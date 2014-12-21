@@ -53,3 +53,10 @@ def test_memoized_get():
     assert cache == {(':x',): 1,
                      (':y',): 2,
                      (':z',): 3}
+
+def test_data_not_in_dict_is_ok():
+    d = {'x': 1}
+    dask.set(d, 'y', add, args=['x', 10])
+
+    assert dask.get(d, 'y') == 11
+

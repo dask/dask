@@ -7,7 +7,8 @@ def get(d, key, get=None):
     v = d[key]
     if istask(v):
         func, args = v[0], v[1:]
-        return func(*[get(d, arg, get=get) for arg in args])
+        return func(*[get(d, arg, get=get) if arg in d else arg
+                        for arg in args])
     else:
         return v
 
