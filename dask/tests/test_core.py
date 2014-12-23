@@ -60,3 +60,23 @@ def test_data_not_in_dict_is_ok():
 
     assert dask.get(d, 'y') == 11
 
+
+def test_get_with_list():
+    d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
+
+    assert dask.get(d, ['x', 'y']) == [1, 2]
+    assert dask.get(d, 'z') == 3
+
+
+def test_get_with_nested_list():
+    d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
+
+    assert dask.get(d, [['x'], 'y']) == [[1], 2]
+    assert dask.get(d, 'z') == 3
+
+
+def test_get_works_with_unhashables_in_values():
+    f = lambda x, y: x + len(y)
+    d = {'x': 1, 'y': (f, 'x', {1})}
+
+    assert dask.get(d, 'y') == 2

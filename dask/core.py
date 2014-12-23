@@ -1,14 +1,25 @@
+def ishashable(x):
+    try:
+        hash(x)
+        return True
+    except TypeError:
+        return False
+
 def istask(x):
     return isinstance(x, tuple) and x and callable(x[0])
 
 
 def get(d, key, get=None):
     get = get or _get
-    v = d[key]
+    if isinstance(key, list):
+        v = [get(d, k, get=get) for k in key]
+    elif not ishashable(key) or key not in d:
+        return key
+    else:
+        v = d[key]
     if istask(v):
         func, args = v[0], v[1:]
-        return func(*[get(d, arg, get=get) if arg in d else arg
-                        for arg in args])
+        return func(*[get(d, arg, get=get) for arg in args])
     else:
         return v
 
