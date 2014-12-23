@@ -51,12 +51,16 @@ def dotmany(A, B, **kwargs):
 def top(func, output, out_indices, *arrind_pairs, **kwargs):
     """ Tensor operation
 
+    Simple embarassing map operation
+
     >>> inc = lambda x: x + 1
     >>> top(inc, 'z', 'ij', 'x', 'ij', blockshapes={'x': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (inc, ('x', 0, 0)),
      ('z', 0, 1): (inc, ('x', 0, 1)),
      ('z', 1, 0): (inc, ('x', 1, 0)),
      ('z', 1, 1): (inc, ('x', 1, 1))}
+
+    Simple operation on two datasets
 
     >>> add = lambda x, y: x + y
     >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', blockshapes={'x': (2, 2),
@@ -66,17 +70,31 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
      ('z', 1, 0): (add, ('x', 1, 0), ('y', 1, 0)),
      ('z', 1, 1): (add, ('x', 1, 1), ('y', 1, 1))}
 
+    Operation that flips one of the datasets
+
+    >>> addT = lambda x, y: x + y.T  # Transpose each chunk
+    >>> #               ..         ..         .. notice swap
+    >>> #                                        z_ij ~ x_ij y_ji
+    >>> top(addT, 'z', 'ij', 'x', 'ij', 'y', 'ji', blockshapes={'x': (2, 2),
+    ...                                                        'y': (2, 2)})  # doctest: +SKIP
+    {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
+     ('z', 0, 1): (add, ('x', 0, 1), ('y', 1, 0)),
+     ('z', 1, 0): (add, ('x', 1, 0), ('y', 0, 1)),
+     ('z', 1, 1): (add, ('x', 1, 1), ('y', 1, 1))}
+
+    Dot product with contraction over ``j`` index.  Yields list arguments
+
     >>> top(dotmany, 'z', 'ik', 'x', 'ij', 'y', 'jk', blockshapes={'x': (2, 2),
     ...                                                            'y': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (dotmany, [('x', 0, 0), ('x', 0, 1)],
-        [('y', 0, 0), ('y', 1, 0)]),
-        ('z', 0, 1): (dotmany, [('x', 0, 0), ('x', 0, 1)],
-            [('y', 0, 1), ('y', 1, 1)]),
-        ('z', 1, 0): (dotmany, [('x', 1, 0), ('x', 1, 1)],
-            [('y', 0, 0), ('y', 1, 0)]),
-        ('z', 1, 1): (dotmany, [('x', 1, 0), ('x', 1, 1)],
-            [('y', 0, 1), ('y', 1, 1)])}
-        """
+                            [('y', 0, 0), ('y', 1, 0)]),
+     ('z', 0, 1): (dotmany, [('x', 0, 0), ('x', 0, 1)],
+                            [('y', 0, 1), ('y', 1, 1)]),
+     ('z', 1, 0): (dotmany, [('x', 1, 0), ('x', 1, 1)],
+                            [('y', 0, 0), ('y', 1, 0)]),
+     ('z', 1, 1): (dotmany, [('x', 1, 0), ('x', 1, 1)],
+                            [('y', 0, 1), ('y', 1, 1)])}
+    """
     blockshapes = kwargs['blockshapes']
     argpairs = list(partition(2, arrind_pairs))
 
