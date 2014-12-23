@@ -1,5 +1,6 @@
 import dask
 from dask.array import *
+from toolz import merge
 
 def contains(a, b):
     """
@@ -63,6 +64,14 @@ def test_top():
                                 [('y', 0, 1), ('y', 1, 1)])}
 
 
+def test_concatenate():
+    x = np.array([1, 2])
+    assert concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+
+    x = np.array([[1, 2]])
+    assert concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+
+
 def eq(a, b):
     c = a == b
     if isinstance(c, np.ndarray):
@@ -71,8 +80,6 @@ def eq(a, b):
 
 
 def test_chunked_dot_product():
-    from toolz import merge
-
     x = np.arange(400).reshape((20, 20))
     o = np.ones((20, 20))
 
@@ -90,9 +97,17 @@ def test_chunked_dot_product():
     assert eq(np.dot(x, o), concatenate(out))
 
 
-def test_concatenate():
-    x = np.array([1, 2])
-    assert concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+def test_chunked_transpose_plus_one():
+    x = np.arange(400).reshape((20, 20))
 
-    x = np.array([[1, 2]])
-    assert concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+    d = {'x': x}
+
+    getx = getem('x', (5, 5), (20, 20))
+
+    f = lambda x: x.T + 1
+    comp = top(f, 'out', 'ij', 'x', 'ji', blockshapes={'x': (4, 4)})
+
+    dsk = merge(d, getx, comp)
+    out = dask.get(dsk, [[('out', i, j) for j in range(4)] for i in range(4)])
+
+    assert eq(concatenate(out), x.T + 1)
