@@ -1,12 +1,12 @@
 
 from into import discover, convert
-from toolz import merge, concat
+from toolz import merge, concat, partition
 from datashape import DataShape
 import itertools
 from math import ceil
 import numpy as np
 from . import core
-from .array import getem, concatenate
+from .array import getem, concatenate, top
 
 
 class Array(object):
@@ -40,6 +40,26 @@ class Array(object):
                         for i in range(self.numblocks[ind])]
 
 
+def atop(func, out, out_ind, *args):
+    arginds = list(partition(2, args))
+    numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
+    argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
+
+    dsk = top(func, out, out_ind, *argindsstr, blockshapes=numblocks)
+
+    # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
+    dims = dict((i, d) for arr, ind in arginds
+                       for d, i in zip(arr.shape, ind))
+    blockdims = dict((i, d) for arr, ind in arginds
+                            for d, i in zip(arr.blockshape, ind))
+
+    shape = tuple(dims[i] for i in out_ind)
+    blockshape = tuple(blockdims[i] for i in out_ind)
+
+    dsks = [a.dask for a, _ in arginds]
+    return Array(merge(dsk, *dsks), out, shape, blockshape)
+
+
 @discover.register(Array)
 def discover_dask_array(a, **kwargs):
     block = a._get_block(*([0] * a.ndim))
@@ -59,7 +79,7 @@ except ImportError:
     pass
 
 
-names = concat([iter('xyz'), ('x_%d' % i for i in itertools.count(1))])
+names = ('x_%d' % i for i in itertools.count(1))
 
 @convert.register(Array, tuple(arrays), cost=0.01)
 def array_to_dask(x, name=None, blockshape=None, **kwargs):

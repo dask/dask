@@ -3,7 +3,7 @@ from math import ceil
 import itertools
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
-        frequencies, join, first, memoize)
+        frequencies, join, first, memoize, map)
 
 
 def ndget(x, blocksize, *args):
@@ -18,8 +18,8 @@ def ndget(x, blocksize, *args):
     array([[12, 13, 14],
            [18, 19, 20]])
     """
-    return x.__getitem__(tuple(slice(i*n, (i+1)*n)
-                            for i, n in zip(args, blocksize)))
+    return x.__getitem__(tuple([slice(i*n, (i+1)*n)
+                            for i, n in zip(args, blocksize)]))
 
 
 def getem(arr, blocksize, shape):
@@ -31,7 +31,7 @@ def getem(arr, blocksize, shape):
      ('X', 1, 1): (ndget, 'X', (2, 3), 1, 1),
      ('X', 0, 1): (ndget, 'X', (2, 3), 0, 1)}
     """
-    numblocks = tuple(int(ceil(n/k)) for n, k in zip(shape, blocksize))
+    numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
     return {(arr,) + tup: (ndget, arr, blocksize) + tup
             for tup in itertools.product(*map(range, numblocks))}
 
@@ -142,11 +142,11 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
         for arg, ind in argpairs:
             dind = dummy_index(ind)
             if dind is False:
-                args.append((arg,) + tuple(kd[i] for i in ind))
+                args.append((arg,) + tuple([kd[i] for i in ind]))
             else:
                 a = []
                 for di in range(dims[dind]):
-                    a.append((arg,) + tuple(kd.get(i, di) for i in ind))
+                    a.append((arg,) + tuple([kd.get(i, di) for i in ind]))
                 args.append(a)
         valtups.append(tuple(args))
 
@@ -166,6 +166,8 @@ def concatenate(arrays, axis=0):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
+    if isinstance(arrays[0], Iterator):
+        arrays = list(map(list, arrays))
     if not isinstance(arrays[0], np.ndarray):
         arrays = [concatenate(a, axis=axis + 1) for a in arrays]
     if arrays[0].ndim <= axis:
