@@ -1,6 +1,7 @@
 import numpy as np
 from math import ceil
 import itertools
+from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map)
@@ -166,6 +167,8 @@ def concatenate(arrays, axis=0):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
+    if isinstance(arrays, Iterator):
+        arrays = list(arrays)
     if isinstance(arrays[0], Iterator):
         arrays = list(map(list, arrays))
     if not isinstance(arrays[0], np.ndarray):

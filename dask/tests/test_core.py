@@ -1,5 +1,16 @@
 import dask
 
+
+def contains(a, b):
+    """
+
+    >>> contains({'x': 1, 'y': 2}, {'x': 1})
+    True
+    >>> contains({'x': 1, 'y': 2}, {'z': 3})
+    False
+    """
+    return all(a.get(k) == v for k, v in b.items())
+
 def inc(x):
     return x + 1
 
@@ -50,9 +61,9 @@ def test_memoized_get():
     result = getm(d, ':z', get=getm)
     assert result == 3
 
-    assert cache == {(':x',): 1,
-                     (':y',): 2,
-                     (':z',): 3}
+    assert contains(cache, {(':x',): 1,
+                            (':y',): 2,
+                            (':z',): 3})
 
 def test_data_not_in_dict_is_ok():
     d = {'x': 1}

@@ -10,6 +10,7 @@ from .array import getem, concatenate, top
 
 
 class Array(object):
+    """ Array object holding a dask """
     __slots__ = 'dask', 'name', 'shape', 'blockshape'
 
     def __init__(self, dask, name, shape, blockshape):
