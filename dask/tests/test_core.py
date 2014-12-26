@@ -91,3 +91,13 @@ def test_get_works_with_unhashables_in_values():
     d = {'x': 1, 'y': (f, 'x', {1})}
 
     assert dask.get(d, 'y') == 2
+
+
+def test_get_laziness():
+    def isconcrete(arg):
+        return isinstance(arg, list)
+
+    d = {'x': 1, 'y': 2, 'z': (isconcrete, ['x', 'y'])}
+
+    assert dask.get(d, ['x', 'y']) == [1, 2]
+    assert dask.get(d, 'z') == False

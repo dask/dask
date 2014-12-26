@@ -53,7 +53,7 @@ def get(d, key, get=None, concrete=True):
     """
     get = get or _get
     if isinstance(key, list):
-        v = (get(d, k, get=get) for k in key)
+        v = (get(d, k, get=get, concrete=concrete) for k in key)
         if concrete:
             v = list(v)
     elif not ishashable(key) or key not in d:
@@ -62,7 +62,7 @@ def get(d, key, get=None, concrete=True):
         v = d[key]
     if istask(v):
         func, args = v[0], v[1:]
-        args2 = [get(d, arg, get=get) for arg in args]
+        args2 = [get(d, arg, get=get, concrete=False) for arg in args]
         return func(*[get(d, arg, get=get) for arg in args2])
     else:
         return v
