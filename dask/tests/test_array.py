@@ -38,7 +38,7 @@ def test_getem():
 
 def test_top():
     inc = lambda x: x + 1
-    assert top(inc, 'z', 'ij', 'x', 'ij', blockshapes={'x': (2, 2)}) == \
+    assert top(inc, 'z', 'ij', 'x', 'ij', numblocks={'x': (2, 2)}) == \
         {('z', 0, 0): (inc, ('x', 0, 0)),
          ('z', 0, 1): (inc, ('x', 0, 1)),
          ('z', 1, 0): (inc, ('x', 1, 0)),
@@ -46,14 +46,14 @@ def test_top():
 
     add = lambda x, y: x + y
     assert top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij',
-                blockshapes={'x': (2, 2), 'y': (2, 2)}) == \
+                numblocks={'x': (2, 2), 'y': (2, 2)}) == \
         {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
          ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
          ('z', 1, 0): (add, ('x', 1, 0), ('y', 1, 0)),
          ('z', 1, 1): (add, ('x', 1, 1), ('y', 1, 1))}
 
     assert top(dotmany, 'z', 'ik', 'x', 'ij', 'y', 'jk',
-                    blockshapes={'x': (2, 2), 'y': (2, 2)}) == \
+                    numblocks={'x': (2, 2), 'y': (2, 2)}) == \
         {('z', 0, 0): (dotmany, [('x', 0, 0), ('x', 0, 1)],
                                 [('y', 0, 0), ('y', 1, 0)]),
          ('z', 0, 1): (dotmany, [('x', 0, 0), ('x', 0, 1)],
@@ -89,7 +89,7 @@ def test_chunked_dot_product():
     geto = getem('o', (5, 5), (20, 20))
 
     result = top(dotmany, 'out', 'ik', 'x', 'ij', 'o', 'jk',
-                 blockshapes={'x': (4, 4), 'o': (4, 4)})
+                 numblocks={'x': (4, 4), 'o': (4, 4)})
 
     dsk = merge(d, getx, geto, result)
     out = dask.get(dsk, [[('out', i, j) for j in range(4)] for i in range(4)])
@@ -105,7 +105,7 @@ def test_chunked_transpose_plus_one():
     getx = getem('x', (5, 5), (20, 20))
 
     f = lambda x: x.T + 1
-    comp = top(f, 'out', 'ij', 'x', 'ji', blockshapes={'x': (4, 4)})
+    comp = top(f, 'out', 'ij', 'x', 'ji', numblocks={'x': (4, 4)})
 
     dsk = merge(d, getx, comp)
     out = dask.get(dsk, [[('out', i, j) for j in range(4)] for i in range(4)])

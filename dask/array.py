@@ -65,7 +65,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Simple embarassing map operation
 
     >>> inc = lambda x: x + 1
-    >>> top(inc, 'z', 'ij', 'x', 'ij', blockshapes={'x': (2, 2)})  # doctest: +SKIP
+    >>> top(inc, 'z', 'ij', 'x', 'ij', numblocks={'x': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (inc, ('x', 0, 0)),
      ('z', 0, 1): (inc, ('x', 0, 1)),
      ('z', 1, 0): (inc, ('x', 1, 0)),
@@ -74,8 +74,8 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Simple operation on two datasets
 
     >>> add = lambda x, y: x + y
-    >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', blockshapes={'x': (2, 2),
-    ...                                                        'y': (2, 2)})  # doctest: +SKIP
+    >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (2, 2),
+    ...                                                      'y': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
      ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
      ('z', 1, 0): (add, ('x', 1, 0), ('y', 1, 0)),
@@ -84,10 +84,10 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Operation that flips one of the datasets
 
     >>> addT = lambda x, y: x + y.T  # Transpose each chunk
-    >>> #               ..         ..         .. notice swap
     >>> #                                        z_ij ~ x_ij y_ji
-    >>> top(addT, 'z', 'ij', 'x', 'ij', 'y', 'ji', blockshapes={'x': (2, 2),
-    ...                                                        'y': (2, 2)})  # doctest: +SKIP
+    >>> #               ..         ..         .. notice swap
+    >>> top(addT, 'z', 'ij', 'x', 'ij', 'y', 'ji', numblocks={'x': (2, 2),
+    ...                                                       'y': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
      ('z', 0, 1): (add, ('x', 0, 1), ('y', 1, 0)),
      ('z', 1, 0): (add, ('x', 1, 0), ('y', 0, 1)),
@@ -95,8 +95,8 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     Dot product with contraction over ``j`` index.  Yields list arguments
 
-    >>> top(dotmany, 'z', 'ik', 'x', 'ij', 'y', 'jk', blockshapes={'x': (2, 2),
-    ...                                                            'y': (2, 2)})  # doctest: +SKIP
+    >>> top(dotmany, 'z', 'ik', 'x', 'ij', 'y', 'jk', numblocks={'x': (2, 2),
+    ...                                                          'y': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (dotmany, [('x', 0, 0), ('x', 0, 1)],
                             [('y', 0, 0), ('y', 1, 0)]),
      ('z', 0, 1): (dotmany, [('x', 0, 0), ('x', 0, 1)],
@@ -106,10 +106,10 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
      ('z', 1, 1): (dotmany, [('x', 1, 0), ('x', 1, 1)],
                             [('y', 0, 1), ('y', 1, 1)])}
     """
-    blockshapes = kwargs['blockshapes']
+    numblocks = kwargs['numblocks']
     argpairs = list(partition(2, arrind_pairs))
 
-    assert set(blockshapes) == set(pluck(0, argpairs))
+    assert set(numblocks) == set(pluck(0, argpairs))
 
     all_indices = pipe(argpairs, pluck(1), concat, set)
     dummy_indices = all_indices - set(out_indices)
@@ -121,7 +121,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = dict(concat([zip(inds, dims)
                         for (x, inds), (x, dims)
-                        in join(first, argpairs, first, blockshapes.items())]))
+                        in join(first, argpairs, first, numblocks.items())]))
 
     # (0, 0), (0, 1), (0, 2), (1, 0), ...
     keytups = list(itertools.product(*[range(dims[i]) for i in out_indices]))
