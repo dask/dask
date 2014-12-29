@@ -46,7 +46,7 @@ def atop(func, out, out_ind, *args):
     numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
 
-    dsk = top(func, out, out_ind, *argindsstr, blockshapes=numblocks)
+    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = dict((i, d) for arr, ind in arginds
@@ -93,3 +93,92 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 @convert.register(np.ndarray, Array, cost=0.5)
 def dask_to_numpy(x, **kwargs):
     return concatenate(core.get(x.dask, x.block_keys()))
+
+
+from blaze.dispatch import dispatch
+from blaze.compute.core import compute_up
+from blaze import compute, ndim
+from blaze.expr import ElemWise, symbol, Reduction, Transpose, TensorDot, Expr
+from toolz import curry, compose
+
+def compute_it(expr, leaves, *data):
+    return compute(expr, dict(zip(leaves, data)))
+
+
+@compute_up.register(ElemWise, Array)
+@compute_up.register(ElemWise, Array, Array)
+def elemwise_array(expr, *data, **kwargs):
+    leaves = expr._inputs
+    inds = tuple(range(ndim(expr)))
+    return atop(curry(compute_it, expr, leaves),
+                next(names), inds,
+                *concat((dat, inds) for dat in data))
+
+from blaze.expr.split import split
+
+@dispatch(Reduction, Array)
+def compute_up(expr, data, **kwargs):
+    leaf = expr._leaves()[0]
+    chunk = symbol('chunk', DataShape(*(data.blockshape +
+        (leaf.dshape.measure,))))
+    (chunk, chunk_expr), (agg, agg_expr) = split(expr._child, expr, chunk=chunk)
+
+    inds = tuple(range(ndim(leaf)))
+    tmp = atop(curry(compute_it, chunk_expr, [chunk]),
+               next(names), inds,
+               data, inds)
+
+    return atop(compose(curry(compute_it, agg_expr, [agg]), concatenate),
+                next(names), tuple(i for i in inds if i not in expr.axis),
+                tmp, inds)
+
+
+@dispatch(Transpose, Array)
+def compute_up(expr, data, **kwargs):
+    return atop(curry(np.transpose, axes=expr.axes),
+                next(names), expr.axes,
+                data, tuple(range(ndim(expr))))
+
+
+alphabet = 'abcdefghijklmnopqrstuvwxyz'
+ALPHABET = alphabet.upper()
+
+
+@curry
+def many(a, b, function=None, reduction=None, **kwargs):
+    return reduction(map(curry(function, **kwargs), a, b))
+
+
+@dispatch(TensorDot, Array, Array)
+def compute_up(expr, lhs, rhs, **kwargs):
+    left_index = list(alphabet[:ndim(lhs)])
+    right_index = list(ALPHABET[:ndim(rhs)])
+    out_index = left_index + right_index
+    for l, r in zip(expr._left_axes, expr._right_axes):
+        out_index.remove(right_index[r])
+        out_index.remove(left_index[l])
+        right_index[r] = left_index[l]
+
+    func = many(function=np.tensordot, reduction=sum,
+                axes=(expr._left_axes, expr._right_axes))
+    return atop(func,
+                next(names), out_index,
+                lhs, tuple(left_index),
+                rhs, tuple(right_index))
+
+
+@dispatch(Expr, Array)
+def post_compute(expr, data, **kwargs):
+    if ndim(expr) == 0:
+        return core.get(data.dask, (data.name,))
+
+    if ndim(expr) == 1:
+        n, = data.numblocks
+        return concatenate(core.get(data.dask,
+                                    [(data.name, i) for i in range(n)]))
+    if ndim(expr) == 2:
+        n, m = data.numblocks
+        return concatenate(core.get(data.dask,
+                                    [[(data.name, i, j) for j in range(m)]
+                                                        for i in range(n)]))
+    return data

@@ -1,7 +1,7 @@
 import dask
 from dask.array import *
 from dask.obj import *
-from into import convert
+from into import convert, into
 
 
 def eq(a, b):
@@ -37,3 +37,29 @@ def test_convert_to_numpy_array():
     x2 = convert(np.ndarray, d)
 
     assert eq(x, x2)
+
+
+nx = np.arange(600).reshape((20, 30))
+ny = np.arange(600).reshape((30, 20))
+dx = convert(Array, nx, blockshape=(4, 5))
+dy = convert(Array, ny, blockshape=(5, 4))
+sx = symbol('x', discover(dx))
+sy = symbol('y', discover(dy))
+
+dask_ns = {sx: dx, sy: dy}
+numpy_ns = {sx: nx, sy: ny}
+
+
+def test_compute():
+    for expr in [2*sx + 1,
+                 sx.sum(axis=0), sx.mean(axis=0),
+                 sx + sx, sx.T, sx.T + sy,
+                 sx.dot(sy), sy.dot(sx),
+                 sx.sum(),
+                # s.sum(axis=1)
+                ]:
+        result = compute(expr, dask_ns, post_compute=False)
+        expected = compute(expr, numpy_ns)
+        assert isinstance(result, Array)
+        result2 = post_compute(expr, result)
+        assert eq(result2, expected)
