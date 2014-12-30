@@ -63,6 +63,10 @@ def test_top():
          ('z', 1, 1): (dotmany, [('x', 1, 0), ('x', 1, 1)],
                                 [('y', 0, 1), ('y', 1, 1)])}
 
+    assert top(identity, 'z', '', 'x', 'ij', numblocks={'x': (2, 2)}) ==\
+        {('z',): (identity, [[('x', 0, 0), ('x', 0, 1)],
+                             [('x', 1, 0), ('x', 1, 1)]])}
+
 
 def test_concatenate():
     x = np.array([1, 2])

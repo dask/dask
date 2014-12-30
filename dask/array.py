@@ -59,6 +59,47 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
     return sum(map(partial(np.dot, **kwargs), A, B))
 
 
+def lol_tuples(head, ind, values, dummies):
+    """ List of list of tuple keys
+
+    Parameters
+    ----------
+
+    head : tuple
+        The known tuple so far
+    ind : Iterable
+        An iterable of indices not yet covered
+    values : dict
+        Known values for non-dummy indices
+    dummies : dict
+        Ranges of values for dummy indices
+
+    Examples
+    --------
+
+    >>> lol_tuples(('x',), 'ij', {'i': 1, 'j': 0}, {})
+    ('x', 1, 0)
+
+    >>> lol_tuples(('x',), 'ij', {'i': 1}, {'j': range(3)})
+    [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
+
+    >>> lol_tuples(('x',), 'ij', {'i': 1}, {'j': range(3)})
+    [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
+
+    >>> lol_tuples(('x',), 'ijk', {'i': 1}, {'j': [0, 1, 2], 'k': [0, 1]}) # doctest: +NORMALIZE_WHITESPACE
+    [[('x', 1, 0, 0), ('x', 1, 0, 1)],
+     [('x', 1, 1, 0), ('x', 1, 1, 1)],
+     [('x', 1, 2, 0), ('x', 1, 2, 1)]]
+    """
+    if not ind:
+        return head
+    if ind[0] not in dummies:
+        return lol_tuples(head + (values[ind[0]],), ind[1:], values, dummies)
+    else:
+        return [lol_tuples(head + (v,), ind[1:], values, dummies)
+                for v in dummies[ind[0]]]
+
+
 def top(func, output, out_indices, *arrind_pairs, **kwargs):
     """ Tensor operation
 
@@ -114,10 +155,6 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     all_indices = pipe(argpairs, pluck(1), concat, set)
     dummy_indices = all_indices - set(out_indices)
 
-    if len(dummy_indices) > 1:
-        raise ValueError("Don't yet support contraction over more than one "
-                "index.")
-
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = dict(concat([zip(inds, dims)
                         for (x, inds), (x, dims)
@@ -136,19 +173,14 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
         else:
             return dinds[0]
 
+    dummies = dict((i, list(range(dims[i]))) for i in dummy_indices)
+
     # Create argument lists
     valtups = []
     for kd in keydicts:
         args = []
         for arg, ind in argpairs:
-            dind = dummy_index(ind)
-            if dind is False:
-                args.append((arg,) + tuple([kd[i] for i in ind]))
-            else:
-                a = []
-                for di in range(dims[dind]):
-                    a.append((arg,) + tuple([kd.get(i, di) for i in ind]))
-                args.append(a)
+            args.append(lol_tuples((arg,), ind, kd, dummies))
         valtups.append(tuple(args))
 
     # Add heads to tuples
