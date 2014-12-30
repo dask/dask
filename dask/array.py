@@ -165,14 +165,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     # {i: 0, j: 0}, {i: 0, j: 1}, ...
     keydicts = [dict(zip(out_indices, tup)) for tup in keytups]
 
-    @memoize
-    def dummy_index(inds):
-        dinds = [i for i in inds if i in dummy_indices]
-        if not dinds:
-            return False
-        else:
-            return dinds[0]
-
+    # {j: [1, 2, 3], ...}  For j a dummy index of dimension 3
     dummies = dict((i, list(range(dims[i]))) for i in dummy_indices)
 
     # Create argument lists
