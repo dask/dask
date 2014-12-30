@@ -109,10 +109,10 @@ def compute_it(expr, leaves, *data):
 @compute_up.register(ElemWise, Array, Array)
 def elemwise_array(expr, *data, **kwargs):
     leaves = expr._inputs
-    inds = tuple(range(ndim(expr)))
+    expr_inds = tuple(range(ndim(expr)))[::-1]
     return atop(curry(compute_it, expr, leaves),
-                next(names), inds,
-                *concat((dat, inds) for dat in data))
+                next(names), expr_inds,
+                *concat((dat, tuple(range(ndim(dat))[::-1])) for dat in data))
 
 from blaze.expr.split import split
 
