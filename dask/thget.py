@@ -15,7 +15,7 @@ from .core import istask
 from operator import add
 from toolz import concat, first
 from multiprocessing.pool import ThreadPool
-from multiprocessing import Queue
+from Queue import Queue
 from threading import Lock
 
 def inc(x):
@@ -56,11 +56,11 @@ def execute_task(dsk, key, state, queue, results, lock):
         func, args = task[0], task[1:]
         args2 = [get_arg(arg, state['cache'], dsk=dsk) for arg in args]
         result = func(*args2)
+        with lock:
+            finish_task(dsk, key, result, state, results)
     except Exception as e:
         queue.put((key, task, e))
         return key, task, e
-    with lock:
-        finish_task(dsk, key, result, state, results)
     queue.put((key, task, result))
     return key, task, result
 
@@ -72,7 +72,8 @@ def finish_task(dsk, key, result, state, results):
     Mutates.  This should run atomically (with a lock).
     """
     state['cache'][key] = result
-    state['ready'].remove(key)
+    if key in state['ready']:
+        state['ready'].remove(key)
 
     for dep in state['dependents'][key]:
         s = state['waiting'][dep]
@@ -188,7 +189,8 @@ def start_state_from_dask(dsk, cache=None):
                       'y': set(['w']),
                       'z': set(['w'])}}
     """
-    cache = cache or dict()
+    if cache is None:
+        cache = dict()
     for k, v in dsk.items():
         if not istask(v):
             cache[k] = v
@@ -235,7 +237,7 @@ def ndget(ind, coll, lazy=False):
         return coll[ind]
 
 
-def get(dsk, result, pool=None, cache=None):
+def get(dsk, result, pool=None, cache=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
     Parameters
@@ -272,6 +274,7 @@ def get(dsk, result, pool=None, cache=None):
     queue = Queue()
     lock = Lock()  # lock for state dict
     jobs = dict()
+    finished = set()
 
     if not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
@@ -289,6 +292,7 @@ def get(dsk, result, pool=None, cache=None):
             key, finished_task, res = queue.get()
             if isinstance(res, Exception):
                 raise res
+            finished.add(key)
             # print("Finished %s" % str(finished_task))
             with lock:
                 while state['ready']:
@@ -310,3 +314,23 @@ def get(dsk, result, pool=None, cache=None):
         # print("Finished %s" % str(finished_task))
 
     return ndget(result, state['cache'])
+
+
+def visualize(dsk, state, finished, jobs):
+    from dask.dot import dot_graph
+    for key in (list(state['cache']) + list(jobs) + list(finished) +
+            list(state['waiting'])):
+        try:
+            hash(key)
+        except TypeError:
+            print key
+    data, func = dict(), dict()
+    for key in state['cache']:
+        data[key] = {'color': 'blue'}
+    for key in jobs:
+        func[key] = {'color': 'green'}
+    for key in finished:
+        func[key] = {'color': 'blue'}
+    for key in state['waiting']:
+        func[key] = {'color': 'gray'}
+    return dot_graph(dsk, data_attributes=data, function_attributes=func)

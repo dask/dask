@@ -175,10 +175,12 @@ def post_compute(expr, data, get=thget.get, **kwargs):
     if ndim(expr) == 1:
         n, = data.numblocks
         return concatenate(get(data.dask,
-                                    [(data.name, i) for i in range(n)]))
+                                    [(data.name, i) for i in range(n)],
+                                    **kwargs))
     if ndim(expr) == 2:
         n, m = data.numblocks
         return concatenate(get(data.dask,
                                     [[(data.name, i, j) for j in range(m)]
-                                                        for i in range(n)]))
+                                                        for i in range(n)],
+                                **kwargs))
     return data

@@ -33,7 +33,7 @@ def istask(x):
     return isinstance(x, tuple) and x and callable(x[0])
 
 
-def get(d, key, get=None, concrete=True):
+def get(d, key, get=None, concrete=True, **kwargs):
     """ Get value from Dask
 
     Exmaple
