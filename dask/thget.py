@@ -178,23 +178,46 @@ def start_state_from_dask(dsk, cache=None):
 def ndget(ind, coll, lazy=False):
     """
 
-    >>> ndget(2, 'abc')
+    >>> ndget(1, 'abc')
     'b'
-    >>> ndget([2, 1], 'abc')
+    >>> ndget([1, 0], 'abc')
     ('b', 'a')
-    >>> ndget([[2, 1], [1, 2]] 'abc')
+    >>> ndget([[1, 0], [0, 1]], 'abc')
     (('b', 'a'), ('a', 'b'))
     """
     if isinstance(ind, list):
         seq = (ndget(i, coll, lazy=lazy) for i in ind)
         if not lazy:
-            seq = list(seq)
+            seq = tuple(seq)
         return seq
     else:
         return coll[ind]
 
 
 def get(dsk, result, pool=None, cache=None):
+    """ Threaded cached implementation of dask.get
+
+    Parameters
+    ----------
+
+    dsk: dict
+        A dask dictionary specifying a workflow
+    result: key or list of keys
+        Keys corresponding to desired data
+    pool: multiprocessing.pool.ThreadPool (optional)
+        A thread pool to use (default to creating one)
+    cache: dict-like (optional)
+        Temporary storage of results
+
+    Examples
+    --------
+
+    >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
+    >>> get(dsk, 'w')
+    4
+    >>> get(dsk, ['w', 'y'])
+    (4, 2)
+    """
     result_flat = result
     while isinstance(result_flat[0], list):
         result_flat = set.union(*map(set, result_flat))
@@ -207,23 +230,26 @@ def get(dsk, result, pool=None, cache=None):
     queue = Queue()
     jobs = []
 
+    # Seed initial tasks into the thread pool
     for key in state['ready']:
         jobs.append(pool.apply_async(execute_task, args=[dsk, key, state, queue, results]))
 
+    # Main loop, wait on tasks to finish, insert new ones
     while state['waiting']:
         finished_task = queue.get()
-        print("Finished %s" % str(finished_task))
+        # print("Finished %s" % str(finished_task))
         for new_key in state['ready']:
             # TODO: choose tasks more intelligently
             #       and do not aggressively send tasks to pool
             pool.apply_async(execute_task, args=[dsk, new_key, state, queue, results])
 
+    # Clean up thread pool
     pool.close()
     pool.join()
 
+    # Final reporting
     while not queue.empty():
         finished_task = queue.get()
-        print("Finished %s" % str(finished_task))
-
+        # print("Finished %s" % str(finished_task))
 
     return ndget(result, state['cache'])
