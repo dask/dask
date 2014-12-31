@@ -17,6 +17,7 @@ from toolz import concat, first
 from multiprocessing.pool import ThreadPool
 from Queue import Queue
 from threading import Lock
+import psutil
 
 def inc(x):
     return x + 1
@@ -92,6 +93,7 @@ def finish_task(dsk, key, result, state, results):
             del state['cache'][dep]
 
     state['finished'].add(key)
+    state['num-active-threads'] -= 1
 
     return state
 
@@ -186,6 +188,7 @@ def start_state_from_dask(dsk, cache=None):
                     'y': set(['w']),
                     'z': set(['w'])},
      'finished': set([]),
+     'num-active-threads': 0,
      'ready': set(['z']),
      'waiting': {'w': set(['z'])},
      'waiting_data': {'x': set(['z']),
@@ -216,7 +219,8 @@ def start_state_from_dask(dsk, cache=None):
              'waiting_data': waiting_data,
              'cache': cache,
              'ready': ready,
-             'finished': set()}
+             'finished': set(),
+             'num-active-threads': 0}
 
     return state
 
@@ -241,7 +245,7 @@ def ndget(ind, coll, lazy=False):
         return coll[ind]
 
 
-def get(dsk, result, pool=None, cache=None, **kwargs):
+def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
     Parameters
@@ -271,7 +275,7 @@ def get(dsk, result, pool=None, cache=None, **kwargs):
         result_flat = set([result])
     results = set(result_flat)
 
-    pool = pool or ThreadPool(1)
+    pool = ThreadPool(nthreads)
 
     state = start_state_from_dask(dsk, cache=cache)
 
@@ -285,8 +289,9 @@ def get(dsk, result, pool=None, cache=None, **kwargs):
     try:
         # Seed initial tasks into the thread pool
         with lock:
-            while state['ready']:
+            while state['ready'] and state['num-active-threads'] < nthreads:
                 key = state['ready'].pop()
+                state['num-active-threads'] += 1
                 jobs[key] = pool.apply_async(execute_task, args=[dsk, key, state,
                     queue, results, lock])
 
@@ -296,8 +301,9 @@ def get(dsk, result, pool=None, cache=None, **kwargs):
             if isinstance(res, Exception):
                 raise res
             with lock:
-                while state['ready']:
+                while state['ready'] and state['num-active-threads'] < nthreads:
                     new_key = state['ready'].pop()
+                    state['num-active-threads'] += 1
                     assert new_key not in jobs
                     # TODO: choose tasks more intelligently
                     #       and do not aggressively send tasks to pool
