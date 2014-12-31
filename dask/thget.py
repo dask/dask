@@ -91,6 +91,8 @@ def finish_task(dsk, key, result, state, results):
         elif dep in state['cache'] and dep not in results:
             del state['cache'][dep]
 
+    state['finished'].add(key)
+
     return state
 
 
@@ -183,6 +185,7 @@ def start_state_from_dask(dsk, cache=None):
                     'x': set(['z']),
                     'y': set(['w']),
                     'z': set(['w'])},
+     'finished': set([]),
      'ready': set(['z']),
      'waiting': {'w': set(['z'])},
      'waiting_data': {'x': set(['z']),
@@ -212,7 +215,8 @@ def start_state_from_dask(dsk, cache=None):
              'waiting': waiting,
              'waiting_data': waiting_data,
              'cache': cache,
-             'ready': ready}
+             'ready': ready,
+             'finished': set()}
 
     return state
 
@@ -274,7 +278,6 @@ def get(dsk, result, pool=None, cache=None, **kwargs):
     queue = Queue()
     lock = Lock()  # lock for state dict
     jobs = dict()
-    finished = set()
 
     if not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
@@ -288,12 +291,10 @@ def get(dsk, result, pool=None, cache=None, **kwargs):
                     queue, results, lock])
 
         # Main loop, wait on tasks to finish, insert new ones
-        while state['waiting'] or state['ready']:
+        while state['waiting'] or state['ready'] or len(state['finished']) < len(jobs):
             key, finished_task, res = queue.get()
             if isinstance(res, Exception):
                 raise res
-            finished.add(key)
-            # print("Finished %s" % str(finished_task))
             with lock:
                 while state['ready']:
                     new_key = state['ready'].pop()
@@ -316,20 +317,14 @@ def get(dsk, result, pool=None, cache=None, **kwargs):
     return ndget(result, state['cache'])
 
 
-def visualize(dsk, state, finished, jobs):
+def visualize(dsk, state, jobs):
     from dask.dot import dot_graph
-    for key in (list(state['cache']) + list(jobs) + list(finished) +
-            list(state['waiting'])):
-        try:
-            hash(key)
-        except TypeError:
-            print key
     data, func = dict(), dict()
     for key in state['cache']:
         data[key] = {'color': 'blue'}
     for key in jobs:
         func[key] = {'color': 'green'}
-    for key in finished:
+    for key in state['finished']:
         func[key] = {'color': 'blue'}
     for key in state['waiting']:
         func[key] = {'color': 'gray'}
