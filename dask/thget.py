@@ -90,7 +90,7 @@ def finish_task(dsk, key, result, state, results):
             if not s and dep not in results:
                 release_data(dep, state)
         elif dep in state['cache'] and dep not in results:
-            del state['cache'][dep]
+            release_data(dep, state)
 
     state['finished'].add(key)
     state['num-active-threads'] -= 1
@@ -100,9 +100,12 @@ def finish_task(dsk, key, result, state, results):
 
 def release_data(key, state):
     """ Remove data from temporary storage """
-    assert not state['waiting_data'][key]
+    if key in state['waiting_data']:
+        assert not state['waiting_data'][key]
+        del state['waiting_data'][key]
+
     state['released'].add(key)
-    del state['waiting_data'][key]
+
     del state['cache'][key]
 
 
@@ -296,7 +299,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         tick[0] += 1
         # Emit visualization if called for
         if debug_counts and tick[0] % debug_counts == 0:
-            visualize(dsk, state, jobs, filename='dask_%d' % tick)
+            visualize(dsk, state, jobs, filename='dask_%d' % tick[0])
         # Choose a good task to compute
         key = choose_task(state)
         state['ready'].remove(key)
@@ -340,16 +343,20 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
 def visualize(dsk, state, jobs, filename='dask'):
     from dask.dot import dot_graph
     data, func = dict(), dict()
+    for key in dsk:
+        func[key] = {'color': 'gray'}
+        data[key] = {'color': 'gray'}
+
     for key in state['cache']:
         data[key] = {'color': 'blue'}
     for key in state['released']:
-        data[key] = {'color': 'gray'}
+        data[key] = {'color': 'black'}
+
     for key in jobs:
-        func[key] = {'color': 'green'}
-    for key in state['finished']:
-        func[key] = {'color': 'blue'}
-    for key in state['waiting']:
-        func[key] = {'color': 'gray'}
+        if key in state['finished']:
+            func[key] = {'color': 'blue'}
+        else:
+            func[key] = {'color': 'red'}
     return dot_graph(dsk, data_attributes=data, function_attributes=func,
             filename=filename)
 
