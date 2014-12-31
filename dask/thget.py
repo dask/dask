@@ -13,7 +13,7 @@ Changing states
 """
 from .core import istask
 from operator import add
-from toolz import concat, first
+from toolz import concat, first, partial
 from multiprocessing.pool import ThreadPool
 from Queue import Queue
 from threading import Lock
@@ -290,7 +290,8 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, **kwargs):
         # Seed initial tasks into the thread pool
         with lock:
             while state['ready'] and state['num-active-threads'] < nthreads:
-                key = state['ready'].pop()
+                key = choose_task(state)
+                state['ready'].remove(key)
                 state['num-active-threads'] += 1
                 jobs[key] = pool.apply_async(execute_task, args=[dsk, key, state,
                     queue, results, lock])
@@ -302,7 +303,8 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, **kwargs):
                 raise res
             with lock:
                 while state['ready'] and state['num-active-threads'] < nthreads:
-                    new_key = state['ready'].pop()
+                    new_key = choose_task(state)
+                    state['ready'].remove(new_key)
                     state['num-active-threads'] += 1
                     assert new_key not in jobs
                     # TODO: choose tasks more intelligently
@@ -335,3 +337,37 @@ def visualize(dsk, state, jobs):
     for key in state['waiting']:
         func[key] = {'color': 'gray'}
     return dot_graph(dsk, data_attributes=data, function_attributes=func)
+
+
+def score(key, state):
+    """ Prefer to run tasks that remove need to hold on to data """
+    deps = state['dependencies'][key]
+    wait = state['waiting_data']
+    return sum([1./len(wait[dep])**2 for dep in deps])
+
+def choose_task(state, score=score):
+    """
+    Select a task that maximizes scoring function
+
+    Default scoring function selects tasks that free up the maximum number of
+    resources.
+
+    E.g. for ready tasks a, b with dependencies:
+
+        {a: {x, y},
+         b: {x, w}}
+
+    and for data w, x, y, z waiting on the following tasks
+
+        {w: {b, c}
+         x: {a, b, c},
+         y: {a}}
+
+    We choose task a because it will completely free up resource y and
+    partially free up resource x.  Task b only partially frees up resources x
+    and w and completely frees none so it is given a lower score.
+
+    See also:
+        score
+    """
+    return max(state['ready'], key=partial(score, state=state))

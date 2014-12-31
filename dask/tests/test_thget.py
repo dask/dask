@@ -73,3 +73,14 @@ def bad(x):
 def test_exceptions_rise_to_top():
     dsk = {'x': 1, 'y': (bad, 'x')}
     assert raises(ValueError, lambda: get(dsk, 'y'))
+
+
+def test_choose_task():
+    dsk = {'x': 1, 'y': 1, 'a': (add, 'x', 'y'), 'b': (inc, 'x')}
+    state = start_state_from_dask(dsk)
+    assert choose_task(state) == 'a'  # can remove two data at once
+
+
+    dsk = {'x': 1, 'y': 1, 'a': (inc, 'x'), 'b': (inc, 'y'), 'c': (inc, 'x')}
+    state = start_state_from_dask(dsk)
+    assert choose_task(state) == 'b'  # only task that removes data
