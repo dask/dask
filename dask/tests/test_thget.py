@@ -21,7 +21,9 @@ def test_start_state():
                               'z': set(['w'])},
                'ready': set(['z']),
                'waiting': {'w': set(['z'])},
-               'waiting_data': {'z': set(['w'])}}
+               'waiting_data': {'x': set(['z']),
+                                'y': set(['w']),
+                                'z': set(['w'])}}
 
 
 def test_finish_task():
@@ -44,11 +46,17 @@ def test_finish_task():
                          'z': set(['w'])},
           'ready': set(['w']),
           'waiting': {},
-          'waiting_data': {'z': set(['w'])}}
+          'waiting_data': {'y': set(['w']),
+                           'z': set(['w'])}}
 
 
 def test_get():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     assert get(dsk, 'w') == 4
     assert get(dsk, ['w', 'z']) == (4, 2)
+
+
+def test_nested_get():
+    dsk = {'x': 1, 'y': 2, 'a': (add, 'x', 'y'), 'b': (sum, ['x', 'y'])}
+    assert get(dsk, ['a', 'b']) == (3, 3)
 

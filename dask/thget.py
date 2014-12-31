@@ -16,6 +16,7 @@ from operator import add
 from toolz import concat, first
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Queue
+from threading import Lock
 
 def inc(x):
     return x + 1
@@ -41,12 +42,13 @@ def get_arg(arg, cache):
         return cache[arg]
 
 
-def execute_task(dsk, key, state, queue, results):
+def execute_task(dsk, key, state, queue, results, lock):
     task = dsk[key]
     func, args = task[0], task[1:]
     args2 = [get_arg(arg, state['cache']) for arg in args]
     result = func(*args2)
-    finish_task(dsk, key, result, state, results)
+    with lock:
+        finish_task(dsk, key, result, state, results)
     queue.put(task)
 
 
@@ -70,8 +72,8 @@ def finish_task(dsk, key, result, state, results):
         if dep in state['waiting_data']:
             s = state['waiting_data'][dep]
             s.remove(key)
-            if not s and s not in results:
-                release_data(dsk, dep, **state)
+            if not s and dep not in results:
+                release_data(dep, state)
         elif dep in state['cache'] and dep not in results:
             del state['cache'][dep]
 
@@ -162,7 +164,9 @@ def start_state_from_dask(dsk, cache=None):
                     'z': set(['w'])},
      'ready': set(['z']),
      'waiting': {'w': set(['z'])},
-     'waiting_data': {'z': set(['w'])}}
+     'waiting_data': {'x': set(['z']),
+                      'y': set(['w']),
+                      'z': set(['w'])}}
     """
     cache = cache or dict()
     for k, v in dsk.items():
@@ -176,8 +180,7 @@ def start_state_from_dask(dsk, cache=None):
     for a in cache:
         for b in dependents[a]:
             waiting[b].remove(a)
-    waiting_data = reverse_dict(waiting)
-    waiting_data = {k: v for k, v in waiting_data.items() if v}
+    waiting_data = {k: v.copy() for k, v in dependents.items() if v}
 
     ready = {k for k, v in waiting.items() if not v}
     waiting = {k: v for k, v in waiting.items() if v}
@@ -239,26 +242,32 @@ def get(dsk, result, pool=None, cache=None):
         result_flat = set(flatten(result))
     else:
         result_flat = set([result])
+    results = set(result_flat)
 
     pool = pool or ThreadPool()
 
     state = start_state_from_dask(dsk, cache=cache)
 
     queue = Queue()
+    lock = Lock()
     jobs = []
 
     # Seed initial tasks into the thread pool
-    for key in state['ready']:
-        jobs.append(pool.apply_async(execute_task, args=[dsk, key, state, queue, results]))
+    with lock:
+        for key in state['ready']:
+            jobs.append(pool.apply_async(execute_task, args=[dsk, key, state,
+                queue, results, lock]))
 
     # Main loop, wait on tasks to finish, insert new ones
     while state['waiting']:
         finished_task = queue.get()
         # print("Finished %s" % str(finished_task))
-        for new_key in state['ready']:
-            # TODO: choose tasks more intelligently
-            #       and do not aggressively send tasks to pool
-            pool.apply_async(execute_task, args=[dsk, new_key, state, queue, results])
+        with lock:
+            for new_key in state['ready']:
+                # TODO: choose tasks more intelligently
+                #       and do not aggressively send tasks to pool
+                pool.apply_async(execute_task, args=[dsk, new_key, state, queue,
+                    results, lock])
 
     # Clean up thread pool
     pool.close()
