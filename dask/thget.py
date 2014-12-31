@@ -41,37 +41,38 @@ def get_arg(arg, cache):
         return cache[arg]
 
 
-def execute_task(dsk, task, state, queue):
+def execute_task(dsk, key, state, queue, results):
+    task = dsk[key]
     func, args = task[0], task[1:]
     args2 = [get_arg(arg, state['cache']) for arg in args]
     result = func(*args2)
-    finish_task(dsk, task, result, state)
+    finish_task(dsk, key, result, state, results)
     queue.put(task)
 
 
-def finish_task(dsk, task, result, state):
+def finish_task(dsk, key, result, state, results):
     """
     Update executation state after a task finishes
 
     Mutates.  This should run atomically (with a lock).
     """
-    state['cache'][task] = result
-    state['ready'].remove(task)
+    state['cache'][key] = result
+    state['ready'].remove(key)
 
-    for dep in state['dependents'][task]:
+    for dep in state['dependents'][key]:
         s = state['waiting'][dep]
-        s.remove(task)
+        s.remove(key)
         if not s:
             del state['waiting'][dep]
             state['ready'].add(dep)
 
-    for dep in state['dependencies'][task]:
+    for dep in state['dependencies'][key]:
         if dep in state['waiting_data']:
             s = state['waiting_data'][dep]
-            s.remove(task)
-            if not s:
+            s.remove(key)
+            if not s and s not in results:
                 release_data(dsk, dep, **state)
-        elif dep in state['cache']:
+        elif dep in state['cache'] and dep not in results:
             del state['cache'][dep]
 
     return state
@@ -174,22 +175,55 @@ def start_state_from_dask(dsk, cache=None):
     return state
 
 
+def ndget(ind, coll, lazy=False):
+    """
+
+    >>> ndget(2, 'abc')
+    'b'
+    >>> ndget([2, 1], 'abc')
+    ('b', 'a')
+    >>> ndget([[2, 1], [1, 2]] 'abc')
+    (('b', 'a'), ('a', 'b'))
+    """
+    if isinstance(ind, list):
+        seq = (ndget(i, coll, lazy=lazy) for i in ind)
+        if not lazy:
+            seq = list(seq)
+        return seq
+    else:
+        return coll[ind]
+
+
 def get(dsk, result, pool=None, cache=None):
-    if not isinstance(result, list):
-        result = [result]
+    result_flat = result
+    while isinstance(result_flat[0], list):
+        result_flat = set.union(*map(set, result_flat))
+    results = set(result_flat)
 
     pool = pool or ThreadPool()
 
     state = start_state_from_dask(dsk, cache=cache)
 
     queue = Queue()
+    jobs = []
 
-    for task in ready:
-        pool.apply_async(execute_task, args=[task, state, queue])
+    for key in state['ready']:
+        jobs.append(pool.apply_async(execute_task, args=[dsk, key, state, queue, results]))
 
-    for finished_task in queue:
-        print("Finished %s" % finished_task)
-        for new_task in ready:
+    while state['waiting']:
+        finished_task = queue.get()
+        print("Finished %s" % str(finished_task))
+        for new_key in state['ready']:
             # TODO: choose tasks more intelligently
             #       and do not aggressively send tasks to pool
-            pool.apply_async(execute_task, args=[new_task, state])
+            pool.apply_async(execute_task, args=[dsk, new_key, state, queue, results])
+
+    pool.close()
+    pool.join()
+
+    while not queue.empty():
+        finished_task = queue.get()
+        print("Finished %s" % str(finished_task))
+
+
+    return ndget(result, state['cache'])

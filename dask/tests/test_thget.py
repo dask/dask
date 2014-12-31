@@ -30,7 +30,7 @@ def test_finish_task():
     task = 'z'
     result = 2
 
-    finish_task(dsk, task, result, state)
+    finish_task(dsk, task, result, state, set())
 
     assert state == {
           'cache': {'y': 2, 'z': 2},
@@ -49,4 +49,6 @@ def test_finish_task():
 
 def test_get():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
+    assert get(dsk, 'w') == 4
+    assert get(dsk, ['w', 'z']) == [4, 2]
 
