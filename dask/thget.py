@@ -291,12 +291,17 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         raise ValueError("Found no accessible jobs in dask")
 
     def fire_task():
+        """ Fire off a task to the thread pool """
+        # Update heartbeat
         tick[0] += 1
+        # Emit visualization if called for
         if debug_counts and tick[0] % debug_counts == 0:
             visualize(dsk, state, jobs, filename='dask_%d' % tick)
+        # Choose a good task to compute
         key = choose_task(state)
         state['ready'].remove(key)
         state['num-active-threads'] += 1
+        # Submit
         jobs[key] = pool.apply_async(execute_task, args=[dsk, key, state,
             queue, results, lock])
 
