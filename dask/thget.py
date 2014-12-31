@@ -13,7 +13,7 @@ Changing states
 """
 from .core import istask
 from operator import add
-from toolz import concat
+from toolz import concat, first
 from multiprocessing.pool import ThreadPool
 from multiprocessing import Queue
 
@@ -109,8 +109,25 @@ def get_dependencies(dsk, task):
     if not istask(val):
         return set([])
     else:
-        return set(list(val[1:]))
+        return set(flatten(val[1:]))
 
+
+def flatten(seq):
+    """
+
+    >>> list(flatten([1]))
+    [1]
+
+    >>> list(flatten([[1, 2], [1, 2]]))
+    [1, 2, 1, 2]
+
+    >>> list(flatten([[[1], [2]], [[1], [2]]]))
+    [1, 2, 1, 2]
+    """
+    if not isinstance(first(seq), (list, tuple, set)):
+        return seq
+    else:
+        return concat(map(flatten, seq))
 
 def reverse_dict(d):
     """
@@ -218,10 +235,10 @@ def get(dsk, result, pool=None, cache=None):
     >>> get(dsk, ['w', 'y'])
     (4, 2)
     """
-    result_flat = result
-    while isinstance(result_flat[0], list):
-        result_flat = set.union(*map(set, result_flat))
-    results = set(result_flat)
+    if isinstance(result, list):
+        result_flat = set(flatten(result))
+    else:
+        result_flat = set([result])
 
     pool = pool or ThreadPool()
 
