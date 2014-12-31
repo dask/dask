@@ -45,7 +45,7 @@ def get_arg(arg, cache, dsk=None):
     elif arg in cache:
         return cache[arg]
     elif arg in dsk:
-        raise ValueError("Premature deletion of data")
+        raise ValueError("Premature deletion of data.  Key: %s" % str(arg))
     else:
         return arg
 
@@ -57,12 +57,12 @@ def execute_task(dsk, key, state, queue, results, lock):
         args2 = [get_arg(arg, state['cache'], dsk=dsk) for arg in args]
         result = func(*args2)
     except Exception as e:
-        queue.put((task, e))
-        return task, e
+        queue.put((key, task, e))
+        return key, task, e
     with lock:
         finish_task(dsk, key, result, state, results)
-    queue.put((task, result))
-    return task, result
+    queue.put((key, task, result))
+    return key, task, result
 
 
 def finish_task(dsk, key, result, state, results):
@@ -265,43 +265,48 @@ def get(dsk, result, pool=None, cache=None):
         result_flat = set([result])
     results = set(result_flat)
 
-    pool = pool or ThreadPool()
+    pool = pool or ThreadPool(1)
 
     state = start_state_from_dask(dsk, cache=cache)
 
     queue = Queue()
-    lock = Lock()
-    jobs = []
+    lock = Lock()  # lock for state dict
+    jobs = dict()
 
     if not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
 
-    # Seed initial tasks into the thread pool
-    with lock:
-        for key in state['ready']:
-            jobs.append(pool.apply_async(execute_task, args=[dsk, key, state,
-                queue, results, lock]))
-
-    # Main loop, wait on tasks to finish, insert new ones
-    while state['waiting'] or state['ready']:
-        finished_task, res = queue.get()
-        if isinstance(res, Exception):
-            raise res
-        # print("Finished %s" % str(finished_task))
+    try:
+        # Seed initial tasks into the thread pool
         with lock:
-            for new_key in state['ready']:
-                # TODO: choose tasks more intelligently
-                #       and do not aggressively send tasks to pool
-                pool.apply_async(execute_task, args=[dsk, new_key, state, queue,
-                    results, lock])
+            while state['ready']:
+                key = state['ready'].pop()
+                jobs[key] = pool.apply_async(execute_task, args=[dsk, key, state,
+                    queue, results, lock])
 
-    # Clean up thread pool
-    pool.close()
-    pool.join()
+        # Main loop, wait on tasks to finish, insert new ones
+        while state['waiting'] or state['ready']:
+            key, finished_task, res = queue.get()
+            if isinstance(res, Exception):
+                raise res
+            # print("Finished %s" % str(finished_task))
+            with lock:
+                while state['ready']:
+                    new_key = state['ready'].pop()
+                    assert new_key not in jobs
+                    # TODO: choose tasks more intelligently
+                    #       and do not aggressively send tasks to pool
+                    jobs[key] = pool.apply_async(execute_task, args=[dsk, new_key, state, queue,
+                        results, lock])
+
+    finally:
+        # Clean up thread pool
+        pool.close()
+        pool.join()
 
     # Final reporting
     while not queue.empty():
-        finished_task = queue.get()
+        key, finished_task, res = queue.get()
         # print("Finished %s" % str(finished_task))
 
     return ndget(result, state['cache'])
