@@ -5,7 +5,7 @@ from datashape import DataShape
 import itertools
 from math import ceil
 import numpy as np
-from . import core
+from . import core, thget
 from .array import getem, concatenate, top
 
 
@@ -91,8 +91,8 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 
 
 @convert.register(np.ndarray, Array, cost=0.5)
-def dask_to_numpy(x, **kwargs):
-    return concatenate(core.get(x.dask, x.block_keys()))
+def dask_to_numpy(x, get=thget.get, **kwargs):
+    return concatenate(get(x.dask, x.block_keys()))
 
 
 from blaze.dispatch import dispatch
@@ -168,17 +168,17 @@ def compute_up(expr, lhs, rhs, **kwargs):
 
 
 @dispatch(Expr, Array)
-def post_compute(expr, data, **kwargs):
+def post_compute(expr, data, get=thget.get, **kwargs):
     if ndim(expr) == 0:
-        return core.get(data.dask, (data.name,))
+        return get(data.dask, (data.name,))
 
     if ndim(expr) == 1:
         n, = data.numblocks
-        return concatenate(core.get(data.dask,
+        return concatenate(get(data.dask,
                                     [(data.name, i) for i in range(n)]))
     if ndim(expr) == 2:
         n, m = data.numblocks
-        return concatenate(core.get(data.dask,
+        return concatenate(get(data.dask,
                                     [[(data.name, i, j) for j in range(m)]
                                                         for i in range(n)]))
     return data
