@@ -93,7 +93,8 @@ def get_dependencies(dsk, task):
     >>> dsk = {'x': 1,
     ...        'y': (inc, 'x'),
     ...        'z': (add, 'x', 'y'),
-    ...        'w': (inc, 'z')}
+    ...        'w': (inc, 'z'),
+    ...        'a': (add, 'x', 1)}
 
     >>> get_dependencies(dsk, 'x')
     set([])
@@ -106,12 +107,15 @@ def get_dependencies(dsk, task):
 
     >>> get_dependencies(dsk, 'w')  # Only direct dependencies
     set(['z'])
+
+    >>> get_dependencies(dsk, 'a')  # Ignore non-keys
+    set(['x'])
     """
     val = dsk[task]
     if not istask(val):
         return set([])
     else:
-        return set(flatten(val[1:]))
+        return set(k for k in flatten(val[1:]) if k in dsk)
 
 
 def flatten(seq):
@@ -206,9 +210,10 @@ def ndget(ind, coll, lazy=False):
     (('b', 'a'), ('a', 'b'))
     """
     if isinstance(ind, list):
-        seq = (ndget(i, coll, lazy=lazy) for i in ind)
-        if not lazy:
-            seq = tuple(seq)
+        if lazy:
+            return (ndget(i, coll, lazy=lazy) for i in ind)
+        else:
+            return [ndget(i, coll, lazy=lazy) for i in ind]
         return seq
     else:
         return coll[ind]
@@ -252,6 +257,9 @@ def get(dsk, result, pool=None, cache=None):
     lock = Lock()
     jobs = []
 
+    if not state['ready']:
+        raise ValueError("Found no accessible jobs in dask")
+
     # Seed initial tasks into the thread pool
     with lock:
         for key in state['ready']:
@@ -259,7 +267,7 @@ def get(dsk, result, pool=None, cache=None):
                 queue, results, lock]))
 
     # Main loop, wait on tasks to finish, insert new ones
-    while state['waiting']:
+    while state['waiting'] or state['ready']:
         finished_task = queue.get()
         # print("Finished %s" % str(finished_task))
         with lock:
