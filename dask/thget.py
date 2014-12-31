@@ -144,7 +144,7 @@ def flatten(seq):
     [1, 2, 1, 2]
 
     >>> list(flatten(((1, 2), (1, 2)))) # Don't flatten tuples
-    ((1, 2), (1, 2))
+    [(1, 2), (1, 2)]
     """
     if not isinstance(first(seq), list):
         return seq
@@ -172,7 +172,7 @@ def start_state_from_dask(dsk, cache=None):
 
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     >>> import pprint
-    >>> pprint.pprint(start_state_from_dask(dsk))
+    >>> pprint.pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
     {'cache': {'x': 1, 'y': 2},
      'dependencies': {'w': set(['y', 'z']),
                       'x': set([]),

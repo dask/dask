@@ -1,6 +1,7 @@
 import dask
 from dask.thget import *
 from contextlib import contextmanager
+from dask.utils import raises
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -60,3 +61,10 @@ def test_nested_get():
     dsk = {'x': 1, 'y': 2, 'a': (add, 'x', 'y'), 'b': (sum, ['x', 'y'])}
     assert get(dsk, ['a', 'b']) == (3, 3)
 
+
+def bad(x):
+    raise ValueError()
+
+def test_exceptions_rise_to_top():
+    dsk = {'x': 1, 'y': (bad, 'x')}
+    assert raises(ValueError, lambda: get(dsk, 'y'))
