@@ -22,7 +22,7 @@ def inc(x):
     return x + 1
 
 
-def get_arg(arg, cache):
+def get_arg(arg, cache, dsk=None):
     """
 
     >>> cache = {'x': 1, 'y': 2}
@@ -35,21 +35,34 @@ def get_arg(arg, cache):
 
     >>> list(map(list, get_arg([['x', 'y'], ['y', 'x']], cache)))
     [[1, 2], [2, 1]]
+
+    >>> get_arg('foo', cache)  # Passes through on non-keys
+    'foo'
     """
+    dsk = dsk or dict()
     if isinstance(arg, list):
         return (get_arg(a, cache) for a in arg)
-    else:
+    elif arg in cache:
         return cache[arg]
+    elif arg in dsk:
+        raise ValueError("Premature deletion of data")
+    else:
+        return arg
 
 
 def execute_task(dsk, key, state, queue, results, lock):
-    task = dsk[key]
-    func, args = task[0], task[1:]
-    args2 = [get_arg(arg, state['cache']) for arg in args]
-    result = func(*args2)
+    try:
+        task = dsk[key]
+        func, args = task[0], task[1:]
+        args2 = [get_arg(arg, state['cache'], dsk=dsk) for arg in args]
+        result = func(*args2)
+    except Exception as e:
+        queue.put((task, e))
+        return task, e
     with lock:
         finish_task(dsk, key, result, state, results)
-    queue.put(task)
+    queue.put((task, result))
+    return task, result
 
 
 def finish_task(dsk, key, result, state, results):
@@ -129,8 +142,11 @@ def flatten(seq):
 
     >>> list(flatten([[[1], [2]], [[1], [2]]]))
     [1, 2, 1, 2]
+
+    >>> list(flatten(((1, 2), (1, 2)))) # Don't flatten tuples
+    ((1, 2), (1, 2))
     """
-    if not isinstance(first(seq), (list, tuple, set)):
+    if not isinstance(first(seq), list):
         return seq
     else:
         return concat(map(flatten, seq))
@@ -268,7 +284,9 @@ def get(dsk, result, pool=None, cache=None):
 
     # Main loop, wait on tasks to finish, insert new ones
     while state['waiting'] or state['ready']:
-        finished_task = queue.get()
+        finished_task, res = queue.get()
+        if isinstance(res, Exception):
+            raise res
         # print("Finished %s" % str(finished_task))
         with lock:
             for new_key in state['ready']:
