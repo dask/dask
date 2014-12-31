@@ -213,7 +213,7 @@ def ndget(ind, coll, lazy=False):
         if lazy:
             return (ndget(i, coll, lazy=lazy) for i in ind)
         else:
-            return [ndget(i, coll, lazy=lazy) for i in ind]
+            return tuple([ndget(i, coll, lazy=lazy) for i in ind])
         return seq
     else:
         return coll[ind]
