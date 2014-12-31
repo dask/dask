@@ -1,4 +1,5 @@
 import networkx as nx
+from .core import istask
 
 def to_networkx(d):
     g = nx.DiGraph()
