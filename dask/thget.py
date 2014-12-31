@@ -101,6 +101,7 @@ def finish_task(dsk, key, result, state, results):
 def release_data(key, state):
     """ Remove data from temporary storage """
     assert not state['waiting_data'][key]
+    state['released'].add(key)
     del state['waiting_data'][key]
     del state['cache'][key]
 
@@ -190,6 +191,7 @@ def start_state_from_dask(dsk, cache=None):
      'finished': set([]),
      'num-active-threads': 0,
      'ready': set(['z']),
+     'released': set([]),
      'waiting': {'w': set(['z'])},
      'waiting_data': {'x': set(['z']),
                       'y': set(['w']),
@@ -220,6 +222,7 @@ def start_state_from_dask(dsk, cache=None):
              'cache': cache,
              'ready': ready,
              'finished': set(),
+             'released': set(),
              'num-active-threads': 0}
 
     return state
@@ -245,7 +248,7 @@ def ndget(ind, coll, lazy=False):
         return coll[ind]
 
 
-def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, **kwargs):
+def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
     Parameters
@@ -282,19 +285,27 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, **kwargs):
     queue = Queue()
     lock = Lock()  # lock for state dict
     jobs = dict()
+    tick = [0]
 
     if not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
+
+    def fire_task():
+        tick[0] += 1
+        if debug_counts and tick[0] % debug_counts == 0:
+            visualize(dsk, state, jobs, filename='dask_%d' % tick)
+        key = choose_task(state)
+        state['ready'].remove(key)
+        state['num-active-threads'] += 1
+        jobs[key] = pool.apply_async(execute_task, args=[dsk, key, state,
+            queue, results, lock])
+
 
     try:
         # Seed initial tasks into the thread pool
         with lock:
             while state['ready'] and state['num-active-threads'] < nthreads:
-                key = choose_task(state)
-                state['ready'].remove(key)
-                state['num-active-threads'] += 1
-                jobs[key] = pool.apply_async(execute_task, args=[dsk, key, state,
-                    queue, results, lock])
+                fire_task()
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or len(state['finished']) < len(jobs):
@@ -303,14 +314,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, **kwargs):
                 raise res
             with lock:
                 while state['ready'] and state['num-active-threads'] < nthreads:
-                    new_key = choose_task(state)
-                    state['ready'].remove(new_key)
-                    state['num-active-threads'] += 1
-                    assert new_key not in jobs
-                    # TODO: choose tasks more intelligently
-                    #       and do not aggressively send tasks to pool
-                    jobs[key] = pool.apply_async(execute_task, args=[dsk, new_key, state, queue,
-                        results, lock])
+                    fire_task()
 
     finally:
         # Clean up thread pool
@@ -322,21 +326,27 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, **kwargs):
         key, finished_task, res = queue.get()
         # print("Finished %s" % str(finished_task))
 
+    if debug_counts:
+        visualize(dsk, state, jobs, filename='dask_end')
+
     return ndget(result, state['cache'])
 
 
-def visualize(dsk, state, jobs):
+def visualize(dsk, state, jobs, filename='dask'):
     from dask.dot import dot_graph
     data, func = dict(), dict()
     for key in state['cache']:
         data[key] = {'color': 'blue'}
+    for key in state['released']:
+        data[key] = {'color': 'gray'}
     for key in jobs:
         func[key] = {'color': 'green'}
     for key in state['finished']:
         func[key] = {'color': 'blue'}
     for key in state['waiting']:
         func[key] = {'color': 'gray'}
-    return dot_graph(dsk, data_attributes=data, function_attributes=func)
+    return dot_graph(dsk, data_attributes=data, function_attributes=func,
+            filename=filename)
 
 
 def score(key, state):
