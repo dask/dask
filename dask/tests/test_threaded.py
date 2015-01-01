@@ -86,3 +86,11 @@ def test_choose_task():
     dsk = {'x': 1, 'y': 1, 'a': (inc, 'x'), 'b': (inc, 'y'), 'c': (inc, 'x')}
     state = start_state_from_dask(dsk)
     assert choose_task(state) == 'b'  # only task that removes data
+
+
+def test_state_to_networkx():
+    import networkx as nx
+    dsk = {'x': 1, 'y': 1, 'a': (add, 'x', 'y'), 'b': (inc, 'x')}
+    state = start_state_from_dask(dsk)
+    g = state_to_networkx(dsk, state, {})
+    assert isinstance(g, nx.DiGraph)

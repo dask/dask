@@ -183,6 +183,40 @@ def ndget(ind, coll, lazy=False):
     else:
         return coll[ind]
 
+def score(key, state):
+    """ Prefer to run tasks that remove need to hold on to data """
+    deps = state['dependencies'][key]
+    wait = state['waiting_data']
+    return sum([1./len(wait[dep])**2 for dep in deps])
+
+
+def choose_task(state, score=score):
+    """
+    Select a task that maximizes scoring function
+
+    Default scoring function selects tasks that free up the maximum number of
+    resources.
+
+    E.g. for ready tasks a, b with dependencies:
+
+        {a: {x, y},
+         b: {x, w}}
+
+    and for data w, x, y, z waiting on the following tasks
+
+        {w: {b, c}
+         x: {a, b, c},
+         y: {a}}
+
+    We choose task a because it will completely free up resource y and
+    partially free up resource x.  Task b only partially frees up resources x
+    and w and completely frees none so it is given a lower score.
+
+    See also:
+        score
+    """
+    return max(state['ready'], key=partial(score, state=state))
+
 
 def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **kwargs):
     """ Threaded cached implementation of dask.get
@@ -273,8 +307,9 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     return ndget(result, state['cache'])
 
 
-def visualize(dsk, state, jobs, filename='dask'):
-    from dask.dot import dot_graph
+def state_to_networkx(dsk, state, jobs):
+    import networkx as nx
+    from .dot import to_networkx
     data, func = dict(), dict()
     for key in dsk:
         func[key] = {'color': 'gray'}
@@ -291,39 +326,10 @@ def visualize(dsk, state, jobs, filename='dask'):
             func[key] = {'color': 'blue'}
         else:
             func[key] = {'color': 'red'}
-    return dot_graph(dsk, data_attributes=data, function_attributes=func,
-            filename=filename)
+    return to_networkx(dsk, data, func)
 
 
-def score(key, state):
-    """ Prefer to run tasks that remove need to hold on to data """
-    deps = state['dependencies'][key]
-    wait = state['waiting_data']
-    return sum([1./len(wait[dep])**2 for dep in deps])
-
-def choose_task(state, score=score):
-    """
-    Select a task that maximizes scoring function
-
-    Default scoring function selects tasks that free up the maximum number of
-    resources.
-
-    E.g. for ready tasks a, b with dependencies:
-
-        {a: {x, y},
-         b: {x, w}}
-
-    and for data w, x, y, z waiting on the following tasks
-
-        {w: {b, c}
-         x: {a, b, c},
-         y: {a}}
-
-    We choose task a because it will completely free up resource y and
-    partially free up resource x.  Task b only partially frees up resources x
-    and w and completely frees none so it is given a lower score.
-
-    See also:
-        score
-    """
-    return max(state['ready'], key=partial(score, state=state))
+def visualize(dsk, state, jobs, filename='dask'):
+    from dask.dot import dot_graph
+    g = state_to_networkx(dsk, state, jobs)
+    write_networkx_to_dot(g, filename=filename)
