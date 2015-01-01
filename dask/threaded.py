@@ -330,6 +330,6 @@ def state_to_networkx(dsk, state, jobs):
 
 
 def visualize(dsk, state, jobs, filename='dask'):
-    from dask.dot import dot_graph
+    from dask.dot import dot_graph, write_networkx_to_dot
     g = state_to_networkx(dsk, state, jobs)
     write_networkx_to_dot(g, filename=filename)
