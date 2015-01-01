@@ -32,6 +32,8 @@ class Array(object):
         return len(self.shape)
 
     def block_keys(self, *args):
+        if self.ndim == 0:
+            return [(self.name,)]
         ind = len(args)
         if ind + 1 == self.ndim:
             return [(self.name,) + args + (i,)
@@ -169,18 +171,7 @@ def compute_up(expr, lhs, rhs, **kwargs):
 
 @dispatch(Expr, Array)
 def post_compute(expr, data, get=threaded.get, **kwargs):
-    if ndim(expr) == 0:
-        return get(data.dask, (data.name,))
-
-    if ndim(expr) == 1:
-        n, = data.numblocks
-        return concatenate(get(data.dask,
-                                    [(data.name, i) for i in range(n)],
-                                    **kwargs))
-    if ndim(expr) == 2:
-        n, m = data.numblocks
-        return concatenate(get(data.dask,
-                                    [[(data.name, i, j) for j in range(m)]
-                                                        for i in range(n)],
-                                **kwargs))
-    return data
+    if ndim(expr) > 0:
+        return concatenate(get(data.dask, data.block_keys(), **kwargs))
+    else:
+        return get(data.dask, data.block_keys()[0], **kwargs)

@@ -57,6 +57,7 @@ def test_compute():
                  sx.dot(sy), sy.dot(sx),
                  sx.sum(),
                  sx - sx.sum(),
+                 sx.dot(sx.T),
                  # sx.sum(axis=1)
                 ]:
         result = compute(expr, dask_ns, post_compute=False)
@@ -64,3 +65,10 @@ def test_compute():
         assert isinstance(result, Array)
         result2 = post_compute(expr, result)
         assert eq(result2, expected)
+
+
+def test_block_keys():
+    assert dx.block_keys() == [[(dx.name, i, j) for j in range(6)]
+                                                for i in range(5)]
+    d = Array({}, 'x', (), ())
+    assert d.block_keys() == [('x',)]
