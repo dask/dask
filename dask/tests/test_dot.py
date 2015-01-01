@@ -12,7 +12,8 @@ def inc(x):
 
 dsk = {'x': 1, 'y': (inc, 'x'),
        'a': 2, 'b': (inc, 'a'),
-       'z': (add, 'y', 'b')}
+       'z': (add, 'y', 'b'),
+       'c': (sum, ['y', 'b'])}
 
 
 def test_to_networkx():
