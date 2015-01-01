@@ -5,7 +5,7 @@ from datashape import DataShape
 import itertools
 from math import ceil
 import numpy as np
-from . import core, thget
+from . import core, threaded
 from .array import getem, concatenate, top
 
 
@@ -91,7 +91,7 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 
 
 @convert.register(np.ndarray, Array, cost=0.5)
-def dask_to_numpy(x, get=thget.get, **kwargs):
+def dask_to_numpy(x, get=threaded.get, **kwargs):
     return concatenate(get(x.dask, x.block_keys()))
 
 
@@ -168,7 +168,7 @@ def compute_up(expr, lhs, rhs, **kwargs):
 
 
 @dispatch(Expr, Array)
-def post_compute(expr, data, get=thget.get, **kwargs):
+def post_compute(expr, data, get=threaded.get, **kwargs):
     if ndim(expr) == 0:
         return get(data.dask, (data.name,))
 

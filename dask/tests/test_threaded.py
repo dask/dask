@@ -1,5 +1,5 @@
 import dask
-from dask.thget import *
+from dask.threaded import *
 from contextlib import contextmanager
 from dask.utils import raises
 
