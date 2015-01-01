@@ -11,9 +11,9 @@ Changing states
 3.  ready: A set of ready-to-run tasks
 4.  waiting_data: available data to yet-to-be-run-tasks {key: {keys}}
 """
-from .core import istask
+from .core import istask, flatten, reverse_dict, get_dependencies
 from operator import add
-from toolz import concat, first, partial
+from toolz import concat, partial
 from multiprocessing.pool import ThreadPool
 from Queue import Queue
 from threading import Lock
@@ -107,73 +107,6 @@ def release_data(key, state):
     state['released'].add(key)
 
     del state['cache'][key]
-
-
-def get_dependencies(dsk, task):
-    """ Get the immediate tasks on which this task depends
-
-    >>> dsk = {'x': 1,
-    ...        'y': (inc, 'x'),
-    ...        'z': (add, 'x', 'y'),
-    ...        'w': (inc, 'z'),
-    ...        'a': (add, 'x', 1)}
-
-    >>> get_dependencies(dsk, 'x')
-    set([])
-
-    >>> get_dependencies(dsk, 'y')
-    set(['x'])
-
-    >>> get_dependencies(dsk, 'z')  # doctest: +SKIP
-    set(['x', 'y'])
-
-    >>> get_dependencies(dsk, 'w')  # Only direct dependencies
-    set(['z'])
-
-    >>> get_dependencies(dsk, 'a')  # Ignore non-keys
-    set(['x'])
-    """
-    val = dsk[task]
-    if not istask(val):
-        return set([])
-    else:
-        return set(k for k in flatten(val[1:]) if k in dsk)
-
-
-def flatten(seq):
-    """
-
-    >>> list(flatten([1]))
-    [1]
-
-    >>> list(flatten([[1, 2], [1, 2]]))
-    [1, 2, 1, 2]
-
-    >>> list(flatten([[[1], [2]], [[1], [2]]]))
-    [1, 2, 1, 2]
-
-    >>> list(flatten(((1, 2), (1, 2)))) # Don't flatten tuples
-    [(1, 2), (1, 2)]
-    """
-    if not isinstance(first(seq), list):
-        return seq
-    else:
-        return concat(map(flatten, seq))
-
-def reverse_dict(d):
-    """
-
-    >>> a, b, c = 'abc'
-    >>> d = {a: [b, c], b: [c]}
-    >>> reverse_dict(d)  # doctest: +SKIP
-    {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
-    """
-    terms = list(d.keys()) + list(concat(d.values()))
-    result = {t: set() for t in terms}
-    for k, vals in d.items():
-        for val in vals:
-            result[val].add(k)
-    return result
 
 
 def start_state_from_dask(dsk, cache=None):
@@ -347,10 +280,11 @@ def visualize(dsk, state, jobs, filename='dask'):
         func[key] = {'color': 'gray'}
         data[key] = {'color': 'gray'}
 
-    for key in state['cache']:
-        data[key] = {'color': 'blue'}
     for key in state['released']:
         data[key] = {'color': 'black'}
+    for key in state['cache']:
+        assert key in dsk
+        data[key] = {'color': 'red'}
 
     for key in jobs:
         if key in state['finished']:

@@ -1,3 +1,6 @@
+from toolz import first, concat
+import __builtin__ as builtins
+
 def ishashable(x):
     """ Is x hashable?
 
@@ -95,3 +98,71 @@ def set(d, key, val, args=[]):
     if callable(val):
         val = (val,) + tuple(args)
     d[key] = val
+
+
+def get_dependencies(dsk, task):
+    """ Get the immediate tasks on which this task depends
+
+    >>> dsk = {'x': 1,
+    ...        'y': (inc, 'x'),
+    ...        'z': (add, 'x', 'y'),
+    ...        'w': (inc, 'z'),
+    ...        'a': (add, 'x', 1)}
+
+    >>> get_dependencies(dsk, 'x')
+    set([])
+
+    >>> get_dependencies(dsk, 'y')
+    set(['x'])
+
+    >>> get_dependencies(dsk, 'z')  # doctest: +SKIP
+    set(['x', 'y'])
+
+    >>> get_dependencies(dsk, 'w')  # Only direct dependencies
+    set(['z'])
+
+    >>> get_dependencies(dsk, 'a')  # Ignore non-keys
+    set(['x'])
+    """
+    val = dsk[task]
+    if not istask(val):
+        return builtins.set([])
+    else:
+        return builtins.set(k for k in flatten(val[1:]) if k in dsk)
+
+
+def flatten(seq):
+    """
+
+    >>> list(flatten([1]))
+    [1]
+
+    >>> list(flatten([[1, 2], [1, 2]]))
+    [1, 2, 1, 2]
+
+    >>> list(flatten([[[1], [2]], [[1], [2]]]))
+    [1, 2, 1, 2]
+
+    >>> list(flatten(((1, 2), (1, 2)))) # Don't flatten tuples
+    [(1, 2), (1, 2)]
+    """
+    if not isinstance(first(seq), list):
+        return seq
+    else:
+        return concat(map(flatten, seq))
+
+def reverse_dict(d):
+    """
+
+    >>> a, b, c = 'abc'
+    >>> d = {a: [b, c], b: [c]}
+    >>> reverse_dict(d)  # doctest: +SKIP
+    {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
+    """
+    terms = list(d.keys()) + list(concat(d.values()))
+    result = {t: builtins.set() for t in terms}
+    for k, vals in d.items():
+        for val in vals:
+            result[val].add(k)
+    return result
+

@@ -1,5 +1,14 @@
 import networkx as nx
-from dask.core import istask
+from dask.core import istask, get_dependencies
+
+
+def make_hashable(x):
+    try:
+        hash(x)
+        return x
+    except TypeError:
+        return id(x)
+
 
 def to_networkx(d, data_attributes=None, function_attributes=None):
     data_attributes = data_attributes or dict()
@@ -10,13 +19,19 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
         g.add_node(k, shape='box', **data_attributes.get(k, dict()))
         if istask(v):
             func, args = v[0], v[1:]
-            func_node = (v, 'function')
-            g.add_node(func_node, shape='circle', label=func.__name__,
-                    **function_attributes.get(k, dict()))
+            func_node = make_hashable((v, 'function'))
+            g.add_node(func_node,
+                       shape='circle',
+                       label=func.__name__,
+                       **function_attributes.get(k, dict()))
             g.add_edge(k, func_node)
-            for arg in args:
-                g.add_node(arg, shape='box', **data_attributes.get(k, dict()))
-                g.add_edge(func_node, arg)
+            for dep in get_dependencies(d, k):
+                arg2 = make_hashable(dep)
+                g.add_node(arg2,
+                           label=str(dep),
+                           shape='box',
+                           **data_attributes.get(k, dict()))
+                g.add_edge(func_node, arg2)
         else:
             g.add_node(k, label='%s=%s' % (k, v), **data_attributes.get(k, dict()))
 
