@@ -38,17 +38,20 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
     return g
 
 
-def dot_graph(d, filename='mydask', **kwargs):
+def write_networkx_to_dot(dg, filename='mydask'):
     import os
-    g = to_networkx(d, **kwargs)
-    p = nx.to_pydot(g)
-
+    p = nx.to_pydot(dg)
     with open(filename + '.dot', 'w') as f:
         f.write(p.to_string())
 
     os.system('dot -Tpdf %s.dot -o %s.pdf' % (filename, filename))
     os.system('dot -Tpng %s.dot -o %s.png' % (filename, filename))
     print("Writing graph to %s.pdf" % filename)
+
+
+def dot_graph(d, filename='mydask', **kwargs):
+    dg = to_networkx(d, **kwargs)
+    write_networkx_to_dot(dg, filename=filename)
 
 
 if __name__ == '__main__':
