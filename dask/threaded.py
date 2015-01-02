@@ -201,6 +201,7 @@ def ndget(ind, coll, lazy=False):
     else:
         return coll[ind]
 
+
 def score(key, state):
     """ Prefer to run tasks that remove need to hold on to data """
     deps = state['dependencies'][key]
@@ -328,6 +329,11 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
 
 
 def state_to_networkx(dsk, state, jobs):
+    """ Convert state to networkx for visualization
+
+    See Also:
+        visualize
+    """
     import networkx as nx
     from .dot import to_networkx
     data, func = dict(), dict()
@@ -350,6 +356,7 @@ def state_to_networkx(dsk, state, jobs):
 
 
 def visualize(dsk, state, jobs, filename='dask'):
+    """ Visualize state of compputation as dot graph """
     from dask.dot import dot_graph, write_networkx_to_dot
     g = state_to_networkx(dsk, state, jobs)
     write_networkx_to_dot(g, filename=filename)

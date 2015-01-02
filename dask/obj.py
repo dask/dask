@@ -32,7 +32,7 @@ class Array(object):
     def ndim(self):
         return len(self.shape)
 
-    def block_keys(self, *args):
+    def keys(self, *args):
         if self.ndim == 0:
             return [(self.name,)]
         ind = len(args)
@@ -40,7 +40,7 @@ class Array(object):
             return [(self.name,) + args + (i,)
                         for i in range(self.numblocks[ind])]
         else:
-            return [self.block_keys(*(args + (i,)))
+            return [self.keys(*(args + (i,)))
                         for i in range(self.numblocks[ind])]
 
 
@@ -95,7 +95,7 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 
 @convert.register(np.ndarray, Array, cost=0.5)
 def dask_to_numpy(x, get=threaded.get, **kwargs):
-    return concatenate(get(x.dask, x.block_keys()))
+    return concatenate(get(x.dask, x.keys()))
 
 
 from blaze.dispatch import dispatch
@@ -174,6 +174,6 @@ def compute_up(expr, lhs, rhs, **kwargs):
 def post_compute(expr, data, get=threaded.get, **kwargs):
     dsk = inline(data.dask, fast_functions=set([ndslice, np.transpose]))
     if ndim(expr) > 0:
-        return concatenate(get(dsk, data.block_keys(), **kwargs))
+        return concatenate(get(dsk, data.keys(), **kwargs))
     else:
-        return get(dsk, data.block_keys()[0], **kwargs)
+        return get(dsk, data.keys()[0], **kwargs)

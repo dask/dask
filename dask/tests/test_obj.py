@@ -20,8 +20,8 @@ def test_Array():
 
     assert a.numblocks == (10, 10)
 
-    assert a.block_keys() == [[('x', i, j) for j in range(10)]
-                                           for i in range(10)]
+    assert a.keys() == [[('x', i, j) for j in range(10)]
+                                     for i in range(10)]
 
 
 def test_convert():
@@ -67,8 +67,8 @@ def test_compute():
         assert eq(result2, expected)
 
 
-def test_block_keys():
-    assert dx.block_keys() == [[(dx.name, i, j) for j in range(6)]
-                                                for i in range(5)]
+def test_keys():
+    assert dx.keys() == [[(dx.name, i, j) for j in range(6)]
+                                          for i in range(5)]
     d = Array({}, 'x', (), ())
-    assert d.block_keys() == [('x',)]
+    assert d.keys() == [('x',)]
