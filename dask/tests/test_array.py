@@ -23,17 +23,17 @@ def test_basic():
     assert a.shape == (10, 10)
     assert a.blockshape == (4, 4)
     assert a.numblocks == (3, 3)
-    assert contains(a.data, {('x', i, j): (ndget, 'x', a.blockshape, i, j)
+    assert contains(a.data, {('x', i, j): (ndslice, 'x', a.blockshape, i, j)
                                     for i in range(3)
                                     for j in range(3)})
 '''
 
 def test_getem():
     assert getem('X', blocksize=(2, 3), shape=(4, 6)) == \
-        {('X', 0, 0): (ndget, 'X', (2, 3), 0, 0),
-         ('X', 1, 0): (ndget, 'X', (2, 3), 1, 0),
-         ('X', 1, 1): (ndget, 'X', (2, 3), 1, 1),
-         ('X', 0, 1): (ndget, 'X', (2, 3), 0, 1)}
+        {('X', 0, 0): (ndslice, 'X', (2, 3), 0, 0),
+         ('X', 1, 0): (ndslice, 'X', (2, 3), 1, 0),
+         ('X', 1, 1): (ndslice, 'X', (2, 3), 1, 1),
+         ('X', 0, 1): (ndslice, 'X', (2, 3), 0, 1)}
 
 
 def test_top():

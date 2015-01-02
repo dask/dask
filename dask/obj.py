@@ -7,7 +7,7 @@ from math import ceil
 import numpy as np
 from . import core, threaded
 from .threaded import inline
-from .array import getem, concatenate, top, ndget
+from .array import getem, concatenate, top, ndslice
 
 
 class Array(object):
@@ -172,7 +172,7 @@ def compute_up(expr, lhs, rhs, **kwargs):
 
 @dispatch(Expr, Array)
 def post_compute(expr, data, get=threaded.get, **kwargs):
-    dsk = inline(data.dask, fast_functions=set([ndget, np.transpose]))
+    dsk = inline(data.dask, fast_functions=set([ndslice, np.transpose]))
     if ndim(expr) > 0:
         return concatenate(get(dsk, data.block_keys(), **kwargs))
     else:

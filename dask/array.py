@@ -7,15 +7,15 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map)
 
 
-def ndget(x, blocksize, *args):
+def ndslice(x, blocksize, *args):
     """ Get a block from an nd-array
 
     >>> x = np.arange(24).reshape((4, 6))
-    >>> ndget(x, (2, 3), 0, 0)
+    >>> ndslice(x, (2, 3), 0, 0)
     array([[0, 1, 2],
            [6, 7, 8]])
 
-    >>> ndget(x, (2, 3), 1, 0)
+    >>> ndslice(x, (2, 3), 1, 0)
     array([[12, 13, 14],
            [18, 19, 20]])
     """
@@ -27,13 +27,13 @@ def getem(arr, blocksize, shape):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', blocksize=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (ndget, 'X', (2, 3), 0, 0),
-     ('X', 1, 0): (ndget, 'X', (2, 3), 1, 0),
-     ('X', 1, 1): (ndget, 'X', (2, 3), 1, 1),
-     ('X', 0, 1): (ndget, 'X', (2, 3), 0, 1)}
+    {('X', 0, 0): (ndslice, 'X', (2, 3), 0, 0),
+     ('X', 1, 0): (ndslice, 'X', (2, 3), 1, 0),
+     ('X', 1, 1): (ndslice, 'X', (2, 3), 1, 1),
+     ('X', 0, 1): (ndslice, 'X', (2, 3), 0, 1)}
     """
     numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
-    return {(arr,) + tup: (ndget, arr, blocksize) + tup
+    return {(arr,) + tup: (ndslice, arr, blocksize) + tup
             for tup in itertools.product(*map(range, numblocks))}
 
 
