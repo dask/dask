@@ -23,26 +23,39 @@ def inc(x):
     return x + 1
 
 
-def get_arg(arg, cache, dsk=None):
+def _execute_task(arg, cache, dsk=None):
     """
 
     >>> cache = {'x': 1, 'y': 2}
 
-    >>> get_arg('x', cache)
+    Compute tasks against a cache
+    >>> _execute_task((add, (inc, 'x'), 1), cache)  # Support nested computation
+    3
+
+    >>> _execute_task((add, 'x', 1), cache)  # Compute task in naive manner
+    2
+
+    Also grab data from cache
+    >>> _execute_task('x', cache)
     1
 
-    >>> list(get_arg(['x', 'y'], cache))
+    Support nested lists
+    >>> list(_execute_task(['x', 'y'], cache))
     [1, 2]
 
-    >>> list(map(list, get_arg([['x', 'y'], ['y', 'x']], cache)))
+    >>> list(map(list, _execute_task([['x', 'y'], ['y', 'x']], cache)))
     [[1, 2], [2, 1]]
 
-    >>> get_arg('foo', cache)  # Passes through on non-keys
+    >>> _execute_task('foo', cache)  # Passes through on non-keys
     'foo'
     """
     dsk = dsk or dict()
     if isinstance(arg, list):
-        return (get_arg(a, cache) for a in arg)
+        return (_execute_task(a, cache) for a in arg)
+    elif istask(arg):
+        func, args = arg[0], arg[1:]
+        args2 = [_execute_task(a, cache, dsk=dsk) for a in args]
+        return func(*args2)
     elif arg in cache:
         return cache[arg]
     elif arg in dsk:
@@ -52,11 +65,14 @@ def get_arg(arg, cache, dsk=None):
 
 
 def execute_task(dsk, key, state, queue, results, lock):
+    """ Compute task and handle all administration
+
+    See also:
+        _execute_task - actually execute task
+    """
     try:
         task = dsk[key]
-        func, args = task[0], task[1:]
-        args2 = [get_arg(arg, state['cache'], dsk=dsk) for arg in args]
-        result = func(*args2)
+        result = _execute_task(task, state['cache'], dsk=dsk)
         with lock:
             finish_task(dsk, key, result, state, results)
         result = key, task, result, None
@@ -339,6 +355,65 @@ def visualize(dsk, state, jobs, filename='dask'):
     write_networkx_to_dot(g, filename=filename)
 
 
+def deepmap(func, seq):
+    """ Apply function inside nested lists
+
+    >>> deepmap(inc, [[1, 2], [3, 4]])
+    [[2, 3], [4, 5]]
+    """
+    if isinstance(seq, list):
+        return [deepmap(func, item) for item in seq]
+    else:
+        return func(seq)
+
+
+def double(x):
+    return x * 2
+
+def expand_key(dsk, fast, key):
+    """
+
+    >>> dsk = {'out': (sum, ['i', 'd']),
+    ...        'i': (inc, 'x'),
+    ...        'd': (double, 'y'),
+    ...        'x': 1, 'y': 1}
+    >>> expand_key(dsk, [inc], 'd')
+    'd'
+    >>> expand_key(dsk, [inc], 'i')  # doctest: +SKIP
+    (inc, 'x')
+    >>> expand_key(dsk, [inc], ['i', 'd'])  # doctest: +SKIP
+    [(inc, 'x'), 'd']
+    """
+    if isinstance(key, list):
+        return [expand_key(dsk, fast, item) for item in key]
+    elif key in dsk and istask(dsk[key]) and dsk[key][0] in fast:
+        task = dsk[key]
+        return (task[0],) + tuple([expand_key(dsk, fast, k) for k in task[1:]])
+    else:
+        return key
+
+
+def expand_value(dsk, fast, key):
+    """
+
+    >>> dsk = {'out': (sum, ['i', 'd']),
+    ...        'i': (inc, 'x'),
+    ...        'd': (double, 'y'),
+    ...        'x': 1, 'y': 1}
+    >>> expand_value(dsk, [inc], 'd')  # doctest: +SKIP
+    (double, 'y')
+    >>> expand_value(dsk, [inc], 'i')  # doctest: +SKIP
+    (inc, 'x')
+    >>> expand_value(dsk, [inc], 'out')  # doctest: +SKIP
+    (sum, [(inc, 'x'), 'd'])
+    """
+    task = dsk[key]
+    if not istask(task):
+        return task
+    func, args = task[0], task[1:]
+    return (func,) + tuple([expand_key(dsk, fast, arg) for arg in args])
+
+
 def inline(dsk, fast_functions=None):
     """ Inline cheap functions into larger operations
 
@@ -356,6 +431,11 @@ def inline(dsk, fast_functions=None):
     dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
 
+    result = {k: expand_value(dsk, fast_functions, k) for k, v in dsk.items()
+            if not dependents[k] or not istask(v) or v[0] not in fast_functions}
+    return result
+
+'''
     def value(task):
         """
 
@@ -365,9 +445,14 @@ def inline(dsk, fast_functions=None):
         if not istask(task):
             return task
         func, args = task[0], task[1:]
+
         new_args = list()
         for arg in args:
-            if arg not in dsk:
+            if isinstance(arg, list):
+                import pdb; pdb.set_trace()
+                new_args.append(deepmap(lambda k: value(dsk.get(k, k)), arg))
+                continue
+            elif arg not in dsk:
                 new_args.append(arg)
                 continue
             else:
@@ -379,12 +464,4 @@ def inline(dsk, fast_functions=None):
 
         return (func,) + tuple(new_args)
 
-    result = dict()
-    for k, v in dsk.items():
-        if not istask(v):
-            result[k] = v
-        elif v[0] not in fast_functions:
-            result[k] = value(v)
-        elif not dependents[k]:
-            result[k] = value(v)
-    return result
+'''

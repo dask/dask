@@ -117,3 +117,36 @@ def test_inline_doesnt_shrink_fast_functions_at_top():
     dsk = {'x': (inc, 'y'), 'y': 1}
     result = inline(dsk, fast_functions=set([inc]))
     assert result == dsk
+
+
+def test_inline_traverses_lists():
+    x, y, i, d = 'xyid'
+    dsk = {'out': (sum, [i, d]),
+           i: (inc, x),
+           d: (double, y),
+           x: 1, y: 1}
+    expected = {'out': (sum, [(inc, x), d]),
+                d: (double, y),
+                x: 1, y: 1}
+    result = inline(dsk, fast_functions=set([inc]))
+    assert result == expected
+
+
+def test_expand_value():
+    dsk = {'out': (sum, ['i', 'd']),
+           'i': (inc, 'x'),
+           'd': (double, 'y'),
+           'x': 1, 'y': 1}
+    assert expand_value(dsk, [inc], 'd') == (double, 'y')
+    assert expand_value(dsk, [inc], 'i') == (inc, 'x')
+    assert expand_value(dsk, [inc], 'out') == (sum, [(inc, 'x'), 'd'])
+
+
+def test_expand_key():
+    dsk = {'out': (sum, ['i', 'd']),
+           'i': (inc, 'x'),
+           'd': (double, 'y'),
+           'x': 1, 'y': 1}
+    assert expand_key(dsk, [inc], 'd') == 'd'
+    assert expand_key(dsk, [inc], 'i') == (inc, 'x')
+    assert expand_key(dsk, [inc], ['i', 'd']) == [(inc, 'x'), 'd']
