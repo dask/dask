@@ -59,11 +59,13 @@ def execute_task(dsk, key, state, queue, results, lock):
         result = func(*args2)
         with lock:
             finish_task(dsk, key, result, state, results)
+        result = key, task, result, None
     except Exception as e:
-        queue.put((key, task, e))
-        return key, task, e
-    queue.put((key, task, result))
-    return key, task, result
+        import sys
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        result = key, task, e, exc_traceback
+    queue.put(result)
+    return result
 
 
 def finish_task(dsk, key, result, state, results):
@@ -284,8 +286,10 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or len(state['finished']) < len(jobs):
-            key, finished_task, res = queue.get()
+            key, finished_task, res, tb = queue.get()
             if isinstance(res, Exception):
+                import traceback
+                traceback.print_tb(tb)
                 raise res
             with lock:
                 while state['ready'] and state['num-active-threads'] < nthreads:
@@ -298,7 +302,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
 
     # Final reporting
     while not queue.empty():
-        key, finished_task, res = queue.get()
+        key, finished_task, res, tb = queue.get()
         # print("Finished %s" % str(finished_task))
 
     if debug_counts:
