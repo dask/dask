@@ -1,15 +1,98 @@
 """
-Players:
+A threaded shared-memory scheduler for dask graphs.
 
-Constants
+This code is experimental and fairly ugly.  It should probably be rewritten
+before anyone really depends on it.  It is very stateful and error-prone.
+
+That being said, it is decently fast.
+
+State
+=====
+
+Many functions pass around a ``state`` variable that holds the current state of
+the computation.  This variable consists of several other dictionaries and
+sets, explained below.
+
+Constant state
+--------------
+
 1.  dependencies: {x: [a, b ,c]} a,b,c, must be run before x
 2.  dependents: {a: [x, y]} a must run before x or y
 
-Changing states
+Changing state
+--------------
+
+### Data
+
 1.  cache: available concrete data.  {key: actual-data}
-2.  waiting: which tasks are waiting on others.  {key: {keys}}
-3.  ready: A set of ready-to-run tasks
-4.  waiting_data: available data to yet-to-be-run-tasks {key: {keys}}
+2.  released: data that we've seen, used, and released because it is no longer
+    needed
+
+### Jobs
+
+1.  ready: A set of ready-to-run tasks
+2.  finished: A set of finished tasks
+3.  waiting: which tasks are still waiting on others :: {key: {keys}}
+    Real-time equivalent of dependencies
+4.  waiting_data: available data to yet-to-be-run-tasks :: {key: {keys}}
+    Real-time equivalent of dependents
+
+### Other
+
+1.  num-active-threads: Number of currently running threads.  int
+
+Example
+-------
+>>> import pprint
+>>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
+>>> pprint.pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
+{'cache': {'x': 1, 'y': 2},
+ 'dependencies': {'w': set(['y', 'z']),
+                  'x': set([]),
+                  'y': set([]),
+                  'z': set(['x'])},
+ 'dependents': {'w': set([]),
+                'x': set(['z']),
+                'y': set(['w']),
+                'z': set(['w'])},
+ 'finished': set([]),
+ 'num-active-threads': 0,
+ 'ready': set(['z']),
+ 'released': set([]),
+ 'waiting': {'w': set(['z'])},
+ 'waiting_data': {'x': set(['z']),
+                  'y': set(['w']),
+                  'z': set(['w'])}}
+
+Optimizations
+=============
+
+We build this scheduler with out-of-core array operations in mind.  To this end
+we have encoded some particular optimizations.
+
+Compute to release data
+-----------------------
+
+When we choose a new task to execute we often have many options.  Policies at
+this stage are cheap and can significantly impact performance.  One could
+imagine policies that expose parallelism, drive towards a paticular output,
+etc..  Our current policy is the compute tasks that free up data resources.
+
+See the functions ``choose_task`` and ``score`` for more information
+
+
+Inlining computations
+---------------------
+
+We hold on to intermediate computations either in memory or on disk.
+
+For very cheap computations that may emit new copies of the data, like
+``np.transpose`` or possibly even ``x + 1`` we choose not to store these as
+separate pieces of data / tasks.  Instead we combine them with the computations
+that require them.  This may result in repeated computation but saves
+significantly on space and computation complexity.
+
+See the function ``inline`` for more information.
 """
 from .core import istask, flatten, reverse_dict, get_dependencies
 from operator import add
@@ -22,113 +105,15 @@ import psutil
 def inc(x):
     return x + 1
 
-
-def _execute_task(arg, cache, dsk=None):
-    """
-
-    >>> cache = {'x': 1, 'y': 2}
-
-    Compute tasks against a cache
-    >>> _execute_task((add, (inc, 'x'), 1), cache)  # Support nested computation
-    3
-
-    >>> _execute_task((add, 'x', 1), cache)  # Compute task in naive manner
-    2
-
-    Also grab data from cache
-    >>> _execute_task('x', cache)
-    1
-
-    Support nested lists
-    >>> list(_execute_task(['x', 'y'], cache))
-    [1, 2]
-
-    >>> list(map(list, _execute_task([['x', 'y'], ['y', 'x']], cache)))
-    [[1, 2], [2, 1]]
-
-    >>> _execute_task('foo', cache)  # Passes through on non-keys
-    'foo'
-    """
-    dsk = dsk or dict()
-    if isinstance(arg, list):
-        return (_execute_task(a, cache) for a in arg)
-    elif istask(arg):
-        func, args = arg[0], arg[1:]
-        args2 = [_execute_task(a, cache, dsk=dsk) for a in args]
-        return func(*args2)
-    elif arg in cache:
-        return cache[arg]
-    elif arg in dsk:
-        raise ValueError("Premature deletion of data.  Key: %s" % str(arg))
-    else:
-        return arg
-
-
-def execute_task(dsk, key, state, queue, results, lock):
-    """ Compute task and handle all administration
-
-    See also:
-        _execute_task - actually execute task
-    """
-    try:
-        task = dsk[key]
-        result = _execute_task(task, state['cache'], dsk=dsk)
-        with lock:
-            finish_task(dsk, key, result, state, results)
-        result = key, task, result, None
-    except Exception as e:
-        import sys
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        result = key, task, e, exc_traceback
-    queue.put(result)
-    return result
-
-
-def finish_task(dsk, key, result, state, results):
-    """
-    Update executation state after a task finishes
-
-    Mutates.  This should run atomically (with a lock).
-    """
-    state['cache'][key] = result
-    if key in state['ready']:
-        state['ready'].remove(key)
-
-    for dep in state['dependents'][key]:
-        s = state['waiting'][dep]
-        s.remove(key)
-        if not s:
-            del state['waiting'][dep]
-            state['ready'].add(dep)
-
-    for dep in state['dependencies'][key]:
-        if dep in state['waiting_data']:
-            s = state['waiting_data'][dep]
-            s.remove(key)
-            if not s and dep not in results:
-                release_data(dep, state)
-        elif dep in state['cache'] and dep not in results:
-            release_data(dep, state)
-
-    state['finished'].add(key)
-    state['num-active-threads'] -= 1
-
-    return state
-
-
-def release_data(key, state):
-    """ Remove data from temporary storage """
-    if key in state['waiting_data']:
-        assert not state['waiting_data'][key]
-        del state['waiting_data'][key]
-
-    state['released'].add(key)
-
-    del state['cache'][key]
+def double(x):
+    return x * 2
 
 
 def start_state_from_dask(dsk, cache=None):
     """ Start state from a dask
+
+    Example
+    -------
 
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     >>> import pprint
@@ -182,25 +167,158 @@ def start_state_from_dask(dsk, cache=None):
     return state
 
 
-def ndget(ind, coll, lazy=False):
-    """
+'''
+Running tasks
+-------------
 
-    >>> ndget(1, 'abc')
+When we execute tasks we both
+
+1.  Perform the actual work of collecting the appropriate data and calling the function
+2.  Manage administrative state to coordinate with the scheduler
+'''
+
+def _execute_task(arg, cache, dsk=None):
+    """ Do the actual work of collecting data and executing a function
+
+    Examples
+    --------
+
+    >>> cache = {'x': 1, 'y': 2}
+
+    Compute tasks against a cache
+    >>> _execute_task((add, 'x', 1), cache)  # Compute task in naive manner
+    2
+    >>> _execute_task((add, (inc, 'x'), 1), cache)  # Support nested computation
+    3
+
+    Also grab data from cache
+    >>> _execute_task('x', cache)
+    1
+
+    Support nested lists
+    >>> list(_execute_task(['x', 'y'], cache))
+    [1, 2]
+
+    >>> list(map(list, _execute_task([['x', 'y'], ['y', 'x']], cache)))
+    [[1, 2], [2, 1]]
+
+    >>> _execute_task('foo', cache)  # Passes through on non-keys
+    'foo'
+    """
+    dsk = dsk or dict()
+    if isinstance(arg, list):
+        return (_execute_task(a, cache) for a in arg)
+    elif istask(arg):
+        func, args = arg[0], arg[1:]
+        args2 = [_execute_task(a, cache, dsk=dsk) for a in args]
+        return func(*args2)
+    elif arg in cache:
+        return cache[arg]
+    elif arg in dsk:
+        raise ValueError("Premature deletion of data.  Key: %s" % str(arg))
+    else:
+        return arg
+
+
+def execute_task(dsk, key, state, queue, results, lock):
+    """
+    Compute task and handle all administration
+
+    See also:
+        _execute_task - actually execute task
+    """
+    try:
+        task = dsk[key]
+        result = _execute_task(task, state['cache'], dsk=dsk)
+        with lock:
+            finish_task(dsk, key, result, state, results)
+        result = key, task, result, None
+    except Exception as e:
+        import sys
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        result = key, task, e, exc_traceback
+    queue.put(result)
+    return result
+
+
+def finish_task(dsk, key, result, state, results):
+    """
+    Update executation state after a task finishes
+
+    Mutates.  This should run atomically (with a lock).
+    """
+    state['cache'][key] = result
+    if key in state['ready']:
+        state['ready'].remove(key)
+
+    for dep in state['dependents'][key]:
+        s = state['waiting'][dep]
+        s.remove(key)
+        if not s:
+            del state['waiting'][dep]
+            state['ready'].add(dep)
+
+    for dep in state['dependencies'][key]:
+        if dep in state['waiting_data']:
+            s = state['waiting_data'][dep]
+            s.remove(key)
+            if not s and dep not in results:
+                release_data(dep, state)
+        elif dep in state['cache'] and dep not in results:
+            release_data(dep, state)
+
+    state['finished'].add(key)
+    state['num-active-threads'] -= 1
+
+    return state
+
+
+def release_data(key, state):
+    """ Remove data from temporary storage
+
+    See Also
+        finish_task
+    """
+    if key in state['waiting_data']:
+        assert not state['waiting_data'][key]
+        del state['waiting_data'][key]
+
+    state['released'].add(key)
+
+    del state['cache'][key]
+
+
+def nested_get(ind, coll, lazy=False):
+    """ Get nested index from collection
+
+    Examples
+    --------
+
+    >>> nested_get(1, 'abc')
     'b'
-    >>> ndget([1, 0], 'abc')
+    >>> nested_get([1, 0], 'abc')
     ('b', 'a')
-    >>> ndget([[1, 0], [0, 1]], 'abc')
+    >>> nested_get([[1, 0], [0, 1]], 'abc')
     (('b', 'a'), ('a', 'b'))
     """
     if isinstance(ind, list):
         if lazy:
-            return (ndget(i, coll, lazy=lazy) for i in ind)
+            return (nested_get(i, coll, lazy=lazy) for i in ind)
         else:
-            return tuple([ndget(i, coll, lazy=lazy) for i in ind])
+            return tuple([nested_get(i, coll, lazy=lazy) for i in ind])
         return seq
     else:
         return coll[ind]
 
+'''
+Task Selection
+--------------
+
+We often have a choice among many tasks to run next.  This choice is both
+cheap and can significantly impact performance.
+
+Here we choose tasks that immediately free data resources.
+'''
 
 def score(key, state):
     """ Prefer to run tasks that remove need to hold on to data """
@@ -236,6 +354,114 @@ def choose_task(state, score=score):
     """
     return max(state['ready'], key=partial(score, state=state))
 
+
+'''
+Inlining
+--------
+
+We join small cheap tasks on to others to avoid the creation of intermediaries.
+'''
+
+
+def inline(dsk, fast_functions=None):
+    """ Inline cheap functions into larger operations
+
+    >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
+    ...        'i': (inc, 'x'),
+    ...        'd': (double, 'y'),
+    ...        'x': 1, 'y': 1}
+    >>> inline(dsk, [inc])  # doctest: +SKIP
+    {'out': (add, (inc, 'x'), 'd'),
+     'd': (double, 'y'),
+     'x': 1, 'y': 1}
+    """
+    if not fast_functions:
+        return dsk
+    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    dependents = reverse_dict(dependencies)
+
+    def isfast(func):
+        if hasattr(func, 'func'):  # Support partials, curries
+            return func.func in fast_functions
+        else:
+            return func in fast_functions
+
+    result = {k: expand_value(dsk, fast_functions, k) for k, v in dsk.items()
+                if not dependents[k]
+                or not istask(v)
+                or not isfast(v[0])}
+    return result
+
+
+def deepmap(func, seq):
+    """ Apply function inside nested lists
+
+    >>> deepmap(inc, [[1, 2], [3, 4]])
+    [[2, 3], [4, 5]]
+    """
+    if isinstance(seq, list):
+        return [deepmap(func, item) for item in seq]
+    else:
+        return func(seq)
+
+
+def expand_key(dsk, fast, key):
+    """
+
+    >>> dsk = {'out': (sum, ['i', 'd']),
+    ...        'i': (inc, 'x'),
+    ...        'd': (double, 'y'),
+    ...        'x': 1, 'y': 1}
+    >>> expand_key(dsk, [inc], 'd')
+    'd'
+    >>> expand_key(dsk, [inc], 'i')  # doctest: +SKIP
+    (inc, 'x')
+    >>> expand_key(dsk, [inc], ['i', 'd'])  # doctest: +SKIP
+    [(inc, 'x'), 'd']
+    """
+    if isinstance(key, list):
+        return [expand_key(dsk, fast, item) for item in key]
+
+    def isfast(func):
+        if hasattr(func, 'func'):  # Support partials, curries
+            return func.func in fast
+        else:
+            return func in fast
+
+    if (key in dsk and istask(dsk[key]) and isfast(dsk[key][0])):
+        task = dsk[key]
+        return (task[0],) + tuple([expand_key(dsk, fast, k) for k in task[1:]])
+    else:
+        return key
+
+
+def expand_value(dsk, fast, key):
+    """
+
+    >>> dsk = {'out': (sum, ['i', 'd']),
+    ...        'i': (inc, 'x'),
+    ...        'd': (double, 'y'),
+    ...        'x': 1, 'y': 1}
+    >>> expand_value(dsk, [inc], 'd')  # doctest: +SKIP
+    (double, 'y')
+    >>> expand_value(dsk, [inc], 'i')  # doctest: +SKIP
+    (inc, 'x')
+    >>> expand_value(dsk, [inc], 'out')  # doctest: +SKIP
+    (sum, [(inc, 'x'), 'd'])
+    """
+    task = dsk[key]
+    if not istask(task):
+        return task
+    func, args = task[0], task[1:]
+    return (func,) + tuple([expand_key(dsk, fast, arg) for arg in args])
+
+
+'''
+`get`
+-----
+
+The main function of the scheduler.  Get is the main entry point.
+'''
 
 def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **kwargs):
     """ Threaded cached implementation of dask.get
@@ -325,7 +551,25 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     if debug_counts:
         visualize(dsk, state, jobs, filename='dask_end')
 
-    return ndget(result, state['cache'])
+    return nested_get(result, state['cache'])
+
+
+'''
+Debugging
+---------
+
+The threaded nature of this project presents challenging to normal unit-test
+and debug workflows.  Visualization of the execution state has value.
+
+Our main mechanism is a visualization of the execution state as colors on our
+normal dot graphs (see dot module).
+'''
+
+def visualize(dsk, state, jobs, filename='dask'):
+    """ Visualize state of compputation as dot graph """
+    from dask.dot import dot_graph, write_networkx_to_dot
+    g = state_to_networkx(dsk, state, jobs)
+    write_networkx_to_dot(g, filename=filename)
 
 
 def state_to_networkx(dsk, state, jobs):
@@ -353,107 +597,3 @@ def state_to_networkx(dsk, state, jobs):
         else:
             func[key] = {'color': 'red'}
     return to_networkx(dsk, data, func)
-
-
-def visualize(dsk, state, jobs, filename='dask'):
-    """ Visualize state of compputation as dot graph """
-    from dask.dot import dot_graph, write_networkx_to_dot
-    g = state_to_networkx(dsk, state, jobs)
-    write_networkx_to_dot(g, filename=filename)
-
-
-def deepmap(func, seq):
-    """ Apply function inside nested lists
-
-    >>> deepmap(inc, [[1, 2], [3, 4]])
-    [[2, 3], [4, 5]]
-    """
-    if isinstance(seq, list):
-        return [deepmap(func, item) for item in seq]
-    else:
-        return func(seq)
-
-
-def double(x):
-    return x * 2
-
-
-def expand_key(dsk, fast, key):
-    """
-
-    >>> dsk = {'out': (sum, ['i', 'd']),
-    ...        'i': (inc, 'x'),
-    ...        'd': (double, 'y'),
-    ...        'x': 1, 'y': 1}
-    >>> expand_key(dsk, [inc], 'd')
-    'd'
-    >>> expand_key(dsk, [inc], 'i')  # doctest: +SKIP
-    (inc, 'x')
-    >>> expand_key(dsk, [inc], ['i', 'd'])  # doctest: +SKIP
-    [(inc, 'x'), 'd']
-    """
-    if isinstance(key, list):
-        return [expand_key(dsk, fast, item) for item in key]
-
-    def isfast(func):
-        if hasattr(func, 'func'):  # Support partials, curries
-            return func.func in fast
-        else:
-            return func in fast
-
-    if (key in dsk and istask(dsk[key]) and isfast(dsk[key][0])):
-        task = dsk[key]
-        return (task[0],) + tuple([expand_key(dsk, fast, k) for k in task[1:]])
-    else:
-        return key
-
-
-def expand_value(dsk, fast, key):
-    """
-
-    >>> dsk = {'out': (sum, ['i', 'd']),
-    ...        'i': (inc, 'x'),
-    ...        'd': (double, 'y'),
-    ...        'x': 1, 'y': 1}
-    >>> expand_value(dsk, [inc], 'd')  # doctest: +SKIP
-    (double, 'y')
-    >>> expand_value(dsk, [inc], 'i')  # doctest: +SKIP
-    (inc, 'x')
-    >>> expand_value(dsk, [inc], 'out')  # doctest: +SKIP
-    (sum, [(inc, 'x'), 'd'])
-    """
-    task = dsk[key]
-    if not istask(task):
-        return task
-    func, args = task[0], task[1:]
-    return (func,) + tuple([expand_key(dsk, fast, arg) for arg in args])
-
-
-def inline(dsk, fast_functions=None):
-    """ Inline cheap functions into larger operations
-
-    >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
-    ...        'i': (inc, 'x'),
-    ...        'd': (double, 'y'),
-    ...        'x': 1, 'y': 1}
-    >>> inline(dsk, [inc])  # doctest: +SKIP
-    {'out': (add, (inc, 'x'), 'd'),
-     'd': (double, 'y'),
-     'x': 1, 'y': 1}
-    """
-    if not fast_functions:
-        return dsk
-    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-    dependents = reverse_dict(dependencies)
-
-    def isfast(func):
-        if hasattr(func, 'func'):  # Support partials, curries
-            return func.func in fast_functions
-        else:
-            return func in fast_functions
-
-    result = {k: expand_value(dsk, fast_functions, k) for k, v in dsk.items()
-                if not dependents[k]
-                or not istask(v)
-                or not isfast(v[0])}
-    return result
