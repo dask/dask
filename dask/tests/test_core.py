@@ -101,3 +101,10 @@ def test_get_laziness():
 
     assert dask.get(d, ['x', 'y']) == [1, 2]
     assert dask.get(d, 'z') == False
+
+
+def test_get_dependencies_nested():
+    dsk = {'x': 1, 'y': 2,
+           'z': (add, (inc, 'x'), 'y')}
+
+    assert dask.core.get_dependencies(dsk, 'z') == set(['x', 'y'])

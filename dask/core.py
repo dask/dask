@@ -1,5 +1,9 @@
 from toolz import first, concat
 import __builtin__ as builtins
+from operator import add
+
+def inc(x):
+    return x + 1
 
 def ishashable(x):
     """ Is x hashable?
@@ -100,6 +104,28 @@ def set(d, key, val, args=[]):
     d[key] = val
 
 
+def _deps(dsk, arg):
+    """ Get dependencies from keys or tasks
+
+    Helper function for get_dependencies.
+
+    >>> dsk = {'x': 1, 'y': 2}
+
+    >>> _deps(dsk, 'x')
+    set(['x'])
+    >>> _deps(dsk, (add, 'x', 1))
+    set(['x'])
+
+    >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
+    set(['x', 'y'])
+    """
+    if istask(arg):
+        return builtins.set.union(*[_deps(dsk, a) for a in arg[1:]])
+    if arg not in dsk:
+        return builtins.set()
+    return builtins.set([arg])
+
+
 def get_dependencies(dsk, task):
     """ Get the immediate tasks on which this task depends
 
@@ -107,7 +133,7 @@ def get_dependencies(dsk, task):
     ...        'y': (inc, 'x'),
     ...        'z': (add, 'x', 'y'),
     ...        'w': (inc, 'z'),
-    ...        'a': (add, 'x', 1)}
+    ...        'a': (add, (inc, 'x'), 1)}
 
     >>> get_dependencies(dsk, 'x')
     set([])
@@ -127,8 +153,7 @@ def get_dependencies(dsk, task):
     val = dsk[task]
     if not istask(val):
         return builtins.set([])
-    else:
-        return builtins.set(k for k in flatten(val[1:]) if k in dsk)
+    return builtins.set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
 
 
 def flatten(seq):
