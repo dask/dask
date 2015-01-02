@@ -337,3 +337,54 @@ def visualize(dsk, state, jobs, filename='dask'):
     from dask.dot import dot_graph, write_networkx_to_dot
     g = state_to_networkx(dsk, state, jobs)
     write_networkx_to_dot(g, filename=filename)
+
+
+def inline(dsk, fast_functions=None):
+    """ Inline cheap functions into larger operations
+
+    >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
+    ...        'i': (inc, 'x'),
+    ...        'd': (double, 'y'),
+    ...        'x': 1, 'y': 1}
+    >>> inline(dsk, [inc])  # doctest: +SKIP
+    {'out': (add, (inc, 'x'), 'd'),
+     'd': (double, 'y'),
+     'x': 1, 'y': 1}
+    """
+    if not fast_functions:
+        return dsk
+    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    dependents = reverse_dict(dependencies)
+
+    def value(task):
+        """
+
+        Given a task like (add, 'i', 'x')
+        return a compound task like (add, (inc, 'j'), 'x')
+        """
+        if not istask(task):
+            return task
+        func, args = task[0], task[1:]
+        new_args = list()
+        for arg in args:
+            if arg not in dsk:
+                new_args.append(arg)
+                continue
+            else:
+                subtask = dsk[arg]
+                if istask(subtask) and subtask[0] in fast_functions:
+                    new_args.append(value(subtask))
+                else:
+                    new_args.append(arg)
+
+        return (func,) + tuple(new_args)
+
+    result = dict()
+    for k, v in dsk.items():
+        if not istask(v):
+            result[k] = v
+        elif v[0] not in fast_functions:
+            result[k] = value(v)
+        elif not dependents[k]:
+            result[k] = value(v)
+    return result

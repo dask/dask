@@ -94,3 +94,26 @@ def test_state_to_networkx():
     state = start_state_from_dask(dsk)
     g = state_to_networkx(dsk, state, {})
     assert isinstance(g, nx.DiGraph)
+
+
+def double(x):
+    return x * 2
+
+def test_inline():
+    x, y, i, d = 'xyid'
+    dsk = {'out': (add, i, d),
+           i: (inc, x),
+           d: (double, y),
+           x: 1, y: 1}
+
+    result = inline(dsk, fast_functions=set([inc]))
+    expected = {'out': (add, (inc, x), d),
+                d: (double, y),
+                x: 1, y: 1}
+    assert result == expected
+
+
+def test_inline_doesnt_shrink_fast_functions_at_top():
+    dsk = {'x': (inc, 'y'), 'y': 1}
+    result = inline(dsk, fast_functions=set([inc]))
+    assert result == dsk
