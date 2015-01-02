@@ -370,6 +370,7 @@ def deepmap(func, seq):
 def double(x):
     return x * 2
 
+
 def expand_key(dsk, fast, key):
     """
 
@@ -386,7 +387,14 @@ def expand_key(dsk, fast, key):
     """
     if isinstance(key, list):
         return [expand_key(dsk, fast, item) for item in key]
-    elif key in dsk and istask(dsk[key]) and dsk[key][0] in fast:
+
+    def isfast(func):
+        if hasattr(func, 'func'):  # Support partials, curries
+            return func.func in fast
+        else:
+            return func in fast
+
+    if (key in dsk and istask(dsk[key]) and isfast(dsk[key][0])):
         task = dsk[key]
         return (task[0],) + tuple([expand_key(dsk, fast, k) for k in task[1:]])
     else:
@@ -431,37 +439,14 @@ def inline(dsk, fast_functions=None):
     dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
 
+    def isfast(func):
+        if hasattr(func, 'func'):  # Support partials, curries
+            return func.func in fast_functions
+        else:
+            return func in fast_functions
+
     result = {k: expand_value(dsk, fast_functions, k) for k, v in dsk.items()
-            if not dependents[k] or not istask(v) or v[0] not in fast_functions}
+                if not dependents[k]
+                or not istask(v)
+                or not isfast(v[0])}
     return result
-
-'''
-    def value(task):
-        """
-
-        Given a task like (add, 'i', 'x')
-        return a compound task like (add, (inc, 'j'), 'x')
-        """
-        if not istask(task):
-            return task
-        func, args = task[0], task[1:]
-
-        new_args = list()
-        for arg in args:
-            if isinstance(arg, list):
-                import pdb; pdb.set_trace()
-                new_args.append(deepmap(lambda k: value(dsk.get(k, k)), arg))
-                continue
-            elif arg not in dsk:
-                new_args.append(arg)
-                continue
-            else:
-                subtask = dsk[arg]
-                if istask(subtask) and subtask[0] in fast_functions:
-                    new_args.append(value(subtask))
-                else:
-                    new_args.append(arg)
-
-        return (func,) + tuple(new_args)
-
-'''

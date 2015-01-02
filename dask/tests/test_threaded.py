@@ -2,6 +2,7 @@ import dask
 from dask.threaded import *
 from contextlib import contextmanager
 from dask.utils import raises
+from operator import add, mul
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -111,6 +112,15 @@ def test_inline():
                 d: (double, y),
                 x: 1, y: 1}
     assert result == expected
+
+
+def test_inline_ignores_curries_and_partials():
+    dsk = {'x': 1, 'y': 2,
+           'a': (partial(add, 1), 'x'),
+           'b': (inc, 'a')}
+
+    result = inline(dsk, fast_functions=set([add]))
+    assert 'a' not in set(result.keys())
 
 
 def test_inline_doesnt_shrink_fast_functions_at_top():

@@ -6,7 +6,8 @@ import itertools
 from math import ceil
 import numpy as np
 from . import core, threaded
-from .array import getem, concatenate, top
+from .threaded import inline
+from .array import getem, concatenate, top, ndget
 
 
 class Array(object):
@@ -171,7 +172,8 @@ def compute_up(expr, lhs, rhs, **kwargs):
 
 @dispatch(Expr, Array)
 def post_compute(expr, data, get=threaded.get, **kwargs):
+    dsk = inline(data.dask, fast_functions=set([ndget, np.transpose]))
     if ndim(expr) > 0:
-        return concatenate(get(data.dask, data.block_keys(), **kwargs))
+        return concatenate(get(dsk, data.block_keys(), **kwargs))
     else:
-        return get(data.dask, data.block_keys()[0], **kwargs)
+        return get(dsk, data.block_keys()[0], **kwargs)
