@@ -4,8 +4,8 @@ Dask Specification
 
 We represent a computation as a directed acyclic graph of tasks with data
 dependencies.  Dask is a specification to encode such a graph using ordinary
-Python data structures, namely ``dict``s, ``tuple``s, ``function``s, and
-arbitrary Python values.
+Python data structures, namely dicts, tuples, functions, and arbitrary Python
+values.
 
 
 Definitions
