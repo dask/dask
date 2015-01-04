@@ -66,6 +66,52 @@ If the argument is a list then a function should expect an ``Iterator`` of
 concrete values.
 
 
+Entry Point - The ``get`` function
+----------------------------------
+
+The ``get`` function serves as entry point to computation.
+This function gets the value associated to the given key.  That key may
+refer to stored data as is the case with ``'x'`` or a task as is the case with
+``'z'``.  In the latter case ``get`` should perform all necessary computation
+to retrieve the computed value.
+
+.. code-block:: python
+
+   >>> dsk = {'x': 1,
+   ...        'y': 2,
+   ...        'z': (add, 'x', 'y'),
+   ...        'w': (sum, ['x', 'y', 'z'])}
+
+.. code-block:: python
+
+   >>> get(dsk, 'x')
+   1
+
+   >>> get(dsk, 'z')
+   3
+
+   >>> get(dsk, 'w')
+   6
+
+Additionally if given a ``list`` get should simultaneously acquire values for
+multiple keys
+
+.. code-block:: python
+
+   >>> get(dsk, ['x', 'y', 'z'])
+   [1, 2, 3]
+
+Because we accept lists of keys as keys we support nested lists.
+
+.. code-block:: python
+
+   >>> get(dsk, [['x', 'y'], ['z', 'w']])
+   [[1, 2], [3, 6]]
+
+Internally ``get`` can be arbitrarily complex, calling out to distributed
+computing, using caches, etc..
+
+
 Why use tuples
 --------------
 
