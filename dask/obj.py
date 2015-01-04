@@ -45,7 +45,8 @@ class Array(object):
 
 
 def atop(func, out, out_ind, *args):
-    arginds = list(partition(2, args))
+    """ Array object version of dask.array.top """
+    arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
 
@@ -108,14 +109,16 @@ def compute_it(expr, leaves, *data):
     return compute(expr, dict(zip(leaves, data)))
 
 
-@compute_up.register(ElemWise, Array)
-@compute_up.register(ElemWise, Array, Array)
 def elemwise_array(expr, *data, **kwargs):
     leaves = expr._inputs
     expr_inds = tuple(range(ndim(expr)))[::-1]
     return atop(curry(compute_it, expr, leaves),
                 next(names), expr_inds,
                 *concat((dat, tuple(range(ndim(dat))[::-1])) for dat in data))
+
+for i in range(10):
+    compute_up.register(ElemWise, *([Array] * i))(elemwise_array)
+
 
 from blaze.expr.split import split
 
