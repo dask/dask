@@ -22,12 +22,6 @@ Install
 Example
 -------
 
-.. image:: docs/source/_static/dask-simple.png
-   :height: 400px
-   :alt: A simple dask dictionary
-   :align: right
-
-
 Consider the following simple program
 
 .. code-block:: python
@@ -49,6 +43,16 @@ We encode this as a dictionary in the following way
    d = {'x': 1,
         'y': (inc, 'x'),
         'z': (add, 'y', 10)}
+
+While less aesthetically pleasing this dictionary may now be analyzed,
+optimized, and computed on by other Python code, not just the Python
+interpreter.
+
+.. image:: docs/source/_static/dask-simple.png
+   :height: 400px
+   :alt: A simple dask dictionary
+   :align: right
+
 
 Dependencies
 ------------
