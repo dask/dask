@@ -1,6 +1,6 @@
-from toolz import first, concat
 import __builtin__ as builtins
 from operator import add
+from itertools import chain
 
 def inc(x):
     return x + 1
@@ -174,10 +174,10 @@ def flatten(seq):
     >>> list(flatten(((1, 2), (1, 2)))) # Don't flatten tuples
     [(1, 2), (1, 2)]
     """
-    if not isinstance(first(seq), list):
+    if not isinstance(next(iter(seq)), list):
         return seq
     else:
-        return concat(map(flatten, seq))
+        return chain.from_iterable(map(flatten, seq))
 
 def reverse_dict(d):
     """
@@ -187,7 +187,7 @@ def reverse_dict(d):
     >>> reverse_dict(d)  # doctest: +SKIP
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
-    terms = list(d.keys()) + list(concat(d.values()))
+    terms = list(d.keys()) + list(chain.from_iterable(d.values()))
     result = {t: builtins.set() for t in terms}
     for k, vals in d.items():
         for val in vals:
