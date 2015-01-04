@@ -7,7 +7,7 @@ from math import ceil
 import numpy as np
 from . import core, threaded
 from .threaded import inline
-from .array import getem, concatenate, top, ndslice
+from .array import getem, concatenate, concatenate2, top, ndslice
 
 
 class Array(object):
@@ -134,7 +134,8 @@ def compute_up(expr, data, **kwargs):
                next(names), inds,
                data, inds)
 
-    return atop(compose(curry(compute_it, agg_expr, [agg]), concatenate),
+    return atop(compose(curry(compute_it, agg_expr, [agg]),
+                        curry(concatenate2, axes=expr.axis)),
                 next(names), tuple(i for i in inds if i not in expr.axis),
                 tmp, inds)
 

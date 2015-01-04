@@ -58,7 +58,7 @@ def test_compute():
                  sx.sum(),
                  sx - sx.sum(),
                  sx.dot(sx.T),
-                 # sx.sum(axis=1)
+                 sx.sum(axis=1)
                 ]:
         result = compute(expr, dask_ns, post_compute=False)
         expected = compute(expr, numpy_ns)
