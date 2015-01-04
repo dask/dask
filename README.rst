@@ -13,11 +13,11 @@ New BSD. See `License File <https://github.com/ContinuumIO/dask/blob/master/LICE
 Install
 -------
 
-``dask`` is on the Python Package Index (PyPI):
+``dask`` is not yet on any package index.  It is still experimental.
 
 ::
 
-    pip install dask
+    python setup.py install
 
 Example
 -------
@@ -63,4 +63,4 @@ is pure Python and requires no dependencies beyond the standard library.
 It is, in short, a light weight dependency.
 
 The threaded implementation depends on networkx.  The ``Array`` dataset depends
-on ``numpy``.
+on ``numpy`` and the ``blaze`` family of projects.
