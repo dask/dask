@@ -157,8 +157,8 @@ def many(a, b, binop=None, reduction=None, **kwargs):
     """
     Apply binary operator to pairwise to sequences, then reduce.
 
-    >>> many([1, 2, 3], [10, 20, 30], add, sum)
-    66
+    >>> many([1, 2, 3], [10, 20, 30], mul, sum)  # dot product
+    140
     """
     return reduction(map(curry(binop, **kwargs), a, b))
 
@@ -174,7 +174,7 @@ def compute_up(expr, lhs, rhs, **kwargs):
         out_index.remove(left_index[l])
         right_index[r] = left_index[l]
 
-    func = many(function=np.tensordot, reduction=sum,
+    func = many(binop=np.tensordot, reduction=sum,
                 axes=(expr._left_axes, expr._right_axes))
     return atop(func,
                 next(names), out_index,
