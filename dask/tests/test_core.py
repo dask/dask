@@ -108,3 +108,11 @@ def test_get_dependencies_nested():
            'z': (add, (inc, 'x'), 'y')}
 
     assert dask.core.get_dependencies(dsk, 'z') == set(['x', 'y'])
+
+
+def test_nested_tasks():
+    d = {'x': 1,
+         'y': (inc, 'x'),
+         'z': (add, (inc, 'x'), 'y')}
+
+    assert dask.get(d, 'z') == 4

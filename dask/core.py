@@ -63,10 +63,13 @@ def get(d, key, get=None, concrete=True, **kwargs):
         v = (get(d, k, get=get, concrete=concrete) for k in key)
         if concrete:
             v = list(v)
-    elif not ishashable(key) or key not in d:
-        return key
-    else:
+    elif ishashable(key) and key in d:
         v = d[key]
+    elif istask(key):
+        v = key
+    else:
+        return key
+
     if istask(v):
         func, args = v[0], v[1:]
         args2 = [get(d, arg, get=get, concrete=False) for arg in args]
