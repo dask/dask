@@ -88,7 +88,7 @@ def test_get_with_nested_list():
 
 def test_get_works_with_unhashables_in_values():
     f = lambda x, y: x + len(y)
-    d = {'x': 1, 'y': (f, 'x', {1})}
+    d = {'x': 1, 'y': (f, 'x', set([1]))}
 
     assert dask.get(d, 'y') == 2
 

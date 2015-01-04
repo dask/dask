@@ -33,8 +33,8 @@ def getem(arr, blocksize, shape):
      ('X', 0, 1): (ndslice, 'X', (2, 3), 0, 1)}
     """
     numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
-    return {(arr,) + tup: (ndslice, arr, blocksize) + tup
-            for tup in itertools.product(*map(range, numblocks))}
+    return dict(((arr,) + tup, (ndslice, arr, blocksize) + tup)
+            for tup in itertools.product(*map(range, numblocks)))
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):

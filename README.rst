@@ -61,3 +61,6 @@ Dependencies
 is pure Python and requires no dependencies beyond the standard library.
 
 It is, in short, a light weight dependency.
+
+The threaded implementation depends on networkx.  The ``Array`` dataset depends
+on ``numpy``.

@@ -188,7 +188,7 @@ def reverse_dict(d):
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
     terms = list(d.keys()) + list(chain.from_iterable(d.values()))
-    result = {t: builtins.set() for t in terms}
+    result = dict((t, builtins.set()) for t in terms)
     for k, vals in d.items():
         for val in vals:
             result[val].add(k)

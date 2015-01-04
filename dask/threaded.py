@@ -142,17 +142,17 @@ def start_state_from_dask(dsk, cache=None):
         if not istask(v):
             cache[k] = v
 
-    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-    waiting = {k: v.copy() for k, v in dependencies.items() if v}
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    waiting = dict((k, v.copy()) for k, v in dependencies.items() if v)
 
     dependents = reverse_dict(dependencies)
     for a in cache:
         for b in dependents[a]:
             waiting[b].remove(a)
-    waiting_data = {k: v.copy() for k, v in dependents.items() if v}
+    waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
 
-    ready = {k for k, v in waiting.items() if not v}
-    waiting = {k: v for k, v in waiting.items() if v}
+    ready = set([k for k, v in waiting.items() if not v])
+    waiting = dict((k, v) for k, v in waiting.items() if v)
 
     state = {'dependencies': dependencies,
              'dependents': dependents,
@@ -377,7 +377,7 @@ def inline(dsk, fast_functions=None):
     """
     if not fast_functions:
         return dsk
-    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     dependents = reverse_dict(dependencies)
 
     def isfast(func):
@@ -386,10 +386,11 @@ def inline(dsk, fast_functions=None):
         else:
             return func in fast_functions
 
-    result = {k: expand_value(dsk, fast_functions, k) for k, v in dsk.items()
+    result = dict((k, expand_value(dsk, fast_functions, k))
+                for k, v in dsk.items()
                 if not dependents[k]
                 or not istask(v)
-                or not isfast(v[0])}
+                or not isfast(v[0]))
     return result
 
 
