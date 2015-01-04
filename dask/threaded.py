@@ -98,7 +98,7 @@ from .core import istask, flatten, reverse_dict, get_dependencies
 from operator import add
 from toolz import concat, partial
 from multiprocessing.pool import ThreadPool
-from Queue import Queue
+from .compatibility import Queue
 from threading import Lock
 import psutil
 

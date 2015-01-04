@@ -1,6 +1,6 @@
-import __builtin__ as builtins
 from operator import add
 from itertools import chain
+from .compatibility import builtins
 
 def inc(x):
     return x + 1
