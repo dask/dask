@@ -2,6 +2,7 @@
 from into import discover, convert
 from toolz import merge, concat, partition
 from datashape import DataShape
+from operator import add
 import itertools
 from math import ceil
 import numpy as np
@@ -152,8 +153,15 @@ ALPHABET = alphabet.upper()
 
 
 @curry
-def many(a, b, function=None, reduction=None, **kwargs):
-    return reduction(map(curry(function, **kwargs), a, b))
+def many(a, b, binop=None, reduction=None, **kwargs):
+    """
+    Apply binary operator to pairwise to sequences, then reduce.
+
+    >>> many([1, 2, 3], [10, 20, 30], add, sum)
+    66
+    """
+    return reduction(map(curry(binop, **kwargs), a, b))
+
 
 
 @dispatch(TensorDot, Array, Array)
