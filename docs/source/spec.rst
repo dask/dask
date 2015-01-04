@@ -20,14 +20,15 @@ A **dask** is a dictionary mapping data-keys to values or tasks.
     'z': (add, 'x', 'y'),
     'w': (sum, ['x', 'y', 'z'])}
 
-A **key** is any hashable value.
+A **key** is any hashable value that is not a task.
 
 .. code-block:: python
 
    'x'
-   (1, 2, 3)
+   ('x', 2, 3)
 
-A **task** is an atomic unit of work to be run by a single worker.
+A **task** is a tuple with a callable first element.  Tasks represent atomic
+units of work meant to be run by a single worker.
 
 .. code-block:: python
 
@@ -53,6 +54,10 @@ So all of the following are valid tasks
    (add, (inc, 'x'), 2)
    (sum, [1, 2])
    (sum, ['x', (inc, 'x')])
+   (np.dot, np.array([...]), np.array([...]))
+
+To encode keyword arguments we recommend the use of ``functools.partial`` or
+``toolz.curry``.
 
 
 What functions should expect
