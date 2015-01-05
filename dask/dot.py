@@ -1,5 +1,6 @@
 import networkx as nx
 from dask.core import istask, get_dependencies
+from toolz import first
 
 
 def make_hashable(x):
@@ -7,7 +8,7 @@ def make_hashable(x):
         hash(x)
         return x
     except TypeError:
-        return id(x)
+        return hash(str(x))
 
 
 def to_networkx(d, data_attributes=None, function_attributes=None):
@@ -15,17 +16,18 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
     function_attributes = function_attributes or dict()
     g = nx.DiGraph()
 
-    for k, v in d.items():
+    for k, v in sorted(d.items(), key=first):
         g.add_node(k, shape='box', **data_attributes.get(k, dict()))
         if istask(v):
             func, args = v[0], v[1:]
             func_node = make_hashable((v, 'function'))
+            funcs.append(func_node)
             g.add_node(func_node,
                        shape='circle',
                        label=func.__name__,
                        **function_attributes.get(k, dict()))
             g.add_edge(k, func_node)
-            for dep in get_dependencies(d, k):
+            for dep in sorted(get_dependencies(d, k)):
                 arg2 = make_hashable(dep)
                 g.add_node(arg2,
                            label=str(dep),
