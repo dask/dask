@@ -1,7 +1,8 @@
 
-from into import discover, convert
+from into import discover, convert, append
 from toolz import merge, concat, partition
 from datashape import DataShape
+from datashape.dispatch import dispatch
 from operator import add
 import itertools
 from math import ceil
@@ -99,6 +100,44 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 def dask_to_numpy(x, get=threaded.get, **kwargs):
     return concatenate(get(x.dask, x.keys()))
 
+
+@append.register(tuple(arrays), Array)
+def store_Array_in_ooc_data(out, arr, **kwargs):
+    from threading import Lock
+    lock = Lock()
+    def store(x, *args):
+        with lock:
+            ind = tuple([slice(i*d, (i+1)*d) for i, d in zip(args, arr.blockshape)])
+            out[ind] = x
+        return None
+
+    name = 'store-%s' % arr.name
+    update = dict(((name,) + t[1:], (store, t) + t[1:]) for t in core.flatten(arr.keys()))
+    dsk = merge(arr.dask, update)
+
+    # Resize output dataset to accept new data
+    assert out.shape[1:] == arr.shape[1:]
+    resize(out, out.shape[0] + arr.shape[0])  # elongate
+
+    dsk2 = inline(dsk, fast_functions=set([ndslice, np.transpose]))
+    threaded.get(dsk2, list(update.keys()))
+    return out
+
+
+@dispatch(bcolz.carray, int)
+def resize(x, size):
+    return x.resize(size)
+
+
+@dispatch(h5py.Dataset, int)
+def resize(x, size):
+    s = list(x.shape)
+    s[0] = size
+    return resize(x, tuple(s))
+
+@dispatch(h5py.Dataset, tuple)
+def resize(x, shape):
+    return x.resize(shape)
 
 from blaze.dispatch import dispatch
 from blaze.compute.core import compute_up

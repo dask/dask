@@ -39,6 +39,20 @@ def test_convert_to_numpy_array():
     assert eq(x, x2)
 
 
+def test_append_to_array():
+    x = np.arange(600).reshape((20, 30))
+    a = into(Array, x, blockshape=(4, 5))
+    b = bcolz.zeros(shape=(0, 30), dtype=x.dtype)
+
+    append(b, a)
+    assert eq(b[:], x)
+
+    from into.utils import tmpfile
+    with tmpfile('hdf5') as fn:
+        h = into(fn+'::/data', a)
+        assert eq(h[:], x)
+
+
 nx = np.arange(600).reshape((20, 30))
 ny = np.arange(600).reshape((30, 20))
 dx = convert(Array, nx, blockshape=(4, 5))
