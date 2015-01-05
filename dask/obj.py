@@ -6,6 +6,7 @@ from datashape.dispatch import dispatch
 from operator import add
 import itertools
 from math import ceil
+from collections import Iterable
 import numpy as np
 from . import core, threaded
 from .threaded import inline
@@ -101,8 +102,16 @@ def dask_to_numpy(x, get=threaded.get, **kwargs):
     return concatenate(get(x.dask, x.keys()))
 
 
-@append.register(tuple(arrays), Array)
-def store_Array_in_ooc_data(out, arr, **kwargs):
+@convert.register(float, Array, cost=0.5)
+def dask_to_float(x, get=threaded.get, **kwargs):
+    result = get(x.dask, x.keys())
+    while isinstance(result, Iterable):
+        assert len(result) == 1
+        result = result[0]
+    return result
+
+
+def insert_to_ooc(out, arr):
     from threading import Lock
     lock = Lock()
     def store(x, *args):
@@ -112,7 +121,12 @@ def store_Array_in_ooc_data(out, arr, **kwargs):
         return None
 
     name = 'store-%s' % arr.name
-    update = dict(((name,) + t[1:], (store, t) + t[1:]) for t in core.flatten(arr.keys()))
+    return dict(((name,) + t[1:], (store, t) + t[1:]) for t in core.flatten(arr.keys()))
+
+
+@append.register(tuple(arrays), Array)
+def store_Array_in_ooc_data(out, arr, **kwargs):
+    update = insert_to_ooc(out, arr)
     dsk = merge(arr.dask, update)
 
     # Resize output dataset to accept new data
@@ -120,7 +134,7 @@ def store_Array_in_ooc_data(out, arr, **kwargs):
     resize(out, out.shape[0] + arr.shape[0])  # elongate
 
     dsk2 = inline(dsk, fast_functions=set([ndslice, np.transpose]))
-    threaded.get(dsk2, list(update.keys()))
+    threaded.get(dsk2, list(update.keys()), **kwargs)
     return out
 
 
@@ -220,11 +234,3 @@ def compute_up(expr, lhs, rhs, **kwargs):
                 lhs, tuple(left_index),
                 rhs, tuple(right_index))
 
-
-@dispatch(Expr, Array)
-def post_compute(expr, data, get=threaded.get, **kwargs):
-    dsk = inline(data.dask, fast_functions=set([ndslice, np.transpose]))
-    if ndim(expr) > 0:
-        return concatenate(get(dsk, data.keys(), **kwargs))
-    else:
-        return get(dsk, data.keys()[0], **kwargs)

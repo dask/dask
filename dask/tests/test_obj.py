@@ -2,6 +2,7 @@ import dask
 from dask.array import *
 from dask.obj import *
 from into import convert, into
+from collections import Iterable
 
 
 def eq(a, b):
@@ -74,10 +75,13 @@ def test_compute():
                  sx.dot(sx.T),
                  sx.sum(axis=1)
                 ]:
-        result = compute(expr, dask_ns, post_compute=False)
+        result = compute(expr, dask_ns)
         expected = compute(expr, numpy_ns)
         assert isinstance(result, Array)
-        result2 = post_compute(expr, result)
+        if expr.dshape.shape:
+            result2 = into(np.ndarray, result)
+        else:
+            result2 = into(float, result)
         assert eq(result2, expected)
 
 
