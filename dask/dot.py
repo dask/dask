@@ -12,8 +12,11 @@ def make_hashable(x):
 
 
 def to_networkx(d, data_attributes=None, function_attributes=None):
-    data_attributes = data_attributes or dict()
-    function_attributes = function_attributes or dict()
+    if data_attributes is None:
+        data_attributes = dict()
+    if function_attributes is None:
+        function_attributes = dict()
+
     g = nx.DiGraph()
 
     for k, v in sorted(d.items(), key=first):
@@ -21,7 +24,6 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
         if istask(v):
             func, args = v[0], v[1:]
             func_node = make_hashable((v, 'function'))
-            funcs.append(func_node)
             g.add_node(func_node,
                        shape='circle',
                        label=func.__name__,
@@ -32,7 +34,7 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
                 g.add_node(arg2,
                            label=str(dep),
                            shape='box',
-                           **data_attributes.get(k, dict()))
+                           **data_attributes.get(dep, dict()))
                 g.add_edge(func_node, arg2)
         else:
             g.add_node(k, label='%s=%s' % (k, v), **data_attributes.get(k, dict()))
