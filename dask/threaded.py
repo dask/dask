@@ -108,6 +108,7 @@ def inc(x):
 def double(x):
     return x * 2
 
+DEBUG = False
 
 def start_state_from_dask(dsk, cache=None):
     """ Start state from a dask
@@ -263,7 +264,13 @@ def finish_task(dsk, key, result, state, results):
             s = state['waiting_data'][dep]
             s.remove(key)
             if not s and dep not in results:
+                if DEBUG:
+                    from chest.core import nbytes
+                    print("Key: %s\tDep: %s\t NBytes: %.2f\t Release" % (key, dep,
+                        sum(map(nbytes, state['cache'].values()) / 1e6)))
+                assert dep in state['cache']
                 release_data(dep, state)
+                assert dep not in state['cache']
         elif dep in state['cache'] and dep not in results:
             release_data(dep, state)
 
@@ -573,23 +580,16 @@ def visualize(dsk, state, jobs, filename='dask'):
     write_networkx_to_dot(g, filename=filename)
 
 
-def state_to_networkx(dsk, state, jobs):
-    """ Convert state to networkx for visualization
-
-    See Also:
-        visualize
-    """
-    import networkx as nx
-    from .dot import to_networkx
+def color_nodes(dsk, state, jobs):
     data, func = dict(), dict()
     for key in dsk:
         func[key] = {'color': 'gray'}
-        data[key] = {'color': 'gray'}
+        data[key] = {'color': 'black'}
 
     for key in state['released']:
         data[key] = {'color': 'black'}
+
     for key in state['cache']:
-        assert key in dsk
         data[key] = {'color': 'red'}
 
     for key in jobs:
@@ -597,4 +597,15 @@ def state_to_networkx(dsk, state, jobs):
             func[key] = {'color': 'blue'}
         else:
             func[key] = {'color': 'red'}
-    return to_networkx(dsk, data, func)
+    return data, func
+
+
+def state_to_networkx(dsk, state, jobs):
+    """ Convert state to networkx for visualization
+
+    See Also:
+        visualize
+    """
+    from .dot import to_networkx
+    data, func = color_nodes(dsk, state, jobs)
+    return to_networkx(dsk, data_attributes=data, function_attributes=func)
