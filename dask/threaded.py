@@ -519,7 +519,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         tick[0] += 1
         # Emit visualization if called for
         if debug_counts and tick[0] % debug_counts == 0:
-            visualize(dsk, state, jobs, filename='dask_%d' % tick[0])
+            visualize(dsk, state, jobs, filename='dask_%03d' % tick[0])
         # Choose a good task to compute
         key = choose_task(state)
         state['ready'].remove(key)
@@ -584,10 +584,10 @@ def color_nodes(dsk, state, jobs):
     data, func = dict(), dict()
     for key in dsk:
         func[key] = {'color': 'gray'}
-        data[key] = {'color': 'black'}
+        data[key] = {'color': 'gray'}
 
     for key in state['released']:
-        data[key] = {'color': 'black'}
+        data[key] = {'color': 'blue'}
 
     for key in state['cache']:
         data[key] = {'color': 'red'}
@@ -597,6 +597,10 @@ def color_nodes(dsk, state, jobs):
             func[key] = {'color': 'blue'}
         else:
             func[key] = {'color': 'red'}
+
+    for key in dsk:
+        func[key]['penwidth'] = 4
+        data[key]['penwidth'] = 4
     return data, func
 
 
