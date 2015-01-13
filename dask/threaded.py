@@ -512,7 +512,6 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     #To make sure the scheduler is in a safe state at all times, the state dict
     #  needs to be updated by only one thread at a time.
     lock = Lock()
-    jobs = set()
     tick = [0]
 
     if not state['ready']:
@@ -524,7 +523,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         tick[0] += 1
         # Emit visualization if called for
         if debug_counts and tick[0] % debug_counts == 0:
-            visualize(dsk, state, jobs, filename='dask_%03d' % tick[0])
+            visualize(dsk, state, filename='dask_%03d' % tick[0])
         # Choose a good task to compute
         key = choose_task(state)
         state['ready'].remove(key)
@@ -532,8 +531,6 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         # Submit
         pool.apply_async(execute_task, args=[dsk, key, state, queue, results,
                                              lock])
-        jobs.add(key)
-
 
     try:
         # Seed initial tasks into the thread pool
@@ -542,7 +539,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
                 fire_task()
 
         # Main loop, wait on tasks to finish, insert new ones
-        while state['waiting'] or state['ready'] or (len(state['finished']) < len(jobs)):
+        while state['waiting'] or state['ready'] or state['running']:
             key, finished_task, res, tb = queue.get()
             if isinstance(res, Exception):
                 import traceback
@@ -563,7 +560,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         # print("Finished %s" % str(finished_task))
 
     if debug_counts:
-        visualize(dsk, state, jobs, filename='dask_end')
+        visualize(dsk, state, filename='dask_end')
 
     return nested_get(result, state['cache'])
 
@@ -579,14 +576,14 @@ Our main mechanism is a visualization of the execution state as colors on our
 normal dot graphs (see dot module).
 '''
 
-def visualize(dsk, state, jobs, filename='dask'):
+def visualize(dsk, state, filename='dask'):
     """ Visualize state of compputation as dot graph """
     from dask.dot import dot_graph, write_networkx_to_dot
-    g = state_to_networkx(dsk, state, jobs)
+    g = state_to_networkx(dsk, state)
     write_networkx_to_dot(g, filename=filename)
 
 
-def color_nodes(dsk, state, jobs):
+def color_nodes(dsk, state):
     data, func = dict(), dict()
     for key in dsk:
         func[key] = {'color': 'gray'}
@@ -598,10 +595,9 @@ def color_nodes(dsk, state, jobs):
     for key in state['cache']:
         data[key] = {'color': 'red'}
 
-    for key in jobs:
-        if key in state['finished']:
+    for key in state['finished']:
             func[key] = {'color': 'blue'}
-        else:
+    for key in state['running']:
             func[key] = {'color': 'red'}
 
     for key in dsk:
@@ -610,12 +606,12 @@ def color_nodes(dsk, state, jobs):
     return data, func
 
 
-def state_to_networkx(dsk, state, jobs):
+def state_to_networkx(dsk, state):
     """ Convert state to networkx for visualization
 
     See Also:
         visualize
     """
     from .dot import to_networkx
-    data, func = color_nodes(dsk, state, jobs)
+    data, func = color_nodes(dsk, state)
     return to_networkx(dsk, data_attributes=data, function_attributes=func)
