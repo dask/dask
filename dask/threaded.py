@@ -239,7 +239,7 @@ def execute_task(dsk, key, state, queue, results, lock):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         result = key, task, e, exc_traceback
     queue.put(result)
-    return result
+    return
 
 
 def finish_task(dsk, key, result, state, results):
@@ -481,10 +481,12 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         A dask dictionary specifying a workflow
     result: key or list of keys
         Keys corresponding to desired data
-    pool: multiprocessing.pool.ThreadPool (optional)
-        A thread pool to use (default to creating one)
+    nthreads: integer of thread count
+        The number of threads to use in the ThreadPool that will actually execute tasks
     cache: dict-like (optional)
         Temporary storage of results
+    debug_counts: integer or None
+        This integer tells how often the scheduler should dump debugging info
 
     Examples
     --------
@@ -506,8 +508,12 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     state = start_state_from_dask(dsk, cache=cache)
 
     queue = Queue()
-    lock = Lock()  # lock for state dict
-    jobs = dict()
+    #lock for state dict updates
+    #When a task completes, we need to update several things in the state dict.
+    #To make sure the scheduler is in a safe state at all times, the state dict
+    #  needs to be updated by only one thread at a time.
+    lock = Lock()
+    jobs = set()
     tick = [0]
 
     if not state['ready']:
@@ -525,8 +531,9 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         state['ready'].remove(key)
         state['num-active-threads'] += 1
         # Submit
-        jobs[key] = pool.apply_async(execute_task, args=[dsk, key, state,
-            queue, results, lock])
+        pool.apply_async(execute_task, args=[dsk, key, state, queue, results, 
+                                             lock])
+        jobs.add(key)
 
 
     try:
@@ -536,7 +543,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
                 fire_task()
 
         # Main loop, wait on tasks to finish, insert new ones
-        while state['waiting'] or state['ready'] or len(state['finished']) < len(jobs):
+        while state['waiting'] or state['ready'] or (len(state['finished']) < len(jobs)):
             key, finished_task, res, tb = queue.get()
             if isinstance(res, Exception):
                 import traceback
