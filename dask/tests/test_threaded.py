@@ -23,7 +23,7 @@ def test_start_state():
                               'z': set(['w'])},
                'finished': set([]),
                'released': set([]),
-               'num-active-threads': 0,
+               'running': set([]),
                'ready': set(['z']),
                'waiting': {'w': set(['z'])},
                'waiting_data': {'x': set(['z']),
@@ -34,7 +34,7 @@ def test_start_state():
 def test_finish_task():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     state = start_state_from_dask(dsk)
-    state['num-active-threads'] = 5
+    state['running'] = set(['z', 'other-task'])
     task = 'z'
     result = 2
 
@@ -48,7 +48,7 @@ def test_finish_task():
                            'z': set(['x'])},
           'finished': set(['z']),
           'released': set(['x']),
-          'num-active-threads': 4,
+          'running': set(['other-task']),
           'dependents': {'w': set([]),
                          'x': set(['z']),
                          'y': set(['w']),

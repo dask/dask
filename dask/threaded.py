@@ -31,18 +31,17 @@ Changing state
 ### Jobs
 
 1.  ready: A set of ready-to-run tasks
+1.  running: A set of tasks currently in execution
 2.  finished: A set of finished tasks
 3.  waiting: which tasks are still waiting on others :: {key: {keys}}
     Real-time equivalent of dependencies
 4.  waiting_data: available data to yet-to-be-run-tasks :: {key: {keys}}
     Real-time equivalent of dependents
 
-### Other
-
-1.  num-active-threads: Number of currently running threads.  int
 
 Example
 -------
+
 >>> import pprint
 >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
 >>> pprint.pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
@@ -56,9 +55,9 @@ Example
                 'y': set(['w']),
                 'z': set(['w'])},
  'finished': set([]),
- 'num-active-threads': 0,
  'ready': set(['z']),
  'released': set([]),
+ 'running': set([]),
  'waiting': {'w': set(['z'])},
  'waiting_data': {'x': set(['z']),
                   'y': set(['w']),
@@ -129,9 +128,9 @@ def start_state_from_dask(dsk, cache=None):
                     'y': set(['w']),
                     'z': set(['w'])},
      'finished': set([]),
-     'num-active-threads': 0,
      'ready': set(['z']),
      'released': set([]),
+     'running': set([]),
      'waiting': {'w': set(['z'])},
      'waiting_data': {'x': set(['z']),
                       'y': set(['w']),
@@ -161,9 +160,9 @@ def start_state_from_dask(dsk, cache=None):
              'waiting_data': waiting_data,
              'cache': cache,
              'ready': ready,
+             'running': set(),
              'finished': set(),
-             'released': set(),
-             'num-active-threads': 0}
+             'released': set()}
 
     return state
 
@@ -275,7 +274,7 @@ def finish_task(dsk, key, result, state, results):
             release_data(dep, state)
 
     state['finished'].add(key)
-    state['num-active-threads'] -= 1
+    state['running'].remove(key)
 
     return state
 
@@ -529,9 +528,9 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         # Choose a good task to compute
         key = choose_task(state)
         state['ready'].remove(key)
-        state['num-active-threads'] += 1
+        state['running'].add(key)
         # Submit
-        pool.apply_async(execute_task, args=[dsk, key, state, queue, results, 
+        pool.apply_async(execute_task, args=[dsk, key, state, queue, results,
                                              lock])
         jobs.add(key)
 
@@ -539,7 +538,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     try:
         # Seed initial tasks into the thread pool
         with lock:
-            while state['ready'] and state['num-active-threads'] < nthreads:
+            while state['ready'] and len(state['running']) < nthreads:
                 fire_task()
 
         # Main loop, wait on tasks to finish, insert new ones
@@ -550,7 +549,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
                 traceback.print_tb(tb)
                 raise res
             with lock:
-                while state['ready'] and state['num-active-threads'] < nthreads:
+                while state['ready'] and len(state['running']) < nthreads:
                     fire_task()
 
     finally:
