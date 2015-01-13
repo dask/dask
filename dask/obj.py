@@ -99,12 +99,13 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 
 @convert.register(np.ndarray, Array, cost=0.5)
 def dask_to_numpy(x, get=threaded.get, **kwargs):
-    return concatenate(get(x.dask, x.keys()))
+    dsk2 = inline(x.dask, fast_functions=set([ndslice, np.transpose]))
+    return concatenate(get(dsk2, x.keys(), **kwargs))
 
 
 @convert.register(float, Array, cost=0.5)
 def dask_to_float(x, get=threaded.get, **kwargs):
-    result = get(x.dask, x.keys())
+    result = get(x.dask, x.keys(), **kwargs)
     while isinstance(result, Iterable):
         assert len(result) == 1
         result = result[0]
@@ -159,14 +160,15 @@ from blaze import compute, ndim
 from blaze.expr import ElemWise, symbol, Reduction, Transpose, TensorDot, Expr
 from toolz import curry, compose
 
-def compute_it(expr, leaves, *data):
-    return compute(expr, dict(zip(leaves, data)))
+def compute_it(expr, leaves, *data, **kwargs):
+    kwargs.pop('scope')
+    return compute(expr, dict(zip(leaves, data)), **kwargs)
 
 
 def elemwise_array(expr, *data, **kwargs):
     leaves = expr._inputs
     expr_inds = tuple(range(ndim(expr)))[::-1]
-    return atop(curry(compute_it, expr, leaves),
+    return atop(curry(compute_it, expr, leaves, **kwargs),
                 next(names), expr_inds,
                 *concat((dat, tuple(range(ndim(dat))[::-1])) for dat in data))
 
@@ -184,11 +186,11 @@ def compute_up(expr, data, **kwargs):
     (chunk, chunk_expr), (agg, agg_expr) = split(expr._child, expr, chunk=chunk)
 
     inds = tuple(range(ndim(leaf)))
-    tmp = atop(curry(compute_it, chunk_expr, [chunk]),
+    tmp = atop(curry(compute_it, chunk_expr, [chunk], **kwargs),
                next(names), inds,
                data, inds)
 
-    return atop(compose(curry(compute_it, agg_expr, [agg]),
+    return atop(compose(curry(compute_it, agg_expr, [agg], **kwargs),
                         curry(concatenate2, axes=expr.axis)),
                 next(names), tuple(i for i in inds if i not in expr.axis),
                 tmp, inds)
