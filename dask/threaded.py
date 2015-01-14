@@ -31,18 +31,17 @@ Changing state
 ### Jobs
 
 1.  ready: A set of ready-to-run tasks
+1.  running: A set of tasks currently in execution
 2.  finished: A set of finished tasks
 3.  waiting: which tasks are still waiting on others :: {key: {keys}}
     Real-time equivalent of dependencies
 4.  waiting_data: available data to yet-to-be-run-tasks :: {key: {keys}}
     Real-time equivalent of dependents
 
-### Other
-
-1.  num-active-threads: Number of currently running threads.  int
 
 Example
 -------
+
 >>> import pprint
 >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
 >>> pprint.pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
@@ -56,9 +55,9 @@ Example
                 'y': set(['w']),
                 'z': set(['w'])},
  'finished': set([]),
- 'num-active-threads': 0,
  'ready': set(['z']),
  'released': set([]),
+ 'running': set([]),
  'waiting': {'w': set(['z'])},
  'waiting_data': {'x': set(['z']),
                   'y': set(['w']),
@@ -129,9 +128,9 @@ def start_state_from_dask(dsk, cache=None):
                     'y': set(['w']),
                     'z': set(['w'])},
      'finished': set([]),
-     'num-active-threads': 0,
      'ready': set(['z']),
      'released': set([]),
+     'running': set([]),
      'waiting': {'w': set(['z'])},
      'waiting_data': {'x': set(['z']),
                       'y': set(['w']),
@@ -161,9 +160,9 @@ def start_state_from_dask(dsk, cache=None):
              'waiting_data': waiting_data,
              'cache': cache,
              'ready': ready,
+             'running': set(),
              'finished': set(),
-             'released': set(),
-             'num-active-threads': 0}
+             'released': set()}
 
     return state
 
@@ -231,7 +230,8 @@ def execute_task(dsk, key, state, queue, results, lock):
     try:
         task = dsk[key]
         result = _execute_task(task, state['cache'], dsk=dsk)
-        finish_task(dsk, key, result, state, results, lock)
+        with lock:
+            finish_task(dsk, key, result, state, results)
         result = key, task, result, None
     except Exception as e:
         import sys
@@ -241,41 +241,40 @@ def execute_task(dsk, key, state, queue, results, lock):
     return
 
 
-def finish_task(dsk, key, result, state, results, lock):
+def finish_task(dsk, key, result, state, results):
     """
     Update executation state after a task finishes
 
     Mutates.  This should run atomically (with a lock).
     """
-    with lock:
-        state['cache'][key] = result
-        if key in state['ready']:
-            state['ready'].remove(key)
+    state['cache'][key] = result
+    if key in state['ready']:
+        state['ready'].remove(key)
 
-        for dep in state['dependents'][key]:
-            s = state['waiting'][dep]
+    for dep in state['dependents'][key]:
+        s = state['waiting'][dep]
+        s.remove(key)
+        if not s:
+            del state['waiting'][dep]
+            state['ready'].add(dep)
+
+    for dep in state['dependencies'][key]:
+        if dep in state['waiting_data']:
+            s = state['waiting_data'][dep]
             s.remove(key)
-            if not s:
-                del state['waiting'][dep]
-                state['ready'].add(dep)
-
-        for dep in state['dependencies'][key]:
-            if dep in state['waiting_data']:
-                s = state['waiting_data'][dep]
-                s.remove(key)
-                if not s and dep not in results:
-                    if DEBUG:
-                        from chest.core import nbytes
-                        print("Key: %s\tDep: %s\t NBytes: %.2f\t Release" % (key, dep,
-                            sum(map(nbytes, state['cache'].values()) / 1e6)))
-                    assert dep in state['cache']
-                    release_data(dep, state)
-                    assert dep not in state['cache']
-            elif dep in state['cache'] and dep not in results:
+            if not s and dep not in results:
+                if DEBUG:
+                    from chest.core import nbytes
+                    print("Key: %s\tDep: %s\t NBytes: %.2f\t Release" % (key, dep,
+                        sum(map(nbytes, state['cache'].values()) / 1e6)))
+                assert dep in state['cache']
                 release_data(dep, state)
+                assert dep not in state['cache']
+        elif dep in state['cache'] and dep not in results:
+            release_data(dep, state)
 
-        state['finished'].add(key)
-        state['num-active-threads'] -= 1
+    state['finished'].add(key)
+    state['running'].remove(key)
 
     return state
 
@@ -517,7 +516,6 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     #To make sure the scheduler is in a safe state at all times, the state dict
     #  needs to be updated by only one thread at a time.
     lock = Lock()
-    jobs = set()
     tick = [0]
 
     if not state['ready']:
@@ -530,35 +528,34 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
             tick[0] += 1
             # Emit visualization if called for
             if debug_counts and tick[0] % debug_counts == 0:
-                visualize(dsk, state, jobs, filename='dask_%03d' % tick[0])
+                visualize(dsk, state, filename='dask_%03d' % tick[0])
             # Choose a good task to compute
             key = choose_task(state)
             state['ready'].remove(key)
-            state['num-active-threads'] += 1
-        # We don't need a lock around execute task since it is actually executing
-        #   stuff. We wll need a lock
+            state['running'].add(key)
+        # We need to not wrap execute_task in a lock.
+        #   finish_task (which execute_task calls) acquires the lock
+        # In synchronous mode, that will cause a deadlock if execute_task is wrapped in a lock
         if asynchronous:
             pool.apply_async(execute_task, args=[dsk, key, state, queue,
                                                  results, lock])
         else:
             execute_task(dsk, key, state, queue, results, lock)
 
-        jobs.add(key)
-
 
     try:
         # Seed initial tasks into the thread pool
-        while state['ready'] and (state['num-active-threads'] < nthreads) and (queue.qsize() < max_queue_size):
+        while state['ready'] and (len(state['running']) < nthreads) and (queue.qsize() < max_queue_size):
             fire_task()
 
         # Main loop, wait on tasks to finish, insert new ones
-        while state['waiting'] or state['ready'] or (len(state['finished']) < len(jobs)):
+        while state['waiting'] or state['ready'] or state['running']:
             key, finished_task, res, tb = queue.get()
             if isinstance(res, Exception):
                 import traceback
                 traceback.print_tb(tb)
                 raise res
-            while state['ready'] and (state['num-active-threads'] < nthreads) and (queue.qsize() < max_queue_size):
+            while state['ready'] and (len(state['running']) < nthreads) and (queue.qsize() < max_queue_size):
                 fire_task()
 
     finally:
@@ -572,7 +569,7 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         # print("Finished %s" % str(finished_task))
 
     if debug_counts:
-        visualize(dsk, state, jobs, filename='dask_end')
+        visualize(dsk, state, filename='dask_end')
 
     return nested_get(result, state['cache'])
 
@@ -588,14 +585,14 @@ Our main mechanism is a visualization of the execution state as colors on our
 normal dot graphs (see dot module).
 '''
 
-def visualize(dsk, state, jobs, filename='dask'):
+def visualize(dsk, state, filename='dask'):
     """ Visualize state of compputation as dot graph """
     from dask.dot import dot_graph, write_networkx_to_dot
-    g = state_to_networkx(dsk, state, jobs)
+    g = state_to_networkx(dsk, state)
     write_networkx_to_dot(g, filename=filename)
 
 
-def color_nodes(dsk, state, jobs):
+def color_nodes(dsk, state):
     data, func = dict(), dict()
     for key in dsk:
         func[key] = {'color': 'gray'}
@@ -607,10 +604,9 @@ def color_nodes(dsk, state, jobs):
     for key in state['cache']:
         data[key] = {'color': 'red'}
 
-    for key in jobs:
-        if key in state['finished']:
+    for key in state['finished']:
             func[key] = {'color': 'blue'}
-        else:
+    for key in state['running']:
             func[key] = {'color': 'red'}
 
     for key in dsk:
@@ -619,12 +615,12 @@ def color_nodes(dsk, state, jobs):
     return data, func
 
 
-def state_to_networkx(dsk, state, jobs):
+def state_to_networkx(dsk, state):
     """ Convert state to networkx for visualization
 
     See Also:
         visualize
     """
     from .dot import to_networkx
-    data, func = color_nodes(dsk, state, jobs)
+    data, func = color_nodes(dsk, state)
     return to_networkx(dsk, data_attributes=data, function_attributes=func)

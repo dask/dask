@@ -64,3 +64,37 @@ It is, in short, a light weight dependency.
 
 The threaded implementation depends on networkx.  The ``Array`` dataset depends
 on ``numpy`` and the ``blaze`` family of projects.
+
+
+Related Work
+------------
+
+One might ask why we didn't use one of these other fine libraries:
+
+* Luigi_
+* Joblib_
+* mrjob_
+* Any of the fine schedulers in numeric analysis (DAGue_, ...)
+* Any of the fine high-throughput schedulers (Condor_, Pegasus_, Swiftlang_, ...)
+
+The answer is because we wanted all of the following:
+
+* Fine-ish grained parallelism (latencies around 1ms)
+* In-memory communication of intermediate results
+* Dependency structures more complex than ``map``
+* Good support for numeric data
+* First class Python support
+* Trivial installation
+
+Most task schedulers in the Python ecosystem target long-running batch jobs,
+often for processing large amounts of text and aren't appropriate for executing
+multi-core numerics.
+
+
+.. _Luigi: http://luigi.readthedocs.org
+.. _Joblib: https://pythonhosted.org/joblib/index.html
+.. _mrjob: https://pythonhosted.org/mrjob/
+.. _Condor: http://research.cs.wisc.edu/htcondor/
+.. _Pegasus: http://pegasus.isi.edu/
+.. _Swiftlang: http://swift-lang.org/main/
+.. _DAGue: http://icl.eecs.utk.edu/dague/
