@@ -5,6 +5,7 @@ from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map)
+import operator
 
 
 def ndslice(x, blocksize, *args):
@@ -240,3 +241,161 @@ def concatenate(arrays, axis=0):
     if arrays[0].ndim <= axis:
         arrays = [a[None, ...] for a in arrays]
     return np.concatenate(arrays, axis=axis)
+
+
+def dask_1d_slice(out_name, in_name, slice_spec, shape, blockshape):
+    """
+    slice_spec - the full description of the python slice we want.
+    shape - the complete shape of the data that in_name describes
+    blockshape - the maximum size of each block
+
+     - see if our slice can be met checking against the shape
+       - one end goes past the shape? i.e. slice(0, 100) on a shape of (10,)
+       - stride/step? On this first pass, I'm going to ignore the stride.
+       - negative index?
+    - Should the out_name index match the in_name index assuming that the first
+        slice is not 0?
+      i.e. should we return
+        {(y,0):(get, (x,1), slice(3,5))}
+      or
+        {(y,1):(get, (x,1), slice(3,5))}
+
+    - Can we always assume that block (x,1) is the second block? yes, per conversation with @mrocklin.
+    - We also assume that the first slice is (out_name, 0), even if we
+        slice from an inner block like (in_name, 3)
+    - How do we handle a case where the slice size is greater than
+        the block size?
+                       
+    """
+
+    #Step 0: Setup all the variables we will need for the actual slicing
+    #  calculations. This includes the proper starting and stopping
+    #  indexes and step size. Remember that all of these can be negative,
+    #  and all of them can be None
+    start = slice_spec.start
+    stop = slice_spec.stop
+    step = slice_spec.step
+    
+    if start < 0:
+        start = shape[0]+start
+    if stop < 0:
+        stop = shape[0]+stop
+
+    if start is None:
+        start = 0
+    if stop is None:
+        stop = shape[0]
+    if step is None:
+        step = 1
+
+    if start >= shape[0] or start == stop:
+        return {}
+        
+    if stop > shape[0]:
+        stop = shape[0]
+                        
+
+    #Step 1: All of our input variables should now be setup correctly,
+    #  so figure out where to start and stop based on the blocksize
+    #  of the input data
+    leftmost_block = start/blockshape[0]
+    #We subtract 1 from stop so that if the rightmost index
+    #falls on a block boundary, we won't include a slice in the next block
+    #  i.e. slice(0,20) on blockshape(20,) should give us
+    #  (x,0), slice(0,20)
+    #  NOT
+    #  ((x,0), slice(0,20)), ((x,1), slice(0,0))
+    rightmost_block = (stop-1)/blockshape[0]
+    leftmost_block_start_index = start % blockshape[0]
+    rightmost_block_stop_index = stop - (rightmost_block*blockshape[0])
+    num_blocks = rightmost_block - leftmost_block
+
+    
+        
+    dask = {}
+    #There are three main cases to account for when doing the slicing
+    #  within a dask graph
+    #1. slicing within a single block
+    #2. slicing with only adjacent blocks, i.e. blocks 1,2
+    #3. slicing with multiple contiguous blocks, i.e. block 1,2,3,4
+    if leftmost_block == rightmost_block:    
+        dask[(out_name, 0)] = (operator.getitem, (in_name, leftmost_block), slice(leftmost_block_start_index, rightmost_block_stop_index))
+    else:
+        dask[(out_name, 0)] = (operator.getitem, (in_name, leftmost_block), slice(leftmost_block_start_index, blockshape[0]))
+        dask[(out_name, num_blocks)] = (operator.getitem, (in_name, rightmost_block), slice(0, rightmost_block_stop_index))
+            
+    for block_num in range(1, num_blocks):
+        dask[(out_name, block_num)] = (operator.getitem, (in_name, leftmost_block+block_num), slice(0, blockshape[0]))
+
+    return dask
+
+
+
+def _dask_slice(in_name, out_name, leftmost_blocks, rightmost_blocks,
+                leftmost_block_indexes, rightmost_block_indexes,
+                blockshape):
+    """
+    Variables
+    ----
+    leftmost_blocks - list of block indexes
+    rightmost_blocks - list of block indexes
+    
+
+    Assumptions
+    ----
+    1. All of the block and slice indexes are already correct.
+    2. Right rightmost indexes are exclusive like in normal python slicing. i.e. left_index=1, right_index=4 is logically equivalent to list[1:4]
+    """
+    ndims = len(leftmost_blocks)
+    assert len(leftmost_blocks) == len(rightmost_blocks) == \
+      len(leftmost_block_indexes) == len(rightmost_block_indexes)
+
+    #per_dim_count holds the number of blocks that each dimension
+    #  will need to slice. This ends up being a cartesian product
+    per_dim_count = []
+    for dim in range(ndims):
+        per_dim_count.append(rightmost_blocks[dim] - leftmost_blocks[dim])
+
+    #{('y', 0, 0, 0):None, ('y', 0, 0, 1):None, ('y', 1, 0, 0):None, ('y', 1, 0, 1):None}
+    dask = {key: None for key in
+            itertools.product(*[out_name]+[range(i) for i in per_dim_count])
+            }
+              
+    for key in dask:
+        #our output keys start at (0,0,0)
+        #our input blocks start wherever leftmost_blocks says
+        #So, we need to use the output keys as offsets into leftmost_blocks
+        #That is why we add offsets[idx] and leftmost_blocks[idx]
+        offsets = key[1:]
+        in_blocks = [offsets[idx] + leftmost_blocks[idx] for idx in range(ndims)]
+        final_slice = [operator.getitem, tuple([in_name] + in_blocks)]
+        #At this point, all we have to do is construct the slice() commands
+        #
+        dim_slices = []
+        for dim in range(ndims):
+            lblock = leftmost_blocks[dim]
+            rblock = rightmost_blocks[dim]
+            lindex = leftmost_block_indexes[dim]
+            rindex = rightmost_block_indexes[dim]
+
+            #if we make it here, each dimension must have at least 1 member
+
+            #Remember that the rightmost blocks and indexes are exclusive
+            # (i.e. only block-1 and index-1 are actually included in the output)
+            if lblock == rblock-1:
+                dim_slices.append(slice(lindex, rindex))
+            elif offsets[dim] == 0:
+                dim_slices.append(slice(lindex, blockshape[dim]))
+            elif offsets[dim]+lblock == rblock-1:
+                dim_slices.append(slice(0, rindex))
+            else:
+                dim_slices.append(slice(0, blockshape[dim]))
+
+        final_slice.append(tuple(dim_slices))
+        dask[key] = tuple(final_slice)
+
+
+    return dask
+
+
+        
