@@ -6,36 +6,25 @@ from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap)
 from .utils import deepmap
-
-
-def ndslice(x, blocksize, *args):
-    """ Get a block from an nd-array
-
-    >>> x = np.arange(24).reshape((4, 6))
-    >>> ndslice(x, (2, 3), 0, 0)
-    array([[0, 1, 2],
-           [6, 7, 8]])
-
-    >>> ndslice(x, (2, 3), 1, 0)
-    array([[12, 13, 14],
-           [18, 19, 20]])
-    """
-    return x.__getitem__(tuple([slice(i*n, (i+1)*n)
-                            for i, n in zip(args, blocksize)]))
+import operator
 
 
 def getem(arr, blocksize, shape):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', blocksize=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (ndslice, 'X', (2, 3), 0, 0),
-     ('X', 1, 0): (ndslice, 'X', (2, 3), 1, 0),
-     ('X', 1, 1): (ndslice, 'X', (2, 3), 1, 1),
-     ('X', 0, 1): (ndslice, 'X', (2, 3), 0, 1)}
+    {('X', 0, 0): (operator.getitem, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (operator.getitem, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (operator.getitem, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (operator.getitem, 'X', (slice(0, 2), slice(3, 6)))}
     """
     numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
-    return dict(((arr,) + tup, (ndslice, arr, blocksize) + tup)
-            for tup in itertools.product(*map(range, numblocks)))
+    return dict(
+               ((arr,) + ijk,
+               (operator.getitem,
+                 arr,
+                 tuple(slice(i*d, (i+1)*d) for i, d in zip(ijk, blocksize))))
+               for ijk in itertools.product(*map(range, numblocks)))
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):

@@ -13,28 +13,12 @@ def contains(a, b):
     return all(a.get(k) == v for k, v in b.items())
 
 
-'''
-def test_basic():
-    d = dict()
-    d['x'] = 'some-array'
-    a = Array(d, 'x', shape=(10, 10), blockshape=(4, 4))
-
-    assert a.array == 'x'
-    assert a.shape == (10, 10)
-    assert a.blockshape == (4, 4)
-    assert a.numblocks == (3, 3)
-    assert contains(a.data, {('x', i, j): (ndslice, 'x', a.blockshape, i, j)
-                                    for i in range(3)
-                                    for j in range(3)})
-'''
-
 def test_getem():
     assert getem('X', blocksize=(2, 3), shape=(4, 6)) == \
-        {('X', 0, 0): (ndslice, 'X', (2, 3), 0, 0),
-         ('X', 1, 0): (ndslice, 'X', (2, 3), 1, 0),
-         ('X', 1, 1): (ndslice, 'X', (2, 3), 1, 1),
-         ('X', 0, 1): (ndslice, 'X', (2, 3), 0, 1)}
-
+    {('X', 0, 0): (operator.getitem, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (operator.getitem, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (operator.getitem, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (operator.getitem, 'X', (slice(0, 2), slice(3, 6)))}
 
 inc = lambda x: x + 1
 add = lambda x, y: x + y

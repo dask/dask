@@ -93,7 +93,7 @@ significantly on space and computation complexity.
 
 See the function ``inline`` for more information.
 """
-from .core import istask, flatten, reverse_dict, get_dependencies
+from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .utils import deepmap
 from operator import add
 from toolz import concat, partial
@@ -213,6 +213,8 @@ def _execute_task(arg, cache, dsk=None):
         func, args = arg[0], arg[1:]
         args2 = [_execute_task(a, cache, dsk=dsk) for a in args]
         return func(*args2)
+    elif not ishashable(arg):
+        return arg
     elif arg in cache:
         return cache[arg]
     elif arg in dsk:
@@ -423,6 +425,8 @@ def expand_key(dsk, fast, key):
             return func.func in fast
         else:
             return func in fast
+    if not ishashable(key):
+        return key
 
     if (key in dsk and istask(dsk[key]) and isfast(dsk[key][0])):
         task = dsk[key]

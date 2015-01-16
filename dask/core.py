@@ -124,7 +124,10 @@ def _deps(dsk, arg):
     """
     if istask(arg):
         return builtins.set.union(*[_deps(dsk, a) for a in arg[1:]])
-    if arg not in dsk:
+    try:
+        if arg not in dsk:
+            return builtins.set()
+    except TypeError:  # not hashable
         return builtins.set()
     return builtins.set([arg])
 

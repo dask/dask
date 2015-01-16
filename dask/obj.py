@@ -7,10 +7,11 @@ from operator import add
 import itertools
 from math import ceil
 from collections import Iterable
+import operator
 import numpy as np
 from . import core, threaded
 from .threaded import inline
-from .array import (getem, concatenate, concatenate2, top, ndslice,
+from .array import (getem, concatenate, concatenate2, top,
     broadcast_dimensions)
 
 
@@ -100,7 +101,7 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 
 @convert.register(np.ndarray, Array, cost=0.5)
 def dask_to_numpy(x, get=threaded.get, **kwargs):
-    dsk2 = inline(x.dask, fast_functions=set([ndslice, np.transpose]))
+    dsk2 = inline(x.dask, fast_functions=set([operator.getitem, np.transpose]))
     return concatenate(get(dsk2, x.keys(), **kwargs))
 
 
@@ -135,7 +136,7 @@ def store_Array_in_ooc_data(out, arr, **kwargs):
     assert out.shape[1:] == arr.shape[1:]
     resize(out, out.shape[0] + arr.shape[0])  # elongate
 
-    dsk2 = inline(dsk, fast_functions=set([ndslice, np.transpose]))
+    dsk2 = inline(dsk, fast_functions=set([operator.getitem, np.transpose]))
     threaded.get(dsk2, list(update.keys()), **kwargs)
     return out
 
