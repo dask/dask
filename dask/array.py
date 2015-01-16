@@ -333,12 +333,25 @@ def dask_1d_slice(out_name, in_name, slice_spec, shape, blockshape):
 
 def _slice_1d(dim_shape, blocksize, index):
     """
-    Variables
+    Parameters
     ----
     dim_shape - the number of elements in this dimension
     blocksize - the number of elements per block in this dimension
-    index - a description of the elements in this dimension that we want     This might be an integer, a slice(), or an Ellipsis
-    
+    index - a description of the elements in this dimension that we want
+      This might be an integer, a slice(), or an Ellipsis
+
+    Returns
+    ----
+    a dictionary where the keys are the integer indexes of the blocks that should be sliced
+      and the values are the slices
+
+
+    >>> _slice_1d(100, 20, slice(0, 35))
+    {0: slice(0, 20, None), 1: slice(0, 15, None)}
+    >>> _slice_1d(100, 20, slice(10,15))
+    {0: slice(10, 15, None)}
+    >>> _slice_1d(100, 20, slice(40, 100))
+    {2: slice(0, 20, None), 3: slice(0, 20, None), 4: slice(0, 20, None)}
     """
     #integer division often won't tell us how many blocks
     #  we have.
