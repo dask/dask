@@ -94,6 +94,7 @@ significantly on space and computation complexity.
 See the function ``inline`` for more information.
 """
 from .core import istask, flatten, reverse_dict, get_dependencies
+from .utils import deepmap
 from operator import add
 from toolz import concat, partial
 from multiprocessing.pool import ThreadPool
@@ -398,18 +399,6 @@ def inline(dsk, fast_functions=None):
                 or not istask(v)
                 or not isfast(v[0]))
     return result
-
-
-def deepmap(func, seq):
-    """ Apply function inside nested lists
-
-    >>> deepmap(inc, [[1, 2], [3, 4]])
-    [[2, 3], [4, 5]]
-    """
-    if isinstance(seq, list):
-        return [deepmap(func, item) for item in seq]
-    else:
-        return func(seq)
 
 
 def expand_key(dsk, fast, key):

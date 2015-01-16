@@ -10,7 +10,8 @@ from collections import Iterable
 import numpy as np
 from . import core, threaded
 from .threaded import inline
-from .array import getem, concatenate, concatenate2, top, ndslice
+from .array import (getem, concatenate, concatenate2, top, ndslice,
+    broadcast_dimensions)
 
 
 class Array(object):
@@ -56,10 +57,10 @@ def atop(func, out, out_ind, *args):
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    dims = dict((i, d) for arr, ind in arginds
-                       for d, i in zip(arr.shape, ind))
-    blockdims = dict((i, d) for arr, ind in arginds
-                            for d, i in zip(arr.blockshape, ind))
+    shapes = dict((a, a.shape) for a, _ in arginds)
+    dims = broadcast_dimensions(arginds, shapes)
+    blockshapes = dict((a, a.blockshape) for a, _ in arginds)
+    blockdims = broadcast_dimensions(arginds, blockshapes)
 
     shape = tuple(dims[i] for i in out_ind)
     blockshape = tuple(blockdims[i] for i in out_ind)

@@ -36,15 +36,17 @@ def test_getem():
          ('X', 0, 1): (ndslice, 'X', (2, 3), 0, 1)}
 
 
+inc = lambda x: x + 1
+add = lambda x, y: x + y
+
+
 def test_top():
-    inc = lambda x: x + 1
     assert top(inc, 'z', 'ij', 'x', 'ij', numblocks={'x': (2, 2)}) == \
         {('z', 0, 0): (inc, ('x', 0, 0)),
          ('z', 0, 1): (inc, ('x', 0, 1)),
          ('z', 1, 0): (inc, ('x', 1, 0)),
          ('z', 1, 1): (inc, ('x', 1, 1))}
 
-    add = lambda x, y: x + y
     assert top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij',
                 numblocks={'x': (2, 2), 'y': (2, 2)}) == \
         {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
@@ -66,6 +68,15 @@ def test_top():
     assert top(identity, 'z', '', 'x', 'ij', numblocks={'x': (2, 2)}) ==\
         {('z',): (identity, [[('x', 0, 0), ('x', 0, 1)],
                              [('x', 1, 0), ('x', 1, 1)]])}
+
+
+def test_top_supports_broadcasting_rules():
+    assert top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij',
+                numblocks={'x': (1, 2), 'y': (2, 1)}) == \
+        {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
+         ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 0)),
+         ('z', 1, 0): (add, ('x', 0, 0), ('y', 1, 0)),
+         ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 0))}
 
 
 def test_concatenate():

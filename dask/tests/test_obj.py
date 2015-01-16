@@ -55,14 +55,23 @@ def test_append_to_array():
 
 
 nx = np.arange(600).reshape((20, 30))
-ny = np.arange(600).reshape((30, 20))
 dx = convert(Array, nx, blockshape=(4, 5))
-dy = convert(Array, ny, blockshape=(5, 4))
 sx = symbol('x', discover(dx))
+
+ny = np.arange(600).reshape((30, 20))
+dy = convert(Array, ny, blockshape=(5, 4))
 sy = symbol('y', discover(dy))
 
-dask_ns = {sx: dx, sy: dy}
-numpy_ns = {sx: nx, sy: ny}
+na = np.arange(20)
+da = convert(Array, na, blockshape=(4,))
+sa = symbol('a', discover(da))
+
+nb = np.arange(30).reshape((30, 1))
+db = convert(Array, nb, blockshape=(5, 1))
+sb = symbol('b', discover(db))
+
+dask_ns = {sx: dx, sy: dy, sa: da, sb: db}
+numpy_ns = {sx: nx, sy: ny, sa: na, sb: nb}
 
 
 def test_compute():
@@ -73,7 +82,9 @@ def test_compute():
                  sx.sum(),
                  sx - sx.sum(),
                  sx.dot(sx.T),
-                 sx.sum(axis=1)
+                 sx.sum(axis=1),
+                 sy + sa,
+                 sy + sb,
                 ]:
         result = compute(expr, dask_ns)
         expected = compute(expr, numpy_ns)
@@ -84,6 +95,12 @@ def test_compute():
             result2 = into(float, result)
         assert eq(result2, expected)
 
+
+def test_elemwise_broadcasting():
+    arr = compute(sy + sb, dask_ns)
+    expected =  [[(arr.name, i, j) for j in range(5)]
+                                   for i in range(6)]
+    assert arr.keys() == expected
 
 def test_keys():
     assert dx.keys() == [[(dx.name, i, j) for j in range(6)]

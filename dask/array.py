@@ -4,7 +4,8 @@ import itertools
 from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
-        frequencies, join, first, memoize, map)
+        frequencies, join, first, memoize, map, groupby, valmap)
+from .utils import deepmap
 
 
 def ndslice(x, blocksize, *args):
@@ -100,6 +101,57 @@ def lol_tuples(head, ind, values, dummies):
                 for v in dummies[ind[0]]]
 
 
+def zero_broadcast_dimensions(lol, nblocks):
+    """
+
+    >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
+    >>> nblocks = (4, 1, 2)  # note singleton dimension in second place
+    >>> lol = [[('x', 1, 0, 0), ('x', 1, 0, 1)],
+    ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
+    ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
+
+    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
+    [[('x', 1, 0, 0), ('x', 1, 0, 1)],
+     [('x', 1, 0, 0), ('x', 1, 0, 1)],
+     [('x', 1, 0, 0), ('x', 1, 0, 1)]]
+
+    See Also
+    --------
+
+    lol_tuples
+    """
+    f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
+    return deepmap(f, lol)
+
+
+def broadcast_dimensions(argpairs, numblocks):
+    """ Find block dimensions from arguments
+
+    >>> argpairs = [('x', 'ij'), ('y', 'ji')]
+    >>> numblocks = {'x': (2, 3), 'y': (3, 2)}
+    >>> broadcast_dimensions(argpairs, numblocks)
+    {'i': 2, 'j': 3}
+
+    Supports numpy broadcasting rules
+
+    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
+    >>> numblocks = {'x': (2, 1), 'y': (1, 3)}
+    >>> broadcast_dimensions(argpairs, numblocks)
+    {'i': 2, 'j': 3}
+    """
+    # List like [('i', 2), ('j', 1), ('i', 1), ('j', 2)]
+    L = concat([zip(inds, dims)
+                    for (x, inds), (x, dims)
+                    in join(first, argpairs, first, numblocks.items())])
+    g = groupby(0, L)
+    g = dict((k, [d for i, d in v]) for k, v in g.items())
+
+    if not all(len(set(v) - set([1])) == 1 for v in g.values()):
+        raise ValueError("Shapes do not align %s" % g)
+
+    return valmap(max, g)
+
+
 def top(func, output, out_indices, *arrind_pairs, **kwargs):
     """ Tensor operation
 
@@ -146,6 +198,15 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
                             [('y', 0, 0), ('y', 1, 0)]),
      ('z', 1, 1): (dotmany, [('x', 1, 0), ('x', 1, 1)],
                             [('y', 0, 1), ('y', 1, 1)])}
+
+    Supports Broadcasting rules
+
+    >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (1, 2),
+    ...                                                      'y': (2, 2)})  # doctest: +SKIP
+    {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
+     ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
+     ('z', 1, 0): (add, ('x', 0, 0), ('y', 1, 0)),
+     ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 1))}
     """
     numblocks = kwargs['numblocks']
     argpairs = list(partition(2, arrind_pairs))
@@ -156,9 +217,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     dummy_indices = all_indices - set(out_indices)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    dims = dict(concat([zip(inds, dims)
-                        for (x, inds), (x, dims)
-                        in join(first, argpairs, first, numblocks.items())]))
+    dims = broadcast_dimensions(argpairs, numblocks)
 
     # (0, 0), (0, 1), (0, 2), (1, 0), ...
     keytups = list(itertools.product(*[range(dims[i]) for i in out_indices]))
@@ -173,7 +232,9 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     for kd in keydicts:
         args = []
         for arg, ind in argpairs:
-            args.append(lol_tuples((arg,), ind, kd, dummies))
+            tups = lol_tuples((arg,), ind, kd, dummies)
+            tups2 = zero_broadcast_dimensions(tups, numblocks[arg])
+            args.append(tups2)
         valtups.append(tuple(args))
 
     # Add heads to tuples
