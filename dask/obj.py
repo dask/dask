@@ -99,14 +99,25 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
     return Array(dask, name, x.shape, blockshape)
 
 
+def get(dsk, keys, get=threaded.get, **kwargs):
+    """ Specialized get function
+
+    1. Handle inlining
+    2. Use custom score function
+    """
+    fast_functions=kwargs.get('fast_functions',
+                             set([operator.getitem, np.transpose]))
+    dsk2 = inline(dsk, fast_functions=fast_functions)
+    return get(dsk2, keys, **kwargs)
+
+
 @convert.register(np.ndarray, Array, cost=0.5)
-def dask_to_numpy(x, get=threaded.get, **kwargs):
-    dsk2 = inline(x.dask, fast_functions=set([operator.getitem, np.transpose]))
-    return concatenate(get(dsk2, x.keys(), **kwargs))
+def dask_to_numpy(x, **kwargs):
+    return concatenate(get(x.dask, x.keys(), **kwargs))
 
 
 @convert.register(float, Array, cost=0.5)
-def dask_to_float(x, get=threaded.get, **kwargs):
+def dask_to_float(x, **kwargs):
     result = get(x.dask, x.keys(), **kwargs)
     while isinstance(result, Iterable):
         assert len(result) == 1
@@ -136,8 +147,7 @@ def store_Array_in_ooc_data(out, arr, **kwargs):
     assert out.shape[1:] == arr.shape[1:]
     resize(out, out.shape[0] + arr.shape[0])  # elongate
 
-    dsk2 = inline(dsk, fast_functions=set([operator.getitem, np.transpose]))
-    threaded.get(dsk2, list(update.keys()), **kwargs)
+    get(dsk, list(update.keys()), **kwargs)
     return out
 
 
