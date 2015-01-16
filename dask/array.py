@@ -370,28 +370,67 @@ def _slice_1d(dim_shape, blocksize, index):
 
 
 def _block_slice_step_start(blocksize, blocknum, start, stop, step):
-    #start is NOT the start within this block
-    #start IS the start index for the entire (aka non-blocked) slice
-    #stop is NOT the stop index within this block
-    #stop IS the stop index for the entire slice
+    """
+    Parameters
+    ----
+    blocksize : integer
+      Denotes the size of the current block
+    blocknum : integer
+      Denotes the index of the block (block indexing starts from 0)
+      Example:
+        - blocksize = 25
+        - blocknum = 0
+        This implies that this block (0) holds block indexes [0:25] and absolute indexes [0:25]
 
-    #in other words, start and stop have no knowledge of the blocking
-    #  of the data
+        - blocksize = 25
+        - blocknum = 3
+        This implies that this block (3) holds block indexes [0:25] and absolute indexes [75:100]
         
-    #if step > blocksize, we are doing basic indexing into the blocks and may end up skipping a block
+    start : integer
+      Denotes the absolute starting index (inclusive) of the slice
+      start is NOT the start within this block
+      start IS the start index for the entire (aka non-blocked) slice
+    stop : integer
+      Denotes the absolute stopping index (exclusive) of the slice
+      stop is NOT the stop index within this block
+      stop IS the stop index for the entire slice
+    step : An integer or None
+      Denotes the step size of the slice
 
-    #if step is negative, how do we handle it?
-    #We don't currently support negative steps
+
+    Returns
+    ----
+    - None if start falls after the highest absolute index in the block
+    - None if stop falls before the lowest absolute index in the block
+    - None if the step size is so large that the current block won't contribute any elements
+    - An integer index if the step size is large enough that the current block only contributes a single element (in some cases)
+    - a slice() containing the correct start and stop indexes into the block plus the step if any
     
-    #return the start index for the block. If the slice doesn't touch
-    #  the block, return None for the start index
+    Notes
+    ----        
+    - if step > blocksize, we are doing basic indexing into the blocks and may end up skipping a block
+    - negative stepping is UNHANDLED as of 2015-01-16
 
-    #The starting index falls after the block we are currently dealing with
+    >>> _block_slice_step_start(20, 0, 10, 20, None)
+    slice(10, 20, None)
+    >>> _block_slice_step_start(20, 0, 20, 50, None) #The starting index falls outside the block, so it returns None
+    >>> _block_slice_step_start(20, 1, 10, 50, None) #The starting index falls in block 0, so this block's slice starts at index 0
+    slice(0, 20, None)
+    >>> _block_slice_step_start(20, 1, 10, 20, None) #The stopping index falls before block 1 so it returns None
+    >>> _block_slice_step_start(20, 0, 3, 100, 25)
+    3
+    >>> _block_slice_step_start(20, 1, 3, 100, 25)
+    8
+    >>> _block_slice_step_start(20, 1, 10, 40, 3) #Because we start at index 10, the next block's slice starts at index 2 (aka absolute index 22 == 10 + 12)
+    slice(2, 20, 3)
+        
+    """
     if start >= blocksize*(blocknum+1):
+        #The starting index falls after the block we are currently dealing with
         return None
 
-    #the stopping index falls before the block we are currently dealing with
     if stop <= blocksize*(blocknum):
+        #the stopping index falls before the block we are currently dealing with
         return None
 
     #if the starting index happens to be in the current block,
@@ -403,11 +442,25 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
         block_start_index = 0
     else:
         #the starting index is a factor of step size, blocksize, blocknum, and start index
-        block_start_index = (step - (start+(blocknum * blocksize) % step)) % step
+        #What this statement does is determines the starting index into the current block
+        #  given the step size
+        #It happens that the starting index in the block is a function of the
+        #  absolute start, the number of
+        #We do the final ()%step because if the starting index falls on the beginning boundary (aka index 0)
+        #  the (step - 0) calculation will fall somewhere in the middle
+        abs_idx = _first_step_in_block(step, start, blocksize, blocknum)
+        block_start_index = _abs_index_to_rel_index(abs_idx, blocksize)
+        #If the block_start_index is less than 0, that means that this block
+        #  doesn't have any elements selected
+        if block_start_index < 0:
+            return None
         
     if block_start_index >= blocksize:
+        #The starting index into the block falls outside the current block's end
         return None
     elif step >= blocksize:
+        #If the step is >= the blocksize, we will only have one element per block
+        #So, don't bother returning a slice. Just return the index that should be gotten.
         return block_start_index
     else:
         if _index_in_block(stop, blocknum, blocksize):
@@ -416,12 +469,47 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
         else:
             #otherwise, the slice should go to the end of the block
             return slice(block_start_index, blocksize, step)
+
+
+def _first_step_in_block(step, start, blocksize, blocknum):
+    #returns the absolute index of the first element in blocknum
+    #  that the given step occurs at. Otherwise, return -1
+    r = range(start, blocksize*(blocknum+1), step)
+    for idx in r:
+        if _index_in_block(idx, blocknum, blocksize):
+            return idx
+    return -1
+            
+
+def _abs_index_to_rel_index(index, blocksize):
+    return index % blocksize
     
 
-
 def _index_in_block(index, blocknum, blocksize):
-    #return True if the given index falls inside the given block configuration
-    #This only works for index >= 0
+    """
+    Parameters
+    ----
+    index : integer
+      The absolute index into the iterable
+    blocknum : integer
+      Denotes which block we are examining
+    blocksize: integer
+      Denotes how large each block is (how many elements each block has)
+
+    Returns
+    ----
+    A boolean telling if "index" falls in the block given by blocknum
+
+
+    >>> _index_in_block(0, 0, 100)
+    True
+    >>> _index_in_block(0, 1, 100)
+    False
+    >>> _index_in_block(25, 0, 25)
+    False
+    >>> _index_in_block(25, 1, 25)
+    True
+    """
     return blocksize*blocknum <= index < blocksize*(blocknum+1)
 
 
