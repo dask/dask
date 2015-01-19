@@ -1,6 +1,6 @@
 import numpy as np
 from math import ceil
-import itertools
+from itertools import product
 from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
@@ -35,7 +35,7 @@ def getem(arr, blocksize, shape):
     """
     numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
     return dict(((arr,) + tup, (ndslice, arr, blocksize) + tup)
-            for tup in itertools.product(*map(range, numblocks)))
+            for tup in product(*map(range, numblocks)))
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -162,7 +162,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
                         in join(first, argpairs, first, numblocks.items())]))
 
     # (0, 0), (0, 1), (0, 2), (1, 0), ...
-    keytups = list(itertools.product(*[range(dims[i]) for i in out_indices]))
+    keytups = list(product(*[range(dims[i]) for i in out_indices]))
     # {i: 0, j: 0}, {i: 0, j: 1}, ...
     keydicts = [dict(zip(out_indices, tup)) for tup in keytups]
 
@@ -243,115 +243,41 @@ def concatenate(arrays, axis=0):
     return np.concatenate(arrays, axis=axis)
 
 
-def dask_1d_slice(out_name, in_name, slice_spec, shape, blockshape):
-    """
-    slice_spec - the full description of the python slice we want.
-    shape - the complete shape of the data that in_name describes
-    blockshape - the maximum size of each block
-
-     - see if our slice can be met checking against the shape
-       - one end goes past the shape? i.e. slice(0, 100) on a shape of (10,)
-       - stride/step? On this first pass, I'm going to ignore the stride.
-       - negative index?
-    - Should the out_name index match the in_name index assuming that the first
-        slice is not 0?
-      i.e. should we return
-        {(y,0):(get, (x,1), slice(3,5))}
-      or
-        {(y,1):(get, (x,1), slice(3,5))}
-
-    - Can we always assume that block (x,1) is the second block? yes, per conversation with @mrocklin.
-    - We also assume that the first slice is (out_name, 0), even if we
-        slice from an inner block like (in_name, 3)
-    - How do we handle a case where the slice size is greater than
-        the block size?
-                       
-    """
-
-    #Step 0: Setup all the variables we will need for the actual slicing
-    #  calculations. This includes the proper starting and stopping
-    #  indexes and step size. Remember that all of these can be negative,
-    #  and all of them can be None
-    start = slice_spec.start
-    stop = slice_spec.stop
-    step = slice_spec.step
-    
-    if start < 0:
-        start = shape[0]+start
-    if stop < 0:
-        stop = shape[0]+stop
-
-    if start is None:
-        start = 0
-    if stop is None:
-        stop = shape[0]
-    if step is None:
-        step = 1
-
-    if start >= shape[0] or start == stop:
-        return {}
-        
-    if stop > shape[0]:
-        stop = shape[0]
-                        
-
-    #Step 1: All of our input variables should now be setup correctly,
-    #  so figure out where to start and stop based on the blocksize
-    #  of the input data
-    leftmost_block = start/blockshape[0]
-    #We subtract 1 from stop so that if the rightmost index
-    #falls on a block boundary, we won't include a slice in the next block
-    #  i.e. slice(0,20) on blockshape(20,) should give us
-    #  (x,0), slice(0,20)
-    #  NOT
-    #  ((x,0), slice(0,20)), ((x,1), slice(0,0))
-    rightmost_block = (stop-1)/blockshape[0]
-    leftmost_block_start_index = start % blockshape[0]
-    rightmost_block_stop_index = stop - (rightmost_block*blockshape[0])
-    num_blocks = rightmost_block - leftmost_block
-
-    
-        
-    dask = {}
-    #There are three main cases to account for when doing the slicing
-    #  within a dask graph
-    #1. slicing within a single block
-    #2. slicing with only adjacent blocks, i.e. blocks 1,2
-    #3. slicing with multiple contiguous blocks, i.e. block 1,2,3,4
-    if leftmost_block == rightmost_block:    
-        dask[(out_name, 0)] = (operator.getitem, (in_name, leftmost_block), slice(leftmost_block_start_index, rightmost_block_stop_index))
-    else:
-        dask[(out_name, 0)] = (operator.getitem, (in_name, leftmost_block), slice(leftmost_block_start_index, blockshape[0]))
-        dask[(out_name, num_blocks)] = (operator.getitem, (in_name, rightmost_block), slice(0, rightmost_block_stop_index))
-            
-    for block_num in range(1, num_blocks):
-        dask[(out_name, block_num)] = (operator.getitem, (in_name, leftmost_block+block_num), slice(0, blockshape[0]))
-
-    return dask
-
-
-
 def _slice_1d(dim_shape, blocksize, index):
-    """
+    """Returns a dict of {blocknum: slice}
+
+    This function figures out where each slice should start in each
+    block for a single dimension. If the slice won't return any elements
+    in the block, that block will not be in the output.
+
     Parameters
-    ----
-    dim_shape - the number of elements in this dimension
+    ----------
+    dim_shape - the number of elements in this dimension.
+      This should be a positive, non-zero integer
     blocksize - the number of elements per block in this dimension
+      This should be a positive, non-zero integer
     index - a description of the elements in this dimension that we want
       This might be an integer, a slice(), or an Ellipsis
-
+      
     Returns
-    ----
-    a dictionary where the keys are the integer indexes of the blocks that should be sliced
-      and the values are the slices
+    -------
+    a dictionary where the keys are the integer indexes of the blocks that
+      should be sliced and the values are the slices
 
-
+    Tests
+    -----
     >>> _slice_1d(100, 20, slice(0, 35))
     {0: slice(0, 20, None), 1: slice(0, 15, None)}
     >>> _slice_1d(100, 20, slice(10,15))
     {0: slice(10, 15, None)}
     >>> _slice_1d(100, 20, slice(40, 100))
     {2: slice(0, 20, None), 3: slice(0, 20, None), 4: slice(0, 20, None)}
+    >>> _slice_1d(100, 20, slice(0, 100, 40)) #step > blocksize
+    {0: slice(0, 20, 40), 2: (0, 20, 40), 4: (0, 20, 40)}
+    >>> _slice_1d(100, 20, 5)
+    {0: 5}
+    >>> _slice_1d(100, 20, 57)
+    {2: 17}
     """
     #integer division often won't tell us how many blocks
     #  we have.
@@ -362,30 +288,39 @@ def _slice_1d(dim_shape, blocksize, index):
 
     if isinstance(index, int):
         #integer math here is ok.
-        if index >= dim_shape:
-            raise IndexError("index %s is out of bounds for shape %s" % (index, dim_shape))
+        if abs(index) >= dim_shape:
+            raise IndexError("index %s is out of bounds for shape %s" % (
+                index, dim_shape))
         return {index/blocksize : index % blocksize}
 
-    elif isinstance(index, slice):
-        #How do we deal with a step being bigger than the block?
-        #How do we deal with a negative slice?
+    if isinstance(index, slice):
+        #start, stop, and step == None are valid for a slice, 
+        #  but not for our calculations.
         start = index.start or 0
         stop = index.stop or dim_shape
-        step = index.step
+        step = index.step or 1
         start_block = start/blocksize
         stop_block = int(ceil(stop/blocksize))+1
 
-        res = [_block_slice_step_start(blocksize, block, start, stop, step) for block in range(0, stop_block)]
+        res = [_block_slice_step_start(blocksize, block, start, stop, step) \
+               for block in range(0, stop_block)]
                     
-        return {block: res[block] for block in range(start_block, stop_block) if res[block] is not None}
-
-                       
+        #res[block] will be None if the block doesn't contribute anything
+        return {block: res[block] for block in range(start_block, stop_block) \
+                if res[block] is not None}
 
 
 def _block_slice_step_start(blocksize, blocknum, start, stop, step):
-    """
+    """Return the slice for a single block
+
+    This function determines the relative slice in a single block
+    given the absolute positions of start, stop, and step. Each block
+    element has an absolute index and a relative index. The absolute
+    index is the element's position in the larger/conjoined structure.
+    The relative index is the element's position in the block.
+
     Parameters
-    ----
+    ----------
     blocksize : integer
       Denotes the size of the current block
     blocknum : integer
@@ -393,11 +328,13 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
       Example:
         - blocksize = 25
         - blocknum = 0
-        This implies that this block (0) holds block indexes [0:25] and absolute indexes [0:25]
+        This implies that this block (0) holds block indexes [0:25]
+        and absolute indexes [0:25]
 
         - blocksize = 25
         - blocknum = 3
-        This implies that this block (3) holds block indexes [0:25] and absolute indexes [75:100]
+        This implies that this block (3) holds block indexes [0:25]
+        and absolute indexes [75:100]
         
     start : integer
       Denotes the absolute starting index (inclusive) of the slice
@@ -412,38 +349,50 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
 
 
     Returns
-    ----
+    -------
     - None if start falls after the highest absolute index in the block
     - None if stop falls before the lowest absolute index in the block
-    - None if the step size is so large that the current block won't contribute any elements
-    - An integer index if the step size is large enough that the current block only contributes a single element (in some cases)
-    - a slice() containing the correct start and stop indexes into the block plus the step if any
+    - None if the step size is so large that the current block won't
+      contribute any elements
+    - An integer index if the step size is large enough that the current
+      block only contributes a single element (in some cases)
+    - a slice() containing the correct start and stop indexes into the
+      block plus the step if any
     
     Notes
-    ----        
-    - if step > blocksize, we are doing basic indexing into the blocks and may end up skipping a block
+    -----
+    - if step > blocksize, we are doing basic indexing into the blocks
+      and may end up skipping a block
     - negative stepping is UNHANDLED as of 2015-01-16
 
+    Tests
+    -----
     >>> _block_slice_step_start(20, 0, 10, 20, None)
     slice(10, 20, None)
-    >>> _block_slice_step_start(20, 0, 20, 50, None) #The starting index falls outside the block, so it returns None
-    >>> _block_slice_step_start(20, 1, 10, 50, None) #The starting index falls in block 0, so this block's slice starts at index 0
+    >>> #The starting index falls outside the block, so it returns None
+    >>> _block_slice_step_start(20, 0, 20, 50, None)
+    >>> #The starting index falls in block 0, so this block's slice
+    >>> #starts at index 0
+    >>> _block_slice_step_start(20, 1, 10, 50, None)
     slice(0, 20, None)
-    >>> _block_slice_step_start(20, 1, 10, 20, None) #The stopping index falls before block 1 so it returns None
+    >>> #The stopping index falls before block 1 so it returns None
+    >>> _block_slice_step_start(20, 1, 10, 20, None)
     >>> _block_slice_step_start(20, 0, 3, 100, 25)
-    3
+    slice(3, 20, 25)
     >>> _block_slice_step_start(20, 1, 3, 100, 25)
-    8
-    >>> _block_slice_step_start(20, 1, 10, 40, 3) #Because we start at index 10, the next block's slice starts at index 2 (aka absolute index 22 == 10 + 12)
+    slice(8, 20, 25)
+    >>> #Because we start at index 10, the next block's slice starts at
+    >>> #index 2 (aka absolute index 22 == 10 + 12)
+    >>> _block_slice_step_start(20, 1, 10, 40, 3)
     slice(2, 20, 3)
         
     """
     if start >= blocksize*(blocknum+1):
-        #The starting index falls after the block we are currently dealing with
+        #The starting index falls after the end of the given block
         return None
 
     if stop <= blocksize*(blocknum):
-        #the stopping index falls before the block we are currently dealing with
+        #the stopping index falls before the start of the given block
         return None
 
     #if the starting index happens to be in the current block,
@@ -451,33 +400,23 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
     #  for the slice.start index
     if _index_in_block(start, blocknum, blocksize):
         block_start_index = start % blocksize
-    elif step is None:
-        block_start_index = 0
     else:
-        #the starting index is a factor of step size, blocksize, blocknum, and start index
-        #What this statement does is determines the starting index into the current block
-        #  given the step size
-        #It happens that the starting index in the block is a function of the
-        #  absolute start, the number of
-        #We do the final ()%step because if the starting index falls on the beginning boundary (aka index 0)
-        #  the (step - 0) calculation will fall somewhere in the middle
-        abs_idx = _first_step_in_block(step, start, blocksize, blocknum)
-        block_start_index = _abs_index_to_rel_index(abs_idx, blocksize)
-        #If the block_start_index is less than 0, that means that this block
+        block_start_index = _first_step_in_block(step, start,
+                                                 blocksize, blocknum)
+        #If the block_start_index is less than 0,
+        #  that means that this block
         #  doesn't have any elements selected
         if block_start_index < 0:
             return None
         
     if block_start_index >= blocksize:
-        #The starting index into the block falls outside the current block's end
+        #The starting index into the block falls outside the
+        #  current block's end
         return None
-    elif step >= blocksize:
-        #If the step is >= the blocksize, we will only have one element per block
-        #So, don't bother returning a slice. Just return the index that should be gotten.
-        return block_start_index
     else:
         if _index_in_block(stop, blocknum, blocksize):
-            #If the stopping index falls inside this block, our returned slice should reflect that stoppage
+            #If the stopping index falls inside this block, our
+            #  returned slice should reflect that stoppage
             return slice(block_start_index, stop % blocksize, step)
         else:
             #otherwise, the slice should go to the end of the block
@@ -485,23 +424,21 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
 
 
 def _first_step_in_block(step, start, blocksize, blocknum):
-    #returns the absolute index of the first element in blocknum
-    #  that the given step occurs at. Otherwise, return -1
-    r = range(start, blocksize*(blocknum+1), step)
-    for idx in r:
-        if _index_in_block(idx, blocknum, blocksize):
-            return idx
-    return -1
-            
+    """Returns the blockindex of the first contributing element
 
-def _abs_index_to_rel_index(index, blocksize):
-    return index % blocksize
-    
+    This function determines where in the given block the first
+    contributing element is. If the block doesn't contribute
+    an element, -1 is returned  
+    """
+    if start >= blocksize*(blocknum+1):
+        return -1
+    return step - 1 - ((blocknum*blocksize) - start - 1) % step
+
 
 def _index_in_block(index, blocknum, blocksize):
     """
     Parameters
-    ----
+    ----------
     index : integer
       The absolute index into the iterable
     blocknum : integer
@@ -510,9 +447,8 @@ def _index_in_block(index, blocknum, blocksize):
       Denotes how large each block is (how many elements each block has)
 
     Returns
-    ----
-    A boolean telling if "index" falls in the block given by blocknum
-
+    -------
+    A boolean telling if index falls in the block given by blocknum
 
     >>> _index_in_block(0, 0, 100)
     True
@@ -526,14 +462,72 @@ def _index_in_block(index, blocknum, blocksize):
     return blocksize*blocknum <= index < blocksize*(blocknum+1)
 
 
-def dask_slice(in_name, out_name, shape, blockshape, indexes):
+def dask_slice(out_name, in_name, shape, blockshape, indexes,
+               getitem_func=operator.getitem):
+    """Returns a new dask containing the slices for all n-dimensions
+
+    This function makes a new dask that slices blocks along every
+    dimension and aggregates (via cartesian product) each dimension's
+    slices so that the resulting block slices give the same results
+    as the original slice on the original structure
+    
+    Parameters
+    ----------
+    in_name - string
+      This is the dask variable name that will be used as input
+    out_name - string
+      This is the dask variable output name 
+    shape - iterable of integers (only tested with tuples of integers)
+      The shape of the 
+    blockshape - iterable of integers
+    indexes - iterable of indexes, ellipses, or slices
+    getitem_func - the function that will be used to get the
+      items from the block. This is required by dask.
+    
+    Returns
+    -------
+    a dict where the keys are tuples of
+    (out_name, dim_index[, dim_index[, ...]])
+    and the values are 
+    (function, (in_name, dim_index[, dim_index[, ...]]),
+               (slice(),[slice()[,...]])
+        
+    Tests
+    -----
+    See tests/test_slicing.py
+    """
+
+    #Quick Optimization
+    #If we are only given full slices, simply return the input variable
+    #i.e. input_data[:,:,:] becomes
+    #(slice(None,None,None), slice(None,None,None),
+    # slice(None,None,None))
+    #In this case, we shouldn't do any slicing.
+    empty = slice(None, None, None)
+    if all(index == empty for index in indexes):
+        return {out_name: in_name}
+    
+    #Get a list (for each dimension) of dicts{blocknum: slice()}
+    #  for each dimension
     block_slices = list(map(_slice_1d, shape, blockshape, indexes))
 
-    out_names = list(itertools.product([out_name], *[range(len(d)) for d in block_slices]))
-    in_names = list(itertools.product([in_name], *[i.keys() for i in block_slices]))
-    all_slices = list(itertools.product(*[i.values() for i in block_slices]))
+    #out_names has the cartesion product of output block index locations
+    #i.e. (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0)
+    out_names = product([out_name],
+                        *[range(len(d)) for d in block_slices])
 
-    final_out = {out_name:(operator.getitem, in_name, slices) for out_name, in_name, slices in zip(out_names, in_names, all_slices)}
+    #in_names holds the cartesion product of input block index locations
+    #i.e. (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2)
+    in_names = product([in_name], *[i.keys() for i in block_slices])
+
+    #all_slices holds the slices needed to generate
+    #(out_name, 0, 0, 0) from (in_name, 1, 1, 2)
+    #There should be 1 slice per dimension index
+    all_slices = product(*[i.values() for i in block_slices])
+
+    final_out = {out_name:(getitem_func, in_name, slices) for
+                 out_name, in_name, slices in zip(out_names, in_names,
+                                                  all_slices)}
     
     return final_out
 
