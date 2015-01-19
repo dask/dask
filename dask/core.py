@@ -1,5 +1,6 @@
 from operator import add
 from itertools import chain
+from toolz import keyfilter
 from .compatibility import builtins
 
 def inc(x):
@@ -193,4 +194,32 @@ def reverse_dict(d):
         for val in vals:
             result[val].add(k)
     return result
+
+
+def cull(dsk, keys):
+    """ Return new dask with only the tasks required to calculate keys.
+
+    In other words, remove unnecessary tasks from dask.
+    ``keys`` may be a single key or list of keys.
+
+    Exmaple
+    -------
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
+    >>> cull(d, 'out')  # doctest: +SKIP
+    {'x': 1, 'out': (add, 'x', 10)}
+    """
+    if not isinstance(keys, list):
+        keys = [keys]
+    nxt = builtins.set(keys)
+    seen = nxt
+    while nxt:
+        cur = nxt
+        nxt = builtins.set()
+        for item in cur:
+            for dep in get_dependencies(dsk, item):
+                if dep not in seen:
+                    nxt.add(dep)
+        seen.update(nxt)
+    return keyfilter(seen.__contains__, dsk)
 

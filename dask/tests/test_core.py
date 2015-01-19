@@ -1,4 +1,5 @@
 import dask
+from dask.utils import raises
 
 
 def contains(a, b):
@@ -116,3 +117,14 @@ def test_nested_tasks():
          'z': (add, (inc, 'x'), 'y')}
 
     assert dask.get(d, 'z') == 4
+
+
+def test_cull():
+    # 'out' depends on 'x' and 'y', but not 'z'
+    d = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x'), 'out': (add, 'y', 10)}
+    culled = dask.core.cull(d, 'out')
+    assert culled == {'x': 1, 'y': (inc, 'x'), 'out': (add, 'y', 10)}
+    assert dask.core.cull(d, 'out') == dask.core.cull(d, ['out'])
+    assert dask.core.cull(d, ['out', 'z']) == d
+    assert raises(KeyError, lambda: dask.core.cull(d, 'badkey'))
+
