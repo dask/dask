@@ -9,7 +9,7 @@ def inc(x):
 def ishashable(x):
     """ Is x hashable?
 
-    Exmaple
+    Example
     -------
 
     >>> ishashable(1)
@@ -29,7 +29,7 @@ def istask(x):
 
     A task is a tuple with a callable first argument
 
-    Exmaple
+    Example
     -------
 
     >>> inc = lambda x: x + 1
@@ -44,7 +44,7 @@ def istask(x):
 def get(d, key, get=None, concrete=True, **kwargs):
     """ Get value from Dask
 
-    Exmaple
+    Example
     -------
 
     >>> inc = lambda x: x + 1
@@ -84,7 +84,7 @@ _get = get
 def set(d, key, val, args=[]):
     """ Set value for key in Dask
 
-    Exmaple
+    Example
     -------
 
     >>> d = {}
@@ -202,7 +202,7 @@ def cull(dsk, keys):
     In other words, remove unnecessary tasks from dask.
     ``keys`` may be a single key or list of keys.
 
-    Exmaple
+    Example
     -------
 
     >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
