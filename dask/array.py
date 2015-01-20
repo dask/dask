@@ -301,6 +301,7 @@ def _slice_1d(dim_shape, blocksize, index):
 
     Parameters
     ----------
+
     dim_shape - the number of elements in this dimension.
       This should be a positive, non-zero integer
     blocksize - the number of elements per block in this dimension
@@ -310,27 +311,37 @@ def _slice_1d(dim_shape, blocksize, index):
 
     Returns
     -------
-    a dictionary where the keys are the integer indexes of the blocks that
+
+    dictionary where the keys are the integer indexes of the blocks that
       should be sliced and the values are the slices
 
-    Tests
-    -----
+    Examples
+    --------
+
+    100 length array cut into length 10 pieces, slice 0:35
     >>> _slice_1d(100, 20, slice(0, 35))
-    {0: slice(0, 20, None), 1: slice(0, 15, None)}
-    >>> _slice_1d(100, 20, slice(10,15))
-    {0: slice(10, 15, None)}
+    {0: slice(0, 20, 1), 1: slice(0, 15, 1)}
+
+    >>> _slice_1d(100, 20, slice(10, 15))
+    {0: slice(10, 15, 1)}
+
     >>> _slice_1d(100, 20, slice(40, 100))
-    {2: slice(0, 20, None), 3: slice(0, 20, None), 4: slice(0, 20, None)}
-    >>> _slice_1d(100, 20, slice(0, 100, 40)) #step > blocksize
-    {0: slice(0, 20, 40), 2: (0, 20, 40), 4: (0, 20, 40)}
+    {2: slice(0, 20, 1), 3: slice(0, 20, 1), 4: slice(0, 20, 1)}
+
+    >>> _slice_1d(100, 20, slice(0, 100, 40))  # step > blocksize
+    {0: slice(0, 20, 40), 2: slice(0, 20, 40), 4: slice(0, 20, 40)}
+
+    Also supports indexing single elements
+
     >>> _slice_1d(100, 20, 5)
     {0: 5}
+
     >>> _slice_1d(100, 20, 57)
     {2: 17}
     """
     #integer division often won't tell us how many blocks
     #  we have.
-    num_blocks = int(ceil(float(dim_shape)/blocksize))
+    num_blocks = int(ceil(float(dim_shape) / blocksize))
 
     if index == Ellipsis or index == slice(None, None, None):
         return {i: index for i in range(num_blocks)}
@@ -370,6 +381,7 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
 
     Parameters
     ----------
+
     blocksize : integer
       Denotes the size of the current block
     blocknum : integer
@@ -399,6 +411,7 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
 
     Returns
     -------
+
     - None if start falls after the highest absolute index in the block
     - None if stop falls before the lowest absolute index in the block
     - None if the step size is so large that the current block won't
@@ -410,31 +423,42 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
 
     Notes
     -----
+
     - if step > blocksize, we are doing basic indexing into the blocks
       and may end up skipping a block
     - negative stepping is UNHANDLED as of 2015-01-16
 
-    Tests
-    -----
+    Examples
+    --------
+
     >>> _block_slice_step_start(20, 0, 10, 20, None)
     slice(10, 20, None)
-    >>> #The starting index falls outside the block, so it returns None
+
+    The starting index falls outside the block, so it returns None
+
     >>> _block_slice_step_start(20, 0, 20, 50, None)
-    >>> #The starting index falls in block 0, so this block's slice
-    >>> #starts at index 0
+
+    The starting index falls in block 0, so this block's slice
+    starts at index 0
+
     >>> _block_slice_step_start(20, 1, 10, 50, None)
     slice(0, 20, None)
-    >>> #The stopping index falls before block 1 so it returns None
+
+    The stopping index falls before block 1 so it returns None
+
     >>> _block_slice_step_start(20, 1, 10, 20, None)
+
     >>> _block_slice_step_start(20, 0, 3, 100, 25)
     slice(3, 20, 25)
+
     >>> _block_slice_step_start(20, 1, 3, 100, 25)
     slice(8, 20, 25)
-    >>> #Because we start at index 10, the next block's slice starts at
-    >>> #index 2 (aka absolute index 22 == 10 + 12)
+
+    Because we start at index 10, the next block's slice starts at
+    index 2 (aka absolute index 22 == 10 + 12)
+
     >>> _block_slice_step_start(20, 1, 10, 40, 3)
     slice(2, 20, 3)
-
     """
     if start >= blocksize*(blocknum+1):
         #The starting index falls after the end of the given block
@@ -473,7 +497,8 @@ def _block_slice_step_start(blocksize, blocknum, start, stop, step):
 
 
 def _first_step_in_block(step, start, blocksize, blocknum):
-    """Returns the blockindex of the first contributing element
+    """
+    Block-index of the first contributing element
 
     This function determines where in the given block the first
     contributing element is. If the block doesn't contribute
@@ -481,13 +506,17 @@ def _first_step_in_block(step, start, blocksize, blocknum):
     """
     if start >= blocksize*(blocknum+1):
         return -1
+    if step is None:
+        step = 1
     return step - 1 - ((blocknum*blocksize) - start - 1) % step
 
 
 def _index_in_block(index, blocknum, blocksize):
     """
+
     Parameters
     ----------
+
     index : integer
       The absolute index into the iterable
     blocknum : integer
@@ -497,7 +526,11 @@ def _index_in_block(index, blocknum, blocksize):
 
     Returns
     -------
+
     A boolean telling if index falls in the block given by blocknum
+
+    Examples
+    --------
 
     >>> _index_in_block(0, 0, 100)
     True
@@ -513,7 +546,8 @@ def _index_in_block(index, blocknum, blocksize):
 
 def dask_slice(out_name, in_name, shape, blockshape, indexes,
                getitem_func=operator.getitem):
-    """Returns a new dask containing the slices for all n-dimensions
+    """
+    Return a new dask containing the slices for all n-dimensions
 
     This function makes a new dask that slices blocks along every
     dimension and aggregates (via cartesian product) each dimension's
@@ -522,6 +556,7 @@ def dask_slice(out_name, in_name, shape, blockshape, indexes,
 
     Parameters
     ----------
+
     in_name - string
       This is the dask variable name that will be used as input
     out_name - string
@@ -535,15 +570,22 @@ def dask_slice(out_name, in_name, shape, blockshape, indexes,
 
     Returns
     -------
-    a dict where the keys are tuples of
-    (out_name, dim_index[, dim_index[, ...]])
-    and the values are
-    (function, (in_name, dim_index[, dim_index[, ...]]),
-               (slice(),[slice()[,...]])
 
-    Tests
-    -----
-    See tests/test_slicing.py
+    Dict where the keys are tuples of
+
+        (out_name, dim_index[, dim_index[, ...]])
+
+    and the values are
+
+        (function, (in_name, dim_index, dim_index, ...),
+                   (slice(...), [slice()[,...]])
+
+    Example
+    -------
+
+    >>> dask_slice('y', 'x', (100,), (20,), (slice(10, 35),))  # doctest: +SKIP
+    {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
+     ('y', 1): (getitem, ('x', 1), (slice( 0, 15),))}
     """
 
     #Quick Optimization
@@ -579,4 +621,3 @@ def dask_slice(out_name, in_name, shape, blockshape, indexes,
                                                   all_slices)}
 
     return final_out
-
