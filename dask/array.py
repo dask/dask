@@ -1,5 +1,5 @@
 import numpy as np
-from math import ceil
+from math import ceil, floor
 from itertools import product
 from collections import Iterator
 from functools import partial
@@ -291,7 +291,7 @@ def _slice_1d(dim_shape, blocksize, index):
         if abs(index) >= dim_shape:
             raise IndexError("index %s is out of bounds for shape %s" % (
                 index, dim_shape))
-        return {index/blocksize : index % blocksize}
+        return {int(index/blocksize) : index % blocksize}
 
     if isinstance(index, slice):
         #start, stop, and step == None are valid for a slice, 
@@ -299,7 +299,7 @@ def _slice_1d(dim_shape, blocksize, index):
         start = index.start or 0
         stop = index.stop or dim_shape
         step = index.step or 1
-        start_block = start/blocksize
+        start_block = int(start/blocksize)
         stop_block = int(ceil(stop/blocksize))+1
 
         res = [_block_slice_step_start(blocksize, block, start, stop, step) \
