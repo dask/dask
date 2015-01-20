@@ -1,6 +1,6 @@
 
 from into import discover, convert, append
-from toolz import merge, concat, partition
+from toolz import merge, concat, partition, accumulate, first
 from datashape import DataShape
 from datashape.dispatch import dispatch
 from operator import add
@@ -17,18 +17,20 @@ from .array import (getem, concatenate, concatenate2, top,
 
 class Array(object):
     """ Array object holding a dask """
-    __slots__ = 'dask', 'name', 'shape', 'blockshape'
+    __slots__ = 'dask', 'name', 'shape', 'blockdims'
 
-    def __init__(self, dask, name, shape, blockshape):
+    def __init__(self, dask, name, shape, blockshape=None, blockdims=None):
         self.dask = dask
         self.name = name
         self.shape = shape
-        self.blockshape = blockshape
+        if blockshape:
+            blockdims = tuple((bd,) * (d // bd) for d, bd in zip(shape,
+                blockshape))
+        self.blockdims = blockdims
 
     @property
     def numblocks(self):
-        return tuple(int(ceil(a / b))
-                     for a, b in zip(self.shape, self.blockshape))
+        return tuple(map(len, self.blockdims))
 
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
@@ -60,14 +62,14 @@ def atop(func, out, out_ind, *args):
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     shapes = dict((a, a.shape) for a, _ in arginds)
     dims = broadcast_dimensions(arginds, shapes)
-    blockshapes = dict((a, a.blockshape) for a, _ in arginds)
-    blockdims = broadcast_dimensions(arginds, blockshapes)
-
     shape = tuple(dims[i] for i in out_ind)
-    blockshape = tuple(blockdims[i] for i in out_ind)
+
+    blockdim_dict = dict((a, a.blockdims) for a, _ in arginds)
+    blockdimss = broadcast_dimensions(arginds, blockdim_dict)
+    blockdims = tuple(blockdimss[i] for i in out_ind)
 
     dsks = [a.dask for a, _ in arginds]
-    return Array(merge(dsk, *dsks), out, shape, blockshape)
+    return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims)
 
 
 @discover.register(Array)
@@ -128,9 +130,12 @@ def dask_to_float(x, **kwargs):
 def insert_to_ooc(out, arr):
     from threading import Lock
     lock = Lock()
+
+    locs = [[0] + list(accumulate(add, bl)) for bl in arr.blockdims]
+
     def store(x, *args):
         with lock:
-            ind = tuple([slice(i*d, (i+1)*d) for i, d in zip(args, arr.blockshape)])
+            ind = tuple([slice(loc[i], loc[i+1]) for i, loc in zip(args, locs)])
             out[ind] = x
         return None
 
@@ -193,7 +198,7 @@ from blaze.expr.split import split
 @dispatch(Reduction, Array)
 def compute_up(expr, data, **kwargs):
     leaf = expr._leaves()[0]
-    chunk = symbol('chunk', DataShape(*(data.blockshape +
+    chunk = symbol('chunk', DataShape(*(tuple(map(first, data.blockdims)) +
         (leaf.dshape.measure,))))
     (chunk, chunk_expr), (agg, agg_expr) = split(expr._child, expr, chunk=chunk)
 
@@ -247,4 +252,3 @@ def compute_up(expr, lhs, rhs, **kwargs):
                 next(names), out_index,
                 lhs, tuple(left_index),
                 rhs, tuple(right_index))
-

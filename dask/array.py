@@ -113,8 +113,21 @@ def zero_broadcast_dimensions(lol, nblocks):
     return deepmap(f, lol)
 
 
-def broadcast_dimensions(argpairs, numblocks):
+def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
     """ Find block dimensions from arguments
+
+    Parameters
+    ----------
+
+    argpairs: iterable
+        name, ijk index pairs
+    numblocks: dict
+        maps {name: number of blocks}
+    sentinels: iterable (optional)
+        values for singleton dimensions
+
+    Examples
+    --------
 
     >>> argpairs = [('x', 'ij'), ('y', 'ji')]
     >>> numblocks = {'x': (2, 3), 'y': (3, 2)}
@@ -127,6 +140,13 @@ def broadcast_dimensions(argpairs, numblocks):
     >>> numblocks = {'x': (2, 1), 'y': (1, 3)}
     >>> broadcast_dimensions(argpairs, numblocks)
     {'i': 2, 'j': 3}
+
+    Works in other contexts too
+
+    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
+    >>> d = {'x': ('Hello', 1), 'y': (1, (2, 3))}
+    >>> broadcast_dimensions(argpairs, d)
+    {'i': 'Hello', 'j': (2, 3)}
     """
     # List like [('i', 2), ('j', 1), ('i', 1), ('j', 2)]
     L = concat([zip(inds, dims)
@@ -135,7 +155,9 @@ def broadcast_dimensions(argpairs, numblocks):
     g = groupby(0, L)
     g = dict((k, [d for i, d in v]) for k, v in g.items())
 
-    if not all(len(set(v) - set([1])) == 1 for v in g.values()):
+    g2 = dict((k, set(v) - set(sentinels)) for k, v in g.items())
+
+    if not set(map(len, g2.values())) == set([1]):
         raise ValueError("Shapes do not align %s" % g)
 
     return valmap(max, g)

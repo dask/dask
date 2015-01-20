@@ -24,6 +24,8 @@ def test_Array():
     assert a.keys() == [[('x', i, j) for j in range(10)]
                                      for i in range(10)]
 
+    assert a.blockdims == ((100,) * 10, (100,) * 10)
+
 
 def test_convert():
     x = np.arange(600).reshape((20, 30))
@@ -107,3 +109,14 @@ def test_keys():
                                           for i in range(5)]
     d = Array({}, 'x', (), ())
     assert d.keys() == [('x',)]
+
+
+def test_insert_to_ooc():
+    x = np.arange(600).reshape((20, 30))
+    y = np.empty(shape=x.shape, dtype=x.dtype)
+    a = convert(Array, x, blockshape=(4, 5))
+
+    dsk = insert_to_ooc(y, a)
+    core.get(merge(dsk, a.dask), dsk.keys())
+
+    assert eq(y, x)
