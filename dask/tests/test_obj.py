@@ -120,3 +120,18 @@ def test_insert_to_ooc():
     core.get(merge(dsk, a.dask), dsk.keys())
 
     assert eq(y, x)
+
+
+def test_ragged_blockdims():
+    dsk = {('x', 0, 0): np.ones((2, 2)),
+           ('x', 0, 1): np.ones((2, 3)),
+           ('x', 1, 0): np.ones((5, 2)),
+           ('x', 1, 1): np.ones((5, 3))}
+
+    a = Array(dsk, 'x', shape=(7, 5), blockdims=[(2, 5), (2, 3)])
+    s = symbol('s', '7 * 5 * int')
+
+    assert compute(s.sum(axis=0), a).blockdims == ((2, 3),)
+    assert compute(s.sum(axis=1), a).blockdims == ((2, 5),)
+
+    assert compute(s + 1, a).blockdims == a.blockdims

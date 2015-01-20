@@ -23,10 +23,10 @@ class Array(object):
         self.dask = dask
         self.name = name
         self.shape = shape
-        if blockshape:
+        if blockshape is not None:
             blockdims = tuple((bd,) * (d // bd) for d, bd in zip(shape,
                 blockshape))
-        self.blockdims = blockdims
+        self.blockdims = tuple(map(tuple, blockdims))
 
     @property
     def numblocks(self):
@@ -98,7 +98,7 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
     name = name or next(names)
     dask = merge({name: x}, getem(name, blockshape, x.shape))
 
-    return Array(dask, name, x.shape, blockshape)
+    return Array(dask, name, x.shape, blockshape=blockshape)
 
 
 def get(dsk, keys, get=threaded.get, **kwargs):
