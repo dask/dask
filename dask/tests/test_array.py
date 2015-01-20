@@ -13,38 +13,24 @@ def contains(a, b):
     return all(a.get(k) == v for k, v in b.items())
 
 
-'''
-def test_basic():
-    d = dict()
-    d['x'] = 'some-array'
-    a = Array(d, 'x', shape=(10, 10), blockshape=(4, 4))
-
-    assert a.array == 'x'
-    assert a.shape == (10, 10)
-    assert a.blockshape == (4, 4)
-    assert a.numblocks == (3, 3)
-    assert contains(a.data, {('x', i, j): (ndslice, 'x', a.blockshape, i, j)
-                                    for i in range(3)
-                                    for j in range(3)})
-'''
-
 def test_getem():
     assert getem('X', blocksize=(2, 3), shape=(4, 6)) == \
-        {('X', 0, 0): (ndslice, 'X', (2, 3), 0, 0),
-         ('X', 1, 0): (ndslice, 'X', (2, 3), 1, 0),
-         ('X', 1, 1): (ndslice, 'X', (2, 3), 1, 1),
-         ('X', 0, 1): (ndslice, 'X', (2, 3), 0, 1)}
+    {('X', 0, 0): (operator.getitem, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (operator.getitem, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (operator.getitem, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (operator.getitem, 'X', (slice(0, 2), slice(3, 6)))}
+
+inc = lambda x: x + 1
+add = lambda x, y: x + y
 
 
 def test_top():
-    inc = lambda x: x + 1
     assert top(inc, 'z', 'ij', 'x', 'ij', numblocks={'x': (2, 2)}) == \
         {('z', 0, 0): (inc, ('x', 0, 0)),
          ('z', 0, 1): (inc, ('x', 0, 1)),
          ('z', 1, 0): (inc, ('x', 1, 0)),
          ('z', 1, 1): (inc, ('x', 1, 1))}
 
-    add = lambda x, y: x + y
     assert top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij',
                 numblocks={'x': (2, 2), 'y': (2, 2)}) == \
         {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
@@ -66,6 +52,15 @@ def test_top():
     assert top(identity, 'z', '', 'x', 'ij', numblocks={'x': (2, 2)}) ==\
         {('z',): (identity, [[('x', 0, 0), ('x', 0, 1)],
                              [('x', 1, 0), ('x', 1, 1)]])}
+
+
+def test_top_supports_broadcasting_rules():
+    assert top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij',
+                numblocks={'x': (1, 2), 'y': (2, 1)}) == \
+        {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
+         ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 0)),
+         ('z', 1, 0): (add, ('x', 0, 0), ('y', 1, 0)),
+         ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 0))}
 
 
 def test_concatenate():

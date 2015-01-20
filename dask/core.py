@@ -1,5 +1,6 @@
 from operator import add
 from itertools import chain
+from toolz import keyfilter
 from .compatibility import builtins
 
 def inc(x):
@@ -8,7 +9,7 @@ def inc(x):
 def ishashable(x):
     """ Is x hashable?
 
-    Exmaple
+    Example
     -------
 
     >>> ishashable(1)
@@ -28,7 +29,7 @@ def istask(x):
 
     A task is a tuple with a callable first argument
 
-    Exmaple
+    Example
     -------
 
     >>> inc = lambda x: x + 1
@@ -43,7 +44,7 @@ def istask(x):
 def get(d, key, get=None, concrete=True, **kwargs):
     """ Get value from Dask
 
-    Exmaple
+    Example
     -------
 
     >>> inc = lambda x: x + 1
@@ -83,7 +84,7 @@ _get = get
 def set(d, key, val, args=[]):
     """ Set value for key in Dask
 
-    Exmaple
+    Example
     -------
 
     >>> d = {}
@@ -124,7 +125,10 @@ def _deps(dsk, arg):
     """
     if istask(arg):
         return builtins.set.union(*[_deps(dsk, a) for a in arg[1:]])
-    if arg not in dsk:
+    try:
+        if arg not in dsk:
+            return builtins.set()
+    except TypeError:  # not hashable
         return builtins.set()
     return builtins.set([arg])
 
@@ -193,4 +197,32 @@ def reverse_dict(d):
         for val in vals:
             result[val].add(k)
     return result
+
+
+def cull(dsk, keys):
+    """ Return new dask with only the tasks required to calculate keys.
+
+    In other words, remove unnecessary tasks from dask.
+    ``keys`` may be a single key or list of keys.
+
+    Example
+    -------
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
+    >>> cull(d, 'out')  # doctest: +SKIP
+    {'x': 1, 'out': (add, 'x', 10)}
+    """
+    if not isinstance(keys, list):
+        keys = [keys]
+    nxt = builtins.set(keys)
+    seen = nxt
+    while nxt:
+        cur = nxt
+        nxt = builtins.set()
+        for item in cur:
+            for dep in get_dependencies(dsk, item):
+                if dep not in seen:
+                    nxt.add(dep)
+        seen.update(nxt)
+    return keyfilter(seen.__contains__, dsk)
 
