@@ -172,11 +172,12 @@ def resize(x, shape):
     return x.resize(shape)
 
 from blaze.dispatch import dispatch
-from blaze.compute.core import compute_up
+from blaze.compute.core import compute_up, optimize
 from blaze import compute, ndim
 from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
-        Expr, Slice)
+        Expr, Slice, Broadcast)
 from toolz import curry, compose
+from numbers import Number
 
 def compute_it(expr, leaves, *data, **kwargs):
     kwargs.pop('scope')
@@ -190,7 +191,32 @@ def elemwise_array(expr, *data, **kwargs):
                 next(names), expr_inds,
                 *concat((dat, tuple(range(ndim(dat))[::-1])) for dat in data))
 
-for i in range(10):
+
+try:
+    from blaze.compute.numba import (get_numba_ufunc, broadcast_collect,
+            Broadcastable)
+
+    def compute_broadcast(expr, *data, **kwargs):
+        leaves = expr._inputs
+        expr_inds = tuple(range(ndim(expr)))[::-1]
+        func = get_numba_ufunc(expr)
+        return atop(func,
+                    next(names), expr_inds,
+                    *concat((dat, tuple(range(ndim(dat))[::-1])) for dat in data))
+
+    def optimize_array(expr, *data):
+        return broadcast_collect(expr, Broadcastable=Broadcastable,
+                                       WantToBroadcast=Broadcastable)
+
+    for i in range(5):
+        compute_up.register(Broadcast, *([(Array, Number)] * i))(compute_broadcast)
+        optimize.register(Expr, *([(Array, Number)] * i))(optimize_array)
+
+except ImportError:
+    pass
+
+
+for i in range(5):
     compute_up.register(ElemWise, *([Array] * i))(elemwise_array)
 
 
