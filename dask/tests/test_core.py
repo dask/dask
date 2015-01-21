@@ -128,3 +128,13 @@ def test_cull():
     assert dask.core.cull(d, ['out', 'z']) == d
     assert raises(KeyError, lambda: dask.core.cull(d, 'badkey'))
 
+
+def test_get_stack_limit():
+    d = {'x%s' % (i+1): (inc, 'x%s' % i) for i in range(10000)}
+    d['x0'] = 0
+    assert dask.get(d, 'x10000') == 10000
+    # introduce cycle
+    d['x5000'] = (inc, 'x5001')
+    assert raises(ValueError, lambda: dask.get(d, 'x10000'))
+    assert dask.get(d, 'x4999') == 4999
+

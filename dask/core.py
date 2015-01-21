@@ -41,6 +41,81 @@ def istask(x):
     return isinstance(x, tuple) and x and callable(x[0])
 
 
+def isdag(d, keys):
+    # Stack-based depth-first search traversal
+    if not isinstance(keys, list):
+        keys = [keys]
+    completed = builtins.set()
+    seen = builtins.set()
+    for key in keys:
+        if key in completed:
+            continue
+        nodes = [key]
+        while nodes:
+            cur = nodes[-1]
+            if cur in completed:
+                nodes.pop()
+                continue
+            seen.add(cur)
+
+            next_nodes = []
+            for nxt in get_dependencies(d, cur):
+                if nxt not in completed:
+                    if nxt in seen:
+                        return False
+                    next_nodes.append(nxt)
+
+            if next_nodes:
+                nodes.extend(next_nodes)
+            else:
+                completed.add(cur)
+                nodes.pop()
+        return True
+
+
+def _get_task(d, task, maxdepth=1000):
+    # non-recursive.  DAG property is checked upon reaching maxdepth.
+    depth = 0
+    _iter = lambda *args: iter(args)
+    stack = (task[0], list(task[:0:-1]), [], None)
+    while True:
+        func, args, results, prev = stack
+        if not args:
+            val = func(*results)
+            if prev is None:
+                return val
+            prev[2].append(val)
+            stack = prev
+            depth -= 1
+            continue
+
+        key = args.pop()
+        if isinstance(key, list):
+            # v = (get(d, k, concrete=False) for k in key)  # recursive
+            # Fake being lazy
+            stack = (_iter, key[::-1], [], stack)
+            depth += 1
+            if maxdepth and depth > maxdepth:
+                if not isdag(d, list(task[1:])):
+                    raise ValueError('Cycle detected in dask!')
+                maxdepth = None
+            continue
+        elif ishashable(key) and key in d:
+            v = d[key]
+        else:
+            v = key
+
+        if istask(v):
+            stack = (v[0], list(v[:0:-1]), [], stack)
+            depth += 1
+            if maxdepth and depth > maxdepth:
+                if not isdag(d, list(task[1:])):
+                    raise ValueError('Cycle detected in dask!')
+                maxdepth = None
+        else:
+            results.append(v)
+
+
 def get(d, key, get=None, concrete=True, **kwargs):
     """ Get value from Dask
 
@@ -72,6 +147,9 @@ def get(d, key, get=None, concrete=True, **kwargs):
         return key
 
     if istask(v):
+        if get is _get:
+            # use non-recursive method by default
+            return _get_task(d, v)
         func, args = v[0], v[1:]
         args2 = [get(d, arg, get=get, concrete=False) for arg in args]
         return func(*[get(d, arg, get=get) for arg in args2])
