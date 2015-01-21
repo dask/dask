@@ -1,5 +1,3 @@
-#!/usr/bin/env py.test
-
 import dask
 from dask.array import dask_slice, _slice_1d
 import operator
@@ -8,9 +6,13 @@ import numpy
 
 def test_slice_1d():
     expected = {0: slice(10, 25, 1), 1: slice(0, 25, 1), 2: slice(0, 1, 1)}
-    result = _slice_1d(100, [25]*4, slice(10,51,None))
-
+    result = _slice_1d(100, [25]*4, slice(10, 51, None))
     assert expected == result
+
+
+def test_slice_singleton_value_on_boundary():
+    assert _slice_1d(15, [5, 5, 5], 10) == {2: 0}
+    assert _slice_1d(30, (5, 5, 5, 5, 5, 5), 10) == {2: 0}
 
 
 def test_dask_slice_1d():

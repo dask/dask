@@ -378,7 +378,7 @@ def _slice_1d(dim_shape, lengths, index):
         i = 0
         ind = index
         lens = list(lengths)
-        while ind > lens[0]:
+        while ind >= lens[0]:
             i += 1
             ind -= lens.pop(0)
         return {i: ind}
