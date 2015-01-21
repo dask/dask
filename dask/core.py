@@ -70,7 +70,7 @@ def isdag(d, keys):
             else:
                 completed.add(cur)
                 nodes.pop()
-        return True
+    return True
 
 
 def _get_task(d, task, maxdepth=1000):
