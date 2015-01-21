@@ -11,8 +11,8 @@ import operator
 import numpy as np
 from . import core, threaded
 from .threaded import inline
-from .array import (getem, concatenate, concatenate2, top,
-    broadcast_dimensions)
+from .array import (getem, concatenate, concatenate2, top, new_blockdim,
+    broadcast_dimensions, dask_slice)
 
 
 class Array(object):
@@ -174,7 +174,8 @@ def resize(x, shape):
 from blaze.dispatch import dispatch
 from blaze.compute.core import compute_up
 from blaze import compute, ndim
-from blaze.expr import ElemWise, symbol, Reduction, Transpose, TensorDot, Expr
+from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
+        Expr, Slice)
 from toolz import curry, compose
 
 def compute_it(expr, leaves, *data, **kwargs):
@@ -252,3 +253,17 @@ def compute_up(expr, lhs, rhs, **kwargs):
                 next(names), out_index,
                 lhs, tuple(left_index),
                 rhs, tuple(right_index))
+
+
+@dispatch(Slice, Array)
+def compute_up(expr, data, **kwargs):
+    out = next(names)
+    index = expr.index
+
+    # Turn x[5:10] into x[5:10, :, :] as needed
+    index = list(index) + [slice(None, None, None)] * (expr.ndim - len(index))
+
+    dsk = dask_slice(out, data.name, data.shape, data.blockdims, index)
+    blockdims = [new_blockdim(d, db, i)
+                for d, i, db in zip(data.shape, index, data.blockdims)]
+    return Array(merge(data.dask, dsk), out, expr.shape, blockdims=blockdims)

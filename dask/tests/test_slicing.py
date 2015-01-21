@@ -12,12 +12,6 @@ def test_slice_1d():
 
     assert expected == result
 
-    expected = {0: slice(None, None, None), 1: slice(None, None, None),
-                2: slice(None, None, None), 3: slice(None, None, None)}
-    result = _slice_1d(100, [25]*4 ,slice(None, None, None))
-
-    assert expected == result
-
 
 def test_dask_slice_1d():
     #x[24::2]

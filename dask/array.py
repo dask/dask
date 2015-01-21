@@ -314,6 +314,16 @@ def concatenate(arrays, axis=0):
     return np.concatenate(arrays, axis=axis)
 
 
+def new_blockdim(dim_shape, lengths, index):
+    """
+
+    >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(0, 90, 2))
+    [10, 5, 10, 5, 15]
+    """
+    pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
+    return [(slc.stop - slc.start) // slc.step for _, slc in pairs]
+
+
 def _slice_1d(dim_shape, lengths, index):
     """Returns a dict of {blocknum: slice}
 
@@ -363,9 +373,6 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], 25)
     {1: 5}
     """
-    if index == Ellipsis or index == slice(None, None, None):
-        return {i: index for i in range(len(lengths))}
-
     if isinstance(index, int):
         i = 0
         ind = index
@@ -376,8 +383,6 @@ def _slice_1d(dim_shape, lengths, index):
         return {i: ind}
 
     if isinstance(index, slice):
-        #start, stop, and step == None are valid for a slice,
-        #  but not for our calculations.
         orig_start = start = index.start or 0
         orig_stop = stop = index.stop or dim_shape
         step = index.step or 1
