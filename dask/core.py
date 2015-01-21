@@ -42,33 +42,63 @@ def istask(x):
 
 
 def isdag(d, keys):
-    # Stack-based depth-first search traversal
+    """ Does Dask form a directed acyclic graph when calculating keys?
+
+    ``keys`` may be a single key or list of keys.
+
+    Example
+    -------
+
+    >>> inc = lambda x: x + 1
+    >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')
+    True
+    >>> isdag({'x': (inc, 'y'), 'y': (inc, 'x')}, 'y')
+    False
+    """
+    # Stack-based depth-first search traversal.  This is based on Tarjan's
+    # method for topological sorting (see wikipedia for pseudocode)
     if not isinstance(keys, list):
         keys = [keys]
+
+    # Nodes whose descendents have been completely explored.
+    # These nodes are guaranteed to not be part of a cycle.
     completed = builtins.set()
+
+    # All nodes that have been visited in the current traversal.  Because
+    # we are doing depth-first search, going "deeper" should never result
+    # in visiting a node that has already been seen.  The `seen` and
+    # `completed` sets are mutually exclusive; it is okay to visit a node
+    # that has already been added to `completed`.
     seen = builtins.set()
+
     for key in keys:
         if key in completed:
             continue
         nodes = [key]
         while nodes:
+            # Keep current node on the stack until all descendants are visited
             cur = nodes[-1]
             if cur in completed:
+                # Already fully traversed descendants of cur
                 nodes.pop()
                 continue
             seen.add(cur)
 
+            # Add direct descendants of cur to nodes stack
             next_nodes = []
             for nxt in get_dependencies(d, cur):
                 if nxt not in completed:
                     if nxt in seen:
+                        # Cycle detected!
                         return False
                     next_nodes.append(nxt)
 
             if next_nodes:
                 nodes.extend(next_nodes)
             else:
+                # cur has no more descendants to explore, so we're done with it
                 completed.add(cur)
+                seen.remove(cur)
                 nodes.pop()
     return True
 
@@ -77,15 +107,26 @@ def _get_task(d, task, maxdepth=1000):
     # non-recursive.  DAG property is checked upon reaching maxdepth.
     depth = 0
     _iter = lambda *args: iter(args)
-    stack = (task[0], list(task[:0:-1]), [], None)
+
+    # We construct a nested heirarchy of tuples to mimic the execution stack
+    # of frames that Python would maintain for a recursive implementation.
+    # A frame is associated with a single task from a Dask.
+    # A frame tuple has four elements:
+    #    1) The function for the task.
+    #    2) The arguments for the task (typically keys in the Dask).
+    #       Arguments are stored in reverse order, and elements are popped
+    #       as they are evaluated.
+    #    3) The calculated results of the arguments from (2).
+    #    4) The previous frame.
+    frame = (task[0], list(task[:0:-1]), [], None)
     while True:
-        func, args, results, prev = stack
+        func, args, results, prev = frame
         if not args:
             val = func(*results)
             if prev is None:
                 return val
             prev[2].append(val)
-            stack = prev
+            frame = prev
             depth -= 1
             continue
 
@@ -93,7 +134,7 @@ def _get_task(d, task, maxdepth=1000):
         if isinstance(key, list):
             # v = (get(d, k, concrete=False) for k in key)  # recursive
             # Fake being lazy
-            stack = (_iter, key[::-1], [], stack)
+            frame = (_iter, key[::-1], [], frame)
             depth += 1
             if maxdepth and depth > maxdepth:
                 if not isdag(d, list(task[1:])):
@@ -106,7 +147,7 @@ def _get_task(d, task, maxdepth=1000):
             v = key
 
         if istask(v):
-            stack = (v[0], list(v[:0:-1]), [], stack)
+            frame = (v[0], list(v[:0:-1]), [], frame)
             depth += 1
             if maxdepth and depth > maxdepth:
                 if not isdag(d, list(task[1:])):
