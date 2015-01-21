@@ -153,9 +153,9 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
                     for (x, inds), (x, dims)
                     in join(first, argpairs, first, numblocks.items())])
     g = groupby(0, L)
-    g = dict((k, [d for i, d in v]) for k, v in g.items())
+    g = dict((k, set([d for i, d in v])) for k, v in g.items())
 
-    g2 = dict((k, set(v) - set(sentinels)) for k, v in g.items())
+    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
 
     if not set(map(len, g2.values())) == set([1]):
         raise ValueError("Shapes do not align %s" % g)

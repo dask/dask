@@ -110,3 +110,9 @@ def test_chunked_transpose_plus_one():
     out = dask.get(dsk, [[('out', i, j) for j in range(4)] for i in range(4)])
 
     assert eq(concatenate(out), x.T + 1)
+
+
+def test_broadcast_dimensions_works_with_singleton_dimensions():
+    argpairs = [('x', 'i')]
+    numblocks = {'x': ((1,),)}
+    assert broadcast_dimensions(argpairs, numblocks) == {'i': (1,)}
