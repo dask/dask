@@ -3,6 +3,7 @@ from dask.array import *
 from dask.obj import *
 from into import convert, into
 from collections import Iterable
+from toolz import concat
 
 
 def eq(a, b):
@@ -25,6 +26,16 @@ def test_Array():
                                      for i in range(10)]
 
     assert a.blockdims == ((100,) * 10, (100,) * 10)
+
+
+def test_numblocks_suppoorts_singleton_block_dims():
+    shape = (100, 10)
+    blockshape = (10, 10)
+    name = 'x'
+    dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
+    a = Array(dsk, name, shape, blockshape)
+
+    assert set(concat(a.keys())) == set([('x', i, 0) for i in range(100//10)])
 
 
 def test_convert():
@@ -87,7 +98,7 @@ def test_compute():
                  sx.sum(axis=1),
                  sy + sa,
                  sy + sb,
-                 sx[3:17], sx[3:10, 10:25:2] + 1,
+                 sx[3:17], sx[3:10, 10:25:2] + 1, sx[:5, 10],
                 ]:
         result = compute(expr, dask_ns)
         expected = compute(expr, numpy_ns)
@@ -136,3 +147,9 @@ def test_ragged_blockdims():
     assert compute(s.sum(axis=1), a).blockdims == ((2, 5),)
 
     assert compute(s + 1, a).blockdims == a.blockdims
+
+
+def test_slicing_with_singleton_dimensions():
+    arr = compute(sx[5:15, 12], dx)
+    assert arr.dask == 0
+    assert all(len(k) == 2 for k in arr.keys())

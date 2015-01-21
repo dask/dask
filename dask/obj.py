@@ -265,5 +265,6 @@ def compute_up(expr, data, **kwargs):
 
     dsk = dask_slice(out, data.name, data.shape, data.blockdims, index)
     blockdims = [new_blockdim(d, db, i)
-                for d, i, db in zip(data.shape, index, data.blockdims)]
+                for d, i, db in zip(data.shape, index, data.blockdims)
+                if not isinstance(i, int)]
     return Array(merge(data.dask, dsk), out, expr.shape, blockdims=blockdims)

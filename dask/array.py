@@ -320,6 +320,7 @@ def new_blockdim(dim_shape, lengths, index):
     >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(0, 90, 2))
     [10, 5, 10, 5, 15]
     """
+    assert not isinstance(index, int)
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
     return [(slc.stop - slc.start) // slc.step for _, slc in pairs]
 
@@ -440,7 +441,6 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
      ('y', 1): (getitem, ('x', 1), (slice( 0, 15),))}
     """
-
     #Quick Optimization
     #If we are only given full slices, simply return the input variable
     #i.e. input_data[:,:,:] becomes
@@ -458,7 +458,9 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     #out_names has the cartesion product of output block index locations
     #i.e. (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0)
     out_names = product([out_name],
-                        *[range(len(d)) for d in block_slices])
+                        *[range(len(d))
+                            for d, i in zip(block_slices, indexes)
+                            if not isinstance(i, int)])
 
     #in_names holds the cartesion product of input block index locations
     #i.e. (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2)
@@ -469,8 +471,8 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     #There should be 1 slice per dimension index
     all_slices = product(*[i.values() for i in block_slices])
 
-    final_out = {out_name:(getitem_func, in_name, slices) for
-                 out_name, in_name, slices in zip(out_names, in_names,
-                                                  all_slices)}
+    final_out = {out_name: (getitem_func, in_name, slices)
+                    for out_name, in_name, slices
+                    in zip(out_names, in_names, all_slices)}
 
     return final_out

@@ -67,13 +67,13 @@ def test_dask_slice_2d():
     assert expected == result
 
     #2d slices with one dimension: x[5,10::1]
-    expected = {('y', 0, 0): (operator.getitem,
+    expected = {('y', 0): (operator.getitem,
                                ('x', 0, 0),
                                (5, slice(10, 20, 1))),
-                 ('y', 0, 1): (operator.getitem,
+                 ('y', 1): (operator.getitem,
                                ('x', 0, 1),
                                (5, slice(0, 20, 1))),
-                 ('y', 0, 2): (operator.getitem,
+                 ('y', 2): (operator.getitem,
                                ('x', 0, 2),
                                (5, slice(0, 5, 1)))}
 
@@ -96,3 +96,11 @@ def test_slice_optimizations():
                          slice(None,None,None)))
     assert expected == result
 
+
+def test_slicing_with_singleton_indices():
+    result = dask_slice('y', 'x', (10, 10), ([5, 5], [5, 5]),
+                        (slice(0, 5), 8))
+
+    expected = {('y', 0): (operator.getitem, ('x', 0, 1), (slice(0, 5, 1), 3))}
+
+    assert expected == result
