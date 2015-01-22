@@ -1,13 +1,13 @@
 import numpy as np
 from math import ceil, floor
-from itertools import product
+from itertools import product, count, izip
 from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap)
 from .utils import deepmap
 import operator
-
+from .compatibility import accumulate
 
 def getem(arr, blocksize, shape):
     """ Dask getting various chunks from an array-like
@@ -373,6 +373,16 @@ def _slice_1d(dim_shape, lengths, index):
 
     >>> _slice_1d(100, [20, 20, 20, 20, 20], 25)
     {1: 5}
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3))
+    {0: slice(-2, -20, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3))
+    {0: slice(-2, -8, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
+    {4: slice(-1, -12, -3)}
+
     """
     if isinstance(index, int):
         i = 0
@@ -383,11 +393,30 @@ def _slice_1d(dim_shape, lengths, index):
             ind -= lens.pop(0)
         return {i: ind}
 
-    if isinstance(index, slice):
-        orig_start = start = index.start or 0
-        orig_stop = stop = index.stop or dim_shape
-        step = index.step or 1
-        d = dict()
+    assert isinstance(index, slice)
+    step = index.step or 1
+    if step > 0:
+        start = index.start or 0
+        stop = index.stop or dim_shape
+    else:
+        #x=range(10)
+        #x[12::-3] == x[11::-3] == x[-1::-3] == x[9::-3]
+        #this is for negative indexing. First, deal with None start
+        start = index.start or dim_shape-1
+        #start > dim_shape should be set to the last index in this dimension
+        #for negative indexing, start is always the absolute index
+        start = dim_shape-1 if start >= dim_shape else start
+        #x[dim_shape:0:-1] is NOT the same as x[dim_shape[::-1]
+        #x[dim_shape[::-1] IS the same as x[dim_shape:-dim_shape-1:-1]
+        stop = -(dim_shape+1) if index.stop is None else index.stop
+
+    if start < 0:
+        start += dim_shape
+    if stop < 0:
+        stop += dim_shape
+
+    d = dict()
+    if step > 0:
         for i, length in enumerate(lengths):
             if start < length and stop > 0:
                 d[i] = slice(start, min(stop, length), step)
@@ -395,8 +424,40 @@ def _slice_1d(dim_shape, lengths, index):
             else:
                 start = start - length
             stop -= length
-        return d
+    else:
+        #negative stepping is handled here
+        #stop gets incremented by block length in the loop.
+        #it will eventually hold the stopping index for the
+        #  current block.
+        stop -= dim_shape
+        tail_indexes = list(accumulate(lengths))
+        #11%3==2 and 11%-3==-1. We need the positive step for %
+        pos_step = abs(step)
+        offset = 0
+        for i, length in izip(count(len(lengths)-1, -1), reversed(lengths)):
+            #We are stepping backwards, so the loop goes from len-1 to 0
+            #start should always be the absolute index where we start.
+            #start - tail_indexes[i] turns the absolute index into
+            #  a NEGATIVE block index. tail_indexes[i] hold the last,
+            #  absolute, exclusive index in the block
+            #  (i.e. x[0:tail_index]).
+            #The start index for the next iteration is a function
+            #  of the offset that the step introduces and the
+            #  length of the current block
+            #Finally, the max(stop, -length-1) is there because we need
+            #  a way to indicate that the slice INCLUDES the first block
+            #  element. x[10:0:-1] doesn't include x[0].
+            #  The tricky bit is that x[10:-11:-1] does include x[0]
+            if start + length >= tail_indexes[i] and stop < 0:
+                d[i] = slice(start - tail_indexes[i],
+                             max(stop, -length - 1), step)
+                #The offset accumulates over time from the start point
+                offset = (offset + pos_step - (length % pos_step)) % pos_step
+                start = tail_indexes[i] - 1 - length - offset
 
+            stop += length
+
+    return d
 
 def dask_slice(out_name, in_name, shape, blockdims, indexes,
                getitem_func=operator.getitem):
