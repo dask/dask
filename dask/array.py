@@ -4,10 +4,10 @@ from itertools import product, count, izip
 from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
-        frequencies, join, first, memoize, map, groupby, valmap)
+        frequencies, join, first, memoize, map, groupby, valmap, accumulate)
 from .utils import deepmap
+from operator import add
 import operator
-from .compatibility import accumulate
 
 def getem(arr, blocksize, shape):
     """ Dask getting various chunks from an array-like
@@ -430,7 +430,7 @@ def _slice_1d(dim_shape, lengths, index):
         #it will eventually hold the stopping index for the
         #  current block.
         stop -= dim_shape
-        tail_indexes = list(accumulate(lengths))
+        tail_indexes = list(accumulate(add, lengths))
         #11%3==2 and 11%-3==-1. We need the positive step for %
         pos_step = abs(step)
         offset = 0
