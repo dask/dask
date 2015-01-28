@@ -1,5 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
 import dask
-from dask.array import *
+from dask.array.core import *
 from toolz import merge
 
 def contains(a, b):
@@ -116,3 +118,37 @@ def test_broadcast_dimensions_works_with_singleton_dimensions():
     argpairs = [('x', 'i')]
     numblocks = {'x': ((1,),)}
     assert broadcast_dimensions(argpairs, numblocks) == {'i': (1,)}
+
+
+def test_Array():
+    shape = (1000, 1000)
+    blockshape = (100, 100)
+    name = 'x'
+    dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
+    a = Array(dsk, name, shape, blockshape)
+
+    assert a.numblocks == (10, 10)
+
+    assert a.keys() == [[('x', i, j) for j in range(10)]
+                                     for i in range(10)]
+
+    assert a.blockdims == ((100,) * 10, (100,) * 10)
+
+
+def test_numblocks_suppoorts_singleton_block_dims():
+    shape = (100, 10)
+    blockshape = (10, 10)
+    name = 'x'
+    dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
+    a = Array(dsk, name, shape, blockshape)
+
+    assert set(concat(a.keys())) == set([('x', i, 0) for i in range(100//10)])
+
+
+def test_keys():
+    dsk = dict((('x', i, j), ()) for i in range(5) for j in range(6))
+    dx = Array(dsk, 'x', (50, 60), blockshape=(10, 10))
+    assert dx.keys() == [[(dx.name, i, j) for j in range(6)]
+                                          for i in range(5)]
+    d = Array({}, 'x', (), ())
+    assert d.keys() == [('x',)]

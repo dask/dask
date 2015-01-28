@@ -1,5 +1,5 @@
 import dask
-from dask.array import dask_slice, _slice_1d
+from dask.array.core import dask_slice, _slice_1d
 import operator
 import numpy
 

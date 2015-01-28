@@ -1,13 +1,21 @@
-import numpy as np
+from __future__ import absolute_import, division, print_function
+
+from operator import add
+import operator
 from math import ceil, floor
 from itertools import product, count
 from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
-        frequencies, join, first, memoize, map, groupby, valmap, accumulate)
-from .utils import deepmap
-from operator import add
-import operator
+        frequencies, join, first, memoize, map, groupby, valmap, accumulate,
+        merge)
+import numpy as np
+from ..utils import deepmap
+from .. import threaded, core
+
+
+names = ('x_%d' % i for i in count(1))
+
 
 def getem(arr, blocksize, shape):
     """ Dask getting various chunks from an array-like
@@ -539,3 +547,86 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
                     in zip(out_names, in_names, all_slices)}
 
     return final_out
+
+
+class Array(object):
+    """ Array object holding a dask
+
+    Parameters
+    ----------
+
+    dask : dict
+        Task dependency graph
+    name : string
+        Name of array in dask
+    shape : tuple of ints
+        Shape of the entire array
+    blockdims : iterable of tuples
+        block sizes along each dimension
+    """
+
+    __slots__ = 'dask', 'name', 'shape', 'blockdims'
+
+    def __init__(self, dask, name, shape, blockshape=None, blockdims=None):
+        self.dask = dask
+        self.name = name
+        self.shape = shape
+        if blockshape is not None:
+            blockdims = tuple((bd,) * (d // bd) for d, bd in zip(shape,
+                blockshape))
+        self.blockdims = tuple(map(tuple, blockdims))
+
+    @property
+    def numblocks(self):
+        return tuple(map(len, self.blockdims))
+
+    def _get_block(self, *args):
+        return core.get(self.dask, (self.name,) + args)
+
+    @property
+    def ndim(self):
+        return len(self.shape)
+
+    def keys(self, *args):
+        if self.ndim == 0:
+            return [(self.name,)]
+        ind = len(args)
+        if ind + 1 == self.ndim:
+            return [(self.name,) + args + (i,)
+                        for i in range(self.numblocks[ind])]
+        else:
+            return [self.keys(*(args + (i,)))
+                        for i in range(self.numblocks[ind])]
+
+
+def atop(func, out, out_ind, *args):
+    """ Array object version of dask.array.top """
+    arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
+    numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
+    argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
+
+    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
+
+    # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
+    shapes = dict((a, a.shape) for a, _ in arginds)
+    dims = broadcast_dimensions(arginds, shapes)
+    shape = tuple(dims[i] for i in out_ind)
+
+    blockdim_dict = dict((a, a.blockdims) for a, _ in arginds)
+    blockdimss = broadcast_dimensions(arginds, blockdim_dict)
+    blockdims = tuple(blockdimss[i] for i in out_ind)
+
+    dsks = [a.dask for a, _ in arginds]
+    return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims)
+
+
+def get(dsk, keys, get=threaded.get, **kwargs):
+    """ Specialized get function
+
+    1. Handle inlining
+    2. Use custom score function
+    """
+    fast_functions=kwargs.get('fast_functions',
+                             set([operator.getitem, np.transpose]))
+    dsk2 = threaded.inline(dsk, fast_functions=fast_functions)
+    return get(dsk2, keys, **kwargs)
