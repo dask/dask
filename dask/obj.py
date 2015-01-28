@@ -1,6 +1,6 @@
 
 from into import discover, convert, append
-from toolz import merge, concat, partition
+from toolz import merge, concat, partition, accumulate, first
 from datashape import DataShape
 from datashape.dispatch import dispatch
 from operator import add
@@ -11,24 +11,26 @@ import operator
 import numpy as np
 from . import core, threaded
 from .threaded import inline
-from .array import (getem, concatenate, concatenate2, top,
-    broadcast_dimensions)
+from .array import (getem, concatenate, concatenate2, top, new_blockdim,
+    broadcast_dimensions, dask_slice)
 
 
 class Array(object):
     """ Array object holding a dask """
-    __slots__ = 'dask', 'name', 'shape', 'blockshape'
+    __slots__ = 'dask', 'name', 'shape', 'blockdims'
 
-    def __init__(self, dask, name, shape, blockshape):
+    def __init__(self, dask, name, shape, blockshape=None, blockdims=None):
         self.dask = dask
         self.name = name
         self.shape = shape
-        self.blockshape = blockshape
+        if blockshape is not None:
+            blockdims = tuple((bd,) * (d // bd) for d, bd in zip(shape,
+                blockshape))
+        self.blockdims = tuple(map(tuple, blockdims))
 
     @property
     def numblocks(self):
-        return tuple(int(ceil(a / b))
-                     for a, b in zip(self.shape, self.blockshape))
+        return tuple(map(len, self.blockdims))
 
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
@@ -60,14 +62,14 @@ def atop(func, out, out_ind, *args):
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     shapes = dict((a, a.shape) for a, _ in arginds)
     dims = broadcast_dimensions(arginds, shapes)
-    blockshapes = dict((a, a.blockshape) for a, _ in arginds)
-    blockdims = broadcast_dimensions(arginds, blockshapes)
-
     shape = tuple(dims[i] for i in out_ind)
-    blockshape = tuple(blockdims[i] for i in out_ind)
+
+    blockdim_dict = dict((a, a.blockdims) for a, _ in arginds)
+    blockdimss = broadcast_dimensions(arginds, blockdim_dict)
+    blockdims = tuple(blockdimss[i] for i in out_ind)
 
     dsks = [a.dask for a, _ in arginds]
-    return Array(merge(dsk, *dsks), out, shape, blockshape)
+    return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims)
 
 
 @discover.register(Array)
@@ -96,7 +98,7 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
     name = name or next(names)
     dask = merge({name: x}, getem(name, blockshape, x.shape))
 
-    return Array(dask, name, x.shape, blockshape)
+    return Array(dask, name, x.shape, blockshape=blockshape)
 
 
 def get(dsk, keys, get=threaded.get, **kwargs):
@@ -128,9 +130,12 @@ def dask_to_float(x, **kwargs):
 def insert_to_ooc(out, arr):
     from threading import Lock
     lock = Lock()
+
+    locs = [[0] + list(accumulate(add, bl)) for bl in arr.blockdims]
+
     def store(x, *args):
         with lock:
-            ind = tuple([slice(i*d, (i+1)*d) for i, d in zip(args, arr.blockshape)])
+            ind = tuple([slice(loc[i], loc[i+1]) for i, loc in zip(args, locs)])
             out[ind] = x
         return None
 
@@ -167,10 +172,12 @@ def resize(x, shape):
     return x.resize(shape)
 
 from blaze.dispatch import dispatch
-from blaze.compute.core import compute_up
+from blaze.compute.core import compute_up, optimize
 from blaze import compute, ndim
-from blaze.expr import ElemWise, symbol, Reduction, Transpose, TensorDot, Expr
+from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
+        Expr, Slice, Broadcast)
 from toolz import curry, compose
+from numbers import Number
 
 def compute_it(expr, leaves, *data, **kwargs):
     kwargs.pop('scope')
@@ -184,7 +191,32 @@ def elemwise_array(expr, *data, **kwargs):
                 next(names), expr_inds,
                 *concat((dat, tuple(range(ndim(dat))[::-1])) for dat in data))
 
-for i in range(10):
+
+try:
+    from blaze.compute.numba import (get_numba_ufunc, broadcast_collect,
+            Broadcastable)
+
+    def compute_broadcast(expr, *data, **kwargs):
+        leaves = expr._inputs
+        expr_inds = tuple(range(ndim(expr)))[::-1]
+        func = get_numba_ufunc(expr)
+        return atop(func,
+                    next(names), expr_inds,
+                    *concat((dat, tuple(range(ndim(dat))[::-1])) for dat in data))
+
+    def optimize_array(expr, *data):
+        return broadcast_collect(expr, Broadcastable=Broadcastable,
+                                       WantToBroadcast=Broadcastable)
+
+    for i in range(5):
+        compute_up.register(Broadcast, *([(Array, Number)] * i))(compute_broadcast)
+        optimize.register(Expr, *([(Array, Number)] * i))(optimize_array)
+
+except ImportError:
+    pass
+
+
+for i in range(5):
     compute_up.register(ElemWise, *([Array] * i))(elemwise_array)
 
 
@@ -193,7 +225,7 @@ from blaze.expr.split import split
 @dispatch(Reduction, Array)
 def compute_up(expr, data, **kwargs):
     leaf = expr._leaves()[0]
-    chunk = symbol('chunk', DataShape(*(data.blockshape +
+    chunk = symbol('chunk', DataShape(*(tuple(map(first, data.blockdims)) +
         (leaf.dshape.measure,))))
     (chunk, chunk_expr), (agg, agg_expr) = split(expr._child, expr, chunk=chunk)
 
@@ -248,3 +280,17 @@ def compute_up(expr, lhs, rhs, **kwargs):
                 lhs, tuple(left_index),
                 rhs, tuple(right_index))
 
+
+@dispatch(Slice, Array)
+def compute_up(expr, data, **kwargs):
+    out = next(names)
+    index = expr.index
+
+    # Turn x[5:10] into x[5:10, :, :] as needed
+    index = list(index) + [slice(None, None, None)] * (expr.ndim - len(index))
+
+    dsk = dask_slice(out, data.name, data.shape, data.blockdims, index)
+    blockdims = [new_blockdim(d, db, i)
+                for d, i, db in zip(data.shape, index, data.blockdims)
+                if not isinstance(i, int)]
+    return Array(merge(data.dask, dsk), out, expr.shape, blockdims=blockdims)

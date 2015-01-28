@@ -9,3 +9,4 @@ if PY3:
 else:
     import __builtin__ as builtins
     from Queue import Queue
+    import operator

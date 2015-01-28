@@ -1,13 +1,13 @@
 import numpy as np
-from math import ceil
-import itertools
+from math import ceil, floor
+from itertools import product, count
 from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
-        frequencies, join, first, memoize, map, groupby, valmap)
+        frequencies, join, first, memoize, map, groupby, valmap, accumulate)
 from .utils import deepmap
+from operator import add
 import operator
-
 
 def getem(arr, blocksize, shape):
     """ Dask getting various chunks from an array-like
@@ -24,7 +24,7 @@ def getem(arr, blocksize, shape):
                (operator.getitem,
                  arr,
                  tuple(slice(i*d, (i+1)*d) for i, d in zip(ijk, blocksize))))
-               for ijk in itertools.product(*map(range, numblocks)))
+               for ijk in product(*map(range, numblocks)))
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -113,8 +113,21 @@ def zero_broadcast_dimensions(lol, nblocks):
     return deepmap(f, lol)
 
 
-def broadcast_dimensions(argpairs, numblocks):
+def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
     """ Find block dimensions from arguments
+
+    Parameters
+    ----------
+
+    argpairs: iterable
+        name, ijk index pairs
+    numblocks: dict
+        maps {name: number of blocks}
+    sentinels: iterable (optional)
+        values for singleton dimensions
+
+    Examples
+    --------
 
     >>> argpairs = [('x', 'ij'), ('y', 'ji')]
     >>> numblocks = {'x': (2, 3), 'y': (3, 2)}
@@ -127,15 +140,24 @@ def broadcast_dimensions(argpairs, numblocks):
     >>> numblocks = {'x': (2, 1), 'y': (1, 3)}
     >>> broadcast_dimensions(argpairs, numblocks)
     {'i': 2, 'j': 3}
+
+    Works in other contexts too
+
+    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
+    >>> d = {'x': ('Hello', 1), 'y': (1, (2, 3))}
+    >>> broadcast_dimensions(argpairs, d)
+    {'i': 'Hello', 'j': (2, 3)}
     """
     # List like [('i', 2), ('j', 1), ('i', 1), ('j', 2)]
     L = concat([zip(inds, dims)
                     for (x, inds), (x, dims)
                     in join(first, argpairs, first, numblocks.items())])
     g = groupby(0, L)
-    g = dict((k, [d for i, d in v]) for k, v in g.items())
+    g = dict((k, set([d for i, d in v])) for k, v in g.items())
 
-    if not all(len(set(v) - set([1])) == 1 for v in g.values()):
+    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
+
+    if not set(map(len, g2.values())) == set([1]):
         raise ValueError("Shapes do not align %s" % g)
 
     return valmap(max, g)
@@ -209,7 +231,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     dims = broadcast_dimensions(argpairs, numblocks)
 
     # (0, 0), (0, 1), (0, 2), (1, 0), ...
-    keytups = list(itertools.product(*[range(dims[i]) for i in out_indices]))
+    keytups = list(product(*[range(dims[i]) for i in out_indices]))
     # {i: 0, j: 0}, {i: 0, j: 1}, ...
     keydicts = [dict(zip(out_indices, tup)) for tup in keytups]
 
@@ -290,3 +312,230 @@ def concatenate(arrays, axis=0):
     if arrays[0].ndim <= axis:
         arrays = [a[None, ...] for a in arrays]
     return np.concatenate(arrays, axis=axis)
+
+
+def new_blockdim(dim_shape, lengths, index):
+    """
+
+    >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(0, 90, 2))
+    [10, 5, 10, 5, 15]
+    """
+    assert not isinstance(index, int)
+    pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
+    return [(slc.stop - slc.start) // slc.step for _, slc in pairs]
+
+
+def _slice_1d(dim_shape, lengths, index):
+    """Returns a dict of {blocknum: slice}
+
+    This function figures out where each slice should start in each
+    block for a single dimension. If the slice won't return any elements
+    in the block, that block will not be in the output.
+
+    Parameters
+    ----------
+
+    dim_shape - the number of elements in this dimension.
+      This should be a positive, non-zero integer
+    blocksize - the number of elements per block in this dimension
+      This should be a positive, non-zero integer
+    index - a description of the elements in this dimension that we want
+      This might be an integer, a slice(), or an Ellipsis
+
+    Returns
+    -------
+
+    dictionary where the keys are the integer indexes of the blocks that
+      should be sliced and the values are the slices
+
+    Examples
+    --------
+
+    100 length array cut into length 20 pieces, slice 0:35
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(0, 35))
+    {0: slice(0, 20, 1), 1: slice(0, 15, 1)}
+
+    Support irregular blocks and various slices
+
+    >>> _slice_1d(100, [20, 10, 10, 10, 25, 25], slice(10, 35))
+    {0: slice(10, 20, 1), 1: slice(0, 10, 1), 2: slice(0, 5, 1)}
+
+    Support step sizes
+
+    >>> _slice_1d(100, [15, 14, 13], slice(10, 41, 3))
+    {0: slice(10, 15, 3), 1: slice(1, 14, 3), 2: slice(2, 12, 3)}
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(0, 100, 40))  # step > blocksize
+    {0: slice(0, 20, 40), 2: slice(0, 20, 40), 4: slice(0, 20, 40)}
+
+    Also support indexing single elements
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], 25)
+    {1: 5}
+
+    And negative slicing
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3))
+    {0: slice(-2, -20, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3))
+    {0: slice(-2, -8, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
+    {4: slice(-1, -12, -3)}
+    """
+    if isinstance(index, int):
+        i = 0
+        ind = index
+        lens = list(lengths)
+        while ind >= lens[0]:
+            i += 1
+            ind -= lens.pop(0)
+        return {i: ind}
+
+    assert isinstance(index, slice)
+    step = index.step or 1
+    if step > 0:
+        start = index.start or 0
+        stop = index.stop or dim_shape
+    else:
+        # x=range(10)
+        # x[12::-3] == x[11::-3] == x[-1::-3] == x[9::-3]
+        # this is for negative indexing. First, deal with None start
+        start = index.start or dim_shape - 1
+        # start > dim_shape should be set to the last index in this dimension
+        # for negative indexing, start is always the absolute index
+        start = dim_shape - 1 if start >= dim_shape else start
+        # x[dim_shape:0:-1] is NOT the same as x[dim_shape[::-1]
+        # x[dim_shape[::-1] IS the same as x[dim_shape:-dim_shape-1:-1]
+        stop = -(dim_shape + 1) if index.stop is None else index.stop
+
+    if start < 0:
+        start += dim_shape
+    if stop < 0:
+        stop += dim_shape
+
+    d = dict()
+    if step > 0:
+        for i, length in enumerate(lengths):
+            if start < length and stop > 0:
+                d[i] = slice(start, min(stop, length), step)
+                start = (start - length) % step
+            else:
+                start = start - length
+            stop -= length
+    else:
+        # negative stepping is handled here
+        # stop gets incremented by block length in the loop.
+        # it will eventually hold the stopping index for the
+        #   current block.
+        stop -= dim_shape
+        tail_indexes = list(accumulate(add, lengths))
+        # 11%3==2 and 11%-3==-1. We need the positive step for %
+        pos_step = abs(step)
+        offset = 0
+        for i, length in zip(count(len(lengths)-1, -1), reversed(lengths)):
+            # We are stepping backwards, so the loop goes from len-1 to 0
+            # start should always be the absolute index where we start.
+            # start - tail_indexes[i] turns the absolute index into
+            #   a NEGATIVE block index. tail_indexes[i] hold the last,
+            #   absolute, exclusive index in the block
+            #   (i.e. x[0:tail_index]).
+            # The start index for the next iteration is a function
+            #   of the offset that the step introduces and the
+            #   length of the current block
+            # Finally, the max(stop, -length-1) is there because we need
+            #   a way to indicate that the slice INCLUDES the first block
+            #   element. x[10:0:-1] doesn't include x[0].
+            #   The tricky bit is that x[10:-11:-1] does include x[0]
+            if start + length >= tail_indexes[i] and stop < 0:
+                d[i] = slice(start - tail_indexes[i],
+                             max(stop, -length - 1), step)
+                # The offset accumulates over time from the start point
+                offset = (offset + pos_step - (length % pos_step)) % pos_step
+                start = tail_indexes[i] - 1 - length - offset
+
+            stop += length
+
+    return d
+
+
+def dask_slice(out_name, in_name, shape, blockdims, indexes,
+               getitem_func=operator.getitem):
+    """
+    Return a new dask containing the slices for all n-dimensions
+
+    This function makes a new dask that slices blocks along every
+    dimension and aggregates (via cartesian product) each dimension's
+    slices so that the resulting block slices give the same results
+    as the original slice on the original structure
+
+    Parameters
+    ----------
+
+    in_name - string
+      This is the dask variable name that will be used as input
+    out_name - string
+      This is the dask variable output name
+    shape - iterable of integers (only tested with tuples of integers)
+      The shape of the
+    blockshape - iterable of integers
+    indexes - iterable of indexes, ellipses, or slices
+    getitem_func - the function that will be used to get the
+      items from the block. This is required by dask.
+
+    Returns
+    -------
+
+    Dict where the keys are tuples of
+
+        (out_name, dim_index[, dim_index[, ...]])
+
+    and the values are
+
+        (function, (in_name, dim_index, dim_index, ...),
+                   (slice(...), [slice()[,...]])
+
+    Example
+    -------
+
+    >>> dask_slice('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  #  doctest: +SKIP
+    {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
+     ('y', 1): (getitem, ('x', 1), (slice( 0, 15),))}
+    """
+    # Quick Optimization
+    # If we are only given full slices, simply return the input variable
+    # i.e. input_data[:,:,:] becomes
+    # (slice(None,None,None), slice(None,None,None),
+    #  slice(None,None,None))
+    # In this case, we shouldn't do any slicing.
+    empty = slice(None, None, None)
+    if all(index == empty for index in indexes):
+        return {out_name: in_name}
+
+    # Get a list (for each dimension) of dicts{blocknum: slice()}
+    #   for each dimension
+    block_slices = list(map(_slice_1d, shape, blockdims, indexes))
+
+    # out_names has the Cartesian product of output block index locations
+    # i.e. (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0)
+    out_names = product([out_name],
+                        *[range(len(d))
+                            for d, i in zip(block_slices, indexes)
+                            if not isinstance(i, int)])
+
+    # in_names holds the Cartesian product of input block index locations
+    # i.e. (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2)
+    in_names = product([in_name], *[i.keys() for i in block_slices])
+
+    # all_slices holds the slices needed to generate
+    # (out_name, 0, 0, 0) from (in_name, 1, 1, 2)
+    # There should be 1 slice per dimension index
+    all_slices = product(*[i.values() for i in block_slices])
+
+    final_out = {out_name: (getitem_func, in_name, slices)
+                    for out_name, in_name, slices
+                    in zip(out_names, in_names, all_slices)}
+
+    return final_out

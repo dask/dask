@@ -3,6 +3,8 @@ from dask.array import *
 from dask.obj import *
 from into import convert, into
 from collections import Iterable
+from toolz import concat
+from operator import getitem
 
 
 def eq(a, b):
@@ -23,6 +25,18 @@ def test_Array():
 
     assert a.keys() == [[('x', i, j) for j in range(10)]
                                      for i in range(10)]
+
+    assert a.blockdims == ((100,) * 10, (100,) * 10)
+
+
+def test_numblocks_suppoorts_singleton_block_dims():
+    shape = (100, 10)
+    blockshape = (10, 10)
+    name = 'x'
+    dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
+    a = Array(dsk, name, shape, blockshape)
+
+    assert set(concat(a.keys())) == set([('x', i, 0) for i in range(100//10)])
 
 
 def test_convert():
@@ -85,6 +99,7 @@ def test_compute():
                  sx.sum(axis=1),
                  sy + sa,
                  sy + sb,
+                 sx[3:17], sx[3:10, 10:25:2] + 1, sx[:5, 10],
                 ]:
         result = compute(expr, dask_ns)
         expected = compute(expr, numpy_ns)
@@ -107,3 +122,39 @@ def test_keys():
                                           for i in range(5)]
     d = Array({}, 'x', (), ())
     assert d.keys() == [('x',)]
+
+
+def test_insert_to_ooc():
+    x = np.arange(600).reshape((20, 30))
+    y = np.empty(shape=x.shape, dtype=x.dtype)
+    a = convert(Array, x, blockshape=(4, 5))
+
+    dsk = insert_to_ooc(y, a)
+    core.get(merge(dsk, a.dask), list(dsk.keys()))
+
+    assert eq(y, x)
+
+
+def test_ragged_blockdims():
+    dsk = {('x', 0, 0): np.ones((2, 2)),
+           ('x', 0, 1): np.ones((2, 3)),
+           ('x', 1, 0): np.ones((5, 2)),
+           ('x', 1, 1): np.ones((5, 3))}
+
+    a = Array(dsk, 'x', shape=(7, 5), blockdims=[(2, 5), (2, 3)])
+    s = symbol('s', '7 * 5 * int')
+
+    assert compute(s.sum(axis=0), a).blockdims == ((2, 3),)
+    assert compute(s.sum(axis=1), a).blockdims == ((2, 5),)
+
+    assert compute(s + 1, a).blockdims == a.blockdims
+
+
+def test_slicing_with_singleton_dimensions():
+    arr = compute(sx[5:15, 12], dx)
+    x = dx.name
+    y = arr.name
+    assert arr.dask[(y, 0)] == (getitem, (x, 1, 2), (slice(1, 4, 1), 2))
+    assert arr.dask[(y, 1)] == (getitem, (x, 2, 2), (slice(0, 4, 1), 2))
+    assert arr.dask[(y, 2)] == (getitem, (x, 3, 2), (slice(0, 3, 1), 2))
+    assert all(len(k) == 2 for k in arr.keys())
