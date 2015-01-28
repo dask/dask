@@ -168,7 +168,7 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
     if not set(map(len, g2.values())) == set([1]):
         raise ValueError("Shapes do not align %s" % g)
 
-    return valmap(max, g)
+    return valmap(first, g2)
 
 
 def top(func, output, out_indices, *arrind_pairs, **kwargs):

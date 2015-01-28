@@ -120,6 +120,12 @@ def test_broadcast_dimensions_works_with_singleton_dimensions():
     assert broadcast_dimensions(argpairs, numblocks) == {'i': (1,)}
 
 
+def test_broadcast_dimensions():
+    argpairs = [('x', 'ij'), ('y', 'ij')]
+    d = {'x': ('Hello', 1), 'y': (1, (2, 3))}
+    assert broadcast_dimensions(argpairs, d) == {'i': 'Hello', 'j': (2, 3)}
+
+
 def test_Array():
     shape = (1000, 1000)
     blockshape = (100, 100)
