@@ -174,6 +174,28 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
 def top(func, output, out_indices, *arrind_pairs, **kwargs):
     """ Tensor operation
 
+    Applies a function, ``func``, across blocks from many different input
+    dasks.  We arrange the pattern with which those blocks interact with sets
+    of matching indices.  E.g.
+
+        top(func, 'z', 'i', 'x', 'i', 'y', 'i')
+
+    yield an embarassingly parallel communication pattern and is read as
+
+        z_i = func(x_i, y_i)
+
+    More complex patterns may emerge, including multiple indices
+
+        top(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
+
+        $$ z_{ij} = func(x_{ij}, y_{ji}) $$
+
+    Indices missing in the output but present in the inputs results in many
+    inputs being sent to one function (see examples).
+
+    Examples
+    --------
+
     Simple embarassing map operation
 
     >>> inc = lambda x: x + 1
