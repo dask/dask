@@ -1,6 +1,8 @@
 Dask
 ====
 
+|Build Status| |Coverage Status| |Version Status| |Downloads|
+
 A minimal task scheduling abstraction.
 
 See Dask documentation at http://dask.readthedocs.org
@@ -98,3 +100,11 @@ multi-core numerics.
 .. _Pegasus: http://pegasus.isi.edu/
 .. _Swiftlang: http://swift-lang.org/main/
 .. _DAGue: http://icl.eecs.utk.edu/dague/
+.. |Build Status| image:: https://travis-ci.org/ContinuumIO/dask.png
+   :target: https://travis-ci.org/ContinuumIO/dask
+.. |Coverage Status| image:: https://coveralls.io/repos/ContinuumIO/dask/badge.png
+   :target: https://coveralls.io/r/ContinuumIO/dask
+.. |Version Status| image:: https://pypip.in/v/dask.png
+   :target: https://pypi.python.org/pypi/dask/
+.. |Downloads| image:: https://pypip.in/d/dask/badge.png
+   :target: https://pypi.python.org/pypi/dask/
