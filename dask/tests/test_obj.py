@@ -4,6 +4,7 @@ from dask.obj import *
 from into import convert, into
 from collections import Iterable
 from toolz import concat
+from operator import getitem
 
 
 def eq(a, b):
@@ -151,5 +152,9 @@ def test_ragged_blockdims():
 
 def test_slicing_with_singleton_dimensions():
     arr = compute(sx[5:15, 12], dx)
-    assert arr.dask == 0
+    x = dx.name
+    y = arr.name
+    assert arr.dask[(y, 0)] == (getitem, (x, 1, 2), (slice(1, 4, 1), 2))
+    assert arr.dask[(y, 1)] == (getitem, (x, 2, 2), (slice(0, 4, 1), 2))
+    assert arr.dask[(y, 2)] == (getitem, (x, 3, 2), (slice(0, 3, 1), 2))
     assert all(len(k) == 2 for k in arr.keys())

@@ -1,6 +1,6 @@
 import numpy as np
 from math import ceil, floor
-from itertools import product, count, izip
+from itertools import product, count
 from collections import Iterator
 from functools import partial
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
@@ -374,6 +374,8 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], 25)
     {1: 5}
 
+    And negative slicing
+
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3))
     {0: slice(-2, -20, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
 
@@ -382,7 +384,6 @@ def _slice_1d(dim_shape, lengths, index):
 
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
-
     """
     if isinstance(index, int):
         i = 0
@@ -399,16 +400,16 @@ def _slice_1d(dim_shape, lengths, index):
         start = index.start or 0
         stop = index.stop or dim_shape
     else:
-        #x=range(10)
-        #x[12::-3] == x[11::-3] == x[-1::-3] == x[9::-3]
-        #this is for negative indexing. First, deal with None start
-        start = index.start or dim_shape-1
-        #start > dim_shape should be set to the last index in this dimension
-        #for negative indexing, start is always the absolute index
-        start = dim_shape-1 if start >= dim_shape else start
-        #x[dim_shape:0:-1] is NOT the same as x[dim_shape[::-1]
-        #x[dim_shape[::-1] IS the same as x[dim_shape:-dim_shape-1:-1]
-        stop = -(dim_shape+1) if index.stop is None else index.stop
+        # x=range(10)
+        # x[12::-3] == x[11::-3] == x[-1::-3] == x[9::-3]
+        # this is for negative indexing. First, deal with None start
+        start = index.start or dim_shape - 1
+        # start > dim_shape should be set to the last index in this dimension
+        # for negative indexing, start is always the absolute index
+        start = dim_shape - 1 if start >= dim_shape else start
+        # x[dim_shape:0:-1] is NOT the same as x[dim_shape[::-1]
+        # x[dim_shape[::-1] IS the same as x[dim_shape:-dim_shape-1:-1]
+        stop = -(dim_shape + 1) if index.stop is None else index.stop
 
     if start < 0:
         start += dim_shape
@@ -425,39 +426,40 @@ def _slice_1d(dim_shape, lengths, index):
                 start = start - length
             stop -= length
     else:
-        #negative stepping is handled here
-        #stop gets incremented by block length in the loop.
-        #it will eventually hold the stopping index for the
-        #  current block.
+        # negative stepping is handled here
+        # stop gets incremented by block length in the loop.
+        # it will eventually hold the stopping index for the
+        #   current block.
         stop -= dim_shape
         tail_indexes = list(accumulate(add, lengths))
-        #11%3==2 and 11%-3==-1. We need the positive step for %
+        # 11%3==2 and 11%-3==-1. We need the positive step for %
         pos_step = abs(step)
         offset = 0
-        for i, length in izip(count(len(lengths)-1, -1), reversed(lengths)):
-            #We are stepping backwards, so the loop goes from len-1 to 0
-            #start should always be the absolute index where we start.
-            #start - tail_indexes[i] turns the absolute index into
-            #  a NEGATIVE block index. tail_indexes[i] hold the last,
-            #  absolute, exclusive index in the block
-            #  (i.e. x[0:tail_index]).
-            #The start index for the next iteration is a function
-            #  of the offset that the step introduces and the
-            #  length of the current block
-            #Finally, the max(stop, -length-1) is there because we need
-            #  a way to indicate that the slice INCLUDES the first block
-            #  element. x[10:0:-1] doesn't include x[0].
-            #  The tricky bit is that x[10:-11:-1] does include x[0]
+        for i, length in zip(count(len(lengths)-1, -1), reversed(lengths)):
+            # We are stepping backwards, so the loop goes from len-1 to 0
+            # start should always be the absolute index where we start.
+            # start - tail_indexes[i] turns the absolute index into
+            #   a NEGATIVE block index. tail_indexes[i] hold the last,
+            #   absolute, exclusive index in the block
+            #   (i.e. x[0:tail_index]).
+            # The start index for the next iteration is a function
+            #   of the offset that the step introduces and the
+            #   length of the current block
+            # Finally, the max(stop, -length-1) is there because we need
+            #   a way to indicate that the slice INCLUDES the first block
+            #   element. x[10:0:-1] doesn't include x[0].
+            #   The tricky bit is that x[10:-11:-1] does include x[0]
             if start + length >= tail_indexes[i] and stop < 0:
                 d[i] = slice(start - tail_indexes[i],
                              max(stop, -length - 1), step)
-                #The offset accumulates over time from the start point
+                # The offset accumulates over time from the start point
                 offset = (offset + pos_step - (length % pos_step)) % pos_step
                 start = tail_indexes[i] - 1 - length - offset
 
             stop += length
 
     return d
+
 
 def dask_slice(out_name, in_name, shape, blockdims, indexes,
                getitem_func=operator.getitem):
@@ -498,38 +500,38 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     Example
     -------
 
-    >>> dask_slice('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  # doctest: +SKIP
+    >>> dask_slice('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  #  doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
      ('y', 1): (getitem, ('x', 1), (slice( 0, 15),))}
     """
-    #Quick Optimization
-    #If we are only given full slices, simply return the input variable
-    #i.e. input_data[:,:,:] becomes
-    #(slice(None,None,None), slice(None,None,None),
-    # slice(None,None,None))
-    #In this case, we shouldn't do any slicing.
+    # Quick Optimization
+    # If we are only given full slices, simply return the input variable
+    # i.e. input_data[:,:,:] becomes
+    # (slice(None,None,None), slice(None,None,None),
+    #  slice(None,None,None))
+    # In this case, we shouldn't do any slicing.
     empty = slice(None, None, None)
     if all(index == empty for index in indexes):
         return {out_name: in_name}
 
-    #Get a list (for each dimension) of dicts{blocknum: slice()}
-    #  for each dimension
+    # Get a list (for each dimension) of dicts{blocknum: slice()}
+    #   for each dimension
     block_slices = list(map(_slice_1d, shape, blockdims, indexes))
 
-    #out_names has the cartesion product of output block index locations
-    #i.e. (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0)
+    # out_names has the Cartesian product of output block index locations
+    # i.e. (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0)
     out_names = product([out_name],
                         *[range(len(d))
                             for d, i in zip(block_slices, indexes)
                             if not isinstance(i, int)])
 
-    #in_names holds the cartesion product of input block index locations
-    #i.e. (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2)
+    # in_names holds the Cartesian product of input block index locations
+    # i.e. (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2)
     in_names = product([in_name], *[i.keys() for i in block_slices])
 
-    #all_slices holds the slices needed to generate
-    #(out_name, 0, 0, 0) from (in_name, 1, 1, 2)
-    #There should be 1 slice per dimension index
+    # all_slices holds the slices needed to generate
+    # (out_name, 0, 0, 0) from (in_name, 1, 1, 2)
+    # There should be 1 slice per dimension index
     all_slices = product(*[i.values() for i in block_slices])
 
     final_out = {out_name: (getitem_func, in_name, slices)
