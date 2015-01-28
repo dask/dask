@@ -130,7 +130,7 @@ def test_insert_to_ooc():
     a = convert(Array, x, blockshape=(4, 5))
 
     dsk = insert_to_ooc(y, a)
-    core.get(merge(dsk, a.dask), dsk.keys())
+    core.get(merge(dsk, a.dask), list(dsk.keys()))
 
     assert eq(y, x)
 
