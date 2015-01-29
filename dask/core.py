@@ -1,6 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
 from operator import add
 from itertools import chain
-from toolz import keyfilter
 from .compatibility import builtins
 
 def inc(x):
@@ -224,5 +225,4 @@ def cull(dsk, keys):
                 if dep not in seen:
                     nxt.add(dep)
         seen.update(nxt)
-    return keyfilter(seen.__contains__, dsk)
-
+    return dict((k, v) for k, v in dsk.items() if k in seen)

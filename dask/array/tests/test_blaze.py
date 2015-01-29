@@ -1,7 +1,8 @@
+from __future__ import absolute_import, division, print_function
+
 import dask
-from dask.array import *
-from dask.obj import *
-from into import convert, into
+from dask.array.blaze import *
+from into import discover, convert, into
 from collections import Iterable
 from toolz import concat
 from operator import getitem
@@ -12,60 +13,6 @@ def eq(a, b):
     if isinstance(c, np.ndarray):
         c = c.all()
     return c
-
-
-def test_Array():
-    shape = (1000, 1000)
-    blockshape = (100, 100)
-    name = 'x'
-    dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
-    a = Array(dsk, name, shape, blockshape)
-
-    assert a.numblocks == (10, 10)
-
-    assert a.keys() == [[('x', i, j) for j in range(10)]
-                                     for i in range(10)]
-
-    assert a.blockdims == ((100,) * 10, (100,) * 10)
-
-
-def test_numblocks_suppoorts_singleton_block_dims():
-    shape = (100, 10)
-    blockshape = (10, 10)
-    name = 'x'
-    dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
-    a = Array(dsk, name, shape, blockshape)
-
-    assert set(concat(a.keys())) == set([('x', i, 0) for i in range(100//10)])
-
-
-def test_convert():
-    x = np.arange(600).reshape((20, 30))
-    d = convert(Array, x, blockshape=(4, 5))
-
-    assert isinstance(d, Array)
-
-
-def test_convert_to_numpy_array():
-    x = np.arange(600).reshape((20, 30))
-    d = convert(Array, x, blockshape=(4, 5))
-    x2 = convert(np.ndarray, d)
-
-    assert eq(x, x2)
-
-
-def test_append_to_array():
-    x = np.arange(600).reshape((20, 30))
-    a = into(Array, x, blockshape=(4, 5))
-    b = bcolz.zeros(shape=(0, 30), dtype=x.dtype)
-
-    append(b, a)
-    assert eq(b[:], x)
-
-    from into.utils import tmpfile
-    with tmpfile('hdf5') as fn:
-        h = into(fn+'::/data', a)
-        assert eq(h[:], x)
 
 
 nx = np.arange(600).reshape((20, 30))
@@ -116,23 +63,6 @@ def test_elemwise_broadcasting():
     expected =  [[(arr.name, i, j) for j in range(5)]
                                    for i in range(6)]
     assert arr.keys() == expected
-
-def test_keys():
-    assert dx.keys() == [[(dx.name, i, j) for j in range(6)]
-                                          for i in range(5)]
-    d = Array({}, 'x', (), ())
-    assert d.keys() == [('x',)]
-
-
-def test_insert_to_ooc():
-    x = np.arange(600).reshape((20, 30))
-    y = np.empty(shape=x.shape, dtype=x.dtype)
-    a = convert(Array, x, blockshape=(4, 5))
-
-    dsk = insert_to_ooc(y, a)
-    core.get(merge(dsk, a.dask), list(dsk.keys()))
-
-    assert eq(y, x)
 
 
 def test_ragged_blockdims():

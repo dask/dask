@@ -1,11 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 from .core import istask, get, set
-from multipledispatch import halt_ordering, restart_ordering
 
-halt_ordering()
-import blaze, into
-halt_ordering()
-
-from .obj import Array
-restart_ordering()
-
-__version__ = '0.1.0'
+__version__ = '0.2.0'

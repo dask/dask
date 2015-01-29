@@ -11,19 +11,24 @@ install:
   - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
-  - conda config --add channels blaze
   - conda config --set always_yes yes --set changeps1 no
   - conda update conda
 
   # Install dependencies
-  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION pytest numpy blaze into pip coverage toolz
+  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
+  - conda install pytest numpy into pip coverage toolz
+  - conda install -c blaze blaze
+  - pip install coveralls --use-mirrors
+
+  # Install dask
+  - python setup.py install
 
 script:
     - py.test dask
 
 after_success:
-    - pip install coveralls --use-mirrors ; coveralls
+    - coveralls
 
 notifications:
   email: false
