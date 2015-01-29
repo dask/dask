@@ -21,6 +21,9 @@ install:
   - conda install -c blaze pytest numpy blaze into pip coverage toolz
   - pip install coveralls --use-mirrors
 
+  # Install dask
+  - python setup.py install
+
 script:
     - py.test dask
 
