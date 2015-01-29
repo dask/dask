@@ -16,14 +16,16 @@ install:
   - conda update conda
 
   # Install dependencies
-  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION pytest numpy blaze into pip coverage toolz
+  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
+  - conda install -c blaze pytest numpy blaze into pip coverage toolz
+  - pip install coveralls --use-mirrors
 
 script:
     - py.test dask
 
 after_success:
-    - pip install coveralls --use-mirrors ; coveralls
+    - coveralls
 
 notifications:
   email: false
