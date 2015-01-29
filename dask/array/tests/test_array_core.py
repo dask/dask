@@ -4,15 +4,9 @@ import dask
 from dask.array.core import *
 from toolz import merge
 
-def contains(a, b):
-    """
 
-    >>> contains({'x': 1, 'y': 2}, {'x': 1})
-    True
-    >>> contains({'x': 1, 'y': 2}, {'z': 3})
-    False
-    """
-    return all(a.get(k) == v for k, v in b.items())
+inc = lambda x: x + 1
+add = lambda x, y: x + y
 
 
 def test_getem():
@@ -21,9 +15,6 @@ def test_getem():
      ('X', 1, 0): (operator.getitem, 'X', (slice(2, 4), slice(0, 3))),
      ('X', 1, 1): (operator.getitem, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (operator.getitem, 'X', (slice(0, 2), slice(3, 6)))}
-
-inc = lambda x: x + 1
-add = lambda x, y: x + y
 
 
 def test_top():

@@ -1,3 +1,5 @@
+from __future__ import absolute_import, division, print_function
+
 import networkx as nx
 from dask.core import istask, get_dependencies
 from toolz import first
