@@ -465,7 +465,7 @@ def _slice_1d(dim_shape, lengths, index):
         # 11%3==2 and 11%-3==-1. We need the positive step for %
         pos_step = abs(step)
         offset = 0
-        for i, length in zip(count(len(lengths)-1, -1), reversed(lengths)):
+        for i, length in zip(range(len(lengths)-1, -1, -1), reversed(lengths)):
             # We are stepping backwards, so the loop goes from len-1 to 0
             # start should always be the absolute index where we start.
             # start - tail_indexes[i] turns the absolute index into
@@ -564,9 +564,9 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     # There should be 1 slice per dimension index
     all_slices = product(*[i.values() for i in block_slices])
 
-    final_out = {out_name: (getitem_func, in_name, slices)
+    final_out = dict((out_name, (getitem_func, in_name, slices))
                     for out_name, in_name, slices
-                    in zip(out_names, in_names, all_slices)}
+                    in zip(out_names, in_names, all_slices))
 
     return final_out
 
