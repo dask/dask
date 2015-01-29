@@ -501,6 +501,10 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     pool = ThreadPool(nthreads)
 
     state = start_state_from_dask(dsk, cache=cache)
+    #asynchronous denotes whether or not we asynchronously or synchronously call execute_task in the fire_task function
+    asynchronous = kwargs.get("asynchronous", True)
+    #max_queue_size denotes how large the results queue can be before we start removing things from it
+    max_queue_size = kwargs.get("max_queue_size", nthreads*2)
 
     queue = Queue()
     #lock for state dict updates
@@ -516,23 +520,29 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     def fire_task():
         """ Fire off a task to the thread pool """
         # Update heartbeat
-        tick[0] += 1
-        # Emit visualization if called for
-        if debug_counts and tick[0] % debug_counts == 0:
-            visualize(dsk, state, filename='dask_%03d' % tick[0])
-        # Choose a good task to compute
-        key = choose_task(state)
-        state['ready'].remove(key)
-        state['running'].add(key)
-        # Submit
-        pool.apply_async(execute_task, args=[dsk, key, state, queue, results,
-                                             lock])
+        with lock:
+            tick[0] += 1
+            # Emit visualization if called for
+            if debug_counts and tick[0] % debug_counts == 0:
+                visualize(dsk, state, filename='dask_%03d' % tick[0])
+            # Choose a good task to compute
+            key = choose_task(state)
+            state['ready'].remove(key)
+            state['running'].add(key)
+        # We need to not wrap execute_task in a lock.
+        #   finish_task (which execute_task calls) acquires the lock
+        # In synchronous mode, that will cause a deadlock if execute_task is wrapped in a lock
+        if asynchronous:
+            pool.apply_async(execute_task, args=[dsk, key, state, queue,
+                                                 results, lock])
+        else:
+            execute_task(dsk, key, state, queue, results, lock)
+
 
     try:
         # Seed initial tasks into the thread pool
-        with lock:
-            while state['ready'] and len(state['running']) < nthreads:
-                fire_task()
+        while state['ready'] and (len(state['running']) < nthreads) and (queue.qsize() < max_queue_size):
+            fire_task()
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or state['running']:
@@ -541,9 +551,8 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
                 import traceback
                 traceback.print_tb(tb)
                 raise res
-            with lock:
-                while state['ready'] and len(state['running']) < nthreads:
-                    fire_task()
+            while state['ready'] and (len(state['running']) < nthreads) and (queue.qsize() < max_queue_size):
+                fire_task()
 
     finally:
         # Clean up thread pool
