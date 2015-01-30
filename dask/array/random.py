@@ -1,12 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-from .wrap import wrap
+from .wrap import wrap, wrap_func_size_as_kwarg
 
 """
 Univariate distributions
 """
 
+wrap = wrap(wrap_func_size_as_kwarg)
 
 random = wrap(np.random.random)
 beta = wrap(np.random.beta)

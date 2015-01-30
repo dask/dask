@@ -8,4 +8,5 @@ from .blaze import np  # need to go through import process here
 from .into import np   # Otherwise someone might import later
                        # without ordering halted
 from . import random
+from .wrap import ones, zeros, empty
 restart_ordering()

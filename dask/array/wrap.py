@@ -33,16 +33,18 @@ def blockdims_from_blockshape(shape, blockshape):
     return tuple(map(tuple, map(dims_from_size, shape, blockshape)))
 
 
-def wrap_func(func, *args, **kwargs):
+def wrap_func_size_as_kwarg(func, *args, **kwargs):
     """
     Transform np.random function into blocked version
     """
-    if 'shape' in kwargs and 'size' not in kwargs:
-        size = kwargs['shape']
-    elif 'size' not in kwargs:
-        size, args = args[-1], args[:-1]
+    if 'size' not in kwargs:
+        args, size = args[:-1], args[-1]
     else:
         size = kwargs.pop('size')
+
+    if not isinstance(size, tuple):
+        size = (size,)
+
     blockshape = kwargs.pop('blockshape', None)
     blockdims = kwargs.pop('blockdims', None)
     name = kwargs.pop('name', None)
@@ -59,7 +61,37 @@ def wrap_func(func, *args, **kwargs):
     return Array(dsk, name, shape=size, blockdims=blockdims)
 
 
-def wrap(func):
+def wrap_func_shape_as_first_arg(func, *args, **kwargs):
+    """
+    Transform np.random function into blocked version
+    """
+    if 'shape' not in kwargs:
+        shape, args = args[0], args[1:]
+    else:
+        shape = kwargs.pop('shape')
+
+    if not isinstance(shape, tuple):
+        shape = (shape,)
+
+    blockshape = kwargs.pop('blockshape', None)
+    blockdims = kwargs.pop('blockdims', None)
+
+    name = kwargs.pop('name', None)
+    if not blockdims and blockshape:
+        blockdims = blockdims_from_blockshape(shape, blockshape)
+
+    name = name or next(names)
+
+    keys = product([name], *[range(len(bd)) for bd in blockdims])
+    shapes = product(*blockdims)
+    vals = ((curry(func, s, *args, **kwargs),) for s in shapes)
+
+    dsk = dict(zip(keys, vals))
+    return Array(dsk, name, shape=shape, blockdims=blockdims)
+
+
+@curry
+def wrap(wrap_func, func):
     f = curry(wrap_func, func)
     f.__doc__ = """
     Blocked variant of %(name)s
@@ -72,3 +104,10 @@ def wrap(func):
 
     f.__name__ = 'blocked_' + func.__name__
     return f
+
+
+w = wrap(wrap_func_shape_as_first_arg)
+
+ones = w(np.ones)
+zeros = w(np.zeros)
+empty = w(np.empty)
