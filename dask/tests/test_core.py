@@ -112,6 +112,11 @@ def test_get_dependencies_nested():
     assert dask.core.get_dependencies(dsk, 'z') == set(['x', 'y'])
 
 
+def test_get_dependencies_empty():
+    dsk = {'x': (inc,)}
+    assert dask.core.get_dependencies(dsk, 'x') == set()
+
+
 def test_nested_tasks():
     d = {'x': 1,
          'y': (inc, 'x'),

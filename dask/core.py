@@ -161,7 +161,11 @@ def get_dependencies(dsk, task):
     val = dsk[task]
     if not istask(val):
         return builtins.set([])
-    return builtins.set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
+    children = flatten(val[1:])
+    if not children:
+        return builtins.set()
+    else:
+        return builtins.set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
 
 
 def flatten(seq):
