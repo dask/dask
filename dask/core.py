@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from operator import add
 from itertools import chain
-from .compatibility import builtins
 
 def inc(x):
     return x + 1
@@ -82,33 +81,6 @@ def get(d, key, get=None, concrete=True, **kwargs):
 _get = get
 
 
-def set(d, key, val, args=[]):
-    """ Set value for key in Dask
-
-    Example
-    -------
-
-    >>> d = {}
-    >>> set(d, 'x', 1)
-    >>> d
-    {'x': 1}
-
-    >>> inc = lambda x: x + 1
-    >>> set(d, 'y', inc, args=['x'])
-
-    >>> get(d, 'y')
-    2
-
-    See Also
-    --------
-    get
-    """
-    assert key not in d
-    if callable(val):
-        val = (val,) + tuple(args)
-    d[key] = val
-
-
 def _deps(dsk, arg):
     """ Get dependencies from keys or tasks
 
@@ -125,13 +97,13 @@ def _deps(dsk, arg):
     set(['x', 'y'])
     """
     if istask(arg):
-        return builtins.set.union(*[_deps(dsk, a) for a in arg[1:]])
+        return set.union(*[_deps(dsk, a) for a in arg[1:]])
     try:
         if arg not in dsk:
-            return builtins.set()
+            return set()
     except TypeError:  # not hashable
-        return builtins.set()
-    return builtins.set([arg])
+        return set()
+    return set([arg])
 
 
 def get_dependencies(dsk, task):
@@ -160,12 +132,12 @@ def get_dependencies(dsk, task):
     """
     val = dsk[task]
     if not istask(val):
-        return builtins.set([])
+        return set([])
     children = flatten(val[1:])
     if not children:
-        return builtins.set()
+        return set()
     else:
-        return builtins.set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
+        return set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
 
 
 def flatten(seq):
@@ -200,7 +172,7 @@ def reverse_dict(d):
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
     terms = list(d.keys()) + list(chain.from_iterable(d.values()))
-    result = dict((t, builtins.set()) for t in terms)
+    result = dict((t, set()) for t in terms)
     for k, vals in d.items():
         for val in vals:
             result[val].add(k)
@@ -222,11 +194,11 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, list):
         keys = [keys]
-    nxt = builtins.set(keys)
+    nxt = set(keys)
     seen = nxt
     while nxt:
         cur = nxt
-        nxt = builtins.set()
+        nxt = set()
         for item in cur:
             for dep in get_dependencies(dsk, item):
                 if dep not in seen:
