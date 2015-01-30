@@ -42,19 +42,23 @@ def istask(x):
     return isinstance(x, tuple) and x and callable(x[0])
 
 
-def isdag(d, keys):
-    """ Does Dask form a directed acyclic graph when calculating keys?
+def getcycle(d, keys):
+    """ Return a list of nodes that form a cycle if Dask is not a DAG.
+
+    Returns an empty list if no cycle is found.
 
     ``keys`` may be a single key or list of keys.
 
     Example
     -------
 
-    >>> inc = lambda x: x + 1
-    >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')
-    True
-    >>> isdag({'x': (inc, 'y'), 'y': (inc, 'x')}, 'y')
-    False
+    >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
+    >>> getcycle(d, 'x')
+    ['x', 'z', 'y', 'x']
+
+    See Also
+    --------
+    isdag
     """
     # Stack-based depth-first search traversal.  This is based on Tarjan's
     # method for topological sorting (see wikipedia for pseudocode)
@@ -91,7 +95,12 @@ def isdag(d, keys):
                 if nxt not in completed:
                     if nxt in seen:
                         # Cycle detected!
-                        return False
+                        cycle = [nxt]
+                        while nodes[-1] != nxt:
+                            cycle.append(nodes.pop())
+                        cycle.append(nodes.pop())
+                        cycle.reverse()
+                        return cycle
                     next_nodes.append(nxt)
 
             if next_nodes:
@@ -101,7 +110,28 @@ def isdag(d, keys):
                 completed.add(cur)
                 seen.remove(cur)
                 nodes.pop()
-    return True
+    return []
+
+
+def isdag(d, keys):
+    """ Does Dask form a directed acyclic graph when calculating keys?
+
+    ``keys`` may be a single key or list of keys.
+
+    Example
+    -------
+
+    >>> inc = lambda x: x + 1
+    >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')
+    True
+    >>> isdag({'x': (inc, 'y'), 'y': (inc, 'x')}, 'y')
+    False
+
+    See Also
+    --------
+    getcycle
+    """
+    return not getcycle(d, keys)
 
 
 def _get_task(d, task, maxdepth=1000):
@@ -138,8 +168,10 @@ def _get_task(d, task, maxdepth=1000):
             frame = (_iter, key[::-1], [], frame)
             depth += 1
             if maxdepth and depth > maxdepth:
-                if not isdag(d, list(task[1:])):
-                    raise ValueError('Cycle detected in dask!')
+                cycle = getcycle(d, list(task[1:]))
+                if cycle:
+                    cycle = '->'.join(cycle)
+                    raise RuntimeError('Cycle detected in Dask: %s' % cycle)
                 maxdepth = None
             continue
         elif ishashable(key) and key in d:
@@ -151,8 +183,10 @@ def _get_task(d, task, maxdepth=1000):
             frame = (v[0], list(v[:0:-1]), [], frame)
             depth += 1
             if maxdepth and depth > maxdepth:
-                if not isdag(d, list(task[1:])):
-                    raise ValueError('Cycle detected in dask!')
+                cycle = getcycle(d, list(task[1:]))
+                if cycle:
+                    cycle = '->'.join(cycle)
+                    raise RuntimeError('Cycle detected in Dask: %s' % cycle)
                 maxdepth = None
         else:
             results.append(v)

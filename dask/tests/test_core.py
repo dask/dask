@@ -141,7 +141,7 @@ def test_get_stack_limit():
     assert dask.get(d, 'x10000') == 10000
     # introduce cycle
     d['x5000'] = (inc, 'x5001')
-    assert raises(ValueError, lambda: dask.get(d, 'x10000'))
+    assert raises(RuntimeError, lambda: dask.get(d, 'x10000'))
     assert dask.get(d, 'x4999') == 4999
 
 
