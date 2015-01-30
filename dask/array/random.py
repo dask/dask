@@ -33,21 +33,7 @@ def blockdims_from_blockshape(shape, blockshape):
 
 def generic(func, *args, **kwargs):
     """
-    Random dask array uniform in [0, 1)
-
-    >>> random(size=(1000, 1000), blockshape=(500, 500)).dask  # doctest: +SKIP
-    {('rand_1', 0, 0): (np.random.random, 500, 500),
-     ('rand_1', 0, 1): (np.random.random, 500, 500),
-     ('rand_1', 1, 0): (np.random.random, 500, 500),
-     ('rand_1', 1, 1): (np.random.random, 500, 500)}
-
-    Handle uneven sizes
-
-    >>> random(size=(1000, 1000), blockshape=(600, 600)).dask  # doctest: +SKIP
-    {('rand_1', 0, 0): (np.random.random, 600, 600),
-     ('rand_1', 0, 1): (np.random.random, 600, 400),
-     ('rand_1', 1, 0): (np.random.random, 400, 600),
-     ('rand_1', 1, 1): (np.random.random, 400, 400)}
+    Transform np.random function into blocked version
     """
     if 'size' not in kwargs:
         size, args = args[-1], args[:-1]
