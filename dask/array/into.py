@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from threading import Lock
 import numpy as np
 from toolz import merge, accumulate
-from into import discover, convert, append
+from into import discover, convert, append, into
 from datashape.dispatch import dispatch
 from datashape import DataShape
 from operator import add
