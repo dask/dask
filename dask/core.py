@@ -179,10 +179,13 @@ def flatten(seq):
     >>> list(flatten(((1, 2), (1, 2)))) # Don't flatten tuples
     [(1, 2), (1, 2)]
     """
-    if not isinstance(next(iter(seq)), list):
-        return seq
-    else:
-        return chain.from_iterable(map(flatten, seq))
+    try:
+        if not isinstance(next(iter(seq)), list):
+            return seq
+        else:
+            return chain.from_iterable(map(flatten, seq))
+    except StopIteration:
+        return []
 
 def reverse_dict(d):
     """

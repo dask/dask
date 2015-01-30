@@ -1,5 +1,6 @@
 import dask
 from dask.utils import raises
+from dask.core import flatten
 
 
 def contains(a, b):
@@ -128,3 +129,6 @@ def test_cull():
     assert dask.core.cull(d, ['out', 'z']) == d
     assert raises(KeyError, lambda: dask.core.cull(d, 'badkey'))
 
+
+def test_flatten():
+    assert list(flatten(())) == []
