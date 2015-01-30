@@ -55,7 +55,10 @@ def wrap_func_size_as_kwarg(func, *args, **kwargs):
 
     keys = product([name], *[range(len(bd)) for bd in blockdims])
     sizes = product(*blockdims)
-    vals = ((curry(func, *args, size=size, **kwargs),) for size in sizes)
+    if not kwargs:
+        vals = ((func,) + args + (size,) for size in sizes)
+    else:
+        vals = ((curry(func, *args, size=size, **kwargs),) for size in sizes)
 
     dsk = dict(zip(keys, vals))
     return Array(dsk, name, shape=size, blockdims=blockdims)
@@ -84,7 +87,9 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
 
     keys = product([name], *[range(len(bd)) for bd in blockdims])
     shapes = product(*blockdims)
-    vals = ((curry(func, s, *args, **kwargs),) for s in shapes)
+    if not kwargs:
+        func = curry(func, **kwargs)
+    vals = ((func,) + (s,) + args for s in shapes)
 
     dsk = dict(zip(keys, vals))
     return Array(dsk, name, shape=shape, blockdims=blockdims)

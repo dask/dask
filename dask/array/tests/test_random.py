@@ -1,6 +1,6 @@
 import numpy as np
 from dask.array.core import Array
-from dask.array.random import random, exponential
+from dask.array.random import random, exponential, normal
 from dask.array.into import into
 
 
@@ -28,6 +28,13 @@ def test_parametrized_random_function():
 
     y = set(x.flat)
     assert len(y) > 90
+
+
+def test_kwargs():
+    a = normal(loc=10.0, scale=0.1, size=(10, 10), blockshape=(5, 5))
+    assert isinstance(a, Array)
+    x = into(np.ndarray, a)
+    assert 8 < x.mean() < 12
 
 
 def test_unique_names():
