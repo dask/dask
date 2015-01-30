@@ -1,119 +1,51 @@
-from itertools import count, product
-from toolz import curry
-from .core import Array
+from __future__ import absolute_import, division, print_function
+
 import numpy as np
-
-
-names = ('rand_%d' % i for i in count(1))
-
-
-def dims_from_size(size, blocksize):
-    """
-
-    >>> list(dims_from_size(30, 8))
-    [8, 8, 8, 6]
-    """
-    result = (blocksize,) * (size // blocksize)
-    if size % blocksize:
-        result = result + (size % blocksize,)
-    return result
-
-
-def blockdims_from_blockshape(shape, blockshape):
-    """
-    Convert blockshape to dimensions along each axis
-
-    >>> blockdims_from_blockshape((30, 30), (10, 10))
-    ((10, 10, 10), (10, 10, 10))
-    >>> blockdims_from_blockshape((30, 30), (12, 12))
-    ((12, 12, 6), (12, 12, 6))
-    """
-    return tuple(map(tuple, map(dims_from_size, shape, blockshape)))
-
-
-def generic(func, *args, **kwargs):
-    """
-    Transform np.random function into blocked version
-    """
-    if 'shape' in kwargs and 'size' not in kwargs:
-        size = kwargs['shape']
-    elif 'size' not in kwargs:
-        size, args = args[-1], args[:-1]
-    else:
-        size = kwargs.pop('size')
-    blockshape = kwargs.pop('blockshape', None)
-    blockdims = kwargs.pop('blockdims', None)
-    name = kwargs.pop('name', None)
-    if not blockdims and blockshape:
-        blockdims = blockdims_from_blockshape(size, blockshape)
-
-    name = name or next(names)
-
-    keys = product([name], *[range(len(bd)) for bd in blockdims])
-    sizes = product(*blockdims)
-    vals = ((curry(func, *args, size=size, **kwargs),) for size in sizes)
-
-    dsk = dict(zip(keys, vals))
-    return Array(dsk, name, shape=size, blockdims=blockdims)
-
+from .wrap import wrap
 
 """
 Univariate distributions
 """
 
-def f(func):
-    f = curry(generic, func)
-    f.__doc__ = """
-    Blocked variant of %(name)s
 
-    Follows the signature of %(name)s exactly except that it also requires a
-    keyword argument blockshape=(...) or blockdims=(...).
-
-    Original signature follows below.
-    """ % {'name': func.__name__} + func.__doc__
-
-    f.__name__ = 'blocked_' + func.__name__
-    return f
-
-
-random = f(np.random.random)
-beta = f(np.random.beta)
-binomial = f(np.random.binomial)
-chisquare = f(np.random.chisquare)
-exponential = f(np.random.exponential)
-f = f(np.random.f)
-gamma = f(np.random.gamma)
-geometric = f(np.random.geometric)
-gumbel = f(np.random.gumbel)
-hypergeometric = f(np.random.hypergeometric)
-laplace = f(np.random.laplace)
-logistic = f(np.random.logistic)
-lognormal = f(np.random.lognormal)
-logseries = f(np.random.logseries)
-negative_binomial = f(np.random.negative_binomial)
-noncentral_chisquare = f(np.random.noncentral_chisquare)
-noncentral_f = f(np.random.noncentral_f)
-normal = f(np.random.normal)
-pareto = f(np.random.pareto)
-poisson = f(np.random.poisson)
-power = f(np.random.power)
-rayleigh = f(np.random.rayleigh)
-triangular = f(np.random.triangular)
-uniform = f(np.random.uniform)
-vonmises = f(np.random.vonmises)
-wald = f(np.random.wald)
-weibull = f(np.random.weibull)
-zipf = f(np.random.zipf)
+random = wrap(np.random.random)
+beta = wrap(np.random.beta)
+binomial = wrap(np.random.binomial)
+chisquare = wrap(np.random.chisquare)
+exponential = wrap(np.random.exponential)
+f = wrap(np.random.f)
+gamma = wrap(np.random.gamma)
+geometric = wrap(np.random.geometric)
+gumbel = wrap(np.random.gumbel)
+hypergeometric = wrap(np.random.hypergeometric)
+laplace = wrap(np.random.laplace)
+logistic = wrap(np.random.logistic)
+lognormal = wrap(np.random.lognormal)
+logseries = wrap(np.random.logseries)
+negative_binomial = wrap(np.random.negative_binomial)
+noncentral_chisquare = wrap(np.random.noncentral_chisquare)
+noncentral_f = wrap(np.random.noncentral_f)
+normal = wrap(np.random.normal)
+pareto = wrap(np.random.pareto)
+poisson = wrap(np.random.poisson)
+power = wrap(np.random.power)
+rayleigh = wrap(np.random.rayleigh)
+triangular = wrap(np.random.triangular)
+uniform = wrap(np.random.uniform)
+vonmises = wrap(np.random.vonmises)
+wald = wrap(np.random.wald)
+weibull = wrap(np.random.weibull)
+zipf = wrap(np.random.zipf)
 
 """
 Standard distributions
 """
 
-standard_cauchy = f(np.random.standard_cauchy)
-standard_exponential = f(np.random.standard_exponential)
-standard_gamma = f(np.random.standard_gamma)
-standard_normal = f(np.random.standard_normal)
-standard_t = f(np.random.standard_t)
+standard_cauchy = wrap(np.random.standard_cauchy)
+standard_exponential = wrap(np.random.standard_exponential)
+standard_gamma = wrap(np.random.standard_gamma)
+standard_normal = wrap(np.random.standard_normal)
+standard_t = wrap(np.random.standard_t)
 
 """
 TODO: Multivariate distributions
