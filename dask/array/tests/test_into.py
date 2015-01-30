@@ -54,3 +54,8 @@ def test_insert_to_ooc():
     assert eq(y, x)
 
 
+def test__array__():
+    x = np.arange(600).reshape((20, 30))
+    d = convert(Array, x, blockshape=(4, 5))
+
+    assert eq(x, np.array(d))

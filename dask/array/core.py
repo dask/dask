@@ -620,6 +620,13 @@ class Array(object):
             return [self.keys(*(args + (i,)))
                         for i in range(self.numblocks[ind])]
 
+    def __array__(self, dtype=None, **kwargs):
+        from .into import into
+        x = into(np.ndarray, self)
+        if dtype and x.dtype != dtype:
+            x = x.astype(dtype)
+        return x
+
 
 def atop(func, out, out_ind, *args):
     """ Array object version of dask.array.top """
