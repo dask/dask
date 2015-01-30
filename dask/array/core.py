@@ -657,6 +657,6 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     """
     fast_functions=kwargs.get('fast_functions',
                              set([operator.getitem, np.transpose]))
-    dsk2 = threaded.inline(dsk, fast_functions=fast_functions)
-    dsk3 = core.cull(dsk2, list(core.flatten(keys)))
+    dsk2 = core.cull(dsk, list(core.flatten(keys)))
+    dsk3 = threaded.inline(dsk2, fast_functions=fast_functions)
     return get(dsk3, keys, **kwargs)
