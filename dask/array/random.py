@@ -13,10 +13,10 @@ def dims_from_size(size, blocksize):
     >>> list(dims_from_size(30, 8))
     [8, 8, 8, 6]
     """
-    while size - blocksize > 0:
-        yield blocksize
-        size -= blocksize
-    yield size
+    result = (blocksize,) * (size // blocksize)
+    if size % blocksize:
+        result = result + (size % blocksize,)
+    return result
 
 
 def blockdims_from_blockshape(shape, blockshape):
