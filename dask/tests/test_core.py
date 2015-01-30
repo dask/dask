@@ -1,6 +1,5 @@
-import dask
 from dask.utils import raises
-from dask.core import flatten
+from dask.core import istask, get, get_dependencies, cull, flatten
 
 
 def contains(a, b):
@@ -21,9 +20,9 @@ def add(x, y):
 
 
 def test_istask():
-    assert dask.istask((inc, 1))
-    assert not dask.istask(1)
-    assert not dask.istask((1, 2))
+    assert istask((inc, 1))
+    assert not istask(1)
+    assert not istask((1, 2))
 
 
 d = {':x': 1,
@@ -32,9 +31,9 @@ d = {':x': 1,
 
 
 def test_get():
-    assert dask.get(d, ':x') == 1
-    assert dask.get(d, ':y') == 2
-    assert dask.get(d, ':z') == 3
+    assert get(d, ':x') == 1
+    assert get(d, ':y') == 2
+    assert get(d, ':z') == 3
 
 
 def test_memoized_get():
@@ -43,7 +42,7 @@ def test_memoized_get():
     except ImportError:
         return
     cache = dict()
-    getm = toolz.memoize(dask.get, cache=cache, key=lambda args, kwargs: args[1:])
+    getm = toolz.memoize(get, cache=cache, key=lambda args, kwargs: args[1:])
 
     result = getm(d, ':z', get=getm)
     assert result == 3
@@ -54,28 +53,28 @@ def test_memoized_get():
 
 def test_data_not_in_dict_is_ok():
     d = {'x': 1, 'y': (add, 'x', 10)}
-    assert dask.get(d, 'y') == 11
+    assert get(d, 'y') == 11
 
 
 def test_get_with_list():
     d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
 
-    assert dask.get(d, ['x', 'y']) == [1, 2]
-    assert dask.get(d, 'z') == 3
+    assert get(d, ['x', 'y']) == [1, 2]
+    assert get(d, 'z') == 3
 
 
 def test_get_with_nested_list():
     d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
 
-    assert dask.get(d, [['x'], 'y']) == [[1], 2]
-    assert dask.get(d, 'z') == 3
+    assert get(d, [['x'], 'y']) == [[1], 2]
+    assert get(d, 'z') == 3
 
 
 def test_get_works_with_unhashables_in_values():
     f = lambda x, y: x + len(y)
     d = {'x': 1, 'y': (f, 'x', set([1]))}
 
-    assert dask.get(d, 'y') == 2
+    assert get(d, 'y') == 2
 
 
 def test_get_laziness():
@@ -84,20 +83,20 @@ def test_get_laziness():
 
     d = {'x': 1, 'y': 2, 'z': (isconcrete, ['x', 'y'])}
 
-    assert dask.get(d, ['x', 'y']) == [1, 2]
-    assert dask.get(d, 'z') == False
+    assert get(d, ['x', 'y']) == [1, 2]
+    assert get(d, 'z') == False
 
 
 def test_get_dependencies_nested():
     dsk = {'x': 1, 'y': 2,
            'z': (add, (inc, 'x'), 'y')}
 
-    assert dask.core.get_dependencies(dsk, 'z') == set(['x', 'y'])
+    assert get_dependencies(dsk, 'z') == set(['x', 'y'])
 
 
 def test_get_dependencies_empty():
     dsk = {'x': (inc,)}
-    assert dask.core.get_dependencies(dsk, 'x') == set()
+    assert get_dependencies(dsk, 'x') == set()
 
 
 def test_nested_tasks():
@@ -105,17 +104,17 @@ def test_nested_tasks():
          'y': (inc, 'x'),
          'z': (add, (inc, 'x'), 'y')}
 
-    assert dask.get(d, 'z') == 4
+    assert get(d, 'z') == 4
 
 
 def test_cull():
     # 'out' depends on 'x' and 'y', but not 'z'
     d = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x'), 'out': (add, 'y', 10)}
-    culled = dask.core.cull(d, 'out')
+    culled = cull(d, 'out')
     assert culled == {'x': 1, 'y': (inc, 'x'), 'out': (add, 'y', 10)}
-    assert dask.core.cull(d, 'out') == dask.core.cull(d, ['out'])
-    assert dask.core.cull(d, ['out', 'z']) == d
-    assert raises(KeyError, lambda: dask.core.cull(d, 'badkey'))
+    assert cull(d, 'out') == cull(d, ['out'])
+    assert cull(d, ['out', 'z']) == d
+    assert raises(KeyError, lambda: cull(d, 'badkey'))
 
 
 def test_flatten():
