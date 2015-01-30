@@ -136,7 +136,7 @@ def test_cull():
 
 
 def test_get_stack_limit():
-    d = {'x%s' % (i+1): (inc, 'x%s' % i) for i in range(10000)}
+    d = dict(('x%s' % (i+1), (inc, 'x%s' % i)) for i in range(10000))
     d['x0'] = 0
     assert dask.get(d, 'x10000') == 10000
     # introduce cycle
