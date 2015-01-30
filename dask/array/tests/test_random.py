@@ -35,3 +35,8 @@ def test_unique_names():
     b = random((10, 10), blockshape=(5, 5))
 
     assert a.name != b.name
+
+
+def test_docs():
+    assert 'exponential' in exponential.__doc__
+    assert 'exponential' in exponential.__name__

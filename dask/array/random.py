@@ -35,7 +35,9 @@ def generic(func, *args, **kwargs):
     """
     Transform np.random function into blocked version
     """
-    if 'size' not in kwargs:
+    if 'shape' in kwargs and 'size' not in kwargs:
+        size = kwargs['shape']
+    elif 'size' not in kwargs:
         size, args = args[-1], args[:-1]
     else:
         size = kwargs.pop('size')
@@ -55,14 +57,23 @@ def generic(func, *args, **kwargs):
     return Array(dsk, name, shape=size, blockdims=blockdims)
 
 
-from functools import wraps
-
 """
 Univariate distributions
 """
 
 def f(func):
-    return wraps(func)(curry(generic, func))
+    f = curry(generic, func)
+    f.__doc__ = """
+    Blocked variant of %(name)s
+
+    Follows the signature of %(name)s exactly except that it also requires a
+    keyword argument blockshape=(...) or blockdims=(...).
+
+    Original signature follows below.
+    """ % {'name': func.__name__} + func.__doc__
+
+    f.__name__ = 'blocked_' + func.__name__
+    return f
 
 
 random = f(np.random.random)
