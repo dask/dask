@@ -9,7 +9,7 @@ from toolz import merge, concat, partition, accumulate, first, curry, compose
 from datashape import DataShape
 from blaze.dispatch import dispatch
 from blaze.compute.core import compute_up, optimize
-from blaze import compute, ndim
+from blaze import compute, ndim, shape
 from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
         Expr, Slice, Broadcast)
 
@@ -125,10 +125,10 @@ def compute_up(expr, data, **kwargs):
     index = expr.index
 
     # Turn x[5:10] into x[5:10, :, :] as needed
-    index = list(index) + [slice(None, None, None)] * (expr.ndim - len(index))
+    index = list(index) + [slice(None, None, None)] * (ndim(expr) - len(index))
 
     dsk = dask_slice(out, data.name, data.shape, data.blockdims, index)
     blockdims = [new_blockdim(d, db, i)
                 for d, i, db in zip(data.shape, index, data.blockdims)
                 if not isinstance(i, int)]
-    return Array(merge(data.dask, dsk), out, expr.shape, blockdims=blockdims)
+    return Array(merge(data.dask, dsk), out, shape(expr), blockdims=blockdims)

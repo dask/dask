@@ -47,6 +47,7 @@ def test_compute():
                  sy + sa,
                  sy + sb,
                  sx[3:17], sx[3:10, 10:25:2] + 1, sx[:5, 10],
+                 sx[0, 0]
                 ]:
         result = compute(expr, dask_ns)
         expected = compute(expr, numpy_ns)
