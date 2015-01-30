@@ -136,43 +136,39 @@ def isdag(d, keys):
 
 def _get_task(d, task, maxdepth=1000):
     # non-recursive.  DAG property is checked upon reaching maxdepth.
-    depth = 0
     _iter = lambda *args: iter(args)
 
     # We construct a nested heirarchy of tuples to mimic the execution stack
     # of frames that Python would maintain for a recursive implementation.
     # A frame is associated with a single task from a Dask.
-    # A frame tuple has four elements:
+    # A frame tuple has three elements:
     #    1) The function for the task.
     #    2) The arguments for the task (typically keys in the Dask).
     #       Arguments are stored in reverse order, and elements are popped
     #       as they are evaluated.
     #    3) The calculated results of the arguments from (2).
-    #    4) The previous frame.
-    frame = (task[0], list(task[:0:-1]), [], None)
+    stack = [(task[0], list(task[:0:-1]), [])]
     while True:
-        func, args, results, prev = frame
+        func, args, results = stack[-1]
         if not args:
             val = func(*results)
-            if prev is None:
+            if len(stack) == 1:
                 return val
-            prev[2].append(val)
-            frame = prev
-            depth -= 1
+            stack.pop()
+            stack[-1][2].append(val)
             continue
+        elif maxdepth and len(stack) > maxdepth:
+            cycle = getcycle(d, list(task[1:]))
+            if cycle:
+                cycle = '->'.join(cycle)
+                raise RuntimeError('Cycle detected in Dask: %s' % cycle)
+            maxdepth = None
 
         key = args.pop()
         if isinstance(key, list):
             # v = (get(d, k, concrete=False) for k in key)  # recursive
             # Fake being lazy
-            frame = (_iter, key[::-1], [], frame)
-            depth += 1
-            if maxdepth and depth > maxdepth:
-                cycle = getcycle(d, list(task[1:]))
-                if cycle:
-                    cycle = '->'.join(cycle)
-                    raise RuntimeError('Cycle detected in Dask: %s' % cycle)
-                maxdepth = None
+            stack.append((_iter, key[::-1], []))
             continue
         elif ishashable(key) and key in d:
             v = d[key]
@@ -180,14 +176,7 @@ def _get_task(d, task, maxdepth=1000):
             v = key
 
         if istask(v):
-            frame = (v[0], list(v[:0:-1]), [], frame)
-            depth += 1
-            if maxdepth and depth > maxdepth:
-                cycle = getcycle(d, list(task[1:]))
-                if cycle:
-                    cycle = '->'.join(cycle)
-                    raise RuntimeError('Cycle detected in Dask: %s' % cycle)
-                maxdepth = None
+            stack.append((v[0], list(v[:0:-1]), []))
         else:
             results.append(v)
 
