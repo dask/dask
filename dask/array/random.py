@@ -71,14 +71,56 @@ def generic(func, *args, **kwargs):
 
 from functools import wraps
 
-random = wraps(np.random.random)(curry(generic, np.random.random))
-beta = wraps(np.random.beta)(curry(generic, np.random.beta))
-binomial = wraps(np.random.binomial)(curry(generic, np.random.binomial))
-chisquare = wraps(np.random.chisquare)(curry(generic, np.random.chisquare))
-dirichlet = wraps(np.random.dirichlet)(curry(generic, np.random.dirichlet))
-exponential = wraps(np.random.exponential)(curry(generic, np.random.exponential))
-f = wraps(np.random.f)(curry(generic, np.random.f))
-gamma = wraps(np.random.gamma)(curry(generic, np.random.gamma))
-geometric = wraps(np.random.geometric)(curry(generic, np.random.geometric))
-gumbel = wraps(np.random.gumbel)(curry(generic, np.random.gumbel))
-hypergeometric = wraps(np.random.hypergeometric)(curry(generic, np.random.hypergeometric))
+"""
+Univariate distributions
+"""
+
+def f(func):
+    return wraps(func)(curry(generic, func))
+
+
+random = f(np.random.random)
+beta = f(np.random.beta)
+binomial = f(np.random.binomial)
+chisquare = f(np.random.chisquare)
+exponential = f(np.random.exponential)
+f = f(np.random.f)
+gamma = f(np.random.gamma)
+geometric = f(np.random.geometric)
+gumbel = f(np.random.gumbel)
+hypergeometric = f(np.random.hypergeometric)
+laplace = f(np.random.laplace)
+logistic = f(np.random.logistic)
+lognormal = f(np.random.lognormal)
+logseries = f(np.random.logseries)
+negative_binomial = f(np.random.negative_binomial)
+noncentral_chisquare = f(np.random.noncentral_chisquare)
+noncentral_f = f(np.random.noncentral_f)
+normal = f(np.random.normal)
+pareto = f(np.random.pareto)
+poisson = f(np.random.poisson)
+power = f(np.random.power)
+rayleigh = f(np.random.rayleigh)
+triangular = f(np.random.triangular)
+uniform = f(np.random.uniform)
+vonmises = f(np.random.vonmises)
+wald = f(np.random.wald)
+weibull = f(np.random.weibull)
+zipf = f(np.random.zipf)
+
+"""
+Standard distributions
+"""
+
+standard_cauchy = f(np.random.standard_cauchy)
+standard_exponential = f(np.random.standard_exponential)
+standard_gamma = f(np.random.standard_gamma)
+standard_normal = f(np.random.standard_normal)
+standard_t = f(np.random.standard_t)
+
+"""
+TODO: Multivariate distributions
+
+dirichlet =
+multinomial =
+"""
