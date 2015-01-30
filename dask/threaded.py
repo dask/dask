@@ -93,6 +93,8 @@ significantly on space and computation complexity.
 
 See the function ``inline`` for more information.
 """
+from __future__ import absolute_import, division, print_function
+
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .utils import deepmap
 from operator import add
@@ -144,7 +146,8 @@ def start_state_from_dask(dsk, cache=None):
             cache[k] = v
 
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
-    waiting = dict((k, v.copy()) for k, v in dependencies.items() if v)
+    waiting = dict((k, v.copy()) for k, v in dependencies.items()
+                                 if k not in cache)
 
     dependents = reverse_dict(dependencies)
     for a in cache:

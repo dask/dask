@@ -1,6 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
 from operator import add
 from itertools import chain
-from toolz import keyfilter
 from .compatibility import builtins
 
 def inc(x):
@@ -279,7 +280,11 @@ def get_dependencies(dsk, task):
     val = dsk[task]
     if not istask(val):
         return builtins.set([])
-    return builtins.set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
+    children = flatten(val[1:])
+    if not children:
+        return builtins.set()
+    else:
+        return builtins.set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
 
 
 def flatten(seq):
@@ -297,10 +302,13 @@ def flatten(seq):
     >>> list(flatten(((1, 2), (1, 2)))) # Don't flatten tuples
     [(1, 2), (1, 2)]
     """
-    if not isinstance(next(iter(seq)), list):
-        return seq
-    else:
-        return chain.from_iterable(map(flatten, seq))
+    try:
+        if not isinstance(next(iter(seq)), list):
+            return seq
+        else:
+            return chain.from_iterable(map(flatten, seq))
+    except StopIteration:
+        return []
 
 def reverse_dict(d):
     """
@@ -343,5 +351,4 @@ def cull(dsk, keys):
                 if dep not in seen:
                     nxt.add(dep)
         seen.update(nxt)
-    return keyfilter(seen.__contains__, dsk)
-
+    return dict((k, v) for k, v in dsk.items() if k in seen)

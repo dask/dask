@@ -3,6 +3,7 @@ from dask.threaded import *
 from contextlib import contextmanager
 from dask.utils import raises
 from operator import add, mul
+from copy import deepcopy
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -31,6 +32,11 @@ def test_start_state():
                                 'z': set(['w'])}}
 
 
+
+def test_start_state_with_independent_but_runnable_tasks():
+    assert start_state_from_dask({'x': (inc, 1)})['ready'] == set(['x'])
+
+
 def test_finish_task():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     state = start_state_from_dask(dsk)
@@ -38,6 +44,7 @@ def test_finish_task():
     task = 'z'
     result = 2
 
+    oldstate = deepcopy(state)
     finish_task(dsk, task, result, state, set())
 
     assert state == {
