@@ -137,7 +137,10 @@ def get_dependencies(dsk, task):
     if not children:
         return set()
     else:
-        return set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
+        args = list(flatten(val[1:]))
+        if not args:
+            return set()
+        return set.union(*[_deps(dsk, x) for x in args])
 
 
 def flatten(seq):
