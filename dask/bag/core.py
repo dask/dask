@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
-from toolz import merge, concat, frequencies, merge_with, take, curry, reduce
+from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
+        join)
 from ..multiprocessing import get
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -130,6 +131,13 @@ class Bag(object):
 
     def std(self, ddof=0):
         return math.sqrt(self.var(ddof=ddof))
+
+    def join(self, other, on_self, on_other):
+        name = next(names)
+        dsk = dict(((name, i), (list, (join, on_other, other,
+                                             on_self, (self.name, i))))
+                        for i in range(self.npartitions))
+        return Bag(merge(self.dask, dsk), name, self.npartitions)
 
     def keys(self):
         return [(self.name, i) for i in range(self.npartitions)]

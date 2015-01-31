@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge
+from toolz import merge, join
 import numpy as np
 from dask.bag.core import Bag
 
@@ -15,6 +15,9 @@ def inc(x):
 
 def iseven(x):
     return x % 2 == 0
+
+def isodd(x):
+    return x % 2 == 1
 
 def add(x, y):
     return x + y
@@ -78,3 +81,8 @@ def test_std():
     assert float(b.std()) == np.std(list(range(5)) * 3)
 def test_var():
     assert float(b.var()) == np.var(list(range(5)) * 3)
+
+
+def test_join():
+    assert list(b.join([1, 2, 3], on_self=isodd, on_other=iseven)) == \
+            list(join(iseven, [1, 2, 3], isodd, list(b)))
