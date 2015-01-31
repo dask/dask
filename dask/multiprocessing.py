@@ -1,7 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
+from toolz import curry
 import multiprocessing
 import psutil
+import dill
+import pickle
 from .async import get_async # TODO: get better get
 
 
@@ -10,6 +13,23 @@ def get(dsk, keys):
     pool = multiprocessing.Pool(psutil.cpu_count())
     manager = multiprocessing.Manager()
     queue = manager.Queue()
-    result = get_async(pool.apply_async, psutil.cpu_count(), dsk, keys,
+
+    apply_async = dill_apply_async(pool.apply_async)
+
+    result = get_async(apply_async, psutil.cpu_count(), dsk, keys,
                        queue=queue)
     return result
+
+
+def dill_apply_func(sfunc, sargs, skwds):
+    func = dill.loads(sfunc)
+    args = dill.loads(sargs)
+    kwds = dill.loads(skwds)
+    return func(*args, **kwds)
+
+@curry
+def dill_apply_async(apply_async, func, args=(), kwds={}):
+    sfunc = dill.dumps(func)
+    sargs = dill.dumps(args)
+    skwds = dill.dumps(kwds)
+    return apply_async(dill_apply_func, args=[sfunc, sargs, skwds])
