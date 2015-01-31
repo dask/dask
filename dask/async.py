@@ -229,11 +229,11 @@ def execute_task(key, task, data, queue):
     """
     try:
         result = _execute_task(task, data)
-        result = key, task, result, None
+        result = key, result, None
     except Exception as e:
         import sys
         exc_type, exc_value, exc_traceback = sys.exc_info()
-        result = key, task, e, exc_traceback
+        result = key, e, exc_traceback
     queue.put(result)
 
 
@@ -520,7 +520,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     # Main loop, wait on tasks to finish, insert new ones
     while state['waiting'] or state['ready'] or state['running']:
-        key, finished_task, res, tb = queue.get()
+        key, res, tb = queue.get()
         if isinstance(res, Exception):
             import traceback
             traceback.print_tb(tb)
@@ -531,7 +531,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     # Final reporting
     while state['running'] or not queue.empty():
-        key, finished_task, res, tb = queue.get()
+        key, res, tb = queue.get()
 
     if debug_counts:
         visualize(dsk, state, filename='dask_end')
