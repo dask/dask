@@ -3,7 +3,10 @@ from __future__ import absolute_import, division, print_function
 from toolz import merge
 from dask.bag.core import Bag
 
-dsk = {('x', i): (range, 5) for i in range(3)}
+dsk = {('x', 0): (range, 5),
+       ('x', 1): (range, 5),
+       ('x', 2): (range, 5)}
+
 b = Bag(dsk, 'x', 3)
 
 def inc(x):
@@ -27,20 +30,20 @@ def test_keys():
 
 def test_map():
     c = b.map(inc)
-    expected = merge(dsk, {(c.name, i): (map, inc, (b.name, i))
-                           for i in range(b.npartitions)})
+    expected = merge(dsk, dict(((c.name, i), (map, inc, (b.name, i)))
+                               for i in range(b.npartitions)))
     assert c.dask == expected
 
 def test_filter():
     c = b.filter(iseven)
-    expected = merge(dsk, {(c.name, i): (filter, iseven, (b.name, i))
-                           for i in range(b.npartitions)})
+    expected = merge(dsk, dict(((c.name, i), (filter, iseven, (b.name, i)))
+                               for i in range(b.npartitions)))
     assert c.dask == expected
 
 def dont_test_fold():
     c = b.fold(add)
-    expected = merge(dsk, {(c.name, i): (reduce, add, (b.name, i))
-                           for i in range(b.npartitions)})
+    expected = merge(dsk, dict(((c.name, i), (reduce, add, (b.name, i)))
+                               for i in range(b.npartitions)))
     assert c.dask == expected
 
 
