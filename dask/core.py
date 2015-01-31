@@ -250,34 +250,35 @@ def fuse(dsk):
     chains = []
     children = dict(map(reversed, parents.items()))
     while parents:
-        ch, pa = parents.popitem()
-        chain = [ch, pa]
-        while pa in parents:
-            pa = parents.pop(pa)
-            chain.append(pa)
+        child, parent = parents.popitem()
+        chain = [child, parent]
+        while parent in parents:
+            parent = parents.pop(parent)
+            del children[parent]
+            chain.append(parent)
         chain.reverse()
-        while ch in children:
-            ch = children.pop(ch)
-            del parents[ch]
-            chain.append(ch)
+        while child in children:
+            child = children.pop(child)
+            del parents[child]
+            chain.append(child)
         chains.append(chain)
 
     # create a new dask with fused chains
     rv = {}
     fused = set()
     for chain in chains:
-        ch = chain.pop()
-        val = dsk[ch]
+        child = chain.pop()
+        val = dsk[child]
         while chain:
-            pa = chain.pop()
-            val = subs(dsk[pa], ch, val)
-            fused.add(ch)
-            ch = pa
-        fused.add(ch)
-        rv[ch] = val
+            parent = chain.pop()
+            val = subs(dsk[parent], child, val)
+            fused.add(child)
+            child = parent
+        fused.add(child)
+        rv[child] = val
 
-    for k, v in dsk.items():
-        if k not in fused:
-            rv[k] = v
+    for key, val in dsk.items():
+        if key not in fused:
+            rv[key] = val
     return rv
 
