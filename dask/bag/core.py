@@ -2,21 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 from toolz import merge, concat, frequencies, merge_with, take, curry, reduce
-from ..async import get_async # TODO: get better get
-import multiprocessing
-import psutil
+from ..multiprocessing import get
 
 names = ('bag-%d' % i for i in itertools.count(1))
-
-
-def get(dsk, keys):
-    """ Multiprocessed get function appropriate for Bags """
-    pool = multiprocessing.Pool(psutil.cpu_count())
-    manager = multiprocessing.Manager()
-    queue = manager.Queue()
-    result = get_async(pool.apply_async, psutil.cpu_count(), dsk, keys,
-                       queue=queue)
-    return result
 
 
 class Item(object):
