@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
+from collections import Iterable
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join)
 from ..multiprocessing import get
@@ -135,6 +136,8 @@ class Bag(object):
         return math.sqrt(self.var(ddof=ddof))
 
     def join(self, other, on_self, on_other):
+        assert isinstance(other, Iterable)
+        assert not isinstance(other, Bag)
         name = next(names)
         dsk = dict(((name, i), (list, (join, on_other, other,
                                              on_self, (self.name, i))))
