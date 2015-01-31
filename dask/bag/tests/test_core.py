@@ -49,3 +49,11 @@ def test_iter():
 
 def test_fold_computation():
     assert int(b.fold(add)) == sum(range(5)) * 3
+
+
+def test_frequencies():
+    assert dict(list(b.frequencies())) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
+
+
+def test_topk():
+    assert list(b.topk(4)) == [4, 4, 4, 3]

@@ -1,5 +1,5 @@
 import itertools
-from toolz import merge, concat
+from toolz import merge, concat, frequencies, merge_with, take, curry
 from ..threaded import get # TODO: get better get
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -60,6 +60,25 @@ class Bag(object):
                             for i in range(self.npartitions))
         dsk2 = {b: (reduce, combine or binop, list(dsk.keys()))}
         return Item(merge(self.dask, dsk, dsk2), b)
+
+    def frequencies(self):
+        a = next(names)
+        b = next(names)
+        dsk = dict(((a, i), (frequencies, (self.name, i)))
+                        for i in range(self.npartitions))
+        dsk2 = {(b, 0): (dict.items,
+                            (merge_with, sum, list(sorted(dsk.keys()))))}
+        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+
+
+    def topk(self, k):
+        a = next(names)
+        b = next(names)
+        rsorted = curry(sorted, reverse=True)
+        dsk = dict(((a, i), (list, (take, k, (rsorted, (self.name, i)))))
+                        for i in range(self.npartitions))
+        dsk2 = {(b, 0): (list, (take, k, (rsorted, (concat, dsk.keys()))))}
+        return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
     def keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
