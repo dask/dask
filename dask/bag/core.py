@@ -5,6 +5,10 @@ import math
 from collections import Iterable
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join)
+try:
+    from cytoolz import curry, frequencies, merge_with, join
+except ImportError:
+    pass
 from ..multiprocessing import get
 
 names = ('bag-%d' % i for i in itertools.count(1))
