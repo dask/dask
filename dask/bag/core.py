@@ -41,13 +41,13 @@ class Bag(object):
 
     def map(self, func):
         name = next(names)
-        dsk = dict(((name, i), (map, func, (self.name, i)))
+        dsk = dict(((name, i), (list, (map, func, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
     def filter(self, predicate):
         name = next(names)
-        dsk = dict(((name, i), (filter, predicate, (self.name, i)))
+        dsk = dict(((name, i), (list, (filter, predicate, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 

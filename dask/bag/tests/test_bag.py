@@ -30,14 +30,15 @@ def test_keys():
 
 def test_map():
     c = b.map(inc)
-    expected = merge(dsk, dict(((c.name, i), (map, inc, (b.name, i)))
+    expected = merge(dsk, dict(((c.name, i), (list, (map, inc, (b.name, i))))
                                for i in range(b.npartitions)))
     assert c.dask == expected
 
 
 def test_filter():
     c = b.filter(iseven)
-    expected = merge(dsk, dict(((c.name, i), (filter, iseven, (b.name, i)))
+    expected = merge(dsk, dict(((c.name, i),
+                                (list, (filter, iseven, (b.name, i))))
                                for i in range(b.npartitions)))
     assert c.dask == expected
 
