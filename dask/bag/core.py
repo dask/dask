@@ -2,9 +2,21 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 from toolz import merge, concat, frequencies, merge_with, take, curry, reduce
-from ..threaded import get # TODO: get better get
+from ..threaded import get_async # TODO: get better get
+import multiprocessing
+import psutil
 
 names = ('bag-%d' % i for i in itertools.count(1))
+
+
+def get(dsk, keys):
+    """ Multiprocessed get function appropriate for Bags """
+    pool = multiprocessing.Pool(psutil.cpu_count())
+    manager = multiprocessing.Manager()
+    queue = manager.Queue()
+    result = get_async(pool.apply_async, psutil.cpu_count(), dsk, keys,
+                       queue=queue)
+    return result
 
 
 class Item(object):
@@ -68,7 +80,7 @@ class Bag(object):
         b = next(names)
         dsk = dict(((a, i), (frequencies, (self.name, i)))
                         for i in range(self.npartitions))
-        dsk2 = {(b, 0): (dict.items,
+        dsk2 = {(b, 0): (dictitems,
                             (merge_with, sum, list(sorted(dsk.keys()))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
@@ -87,3 +99,8 @@ class Bag(object):
 
     def __iter__(self):
         return concat(get(self.dask, self.keys()))
+
+
+def dictitems(d):
+    """ A pickleable version of dict.items """
+    return list(d.items())
