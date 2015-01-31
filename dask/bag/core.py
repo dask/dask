@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import math
 from toolz import merge, concat, frequencies, merge_with, take, curry, reduce
 from ..multiprocessing import get
 
@@ -81,6 +82,54 @@ class Bag(object):
                         for i in range(self.npartitions))
         dsk2 = {(b, 0): (list, (take, k, (rsorted, (concat, list(dsk.keys())))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
+
+
+    def _reduction(self, perpartition, aggregate):
+        a = next(names)
+        b = next(names)
+        dsk = dict(((a, i), (perpartition, (self.name, i)))
+                        for i in range(self.npartitions))
+        dsk2 = {b: (aggregate, list(dsk.keys()))}
+        return Item(merge(self.dask, dsk, dsk2), b)
+
+    def sum(self):
+        return self._reduction(sum, sum)
+
+    def max(self):
+        return self._reduction(max, max)
+
+    def min(self):
+        return self._reduction(min, min)
+
+    def any(self):
+        return self._reduction(any, any)
+
+    def all(self):
+        return self._reduction(all, all)
+
+    def count(self):
+        return self._reduction(len, sum)
+
+    def mean(self):
+        def chunk(x):
+            return sum(x), len(x)
+        def agg(x):
+            totals, counts = list(zip(*x))
+            return 1.0 * sum(totals) / sum(counts)
+        return self._reduction(chunk, agg)
+
+    def var(self, ddof=0):
+        def chunk(seq):
+            return sum([x**2 for x in seq]), sum(seq), len(seq)
+        def agg(x):
+            squares, totals, counts = list(zip(*x))
+            x2, x, n = float(sum(squares)), float(sum(totals)), sum(counts)
+            result = (x2 / n) - (x / n)**2
+            return result * n / (n - ddof)
+        return self._reduction(chunk, agg)
+
+    def std(self, ddof=0):
+        return math.sqrt(self.var(ddof=ddof))
 
     def keys(self):
         return [(self.name, i) for i in range(self.npartitions)]

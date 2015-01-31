@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from toolz import merge
+import numpy as np
 from dask.bag.core import Bag
 
 dsk = {('x', 0): (range, 5),
@@ -62,3 +63,18 @@ def test_topk():
 
 def test_lambdas():
     assert list(b.map(lambda x: x + 1)) == list(b.map(inc))
+
+def test_reductions():
+    assert int(b.count()) == 15
+    assert int(b.sum()) == 30
+    assert int(b.max()) == 4
+    assert int(b.min()) == 0
+    assert int(b.any()) == True
+    assert int(b.all()) == False  # some zeros exist
+
+def test_mean():
+    assert float(b.mean()) == np.mean(list(range(5)) * 3)
+def test_std():
+    assert float(b.std()) == np.std(list(range(5)) * 3)
+def test_var():
+    assert float(b.var()) == np.var(list(range(5)) * 3)
