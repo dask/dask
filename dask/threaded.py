@@ -101,7 +101,6 @@ from operator import add
 from toolz import concat, partial
 from multiprocessing.pool import ThreadPool
 from .compatibility import Queue
-from threading import Lock
 import psutil
 
 def inc(x):
@@ -226,7 +225,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(dsk, key, state, queue, results, lock):
+def execute_task(dsk, key, state, queue, results):
     """
     Compute task and handle all administration
 
@@ -236,8 +235,6 @@ def execute_task(dsk, key, state, queue, results, lock):
     try:
         task = dsk[key]
         result = _execute_task(task, state['cache'], dsk=dsk)
-        with lock:
-            finish_task(dsk, key, result, state, results)
         result = key, task, result, None
     except Exception as e:
         import sys
@@ -503,11 +500,6 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     state = start_state_from_dask(dsk, cache=cache)
 
     queue = Queue()
-    #lock for state dict updates
-    #When a task completes, we need to update several things in the state dict.
-    #To make sure the scheduler is in a safe state at all times, the state dict
-    #  needs to be updated by only one thread at a time.
-    lock = Lock()
     tick = [0]
 
     if not state['ready']:
@@ -525,14 +517,12 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
         state['ready'].remove(key)
         state['running'].add(key)
         # Submit
-        pool.apply_async(execute_task, args=[dsk, key, state, queue, results,
-                                             lock])
+        pool.apply_async(execute_task, args=[dsk, key, state, queue, results])
 
     try:
         # Seed initial tasks into the thread pool
-        with lock:
-            while state['ready'] and len(state['running']) < nthreads:
-                fire_task()
+        while state['ready'] and len(state['running']) < nthreads:
+            fire_task()
 
         # Main loop, wait on tasks to finish, insert new ones
         while state['waiting'] or state['ready'] or state['running']:
@@ -541,9 +531,9 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
                 import traceback
                 traceback.print_tb(tb)
                 raise res
-            with lock:
-                while state['ready'] and len(state['running']) < nthreads:
-                    fire_task()
+            finish_task(dsk, key, res, state, results)
+            while state['ready'] and len(state['running']) < nthreads:
+                fire_task()
 
     finally:
         # Clean up thread pool
