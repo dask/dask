@@ -463,6 +463,84 @@ def expand_value(dsk, fast, key):
 The main function of the scheduler.  Get is the main entry point.
 '''
 
+def get_async(apply_async, num_workers, dsk, result, cache=None,
+                debug_counts=None, **kwargs):
+    """ Asynchronous get function
+
+    Parameters
+    ----------
+
+    apply_async : function
+        Asynchronous apply function as found on Pool or ThreadPool
+    num_workers : int
+        The number of active tasks we should have at any one time
+    dsk: dict
+        A dask dictionary specifying a workflow
+    result: key or list of keys
+        Keys corresponding to desired data
+    cache: dict-like (optional)
+        Temporary storage of results
+    debug_counts: integer or None
+        This integer tells how often the scheduler should dump debugging info
+
+    See Also
+    --------
+
+    threaded.get
+    """
+    if isinstance(result, list):
+        result_flat = set(flatten(result))
+    else:
+        result_flat = set([result])
+    results = set(result_flat)
+
+    state = start_state_from_dask(dsk, cache=cache)
+
+    queue = Queue()
+    tick = [0]
+
+    if not state['ready']:
+        raise ValueError("Found no accessible jobs in dask")
+
+    def fire_task():
+        """ Fire off a task to the thread pool """
+        # Update heartbeat
+        tick[0] += 1
+        # Emit visualization if called for
+        if debug_counts and tick[0] % debug_counts == 0:
+            visualize(dsk, state, filename='dask_%03d' % tick[0])
+        # Choose a good task to compute
+        key = choose_task(state)
+        state['ready'].remove(key)
+        state['running'].add(key)
+        # Submit
+        apply_async(execute_task, args=[dsk, key, state, queue, results])
+
+    # Seed initial tasks into the thread pool
+    while state['ready'] and len(state['running']) < num_workers:
+        fire_task()
+
+    # Main loop, wait on tasks to finish, insert new ones
+    while state['waiting'] or state['ready'] or state['running']:
+        key, finished_task, res, tb = queue.get()
+        if isinstance(res, Exception):
+            import traceback
+            traceback.print_tb(tb)
+            raise res
+        finish_task(dsk, key, res, state, results)
+        while state['ready'] and len(state['running']) < num_workers:
+            fire_task()
+
+    # Final reporting
+    while state['running'] or not queue.empty():
+        key, finished_task, res, tb = queue.get()
+
+    if debug_counts:
+        visualize(dsk, state, filename='dask_end')
+
+    return nested_get(result, state['cache'])
+
+
 def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
@@ -489,66 +567,15 @@ def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **
     >>> get(dsk, ['w', 'y'])
     (4, 2)
     """
-    if isinstance(result, list):
-        result_flat = set(flatten(result))
-    else:
-        result_flat = set([result])
-    results = set(result_flat)
-
     pool = ThreadPool(nthreads)
-
-    state = start_state_from_dask(dsk, cache=cache)
-
-    queue = Queue()
-    tick = [0]
-
-    if not state['ready']:
-        raise ValueError("Found no accessible jobs in dask")
-
-    def fire_task():
-        """ Fire off a task to the thread pool """
-        # Update heartbeat
-        tick[0] += 1
-        # Emit visualization if called for
-        if debug_counts and tick[0] % debug_counts == 0:
-            visualize(dsk, state, filename='dask_%03d' % tick[0])
-        # Choose a good task to compute
-        key = choose_task(state)
-        state['ready'].remove(key)
-        state['running'].add(key)
-        # Submit
-        pool.apply_async(execute_task, args=[dsk, key, state, queue, results])
-
     try:
-        # Seed initial tasks into the thread pool
-        while state['ready'] and len(state['running']) < nthreads:
-            fire_task()
-
-        # Main loop, wait on tasks to finish, insert new ones
-        while state['waiting'] or state['ready'] or state['running']:
-            key, finished_task, res, tb = queue.get()
-            if isinstance(res, Exception):
-                import traceback
-                traceback.print_tb(tb)
-                raise res
-            finish_task(dsk, key, res, state, results)
-            while state['ready'] and len(state['running']) < nthreads:
-                fire_task()
-
+        results = get_async(pool.apply_async, nthreads, dsk, result,
+                            cache=cache, debug_counts=debug_counts, **kwargs)
     finally:
-        # Clean up thread pool
         pool.close()
         pool.join()
 
-    # Final reporting
-    while not queue.empty():
-        key, finished_task, res, tb = queue.get()
-        # print("Finished %s" % str(finished_task))
-
-    if debug_counts:
-        visualize(dsk, state, filename='dask_end')
-
-    return nested_get(result, state['cache'])
+    return results
 
 
 '''
