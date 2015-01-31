@@ -135,9 +135,11 @@ class Bag(object):
     def std(self, ddof=0):
         return math.sqrt(self.var(ddof=ddof))
 
-    def join(self, other, on_self, on_other):
+    def join(self, other, on_self, on_other=None):
         assert isinstance(other, Iterable)
         assert not isinstance(other, Bag)
+        if on_other is None:
+            on_other = on_self
         name = next(names)
         dsk = dict(((name, i), (list, (join, on_other, other,
                                              on_self, (self.name, i))))

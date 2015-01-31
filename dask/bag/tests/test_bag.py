@@ -86,3 +86,5 @@ def test_var():
 def test_join():
     assert list(b.join([1, 2, 3], on_self=isodd, on_other=iseven)) == \
             list(join(iseven, [1, 2, 3], isodd, list(b)))
+    assert list(b.join([1, 2, 3], isodd)) == \
+            list(join(isodd, [1, 2, 3], isodd, list(b)))
