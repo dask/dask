@@ -25,7 +25,7 @@ install:
   - python setup.py install
 
 script:
-    - py.test dask
+    - py.test dask --verbose
 
 after_success:
     - coveralls
