@@ -208,24 +208,21 @@ def _execute_task(arg, cache, dsk=None):
     >>> _execute_task('foo', cache)  # Passes through on non-keys
     'foo'
     """
-    dsk = dsk or dict()
     if isinstance(arg, list):
         return (_execute_task(a, cache) for a in arg)
     elif istask(arg):
         func, args = arg[0], arg[1:]
-        args2 = [_execute_task(a, cache, dsk=dsk) for a in args]
+        args2 = [_execute_task(a, cache) for a in args]
         return func(*args2)
     elif not ishashable(arg):
         return arg
     elif arg in cache:
         return cache[arg]
-    elif arg in dsk:
-        raise ValueError("Premature deletion of data.  Key: %s" % str(arg))
     else:
         return arg
 
 
-def execute_task(dsk, key, state, queue, results):
+def execute_task(key, task, data, queue, results):
     """
     Compute task and handle all administration
 
@@ -233,8 +230,7 @@ def execute_task(dsk, key, state, queue, results):
         _execute_task - actually execute task
     """
     try:
-        task = dsk[key]
-        result = _execute_task(task, state['cache'], dsk=dsk)
+        result = _execute_task(task, data)
         result = key, task, result, None
     except Exception as e:
         import sys
@@ -513,8 +509,12 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         key = choose_task(state)
         state['ready'].remove(key)
         state['running'].add(key)
+
+        # Prep data to send
+        data = dict((dep, state['cache'][dep])
+                    for dep in get_dependencies(dsk, key))
         # Submit
-        apply_async(execute_task, args=[dsk, key, state, queue, results])
+        apply_async(execute_task, args=[key, dsk[key], data, queue, results])
 
     # Seed initial tasks into the thread pool
     while state['ready'] and len(state['running']) < num_workers:
