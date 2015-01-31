@@ -222,7 +222,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task, data, queue, results):
+def execute_task(key, task, data, queue):
     """
     Compute task and handle all administration
 
@@ -513,7 +513,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         data = dict((dep, state['cache'][dep])
                     for dep in get_dependencies(dsk, key))
         # Submit
-        apply_async(execute_task, args=[key, dsk[key], data, queue, results])
+        apply_async(execute_task, args=[key, dsk[key], data, queue])
 
     # Seed initial tasks into the thread pool
     while state['ready'] and len(state['running']) < num_workers:
@@ -540,7 +540,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     return nested_get(result, state['cache'])
 
 
-def get(dsk, result, nthreads=psutil.NUM_CPUS, cache=None, debug_counts=None, **kwargs):
+def get(dsk, result, nthreads=psutil.cpu_count(), cache=None, debug_counts=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
     Parameters
