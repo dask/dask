@@ -237,7 +237,6 @@ def execute_task(key, task, data, queue, results):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         result = key, task, e, exc_traceback
     queue.put(result)
-    return
 
 
 def finish_task(dsk, key, result, state, results):
@@ -460,7 +459,7 @@ The main function of the scheduler.  Get is the main entry point.
 '''
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-                debug_counts=None, **kwargs):
+                debug_counts=None, queue=None, **kwargs):
     """ Asynchronous get function
 
     Parameters
@@ -492,7 +491,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     state = start_state_from_dask(dsk, cache=cache)
 
-    queue = Queue()
+    queue = queue or Queue()
     tick = [0]
 
     if not state['ready']:
