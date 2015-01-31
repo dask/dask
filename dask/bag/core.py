@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 from toolz import merge, concat, frequencies, merge_with, take, curry, reduce
-from ..threaded import get_async # TODO: get better get
+from ..async import get_async # TODO: get better get
 import multiprocessing
 import psutil
 
@@ -40,10 +40,10 @@ class Bag(object):
     ...        ('x', 2): (range, 5)}
     >>> b = Bag(dsk, 'x', npartitions=3)
 
-    >>> sorted(b.map(lambda x: x * 10))
+    >>> sorted(b.map(lambda x: x * 10))  # doctest: +SKIP
     [0, 0, 0, 10, 10, 10, 20, 20, 20, 30, 30, 30, 40, 40, 40]
 
-    >>> int(b.fold(lambda x, y: x + y))
+    >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
     def __init__(self, dsk, name, npartitions):

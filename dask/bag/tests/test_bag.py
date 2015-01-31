@@ -34,15 +34,10 @@ def test_map():
                                for i in range(b.npartitions)))
     assert c.dask == expected
 
+
 def test_filter():
     c = b.filter(iseven)
     expected = merge(dsk, dict(((c.name, i), (filter, iseven, (b.name, i)))
-                               for i in range(b.npartitions)))
-    assert c.dask == expected
-
-def dont_test_fold():
-    c = b.fold(add)
-    expected = merge(dsk, dict(((c.name, i), (reduce, add, (b.name, i)))
                                for i in range(b.npartitions)))
     assert c.dask == expected
 
