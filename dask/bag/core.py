@@ -1,5 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
 import itertools
-from toolz import merge, concat, frequencies, merge_with, take, curry
+from toolz import merge, concat, frequencies, merge_with, take, curry, reduce
 from ..threaded import get # TODO: get better get
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -77,7 +79,7 @@ class Bag(object):
         rsorted = curry(sorted, reverse=True)
         dsk = dict(((a, i), (list, (take, k, (rsorted, (self.name, i)))))
                         for i in range(self.npartitions))
-        dsk2 = {(b, 0): (list, (take, k, (rsorted, (concat, dsk.keys()))))}
+        dsk2 = {(b, 0): (list, (take, k, (rsorted, (concat, list(dsk.keys())))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
     def keys(self):

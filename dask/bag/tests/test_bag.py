@@ -1,5 +1,5 @@
 from toolz import merge
-from dask.bag.core import *
+from dask.bag.core import Bag
 
 dsk = {('x', i): (range, 5) for i in range(3)}
 b = Bag(dsk, 'x', 3)
