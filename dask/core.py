@@ -216,3 +216,68 @@ def cull(dsk, keys):
                     nxt.add(dep)
         seen.update(nxt)
     return dict((k, v) for k, v in dsk.items() if k in seen)
+
+
+def subs(task, key, val):
+    newargs = []
+    for arg in task[1:]:
+        if istask(arg):
+            arg = subs(arg, key, val)
+        elif isinstance(arg, list):
+            arg = [subs(x, key, val) for x in arg]
+        elif arg == key:
+            arg = val
+        newargs.append(arg)
+    return task[:1] + tuple(newargs)
+
+
+def fuse(dsk):
+    # locate all members of linear chains
+    parents = {}
+    deadbeats = set()
+    for parent in dsk:
+        deps = get_dependencies(dsk, parent)
+        for child in deps:
+            if child in parents:
+                del parents[child]
+                deadbeats.add(child)
+            elif len(deps) > 1:
+                deadbeats.add(child)
+            elif child not in deadbeats:
+                parents[child] = parent
+
+    # construct the chains from ancestor to descendant
+    chains = []
+    children = dict(map(reversed, parents.items()))
+    while parents:
+        ch, pa = parents.popitem()
+        chain = [ch, pa]
+        while pa in parents:
+            pa = parents.pop(pa)
+            chain.append(pa)
+        chain.reverse()
+        while ch in children:
+            ch = children.pop(ch)
+            del parents[ch]
+            chain.append(ch)
+        chains.append(chain)
+
+    # create a new dask with fused chains
+    rv = {}
+    fused = set()
+    for chain in chains:
+        ch = chain.pop()
+        val = dsk[ch]
+        while chain:
+            pa = chain.pop()
+            val = subs(dsk[pa], ch, val)
+            fused.add(ch)
+            ch = pa
+        fused.add(ch)
+        rv[ch] = val
+
+    for k, v in dsk.items():
+        if k not in fused:
+            rv[k] = v
+    return rv
+
