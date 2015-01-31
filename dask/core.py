@@ -130,17 +130,22 @@ def get_dependencies(dsk, task):
     >>> get_dependencies(dsk, 'a')  # Ignore non-keys
     set(['x'])
     """
-    val = dsk[task]
-    if not istask(val):
-        return set([])
-    children = flatten(val[1:])
-    if not children:
+    args = [dsk[task]]
+    result = set()
+    while args:
+        arg = args.pop()
+        if istask(arg):
+            args.extend(arg[1:])
+        elif isinstance(arg, list):
+            args.extend(arg)
+        else:
+            try:
+                result.add(arg)
+            except TypeError:
+                pass
+    if not result:
         return set()
-    else:
-        args = list(flatten(val[1:]))
-        if not args:
-            return set()
-        return set.union(*[_deps(dsk, x) for x in args])
+    return set.union(*[_deps(dsk, x) for x in result])
 
 
 def flatten(seq):
