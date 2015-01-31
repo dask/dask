@@ -10,12 +10,13 @@ names = ('bag-%d' % i for i in itertools.count(1))
 
 
 class Item(object):
-    def __init__(self, dsk, key):
+    def __init__(self, dsk, key, get=get):
         self.dask = dsk
         self.key = key
+        self.get = get
 
     def compute(self):
-        return get(self.dask, self.key)
+        return self.get(self.dask, self.key)
 
     __int__ = __float__ = __complex__ = __bool__ = compute
 
@@ -36,10 +37,11 @@ class Bag(object):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
-    def __init__(self, dsk, name, npartitions):
+    def __init__(self, dsk, name, npartitions, get=get):
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
+        self.get = get
 
     def map(self, func):
         name = next(names)
@@ -143,7 +145,7 @@ class Bag(object):
         return [(self.name, i) for i in range(self.npartitions)]
 
     def __iter__(self):
-        return concat(get(self.dask, self.keys()))
+        return concat(self.get(self.dask, self.keys()))
 
 
 def dictitems(d):
