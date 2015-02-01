@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from operator import add
 from itertools import chain
-from .compatibility import builtins
 
 def inc(x):
     return x + 1
@@ -82,33 +81,6 @@ def get(d, key, get=None, concrete=True, **kwargs):
 _get = get
 
 
-def set(d, key, val, args=[]):
-    """ Set value for key in Dask
-
-    Example
-    -------
-
-    >>> d = {}
-    >>> set(d, 'x', 1)
-    >>> d
-    {'x': 1}
-
-    >>> inc = lambda x: x + 1
-    >>> set(d, 'y', inc, args=['x'])
-
-    >>> get(d, 'y')
-    2
-
-    See Also
-    --------
-    get
-    """
-    assert key not in d
-    if callable(val):
-        val = (val,) + tuple(args)
-    d[key] = val
-
-
 def _deps(dsk, arg):
     """ Get dependencies from keys or tasks
 
@@ -117,24 +89,27 @@ def _deps(dsk, arg):
     >>> dsk = {'x': 1, 'y': 2}
 
     >>> _deps(dsk, 'x')
-    set(['x'])
+    ['x']
     >>> _deps(dsk, (add, 'x', 1))
-    set(['x'])
+    ['x']
 
     >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
-    set(['x', 'y'])
+    ['x', 'y']
     """
     if istask(arg):
-        return builtins.set.union(*[_deps(dsk, a) for a in arg[1:]])
+        result = []
+        for a in arg[1:]:
+            result.extend(_deps(dsk, a))
+        return result
     try:
         if arg not in dsk:
-            return builtins.set()
+            return []
     except TypeError:  # not hashable
-        return builtins.set()
-    return builtins.set([arg])
+            return []
+    return [arg]
 
 
-def get_dependencies(dsk, task):
+def get_dependencies(dsk, task, as_list=False):
     """ Get the immediate tasks on which this task depends
 
     >>> dsk = {'x': 1,
@@ -158,14 +133,25 @@ def get_dependencies(dsk, task):
     >>> get_dependencies(dsk, 'a')  # Ignore non-keys
     set(['x'])
     """
-    val = dsk[task]
-    if not istask(val):
-        return builtins.set([])
-    children = flatten(val[1:])
-    if not children:
-        return builtins.set()
-    else:
-        return builtins.set.union(*[_deps(dsk, x) for x in flatten(val[1:])])
+    args = [dsk[task]]
+    result = []
+    while args:
+        arg = args.pop()
+        if istask(arg):
+            args.extend(arg[1:])
+        elif isinstance(arg, list):
+            args.extend(arg)
+        else:
+            try:
+                result.append(arg)
+            except TypeError:
+                pass
+    if not result:
+        return [] if as_list else set()
+    rv = []
+    for x in result:
+        rv.extend(_deps(dsk, x))
+    return rv if as_list else set(rv)
 
 
 def flatten(seq):
@@ -182,14 +168,17 @@ def flatten(seq):
 
     >>> list(flatten(((1, 2), (1, 2)))) # Don't flatten tuples
     [(1, 2), (1, 2)]
+
+    >>> list(flatten((1, 2, [3, 4]))) # support heterogeneous
+    [1, 2, 3, 4]
     """
-    try:
-        if not isinstance(next(iter(seq)), list):
-            return seq
+    for item in seq:
+        if isinstance(item, list):
+            for item2 in flatten(item):
+                yield item2
         else:
-            return chain.from_iterable(map(flatten, seq))
-    except StopIteration:
-        return []
+            yield item
+
 
 def reverse_dict(d):
     """
@@ -200,7 +189,7 @@ def reverse_dict(d):
     {'a': set([]), 'b': set(['a']}, 'c': set(['a', 'b'])}
     """
     terms = list(d.keys()) + list(chain.from_iterable(d.values()))
-    result = dict((t, builtins.set()) for t in terms)
+    result = dict((t, set()) for t in terms)
     for k, vals in d.items():
         for val in vals:
             result[val].add(k)
@@ -222,14 +211,106 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, list):
         keys = [keys]
-    nxt = builtins.set(keys)
+    nxt = set(keys)
     seen = nxt
     while nxt:
         cur = nxt
-        nxt = builtins.set()
+        nxt = set()
         for item in cur:
             for dep in get_dependencies(dsk, item):
                 if dep not in seen:
                     nxt.add(dep)
         seen.update(nxt)
     return dict((k, v) for k, v in dsk.items() if k in seen)
+
+
+def subs(task, key, val):
+    """ Perform a substitution on a task
+
+    Example
+    -------
+
+    >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
+    (inc, 1)
+    """
+    if not istask(task):
+        if task == key:
+            return val
+        elif isinstance(task, list):
+            return [subs(x, key, val) for x in task]
+        else:
+            return task
+    newargs = []
+    for arg in task[1:]:
+        if istask(arg):
+            arg = subs(arg, key, val)
+        elif isinstance(arg, list):
+            arg = [subs(x, key, val) for x in arg]
+        elif arg == key:
+            arg = val
+        newargs.append(arg)
+    return task[:1] + tuple(newargs)
+
+
+def fuse(dsk):
+    """ Return new dask with linear sequence of tasks fused together.
+
+    This may be used as an optimization step.
+
+    Example
+    -------
+
+    >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
+    >>> fuse(d)  # doctest: +SKIP
+    {'c': (inc, (inc, 1))}
+    """
+    # locate all members of linear chains
+    parents = {}
+    deadbeats = set()
+    for parent in dsk:
+        deps = get_dependencies(dsk, parent, as_list=True)
+        for child in deps:
+            if child in parents:
+                del parents[child]
+                deadbeats.add(child)
+            elif len(deps) > 1:
+                deadbeats.add(child)
+            elif child not in deadbeats:
+                parents[child] = parent
+
+    # construct the chains from ancestor to descendant
+    chains = []
+    children = dict(map(reversed, parents.items()))
+    while parents:
+        child, parent = parents.popitem()
+        chain = [child, parent]
+        while parent in parents:
+            parent = parents.pop(parent)
+            del children[parent]
+            chain.append(parent)
+        chain.reverse()
+        while child in children:
+            child = children.pop(child)
+            del parents[child]
+            chain.append(child)
+        chains.append(chain)
+
+    # create a new dask with fused chains
+    rv = {}
+    fused = set()
+    for chain in chains:
+        child = chain.pop()
+        val = dsk[child]
+        while chain:
+            parent = chain.pop()
+            val = subs(dsk[parent], child, val)
+            fused.add(child)
+            child = parent
+        fused.add(child)
+        rv[child] = val
+
+    for key, val in dsk.items():
+        if key not in fused:
+            rv[key] = val
+    return rv
+
