@@ -426,6 +426,7 @@ def _slice_1d(dim_shape, lengths, index):
         return {i: ind}
 
     assert isinstance(index, slice)
+
     step = index.step or 1
     if step > 0:
         start = index.start or 0
@@ -511,39 +512,27 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
      ('y', 1): (getitem, ('x', 1), (slice( 0, 15),))}
     """
-    # Quick Optimization
-    # If we are only given full slices, simply return the input variable
-    # i.e. input_data[:,:,:] becomes
-    # (slice(None,None,None), slice(None,None,None),
-    #  slice(None,None,None))
-    # In this case, we shouldn't do any slicing.
     empty = slice(None, None, None)
     if all(index == empty for index in indexes):
         return {out_name: in_name}
 
     # Get a list (for each dimension) of dicts{blocknum: slice()}
-    #   for each dimension
     block_slices = list(map(_slice_1d, shape, blockdims, indexes))
 
-    # out_names has the Cartesian product of output block index locations
-    # i.e. (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0)
+    # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
     out_names = product([out_name],
                         *[range(len(d))
                             for d, i in zip(block_slices, indexes)
                             if not isinstance(i, int)])
 
-    # in_names holds the Cartesian product of input block index locations
-    # i.e. (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2)
+    # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
     in_names = product([in_name], *[i.keys() for i in block_slices])
 
-    # all_slices holds the slices needed to generate
-    # (out_name, 0, 0, 0) from (in_name, 1, 1, 2)
-    # There should be 1 slice per dimension index
     all_slices = product(*[i.values() for i in block_slices])
 
     final_out = dict((out_name, (getitem_func, in_name, slices))
-                    for out_name, in_name, slices
-                    in zip(out_names, in_names, all_slices))
+                     for out_name, in_name, slices
+                     in zip(out_names, in_names, all_slices))
 
     return final_out
 
