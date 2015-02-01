@@ -64,6 +64,7 @@ def test_frequencies():
 
 def test_topk():
     assert list(b.topk(4)) == [4, 4, 4, 3]
+    assert list(b.topk(4, key=lambda x: -x)) == [0, 0, 0, 1]
 
 
 def test_lambdas():

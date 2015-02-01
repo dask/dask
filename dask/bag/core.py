@@ -135,10 +135,10 @@ class Bag(object):
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
 
-    def topk(self, k):
+    def topk(self, k, key=None):
         a = next(names)
         b = next(names)
-        rsorted = curry(sorted, reverse=True)
+        rsorted = curry(sorted, reverse=True, key=key)
         dsk = dict(((a, i), (list, (take, k, (rsorted, (self.name, i)))))
                         for i in range(self.npartitions))
         dsk2 = {(b, 0): (list, (take, k, (rsorted, (concat, list(dsk.keys())))))}
