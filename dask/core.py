@@ -41,28 +41,15 @@ def istask(x):
     return isinstance(x, tuple) and x and callable(x[0])
 
 
-def getcycle(d, keys):
-    """ Return a list of nodes that form a cycle if Dask is not a DAG.
-
-    Returns an empty list if no cycle is found.
-
-    ``keys`` may be a single key or list of keys.
-
-    Example
-    -------
-
-    >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
-    >>> getcycle(d, 'x')
-    ['x', 'z', 'y', 'x']
-
-    See Also
-    --------
-    isdag
-    """
+def _toposort(dsk, keys=None, returncycle=False):
     # Stack-based depth-first search traversal.  This is based on Tarjan's
     # method for topological sorting (see wikipedia for pseudocode)
-    if not isinstance(keys, list):
+    if keys is None:
+        keys = dsk
+    elif not isinstance(keys, list):
         keys = [keys]
+    if not returncycle:
+        ordered = []
 
     # Nodes whose descendents have been completely explored.
     # These nodes are guaranteed to not be part of a cycle.
@@ -90,7 +77,7 @@ def getcycle(d, keys):
 
             # Add direct descendants of cur to nodes stack
             next_nodes = []
-            for nxt in get_dependencies(d, cur):
+            for nxt in get_dependencies(dsk, cur):
                 if nxt not in completed:
                     if nxt in seen:
                         # Cycle detected!
@@ -99,17 +86,51 @@ def getcycle(d, keys):
                             cycle.append(nodes.pop())
                         cycle.append(nodes.pop())
                         cycle.reverse()
-                        return cycle
+                        if returncycle:
+                            return cycle
+                        else:
+                            cycle = '->'.join(cycle)
+                            raise RuntimeError('Cycle detected in Dask: %s' % cycle)
                     next_nodes.append(nxt)
 
             if next_nodes:
                 nodes.extend(next_nodes)
             else:
                 # cur has no more descendants to explore, so we're done with it
+                if not returncycle:
+                    ordered.append(cur)
                 completed.add(cur)
                 seen.remove(cur)
                 nodes.pop()
-    return []
+    if returncycle:
+        return []
+    return ordered
+
+
+def toposort(dsk):
+    """ Return a list of keys of dask sorted in topological order."""
+    return _toposort(dsk)
+
+
+def getcycle(d, keys):
+    """ Return a list of nodes that form a cycle if Dask is not a DAG.
+
+    Returns an empty list if no cycle is found.
+
+    ``keys`` may be a single key or list of keys.
+
+    Example
+    -------
+
+    >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
+    >>> getcycle(d, 'x')
+    ['x', 'z', 'y', 'x']
+
+    See Also
+    --------
+    isdag
+    """
+    return _toposort(d, keys=keys, returncycle=True)
 
 
 def isdag(d, keys):
@@ -454,5 +475,56 @@ def fuse(dsk):
     for key, val in dsk.items():
         if key not in fused:
             rv[key] = val
+    return rv
+
+
+def inline(dsk, keys=None):
+    """ Return new dask with the given keys inlined with their values.
+
+    If ``keys`` is unspecified, then all constants will be inlined.
+
+    Example
+    -------
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
+    >>> inline(d)  # doctest: +SKIP
+    {'y': (inc, 1), 'z': (add, 1, 'y')}
+
+    >>> inline(d, keys='y')  # doctest: +SKIP
+    {'x': 1, 'z': (add, 'x', (inc, 'x'))}
+    """
+    # inline all constants if keys is unspecified
+    if keys is None:
+        keys = set()
+        for key, val in dsk.items():
+            if not istask(val):
+                keys.add(key)
+    elif not isinstance(keys, list):
+        keys = set([keys])
+    else:
+        keys = set(keys)
+
+    # Keys may depend on other keys, so determine replace order with toposort.
+    # The values stored in `keysubs` do not include other keys.
+    replaceorder = toposort(dict((k, dsk[k]) for k in keys if k in dsk))
+    keysubs = {}
+    for key in replaceorder:
+        val = dsk[key]
+        for dep in keys & get_dependencies(dsk, key):
+            if dep in keysubs:
+                replace = keysubs[dep]
+            else:
+                replace = dsk[dep]
+            val = subs(val, dep, replace)
+        keysubs[key] = val
+
+    # Make new dask with substitutions
+    rv = {}
+    for key, val in dsk.items():
+        if key in keys:
+            continue
+        for item in keys & get_dependencies(dsk, key):
+            val = subs(val, item, keysubs[item])
+        rv[key] = val
     return rv
 
