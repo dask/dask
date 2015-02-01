@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join, reduceby
+from toolz import merge, join, reduceby, pipe
 import numpy as np
-from dask.bag.core import Bag
+from dask.bag.core import Bag, lazify_internal, lazify_task, fuse, lazify_top
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -98,3 +98,45 @@ def test_foldby():
 
 def test_map_partitions():
     assert list(b.map_partitions(len)) == [5, 5, 5]
+
+
+def test_lazify_task():
+    task = (sum, (list, (map, inc, [1, 2, 3])))
+    assert lazify_task(task) == (sum, (map, inc, [1, 2, 3]))
+
+    task = (list, (map, inc, [1, 2, 3]))
+    assert lazify_task(task) == task
+
+    a = (list, (map, inc,
+                     (list, (filter, iseven, 'y'))))
+    b = (list, (map, inc,
+                            (filter, iseven, 'y')))
+    assert lazify_task(a) == b
+
+
+f = lambda x: x
+
+
+def test_lazify_internal():
+    a = {'x': (list, (map, inc,
+                           (list, (filter, iseven, 'y')))),
+         'a': (f, 'x'), 'b': (f, 'x')}
+    b = {'x': (list, (map, inc,
+                                  (filter, iseven, 'y'))),
+         'a': (f, 'x'), 'b': (f, 'x')}
+    assert lazify_internal(a) == b
+
+
+def test_lazify_top():
+    a = {'x': (list, (map, inc,
+                           (list, (filter, iseven, 'y')))),
+         'a': (f, 'x')}
+    b = {'x':        (map, inc,
+                           (list, (filter, iseven, 'y'))),
+         'a': (f, 'x')}
+    assert lazify_top(a) == b
+
+    b = Bag(dsk, 'x', 3)
+    d = pipe(b.map(inc).filter(iseven).sum().dask, fuse, lazify_internal,
+            lazify_top)
+    assert 'list' not in str(d)

@@ -4,15 +4,61 @@ import itertools
 import math
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
-        join, reduceby, compose, second)
+        join, reduceby, compose, second, valmap)
 try:
+    import doesnotexist
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
             compose, second)
 except ImportError:
     pass
-from ..multiprocessing import get
+
+from ..multiprocessing import get as mpget
+from ..core import istask, fuse, get_dependencies, reverse_dict
 
 names = ('bag-%d' % i for i in itertools.count(1))
+
+
+def lazify_task(task, start=True):
+    """
+    Given a task, remove unnecessary calls to ``list``
+
+    Example
+    -------
+
+    >>> task = (sum, (list, (map, inc, [1, 2, 3])))
+    >>> lazify_task(task)
+    (sum, (map, inc, [1, 2, 3]))
+    """
+    if not istask(task):
+        return task
+    head, tail = task[0], task[1:]
+    if not start and head is list:
+        task = task[1]
+        return lazify_task(*tail, start=False)
+    else:
+        return (head,) + tuple([lazify_task(arg, False) for arg in tail])
+
+
+def lazify_internal(dsk):
+    """
+    Remove unnecessary calls to ``list`` in tasks
+
+    See Also:
+        ``dask.bag.core.lazify_task``
+    """
+    return valmap(lazify_task, dsk)
+
+
+def lazify_top(dsk):
+    """ No need to be concrete when only one other task needs us """
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependents = reverse_dict(dependencies)
+
+    return dict((k, v[1] if v[0] is list and len(dependents[k]) <= 1 else v)
+                for k, v in dsk.items())
+
+
+get = curry(mpget, optimizations=[fuse, lazify_internal])
 
 
 class Item(object):
