@@ -144,7 +144,6 @@ class Bag(object):
         dsk2 = {(b, 0): (list, (take, k, (rsorted, (concat, list(dsk.keys())))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
-
     def _reduction(self, perpartition, aggregate):
         a = next(names)
         b = next(names)

@@ -11,3 +11,18 @@ def test_apply_lambda():
         assert result.get() == 2
     finally:
         p.close()
+
+
+def bad():
+    raise ValueError("12345")
+
+
+def test_errors_propagate():
+    dsk = {'x': (bad,)}
+
+    try:
+        result = get(dsk, 'x')
+    except Exception as e:
+        assert isinstance(e, ValueError)
+        assert "bad" in str(e)
+        assert "12345" in str(e)

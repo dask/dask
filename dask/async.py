@@ -95,11 +95,13 @@ See the function ``inline`` for more information.
 """
 from __future__ import absolute_import, division, print_function
 
-from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
-from .utils import deepmap
+import psutil
+import sys
+import traceback
 from operator import add
 from toolz import concat, partial
-import psutil
+from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
+from .utils import deepmap
 
 def inc(x):
     return x + 1
@@ -231,9 +233,9 @@ def execute_task(key, task, data, queue):
         result = _execute_task(task, data)
         result = key, result, None
     except Exception as e:
-        import sys
         exc_type, exc_value, exc_traceback = sys.exc_info()
-        result = key, e, exc_traceback
+        tb = ''.join(traceback.format_tb(exc_traceback))
+        result = key, e, tb
     queue.put(result)
 
 
@@ -522,9 +524,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['waiting'] or state['ready'] or state['running']:
         key, res, tb = queue.get()
         if isinstance(res, Exception):
-            import traceback
-            traceback.print_tb(tb)
-            raise res
+            raise type(res)(" Execption in remote Process\n\n"
+                + res.message+ "\n\nTraceback:\n" + tb)
         finish_task(dsk, key, res, state, results)
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
