@@ -38,7 +38,7 @@ def wrap_func_size_as_kwarg(func, *args, **kwargs):
     Transform np.random function into blocked version
     """
     if 'shape' in kwargs and 'size' not in kwargs:
-        kwargs['size'] = kwargs['shape']
+        kwargs['size'] = kwargs.pop('shape')
     if 'size' not in kwargs:
         args, size = args[:-1], args[-1]
     else:

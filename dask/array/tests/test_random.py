@@ -44,6 +44,8 @@ def test_kwargs_size_or_shape():
     assert isinstance(b, Array)
     assert a.blockdims == b.blockdims
 
+    assert np.array(a).shape == np.array(b).shape
+
 
 def test_unique_names():
     a = random((10, 10), blockshape=(5, 5))
