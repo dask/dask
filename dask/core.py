@@ -41,6 +41,145 @@ def istask(x):
     return isinstance(x, tuple) and x and callable(x[0])
 
 
+def getcycle(d, keys):
+    """ Return a list of nodes that form a cycle if Dask is not a DAG.
+
+    Returns an empty list if no cycle is found.
+
+    ``keys`` may be a single key or list of keys.
+
+    Example
+    -------
+
+    >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
+    >>> getcycle(d, 'x')
+    ['x', 'z', 'y', 'x']
+
+    See Also
+    --------
+    isdag
+    """
+    # Stack-based depth-first search traversal.  This is based on Tarjan's
+    # method for topological sorting (see wikipedia for pseudocode)
+    if not isinstance(keys, list):
+        keys = [keys]
+
+    # Nodes whose descendents have been completely explored.
+    # These nodes are guaranteed to not be part of a cycle.
+    completed = builtins.set()
+
+    # All nodes that have been visited in the current traversal.  Because
+    # we are doing depth-first search, going "deeper" should never result
+    # in visiting a node that has already been seen.  The `seen` and
+    # `completed` sets are mutually exclusive; it is okay to visit a node
+    # that has already been added to `completed`.
+    seen = builtins.set()
+
+    for key in keys:
+        if key in completed:
+            continue
+        nodes = [key]
+        while nodes:
+            # Keep current node on the stack until all descendants are visited
+            cur = nodes[-1]
+            if cur in completed:
+                # Already fully traversed descendants of cur
+                nodes.pop()
+                continue
+            seen.add(cur)
+
+            # Add direct descendants of cur to nodes stack
+            next_nodes = []
+            for nxt in get_dependencies(d, cur):
+                if nxt not in completed:
+                    if nxt in seen:
+                        # Cycle detected!
+                        cycle = [nxt]
+                        while nodes[-1] != nxt:
+                            cycle.append(nodes.pop())
+                        cycle.append(nodes.pop())
+                        cycle.reverse()
+                        return cycle
+                    next_nodes.append(nxt)
+
+            if next_nodes:
+                nodes.extend(next_nodes)
+            else:
+                # cur has no more descendants to explore, so we're done with it
+                completed.add(cur)
+                seen.remove(cur)
+                nodes.pop()
+    return []
+
+
+def isdag(d, keys):
+    """ Does Dask form a directed acyclic graph when calculating keys?
+
+    ``keys`` may be a single key or list of keys.
+
+    Example
+    -------
+
+    >>> inc = lambda x: x + 1
+    >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')
+    True
+    >>> isdag({'x': (inc, 'y'), 'y': (inc, 'x')}, 'y')
+    False
+
+    See Also
+    --------
+    getcycle
+    """
+    return not getcycle(d, keys)
+
+
+def _get_task(d, task, maxdepth=1000):
+    # non-recursive.  DAG property is checked upon reaching maxdepth.
+    _iter = lambda *args: iter(args)
+
+    # We construct a nested heirarchy of tuples to mimic the execution stack
+    # of frames that Python would maintain for a recursive implementation.
+    # A frame is associated with a single task from a Dask.
+    # A frame tuple has three elements:
+    #    1) The function for the task.
+    #    2) The arguments for the task (typically keys in the Dask).
+    #       Arguments are stored in reverse order, and elements are popped
+    #       as they are evaluated.
+    #    3) The calculated results of the arguments from (2).
+    stack = [(task[0], list(task[:0:-1]), [])]
+    while True:
+        func, args, results = stack[-1]
+        if not args:
+            val = func(*results)
+            if len(stack) == 1:
+                return val
+            stack.pop()
+            stack[-1][2].append(val)
+            continue
+        elif maxdepth and len(stack) > maxdepth:
+            cycle = getcycle(d, list(task[1:]))
+            if cycle:
+                cycle = '->'.join(cycle)
+                raise RuntimeError('Cycle detected in Dask: %s' % cycle)
+            maxdepth = None
+
+        key = args.pop()
+        if isinstance(key, list):
+            # v = (get(d, k, concrete=False) for k in key)  # recursive
+            # Fake being lazy
+            stack.append((_iter, key[::-1], []))
+            continue
+        elif ishashable(key) and key in d:
+            v = d[key]
+        else:
+            v = key
+
+        if istask(v):
+            stack.append((v[0], list(v[:0:-1]), []))
+        else:
+            results.append(v)
+
+
 def get(d, key, get=None, concrete=True, **kwargs):
     """ Get value from Dask
 
@@ -72,6 +211,9 @@ def get(d, key, get=None, concrete=True, **kwargs):
         return key
 
     if istask(v):
+        if get is _get:
+            # use non-recursive method by default
+            return _get_task(d, v)
         func, args = v[0], v[1:]
         args2 = [get(d, arg, get=get, concrete=False) for arg in args]
         return func(*[get(d, arg, get=get) for arg in args2])
