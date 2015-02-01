@@ -15,14 +15,17 @@ def get(dsk, keys):
     manager = multiprocessing.Manager()
     queue = manager.Queue()
 
-    apply_async = dill_apply_async(pool.apply_async)
+    try:
+        apply_async = dill_apply_async(pool.apply_async)
 
-    # Optimize Dask
-    dsk2 = fuse(dsk)
+        # Optimize Dask
+        dsk2 = fuse(dsk)
 
-    # Run
-    result = get_async(apply_async, psutil.cpu_count(), dsk2, keys,
-                       queue=queue)
+        # Run
+        result = get_async(apply_async, psutil.cpu_count(), dsk2, keys,
+                           queue=queue)
+    finally:
+        pool.close()
     return result
 
 

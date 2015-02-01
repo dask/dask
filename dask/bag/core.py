@@ -199,3 +199,16 @@ class Bag(object):
 def dictitems(d):
     """ A pickleable version of dict.items """
     return list(d.items())
+
+
+from glob import glob
+
+def loadtext(globstring):
+    """ Loads a collection of files into a Bag.  Takes a globstring
+
+    >>> loadtext('all-my-files-*.log')  # doctest: +SKIP
+    <Bag>
+    """
+    filenames = sorted(glob(globstring))
+    d = {('load', i): (list, (open, fn)) for i, fn in enumerate(filenames)}
+    return Bag(d, 'load', len(d))
