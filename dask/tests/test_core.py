@@ -120,11 +120,11 @@ def test_cull():
 def test_get_stack_limit():
     d = dict(('x%s' % (i+1), (inc, 'x%s' % i)) for i in range(10000))
     d['x0'] = 0
-    assert dask.get(d, 'x10000') == 10000
+    assert get(d, 'x10000') == 10000
     # introduce cycle
     d['x5000'] = (inc, 'x5001')
-    assert raises(RuntimeError, lambda: dask.get(d, 'x10000'))
-    assert dask.get(d, 'x4999') == 4999
+    assert raises(RuntimeError, lambda: get(d, 'x10000'))
+    assert get(d, 'x4999') == 4999
 
 
 def test_flatten():
@@ -203,4 +203,3 @@ def test_fuse():
         'b': (inc, 1),
         'c': (add, 'b', 'b')
     }
-

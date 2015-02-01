@@ -66,14 +66,14 @@ def getcycle(d, keys):
 
     # Nodes whose descendents have been completely explored.
     # These nodes are guaranteed to not be part of a cycle.
-    completed = builtins.set()
+    completed = set()
 
     # All nodes that have been visited in the current traversal.  Because
     # we are doing depth-first search, going "deeper" should never result
     # in visiting a node that has already been seen.  The `seen` and
     # `completed` sets are mutually exclusive; it is okay to visit a node
     # that has already been added to `completed`.
-    seen = builtins.set()
+    seen = set()
 
     for key in keys:
         if key in completed:
