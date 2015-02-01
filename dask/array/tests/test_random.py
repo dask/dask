@@ -37,6 +37,14 @@ def test_kwargs():
     assert 8 < x.mean() < 12
 
 
+def test_kwargs_size_or_shape():
+    a = normal(loc=10.0, scale=0.1, shape=(10, 10), blockshape=(5, 5))
+    b = normal(loc=10.0, scale=0.1, size=(10, 10), blockshape=(5, 5))
+    assert isinstance(a, Array)
+    assert isinstance(b, Array)
+    assert a.blockdims == b.blockdims
+
+
 def test_unique_names():
     a = random((10, 10), blockshape=(5, 5))
     b = random((10, 10), blockshape=(5, 5))
