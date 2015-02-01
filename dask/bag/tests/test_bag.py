@@ -96,6 +96,9 @@ def test_foldby():
     c = b.foldby(iseven, lambda acc, x: acc + x, 0, lambda a, b: a + b, 0)
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
 
+    c = b.foldby(iseven, lambda acc, x: acc + x)
+    assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
+
 
 def test_map_partitions():
     assert list(b.map_partitions(len)) == [5, 5, 5]

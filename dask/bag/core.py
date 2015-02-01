@@ -219,8 +219,6 @@ class Bag(object):
             combine = binop
         if initial and not combine_initial and not combine:
             combine_initial = initial
-        if combine_initial is None:
-            raise NotImplementedError("You must supply an initial value")
         if initial:
             dsk = dict(((a, i),
                         (reduceby, key, binop, (self.name, i), initial))
@@ -230,11 +228,17 @@ class Bag(object):
                         (reduceby, key, binop, (self.name, i)))
                         for i in range(self.npartitions))
         combine2 = lambda acc, x: combine(acc, x[1])
-        dsk2 = {(b, 0): (dictitems,
-                          (reduceby,
-                            0, combine2,
-                            (concat, (map, dictitems, list(dsk.keys()))),
-                            combine_initial))}
+        if combine_initial:
+            dsk2 = {(b, 0): (dictitems,
+                              (reduceby,
+                                0, combine2,
+                                (concat, (map, dictitems, list(dsk.keys()))),
+                                combine_initial))}
+        else:
+            dsk2 = {(b, 0): (dictitems,
+                              (merge_with,
+                                (curry, reduce, combine),
+                                list(dsk.keys())))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
 
