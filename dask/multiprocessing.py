@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from toolz import curry
+from .core import fuse
 import multiprocessing
 import psutil
 import dill
@@ -16,7 +17,11 @@ def get(dsk, keys):
 
     apply_async = dill_apply_async(pool.apply_async)
 
-    result = get_async(apply_async, psutil.cpu_count(), dsk, keys,
+    # Optimize Dask
+    dsk2 = fuse(dsk)
+
+    # Run
+    result = get_async(apply_async, psutil.cpu_count(), dsk2, keys,
                        queue=queue)
     return result
 
