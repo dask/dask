@@ -219,6 +219,13 @@ def cull(dsk, keys):
 
 
 def subs(task, key, val):
+    if not istask(task):
+        if task == key:
+            return val
+        elif isinstance(task, list):
+            return [subs(x, key, val) for x in task]
+        else:
+            return task
     newargs = []
     for arg in task[1:]:
         if istask(arg):

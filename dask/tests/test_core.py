@@ -1,5 +1,5 @@
 from dask.utils import raises
-from dask.core import istask, get, get_dependencies, cull, flatten, fuse
+from dask.core import istask, get, get_dependencies, cull, flatten, fuse, subs
 
 
 def contains(a, b):
@@ -119,6 +119,11 @@ def test_cull():
 
 def test_flatten():
     assert list(flatten(())) == []
+
+
+def test_subs():
+    assert subs((sum, [1, 'x']), 'x', 2) == (sum, [1, 2])
+    assert subs((sum, [1, ['x']]), 'x', 2) == (sum, [1, [2]])
 
 
 def test_fuse():
