@@ -431,15 +431,8 @@ def _slice_1d(dim_shape, lengths, index):
         start = index.start or 0
         stop = index.stop or dim_shape
     else:
-        # x=range(10)
-        # x[12::-3] == x[11::-3] == x[-1::-3] == x[9::-3]
-        # this is for negative indexing. First, deal with None start
         start = index.start or dim_shape - 1
-        # start > dim_shape should be set to the last index in this dimension
-        # for negative indexing, start is always the absolute index
         start = dim_shape - 1 if start >= dim_shape else start
-        # x[dim_shape:0:-1] is NOT the same as x[dim_shape[::-1]
-        # x[dim_shape[::-1] IS the same as x[dim_shape:-dim_shape-1:-1]
         stop = -(dim_shape + 1) if index.stop is None else index.stop
 
     if start < 0:
@@ -457,29 +450,12 @@ def _slice_1d(dim_shape, lengths, index):
                 start = start - length
             stop -= length
     else:
-        # negative stepping is handled here
-        # stop gets incremented by block length in the loop.
-        # it will eventually hold the stopping index for the
-        #   current block.
         stop -= dim_shape
         tail_indexes = list(accumulate(add, lengths))
-        # 11%3==2 and 11%-3==-1. We need the positive step for %
-        pos_step = abs(step)
+        pos_step = abs(step) # 11%3==2, 11%-3==-1. Need positive step for %
+
         offset = 0
         for i, length in zip(range(len(lengths)-1, -1, -1), reversed(lengths)):
-            # We are stepping backwards, so the loop goes from len-1 to 0
-            # start should always be the absolute index where we start.
-            # start - tail_indexes[i] turns the absolute index into
-            #   a NEGATIVE block index. tail_indexes[i] hold the last,
-            #   absolute, exclusive index in the block
-            #   (i.e. x[0:tail_index]).
-            # The start index for the next iteration is a function
-            #   of the offset that the step introduces and the
-            #   length of the current block
-            # Finally, the max(stop, -length-1) is there because we need
-            #   a way to indicate that the slice INCLUDES the first block
-            #   element. x[10:0:-1] doesn't include x[0].
-            #   The tricky bit is that x[10:-11:-1] does include x[0]
             if start + length >= tail_indexes[i] and stop < 0:
                 d[i] = slice(start - tail_indexes[i],
                              max(stop, -length - 1), step)
