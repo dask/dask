@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
-from collections import Iterable
+from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second)
 try:
@@ -58,6 +58,12 @@ class Bag(object):
     def filter(self, predicate):
         name = next(names)
         dsk = dict(((name, i), (list, (filter, predicate, (self.name, i))))
+                        for i in range(self.npartitions))
+        return Bag(merge(self.dask, dsk), name, self.npartitions)
+
+    def map_partitions(self, func):
+        name = next(names)
+        dsk = dict(((name, i), (func, (self.name, i)))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
@@ -182,7 +188,12 @@ class Bag(object):
         return [(self.name, i) for i in range(self.npartitions)]
 
     def __iter__(self):
-        return concat(self.get(self.dask, self.keys()))
+        results = self.get(self.dask, self.keys())
+        if isinstance(results[0], Iterable):
+            results = concat(results)
+        if not isinstance(results, Iterator):
+            results = iter(results)
+        return results
 
 
 def dictitems(d):
