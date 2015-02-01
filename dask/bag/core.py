@@ -4,11 +4,11 @@ import itertools
 import math
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
-        join, reduceby, compose, second, valmap)
+        join, reduceby, compose, second, valmap, count)
 try:
     import doesnotexist
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
-            compose, second)
+            compose, second, count)
 except ImportError:
     pass
 
@@ -169,11 +169,15 @@ class Bag(object):
         return self._reduction(all, all)
 
     def count(self):
-        return self._reduction(len, sum)
+        return self._reduction(count, sum)
 
     def mean(self):
-        def chunk(x):
-            return sum(x), len(x)
+        def chunk(seq):
+            total, n = 0.0, 0
+            for x in seq:
+                total += x
+                n += 1
+            return total, n
         def agg(x):
             totals, counts = list(zip(*x))
             return 1.0 * sum(totals) / sum(counts)
@@ -181,7 +185,12 @@ class Bag(object):
 
     def var(self, ddof=0):
         def chunk(seq):
-            return sum([x**2 for x in seq]), sum(seq), len(seq)
+            squares, total, n = 0.0, 0.0, 0
+            for x in seq:
+                squares += x**2
+                total += x
+                n += 1
+            return squares, total, n
         def agg(x):
             squares, totals, counts = list(zip(*x))
             x2, x, n = float(sum(squares)), float(sum(totals)), sum(counts)
