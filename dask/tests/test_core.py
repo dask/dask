@@ -185,4 +185,12 @@ def test_fuse():
         'd': (inc, (inc, 'x')),
         'x': (inc, 0),
     }
+    assert fuse({
+        'a': 1,
+        'b': (inc, 'a'),
+        'c': (add, 'b', 'b')
+    }) == {
+        'b': (inc, 1),
+        'c': (add, 'b', 'b')
+    }
 
