@@ -1,5 +1,5 @@
 from dask.utils import raises
-from dask.core import istask, get, get_dependencies, cull, flatten
+from dask.core import istask, get, get_dependencies, cull, flatten, fuse
 
 
 def contains(a, b):
@@ -119,3 +119,65 @@ def test_cull():
 
 def test_flatten():
     assert list(flatten(())) == []
+
+
+def test_fuse():
+    assert fuse({
+        'w': (inc, 'x'),
+        'x': (inc, 'y'),
+        'y': (inc, 'z'),
+        'z': (add, 'a', 'b'),
+        'a': 1,
+        'b': 2,
+    }) == {
+        'w': (inc, (inc, (inc, (add, 'a', 'b')))),
+        'a': 1,
+        'b': 2,
+    }
+    assert fuse({
+        'NEW': (inc, 'y'),
+        'w': (inc, 'x'),
+        'x': (inc, 'y'),
+        'y': (inc, 'z'),
+        'z': (add, 'a', 'b'),
+        'a': 1,
+        'b': 2,
+    }) == {
+        'NEW': (inc, 'y'),
+        'w': (inc, (inc, 'y')),
+        'y': (inc, (add, 'a', 'b')),
+        'a': 1,
+        'b': 2,
+    }
+    assert fuse({
+        'v': (inc, 'y'),
+        'u': (inc, 'w'),
+        'w': (inc, 'x'),
+        'x': (inc, 'y'),
+        'y': (inc, 'z'),
+        'z': (add, 'a', 'b'),
+        'a': (inc, 'c'),
+        'b': (inc, 'd'),
+        'c': 1,
+        'd': 2,
+    }) == {
+        'u': (inc, (inc, (inc, 'y'))),
+        'v': (inc, 'y'),
+        'y': (inc, (add, 'a', 'b')),
+        'a': (inc, 1),
+        'b': (inc, 2),
+    }
+    assert fuse({
+        'a': (inc, 'x'),
+        'b': (inc, 'x'),
+        'c': (inc, 'x'),
+        'd': (inc, 'c'),
+        'x': (inc, 'y'),
+        'y': 0,
+    }) == {
+        'a': (inc, 'x'),
+        'b': (inc, 'x'),
+        'd': (inc, (inc, 'x')),
+        'x': (inc, 0),
+    }
+
