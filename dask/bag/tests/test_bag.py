@@ -1,12 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join
+from toolz import merge, join, reduceby
 import numpy as np
 from dask.bag.core import Bag
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
        ('x', 2): (range, 5)}
+
+L = list(range(5)) * 3
 
 b = Bag(dsk, 'x', 3)
 
@@ -48,12 +50,12 @@ def test_filter():
 
 
 def test_iter():
-    assert sorted(list(b)) == sorted(list(range(5)) * 3)
+    assert sorted(list(b)) == sorted(L)
     assert sorted(list(b.map(inc))) == sorted(list(range(1, 6)) * 3)
 
 
 def test_fold_computation():
-    assert int(b.fold(add)) == sum(range(5)) * 3
+    assert int(b.fold(add)) == sum(L)
 
 
 def test_frequencies():
@@ -76,11 +78,11 @@ def test_reductions():
     assert int(b.all()) == False  # some zeros exist
 
 def test_mean():
-    assert float(b.mean()) == np.mean(list(range(5)) * 3)
+    assert float(b.mean()) == np.mean(L)
 def test_std():
-    assert float(b.std()) == np.std(list(range(5)) * 3)
+    assert float(b.std()) == np.std(L)
 def test_var():
-    assert float(b.var()) == np.var(list(range(5)) * 3)
+    assert float(b.var()) == np.var(L)
 
 
 def test_join():
@@ -88,3 +90,7 @@ def test_join():
             list(join(iseven, [1, 2, 3], isodd, list(b)))
     assert list(b.join([1, 2, 3], isodd)) == \
             list(join(isodd, [1, 2, 3], isodd, list(b)))
+
+def test_foldby():
+    c = b.foldby(iseven, lambda acc, x: acc + x, 0, lambda a, b: a + b, 0)
+    assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())

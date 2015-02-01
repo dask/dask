@@ -4,9 +4,10 @@ import itertools
 import math
 from collections import Iterable
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
-        join)
+        join, reduceby, compose, second)
 try:
-    from cytoolz import curry, frequencies, merge_with, join
+    from cytoolz import (curry, frequencies, merge_with, join, reduceby,
+            compose, second)
 except ImportError:
     pass
 from ..multiprocessing import get
@@ -149,6 +150,33 @@ class Bag(object):
                                              on_self, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
+
+    def foldby(self, key, binop, initial=None, combine=None,
+               combine_initial=None):
+        a = next(names)
+        b = next(names)
+        if combine is None:
+            combine = binop
+        if initial and not combine_initial and not combine:
+            combine_initial = initial
+        if combine_initial is None:
+            raise NotImplementedError("You must supply an initial value")
+        if initial:
+            dsk = dict(((a, i),
+                        (reduceby, key, binop, (self.name, i), initial))
+                        for i in range(self.npartitions))
+        else:
+            dsk = dict(((a, i),
+                        (reduceby, key, binop, (self.name, i)))
+                        for i in range(self.npartitions))
+        combine2 = lambda acc, x: combine(acc, x[1])
+        dsk2 = {(b, 0): (dictitems,
+                          (reduceby,
+                            0, combine2,
+                            (concat, (map, dictitems, list(dsk.keys()))),
+                            combine_initial))}
+        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+
 
     def keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
