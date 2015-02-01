@@ -265,8 +265,9 @@ def loadtext(globstring):
     """ Loads a collection of files into a Bag.  Takes a globstring
 
     >>> loadtext('all-my-files-*.log')  # doctest: +SKIP
-    <Bag>
+    <dask.Bag at 0x7f2254285ea>
     """
     filenames = sorted(glob(globstring))
-    d = {('load', i): (list, (open, fn)) for i, fn in enumerate(filenames)}
+    d = dict((('load', i), (list, (open, fn)))
+            for i, fn in enumerate(filenames))
     return Bag(d, 'load', len(d))
