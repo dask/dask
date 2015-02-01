@@ -25,8 +25,8 @@ def lazify_task(task, start=True):
     Example
     -------
 
-    >>> task = (sum, (list, (map, inc, [1, 2, 3])))
-    >>> lazify_task(task)
+    >>> task = (sum, (list, (map, inc, [1, 2, 3])))  # doctest: +SKIP
+    >>> lazify_task(task)  # doctest: +SKIP
     (sum, (map, inc, [1, 2, 3]))
     """
     if not istask(task):
@@ -39,7 +39,7 @@ def lazify_task(task, start=True):
         return (head,) + tuple([lazify_task(arg, False) for arg in tail])
 
 
-def lazify_internal(dsk):
+def lazify(dsk):
     """
     Remove unnecessary calls to ``list`` in tasks
 
@@ -49,16 +49,7 @@ def lazify_internal(dsk):
     return valmap(lazify_task, dsk)
 
 
-def lazify_top(dsk):
-    """ No need to be concrete when only one other task needs us """
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
-    dependents = reverse_dict(dependencies)
-
-    return dict((k, v[1] if v[0] is list and len(dependents[k]) <= 1 else v)
-                for k, v in dsk.items())
-
-
-get = curry(mpget, optimizations=[fuse, lazify_internal])
+get = curry(mpget, optimizations=[fuse, lazify])
 
 
 class Item(object):

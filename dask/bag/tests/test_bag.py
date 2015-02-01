@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from toolz import merge, join, reduceby, pipe
 import numpy as np
-from dask.bag.core import Bag, lazify_internal, lazify_task, fuse, lazify_top
+from dask.bag.core import Bag, lazify, lazify_task, fuse
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -121,26 +121,11 @@ def test_lazify_task():
 f = lambda x: x
 
 
-def test_lazify_internal():
+def test_lazify():
     a = {'x': (list, (map, inc,
                            (list, (filter, iseven, 'y')))),
          'a': (f, 'x'), 'b': (f, 'x')}
     b = {'x': (list, (map, inc,
                                   (filter, iseven, 'y'))),
          'a': (f, 'x'), 'b': (f, 'x')}
-    assert lazify_internal(a) == b
-
-
-def test_lazify_top():
-    a = {'x': (list, (map, inc,
-                           (list, (filter, iseven, 'y')))),
-         'a': (f, 'x')}
-    b = {'x':        (map, inc,
-                           (list, (filter, iseven, 'y'))),
-         'a': (f, 'x')}
-    assert lazify_top(a) == b
-
-    b = Bag(dsk, 'x', 3)
-    d = pipe(b.map(inc).filter(iseven).sum().dask, fuse, lazify_internal,
-            lazify_top)
-    assert 'list' not in str(d)
+    assert lazify(a) == b
