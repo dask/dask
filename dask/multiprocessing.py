@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import curry
+from toolz import curry, pipe
 from .core import fuse
 import multiprocessing
 import psutil
@@ -9,7 +9,7 @@ import pickle
 from .async import get_async # TODO: get better get
 
 
-def get(dsk, keys):
+def get(dsk, keys, optimizations=[fuse]):
     """ Multiprocessed get function appropriate for Bags """
     pool = multiprocessing.Pool(psutil.cpu_count())
     manager = multiprocessing.Manager()
@@ -19,7 +19,7 @@ def get(dsk, keys):
         apply_async = dill_apply_async(pool.apply_async)
 
         # Optimize Dask
-        dsk2 = fuse(dsk)
+        dsk2 = pipe(dsk, *optimizations)
 
         # Run
         result = get_async(apply_async, psutil.cpu_count(), dsk2, keys,
