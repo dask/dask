@@ -87,6 +87,25 @@ class Bag(object):
         self.npartitions = npartitions
         self.get = get
 
+    @classmethod
+    def from_filenames(cls, filenames):
+        """ Create dask by loading in lines from many files
+
+        Provide list of filenames
+
+        >>> b = Bag.from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
+
+        Or a globstring
+
+        >>> b = Bag.from_filenames('myfiles.*.txt')  # doctest: +SKIP
+        """
+        if isinstance(filenames, str):
+            filenames = sorted(glob(filenames))
+
+        d = dict((('load', i), (list, (open, fn)))
+                 for i, fn in enumerate(filenames))
+        return Bag(d, 'load', len(d))
+
     def map(self, func):
         name = next(names)
         dsk = dict(((name, i), (list, (map, func, (self.name, i))))

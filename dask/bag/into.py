@@ -12,6 +12,4 @@ def bag_to_iterator(x, **kwargs):
 
 @convert.register(Bag, chunks(TextFile))
 def bag_to_iterator(x, **kwargs):
-    d = dict((('load', i), (list, (open, fn.path))) for i, fn in enumerate(x))
-    # d = dict((('load', i), (list, (into, Iterator, tf))) for i, tf in enumerate(x))
-    return Bag(d, 'load', len(d))
+    return Bag.from_filenames([tf.path for tf in x])
