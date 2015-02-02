@@ -1,5 +1,6 @@
 from dask.multiprocessing import get, dill_apply_async
 import multiprocessing
+from cPickle import PicklingError
 import dill
 
 
@@ -26,3 +27,17 @@ def test_errors_propagate():
         assert isinstance(e, ValueError)
         assert "bad" in str(e)
         assert "12345" in str(e)
+
+
+def make_bad_result():
+    return lambda x: x + 1
+
+
+def test_unpicklable_results_genreate_errors():
+
+    dsk = {'x': (make_bad_result,)}
+
+    try:
+        result = get(dsk, 'x')
+    except Exception as e:
+        assert isinstance(e, PicklingError)

@@ -236,7 +236,12 @@ def execute_task(key, task, data, queue):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         result = key, e, tb
-    queue.put(result)
+    try:
+        queue.put(result)
+    except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
+        queue.put((key, e, tb))
 
 
 def finish_task(dsk, key, result, state, results):
