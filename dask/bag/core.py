@@ -2,9 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
+import heapq
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
-        join, reduceby, compose, second, valmap, count, map)
+        join, reduceby, compose, second, valmap, count, map, partition_all)
 try:
     import doesnotexist
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
@@ -86,6 +87,64 @@ class Bag(object):
         self.npartitions = npartitions
         self.get = get
 
+    @classmethod
+    def from_filenames(cls, filenames):
+        """ Create dask by loading in lines from many files
+
+        Provide list of filenames
+
+        >>> b = Bag.from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
+
+        Or a globstring
+
+        >>> b = Bag.from_filenames('myfiles.*.txt')  # doctest: +SKIP
+        """
+        if isinstance(filenames, str):
+            filenames = sorted(glob(filenames))
+
+        d = dict((('load', i), (list, (open, fn)))
+                 for i, fn in enumerate(filenames))
+        return Bag(d, 'load', len(d))
+
+    @classmethod
+    def from_sequence(cls, seq, partition_size=None, npartitions=None):
+        """ Create dask from Python sequence
+
+        This sequence should be relatively small in memory.  Dask Bag works
+        best when it handles loading your data itself.  Commonly we load a
+        sequence of filenames into a Bag and then use ``.map`` to open them.
+
+        Parameters
+        ----------
+
+        seq: Iterable
+            A sequence of elements to put into the dask
+        partition_size: int (optional)
+            The length of each partition
+        npartitions: int (optional)
+            The number of desired partitions
+
+        It is best to provide either ``partition_size`` or ``npartitions``
+        (though not both.)
+
+        Example
+        -------
+
+        >>> b = Bag.from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
+        """
+        seq = list(seq)
+        if npartitions and not partition_size:
+            partition_size = int(math.ceil(len(seq) / npartitions))
+        if npartitions is None and partition_size is None:
+            if len(seq) < 100:
+                partition_size = 1
+            else:
+                partition_size = len(seq) / 100
+
+        parts = list(partition_all(partition_size, seq))
+        d = dict((('load', i), part) for i, part in enumerate(parts))
+        return Bag(d, 'load', len(d))
+
     def map(self, func):
         name = next(names)
         dsk = dict(((name, i), (list, (map, func, (self.name, i))))
@@ -129,10 +188,13 @@ class Bag(object):
     def topk(self, k, key=None):
         a = next(names)
         b = next(names)
-        rsorted = curry(sorted, reverse=True, key=key)
-        dsk = dict(((a, i), (list, (take, k, (rsorted, (self.name, i)))))
+        if key:
+            topk = curry(heapq.nlargest, key=key)
+        else:
+            topk = heapq.nlargest
+        dsk = dict(((a, i), (list, (topk, k, (self.name, i))))
                         for i in range(self.npartitions))
-        dsk2 = {(b, 0): (list, (take, k, (rsorted, (concat, list(dsk.keys())))))}
+        dsk2 = {(b, 0): (list, (topk, k, (concat, list(dsk.keys()))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
     def _reduction(self, perpartition, aggregate):
@@ -208,8 +270,6 @@ class Bag(object):
         b = next(names)
         if combine is None:
             combine = binop
-        if initial and not combine_initial and not combine:
-            combine_initial = initial
         if initial:
             dsk = dict(((a, i),
                         (reduceby, key, binop, (self.name, i), initial))

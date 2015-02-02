@@ -26,3 +26,18 @@ def test_errors_propagate():
         assert isinstance(e, ValueError)
         assert "bad" in str(e)
         assert "12345" in str(e)
+
+
+def make_bad_result():
+    return lambda x: x + 1
+
+
+def test_unpicklable_results_genreate_errors():
+
+    dsk = {'x': (make_bad_result,)}
+
+    try:
+        result = get(dsk, 'x')
+    except Exception as e:
+        # can't use type because pickle / cPickle distinction
+        assert type(e).__name__ == 'PicklingError'

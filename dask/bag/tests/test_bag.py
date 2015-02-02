@@ -3,6 +3,8 @@ from __future__ import absolute_import, division, print_function
 from toolz import merge, join, reduceby, pipe
 import numpy as np
 from dask.bag.core import Bag, lazify, lazify_task, fuse, map
+from into.utils import filetexts
+
 from collections import Iterator
 
 dsk = {('x', 0): (range, 5),
@@ -142,3 +144,17 @@ def test_map_is_lazy():
 
 def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
+
+
+def test_from_filenames():
+    with filetexts({'a1.log': 'A\nB', 'a2.log': 'C\nD'}) as fns:
+        assert set(line.strip() for line in Bag.from_filenames(fns)) == \
+                set('ABCD')
+        assert set(line.strip() for line in Bag.from_filenames('a*.log')) == \
+                set('ABCD')
+
+
+def test_from_sequence():
+    b = Bag.from_sequence([1, 2, 3, 4, 5], npartitions=3)
+    assert len(b.dask) == 3
+    assert set(b) == set([1, 2, 3, 4, 5])

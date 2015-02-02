@@ -236,7 +236,12 @@ def execute_task(key, task, data, queue):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         result = key, e, tb
-    queue.put(result)
+    try:
+        queue.put(result)
+    except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
+        queue.put((key, e, tb))
 
 
 def finish_task(dsk, key, result, state, results):
@@ -495,7 +500,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     tick = [0]
 
-    if not state['ready']:
+    if state['waiting'] and not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
 
     def fire_task():
