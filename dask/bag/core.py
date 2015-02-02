@@ -212,8 +212,6 @@ class Bag(object):
         b = next(names)
         if combine is None:
             combine = binop
-        if initial and not combine_initial and not combine:
-            combine_initial = initial
         if initial:
             dsk = dict(((a, i),
                         (reduceby, key, binop, (self.name, i), initial))
