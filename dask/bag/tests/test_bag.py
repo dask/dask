@@ -152,3 +152,9 @@ def test_from_filenames():
                 set('ABCD')
         assert set(line.strip() for line in Bag.from_filenames('a*.log')) == \
                 set('ABCD')
+
+
+def test_from_sequence():
+    b = Bag.from_sequence([1, 2, 3, 4, 5], npartitions=3)
+    assert len(b.dask) == 3
+    assert set(b) == set([1, 2, 3, 4, 5])

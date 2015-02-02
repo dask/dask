@@ -5,7 +5,7 @@ import math
 import heapq
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
-        join, reduceby, compose, second, valmap, count, map)
+        join, reduceby, compose, second, valmap, count, map, partition_all)
 try:
     import doesnotexist
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
@@ -104,6 +104,45 @@ class Bag(object):
 
         d = dict((('load', i), (list, (open, fn)))
                  for i, fn in enumerate(filenames))
+        return Bag(d, 'load', len(d))
+
+    @classmethod
+    def from_sequence(cls, seq, partition_size=None, npartitions=None):
+        """ Create dask from Python sequence
+
+        This sequence should be relatively small in memory.  Dask Bag works
+        best when it handles loading your data itself.  Commonly we load a
+        sequence of filenames into a Bag and then use ``.map`` to open them.
+
+        Parameters
+        ----------
+
+        seq: Iterable
+            A sequence of elements to put into the dask
+        partition_size: int (optional)
+            The length of each partition
+        npartitions: int (optional)
+            The number of desired partitions
+
+        It is best to provide either ``partition_size`` or ``npartitions``
+        (though not both.)
+
+        Example
+        -------
+
+        >>> b = Bag.from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
+        """
+        seq = list(seq)
+        if npartitions and not partition_size:
+            partition_size = int(math.ceil(len(seq) / npartitions))
+        if npartitions is None and partition_size is None:
+            if len(seq) < 100:
+                partition_size = 1
+            else:
+                partition_size = len(seq) / 100
+
+        parts = list(partition_all(partition_size, seq))
+        d = dict((('load', i), part) for i, part in enumerate(parts))
         return Bag(d, 'load', len(d))
 
     def map(self, func):
