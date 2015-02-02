@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from toolz import merge, join, reduceby, pipe
 import numpy as np
-from dask.bag.core import Bag, lazify, lazify_task, fuse
+from dask.bag.core import Bag, lazify, lazify_task, fuse, map
+from collections import Iterator
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -133,3 +134,8 @@ def test_lazify():
 
 def test_take():
     assert list(b.take(2)) == [0, 1]
+
+
+def test_map_is_lazy():
+    from dask.bag.core import map
+    assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)

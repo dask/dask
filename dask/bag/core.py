@@ -4,7 +4,7 @@ import itertools
 import math
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
-        join, reduceby, compose, second, valmap, count)
+        join, reduceby, compose, second, valmap, count, map)
 try:
     import doesnotexist
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
