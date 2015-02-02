@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
+import heapq
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map)
@@ -129,10 +130,13 @@ class Bag(object):
     def topk(self, k, key=None):
         a = next(names)
         b = next(names)
-        rsorted = curry(sorted, reverse=True, key=key)
-        dsk = dict(((a, i), (list, (take, k, (rsorted, (self.name, i)))))
+        if key:
+            topk = curry(heapq.nlargest, key=key)
+        else:
+            topk = heapq.nlargest
+        dsk = dict(((a, i), (list, (topk, k, (self.name, i))))
                         for i in range(self.npartitions))
-        dsk2 = {(b, 0): (list, (take, k, (rsorted, (concat, list(dsk.keys())))))}
+        dsk2 = {(b, 0): (list, (topk, k, (concat, list(dsk.keys()))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
     def _reduction(self, perpartition, aggregate):
