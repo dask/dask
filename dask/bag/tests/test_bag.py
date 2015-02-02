@@ -32,7 +32,7 @@ def test_Bag():
 
 
 def test_keys():
-    assert sorted(b.keys()) == sorted(dsk.keys())
+    assert sorted(b._keys()) == sorted(dsk.keys())
 
 
 def test_map():
@@ -139,3 +139,6 @@ def test_take():
 def test_map_is_lazy():
     from dask.bag.core import map
     assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
+
+def test_can_use_dict_to_make_concrete():
+    assert isinstance(dict(b.frequencies()), dict)

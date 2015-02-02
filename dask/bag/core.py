@@ -237,11 +237,11 @@ class Bag(object):
         return Bag(merge(self.dask, {(name, 0): (list, (take, k, (self.name,
             0)))}), name, 1)
 
-    def keys(self):
+    def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
 
     def __iter__(self):
-        results = self.get(self.dask, self.keys())
+        results = self.get(self.dask, self._keys())
         if isinstance(results[0], Iterable):
             results = concat(results)
         if not isinstance(results, Iterator):
