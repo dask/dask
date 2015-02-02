@@ -1,6 +1,5 @@
 from dask.multiprocessing import get, dill_apply_async
 import multiprocessing
-from cPickle import PicklingError
 import dill
 
 
@@ -40,4 +39,5 @@ def test_unpicklable_results_genreate_errors():
     try:
         result = get(dsk, 'x')
     except Exception as e:
-        assert isinstance(e, PicklingError)
+        # can't use type because pickle / cPickle distinction
+        assert type(e).__name__ == 'PicklingError'
