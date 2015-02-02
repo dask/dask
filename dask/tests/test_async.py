@@ -91,7 +91,7 @@ def test_inline():
            d: (double, y),
            x: 1, y: 1}
 
-    result = inline(dsk, fast_functions=set([inc]))
+    result = inline_functions(dsk, fast_functions=set([inc]))
     expected = {'out': (add, (inc, x), d),
                 d: (double, y),
                 x: 1, y: 1}
@@ -103,13 +103,13 @@ def test_inline_ignores_curries_and_partials():
            'a': (partial(add, 1), 'x'),
            'b': (inc, 'a')}
 
-    result = inline(dsk, fast_functions=set([add]))
+    result = inline_functions(dsk, fast_functions=set([add]))
     assert 'a' not in set(result.keys())
 
 
 def test_inline_doesnt_shrink_fast_functions_at_top():
     dsk = {'x': (inc, 'y'), 'y': 1}
-    result = inline(dsk, fast_functions=set([inc]))
+    result = inline_functions(dsk, fast_functions=set([inc]))
     assert result == dsk
 
 
@@ -122,7 +122,7 @@ def test_inline_traverses_lists():
     expected = {'out': (sum, [(inc, x), d]),
                 d: (double, y),
                 x: 1, y: 1}
-    result = inline(dsk, fast_functions=set([inc]))
+    result = inline_functions(dsk, fast_functions=set([inc]))
     assert result == expected
 
 

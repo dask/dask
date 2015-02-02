@@ -1,5 +1,6 @@
 from dask.utils import raises
-from dask.core import istask, get, get_dependencies, cull, flatten, fuse, subs
+from dask.core import (istask, get, get_dependencies, cull, flatten, fuse,
+                       subs, inline)
 
 
 def contains(a, b):
@@ -203,3 +204,8 @@ def test_fuse():
         'b': (inc, 1),
         'c': (add, 'b', 'b')
     }
+
+def test_inline():
+    d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'), 'd': (add, 'a', 'c')}
+    assert inline(d) == {'b': (inc, 1), 'c': (inc, 'b'), 'd': (add, 1, 'c')}
+    assert inline(d, ['a', 'b', 'c']) == {'d': (add, 1, (inc, (inc, 1)))}
