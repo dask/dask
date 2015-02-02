@@ -91,7 +91,7 @@ separate pieces of data / tasks.  Instead we combine them with the computations
 that require them.  This may result in repeated computation but saves
 significantly on space and computation complexity.
 
-See the function ``inline`` for more information.
+See the function ``inline_functions`` for more information.
 """
 from __future__ import absolute_import, division, print_function
 
@@ -367,14 +367,14 @@ We join small cheap tasks on to others to avoid the creation of intermediaries.
 '''
 
 
-def inline(dsk, fast_functions=None):
+def inline_functions(dsk, fast_functions=None):
     """ Inline cheap functions into larger operations
 
     >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
     ...        'i': (inc, 'x'),
     ...        'd': (double, 'y'),
     ...        'x': 1, 'y': 1}
-    >>> inline(dsk, [inc])  # doctest: +SKIP
+    >>> inline_functions(dsk, [inc])  # doctest: +SKIP
     {'out': (add, (inc, 'x'), 'd'),
      'd': (double, 'y'),
      'x': 1, 'y': 1}
