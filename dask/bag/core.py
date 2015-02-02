@@ -232,6 +232,10 @@ class Bag(object):
                                 list(dsk.keys())))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
+    def take(self, k):
+        name = next(names)
+        return Bag(merge(self.dask, {(name, 0): (list, (take, k, (self.name,
+            0)))}), name, 1)
 
     def keys(self):
         return [(self.name, i) for i in range(self.npartitions)]

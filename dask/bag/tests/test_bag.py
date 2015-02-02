@@ -129,3 +129,7 @@ def test_lazify():
                                   (filter, iseven, 'y'))),
          'a': (f, 'x'), 'b': (f, 'x')}
     assert lazify(a) == b
+
+
+def test_take():
+    assert list(b.take(2)) == [0, 1]
