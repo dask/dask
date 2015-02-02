@@ -15,6 +15,11 @@ def test_nested_get():
     assert get(dsk, ['a', 'b']) == (3, 3)
 
 
+def test_get_without_computation():
+    dsk = {'x': 1}
+    assert get(dsk, 'x') == 1
+
+
 def bad(x):
     raise ValueError()
 

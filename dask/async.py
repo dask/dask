@@ -500,7 +500,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     tick = [0]
 
-    if not state['ready']:
+    if state['waiting'] and not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
 
     def fire_task():
