@@ -126,21 +126,14 @@ def test_inline_traverses_lists():
     assert result == expected
 
 
-def test_expand_value():
-    dsk = {'out': (sum, ['i', 'd']),
-           'i': (inc, 'x'),
-           'd': (double, 'y'),
-           'x': 1, 'y': 1}
-    assert expand_value(dsk, [inc], 'd') == (double, 'y')
-    assert expand_value(dsk, [inc], 'i') == (inc, 'x')
-    assert expand_value(dsk, [inc], 'out') == (sum, [(inc, 'x'), 'd'])
-
-
-def test_expand_key():
-    dsk = {'out': (sum, ['i', 'd']),
-           'i': (inc, 'x'),
-           'd': (double, 'y'),
-           'x': 1, 'y': 1}
-    assert expand_key(dsk, [inc], 'd') == 'd'
-    assert expand_key(dsk, [inc], 'i') == (inc, 'x')
-    assert expand_key(dsk, [inc], ['i', 'd']) == [(inc, 'x'), 'd']
+def test_functions_of():
+    a = lambda x: x
+    b = lambda x: x
+    c = lambda x: x
+    assert functions_of((a, 1)) == set([a])
+    assert functions_of((a, (b, 1))) == set([a, b])
+    assert functions_of((a, [(b, 1)])) == set([a, b])
+    assert functions_of((a, [[[(b, 1)]]])) == set([a, b])
+    assert functions_of(1) == set()
+    assert functions_of(a) == set()
+    assert functions_of((a,)) == set([a])
