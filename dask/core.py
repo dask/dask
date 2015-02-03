@@ -374,7 +374,7 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, list):
         keys = [keys]
-    nxt = set(keys)
+    nxt = set(flatten(keys))
     seen = nxt
     while nxt:
         cur = nxt

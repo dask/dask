@@ -115,6 +115,7 @@ def test_cull():
     assert culled == {'x': 1, 'y': (inc, 'x'), 'out': (add, 'y', 10)}
     assert cull(d, 'out') == cull(d, ['out'])
     assert cull(d, ['out', 'z']) == d
+    assert cull(d, [['out'], ['z']]) == cull(d, ['out', 'z'])
     assert raises(KeyError, lambda: cull(d, 'badkey'))
 
 
