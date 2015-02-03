@@ -405,7 +405,7 @@ def inline_functions(dsk, fast_functions=None):
 def functions_of(task):
     """ Set of functions contained within nested task
 
-    >>> task = (add, (mul, 1, 2), (inc, 3))  # doctest: +SKIp
+    >>> task = (add, (mul, 1, 2), (inc, 3))  # doctest: +SKIP
     >>> functions_of(task)  # doctest: +SKIP
     set([add, mul, inc])
     """

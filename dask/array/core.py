@@ -501,7 +501,7 @@ def take(outname, inname, blockdims, index, axis=0):
 
     Mimics ``np.take``
 
-    >>> take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    >>> take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)  # doctest: +SKIP
     {('y', 0): (getitem, (np.concatenate, [(getitem, ('x', 0), ([1, 3, 5],)),
                                            (getitem, ('x', 2), ([7],))],
                                           0),
