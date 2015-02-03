@@ -14,7 +14,7 @@ from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
         Expr, Slice, Broadcast)
 
 from .core import (getem, concatenate, concatenate2, top, new_blockdim,
-    broadcast_dimensions, dask_slice, Array, get, atop, names)
+    broadcast_dimensions, fancy_slice, Array, get, atop, names)
 
 
 def compute_it(expr, leaves, *data, **kwargs):
@@ -127,7 +127,7 @@ def compute_up(expr, data, **kwargs):
     # Turn x[5:10] into x[5:10, :, :] as needed
     index = list(index) + [slice(None, None, None)] * (ndim(expr) - len(index))
 
-    dsk = dask_slice(out, data.name, data.shape, data.blockdims, index)
+    dsk = fancy_slice(out, data.name, data.shape, data.blockdims, index)
     blockdims = [new_blockdim(d, db, i)
                 for d, i, db in zip(data.shape, index, data.blockdims)
                 if not isinstance(i, int)]

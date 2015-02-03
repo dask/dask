@@ -350,7 +350,12 @@ def new_blockdim(dim_shape, lengths, index):
 
     >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(0, 90, 2))
     [10, 5, 10, 5, 15]
+
+    >>> new_blockdim(100, [20, 10, 20, 10, 40], [5, 1, 30, 22])
+    [4]
     """
+    if isinstance(index, list):
+        return [len(index)]
     assert not isinstance(index, int)
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
     return [(slc.stop - slc.start) // slc.step for _, slc in pairs]
@@ -515,10 +520,10 @@ def take(outname, inname, blockdims, index, axis=0):
 
     rev_index = tuple(map(sorted(index).index, index))
     vals = [(getitem, (np.concatenate,
-                        [(getitem, ((inname,) + d[:axis] + (i,) + d[axis+1:]),
+                  (list, [(getitem, ((inname,) + d[:axis] + (i,) + d[axis+1:]),
                                    ((colon,)*axis + (IL,) + (colon,)*(n-axis-1)))
                                 for i, IL in enumerate(index_lists)
-                                if IL],
+                                if IL]),
                         axis),
                      ((colon,)*axis + (rev_index,) + (colon,)*(n-axis-1)))
             for d in product(*dims)]
@@ -526,10 +531,11 @@ def take(outname, inname, blockdims, index, axis=0):
     return dict(zip(keys, vals))
 
 
-def dask_slice(out_name, in_name, shape, blockdims, indexes,
-               getitem_func=getitem):
+tmp_names = ('slice-%d' % i for i in count(1))
+
+def fancy_slice(out_name, in_name, shape, blockdims, indexes):
     """
-    Return a new dask containing the slices for all n-dimensions
+    Fancy indexing along blocked array dasks
 
     This function makes a new dask that slices blocks along every
     dimension and aggregates (via cartesian product) each dimension's
@@ -546,9 +552,7 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     shape - iterable of integers (only tested with tuples of integers)
       The shape of the
     blockshape - iterable of integers
-    indexes - iterable of indexes, ellipses, or slices
-    getitem_func - the function that will be used to get the
-      items from the block. This is required by dask.
+    indexes - iterable of integres, slices, or lists
 
     Returns
     -------
@@ -565,9 +569,51 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     Example
     -------
 
-    >>> dask_slice('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  #  doctest: +SKIP
+    >>> fancy_slice('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  #  doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
      ('y', 1): (getitem, ('x', 1), (slice( 0, 15),))}
+
+    See Also
+    --------
+
+    take - handle slicing with lists ("fancy" indexing)
+    dask_slice - handle slicing with slices and integers
+    """
+    where_list = [i for i, ind in enumerate(indexes) if isinstance(ind, list)]
+    if len(where_list) > 1:
+        raise NotImplementedError("Don't yet support nd fancy indexing")
+
+    indexes_without_list = [slice(None, None, None)
+                                if isinstance(i, list)
+                                else i
+                            for i in indexes]
+    # No lists, hooray! just use dask_slice
+    if indexes == indexes_without_list:
+        return dask_slice(out_name, in_name, shape, blockdims, indexes)
+
+    # lists and full slice/:   Just use take
+    if all(isinstance(i, list) or i == slice(None, None, None)
+            for i in indexes):
+        return take(out_name, in_name, blockdims, indexes[where_list[0]],
+                    axis=where_list[0])
+
+    # Mixed case.  Have both slices/integers and lists.  dask_slice then take
+    tmp = next(tmp_names)
+    dsk = dask_slice(tmp, in_name, shape, blockdims, indexes_without_list)
+    blockdims2 = [new_blockdim(d, db, i)
+                  for d, db, i in zip(shape, blockdims, indexes_without_list)
+                  if not isinstance(i, int)]
+    dsk2 = take(out_name, tmp, blockdims2, indexes[where_list[0]],
+                axis=where_list[0])
+    return merge(dsk, dsk2)
+
+
+def dask_slice(out_name, in_name, shape, blockdims, indexes,
+               getitem_func=getitem):
+    """
+    Dask array indexing with slices and integers
+
+    See fancy_slice for full docstring
     """
     empty = slice(None, None, None)
     if all(index == empty for index in indexes):
