@@ -594,8 +594,9 @@ def fancy_slice(out_name, in_name, shape, blockdims, indexes):
     # lists and full slice/:   Just use take
     if all(isinstance(i, list) or i == slice(None, None, None)
             for i in indexes):
+        axis = where_list[0]
         return take(out_name, in_name, blockdims, indexes[where_list[0]],
-                    axis=where_list[0])
+                    axis=axis)
 
     # Mixed case.  Have both slices/integers and lists.  dask_slice then take
     tmp = next(tmp_names)
@@ -603,8 +604,13 @@ def fancy_slice(out_name, in_name, shape, blockdims, indexes):
     blockdims2 = [new_blockdim(d, db, i)
                   for d, db, i in zip(shape, blockdims, indexes_without_list)
                   if not isinstance(i, int)]
-    dsk2 = take(out_name, tmp, blockdims2, indexes[where_list[0]],
-                axis=where_list[0])
+    # After collapsing some axes, readjust axis parameter
+    axis = where_list[0]
+    axis2 = axis - sum(1 for i, ind in enumerate(indexes)
+                       if i < axis and isinstance(ind, int))
+
+    # Do work
+    dsk2 = take(out_name, tmp, blockdims2, indexes[axis], axis=axis2)
     return merge(dsk, dsk2)
 
 

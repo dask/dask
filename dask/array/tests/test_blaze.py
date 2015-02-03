@@ -92,7 +92,7 @@ def test_slicing_with_singleton_dimensions():
 
 
 def test_slicing_with_lists():
-    nx = np.arange(16).reshape((4, 4))
+    nx = np.arange(20).reshape((4, 5))
     dx = convert(Array, nx, blockshape=(2, 2))
     sx = symbol('x', discover(dx))
     expr = sx[[2, 0, 3]],
@@ -112,3 +112,15 @@ def test_slicing_with_lists():
 
     expr = sx[0],
     assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+    expr = sx[0, [3, 1, 4]],
+    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+
+def test_more_slicing():
+    nx = np.arange(100).reshape((10, 10))
+    dx = convert(Array, nx, blockshape=(3, 3))
+    sx = symbol('x', discover(dx))
+    expr = sx[0, [1, 3, 9, 3]]
+
+    result = compute(expr, dx)
