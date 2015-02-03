@@ -478,10 +478,10 @@ def fuse(dsk):
     return rv
 
 
-def inline(dsk, keys=None):
+def inline(dsk, keys=None, inline_constants=True):
     """ Return new dask with the given keys inlined with their values.
 
-    If ``keys`` is unspecified, then all constants will be inlined.
+    Inlines all constants if ``inline_constants`` keyword is True.
 
     Example
     -------
@@ -491,18 +491,19 @@ def inline(dsk, keys=None):
     {'y': (inc, 1), 'z': (add, 1, 'y')}
 
     >>> inline(d, keys='y')  # doctest: +SKIP
+    {'z': (add, 1, (inc, 1))}
+
+    >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
     {'x': 1, 'z': (add, 'x', (inc, 'x'))}
     """
-    # inline all constants if keys is unspecified
     if keys is None:
-        keys = set()
-        for key, val in dsk.items():
-            if not istask(val):
-                keys.add(key)
-    elif not isinstance(keys, list):
-        keys = set([keys])
-    else:
+        keys  = set()
+    elif isinstance(keys, list):
         keys = set(keys)
+    else:
+        keys = set([keys])
+    if inline_constants:
+        keys.update(k for k, v in dsk.items() if not istask(v))
 
     # Keys may depend on other keys, so determine replace order with toposort.
     # The values stored in `keysubs` do not include other keys.
