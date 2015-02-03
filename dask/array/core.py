@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from operator import add
+from operator import add, getitem
 import operator
 from math import ceil, floor
 from itertools import product, count
@@ -467,6 +467,63 @@ def _slice_1d(dim_shape, lengths, index):
             stop += length
 
     return d
+
+
+def partition_by_size(sizes, seq):
+    """
+
+    >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
+    [[1, 5, 9], [2, 19], [5]]
+    """
+    seq = list(seq)
+    pretotal = 0
+    total = 0
+    i = 0
+    result = list()
+    for s in sizes:
+        total += s
+        L = list()
+        while i < len(seq) and seq[i] < total:
+            L.append(seq[i] - pretotal)
+            i += 1
+        result.append(L)
+        pretotal += s
+    return result
+
+
+def take(outname, inname, blockdims, index, axis=0):
+    """ Index array with an iterable of indexes
+
+    Mimics ``np.take``
+
+    >>> take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    {('y', 0): (getitem, (np.concatenate, [(getitem, ('x', 0), ([1, 3, 5],)),
+                                           (getitem, ('x', 2), ([7],))],
+                                          0),
+                         (2, 0, 4, 1))}
+    """
+    n = len(blockdims)
+    sizes = blockdims[axis]  # the blocksizes on the axis that we care about
+
+    index_lists = partition_by_size(sizes, sorted(index))
+
+    dims = [[0] if axis == i else list(range(len(bd)))
+                for i, bd in enumerate(blockdims)]
+    keys = product([outname], *dims)
+
+    colon = slice(None, None, None)
+
+    rev_index = tuple(map(sorted(index).index, index))
+    vals = [(getitem, (np.concatenate,
+                        [(getitem, ((inname,) + d[:axis] + (i,) + d[axis+1:]),
+                                   ((colon,)*axis + (IL,) + (colon,)*(n-axis-1)))
+                                for i, IL in enumerate(index_lists)
+                                if IL],
+                        axis),
+                     ((colon,)*axis + (rev_index,) + (colon,)*(n-axis-1)))
+            for d in product(*dims)]
+
+    return dict(zip(keys, vals))
 
 
 def dask_slice(out_name, in_name, shape, blockdims, indexes,
