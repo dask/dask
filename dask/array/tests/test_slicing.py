@@ -125,35 +125,35 @@ def test_slice_singleton_value_on_boundary():
 
 def test_dask_slice_1d():
     #x[24::2]
-    expected = {('y', 0): (operator.getitem, ('x', 0), (slice(24, 25, 2),)),
-                ('y', 1): (operator.getitem, ('x', 1), (slice(1, 25, 2),)),
-                ('y', 2): (operator.getitem, ('x', 2), (slice(0, 25, 2),)),
-                ('y', 3): (operator.getitem, ('x', 3), (slice(1, 25, 2),))}
+    expected = {('y', 0): (getitem, ('x', 0), (slice(24, 25, 2),)),
+                ('y', 1): (getitem, ('x', 1), (slice(1, 25, 2),)),
+                ('y', 2): (getitem, ('x', 2), (slice(0, 25, 2),)),
+                ('y', 3): (getitem, ('x', 3), (slice(1, 25, 2),))}
     result = dask_slice('y', 'x', [100], [[25]*4], [slice(24,None,2)])
 
     assert expected == result
 
     #x[26::2]
-    expected = {('y', 0): (operator.getitem, ('x', 1), (slice(1, 25, 2),)),
-                ('y', 1): (operator.getitem, ('x', 2), (slice(0, 25, 2),)),
-                ('y', 2): (operator.getitem, ('x', 3), (slice(1, 25, 2),))}
+    expected = {('y', 0): (getitem, ('x', 1), (slice(1, 25, 2),)),
+                ('y', 1): (getitem, ('x', 2), (slice(0, 25, 2),)),
+                ('y', 2): (getitem, ('x', 3), (slice(1, 25, 2),))}
 
     result = dask_slice('y', 'x', [100], [[25]*4], [slice(26,None,2)])
     assert expected == result
 
     #x[24::2]
-    expected = {('y', 0): (operator.getitem, ('x', 0), (slice(24, 25, 2),)),
-                ('y', 1): (operator.getitem, ('x', 1), (slice(1, 25, 2),)),
-                ('y', 2): (operator.getitem, ('x', 2), (slice(0, 25, 2),)),
-                ('y', 3): (operator.getitem, ('x', 3), (slice(1, 25, 2),))}
+    expected = {('y', 0): (getitem, ('x', 0), (slice(24, 25, 2),)),
+                ('y', 1): (getitem, ('x', 1), (slice(1, 25, 2),)),
+                ('y', 2): (getitem, ('x', 2), (slice(0, 25, 2),)),
+                ('y', 3): (getitem, ('x', 3), (slice(1, 25, 2),))}
     result = dask_slice('y', 'x', (100,), [(25,)*4], (slice(24,None,2),))
 
     assert expected == result
 
     #x[26::2]
-    expected = {('y', 0): (operator.getitem, ('x', 1), (slice(1, 25, 2),)),
-                ('y', 1): (operator.getitem, ('x', 2), (slice(0, 25, 2),)),
-                ('y', 2): (operator.getitem, ('x', 3), (slice(1, 25, 2),))}
+    expected = {('y', 0): (getitem, ('x', 1), (slice(1, 25, 2),)),
+                ('y', 1): (getitem, ('x', 2), (slice(0, 25, 2),)),
+                ('y', 2): (getitem, ('x', 3), (slice(1, 25, 2),))}
 
     result = dask_slice('y', 'x', (100,), [(25,)*4], (slice(26,None,2),))
     assert expected == result
@@ -161,13 +161,13 @@ def test_dask_slice_1d():
 
 def test_dask_slice_2d():
     #2d slices: x[13::2,10::1]
-    expected = {('y', 0, 0): (operator.getitem,
+    expected = {('y', 0, 0): (getitem,
                                ('x', 0, 0),
                                (slice(13, 20, 2), slice(10, 20, 1))),
-                 ('y', 0, 1): (operator.getitem,
+                 ('y', 0, 1): (getitem,
                                ('x', 0, 1),
                                (slice(13, 20, 2), slice(0, 20, 1))),
-                 ('y', 0, 2): (operator.getitem,
+                 ('y', 0, 2): (getitem,
                                ('x', 0, 2),
                                (slice(13, 20, 2), slice(0, 5, 1)))}
 
@@ -177,13 +177,13 @@ def test_dask_slice_2d():
     assert expected == result
 
     #2d slices with one dimension: x[5,10::1]
-    expected = {('y', 0): (operator.getitem,
+    expected = {('y', 0): (getitem,
                                ('x', 0, 0),
                                (5, slice(10, 20, 1))),
-                 ('y', 1): (operator.getitem,
+                 ('y', 1): (getitem,
                                ('x', 0, 1),
                                (5, slice(0, 20, 1))),
-                 ('y', 2): (operator.getitem,
+                 ('y', 2): (getitem,
                                ('x', 0, 2),
                                (5, slice(0, 5, 1)))}
 
@@ -211,7 +211,7 @@ def test_slicing_with_singleton_indices():
     result = dask_slice('y', 'x', (10, 10), ([5, 5], [5, 5]),
                         (slice(0, 5), 8))
 
-    expected = {('y', 0): (operator.getitem, ('x', 0, 1), (slice(0, 5, 1), 3))}
+    expected = {('y', 0): (getitem, ('x', 0, 1), (slice(0, 5, 1), 3))}
 
     assert expected == result
 

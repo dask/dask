@@ -22,15 +22,15 @@ def getem(arr, blocksize, shape):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', blocksize=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (operator.getitem, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (operator.getitem, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (operator.getitem, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (operator.getitem, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
     """
     numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
     return dict(
                ((arr,) + ijk,
-               (operator.getitem,
+               (getitem,
                  arr,
                  tuple(slice(i*d, (i+1)*d) for i, d in zip(ijk, blocksize))))
                for ijk in product(*map(range, numblocks)))
@@ -527,7 +527,7 @@ def take(outname, inname, blockdims, index, axis=0):
 
 
 def dask_slice(out_name, in_name, shape, blockdims, indexes,
-               getitem_func=operator.getitem):
+               getitem_func=getitem):
     """
     Return a new dask containing the slices for all n-dimensions
 
@@ -679,7 +679,7 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     2. Use custom score function
     """
     fast_functions=kwargs.get('fast_functions',
-                             set([operator.getitem, np.transpose]))
+                             set([getitem, np.transpose]))
     dsk2 = core.cull(dsk, list(core.flatten(keys)))
     dsk3 = inline_functions(dsk2, fast_functions=fast_functions)
     return get(dsk3, keys, **kwargs)
