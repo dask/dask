@@ -527,4 +527,3 @@ def inline(dsk, keys=None):
             val = subs(val, item, keysubs[item])
         rv[key] = val
     return rv
-

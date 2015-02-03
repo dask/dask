@@ -372,7 +372,6 @@ Inlining
 We join small cheap tasks on to others to avoid the creation of intermediaries.
 '''
 
-
 def inline_functions(dsk, fast_functions=None):
     """ Inline cheap functions into larger operations
 
@@ -393,9 +392,14 @@ def inline_functions(dsk, fast_functions=None):
     dependents = reverse_dict(dependencies)
 
     keys = [k for k, v in dsk.items()
-              if functions_of(v).issubset(fast_functions)
+              if istask(v)
+              and functions_of(v).issubset(fast_functions)
               and dependents[k]]
-    return inline(dsk, keys)
+    if keys:
+        return inline(dsk, keys)
+    else:
+        return dsk
+
 
 
 def functions_of(task):
