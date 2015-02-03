@@ -124,6 +124,9 @@ def compute_up(expr, data, **kwargs):
     out = next(names)
     index = expr.index
 
+    if all(i == slice(None, None, None) for i in index):
+        return data
+
     # Turn x[5:10] into x[5:10, :, :] as needed
     index = list(index) + [slice(None, None, None)] * (ndim(expr) - len(index))
 

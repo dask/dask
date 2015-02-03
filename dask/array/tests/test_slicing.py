@@ -1,5 +1,5 @@
 import dask
-from dask.array.core import dask_slice, _slice_1d, take
+from dask.array.core import dask_slice, _slice_1d, take, fancy_slice
 import operator
 from operator import getitem
 import numpy as np
@@ -249,3 +249,25 @@ def test_take():
            for i in range(4))
 
     assert result == expected
+
+def test_fancy_slice():
+    from dask.array.into import into, Array
+    from dask.core import cull
+    a = np.arange(100).reshape((10, 10))
+    x = into(Array, a, name='x', shape=(10, 10), blockshape=(3, 3))
+    y = fancy_slice('y', x.name, x.shape, x.blockdims,
+                    ([1, 2, 9], slice(None, None, None)))
+    assert y == \
+        {('y', 0, i): (getitem,
+                       (np.concatenate,
+                        (list,
+                         [(getitem,
+                           ('x', 0, i),
+                           ([1, 2], slice(None, None, None))),
+                          (getitem,
+                           ('x', 3, i),
+                           ([0], slice(None, None, None))),
+                           ]),
+                        0),
+                       ((0, 1, 2), slice(None, None, None)))
+                for i in range(4)}

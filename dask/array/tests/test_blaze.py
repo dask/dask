@@ -106,3 +106,9 @@ def test_slicing_with_lists():
 
     expr = sx[[2, 0, 3], -2],
     assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+    expr = sx[:, :]
+    assert compute(sx, dx).dask == dx.dask
+
+    expr = sx[0],
+    assert eq(np.array(compute(sx, dx)), compute(sx, nx))

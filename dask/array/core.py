@@ -514,7 +514,7 @@ def take(outname, inname, blockdims, index, axis=0):
 
     dims = [[0] if axis == i else list(range(len(bd)))
                 for i, bd in enumerate(blockdims)]
-    keys = product([outname], *dims)
+    keys = list(product([outname], *dims))
 
     colon = slice(None, None, None)
 
@@ -663,8 +663,8 @@ class Array(object):
         self.name = name
         self.shape = shape
         if blockshape is not None:
-            blockdims = tuple((bd,) * (d // bd) for d, bd in zip(shape,
-                blockshape))
+            blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+                              for d, bd in zip(shape, blockshape))
         self.blockdims = tuple(map(tuple, blockdims))
 
     @property
