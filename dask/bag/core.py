@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
+from glob import glob
 import heapq
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
@@ -16,7 +17,9 @@ except ImportError:
 from ..multiprocessing import get as mpget
 from ..core import istask, fuse, get_dependencies, reverse_dict
 
+
 names = ('bag-%d' % i for i in itertools.count(1))
+load_names = ('load-%d' % i for i in itertools.count(1))
 
 
 def lazify_task(task, start=True):
@@ -142,8 +145,9 @@ class Bag(object):
                 partition_size = int(len(seq) / 100)
 
         parts = list(partition_all(partition_size, seq))
-        d = dict((('load', i), part) for i, part in enumerate(parts))
-        return Bag(d, 'load', len(d))
+        name = next(load_names)
+        d = dict(((name, i), part) for i, part in enumerate(parts))
+        return Bag(d, name, len(d))
 
     def map(self, func):
         name = next(names)
@@ -323,17 +327,3 @@ class Bag(object):
 def dictitems(d):
     """ A pickleable version of dict.items """
     return list(d.items())
-
-
-from glob import glob
-
-def loadtext(globstring):
-    """ Loads a collection of files into a Bag.  Takes a globstring
-
-    >>> loadtext('all-my-files-*.log')  # doctest: +SKIP
-    <dask.Bag at 0x7f2254285ea>
-    """
-    filenames = sorted(glob(globstring))
-    d = dict((('load', i), (list, (open, fn)))
-            for i, fn in enumerate(filenames))
-    return Bag(d, 'load', len(d))
