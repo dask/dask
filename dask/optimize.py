@@ -1,4 +1,5 @@
-from .core import istask, get_dependencies, subs, toposort, flatten, add, inc
+from .core import (istask, get_dependencies, subs, toposort, flatten,
+                   reverse_dict, add, inc)
 
 
 def cull(dsk, keys):
@@ -142,4 +143,55 @@ def inline(dsk, keys=None, inline_constants=True):
             val = subs(val, item, keysubs[item])
         rv[key] = val
     return rv
+
+
+def inline_functions(dsk, fast_functions=None, inline_constants=False):
+    """ Inline cheap functions into larger operations
+
+    >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
+    ...        'i': (inc, 'x'),
+    ...        'd': (double, 'y'),
+    ...        'x': 1, 'y': 1}
+    >>> inline_functions(dsk, [inc])  # doctest: +SKIP
+    {'out': (add, (inc, 'x'), 'd'),
+     'd': (double, 'y'),
+     'x': 1, 'y': 1}
+    """
+    if not fast_functions:
+        return dsk
+    fast_functions = set(fast_functions)
+
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependents = reverse_dict(dependencies)
+
+    keys = [k for k, v in dsk.items()
+              if istask(v)
+              and functions_of(v).issubset(fast_functions)
+              and dependents[k]]
+    if keys:
+        return inline(dsk, keys, inline_constants=inline_constants)
+    else:
+        return dsk
+
+
+def functions_of(task):
+    """ Set of functions contained within nested task
+
+    >>> task = (add, (mul, 1, 2), (inc, 3))  # doctest: +SKIP
+    >>> functions_of(task)  # doctest: +SKIP
+    set([add, mul, inc])
+    """
+    result = set()
+    if istask(task):
+        args = set.union(*map(functions_of, task[1:])) if task[1:] else set()
+        return set([unwrap_partial(task[0])]) | args
+    if isinstance(task, (list, tuple)):
+        return set.union(*map(functions_of, task))
+    return set()
+
+
+def unwrap_partial(func):
+    while hasattr(func, 'func'):
+        func = func.func
+    return func
 

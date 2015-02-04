@@ -1,13 +1,16 @@
+from toolz import partial
 from dask.utils import raises
-from dask.optimize import cull, fuse, inline
+from dask.optimize import cull, fuse, inline, inline_functions, functions_of
 
 
 def inc(x):
     return x + 1
 
-
 def add(x, y):
     return x + y
+
+def double(x):
+    return x * 2
 
 
 def test_cull():
@@ -99,4 +102,59 @@ def test_inline():
     assert inline(d, keys='y') == {'z': (add, 1, (inc, 1))}
     assert inline(d, keys='y', inline_constants=False) == {
         'x': 1, 'z': (add, 'x', (inc, 'x'))}
+
+
+def test_inline_functions():
+    x, y, i, d = 'xyid'
+    dsk = {'out': (add, i, d),
+           i: (inc, x),
+           d: (double, y),
+           x: 1, y: 1}
+
+    result = inline_functions(dsk, fast_functions=set([inc]))
+    expected = {'out': (add, (inc, x), d),
+                d: (double, y),
+                x: 1, y: 1}
+    assert result == expected
+
+
+def test_inline_ignores_curries_and_partials():
+    dsk = {'x': 1, 'y': 2,
+           'a': (partial(add, 1), 'x'),
+           'b': (inc, 'a')}
+
+    result = inline_functions(dsk, fast_functions=set([add]))
+    assert 'a' not in set(result.keys())
+
+
+def test_inline_doesnt_shrink_fast_functions_at_top():
+    dsk = {'x': (inc, 'y'), 'y': 1}
+    result = inline_functions(dsk, fast_functions=set([inc]))
+    assert result == dsk
+
+
+def test_inline_traverses_lists():
+    x, y, i, d = 'xyid'
+    dsk = {'out': (sum, [i, d]),
+           i: (inc, x),
+           d: (double, y),
+           x: 1, y: 1}
+    expected = {'out': (sum, [(inc, x), d]),
+                d: (double, y),
+                x: 1, y: 1}
+    result = inline_functions(dsk, fast_functions=set([inc]))
+    assert result == expected
+
+
+def test_functions_of():
+    a = lambda x: x
+    b = lambda x: x
+    c = lambda x: x
+    assert functions_of((a, 1)) == set([a])
+    assert functions_of((a, (b, 1))) == set([a, b])
+    assert functions_of((a, [(b, 1)])) == set([a, b])
+    assert functions_of((a, [[[(b, 1)]]])) == set([a, b])
+    assert functions_of(1) == set()
+    assert functions_of(a) == set()
+    assert functions_of((a,)) == set([a])
 
