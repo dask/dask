@@ -372,7 +372,7 @@ Inlining
 We join small cheap tasks on to others to avoid the creation of intermediaries.
 '''
 
-def inline_functions(dsk, fast_functions=None):
+def inline_functions(dsk, fast_functions=None, inline_constants=False):
     """ Inline cheap functions into larger operations
 
     >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
@@ -396,7 +396,7 @@ def inline_functions(dsk, fast_functions=None):
               and functions_of(v).issubset(fast_functions)
               and dependents[k]]
     if keys:
-        return inline(dsk, keys)
+        return inline(dsk, keys, inline_constants=inline_constants)
     else:
         return dsk
 
