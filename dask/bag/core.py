@@ -5,7 +5,8 @@ import math
 import heapq
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
-        join, reduceby, compose, second, valmap, count, map, partition_all)
+        join, reduceby, compose, second, valmap, count, map, partition_all,
+        filter)
 try:
     import doesnotexist
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
