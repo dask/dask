@@ -12,6 +12,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
 import numpy as np
 from ..utils import deepmap
 from ..async import inline_functions
+from ..optimize import cull
 from .. import threaded, core
 
 
@@ -732,6 +733,6 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     """
     fast_functions=kwargs.get('fast_functions',
                              set([getitem, np.transpose]))
-    dsk2 = core.cull(dsk, list(core.flatten(keys)))
+    dsk2 = cull(dsk, list(core.flatten(keys)))
     dsk3 = inline_functions(dsk2, fast_functions=fast_functions)
     return get(dsk3, keys, **kwargs)
