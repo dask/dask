@@ -164,3 +164,9 @@ def test_from_long_sequence():
     L = list(range(1001))
     b = Bag.from_sequence(L)
     assert set(b) == set(L)
+
+
+def test_product():
+    b2 = b.product(b)
+    assert b2.npartitions == b.npartitions**2
+    assert set(b2) == set([(i, j) for i in L for j in L])
