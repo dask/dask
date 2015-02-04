@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from operator import add
+from operator import add, getitem
 import operator
 from math import ceil, floor
 from itertools import product, count
@@ -22,15 +22,15 @@ def getem(arr, blocksize, shape):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', blocksize=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (operator.getitem, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (operator.getitem, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (operator.getitem, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (operator.getitem, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
     """
     numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
     return dict(
                ((arr,) + ijk,
-               (operator.getitem,
+               (getitem,
                  arr,
                  tuple(slice(i*d, (i+1)*d) for i, d in zip(ijk, blocksize))))
                for ijk in product(*map(range, numblocks)))
@@ -350,7 +350,12 @@ def new_blockdim(dim_shape, lengths, index):
 
     >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(0, 90, 2))
     [10, 5, 10, 5, 15]
+
+    >>> new_blockdim(100, [20, 10, 20, 10, 40], [5, 1, 30, 22])
+    [4]
     """
+    if isinstance(index, list):
+        return [len(index)]
     assert not isinstance(index, int)
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
     return [(slc.stop - slc.start) // slc.step for _, slc in pairs]
@@ -426,20 +431,14 @@ def _slice_1d(dim_shape, lengths, index):
         return {i: ind}
 
     assert isinstance(index, slice)
+
     step = index.step or 1
     if step > 0:
         start = index.start or 0
         stop = index.stop or dim_shape
     else:
-        # x=range(10)
-        # x[12::-3] == x[11::-3] == x[-1::-3] == x[9::-3]
-        # this is for negative indexing. First, deal with None start
         start = index.start or dim_shape - 1
-        # start > dim_shape should be set to the last index in this dimension
-        # for negative indexing, start is always the absolute index
         start = dim_shape - 1 if start >= dim_shape else start
-        # x[dim_shape:0:-1] is NOT the same as x[dim_shape[::-1]
-        # x[dim_shape[::-1] IS the same as x[dim_shape:-dim_shape-1:-1]
         stop = -(dim_shape + 1) if index.stop is None else index.stop
 
     if start < 0:
@@ -457,29 +456,12 @@ def _slice_1d(dim_shape, lengths, index):
                 start = start - length
             stop -= length
     else:
-        # negative stepping is handled here
-        # stop gets incremented by block length in the loop.
-        # it will eventually hold the stopping index for the
-        #   current block.
         stop -= dim_shape
         tail_indexes = list(accumulate(add, lengths))
-        # 11%3==2 and 11%-3==-1. We need the positive step for %
-        pos_step = abs(step)
+        pos_step = abs(step) # 11%3==2, 11%-3==-1. Need positive step for %
+
         offset = 0
         for i, length in zip(range(len(lengths)-1, -1, -1), reversed(lengths)):
-            # We are stepping backwards, so the loop goes from len-1 to 0
-            # start should always be the absolute index where we start.
-            # start - tail_indexes[i] turns the absolute index into
-            #   a NEGATIVE block index. tail_indexes[i] hold the last,
-            #   absolute, exclusive index in the block
-            #   (i.e. x[0:tail_index]).
-            # The start index for the next iteration is a function
-            #   of the offset that the step introduces and the
-            #   length of the current block
-            # Finally, the max(stop, -length-1) is there because we need
-            #   a way to indicate that the slice INCLUDES the first block
-            #   element. x[10:0:-1] doesn't include x[0].
-            #   The tricky bit is that x[10:-11:-1] does include x[0]
             if start + length >= tail_indexes[i] and stop < 0:
                 d[i] = slice(start - tail_indexes[i],
                              max(stop, -length - 1), step)
@@ -492,10 +474,68 @@ def _slice_1d(dim_shape, lengths, index):
     return d
 
 
-def dask_slice(out_name, in_name, shape, blockdims, indexes,
-               getitem_func=operator.getitem):
+def partition_by_size(sizes, seq):
     """
-    Return a new dask containing the slices for all n-dimensions
+
+    >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
+    [[1, 5, 9], [2, 19], [5]]
+    """
+    seq = list(seq)
+    pretotal = 0
+    total = 0
+    i = 0
+    result = list()
+    for s in sizes:
+        total += s
+        L = list()
+        while i < len(seq) and seq[i] < total:
+            L.append(seq[i] - pretotal)
+            i += 1
+        result.append(L)
+        pretotal += s
+    return result
+
+
+def take(outname, inname, blockdims, index, axis=0):
+    """ Index array with an iterable of indexes
+
+    Mimics ``np.take``
+
+    >>> take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)  # doctest: +SKIP
+    {('y', 0): (getitem, (np.concatenate, [(getitem, ('x', 0), ([1, 3, 5],)),
+                                           (getitem, ('x', 2), ([7],))],
+                                          0),
+                         (2, 0, 4, 1))}
+    """
+    n = len(blockdims)
+    sizes = blockdims[axis]  # the blocksizes on the axis that we care about
+
+    index_lists = partition_by_size(sizes, sorted(index))
+
+    dims = [[0] if axis == i else list(range(len(bd)))
+                for i, bd in enumerate(blockdims)]
+    keys = list(product([outname], *dims))
+
+    colon = slice(None, None, None)
+
+    rev_index = tuple(map(sorted(index).index, index))
+    vals = [(getitem, (np.concatenate,
+                  (list, [(getitem, ((inname,) + d[:axis] + (i,) + d[axis+1:]),
+                                   ((colon,)*axis + (IL,) + (colon,)*(n-axis-1)))
+                                for i, IL in enumerate(index_lists)
+                                if IL]),
+                        axis),
+                     ((colon,)*axis + (rev_index,) + (colon,)*(n-axis-1)))
+            for d in product(*dims)]
+
+    return dict(zip(keys, vals))
+
+
+tmp_names = ('slice-%d' % i for i in count(1))
+
+def fancy_slice(out_name, in_name, shape, blockdims, indexes):
+    """
+    Fancy indexing along blocked array dasks
 
     This function makes a new dask that slices blocks along every
     dimension and aggregates (via cartesian product) each dimension's
@@ -512,9 +552,7 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     shape - iterable of integers (only tested with tuples of integers)
       The shape of the
     blockshape - iterable of integers
-    indexes - iterable of indexes, ellipses, or slices
-    getitem_func - the function that will be used to get the
-      items from the block. This is required by dask.
+    indexes - iterable of integres, slices, or lists
 
     Returns
     -------
@@ -531,43 +569,79 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     Example
     -------
 
-    >>> dask_slice('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  #  doctest: +SKIP
+    >>> fancy_slice('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  #  doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
      ('y', 1): (getitem, ('x', 1), (slice( 0, 15),))}
+
+    See Also
+    --------
+
+    take - handle slicing with lists ("fancy" indexing)
+    dask_slice - handle slicing with slices and integers
     """
-    # Quick Optimization
-    # If we are only given full slices, simply return the input variable
-    # i.e. input_data[:,:,:] becomes
-    # (slice(None,None,None), slice(None,None,None),
-    #  slice(None,None,None))
-    # In this case, we shouldn't do any slicing.
+    where_list = [i for i, ind in enumerate(indexes) if isinstance(ind, list)]
+    if len(where_list) > 1:
+        raise NotImplementedError("Don't yet support nd fancy indexing")
+
+    indexes_without_list = [slice(None, None, None)
+                                if isinstance(i, list)
+                                else i
+                            for i in indexes]
+    # No lists, hooray! just use dask_slice
+    if indexes == indexes_without_list:
+        return dask_slice(out_name, in_name, shape, blockdims, indexes)
+
+    # lists and full slice/:   Just use take
+    if all(isinstance(i, list) or i == slice(None, None, None)
+            for i in indexes):
+        axis = where_list[0]
+        return take(out_name, in_name, blockdims, indexes[where_list[0]],
+                    axis=axis)
+
+    # Mixed case.  Have both slices/integers and lists.  dask_slice then take
+    tmp = next(tmp_names)
+    dsk = dask_slice(tmp, in_name, shape, blockdims, indexes_without_list)
+    blockdims2 = [new_blockdim(d, db, i)
+                  for d, db, i in zip(shape, blockdims, indexes_without_list)
+                  if not isinstance(i, int)]
+    # After collapsing some axes, readjust axis parameter
+    axis = where_list[0]
+    axis2 = axis - sum(1 for i, ind in enumerate(indexes)
+                       if i < axis and isinstance(ind, int))
+
+    # Do work
+    dsk2 = take(out_name, tmp, blockdims2, indexes[axis], axis=axis2)
+    return merge(dsk, dsk2)
+
+
+def dask_slice(out_name, in_name, shape, blockdims, indexes,
+               getitem_func=getitem):
+    """
+    Dask array indexing with slices and integers
+
+    See fancy_slice for full docstring
+    """
     empty = slice(None, None, None)
     if all(index == empty for index in indexes):
         return {out_name: in_name}
 
     # Get a list (for each dimension) of dicts{blocknum: slice()}
-    #   for each dimension
     block_slices = list(map(_slice_1d, shape, blockdims, indexes))
 
-    # out_names has the Cartesian product of output block index locations
-    # i.e. (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0)
+    # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
     out_names = product([out_name],
                         *[range(len(d))
                             for d, i in zip(block_slices, indexes)
                             if not isinstance(i, int)])
 
-    # in_names holds the Cartesian product of input block index locations
-    # i.e. (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2)
+    # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
     in_names = product([in_name], *[i.keys() for i in block_slices])
 
-    # all_slices holds the slices needed to generate
-    # (out_name, 0, 0, 0) from (in_name, 1, 1, 2)
-    # There should be 1 slice per dimension index
     all_slices = product(*[i.values() for i in block_slices])
 
     final_out = dict((out_name, (getitem_func, in_name, slices))
-                    for out_name, in_name, slices
-                    in zip(out_names, in_names, all_slices))
+                     for out_name, in_name, slices
+                     in zip(out_names, in_names, all_slices))
 
     return final_out
 
@@ -595,8 +669,8 @@ class Array(object):
         self.name = name
         self.shape = shape
         if blockshape is not None:
-            blockdims = tuple((bd,) * (d // bd) for d, bd in zip(shape,
-                blockshape))
+            blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+                              for d, bd in zip(shape, blockshape))
         self.blockdims = tuple(map(tuple, blockdims))
 
     @property
@@ -657,7 +731,7 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     2. Use custom score function
     """
     fast_functions=kwargs.get('fast_functions',
-                             set([operator.getitem, np.transpose]))
+                             set([getitem, np.transpose]))
     dsk2 = core.cull(dsk, list(core.flatten(keys)))
     dsk3 = inline_functions(dsk2, fast_functions=fast_functions)
     return get(dsk3, keys, **kwargs)

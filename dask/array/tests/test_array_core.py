@@ -132,6 +132,11 @@ def test_Array():
     assert a.blockdims == ((100,) * 10, (100,) * 10)
 
 
+def test_uneven_blockdims():
+    a = Array({}, 'x', shape=(10, 10), blockshape=(3, 3))
+    assert a.blockdims == ((3, 3, 3, 1), (3, 3, 3, 1))
+
+
 def test_numblocks_suppoorts_singleton_block_dims():
     shape = (100, 10)
     blockshape = (10, 10)

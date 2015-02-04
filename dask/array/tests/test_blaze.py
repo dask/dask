@@ -89,3 +89,38 @@ def test_slicing_with_singleton_dimensions():
     assert arr.dask[(y, 1)] == (getitem, (x, 2, 2), (slice(0, 4, 1), 2))
     assert arr.dask[(y, 2)] == (getitem, (x, 3, 2), (slice(0, 3, 1), 2))
     assert all(len(k) == 2 for k in arr.keys())
+
+
+def test_slicing_with_lists():
+    nx = np.arange(20).reshape((4, 5))
+    dx = convert(Array, nx, blockshape=(2, 2))
+    sx = symbol('x', discover(dx))
+    expr = sx[[2, 0, 3]],
+    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+    expr = sx[::2, [2, 0, 3]],
+    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+    expr = sx[1, [2, 0, 3]],
+    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+    expr = sx[[2, 0, 3], -2],
+    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+    expr = sx[:, :]
+    assert compute(sx, dx).dask == dx.dask
+
+    expr = sx[0],
+    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+    expr = sx[0, [3, 1, 4]],
+    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+
+
+def test_more_slicing():
+    nx = np.arange(100).reshape((10, 10))
+    dx = convert(Array, nx, blockshape=(3, 3))
+    sx = symbol('x', discover(dx))
+    expr = sx[0, [1, 3, 9, 3]]
+
+    result = compute(expr, dx)

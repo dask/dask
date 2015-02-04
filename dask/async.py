@@ -100,7 +100,8 @@ import sys
 import traceback
 from operator import add
 from toolz import concat, partial
-from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
+from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
+        inline)
 from .utils import deepmap
 
 def inc(x):
@@ -371,8 +372,7 @@ Inlining
 We join small cheap tasks on to others to avoid the creation of intermediaries.
 '''
 
-
-def inline_functions(dsk, fast_functions=None):
+def inline_functions(dsk, fast_functions=None, inline_constants=False):
     """ Inline cheap functions into larger operations
 
     >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
@@ -386,74 +386,42 @@ def inline_functions(dsk, fast_functions=None):
     """
     if not fast_functions:
         return dsk
+    fast_functions = set(fast_functions)
+
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     dependents = reverse_dict(dependencies)
 
-    def isfast(func):
-        if hasattr(func, 'func'):  # Support partials, curries
-            return func.func in fast_functions
-        else:
-            return func in fast_functions
-
-    result = dict((k, expand_value(dsk, fast_functions, k))
-                for k, v in dsk.items()
-                if not dependents[k]
-                or not istask(v)
-                or not isfast(v[0]))
-    return result
-
-
-def expand_key(dsk, fast, key):
-    """
-
-    >>> dsk = {'out': (sum, ['i', 'd']),
-    ...        'i': (inc, 'x'),
-    ...        'd': (double, 'y'),
-    ...        'x': 1, 'y': 1}
-    >>> expand_key(dsk, [inc], 'd')
-    'd'
-    >>> expand_key(dsk, [inc], 'i')  # doctest: +SKIP
-    (inc, 'x')
-    >>> expand_key(dsk, [inc], ['i', 'd'])  # doctest: +SKIP
-    [(inc, 'x'), 'd']
-    """
-    if isinstance(key, list):
-        return [expand_key(dsk, fast, item) for item in key]
-
-    def isfast(func):
-        if hasattr(func, 'func'):  # Support partials, curries
-            return func.func in fast
-        else:
-            return func in fast
-    if not ishashable(key):
-        return key
-
-    if (key in dsk and istask(dsk[key]) and isfast(dsk[key][0])):
-        task = dsk[key]
-        return (task[0],) + tuple([expand_key(dsk, fast, k) for k in task[1:]])
+    keys = [k for k, v in dsk.items()
+              if istask(v)
+              and functions_of(v).issubset(fast_functions)
+              and dependents[k]]
+    if keys:
+        return inline(dsk, keys, inline_constants=inline_constants)
     else:
-        return key
+        return dsk
 
 
-def expand_value(dsk, fast, key):
+
+def functions_of(task):
+    """ Set of functions contained within nested task
+
+    >>> task = (add, (mul, 1, 2), (inc, 3))  # doctest: +SKIP
+    >>> functions_of(task)  # doctest: +SKIP
+    set([add, mul, inc])
     """
+    result = set()
+    if istask(task):
+        args = set.union(*map(functions_of, task[1:])) if task[1:] else set()
+        return set([unwrap_partial(task[0])]) | args
+    if isinstance(task, (list, tuple)):
+        return set.union(*map(functions_of, task))
+    return set()
 
-    >>> dsk = {'out': (sum, ['i', 'd']),
-    ...        'i': (inc, 'x'),
-    ...        'd': (double, 'y'),
-    ...        'x': 1, 'y': 1}
-    >>> expand_value(dsk, [inc], 'd')  # doctest: +SKIP
-    (double, 'y')
-    >>> expand_value(dsk, [inc], 'i')  # doctest: +SKIP
-    (inc, 'x')
-    >>> expand_value(dsk, [inc], 'out')  # doctest: +SKIP
-    (sum, [(inc, 'x'), 'd'])
-    """
-    task = dsk[key]
-    if not istask(task):
-        return task
-    func, args = task[0], task[1:]
-    return (func,) + tuple([expand_key(dsk, fast, arg) for arg in args])
+
+def unwrap_partial(func):
+    while hasattr(func, 'func'):
+        func = func.func
+    return func
 
 
 '''
