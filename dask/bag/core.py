@@ -139,7 +139,7 @@ class Bag(object):
             if len(seq) < 100:
                 partition_size = 1
             else:
-                partition_size = len(seq) / 100
+                partition_size = int(len(seq) / 100)
 
         parts = list(partition_all(partition_size, seq))
         d = dict((('load', i), part) for i, part in enumerate(parts))

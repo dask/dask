@@ -158,3 +158,9 @@ def test_from_sequence():
     b = Bag.from_sequence([1, 2, 3, 4, 5], npartitions=3)
     assert len(b.dask) == 3
     assert set(b) == set([1, 2, 3, 4, 5])
+
+
+def test_from_long_sequence():
+    L = list(range(1001))
+    b = Bag.from_sequence(L)
+    assert set(b) == set(L)
