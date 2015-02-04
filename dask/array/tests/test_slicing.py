@@ -252,7 +252,7 @@ def test_take():
 
 def test_fancy_slice():
     from dask.array.into import into, Array
-    from dask.core import cull
+    from dask.optimize import cull
     a = np.arange(100).reshape((10, 10))
     x = into(Array, a, name='x', shape=(10, 10), blockshape=(3, 3))
     y = fancy_slice('y', x.name, x.shape, x.blockdims,

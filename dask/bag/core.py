@@ -15,7 +15,8 @@ except ImportError:
     pass
 
 from ..multiprocessing import get as mpget
-from ..core import istask, fuse, get_dependencies, reverse_dict
+from ..core import istask, get_dependencies, reverse_dict
+from ..optimize import fuse
 
 
 names = ('bag-%d' % i for i in itertools.count(1))
