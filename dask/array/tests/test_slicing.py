@@ -258,7 +258,7 @@ def test_fancy_slice():
     y = fancy_slice('y', x.name, x.shape, x.blockdims,
                     ([1, 2, 9], slice(None, None, None)))
     assert y == \
-        {('y', 0, i): (getitem,
+        dict((('y', 0, i), (getitem,
                        (np.concatenate,
                         (list,
                          [(getitem,
@@ -269,5 +269,5 @@ def test_fancy_slice():
                            ([0], slice(None, None, None))),
                            ]),
                         0),
-                       ((0, 1, 2), slice(None, None, None)))
-                for i in range(4)}
+                       ((0, 1, 2), slice(None, None, None))))
+                for i in range(4))
