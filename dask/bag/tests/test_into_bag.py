@@ -4,6 +4,9 @@ from into.utils import filetexts
 from dask.bag.into import Bag, convert
 
 
+def inc(x):
+    return x + 1
+
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
        ('x', 2): (range, 5)}
@@ -22,3 +25,8 @@ def test_convert_logfiles_to_bag():
         assert isinstance(b, Bag)
         assert 'a1.log' in str(b.dask.values())
         assert convert(list, b) == convert(list, logs)
+
+
+def test_sequence():
+    b = into(Bag, [1, 2, 3])
+    assert set(b.map(inc)) == set([2, 3, 4])
