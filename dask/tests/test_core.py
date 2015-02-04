@@ -211,6 +211,8 @@ def test_inline():
     assert inline(d) == {'b': (inc, 1), 'c': (inc, 'b'), 'd': (add, 1, 'c')}
     assert inline(d, ['a', 'b', 'c']) == {'d': (add, 1, (inc, (inc, 1)))}
 
-def test_inline_always_doesnt_collapse_constants():
-    d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'), 'd': (add, 'a', 'c')}
-    assert inline(d, ['b', 'c']) == {'a': 1, 'd': (add, 'a', (inc, (inc, 'a')))}
+    d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
+    assert inline(d) == {'y': (inc, 1), 'z': (add, 1, 'y')}
+    assert inline(d, keys='y') == {'z': (add, 1, (inc, 1))}
+    assert inline(d, keys='y', inline_constants=False) == {
+        'x': 1, 'z': (add, 'x', (inc, 'x'))}
