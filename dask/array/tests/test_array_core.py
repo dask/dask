@@ -176,6 +176,9 @@ def test_stack():
 
     assert set(b.dask.keys()).issubset(s2.dask.keys())
 
+    assert stack([a, b, c], axis=-1).blockdims == \
+            stack([a, b, c], axis=2).blockdims
+
 
 def test_concatenate():
     a, b, c = [Array(getem(name, blocksize=(2, 3), shape=(4, 6)),
@@ -197,3 +200,6 @@ def test_concatenate():
     assert y.dask[(y.name, 1, 5)] == ('C', 1, 1)
 
     assert set(b.dask.keys()).issubset(y.dask.keys())
+
+    assert concatenate([a, b, c], axis=-1).blockdims == \
+            concatenate([a, b, c], axis=1).blockdims

@@ -767,11 +767,16 @@ def stack(seq, axis=0):
     >>> da.stack(data, axis=1).shape
     (4, 3, 4)
 
+    >>> da.stack(data, axis=-1).shape
+    (4, 4, 3)
+
     Result is a new dask Array
 
     See Also:
         concatenate
     """
+    if axis < 0:
+        axis = len(seq[0].shape) + axis + 1
     n = len(seq)
     assert len(set(a.blockdims for a in seq)) == 1  # same blockshape
     shape = seq[0].shape[:axis] + (len(seq),) + seq[0].shape[axis:]
@@ -824,6 +829,8 @@ def concatenate(seq, axis=0):
     See Also:
         stack
     """
+    if axis < 0:
+        axis = len(seq[0].shape) + axis
     n = len(seq)
     bds = [a.blockdims for a in seq]
 
