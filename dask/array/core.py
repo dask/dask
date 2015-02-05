@@ -775,9 +775,14 @@ def stack(seq, axis=0):
     See Also:
         concatenate
     """
-    if axis < 0:
-        axis = len(seq[0].shape) + axis + 1
     n = len(seq)
+    ndim = len(seq[0].shape)
+    if axis < 0:
+        axis = ndim + axis + 1
+    if axis > ndim:
+        raise ValueError("Axis must not be greater than number of dimensions"
+                "\nData has %d dimensions, but got axis=%d" % (ndim, axis))
+
     assert len(set(a.blockdims for a in seq)) == 1  # same blockshape
     shape = seq[0].shape[:axis] + (len(seq),) + seq[0].shape[axis:]
     blockdims = (  seq[0].blockdims[:axis]
@@ -829,9 +834,14 @@ def concatenate(seq, axis=0):
     See Also:
         stack
     """
-    if axis < 0:
-        axis = len(seq[0].shape) + axis
     n = len(seq)
+    ndim = len(seq[0].shape)
+    if axis < 0:
+        axis = ndim + axis
+    if axis >= ndim:
+        raise ValueError("Axis must be less than than number of dimensions"
+                "\nData has %d dimensions, but got axis=%d" % (ndim, axis))
+
     bds = [a.blockdims for a in seq]
 
     if not all(len(set(bds[i][j] for i in range(n))) == 1

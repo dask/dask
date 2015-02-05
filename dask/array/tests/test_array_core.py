@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import dask
 from dask.array.core import *
+from dask.utils import raises
 from toolz import merge
 
 
@@ -174,10 +175,20 @@ def test_stack():
     assert s2.dask[(s2.name, 0, 1, 0)] == ('B', 0, 0)
     assert s2.dask[(s2.name, 1, 1, 0)] == ('B', 1, 0)
 
+    s2 = stack([a, b, c], axis=2)
+    assert s2.shape == (4, 6, 3)
+    assert s2.blockdims == ((2, 2), (3, 3), (1, 1, 1))
+    assert s2.dask[(s2.name, 0, 1, 0)] == ('A', 0, 1)
+    assert s2.dask[(s2.name, 1, 1, 2)] == ('C', 1, 1)
+
+    assert raises(ValueError, lambda: stack([a, b, c], axis=3))
+
     assert set(b.dask.keys()).issubset(s2.dask.keys())
 
     assert stack([a, b, c], axis=-1).blockdims == \
             stack([a, b, c], axis=2).blockdims
+
+
 
 
 def test_concatenate():
@@ -203,3 +214,5 @@ def test_concatenate():
 
     assert concatenate([a, b, c], axis=-1).blockdims == \
             concatenate([a, b, c], axis=1).blockdims
+
+    assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
