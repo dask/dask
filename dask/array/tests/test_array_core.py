@@ -154,3 +154,24 @@ def test_keys():
                                           for i in range(5)]
     d = Array({}, 'x', (), ())
     assert d.keys() == [('x',)]
+
+
+def test_stack():
+    a, b, c = [Array(getem(name, blocksize=(2, 3), shape=(4, 6)),
+                     name, shape=(4, 6), blockshape=(2, 3))
+                for name in 'ABC']
+
+    s = stack([a, b, c], axis=0)
+
+    assert s.shape == (3, 4, 6)
+    assert s.blockdims == ((1, 1, 1), (2, 2), (3, 3))
+    assert s.dask[(s.name, 0, 1, 0)] == ('A', 1, 0)
+    assert s.dask[(s.name, 2, 1, 0)] == ('C', 1, 0)
+
+    s2 = stack([a, b, c], axis=1)
+    assert s2.shape == (4, 3, 6)
+    assert s2.blockdims == ((2, 2), (1, 1, 1), (3, 3))
+    assert s2.dask[(s2.name, 0, 1, 0)] == ('B', 0, 0)
+    assert s2.dask[(s2.name, 1, 1, 0)] == ('B', 1, 0)
+
+    assert set(b.dask.keys()).issubset(s2.dask.keys())

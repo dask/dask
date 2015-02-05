@@ -736,3 +736,52 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     dsk2 = cull(dsk, list(core.flatten(keys)))
     dsk3 = inline_functions(dsk2, fast_functions=fast_functions)
     return get(dsk3, keys, **kwargs)
+
+
+stacked_names = ('stack-%d' % i for i in count(1))
+
+
+def stack(seq, axis=0):
+    """
+    Stack arrays along a new axis
+
+    Given a sequence of dask Arrays form a new dask Array by stacking them
+    along a new dimension (axis=0 by default)
+
+    Example
+    -------
+
+    Create slices
+
+    >>> import dask.array as da
+    >>> import numpy as np
+
+    >>> data = [da.into(da.Array, np.ones((4, 4)), blockshape=(2, 2))
+    ...          for i in range(3)]
+
+    >>> x = stack(data, axis=0)
+    >>> x.shape
+    (3, 4, 4)
+
+    >>> stack(data, axis=1).shape
+    (4, 3, 4)
+
+    Stack is a new dask Array
+    """
+    n = len(seq)
+    assert len(set(a.blockdims for a in seq)) == 1  # same blockshape
+    shape = seq[0].shape[:axis] + (len(seq),) + seq[0].shape[axis:]
+    blockdims = (  seq[0].blockdims[:axis]
+                + ((1,) * n,)
+                + seq[0].blockdims[axis:])
+
+    name = next(stacked_names)
+    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
+
+    names = [a.name for a in seq]
+    values = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
+                for key in keys]
+
+    dsk = dict(zip(keys, values))
+    dsk2 = merge(dsk, *[a.dask for a in seq])
+    return Array(dsk2, name, shape, blockdims=blockdims)
