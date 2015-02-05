@@ -41,119 +41,6 @@ def istask(x):
     return isinstance(x, tuple) and x and callable(x[0])
 
 
-def _toposort(dsk, keys=None, returncycle=False):
-    # Stack-based depth-first search traversal.  This is based on Tarjan's
-    # method for topological sorting (see wikipedia for pseudocode)
-    if keys is None:
-        keys = dsk
-    elif not isinstance(keys, list):
-        keys = [keys]
-    if not returncycle:
-        ordered = []
-
-    # Nodes whose descendents have been completely explored.
-    # These nodes are guaranteed to not be part of a cycle.
-    completed = set()
-
-    # All nodes that have been visited in the current traversal.  Because
-    # we are doing depth-first search, going "deeper" should never result
-    # in visiting a node that has already been seen.  The `seen` and
-    # `completed` sets are mutually exclusive; it is okay to visit a node
-    # that has already been added to `completed`.
-    seen = set()
-
-    for key in keys:
-        if key in completed:
-            continue
-        nodes = [key]
-        while nodes:
-            # Keep current node on the stack until all descendants are visited
-            cur = nodes[-1]
-            if cur in completed:
-                # Already fully traversed descendants of cur
-                nodes.pop()
-                continue
-            seen.add(cur)
-
-            # Add direct descendants of cur to nodes stack
-            next_nodes = []
-            for nxt in get_dependencies(dsk, cur):
-                if nxt not in completed:
-                    if nxt in seen:
-                        # Cycle detected!
-                        cycle = [nxt]
-                        while nodes[-1] != nxt:
-                            cycle.append(nodes.pop())
-                        cycle.append(nodes.pop())
-                        cycle.reverse()
-                        if returncycle:
-                            return cycle
-                        else:
-                            cycle = '->'.join(cycle)
-                            raise RuntimeError('Cycle detected in Dask: %s' % cycle)
-                    next_nodes.append(nxt)
-
-            if next_nodes:
-                nodes.extend(next_nodes)
-            else:
-                # cur has no more descendants to explore, so we're done with it
-                if not returncycle:
-                    ordered.append(cur)
-                completed.add(cur)
-                seen.remove(cur)
-                nodes.pop()
-    if returncycle:
-        return []
-    return ordered
-
-
-def toposort(dsk):
-    """ Return a list of keys of dask sorted in topological order."""
-    return _toposort(dsk)
-
-
-def getcycle(d, keys):
-    """ Return a list of nodes that form a cycle if Dask is not a DAG.
-
-    Returns an empty list if no cycle is found.
-
-    ``keys`` may be a single key or list of keys.
-
-    Example
-    -------
-
-    >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
-    >>> getcycle(d, 'x')
-    ['x', 'z', 'y', 'x']
-
-    See Also
-    --------
-    isdag
-    """
-    return _toposort(d, keys=keys, returncycle=True)
-
-
-def isdag(d, keys):
-    """ Does Dask form a directed acyclic graph when calculating keys?
-
-    ``keys`` may be a single key or list of keys.
-
-    Example
-    -------
-
-    >>> inc = lambda x: x + 1
-    >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')
-    True
-    >>> isdag({'x': (inc, 'y'), 'y': (inc, 'x')}, 'y')
-    False
-
-    See Also
-    --------
-    getcycle
-    """
-    return not getcycle(d, keys)
-
-
 def _get_task(d, task, maxdepth=1000):
     # non-recursive.  DAG property is checked upon reaching maxdepth.
     _iter = lambda *args: iter(args)
@@ -359,34 +246,6 @@ def reverse_dict(d):
     return result
 
 
-def cull(dsk, keys):
-    """ Return new dask with only the tasks required to calculate keys.
-
-    In other words, remove unnecessary tasks from dask.
-    ``keys`` may be a single key or list of keys.
-
-    Example
-    -------
-
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
-    >>> cull(d, 'out')  # doctest: +SKIP
-    {'x': 1, 'out': (add, 'x', 10)}
-    """
-    if not isinstance(keys, list):
-        keys = [keys]
-    nxt = set(flatten(keys))
-    seen = nxt
-    while nxt:
-        cur = nxt
-        nxt = set()
-        for item in cur:
-            for dep in get_dependencies(dsk, item):
-                if dep not in seen:
-                    nxt.add(dep)
-        seen.update(nxt)
-    return dict((k, v) for k, v in dsk.items() if k in seen)
-
-
 def subs(task, key, val):
     """ Perform a substitution on a task
 
@@ -415,116 +274,115 @@ def subs(task, key, val):
     return task[:1] + tuple(newargs)
 
 
-def fuse(dsk):
-    """ Return new dask with linear sequence of tasks fused together.
-
-    This may be used as an optimization step.
-
-    Example
-    -------
-
-    >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
-    >>> fuse(d)  # doctest: +SKIP
-    {'c': (inc, (inc, 1))}
-    """
-    # locate all members of linear chains
-    parents = {}
-    deadbeats = set()
-    for parent in dsk:
-        deps = get_dependencies(dsk, parent, as_list=True)
-        for child in deps:
-            if child in parents:
-                del parents[child]
-                deadbeats.add(child)
-            elif len(deps) > 1:
-                deadbeats.add(child)
-            elif child not in deadbeats:
-                parents[child] = parent
-
-    # construct the chains from ancestor to descendant
-    chains = []
-    children = dict(map(reversed, parents.items()))
-    while parents:
-        child, parent = parents.popitem()
-        chain = [child, parent]
-        while parent in parents:
-            parent = parents.pop(parent)
-            del children[parent]
-            chain.append(parent)
-        chain.reverse()
-        while child in children:
-            child = children.pop(child)
-            del parents[child]
-            chain.append(child)
-        chains.append(chain)
-
-    # create a new dask with fused chains
-    rv = {}
-    fused = set()
-    for chain in chains:
-        child = chain.pop()
-        val = dsk[child]
-        while chain:
-            parent = chain.pop()
-            val = subs(dsk[parent], child, val)
-            fused.add(child)
-            child = parent
-        fused.add(child)
-        rv[child] = val
-
-    for key, val in dsk.items():
-        if key not in fused:
-            rv[key] = val
-    return rv
-
-
-def inline(dsk, keys=None, inline_constants=True):
-    """ Return new dask with the given keys inlined with their values.
-
-    Inlines all constants if ``inline_constants`` keyword is True.
-
-    Example
-    -------
-
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
-    >>> inline(d)  # doctest: +SKIP
-    {'y': (inc, 1), 'z': (add, 1, 'y')}
-
-    >>> inline(d, keys='y')  # doctest: +SKIP
-    {'z': (add, 1, (inc, 1))}
-
-    >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
-    {'x': 1, 'z': (add, 'x', (inc, 'x'))}
-    """
+def _toposort(dsk, keys=None, returncycle=False):
+    # Stack-based depth-first search traversal.  This is based on Tarjan's
+    # method for topological sorting (see wikipedia for pseudocode)
     if keys is None:
-        keys  = set()
-    elif isinstance(keys, list):
-        keys = set(keys)
-    else:
-        keys = set([keys])
-    if inline_constants:
-        keys.update(k for k, v in dsk.items() if not istask(v))
+        keys = dsk
+    elif not isinstance(keys, list):
+        keys = [keys]
+    if not returncycle:
+        ordered = []
 
-    # Keys may depend on other keys, so determine replace order with toposort.
-    # The values stored in `keysubs` do not include other keys.
-    replaceorder = toposort(dict((k, dsk[k]) for k in keys if k in dsk))
-    keysubs = {}
-    for key in replaceorder:
-        val = dsk[key]
-        for dep in keys & get_dependencies(dsk, key):
-            if dep in keysubs:
-                replace = keysubs[dep]
-            else:
-                replace = dsk[dep]
-            val = subs(val, dep, replace)
-        keysubs[key] = val
+    # Nodes whose descendents have been completely explored.
+    # These nodes are guaranteed to not be part of a cycle.
+    completed = set()
 
-    # Make new dask with substitutions
-    rv = {}
-    for key, val in dsk.items():
-        if key in keys:
+    # All nodes that have been visited in the current traversal.  Because
+    # we are doing depth-first search, going "deeper" should never result
+    # in visiting a node that has already been seen.  The `seen` and
+    # `completed` sets are mutually exclusive; it is okay to visit a node
+    # that has already been added to `completed`.
+    seen = set()
+
+    for key in keys:
+        if key in completed:
             continue
-        for item in keys & get_dependencies(dsk, key):
-            val = subs(val, item, keysubs[item])
-        rv[key] = val
-    return rv
+        nodes = [key]
+        while nodes:
+            # Keep current node on the stack until all descendants are visited
+            cur = nodes[-1]
+            if cur in completed:
+                # Already fully traversed descendants of cur
+                nodes.pop()
+                continue
+            seen.add(cur)
+
+            # Add direct descendants of cur to nodes stack
+            next_nodes = []
+            for nxt in get_dependencies(dsk, cur):
+                if nxt not in completed:
+                    if nxt in seen:
+                        # Cycle detected!
+                        cycle = [nxt]
+                        while nodes[-1] != nxt:
+                            cycle.append(nodes.pop())
+                        cycle.append(nodes.pop())
+                        cycle.reverse()
+                        if returncycle:
+                            return cycle
+                        else:
+                            cycle = '->'.join(cycle)
+                            raise RuntimeError('Cycle detected in Dask: %s' % cycle)
+                    next_nodes.append(nxt)
+
+            if next_nodes:
+                nodes.extend(next_nodes)
+            else:
+                # cur has no more descendants to explore, so we're done with it
+                if not returncycle:
+                    ordered.append(cur)
+                completed.add(cur)
+                seen.remove(cur)
+                nodes.pop()
+    if returncycle:
+        return []
+    return ordered
+
+
+def toposort(dsk):
+    """ Return a list of keys of dask sorted in topological order."""
+    return _toposort(dsk)
+
+
+def getcycle(d, keys):
+    """ Return a list of nodes that form a cycle if Dask is not a DAG.
+
+    Returns an empty list if no cycle is found.
+
+    ``keys`` may be a single key or list of keys.
+
+    Example
+    -------
+
+    >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
+    >>> getcycle(d, 'x')
+    ['x', 'z', 'y', 'x']
+
+    See Also
+    --------
+    isdag
+    """
+    return _toposort(d, keys=keys, returncycle=True)
+
+
+def isdag(d, keys):
+    """ Does Dask form a directed acyclic graph when calculating keys?
+
+    ``keys`` may be a single key or list of keys.
+
+    Example
+    -------
+
+    >>> inc = lambda x: x + 1
+    >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')
+    True
+    >>> isdag({'x': (inc, 'y'), 'y': (inc, 'x')}, 'y')
+    False
+
+    See Also
+    --------
+    getcycle
+    """
+    return not getcycle(d, keys)
+

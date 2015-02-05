@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from toolz import curry, pipe, partial
-from .core import fuse, cull
+from .optimize import fuse, cull
 import multiprocessing
 import psutil
 import dill
