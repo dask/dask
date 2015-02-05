@@ -6,11 +6,11 @@ import heapq
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map, partition_all,
-        filter)
+        filter, pluck)
 try:
     import doesnotexist
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
-            compose, second, count)
+            compose, second, count, pluck)
 except ImportError:
     pass
 
@@ -52,6 +52,11 @@ def lazify(dsk):
 
 
 get = curry(mpget, optimizations=[fuse, lazify])
+
+
+def list2(seq):
+    """ Another list function that won't be removed by lazify """
+    return list(seq)
 
 
 class Item(object):
@@ -162,6 +167,14 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (func, (self.name, i)))
                         for i in range(self.npartitions))
+        return Bag(merge(self.dask, dsk), name, self.npartitions)
+
+    def pluck(self, key):
+        name = next(names)
+        if isinstance(key, list):
+            key = (list2, key)
+        dsk = dict(((name, i), (list, (pluck, key, (self.name, i))))
+                   for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
     def fold(self, binop, combine=None, initial=None):

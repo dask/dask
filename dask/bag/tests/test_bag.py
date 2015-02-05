@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join, reduceby, pipe
+from toolz import merge, join, reduceby, pipe, filter
 import numpy as np
 from dask.bag.core import Bag, lazify, lazify_task, fuse, map
 from into.utils import filetexts
@@ -55,6 +55,15 @@ def test_filter():
 def test_iter():
     assert sorted(list(b)) == sorted(L)
     assert sorted(list(b.map(inc))) == sorted(list(range(1, 6)) * 3)
+
+
+def test_pluck():
+    d = {('x', 0): [(1, 10), (2, 20)],
+         ('x', 1): [(3, 30), (4, 40)]}
+    b = Bag(d, 'x', 2)
+    assert set(b.pluck(0)) == set([1, 2, 3, 4])
+    assert set(b.pluck(1)) == set([10, 20, 30, 40])
+    assert set(b.pluck([1, 0])) == set([(10, 1), (20, 2), (30, 3), (40, 4)])
 
 
 def test_fold_computation():
