@@ -768,6 +768,9 @@ def stack(seq, axis=0):
     (4, 3, 4)
 
     Result is a new dask Array
+
+    See Also:
+        concatenate
     """
     n = len(seq)
     assert len(set(a.blockdims for a in seq)) == 1  # same blockshape
@@ -817,6 +820,9 @@ def concatenate(seq, axis=0):
     (4, 12)
 
     Result is a new dask Array
+
+    See Also:
+        stack
     """
     n = len(seq)
     bds = [a.blockdims for a in seq]
