@@ -9,7 +9,7 @@ from datashape import DataShape
 from operator import add
 from collections import Iterable
 import itertools
-from .core import concatenate, Array, getem, get, names
+from .core import rec_concatenate, Array, getem, get, names
 from ..core import flatten
 
 
@@ -42,7 +42,7 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 
 @convert.register(np.ndarray, Array, cost=0.5)
 def dask_to_numpy(x, **kwargs):
-    return concatenate(get(x.dask, x.keys(), **kwargs))
+    return rec_concatenate(get(x.dask, x.keys(), **kwargs))
 
 
 @convert.register(float, Array, cost=0.5)

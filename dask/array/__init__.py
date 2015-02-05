@@ -3,9 +3,9 @@ from multipledispatch import halt_ordering, restart_ordering
 import blaze
 
 halt_ordering()
-from .core import Array
+from .core import Array, stack, concatenate
 from .blaze import np  # need to go through import process here
-from .into import np   # Otherwise someone might import later
+from .into import into # Otherwise someone might import later
                        # without ordering halted
 from . import random
 from .wrap import ones, zeros, empty

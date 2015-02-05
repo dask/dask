@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import add, getitem
+from bisect import bisect
 import operator
 from math import ceil, floor
 from itertools import product, count
@@ -287,38 +288,38 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     return dict(zip(keys, vals))
 
 
-def concatenate2(arrays, axes=[]):
+def _concatenate2(arrays, axes=[]):
     """ Recursively Concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
     length of axes should correspond to the level of nesting of arrays.
 
     >>> x = np.array([[1, 2], [3, 4]])
-    >>> concatenate2([x, x], axes=[0])
+    >>> _concatenate2([x, x], axes=[0])
     array([[1, 2],
            [3, 4],
            [1, 2],
            [3, 4]])
 
-    >>> concatenate2([x, x], axes=[1])
+    >>> _concatenate2([x, x], axes=[1])
     array([[1, 2, 1, 2],
            [3, 4, 3, 4]])
 
-    >>> concatenate2([[x, x], [x, x]], axes=[0, 1])
+    >>> _concatenate2([[x, x], [x, x]], axes=[0, 1])
     array([[1, 2, 1, 2],
            [3, 4, 3, 4],
            [1, 2, 1, 2],
            [3, 4, 3, 4]])
 
     Supports Iterators
-    >>> concatenate2(iter([x, x]), axes=[1])
+    >>> _concatenate2(iter([x, x]), axes=[1])
     array([[1, 2, 1, 2],
            [3, 4, 3, 4]])
     """
     if isinstance(arrays, Iterator):
         arrays = list(arrays)
     if len(axes) > 1:
-        arrays = [concatenate2(a, axes=axes[1:]) for a in arrays]
+        arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
     return np.concatenate(arrays, axis=axes[0])
     if len(axes) == 1:
         return np.concatenate(arrays, axis=axes[0])
@@ -326,11 +327,11 @@ def concatenate2(arrays, axes=[]):
         return np.concatenate
 
 
-def concatenate(arrays, axis=0):
-    """
+def rec_concatenate(arrays, axis=0):
+    """ Recursive np.concatenate
 
     >>> x = np.array([1, 2])
-    >>> concatenate([[x, x], [x, x], [x, x]])
+    >>> rec_concatenate([[x, x], [x, x], [x, x]])
     array([[1, 2, 1, 2],
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
@@ -340,7 +341,7 @@ def concatenate(arrays, axis=0):
     if isinstance(arrays[0], Iterator):
         arrays = list(map(list, arrays))
     if not isinstance(arrays[0], np.ndarray):
-        arrays = [concatenate(a, axis=axis + 1) for a in arrays]
+        arrays = [rec_concatenate(a, axis=axis + 1) for a in arrays]
     if arrays[0].ndim <= axis:
         arrays = [a[None, ...] for a in arrays]
     return np.concatenate(arrays, axis=axis)
@@ -736,3 +737,136 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     dsk2 = cull(dsk, list(core.flatten(keys)))
     dsk3 = inline_functions(dsk2, fast_functions=fast_functions)
     return get(dsk3, keys, **kwargs)
+
+
+stacked_names = ('stack-%d' % i for i in count(1))
+
+
+def stack(seq, axis=0):
+    """
+    Stack arrays along a new axis
+
+    Given a sequence of dask Arrays form a new dask Array by stacking them
+    along a new dimension (axis=0 by default)
+
+    Example
+    -------
+
+    Create slices
+
+    >>> import dask.array as da
+    >>> import numpy as np
+
+    >>> data = [da.into(da.Array, np.ones((4, 4)), blockshape=(2, 2))
+    ...          for i in range(3)]
+
+    >>> x = da.stack(data, axis=0)
+    >>> x.shape
+    (3, 4, 4)
+
+    >>> da.stack(data, axis=1).shape
+    (4, 3, 4)
+
+    >>> da.stack(data, axis=-1).shape
+    (4, 4, 3)
+
+    Result is a new dask Array
+
+    See Also:
+        concatenate
+    """
+    n = len(seq)
+    ndim = len(seq[0].shape)
+    if axis < 0:
+        axis = ndim + axis + 1
+    if axis > ndim:
+        raise ValueError("Axis must not be greater than number of dimensions"
+                "\nData has %d dimensions, but got axis=%d" % (ndim, axis))
+
+    assert len(set(a.blockdims for a in seq)) == 1  # same blockshape
+    shape = seq[0].shape[:axis] + (len(seq),) + seq[0].shape[axis:]
+    blockdims = (  seq[0].blockdims[:axis]
+                + ((1,) * n,)
+                + seq[0].blockdims[axis:])
+
+    name = next(stacked_names)
+    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
+
+    names = [a.name for a in seq]
+    values = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
+                for key in keys]
+
+    dsk = dict(zip(keys, values))
+    dsk2 = merge(dsk, *[a.dask for a in seq])
+    return Array(dsk2, name, shape, blockdims=blockdims)
+
+
+concatenate_names = ('concatenate-%d' % i for i in count(1))
+
+
+def concatenate(seq, axis=0):
+    """
+    Concatenate arrays along an existing axis
+
+    Given a sequence of dask Arrays form a new dask Array by stacking them
+    along an existing dimension (axis=0 by default)
+
+    Example
+    -------
+
+    Create slices
+
+    >>> import dask.array as da
+    >>> import numpy as np
+
+    >>> data = [da.into(da.Array, np.ones((4, 4)), blockshape=(2, 2))
+    ...          for i in range(3)]
+
+    >>> x = da.concatenate(data, axis=0)
+    >>> x.shape
+    (12, 4)
+
+    >>> da.concatenate(data, axis=1).shape
+    (4, 12)
+
+    Result is a new dask Array
+
+    See Also:
+        stack
+    """
+    n = len(seq)
+    ndim = len(seq[0].shape)
+    if axis < 0:
+        axis = ndim + axis
+    if axis >= ndim:
+        raise ValueError("Axis must be less than than number of dimensions"
+                "\nData has %d dimensions, but got axis=%d" % (ndim, axis))
+
+    bds = [a.blockdims for a in seq]
+
+    if not all(len(set(bds[i][j] for i in range(n))) == 1
+            for j in range(len(bds[0])) if j != axis):
+        raise ValueError("Block shapes do not align")
+
+    shape = (seq[0].shape[:axis]
+            + (sum(a.shape[axis] for a in seq),)
+            + seq[0].shape[axis + 1:])
+    blockdims = (  seq[0].blockdims[:axis]
+                + (sum([bd[axis] for bd in bds], ()),)
+                + seq[0].blockdims[axis + 1:])
+
+    name = next(concatenate_names)
+    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
+
+    cum_dims = [0] + list(accumulate(add, [len(a.blockdims[axis]) for a in seq]))
+    names = [a.name for a in seq]
+    values = [(names[bisect(cum_dims, key[axis + 1]) - 1],)
+                + key[1:axis + 1]
+                + (key[axis + 1] - cum_dims[bisect(cum_dims, key[axis+1]) - 1],)
+                + key[axis + 2:]
+                for key in keys]
+
+    dsk = dict(zip(keys, values))
+    dsk2 = merge(dsk, *[a.dask for a in seq])
+
+    return Array(dsk2, name, shape, blockdims=blockdims)
