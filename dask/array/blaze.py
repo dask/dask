@@ -13,7 +13,7 @@ from blaze import compute, ndim, shape
 from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
         Expr, Slice, Broadcast)
 
-from .core import (getem, concatenate, concatenate2, top, new_blockdim,
+from .core import (getem, _concatenate2, top, new_blockdim,
     broadcast_dimensions, fancy_slice, Array, get, atop, names)
 
 
@@ -73,7 +73,7 @@ def compute_up(expr, data, **kwargs):
                data, inds)
 
     return atop(compose(curry(compute_it, agg_expr, [agg], **kwargs),
-                        curry(concatenate2, axes=expr.axis)),
+                        curry(_concatenate2, axes=expr.axis)),
                 next(names), tuple(i for i in inds if i not in expr.axis),
                 tmp, inds)
 

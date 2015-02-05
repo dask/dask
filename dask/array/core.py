@@ -288,38 +288,38 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     return dict(zip(keys, vals))
 
 
-def concatenate2(arrays, axes=[]):
+def _concatenate2(arrays, axes=[]):
     """ Recursively Concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
     length of axes should correspond to the level of nesting of arrays.
 
     >>> x = np.array([[1, 2], [3, 4]])
-    >>> concatenate2([x, x], axes=[0])
+    >>> _concatenate2([x, x], axes=[0])
     array([[1, 2],
            [3, 4],
            [1, 2],
            [3, 4]])
 
-    >>> concatenate2([x, x], axes=[1])
+    >>> _concatenate2([x, x], axes=[1])
     array([[1, 2, 1, 2],
            [3, 4, 3, 4]])
 
-    >>> concatenate2([[x, x], [x, x]], axes=[0, 1])
+    >>> _concatenate2([[x, x], [x, x]], axes=[0, 1])
     array([[1, 2, 1, 2],
            [3, 4, 3, 4],
            [1, 2, 1, 2],
            [3, 4, 3, 4]])
 
     Supports Iterators
-    >>> concatenate2(iter([x, x]), axes=[1])
+    >>> _concatenate2(iter([x, x]), axes=[1])
     array([[1, 2, 1, 2],
            [3, 4, 3, 4]])
     """
     if isinstance(arrays, Iterator):
         arrays = list(arrays)
     if len(axes) > 1:
-        arrays = [concatenate2(a, axes=axes[1:]) for a in arrays]
+        arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
     return np.concatenate(arrays, axis=axes[0])
     if len(axes) == 1:
         return np.concatenate(arrays, axis=axes[0])
@@ -327,11 +327,11 @@ def concatenate2(arrays, axes=[]):
         return np.concatenate
 
 
-def concatenate(arrays, axis=0):
-    """
+def rec_concatenate(arrays, axis=0):
+    """ Recursive np.concatenate
 
     >>> x = np.array([1, 2])
-    >>> concatenate([[x, x], [x, x], [x, x]])
+    >>> rec_concatenate([[x, x], [x, x], [x, x]])
     array([[1, 2, 1, 2],
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
@@ -341,7 +341,7 @@ def concatenate(arrays, axis=0):
     if isinstance(arrays[0], Iterator):
         arrays = list(map(list, arrays))
     if not isinstance(arrays[0], np.ndarray):
-        arrays = [concatenate(a, axis=axis + 1) for a in arrays]
+        arrays = [rec_concatenate(a, axis=axis + 1) for a in arrays]
     if arrays[0].ndim <= axis:
         arrays = [a[None, ...] for a in arrays]
     return np.concatenate(arrays, axis=axis)

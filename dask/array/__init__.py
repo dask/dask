@@ -3,7 +3,7 @@ from multipledispatch import halt_ordering, restart_ordering
 import blaze
 
 halt_ordering()
-from .core import Array, stack
+from .core import Array, stack, concatenate
 from .blaze import np  # need to go through import process here
 from .into import into # Otherwise someone might import later
                        # without ordering halted

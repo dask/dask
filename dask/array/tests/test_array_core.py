@@ -56,12 +56,12 @@ def test_top_supports_broadcasting_rules():
          ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 0))}
 
 
-def test_concatenate():
+def test_rec_concatenate():
     x = np.array([1, 2])
-    assert concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+    assert rec_concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
 
     x = np.array([[1, 2]])
-    assert concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+    assert rec_concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
 
 
 def eq(a, b):
@@ -86,7 +86,7 @@ def test_chunked_dot_product():
     dsk = merge(d, getx, geto, result)
     out = dask.get(dsk, [[('out', i, j) for j in range(4)] for i in range(4)])
 
-    assert eq(np.dot(x, o), concatenate(out))
+    assert eq(np.dot(x, o), rec_concatenate(out))
 
 
 def test_chunked_transpose_plus_one():
@@ -102,7 +102,7 @@ def test_chunked_transpose_plus_one():
     dsk = merge(d, getx, comp)
     out = dask.get(dsk, [[('out', i, j) for j in range(4)] for i in range(4)])
 
-    assert eq(concatenate(out), x.T + 1)
+    assert eq(rec_concatenate(out), x.T + 1)
 
 
 def test_broadcast_dimensions_works_with_singleton_dimensions():
