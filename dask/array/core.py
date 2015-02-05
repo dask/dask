@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import add, getitem
+from bisect import bisect
 import operator
 from math import ceil, floor
 from itertools import product, count
@@ -759,14 +760,14 @@ def stack(seq, axis=0):
     >>> data = [da.into(da.Array, np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
-    >>> x = stack(data, axis=0)
+    >>> x = da.stack(data, axis=0)
     >>> x.shape
     (3, 4, 4)
 
-    >>> stack(data, axis=1).shape
+    >>> da.stack(data, axis=1).shape
     (4, 3, 4)
 
-    Stack is a new dask Array
+    Result is a new dask Array
     """
     n = len(seq)
     assert len(set(a.blockdims for a in seq)) == 1  # same blockshape
@@ -784,4 +785,65 @@ def stack(seq, axis=0):
 
     dsk = dict(zip(keys, values))
     dsk2 = merge(dsk, *[a.dask for a in seq])
+    return Array(dsk2, name, shape, blockdims=blockdims)
+
+
+concatenate_names = ('concatenate-%d' % i for i in count(1))
+
+
+def concatenate(seq, axis=0):
+    """
+    Concatenate arrays along an existing axis
+
+    Given a sequence of dask Arrays form a new dask Array by stacking them
+    along an existing dimension (axis=0 by default)
+
+    Example
+    -------
+
+    Create slices
+
+    >>> import dask.array as da
+    >>> import numpy as np
+
+    >>> data = [da.into(da.Array, np.ones((4, 4)), blockshape=(2, 2))
+    ...          for i in range(3)]
+
+    >>> x = da.concatenate(data, axis=0)
+    >>> x.shape
+    (12, 4)
+
+    >>> da.concatenate(data, axis=1).shape
+    (4, 12)
+
+    Result is a new dask Array
+    """
+    n = len(seq)
+    bds = [a.blockdims for a in seq]
+
+    if not all(len(set(bds[i][j] for i in range(n))) == 1
+            for j in range(len(bds[0])) if j != axis):
+        raise ValueError("Block shapes do not align")
+
+    shape = (seq[0].shape[:axis]
+            + (sum(a.shape[axis] for a in seq),)
+            + seq[0].shape[axis + 1:])
+    blockdims = (  seq[0].blockdims[:axis]
+                + (sum([bd[axis] for bd in bds], ()),)
+                + seq[0].blockdims[axis + 1:])
+
+    name = next(concatenate_names)
+    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
+
+    cum_dims = [0] + list(accumulate(add, [len(a.blockdims[axis]) for a in seq]))
+    names = [a.name for a in seq]
+    values = [(names[bisect(cum_dims, key[axis + 1]) - 1],)
+                + key[1:axis + 1]
+                + (key[axis + 1] - cum_dims[bisect(cum_dims, key[axis+1]) - 1],)
+                + key[axis + 2:]
+                for key in keys]
+
+    dsk = dict(zip(keys, values))
+    dsk2 = merge(dsk, *[a.dask for a in seq])
+
     return Array(dsk2, name, shape, blockdims=blockdims)
