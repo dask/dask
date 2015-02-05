@@ -43,6 +43,15 @@ def test_append_to_array():
         assert eq(h[:], x)
 
 
+def test_into_inplace():
+    x = np.arange(600).reshape((20, 30))
+    a = into(Array, x, blockshape=(4, 5))
+    b = bcolz.zeros(shape=(20, 30), dtype=x.dtype)
+
+    append(b, a, inplace=True)
+    assert eq(b[:], x)
+
+
 def test_insert_to_ooc():
     x = np.arange(600).reshape((20, 30))
     y = np.empty(shape=x.shape, dtype=x.dtype)

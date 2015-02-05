@@ -70,13 +70,14 @@ def insert_to_ooc(out, arr):
 
 
 @append.register(tuple(arrays), Array)
-def store_Array_in_ooc_data(out, arr, **kwargs):
+def store_Array_in_ooc_data(out, arr, inplace=False, **kwargs):
     update = insert_to_ooc(out, arr)
     dsk = merge(arr.dask, update)
 
-    # Resize output dataset to accept new data
-    assert out.shape[1:] == arr.shape[1:]
-    resize(out, out.shape[0] + arr.shape[0])  # elongate
+    if not inplace:
+        # Resize output dataset to accept new data
+        assert out.shape[1:] == arr.shape[1:]
+        resize(out, out.shape[0] + arr.shape[0])  # elongate
 
     get(dsk, list(update.keys()), **kwargs)
     return out
