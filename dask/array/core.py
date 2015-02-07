@@ -383,7 +383,7 @@ def _slice_1d(dim_shape, lengths, index):
     Returns
     -------
 
-    dictionary where the keys are the integer indexes of the blocks that
+    dictionary where the keys are the integer index of the blocks that
       should be sliced and the values are the slices
 
     Examples
@@ -459,17 +459,17 @@ def _slice_1d(dim_shape, lengths, index):
             stop -= length
     else:
         stop -= dim_shape
-        tail_indexes = list(accumulate(add, lengths))
+        tail_index = list(accumulate(add, lengths))
         pos_step = abs(step) # 11%3==2, 11%-3==-1. Need positive step for %
 
         offset = 0
         for i, length in zip(range(len(lengths)-1, -1, -1), reversed(lengths)):
-            if start + length >= tail_indexes[i] and stop < 0:
-                d[i] = slice(start - tail_indexes[i],
+            if start + length >= tail_index[i] and stop < 0:
+                d[i] = slice(start - tail_index[i],
                              max(stop, -length - 1), step)
                 # The offset accumulates over time from the start point
                 offset = (offset + pos_step - (length % pos_step)) % pos_step
-                start = tail_indexes[i] - 1 - length - offset
+                start = tail_index[i] - 1 - length - offset
 
             stop += length
 
@@ -499,7 +499,7 @@ def partition_by_size(sizes, seq):
 
 
 def take(outname, inname, blockdims, index, axis=0):
-    """ Index array with an iterable of indexes
+    """ Index array with an iterable of index
 
     Mimics ``np.take``
 
@@ -560,11 +560,12 @@ def posify_index(shape, ind):
     return ind
 
 
-tmp_names = ('slice-%d' % i for i in count(1))
+slice_names = ('slice-%d' % i for i in count(1))
 
-def fancy_slice(out_name, in_name, shape, blockdims, indexes):
+
+def slice_array(out_name, in_name, blockdims, index):
     """
-    Fancy indexing along blocked array dasks
+    Master function for array slicing
 
     This function makes a new dask that slices blocks along every
     dimension and aggregates (via cartesian product) each dimension's
@@ -578,10 +579,8 @@ def fancy_slice(out_name, in_name, shape, blockdims, indexes):
       This is the dask variable name that will be used as input
     out_name - string
       This is the dask variable output name
-    shape - iterable of integers (only tested with tuples of integers)
-      The shape of the
     blockshape - iterable of integers
-    indexes - iterable of integres, slices, or lists
+    index - iterable of integres, slices, or lists
 
     Returns
     -------
@@ -595,110 +594,180 @@ def fancy_slice(out_name, in_name, shape, blockdims, indexes):
         (function, (in_name, dim_index, dim_index, ...),
                    (slice(...), [slice()[,...]])
 
+    Also new blockdims
+
     Example
     -------
 
-    >>> fancy_slice('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  #  doctest: +SKIP
+    >>> slice_array('y', 'x', (100,), [(20, 20, 20, 20, 20)], (slice(10, 35),))  #  doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
      ('y', 1): (getitem, ('x', 1), (slice( 0, 15),))}
+    """
+    index = tuple(index)
+    blockdims = tuple(map(tuple, blockdims))
+
+    if all(index == slice(None, None, None) for index in index):
+        return {out_name: in_name}, blockdims
+
+    missing = len(blockdims) - len([ind for ind in index if ind is not None])
+    index2 = index + (slice(None, None, None),) * missing
+    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index2)
+
+    bd_out = tuple(map(tuple, bd_out))
+    return dsk_out, bd_out
+
+
+def insert_many(seq, where, val):
+    """ Insert value at many locations in sequence
+
+    >>> insert_many(['a', 'b', 'c'], [0, 2], 'z')
+    ('z', 'a', 'z', 'b', 'c')
+    """
+    seq = list(seq)
+    result = []
+    for i in range(len(where) + len(seq)):
+        if i in where:
+            result.append(val)
+        else:
+            result.append(seq.pop(0))
+    return tuple(result)
+
+
+def slice_with_newaxes(out_name, in_name, blockdims, index):
+    """
+    Handle indexing with Nones
+
+    Strips out Nones then hands off to slice_wrap_lists
+    """
+    assert all(isinstance(ind, (slice, int, list, type(None)))
+               for ind in index)
+
+    # Strip Nones from index
+    index2 = tuple([ind for ind in index if ind is not None])
+    where_none = [i for i, ind in enumerate(index) if ind is None]
+
+    # Pass down and do work
+    dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2)
+
+    # Insert ",0" into the key:  ('x', 2, 3) -> ('x', 0, 2, 0, 3)
+    dsk2 = dict(((out_name,) + insert_many(k[1:], where_none, 0),
+                 (v[:2] + (insert_many(v[2], where_none, None),)))
+                for k, v in dsk.items()
+                if k[0] == out_name)
+
+    # Add back intermediate parts of the dask that weren't the output
+    dsk3 = merge(dsk2, dict((k, v) for k, v in dsk.items() if k[0] != out_name))
+
+    # Insert (1,) into blockdims:  ((2, 2), (3, 3)) -> ((2, 2), (1,), (3, 3))
+    blockdims3 = insert_many(blockdims2, where_none, (1,))
+
+    return dsk3, blockdims3
+
+
+def slice_wrap_lists(out_name, in_name, blockdims, index):
+    """
+    Fancy indexing along blocked array dasks
+
+    Handles index of type list.  Calls slice_slices_and_integers for the rest
 
     See Also
     --------
 
     take - handle slicing with lists ("fancy" indexing)
-    dask_slice - handle slicing with slices and integers
+    slice_slices_and_integers - handle slicing with slices and integers
     """
-    # Turn x[-3, None, 10] into x[7, None, 10]
-    indexes2 = []
-    i = 0
-    for ind in indexes:
-        if ind is not None:
-            indexes2.append(posify_index(shape[i], ind))
-            i += 1
-        else:
-            indexes2.append(ind)
-    indexes2 = tuple(indexes2)
+    shape = tuple(map(sum, blockdims))
+    assert all(isinstance(i, (slice, list, int)) for i in index)
 
-    # Do we have more than one list in the indexes?
-    where_list = [i for i, ind in enumerate(indexes) if isinstance(ind, list)]
+    index2 = posify_index(shape, index)
+
+    # Do we have more than one list in the index?
+    where_list = [i for i, ind in enumerate(index) if isinstance(ind, list)]
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
 
     # Turn x[5:10] into x[5:10, :, :] as needed
-    num_missing_dims = len(shape) - len([i for i in indexes2 if i is not None])
-    indexes3 = indexes2 + (slice(None, None, None),) * num_missing_dims
+    num_missing_dims = len(shape) - len([i for i in index2 if i is not None])
+    index3 = index2 + (slice(None, None, None),) * num_missing_dims
 
-    indexes_without_list = tuple(slice(None, None, None)
+    index_without_list = tuple(slice(None, None, None)
                                     if isinstance(i, list)
                                     else i
-                                    for i in indexes3)
+                                    for i in index3)
 
-    # No lists, hooray! just use dask_slice
-    if indexes3 == indexes_without_list:
-        return dask_slice(out_name, in_name, shape, blockdims, indexes3)
+    # No lists, hooray! just use slice_slices_and_integers
+    if index3 == index_without_list:
+        return slice_slices_and_integers(out_name, in_name, blockdims, index3)
 
     # lists and full slice/:   Just use take
     if all(isinstance(i, list) or i == slice(None, None, None)
-            for i in indexes3):
+            for i in index3):
         axis = where_list[0]
-        return take(out_name, in_name, blockdims, indexes3[where_list[0]],
+        dsk3 = take(out_name, in_name, blockdims, index3[where_list[0]],
                     axis=axis)
+        blockdims2 = blockdims
+    else:  # Mixed case. Both slices/integers and lists. slice/integer then take
+        tmp = next(slice_names)
+        dsk, blockdims2 = slice_slices_and_integers(tmp, in_name, blockdims, index_without_list)
 
-    # Mixed case.  Have both slices/integers and lists.  dask_slice then take
-    tmp = next(tmp_names)
-    dsk = dask_slice(tmp, in_name, shape, blockdims, indexes_without_list)
-    blockdims2 = [new_blockdim(d, db, i)
-                  for d, db, i in zip(shape, blockdims, indexes_without_list)
-                  if not isinstance(i, int)]
-    # After collapsing some axes, readjust axis parameter
-    axis = where_list[0]
-    axis2 = axis - sum(1 for i, ind in enumerate(indexes3)
-                       if i < axis and isinstance(ind, int))
+        # After collapsing some axes due to int indices, adjust axis parameter
+        axis = where_list[0]
+        axis2 = axis - sum(1 for i, ind in enumerate(index3)
+                           if i < axis and isinstance(ind, int))
 
-    # Do work
-    dsk2 = take(out_name, tmp, blockdims2, indexes3[axis], axis=axis2)
-    return merge(dsk, dsk2)
+        # Do work
+        dsk2 = take(out_name, tmp, blockdims2, index3[axis], axis=axis2)
+        dsk3 = merge(dsk, dsk2)
+
+    # Replace blockdims of list entries with single block
+    index4 = [ind for ind in index3 if not isinstance(ind, int)]
+    blockdims3 = tuple([bd if not isinstance(i, list) else (len(i),)
+                        for i, bd in zip(index4, blockdims2)])
+
+    return dsk3, blockdims3
 
 
-def dask_slice(out_name, in_name, shape, blockdims, indexes,
-               getitem_func=getitem):
+def slice_slices_and_integers(out_name, in_name, blockdims, index):
     """
     Dask array indexing with slices and integers
 
-    See fancy_slice for full docstring
-    """
-    empty = slice(None, None, None)
-    if all(index == empty for index in indexes):
-        return {out_name: in_name}
+    Assumes that index is only slice or int objects
 
-    # Strip out None/newaxis
-    indexes2 = [i for i in indexes if i is not None]
+    See fancy_slice for full docstring
+
+    Returns
+    -------
+
+    New dask and new blockdims
+    """
+    shape = tuple(map(sum, blockdims))
+
+    assert all(isinstance(ind, (slice, int)) for ind in index)
+    assert len(index) == len(blockdims)
 
     # Get a list (for each dimension) of dicts{blocknum: slice()}
-    block_slices = list(map(_slice_1d, shape, blockdims, indexes2))
+    block_slices = list(map(_slice_1d, shape, blockdims, index))
 
     # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
     in_names = product([in_name], *[i.keys() for i in block_slices])
 
-    # Add None/newaxis back in
-    block_slices2 = block_slices[:]  # make a copy
-    for i, ind in enumerate(indexes):
-        if ind is None:
-            block_slices2.insert(i, {0: None})
-
     # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
     out_names = product([out_name],
-                        *[range(len(d)) if d is not None else [0]
-                            for d, i in zip(block_slices2, indexes)
+                        *[range(len(d))
+                            for d, i in zip(block_slices, index)
                             if not isinstance(i, int)])
 
-    all_slices = list(product(*[i.values() for i in block_slices2]))
+    all_slices = list(product(*[i.values() for i in block_slices]))
 
-    final_out = dict((out_name, (getitem_func, in_name, slices))
-                     for out_name, in_name, slices
-                     in zip(out_names, in_names, all_slices))
+    dsk_out = dict((out_name, (getitem, in_name, slices))
+                   for out_name, in_name, slices
+                   in zip(out_names, in_names, all_slices))
 
-    return final_out
+    new_blockdims = [new_blockdim(d, db, i)
+                     for d, i, db in zip(shape, index, blockdims)
+                     if not isinstance(i, int)]
+
+    return dsk_out, new_blockdims
 
 
 class Array(object):
@@ -779,7 +848,7 @@ def atop(func, out, out_ind, *args):
     return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims)
 
 
-def get(dsk, keys, get=threaded.get, **kwargs):
+def get(dsk, keys, get=core.get, **kwargs):
     """ Specialized get function
 
     1. Handle inlining

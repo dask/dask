@@ -140,9 +140,9 @@ def test_slicing_with_newaxis():
     assert result.blockdims == ((2, 2), (1,), (2, 2, 1))
     assert eq(np.array(result), compute(expr, nx))
 
-    expr = sx[None, :, None, None, :, None]
+    expr = sx[None, [2, 1, 3], None, None, :, None]
     result = compute(expr, dx)
 
-    assert result.shape == (1, 4, 1, 1, 5, 1)
-    assert result.blockdims == ((1,), (2, 2), (1,), (1,), (2, 2, 1), (1,))
+    assert result.shape == (1, 3, 1, 1, 5, 1)
+    assert result.blockdims == ((1,), (3,), (1,), (1,), (2, 2, 1), (1,))
     assert eq(np.array(result), compute(expr, nx))

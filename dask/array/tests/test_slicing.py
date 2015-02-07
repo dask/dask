@@ -1,5 +1,5 @@
 import dask
-from dask.array.core import dask_slice, _slice_1d, take, fancy_slice
+from dask.array.core import slice_array, _slice_1d, take
 import operator
 from operator import getitem
 import numpy as np
@@ -123,13 +123,13 @@ def test_slice_singleton_value_on_boundary():
     assert _slice_1d(30, (5, 5, 5, 5, 5, 5), 10) == {2: 0}
 
 
-def test_dask_slice_1d():
+def test_slice_array_1d():
     #x[24::2]
     expected = {('y', 0): (getitem, ('x', 0), (slice(24, 25, 2),)),
                 ('y', 1): (getitem, ('x', 1), (slice(1, 25, 2),)),
                 ('y', 2): (getitem, ('x', 2), (slice(0, 25, 2),)),
                 ('y', 3): (getitem, ('x', 3), (slice(1, 25, 2),))}
-    result = dask_slice('y', 'x', [100], [[25]*4], [slice(24,None,2)])
+    result, blockdims = slice_array('y', 'x', [[25]*4], [slice(24,None,2)])
 
     assert expected == result
 
@@ -138,7 +138,7 @@ def test_dask_slice_1d():
                 ('y', 1): (getitem, ('x', 2), (slice(0, 25, 2),)),
                 ('y', 2): (getitem, ('x', 3), (slice(1, 25, 2),))}
 
-    result = dask_slice('y', 'x', [100], [[25]*4], [slice(26,None,2)])
+    result, blockdims = slice_array('y', 'x', [[25]*4], [slice(26,None,2)])
     assert expected == result
 
     #x[24::2]
@@ -146,7 +146,7 @@ def test_dask_slice_1d():
                 ('y', 1): (getitem, ('x', 1), (slice(1, 25, 2),)),
                 ('y', 2): (getitem, ('x', 2), (slice(0, 25, 2),)),
                 ('y', 3): (getitem, ('x', 3), (slice(1, 25, 2),))}
-    result = dask_slice('y', 'x', (100,), [(25,)*4], (slice(24,None,2),))
+    result, blockdims = slice_array('y', 'x', [(25,)*4], (slice(24,None,2),))
 
     assert expected == result
 
@@ -155,11 +155,11 @@ def test_dask_slice_1d():
                 ('y', 1): (getitem, ('x', 2), (slice(0, 25, 2),)),
                 ('y', 2): (getitem, ('x', 3), (slice(1, 25, 2),))}
 
-    result = dask_slice('y', 'x', (100,), [(25,)*4], (slice(26,None,2),))
+    result, blockdims = slice_array('y', 'x', [(25,)*4], (slice(26,None,2),))
     assert expected == result
 
 
-def test_dask_slice_2d():
+def test_slice_array_2d():
     #2d slices: x[13::2,10::1]
     expected = {('y', 0, 0): (getitem,
                                ('x', 0, 0),
@@ -171,7 +171,7 @@ def test_dask_slice_2d():
                                ('x', 0, 2),
                                (slice(13, 20, 2), slice(0, 5, 1)))}
 
-    result = dask_slice('y', 'x', (20, 45), [[20], [20, 20, 5]],
+    result, blockdims = slice_array('y', 'x', [[20], [20, 20, 5]],
                         [slice(13,None,2), slice(10, None, 1)])
 
     assert expected == result
@@ -187,7 +187,7 @@ def test_dask_slice_2d():
                                ('x', 0, 2),
                                (5, slice(0, 5, 1)))}
 
-    result = dask_slice('y', 'x', (20, 45), ([20], [20, 20, 5]),
+    result, blockdims = slice_array('y', 'x', ([20], [20, 20, 5]),
                         [5, slice(10, None, 1)])
 
     assert expected == result
@@ -196,20 +196,20 @@ def test_dask_slice_2d():
 def test_slice_optimizations():
     #bar[:]
     expected = {'foo':'bar'}
-    result = dask_slice('foo', 'bar', (100,), (13,), (slice(None,None,None),))
+    result, blockdims = slice_array('foo', 'bar', [[100]], (slice(None,None,None),))
     assert expected == result
 
     #bar[:,:,:]
     expected = {'foo':'bar'}
-    result = dask_slice('foo', 'bar', (100,1000,10000), (13,0,331),
+    result, blockdims = slice_array('foo', 'bar', [(100,1000,10000)],
                         (slice(None,None,None),slice(None,None,None),
                          slice(None,None,None)))
     assert expected == result
 
 
 def test_slicing_with_singleton_indices():
-    result = dask_slice('y', 'x', (10, 10), ([5, 5], [5, 5]),
-                        (slice(0, 5), 8))
+    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+                                    (slice(0, 5), 8))
 
     expected = {('y', 0): (getitem, ('x', 0, 1), (slice(0, 5, 1), 3))}
 
@@ -217,8 +217,8 @@ def test_slicing_with_singleton_indices():
 
 
 def test_slicing_with_newaxis():
-    result = dask_slice('y', 'x', (10, 10), ([5, 5], [5, 5]),
-                        (slice(0, 3), None, slice(None, None, None)))
+    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+                            (slice(0, 3), None, slice(None, None, None)))
 
     expected = {
         ('y', 0, 0, 0): (getitem,
@@ -230,6 +230,7 @@ def test_slicing_with_newaxis():
       }
 
     assert expected == result
+    assert blockdims == ((3,), (1,), (5, 5))
 
 
 def test_take():
@@ -266,13 +267,13 @@ def test_take():
 
     assert result == expected
 
-def test_fancy_slice():
+def test_slice_lists():
     from dask.array.into import into, Array
     from dask.optimize import cull
     a = np.arange(100).reshape((10, 10))
     x = into(Array, a, name='x', shape=(10, 10), blockshape=(3, 3))
-    y = fancy_slice('y', x.name, x.shape, x.blockdims,
-                    ([1, 2, 9], slice(None, None, None)))
+    y, blockdims = slice_array('y', x.name, x.blockdims,
+                                ([1, 2, 9], slice(None, None, None)))
     assert y == \
         dict((('y', 0, i), (getitem,
                        (np.concatenate,
@@ -287,3 +288,19 @@ def test_fancy_slice():
                         0),
                        ((0, 1, 2), slice(None, None, None))))
                 for i in range(4))
+
+    assert blockdims == ((3,), (3, 3, 3, 1))
+
+
+def test_slicing_blockdims():
+    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+                                    (1, [2, 0, 3]))
+    assert blockdims == ((3,),)
+
+    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+                                    (slice(0, 7), [2, 0, 3]))
+    assert blockdims == ((5, 2), (3,))
+
+    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+                                    (slice(0, 7), 1))
+    assert blockdims == ((5, 2),)
