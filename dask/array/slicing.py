@@ -70,11 +70,15 @@ def slice_array(out_name, in_name, blockdims, index):
     index = tuple(index)
     blockdims = tuple(map(tuple, blockdims))
 
+    # x[:, :, :] - Punt and return old value
     if all(index == slice(None, None, None) for index in index):
         return {out_name: in_name}, blockdims
 
+    # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
     missing = len(blockdims) - len([ind for ind in index if ind is not None])
     index2 = index + (slice(None, None, None),) * missing
+
+    # Pass down to next function
     dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index2)
 
     bd_out = tuple(map(tuple, bd_out))
@@ -127,6 +131,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     shape = tuple(map(sum, blockdims))
     assert all(isinstance(i, (slice, list, int)) for i in index)
 
+    # Change indices like -1 to 9
     index2 = posify_index(shape, index)
 
     # Do we have more than one list in the index?
@@ -134,41 +139,40 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
 
-    # Turn x[5:10] into x[5:10, :, :] as needed
-    num_missing_dims = len(shape) - len([i for i in index2 if i is not None])
-    index3 = index2 + (slice(None, None, None),) * num_missing_dims
-
+    # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(slice(None, None, None)
                                     if isinstance(i, list)
                                     else i
-                                    for i in index3)
+                                    for i in index2)
 
     # No lists, hooray! just use slice_slices_and_integers
-    if index3 == index_without_list:
-        return slice_slices_and_integers(out_name, in_name, blockdims, index3)
+    if index2 == index_without_list:
+        return slice_slices_and_integers(out_name, in_name, blockdims, index2)
 
-    # lists and full slice/:   Just use take
+    # lists and full slices.  Just use take
     if all(isinstance(i, list) or i == slice(None, None, None)
-            for i in index3):
+            for i in index2):
         axis = where_list[0]
-        dsk3 = take(out_name, in_name, blockdims, index3[where_list[0]],
+        dsk3 = take(out_name, in_name, blockdims, index2[where_list[0]],
                     axis=axis)
         blockdims2 = blockdims
-    else:  # Mixed case. Both slices/integers and lists. slice/integer then take
+    # Mixed case. Both slices/integers and lists. slice/integer then take
+    else:
+        # Do first pass without lists
         tmp = next(slice_names)
         dsk, blockdims2 = slice_slices_and_integers(tmp, in_name, blockdims, index_without_list)
 
         # After collapsing some axes due to int indices, adjust axis parameter
         axis = where_list[0]
-        axis2 = axis - sum(1 for i, ind in enumerate(index3)
+        axis2 = axis - sum(1 for i, ind in enumerate(index2)
                            if i < axis and isinstance(ind, int))
 
         # Do work
-        dsk2 = take(out_name, tmp, blockdims2, index3[axis], axis=axis2)
+        dsk2 = take(out_name, tmp, blockdims2, index2[axis], axis=axis2)
         dsk3 = merge(dsk, dsk2)
 
     # Replace blockdims of list entries with single block
-    index4 = [ind for ind in index3 if not isinstance(ind, int)]
+    index4 = [ind for ind in index2 if not isinstance(ind, int)]
     blockdims3 = tuple([bd if not isinstance(i, list) else (len(i),)
                         for i, bd in zip(index4, blockdims2)])
 
@@ -444,5 +448,3 @@ def new_blockdim(dim_shape, lengths, index):
     assert not isinstance(index, int)
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
     return [(slc.stop - slc.start) // slc.step for _, slc in pairs]
-
-
