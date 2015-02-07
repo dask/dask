@@ -533,6 +533,33 @@ def take(outname, inname, blockdims, index, axis=0):
     return dict(zip(keys, vals))
 
 
+def posify_index(shape, ind):
+    """
+
+    >>> posify_index(10, 3)
+    3
+    >>> posify_index(10, -3)
+    7
+    >>> posify_index(10, [3, -3])
+    [3, 7]
+
+    >>> posify_index((10, 20), (3, -3))
+    (3, 17)
+    >>> posify_index((10, 20), (3, [3, 4, -3]))
+    (3, [3, 4, 17])
+    """
+    if isinstance(ind, tuple):
+        return tuple(map(posify_index, shape, ind))
+    if isinstance(ind, int):
+        if ind < 0:
+            return ind + shape
+        else:
+            return ind
+    if isinstance(ind, list):
+        return [posify_index(shape, i) for i in ind]
+    return ind
+
+
 tmp_names = ('slice-%d' % i for i in count(1))
 
 def fancy_slice(out_name, in_name, shape, blockdims, indexes):
@@ -581,23 +608,28 @@ def fancy_slice(out_name, in_name, shape, blockdims, indexes):
     take - handle slicing with lists ("fancy" indexing)
     dask_slice - handle slicing with slices and integers
     """
+    indexes2 = posify_index(shape, indexes)
     where_list = [i for i, ind in enumerate(indexes) if isinstance(ind, list)]
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
 
-    indexes_without_list = [slice(None, None, None)
-                                if isinstance(i, list)
-                                else i
-                            for i in indexes]
+    # Turn x[5:10] into x[5:10, :, :] as needed
+    indexes3 = indexes2 + (slice(None, None, None),) * (len(shape) - len(indexes2))
+
+    indexes_without_list = tuple(slice(None, None, None)
+                                    if isinstance(i, list)
+                                    else i
+                                    for i in indexes3)
+
     # No lists, hooray! just use dask_slice
-    if indexes == indexes_without_list:
-        return dask_slice(out_name, in_name, shape, blockdims, indexes)
+    if indexes3 == indexes_without_list:
+        return dask_slice(out_name, in_name, shape, blockdims, indexes3)
 
     # lists and full slice/:   Just use take
     if all(isinstance(i, list) or i == slice(None, None, None)
-            for i in indexes):
+            for i in indexes3):
         axis = where_list[0]
-        return take(out_name, in_name, blockdims, indexes[where_list[0]],
+        return take(out_name, in_name, blockdims, indexes3[where_list[0]],
                     axis=axis)
 
     # Mixed case.  Have both slices/integers and lists.  dask_slice then take
@@ -608,11 +640,11 @@ def fancy_slice(out_name, in_name, shape, blockdims, indexes):
                   if not isinstance(i, int)]
     # After collapsing some axes, readjust axis parameter
     axis = where_list[0]
-    axis2 = axis - sum(1 for i, ind in enumerate(indexes)
+    axis2 = axis - sum(1 for i, ind in enumerate(indexes3)
                        if i < axis and isinstance(ind, int))
 
     # Do work
-    dsk2 = take(out_name, tmp, blockdims2, indexes[axis], axis=axis2)
+    dsk2 = take(out_name, tmp, blockdims2, indexes3[axis], axis=axis2)
     return merge(dsk, dsk2)
 
 

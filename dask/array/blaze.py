@@ -127,8 +127,8 @@ def compute_up(expr, data, **kwargs):
     if all(i == slice(None, None, None) for i in index):
         return data
 
-    # Turn x[5:10] into x[5:10, :, :] as needed
-    index = list(index) + [slice(None, None, None)] * (ndim(expr) - len(index))
+    index = (index + (slice(None, None, None),) * (ndim(expr._child) -
+            len(index))
 
     dsk = fancy_slice(out, data.name, data.shape, data.blockdims, index)
     blockdims = [new_blockdim(d, db, i)
