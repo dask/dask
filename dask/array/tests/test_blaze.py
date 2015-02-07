@@ -126,3 +126,23 @@ def test_slicing_on_boundary_lines():
 
     result = compute(expr, dx)
     assert eq(result, nx[0, [1, 3, 9, 3]])
+
+
+def test_slicing_with_newaxis():
+    nx = np.arange(20).reshape((4, 5))
+    dx = convert(Array, nx, blockshape=(2, 2))
+    sx = symbol('x', discover(dx))
+
+    expr = sx[:, None, :]
+    result = compute(expr, dx)
+
+    assert result.shape == (4, 1, 5)
+    assert result.blockdims == ((2, 2), (1,), (2, 2, 1))
+    assert eq(np.array(result), compute(expr, nx))
+
+    expr = sx[None, :, None, None, :, None]
+    result = compute(expr, dx)
+
+    assert result.shape == (1, 4, 1, 1, 5, 1)
+    assert result.blockdims == ((1,), (2, 2), (1,), (1,), (2, 2, 1), (1,))
+    assert eq(np.array(result), compute(expr, nx))

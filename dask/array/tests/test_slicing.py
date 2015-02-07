@@ -216,6 +216,22 @@ def test_slicing_with_singleton_indices():
     assert expected == result
 
 
+def test_slicing_with_newaxis():
+    result = dask_slice('y', 'x', (10, 10), ([5, 5], [5, 5]),
+                        (slice(0, 3), None, slice(None, None, None)))
+
+    expected = {
+        ('y', 0, 0, 0): (getitem,
+                          ('x', 0, 0),
+                          (slice(0, 3, 1), None, slice(0, 5, 1))),
+        ('y', 0, 0, 1): (getitem,
+                          ('x', 0, 1),
+                          (slice(0, 3, 1), None, slice(0, 5, 1)))
+      }
+
+    assert expected == result
+
+
 def test_take():
     result = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     expected = {('y', 0):

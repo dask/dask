@@ -608,13 +608,25 @@ def fancy_slice(out_name, in_name, shape, blockdims, indexes):
     take - handle slicing with lists ("fancy" indexing)
     dask_slice - handle slicing with slices and integers
     """
-    indexes2 = posify_index(shape, indexes)
+    # Turn x[-3, None, 10] into x[7, None, 10]
+    indexes2 = []
+    i = 0
+    for ind in indexes:
+        if ind is not None:
+            indexes2.append(posify_index(shape[i], ind))
+            i += 1
+        else:
+            indexes2.append(ind)
+    indexes2 = tuple(indexes2)
+
+    # Do we have more than one list in the indexes?
     where_list = [i for i, ind in enumerate(indexes) if isinstance(ind, list)]
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
 
     # Turn x[5:10] into x[5:10, :, :] as needed
-    indexes3 = indexes2 + (slice(None, None, None),) * (len(shape) - len(indexes2))
+    num_missing_dims = len(shape) - len([i for i in indexes2 if i is not None])
+    indexes3 = indexes2 + (slice(None, None, None),) * num_missing_dims
 
     indexes_without_list = tuple(slice(None, None, None)
                                     if isinstance(i, list)
@@ -659,19 +671,28 @@ def dask_slice(out_name, in_name, shape, blockdims, indexes,
     if all(index == empty for index in indexes):
         return {out_name: in_name}
 
-    # Get a list (for each dimension) of dicts{blocknum: slice()}
-    block_slices = list(map(_slice_1d, shape, blockdims, indexes))
+    # Strip out None/newaxis
+    indexes2 = [i for i in indexes if i is not None]
 
-    # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
-    out_names = product([out_name],
-                        *[range(len(d))
-                            for d, i in zip(block_slices, indexes)
-                            if not isinstance(i, int)])
+    # Get a list (for each dimension) of dicts{blocknum: slice()}
+    block_slices = list(map(_slice_1d, shape, blockdims, indexes2))
 
     # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
     in_names = product([in_name], *[i.keys() for i in block_slices])
 
-    all_slices = product(*[i.values() for i in block_slices])
+    # Add None/newaxis back in
+    block_slices2 = block_slices[:]  # make a copy
+    for i, ind in enumerate(indexes):
+        if ind is None:
+            block_slices2.insert(i, {0: None})
+
+    # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
+    out_names = product([out_name],
+                        *[range(len(d)) if d is not None else [0]
+                            for d, i in zip(block_slices2, indexes)
+                            if not isinstance(i, int)])
+
+    all_slices = list(product(*[i.values() for i in block_slices2]))
 
     final_out = dict((out_name, (getitem_func, in_name, slices))
                      for out_name, in_name, slices
