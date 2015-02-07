@@ -120,12 +120,4 @@ def compute_up(expr, lhs, rhs, **kwargs):
 
 @dispatch(Slice, Array)
 def compute_up(expr, data, **kwargs):
-    out = next(names)
-    index = expr.index
-
-    if all(i == slice(None, None, None) for i in index):
-        return data
-
-    dsk, blockdims = slice_array(out, data.name, data.blockdims, index)
-
-    return Array(merge(data.dask, dsk), out, shape(expr), blockdims=blockdims)
+    return data[expr.index]

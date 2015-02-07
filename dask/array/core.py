@@ -11,6 +11,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
         merge, curry)
 import numpy as np
+from .slicing import slice_array
 from ..utils import deepmap
 from ..async import inline_functions
 from ..optimize import cull
@@ -407,6 +408,18 @@ class Array(object):
         if dtype and x.dtype != dtype:
             x = x.astype(dtype)
         return x
+
+    def __getitem__(self, index):
+        out = next(names)
+        if not isinstance(index, tuple):
+            index = (index,)
+
+        if all(i == slice(None, None, None) for i in index):
+            return self
+
+        dsk, blockdims = slice_array(out, self.name, self.blockdims, index)
+
+        return Array(merge(self.dask, dsk), out, blockdims=blockdims)
 
 
 def atop(func, out, out_ind, *args):
