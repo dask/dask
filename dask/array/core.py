@@ -6,10 +6,10 @@ import operator
 from math import ceil, floor
 from itertools import product, count
 from collections import Iterator
-from functools import partial
+from functools import partial, wraps
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
-        merge)
+        merge, curry)
 import numpy as np
 from ..utils import deepmap
 from ..async import inline_functions
@@ -569,3 +569,10 @@ def concatenate(seq, axis=0):
     dsk2 = merge(dsk, *[a.dask for a in seq])
 
     return Array(dsk2, name, shape, blockdims=blockdims)
+
+
+@wraps(np.transpose)
+def transpose(a, axes=None):
+    return atop(curry(np.transpose, axes=axes),
+                next(names), axes,
+                a, tuple(range(a.ndim)))

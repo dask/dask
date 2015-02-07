@@ -13,7 +13,8 @@ from blaze import compute, ndim, shape
 from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
         Expr, Slice, Broadcast)
 
-from .core import (getem, _concatenate2, top, Array, get, atop, names)
+from .core import (getem, _concatenate2, top, Array, get, atop, names,
+        transpose)
 from .slicing import slice_array
 
 
@@ -80,9 +81,7 @@ def compute_up(expr, data, **kwargs):
 
 @dispatch(Transpose, Array)
 def compute_up(expr, data, **kwargs):
-    return atop(curry(np.transpose, axes=expr.axes),
-                next(names), expr.axes,
-                data, tuple(range(ndim(expr))))
+    return transpose(data, expr.axes)
 
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
