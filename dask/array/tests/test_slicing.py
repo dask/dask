@@ -1,6 +1,5 @@
 import dask
-from dask.array.core import slice_array, _slice_1d, take
-import operator
+from dask.array.slicing import slice_array, _slice_1d, take
 from operator import getitem
 import numpy as np
 from pprint import pprint
@@ -268,11 +267,7 @@ def test_take():
     assert result == expected
 
 def test_slice_lists():
-    from dask.array.into import into, Array
-    from dask.optimize import cull
-    a = np.arange(100).reshape((10, 10))
-    x = into(Array, a, name='x', shape=(10, 10), blockshape=(3, 3))
-    y, blockdims = slice_array('y', x.name, x.blockdims,
+    y, blockdims = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
                                 ([1, 2, 9], slice(None, None, None)))
     assert y == \
         dict((('y', 0, i), (getitem,

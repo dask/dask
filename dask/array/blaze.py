@@ -13,8 +13,8 @@ from blaze import compute, ndim, shape
 from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
         Expr, Slice, Broadcast)
 
-from .core import (getem, _concatenate2, top, new_blockdim,
-    broadcast_dimensions, slice_array, Array, get, atop, names)
+from .core import (getem, _concatenate2, top, Array, get, atop, names)
+from .slicing import slice_array
 
 
 def compute_it(expr, leaves, *data, **kwargs):
