@@ -363,20 +363,25 @@ class Array(object):
         block sizes along each dimension
     """
 
-    __slots__ = 'dask', 'name', 'shape', 'blockdims'
+    __slots__ = 'dask', 'name', 'blockdims'
 
-    def __init__(self, dask, name, shape, blockshape=None, blockdims=None):
+    def __init__(self, dask, name, shape=None, blockshape=None, blockdims=None):
         self.dask = dask
         self.name = name
-        self.shape = shape
-        if blockshape is not None:
+        if shape is not None and blockshape is not None:
             blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
                               for d, bd in zip(shape, blockshape))
+        if blockdims is None:
+            raise ValueError("Either give shape and blockshape or blockdims")
         self.blockdims = tuple(map(tuple, blockdims))
 
     @property
     def numblocks(self):
         return tuple(map(len, self.blockdims))
+
+    @property
+    def shape(self):
+        return tuple(map(sum, self.blockdims))
 
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
