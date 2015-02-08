@@ -423,13 +423,15 @@ class Array(object):
         Examples
         --------
 
+        >>> x = ...  # doctest: +SKIP
+
         >>> import h5py  # doctest: +SKIP
         >>> f = h5py.File('myfile.hdf5')  # doctest: +SKIP
-        >>> dset = f.create_dataset('/data', shape=self.shape,
-        ...                                  chunks=self.blockshape,
+        >>> dset = f.create_dataset('/data', shape=x.shape,
+        ...                                  chunks=x.blockshape,
         ...                                  dtype='f8')  # doctest: +SKIP
 
-        >>> my_array.store(dset)  # doctest: +SKIP
+        >>> x.store(dset)  # doctest: +SKIP
         """
         update = insert_to_ooc(target, self)
         dsk = merge(self.dask, update)
