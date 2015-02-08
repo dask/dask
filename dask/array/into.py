@@ -23,13 +23,28 @@ arrays = [np.ndarray]
 try:
     import h5py
     arrays.append(h5py.Dataset)
+
+    @dispatch(h5py.Dataset, int)
+    def resize(x, size):
+        s = list(x.shape)
+        s[0] = size
+        return resize(x, tuple(s))
+
+    @dispatch(h5py.Dataset, tuple)
+    def resize(x, shape):
+        return x.resize(shape)
 except ImportError:
     pass
 try:
     import bcolz
     arrays.append(bcolz.carray)
+
+    @dispatch(bcolz.carray, int)
+    def resize(x, size):
+        return x.resize(size)
 except ImportError:
     pass
+
 
 
 @convert.register(Array, tuple(arrays), cost=0.01)
@@ -78,20 +93,4 @@ def store_Array_in_ooc_data(out, arr, inplace=False, **kwargs):
 
     get(dsk, list(update.keys()), **kwargs)
     return out
-
-
-@dispatch(bcolz.carray, int)
-def resize(x, size):
-    return x.resize(size)
-
-
-@dispatch(h5py.Dataset, int)
-def resize(x, size):
-    s = list(x.shape)
-    s[0] = size
-    return resize(x, tuple(s))
-
-@dispatch(h5py.Dataset, tuple)
-def resize(x, shape):
-    return x.resize(shape)
 
