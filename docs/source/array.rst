@@ -21,8 +21,8 @@ The ``dask.array`` library supports the following interface from ``numpy``.
 These operations should match the NumPy interface precisely.
 
 
-Construction
-------------
+Construct
+---------
 
 We can construct dask array objects from other array objects that support
 numpy-style slicing.  Here we wrap a dask array around an HDF5 dataset,
@@ -49,8 +49,8 @@ functions to bind many dask arrays into one.
    >>> a = da.stack(arrays, axis=0)  # Stack along a new first axis
 
 
-Interaction
------------
+Interact
+--------
 
 Dask relies on Blaze for usability.  Blaze contains all mathematical operations
 from numpy, tracks dtypes, etc...
@@ -61,15 +61,22 @@ from numpy, tracks dtypes, etc...
    >>> x = Data(a)
    >>> y = log(a + 1)[:5].sum(axis=1)
 
+When you're done interacting you can get a dask array back by calling compute
 
-Store results
--------------
+.. code-block:: Python
+
+   >>> from blaze import compute
+   >>> result = compute(y)
+
+
+Store
+-----
 
 If your data is small you can call ``np.array`` on your dask array to turn it
 in to a normal NumPy array.
 
 If your data is large then you can store your dask array in any object that
-supports numpy-style item assignment like ``h5py.Dataset``.
+supports numpy-style item assignment like an ``h5py.Dataset``.
 
 .. code-block:: Python
 
@@ -80,4 +87,15 @@ supports numpy-style item assignment like ``h5py.Dataset``.
    ...                                  chunks=x.blockshape,
    ...                                  dtype='f8')
 
-   >>> x.store(dset)
+   >>> result.store(dset)
+
+Alternatively, if you're comfortable using Blaze and ``into`` then you can jump
+directly from the blaze expression to storage, leaving it to handle dataset
+creation.
+
+.. code-block:: Python
+
+   >>> from blaze import Data, log, into
+   >>> x = Data(a)
+   >>> y = log(a + 1)[:5].sum(axis=1)
+   >>> into('myfile.hdf5::/data', y)
