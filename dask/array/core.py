@@ -594,3 +594,37 @@ def transpose(a, axes=None):
     return atop(curry(np.transpose, axes=axes),
                 next(names), axes,
                 a, tuple(range(a.ndim)))
+
+
+@curry
+def many(a, b, binop=None, reduction=None, **kwargs):
+    """
+    Apply binary operator to pairwise to sequences, then reduce.
+
+    >>> many([1, 2, 3], [10, 20, 30], mul, sum)  # dot product
+    140
+    """
+    return reduction(map(curry(binop, **kwargs), a, b))
+
+
+alphabet = 'abcdefghijklmnopqrstuvwxyz'
+ALPHABET = alphabet.upper()
+
+
+@wraps(np.tensordot)
+def tensordot(lhs, rhs, axes=None):
+    left_axes, right_axes = axes
+    left_index = list(alphabet[:lhs.ndim])
+    right_index = list(ALPHABET[:rhs.ndim])
+    out_index = left_index + right_index
+    for l, r in zip(left_axes, right_axes):
+        out_index.remove(right_index[r])
+        out_index.remove(left_index[l])
+        right_index[r] = left_index[l]
+
+    func = many(binop=np.tensordot, reduction=sum,
+                axes=(left_axes, right_axes))
+    return atop(func,
+                next(names), out_index,
+                lhs, tuple(left_index),
+                rhs, tuple(right_index))

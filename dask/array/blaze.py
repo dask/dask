@@ -1,20 +1,18 @@
 from __future__ import absolute_import, division, print_function
 
-from math import ceil
 from numbers import Number
-import operator
 import numpy as np
-from toolz import merge, concat, partition, accumulate, first, curry, compose
+from toolz import concat, first, curry, compose
 
 from datashape import DataShape
 from blaze.dispatch import dispatch
 from blaze.compute.core import compute_up, optimize
-from blaze import compute, ndim, shape
+from blaze import compute, ndim
 from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
         Expr, Slice, Broadcast)
 
 from .core import (getem, _concatenate2, top, Array, get, atop, names,
-        transpose)
+        transpose, tensordot)
 from .slicing import slice_array
 
 
@@ -84,38 +82,9 @@ def compute_up(expr, data, **kwargs):
     return transpose(data, expr.axes)
 
 
-alphabet = 'abcdefghijklmnopqrstuvwxyz'
-ALPHABET = alphabet.upper()
-
-
-@curry
-def many(a, b, binop=None, reduction=None, **kwargs):
-    """
-    Apply binary operator to pairwise to sequences, then reduce.
-
-    >>> many([1, 2, 3], [10, 20, 30], mul, sum)  # dot product
-    140
-    """
-    return reduction(map(curry(binop, **kwargs), a, b))
-
-
-
 @dispatch(TensorDot, Array, Array)
 def compute_up(expr, lhs, rhs, **kwargs):
-    left_index = list(alphabet[:ndim(lhs)])
-    right_index = list(ALPHABET[:ndim(rhs)])
-    out_index = left_index + right_index
-    for l, r in zip(expr._left_axes, expr._right_axes):
-        out_index.remove(right_index[r])
-        out_index.remove(left_index[l])
-        right_index[r] = left_index[l]
-
-    func = many(binop=np.tensordot, reduction=sum,
-                axes=(expr._left_axes, expr._right_axes))
-    return atop(func,
-                next(names), out_index,
-                lhs, tuple(left_index),
-                rhs, tuple(right_index))
+    return tensordot(lhs, rhs, (expr._left_axes, expr._right_axes))
 
 
 @dispatch(Slice, Array)
