@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import add, getitem
+from collections import Iterable
 from bisect import bisect
 import operator
 from math import ceil, floor
@@ -403,8 +404,7 @@ class Array(object):
                         for i in range(self.numblocks[ind])]
 
     def __array__(self, dtype=None, **kwargs):
-        from .into import into
-        x = into(np.ndarray, self)
+        x = self.compute()
         if dtype and x.dtype != dtype:
             x = x.astype(dtype)
         return x
@@ -435,6 +435,17 @@ class Array(object):
         dsk = merge(self.dask, update)
         get(dsk, list(update.keys()), **kwargs)
         return target
+
+    def compute(self, **kwargs):
+        result = get(self.dask, self._keys(), **kwargs)
+        if self.shape:
+            result = rec_concatenate(result)
+        else:
+            while isinstance(result, Iterable):
+                result = result[0]
+        return result
+
+    __float__ = __int__ = __bool__ = __complex__ = compute
 
     def __getitem__(self, index):
         out = next(names)

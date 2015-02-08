@@ -157,6 +157,13 @@ def test_keys():
     assert d._keys() == [('x',)]
 
 
+def test_Array_computation():
+    a = Array({('x', 0, 0): np.eye(3)}, 'x', shape=(3, 3), blockshape=(3, 3))
+    assert eq(np.array(a), np.eye(3))
+    assert isinstance(a.compute(), np.ndarray)
+    assert float(a[0, 0]) == 1
+
+
 def test_stack():
     a, b, c = [Array(getem(name, blocksize=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), blockshape=(2, 3))

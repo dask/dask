@@ -6,7 +6,6 @@ from into import discover, convert, append, into
 from datashape.dispatch import dispatch
 from datashape import DataShape
 from operator import add
-from collections import Iterable
 import itertools
 from .core import rec_concatenate, Array, getem, get, names
 from ..core import flatten
@@ -58,11 +57,7 @@ def dask_to_numpy(x, **kwargs):
 
 @convert.register(float, Array, cost=0.5)
 def dask_to_float(x, **kwargs):
-    result = get(x.dask, x._keys(), **kwargs)
-    while isinstance(result, Iterable):
-        assert len(result) == 1
-        result = result[0]
-    return result
+    return x.compute()
 
 
 @append.register(tuple(arrays), Array)
