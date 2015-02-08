@@ -13,8 +13,8 @@ from blaze import compute, ndim, shape
 from blaze.expr import (ElemWise, symbol, Reduction, Transpose, TensorDot,
         Expr, Slice, Broadcast)
 
-from .core import (getem, _concatenate2, top, new_blockdim,
-    broadcast_dimensions, fancy_slice, Array, get, atop, names)
+from .core import (getem, _concatenate2, top, Array, get, atop, names)
+from .slicing import slice_array
 
 
 def compute_it(expr, leaves, *data, **kwargs):
@@ -127,11 +127,6 @@ def compute_up(expr, data, **kwargs):
     if all(i == slice(None, None, None) for i in index):
         return data
 
-    # Turn x[5:10] into x[5:10, :, :] as needed
-    index = list(index) + [slice(None, None, None)] * (ndim(expr) - len(index))
+    dsk, blockdims = slice_array(out, data.name, data.blockdims, index)
 
-    dsk = fancy_slice(out, data.name, data.shape, data.blockdims, index)
-    blockdims = [new_blockdim(d, db, i)
-                for d, i, db in zip(data.shape, index, data.blockdims)
-                if not isinstance(i, int)]
     return Array(merge(data.dask, dsk), out, shape(expr), blockdims=blockdims)

@@ -95,32 +95,54 @@ def test_slicing_with_lists():
     nx = np.arange(20).reshape((4, 5))
     dx = convert(Array, nx, blockshape=(2, 2))
     sx = symbol('x', discover(dx))
-    expr = sx[[2, 0, 3]],
-    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
 
-    expr = sx[::2, [2, 0, 3]],
-    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+    expr = sx[[2, 0, 3]]
+    assert eq(np.array(compute(expr, dx)), compute(expr, nx))
 
-    expr = sx[1, [2, 0, 3]],
-    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+    expr = sx[::2, [2, 0, 3]]
+    assert eq(np.array(compute(expr, dx)), compute(expr, nx))
 
-    expr = sx[[2, 0, 3], -2],
-    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+    expr = sx[1, [2, 0, 3]]
+    assert eq(np.array(compute(expr, dx)), compute(expr, nx))
+
+    expr = sx[[2, 0, 3], -2]
+    assert eq(np.array(compute(expr, dx)), compute(expr, nx))
 
     expr = sx[:, :]
-    assert compute(sx, dx).dask == dx.dask
+    assert compute(expr, dx).dask == dx.dask
 
-    expr = sx[0],
-    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+    expr = sx[0]
+    assert eq(np.array(compute(expr, dx)), compute(expr, nx))
 
-    expr = sx[0, [3, 1, 4]],
-    assert eq(np.array(compute(sx, dx)), compute(sx, nx))
+    expr = sx[0, [3, 1, 4]]
+    assert eq(np.array(compute(expr, dx)), compute(expr, nx))
 
 
-def test_more_slicing():
+def test_slicing_on_boundary_lines():
     nx = np.arange(100).reshape((10, 10))
     dx = convert(Array, nx, blockshape=(3, 3))
     sx = symbol('x', discover(dx))
     expr = sx[0, [1, 3, 9, 3]]
 
     result = compute(expr, dx)
+    assert eq(result, nx[0, [1, 3, 9, 3]])
+
+
+def test_slicing_with_newaxis():
+    nx = np.arange(20).reshape((4, 5))
+    dx = convert(Array, nx, blockshape=(2, 2))
+    sx = symbol('x', discover(dx))
+
+    expr = sx[:, None, :]
+    result = compute(expr, dx)
+
+    assert result.shape == (4, 1, 5)
+    assert result.blockdims == ((2, 2), (1,), (2, 2, 1))
+    assert eq(np.array(result), compute(expr, nx))
+
+    expr = sx[None, [2, 1, 3], None, None, :, None]
+    result = compute(expr, dx)
+
+    assert result.shape == (1, 3, 1, 1, 5, 1)
+    assert result.blockdims == ((1,), (3,), (1,), (1,), (2, 2, 1), (1,))
+    assert eq(np.array(result), compute(expr, nx))
