@@ -12,22 +12,21 @@ The ``dask.array`` library supports the following interface from ``numpy``.
 
 *  Arithmetic and scalar mathematics, ``+, *, exp, log, ...``
 *  Reductions along axes, ``sum(), mean(), std(), sum(axis=0), ...``
-*  Tensor contractions / dot products / matrix multiple, ``tensordot``
+*  Tensor contractions / dot products / matrix multiply, ``tensordot``
 *  Axis reordering / transpose, ``transpose``
 *  Slicing, ``x[:100, 500:100:-2]``
-*  Fancy indexing along single axes with lists or numpy arrays, ``x[:, [10, 1,
-  5]]``
+*  Fancy indexing along single axes with lists or numpy arrays, ``x[:, [10, 1, 5]]``
 *  The array protocol ``__array__``
 
-To the best of our knowledge these operations match the NumPy API precisely.
+These operations should match the NumPy interface precisely.
 
 
 Construction
 ------------
 
-We often construct dask array objects from another array-like object that
-supports numpy-style slicing.  Here we show an example wrapping a dask array
-around an HDF5 dataset
+We can construct dask array objects from other array objects that support
+numpy-style slicing.  Here we wrap a dask array around an HDF5 dataset,
+chunking that dataset into blocks of size ``(1000, 1000)``.
 
 .. code-block:: Python
 
@@ -36,30 +35,31 @@ around an HDF5 dataset
    >>> dset = f['/data/path']
 
    >>> import dask.array as da
-   >>> a = da.Array.from_arraylike(dset, blockshape=(1000, 1000))
+   >>> a = da.Array.from_array(dset, blockshape=(1000, 1000))
 
 Often we have many such datasets.  We can use the ``stack`` or ``concatenate``
-functions to bind many arrays into one.
+functions to bind many dask arrays into one.
 
 .. code-block:: Python
 
    >>> dsets = [h5py.File(fn)['/data'] for fn in sorted(glob('myfiles.*.hdf5')]
-   >>> arrays = [da.Array.from_arraylike(dset, blockshape=(1000, 1000))
+   >>> arrays = [da.Array.from_array(dset, blockshape=(1000, 1000))
                    for dset in dsets]
+
    >>> a = da.stack(arrays, axis=0)  # Stack along a new first axis
 
 
 Interaction
 -----------
 
-Dask relies on Blaze for usability
+Dask relies on Blaze for usability.  Blaze contains all mathematical operations
+from numpy, tracks dtypes, etc...
 
 .. code-block:: Python
 
-   >>> from blaze import Data
-   >>> a = Data(a)
-   >>> (a + 1)[:5].sum(axis=1)
-   [....]
+   >>> from blaze import Data, log
+   >>> x = Data(a)
+   >>> y = log(a + 1)[:5].sum(axis=1)
 
 
 Store results
