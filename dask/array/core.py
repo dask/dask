@@ -525,7 +525,7 @@ def stack(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [da.into(da.Array, np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [Array.from_arraylike(np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.stack(data, axis=0)
@@ -587,7 +587,7 @@ def concatenate(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [da.into(da.Array, np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [Array.from_arraylike(np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.concatenate(data, axis=0)
