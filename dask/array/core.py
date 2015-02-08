@@ -421,6 +421,12 @@ class Array(object):
 
         return Array(merge(self.dask, dsk), out, blockdims=blockdims)
 
+    @classmethod
+    def from_arraylike(cls, x, blockshape=None, name=None, **kwargs):
+        name = name or next(names)
+        dask = merge({name: x}, getem(name, blockshape, x.shape))
+        return Array(dask, name, shape=x.shape, blockshape=blockshape)
+
 
 def atop(func, out, out_ind, *args):
     """ Array object version of dask.array.top """
