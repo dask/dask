@@ -83,8 +83,8 @@ supports numpy-style item assignment like an ``h5py.Dataset``.
    >>> import h5py  # doctest: +SKIP
    >>> f = h5py.File('myfile.hdf5')
 
-   >>> dset = f.create_dataset('/data', shape=x.shape,
-   ...                                  chunks=x.blockshape,
+   >>> dset = f.create_dataset('/data', shape=result.shape,
+   ...                                  chunks=result.blockshape,
    ...                                  dtype='f8')
 
    >>> result.store(dset)
