@@ -423,6 +423,13 @@ class Array(object):
 
     @classmethod
     def from_arraylike(cls, x, blockshape=None, name=None, **kwargs):
+        """ Create dask array from something that looks like an array
+
+        Input must have a ``.shape`` and support numpy-style slicing.
+
+        >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
+        >>> a = da.Array.from_arraylike(x, blockshape=(1000, 1000))  # doctest: +SKIP
+        """
         name = name or next(names)
         dask = merge({name: x}, getem(name, blockshape, x.shape))
         return Array(dask, name, shape=x.shape, blockshape=blockshape)
