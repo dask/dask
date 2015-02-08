@@ -409,6 +409,33 @@ class Array(object):
             x = x.astype(dtype)
         return x
 
+    def store(self, target, **kwargs):
+        """ Store dask array in array-like object, overwrite data in target
+
+        This stores a dask into an object that supports numpy-style setitem
+        indexing.  It stores values chunk by chunk so that it does not have to
+        fill up memory.  For best performance you can align the block size of
+        the storage target with the block size of your array.
+
+        If your data fits in memory then you may prefer calling
+        ``np.array(myarray)`` instead.
+
+        Examples
+        --------
+
+        >>> import h5py  # doctest: +SKIP
+        >>> f = h5py.File('myfile.hdf5')  # doctest: +SKIP
+        >>> dset = f.create_dataset('/data', shape=self.shape,
+        ...                                  chunks=self.blockshape,
+        ...                                  dtype='f8')  # doctest: +SKIP
+
+        >>> my_array.store(dset)  # doctest: +SKIP
+        """
+        update = insert_to_ooc(target, self)
+        dsk = merge(self.dask, update)
+        get(dsk, list(update.keys()), **kwargs)
+        return target
+
     def __getitem__(self, index):
         out = next(names)
         if not isinstance(index, tuple):
@@ -641,3 +668,20 @@ def tensordot(lhs, rhs, axes=None):
                 next(names), out_index,
                 lhs, tuple(left_index),
                 rhs, tuple(right_index))
+
+
+def insert_to_ooc(out, arr):
+    from threading import Lock
+    lock = Lock()
+
+    locs = [[0] + list(accumulate(add, bl)) for bl in arr.blockdims]
+
+    def store(x, *args):
+        with lock:
+            ind = tuple([slice(loc[i], loc[i+1]) for i, loc in zip(args, locs)])
+            out[ind] = x
+        return None
+
+    name = 'store-%s' % arr.name
+    return dict(((name,) + t[1:], (store, t) + t[1:])
+                for t in core.flatten(arr._keys()))

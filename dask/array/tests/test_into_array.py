@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from dask.array.into import *
+from dask.array.core import insert_to_ooc
 from dask import core
 from into import convert, into
 from into.utils import tmpfile
