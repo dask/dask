@@ -391,7 +391,7 @@ class Array(object):
     def ndim(self):
         return len(self.shape)
 
-    def keys(self, *args):
+    def _keys(self, *args):
         if self.ndim == 0:
             return [(self.name,)]
         ind = len(args)
@@ -399,7 +399,7 @@ class Array(object):
             return [(self.name,) + args + (i,)
                         for i in range(self.numblocks[ind])]
         else:
-            return [self.keys(*(args + (i,)))
+            return [self._keys(*(args + (i,)))
                         for i in range(self.numblocks[ind])]
 
     def __array__(self, dtype=None, **kwargs):

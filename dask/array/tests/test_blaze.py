@@ -63,7 +63,7 @@ def test_elemwise_broadcasting():
     arr = compute(sy + sb, dask_ns)
     expected =  [[(arr.name, i, j) for j in range(5)]
                                    for i in range(6)]
-    assert arr.keys() == expected
+    assert arr._keys() == expected
 
 
 def test_ragged_blockdims():
@@ -88,7 +88,7 @@ def test_slicing_with_singleton_dimensions():
     assert arr.dask[(y, 0)] == (getitem, (x, 1, 2), (slice(1, 4, 1), 2))
     assert arr.dask[(y, 1)] == (getitem, (x, 2, 2), (slice(0, 4, 1), 2))
     assert arr.dask[(y, 2)] == (getitem, (x, 3, 2), (slice(0, 3, 1), 2))
-    assert all(len(k) == 2 for k in arr.keys())
+    assert all(len(k) == 2 for k in arr._keys())
 
 
 def test_slicing_with_lists():

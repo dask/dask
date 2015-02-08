@@ -127,7 +127,7 @@ def test_Array():
 
     assert a.numblocks == (10, 10)
 
-    assert a.keys() == [[('x', i, j) for j in range(10)]
+    assert a._keys() == [[('x', i, j) for j in range(10)]
                                      for i in range(10)]
 
     assert a.blockdims == ((100,) * 10, (100,) * 10)
@@ -145,16 +145,16 @@ def test_numblocks_suppoorts_singleton_block_dims():
     dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
     a = Array(dsk, name, shape, blockshape)
 
-    assert set(concat(a.keys())) == set([('x', i, 0) for i in range(100//10)])
+    assert set(concat(a._keys())) == set([('x', i, 0) for i in range(100//10)])
 
 
 def test_keys():
     dsk = dict((('x', i, j), ()) for i in range(5) for j in range(6))
     dx = Array(dsk, 'x', (50, 60), blockshape=(10, 10))
-    assert dx.keys() == [[(dx.name, i, j) for j in range(6)]
+    assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
                                           for i in range(5)]
     d = Array({}, 'x', (), ())
-    assert d.keys() == [('x',)]
+    assert d._keys() == [('x',)]
 
 
 def test_stack():

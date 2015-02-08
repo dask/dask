@@ -39,12 +39,12 @@ def array_to_dask(x, name=None, blockshape=None, **kwargs):
 
 @convert.register(np.ndarray, Array, cost=0.5)
 def dask_to_numpy(x, **kwargs):
-    return rec_concatenate(get(x.dask, x.keys(), **kwargs))
+    return rec_concatenate(get(x.dask, x._keys(), **kwargs))
 
 
 @convert.register(float, Array, cost=0.5)
 def dask_to_float(x, **kwargs):
-    result = get(x.dask, x.keys(), **kwargs)
+    result = get(x.dask, x._keys(), **kwargs)
     while isinstance(result, Iterable):
         assert len(result) == 1
         result = result[0]
@@ -63,7 +63,7 @@ def insert_to_ooc(out, arr):
         return None
 
     name = 'store-%s' % arr.name
-    return dict(((name,) + t[1:], (store, t) + t[1:]) for t in flatten(arr.keys()))
+    return dict(((name,) + t[1:], (store, t) + t[1:]) for t in flatten(arr._keys()))
 
 
 @append.register(tuple(arrays), Array)
