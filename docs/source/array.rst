@@ -35,7 +35,7 @@ chunking that dataset into blocks of size ``(1000, 1000)``.
    >>> dset = f['/data/path']
 
    >>> import dask.array as da
-   >>> a = da.Array.from_array(dset, blockshape=(1000, 1000))
+   >>> a = da.from_array(dset, blockshape=(1000, 1000))
 
 Often we have many such datasets.  We can use the ``stack`` or ``concatenate``
 functions to bind many dask arrays into one.
@@ -43,7 +43,7 @@ functions to bind many dask arrays into one.
 .. code-block:: Python
 
    >>> dsets = [h5py.File(fn)['/data'] for fn in sorted(glob('myfiles.*.hdf5')]
-   >>> arrays = [da.Array.from_array(dset, blockshape=(1000, 1000))
+   >>> arrays = [da.from_array(dset, blockshape=(1000, 1000))
                    for dset in dsets]
 
    >>> a = da.stack(arrays, axis=0)  # Stack along a new first axis

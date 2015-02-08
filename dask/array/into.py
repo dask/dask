@@ -7,7 +7,7 @@ from datashape.dispatch import dispatch
 from datashape import DataShape
 from operator import add
 import itertools
-from .core import rec_concatenate, Array, getem, get, names
+from .core import rec_concatenate, Array, getem, get, names, from_array
 from ..core import flatten
 
 
@@ -47,7 +47,7 @@ except ImportError:
 
 @convert.register(Array, tuple(arrays), cost=0.01)
 def array_to_dask(x, name=None, blockshape=None, **kwargs):
-    return Array.from_array(x, blockshape=blockshape, name=name, **kwargs)
+    return from_array(x, blockshape=blockshape, name=name, **kwargs)
 
 
 @convert.register(np.ndarray, Array, cost=0.5)

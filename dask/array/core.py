@@ -461,18 +461,18 @@ class Array(object):
 
         return Array(merge(self.dask, dsk), out, blockdims=blockdims)
 
-    @classmethod
-    def from_array(cls, x, blockshape=None, name=None, **kwargs):
-        """ Create dask array from something that looks like an array
 
-        Input must have a ``.shape`` and support numpy-style slicing.
+def from_array(x, blockshape=None, name=None, **kwargs):
+    """ Create dask array from something that looks like an array
 
-        >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
-        >>> a = da.Array.from_array(x, blockshape=(1000, 1000))  # doctest: +SKIP
-        """
-        name = name or next(names)
-        dask = merge({name: x}, getem(name, blockshape, x.shape))
-        return Array(dask, name, shape=x.shape, blockshape=blockshape)
+    Input must have a ``.shape`` and support numpy-style slicing.
+
+    >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
+    >>> a = da.from_array(x, blockshape=(1000, 1000))  # doctest: +SKIP
+    """
+    name = name or next(names)
+    dask = merge({name: x}, getem(name, blockshape, x.shape))
+    return Array(dask, name, shape=x.shape, blockshape=blockshape)
 
 
 def atop(func, out, out_ind, *args):
