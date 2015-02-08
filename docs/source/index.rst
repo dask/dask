@@ -92,3 +92,4 @@ Contents
    :maxdepth: 2
 
    spec.rst
+   array.rst
