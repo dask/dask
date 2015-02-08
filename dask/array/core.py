@@ -462,13 +462,13 @@ class Array(object):
         return Array(merge(self.dask, dsk), out, blockdims=blockdims)
 
     @classmethod
-    def from_arraylike(cls, x, blockshape=None, name=None, **kwargs):
+    def from_array(cls, x, blockshape=None, name=None, **kwargs):
         """ Create dask array from something that looks like an array
 
         Input must have a ``.shape`` and support numpy-style slicing.
 
         >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
-        >>> a = da.Array.from_arraylike(x, blockshape=(1000, 1000))  # doctest: +SKIP
+        >>> a = da.Array.from_array(x, blockshape=(1000, 1000))  # doctest: +SKIP
         """
         name = name or next(names)
         dask = merge({name: x}, getem(name, blockshape, x.shape))
@@ -527,7 +527,7 @@ def stack(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [Array.from_arraylike(np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [Array.from_array(np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.stack(data, axis=0)
@@ -589,7 +589,7 @@ def concatenate(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [Array.from_arraylike(np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [Array.from_array(np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.concatenate(data, axis=0)

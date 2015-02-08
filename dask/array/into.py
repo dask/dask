@@ -47,7 +47,7 @@ except ImportError:
 
 @convert.register(Array, tuple(arrays), cost=0.01)
 def array_to_dask(x, name=None, blockshape=None, **kwargs):
-    return Array.from_arraylike(x, blockshape=blockshape, name=name, **kwargs)
+    return Array.from_array(x, blockshape=blockshape, name=name, **kwargs)
 
 
 @convert.register(np.ndarray, Array, cost=0.5)
