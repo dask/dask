@@ -461,6 +461,61 @@ class Array(object):
 
         return Array(merge(self.dask, dsk), out, blockdims=blockdims)
 
+    def __abs__(self, other):
+        return elemwise(operator.abs, self)
+    def __add__(self, other):
+        return elemwise(operator.add, self, other)
+    def __radd__(self, other):
+        return elemwise(operator.add, other, self)
+    def __and__(self, other):
+        return elemwise(operator.and_, self, other)
+    def __rand__(self, other):
+        return elemwise(operator.and_, other, self)
+    def __div__(self, other):
+        return elemwise(operator.div, self, other)
+    def __rdiv__(self, other):
+        return elemwise(operator.div, other, self)
+    def __eq__(self, other):
+        return elemwise(operator.eq, self, other)
+    def __gt__(self, other):
+        return elemwise(operator.gt, self, other)
+    def __ge__(self, other):
+        return elemwise(operator.ge, self, other)
+    def __lt__(self, other):
+        return elemwise(operator.lt, self, other)
+    def __le__(self, other):
+        return elemwise(operator.le, self, other)
+    def __mod__(self, other):
+        return elemwise(operator.mod, self, other)
+    def __rmod__(self, other):
+        return elemwise(operator.mod, other, self)
+    def __mul__(self, other):
+        return elemwise(operator.mul, self, other)
+    def __rmul__(self, other):
+        return elemwise(operator.mul, other, self)
+    def __ne__(self, other):
+        return elemwise(operator.ne, other, self)
+    def __neg__(self, other):
+        return elemwise(operator.neg, self)
+    def __or__(self, other):
+        return elemwise(operator.or_, other, self)
+    def __pow__(self, other):
+        return elemwise(operator.pow, self, other)
+    def __rpow__(self, other):
+        return elemwise(operator.pow, other, self)
+    def __sub__(self, other):
+        return elemwise(operator.sub, self, other)
+    def __rsub__(self, other):
+        return elemwise(operator.sub, other, self)
+    def __truediv__(self, other):
+        return elemwise(operator.truediv, self, other)
+    def __rtruediv__(self, other):
+        return elemwise(operator.truediv, other, self)
+    def __floordiv__(self, other):
+        return elemwise(operator.floordiv, self, other)
+    def __rfloordiv__(self, other):
+        return elemwise(operator.floordiv, other, self)
+
 
 def from_array(x, blockshape=None, name=None, **kwargs):
     """ Create dask array from something that looks like an array
@@ -726,7 +781,7 @@ def elemwise(op, *args, **kwargs):
     See also:
         atop
     """
-    name = kwargs['name'] or next(names)
+    name = kwargs.get('name') or next(names)
     out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
                    for arg in args)
     expr_inds = tuple(range(out_ndim))[::-1]

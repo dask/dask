@@ -66,6 +66,10 @@ def test_rec_concatenate():
 
 
 def eq(a, b):
+    if isinstance(a, Array):
+        a = np.array(a)
+    if isinstance(b, Array):
+        b = np.array(b)
     c = a == b
     if isinstance(c, np.ndarray):
         c = c.all()
@@ -238,3 +242,19 @@ def test_binops():
     assert result.dask[('c', 0)][1] == ('a', 0)
     f = result.dask[('c', 0)][0]
     assert f(10) == 100
+
+
+def test_operators():
+    x = np.arange(10)
+    y = np.arange(10).reshape((10, 1))
+    a = from_array(x, blockshape=(5,))
+    b = from_array(y, blockshape=(5, 1))
+
+    c = a + 1
+    assert eq(c, x + 1)
+
+    c = a + b
+    assert eq(c, x + x.reshape((10, 1)))
+
+    expr = (3 / a * b)**2 > 5
+    assert eq(expr, (3 / x * y)**2 > 5)
