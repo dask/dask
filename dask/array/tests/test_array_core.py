@@ -67,9 +67,9 @@ def test_rec_concatenate():
 
 def eq(a, b):
     if isinstance(a, Array):
-        a = np.array(a)
+        a = a.compute()
     if isinstance(b, Array):
-        b = np.array(b)
+        b = b.compute()
     c = a == b
     if isinstance(c, np.ndarray):
         c = c.all()
@@ -268,3 +268,15 @@ def test_field_access():
     y = from_array(x, blockshape=(1,))
     assert eq(y['a'], x['a'])
     assert eq(y[['b', 'a']], x[['b', 'a']])
+
+
+def test_reductions():
+    x = np.arange(400).reshape((20, 20))
+    a = from_array(x, blockshape=(7, 7))
+
+    assert eq(a.sum(), x.sum())
+    assert eq(a.sum(axis=1), x.sum(axis=1))
+    assert eq(a.sum(axis=1, keepdims=True), x.sum(axis=1, keepdims=True))
+    assert eq(a.mean(), x.mean())
+    assert eq(a.var(axis=(1, 0)), x.var(axis=(1, 0)))
+    # assert eq(a.std(axis=0, keepdims=True), x.std(axis=0, keepdims=True))
