@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import dask
 from dask.array.blaze import *
+from dask.array.into import into
 from into import discover, convert, into
 from collections import Iterable
 from toolz import concat
