@@ -450,6 +450,13 @@ class Array(object):
     __float__ = __int__ = __bool__ = __complex__ = compute
 
     def __getitem__(self, index):
+        # Field access, e.g. x['a'] or x[['a', 'b']]
+        if (isinstance(index, (str, unicode)) or
+            (    isinstance(index, list)
+            and all(isinstance(i, (str, unicode)) for i in index))):
+            return elemwise(getitem, self, index)
+
+        # Slicing
         out = next(names)
         if not isinstance(index, tuple):
             index = (index,)

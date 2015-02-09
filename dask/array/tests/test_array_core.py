@@ -261,3 +261,10 @@ def test_operators():
 
     c = exp(a)
     assert eq(c, np.exp(x))
+
+
+def test_field_access():
+    x = np.array([(1, 1.0), (2, 2.0)], dtype=[('a', 'i4'), ('b', 'f4')])
+    y = from_array(x, blockshape=(1,))
+    assert eq(y['a'], x['a'])
+    assert eq(y[['b', 'a']], x[['b', 'a']])
