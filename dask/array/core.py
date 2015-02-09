@@ -12,7 +12,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
         merge, curry, compose)
 import numpy as np
-from .slicing import slice_array
+from .slicing import slice_array, insert_many
 from ..utils import deepmap
 from ..async import inline_functions
 from ..optimize import cull
@@ -922,5 +922,15 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None):
 
     inds2 = tuple(i for i in inds if i not in axis)
 
-    return atop(compose(aggregate2, curry(_concatenate2, axes=axis)),
-                next(names), inds2, tmp, inds)
+    result = atop(compose(aggregate2, curry(_concatenate2, axes=axis)),
+                  next(names), inds2, tmp, inds)
+
+    if keepdims:
+        dsk = result.dask.copy()
+        for k in core.flatten(result._keys()):
+            k2 = (k[0],) + insert_many(k[1:], axis, 0)
+            dsk[k2] = dsk.pop(k)
+        blockdims = insert_many(result.blockdims, axis, [1])
+        return Array(dsk, result.name, blockdims=blockdims)
+    else:
+        return result

@@ -279,4 +279,8 @@ def test_reductions():
     assert eq(a.sum(axis=1, keepdims=True), x.sum(axis=1, keepdims=True))
     assert eq(a.mean(), x.mean())
     assert eq(a.var(axis=(1, 0)), x.var(axis=(1, 0)))
-    # assert eq(a.std(axis=0, keepdims=True), x.std(axis=0, keepdims=True))
+
+    b = a.sum(keepdims=True)
+    assert b._keys() == [[(b.name, 0, 0)]]
+
+    assert eq(a.std(axis=0, keepdims=True), x.std(axis=0, keepdims=True))
