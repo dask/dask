@@ -10,6 +10,10 @@ from operator import getitem
 
 
 def eq(a, b):
+    if isinstance(a, Array):
+        a = a.compute()
+    if isinstance(b, Array):
+        b = b.compute()
     c = a == b
     if isinstance(c, np.ndarray):
         c = c.all()

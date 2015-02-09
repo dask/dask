@@ -16,6 +16,7 @@ from .slicing import slice_array, insert_many
 from ..utils import deepmap
 from ..async import inline_functions
 from ..optimize import cull
+from ..compatibility import unicode
 from .. import threaded, core
 
 
@@ -604,12 +605,13 @@ def atop(func, out, out_ind, *args):
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    shapes = dict((a, a.shape) for a, _ in arginds)
-    dims = broadcast_dimensions(arginds, shapes)
+    shapes = dict((a.name, a.shape) for a, _ in arginds)
+    nameinds = [(a.name, i) for a, i in arginds]
+    dims = broadcast_dimensions(nameinds, shapes)
     shape = tuple(dims[i] for i in out_ind)
 
-    blockdim_dict = dict((a, a.blockdims) for a, _ in arginds)
-    blockdimss = broadcast_dimensions(arginds, blockdim_dict)
+    blockdim_dict = dict((a.name, a.blockdims) for a, _ in arginds)
+    blockdimss = broadcast_dimensions(nameinds, blockdim_dict)
     blockdims = tuple(blockdimss[i] for i in out_ind)
 
     dsks = [a.dask for a, _ in arginds]
