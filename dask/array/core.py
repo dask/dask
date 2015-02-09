@@ -584,6 +584,9 @@ def from_array(x, blockshape=None, name=None, **kwargs):
 
     Input must have a ``.shape`` and support numpy-style slicing.
 
+    Example
+    -------
+
     >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
     >>> a = da.from_array(x, blockshape=(1000, 1000))  # doctest: +SKIP
     """
@@ -644,7 +647,7 @@ def stack(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [Array.from_array(np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [from_array(np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.stack(data, axis=0)
@@ -706,7 +709,7 @@ def concatenate(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [Array.from_array(np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [from_array(np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.concatenate(data, axis=0)
