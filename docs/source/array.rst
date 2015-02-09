@@ -35,7 +35,7 @@ chunking that dataset into blocks of size ``(1000, 1000)``.
    >>> dset = f['/data/path']
 
    >>> import dask.array as da
-   >>> a = da.from_array(dset, blockshape=(1000, 1000))
+   >>> x = da.from_array(dset, blockshape=(1000, 1000))
 
 Often we have many such datasets.  We can use the ``stack`` or ``concatenate``
 functions to bind many dask arrays into one.
@@ -46,27 +46,31 @@ functions to bind many dask arrays into one.
    >>> arrays = [da.from_array(dset, blockshape=(1000, 1000))
                    for dset in dsets]
 
-   >>> a = da.stack(arrays, axis=0)  # Stack along a new first axis
+   >>> x = da.stack(arrays, axis=0)  # Stack along a new first axis
 
 
 Interact
 --------
 
-Dask relies on Blaze for usability.  Blaze contains all mathematical operations
-from numpy, tracks dtypes, etc...
+Dask copies the NumPy API for an important subset of operations, including
+arithmetic operators, ufuncs, slicing, dot products, and reductions.
 
 .. code-block:: Python
 
-   >>> from blaze import Data, log
-   >>> x = Data(a)
-   >>> y = log(a + 1)[:5].sum(axis=1)
+   >>> y = log(x + 1)[:5].sum(axis=1)
 
-When you're done interacting you can get a dask array back by calling compute
+Alternatively Dask can use Blaze for this same interface.
 
 .. code-block:: Python
 
-   >>> from blaze import compute
+   >>> from blaze import Data, log, compute
+   >>> d = Data(x)
+   >>> y = log(d + 1)[:5].sum(axis=1)
+
    >>> result = compute(y)
+
+This provides a smoother interactive experience, dtype tracking, numba
+acceleration, etc. but does require an extra step.
 
 
 Store
@@ -83,11 +87,11 @@ supports numpy-style item assignment like an ``h5py.Dataset``.
    >>> import h5py  # doctest: +SKIP
    >>> f = h5py.File('myfile.hdf5')
 
-   >>> dset = f.create_dataset('/data', shape=result.shape,
-   ...                                  chunks=result.blockshape,
+   >>> dset = f.create_dataset('/data', shape=y.shape,
+   ...                                  chunks=y.blockshape,
    ...                                  dtype='f8')
 
-   >>> result.store(dset)
+   >>> y.store(dset)
 
 Alternatively, if you're comfortable using Blaze and ``into`` then you can jump
 directly from the blaze expression to storage, leaving it to handle dataset
@@ -96,6 +100,6 @@ creation.
 .. code-block:: Python
 
    >>> from blaze import Data, log, into
-   >>> x = Data(a)
-   >>> y = log(a + 1)[:5].sum(axis=1)
+   >>> d = Data(x)
+   >>> y = log(d + 1)[:5].sum(axis=1)
    >>> into('myfile.hdf5::/data', y)
