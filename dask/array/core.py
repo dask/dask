@@ -489,6 +489,10 @@ class Array(object):
         return elemwise(operator.gt, self, other)
     def __ge__(self, other):
         return elemwise(operator.ge, self, other)
+    def __lshift__(self, other):
+        return elemwise(operator.lshift, self, other)
+    def __rlshift__(self, other):
+        return elemwise(operator.lshift, other, self)
     def __lt__(self, other):
         return elemwise(operator.lt, self, other)
     def __le__(self, other):
@@ -502,15 +506,21 @@ class Array(object):
     def __rmul__(self, other):
         return elemwise(operator.mul, other, self)
     def __ne__(self, other):
-        return elemwise(operator.ne, other, self)
+        return elemwise(operator.ne, self, other)
     def __neg__(self, other):
         return elemwise(operator.neg, self)
     def __or__(self, other):
+        return elemwise(operator.or_, self, other)
+    def __ror__(self, other):
         return elemwise(operator.or_, other, self)
     def __pow__(self, other):
         return elemwise(operator.pow, self, other)
     def __rpow__(self, other):
         return elemwise(operator.pow, other, self)
+    def __rshift__(self, other):
+        return elemwise(operator.rshift, self, other)
+    def __rrshift__(self, other):
+        return elemwise(operator.rshift, other, self)
     def __sub__(self, other):
         return elemwise(operator.sub, self, other)
     def __rsub__(self, other):
@@ -523,6 +533,10 @@ class Array(object):
         return elemwise(operator.floordiv, self, other)
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
+    def __xor__(self, other):
+        return elemwise(operator.xor, self, other)
+    def __rxor__(self, other):
+        return elemwise(operator.xor, other, self)
 
     def any(self, axis=None, keepdims=False):
         from .reductions import any
