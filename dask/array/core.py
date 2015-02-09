@@ -4,18 +4,19 @@ from operator import add, getitem
 from collections import Iterable
 from bisect import bisect
 import operator
-from math import ceil, floor
+import math
 from itertools import product, count
 from collections import Iterator
 from functools import partial, wraps
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
-        merge, curry)
+        merge, curry, compose)
 import numpy as np
-from .slicing import slice_array
+from .slicing import slice_array, insert_many
 from ..utils import deepmap
 from ..async import inline_functions
 from ..optimize import cull
+from ..compatibility import unicode
 from .. import threaded, core
 
 
@@ -31,7 +32,7 @@ def getem(arr, blocksize, shape):
      ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
     """
-    numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
+    numblocks = tuple([int(math.ceil(n/k)) for n, k in zip(shape, blocksize)])
     return dict(
                ((arr,) + ijk,
                (getitem,
@@ -450,6 +451,13 @@ class Array(object):
     __float__ = __int__ = __bool__ = __complex__ = compute
 
     def __getitem__(self, index):
+        # Field access, e.g. x['a'] or x[['a', 'b']]
+        if (isinstance(index, (str, unicode)) or
+            (    isinstance(index, list)
+            and all(isinstance(i, (str, unicode)) for i in index))):
+            return elemwise(getitem, self, index)
+
+        # Slicing
         out = next(names)
         if not isinstance(index, tuple):
             index = (index,)
@@ -461,11 +469,115 @@ class Array(object):
 
         return Array(merge(self.dask, dsk), out, blockdims=blockdims)
 
+    def __abs__(self, other):
+        return elemwise(operator.abs, self)
+    def __add__(self, other):
+        return elemwise(operator.add, self, other)
+    def __radd__(self, other):
+        return elemwise(operator.add, other, self)
+    def __and__(self, other):
+        return elemwise(operator.and_, self, other)
+    def __rand__(self, other):
+        return elemwise(operator.and_, other, self)
+    def __div__(self, other):
+        return elemwise(operator.div, self, other)
+    def __rdiv__(self, other):
+        return elemwise(operator.div, other, self)
+    def __eq__(self, other):
+        return elemwise(operator.eq, self, other)
+    def __gt__(self, other):
+        return elemwise(operator.gt, self, other)
+    def __ge__(self, other):
+        return elemwise(operator.ge, self, other)
+    def __lshift__(self, other):
+        return elemwise(operator.lshift, self, other)
+    def __rlshift__(self, other):
+        return elemwise(operator.lshift, other, self)
+    def __lt__(self, other):
+        return elemwise(operator.lt, self, other)
+    def __le__(self, other):
+        return elemwise(operator.le, self, other)
+    def __mod__(self, other):
+        return elemwise(operator.mod, self, other)
+    def __rmod__(self, other):
+        return elemwise(operator.mod, other, self)
+    def __mul__(self, other):
+        return elemwise(operator.mul, self, other)
+    def __rmul__(self, other):
+        return elemwise(operator.mul, other, self)
+    def __ne__(self, other):
+        return elemwise(operator.ne, self, other)
+    def __neg__(self, other):
+        return elemwise(operator.neg, self)
+    def __or__(self, other):
+        return elemwise(operator.or_, self, other)
+    def __ror__(self, other):
+        return elemwise(operator.or_, other, self)
+    def __pow__(self, other):
+        return elemwise(operator.pow, self, other)
+    def __rpow__(self, other):
+        return elemwise(operator.pow, other, self)
+    def __rshift__(self, other):
+        return elemwise(operator.rshift, self, other)
+    def __rrshift__(self, other):
+        return elemwise(operator.rshift, other, self)
+    def __sub__(self, other):
+        return elemwise(operator.sub, self, other)
+    def __rsub__(self, other):
+        return elemwise(operator.sub, other, self)
+    def __truediv__(self, other):
+        return elemwise(operator.truediv, self, other)
+    def __rtruediv__(self, other):
+        return elemwise(operator.truediv, other, self)
+    def __floordiv__(self, other):
+        return elemwise(operator.floordiv, self, other)
+    def __rfloordiv__(self, other):
+        return elemwise(operator.floordiv, other, self)
+    def __xor__(self, other):
+        return elemwise(operator.xor, self, other)
+    def __rxor__(self, other):
+        return elemwise(operator.xor, other, self)
+
+    def any(self, axis=None, keepdims=False):
+        from .reductions import any
+        return any(self, axis=axis, keepdims=keepdims)
+
+    def all(self, axis=None, keepdims=False):
+        from .reductions import all
+        return all(self, axis=axis, keepdims=keepdims)
+
+    def min(self, axis=None, keepdims=False):
+        from .reductions import min
+        return min(self, axis=axis, keepdims=keepdims)
+
+    def max(self, axis=None, keepdims=False):
+        from .reductions import max
+        return max(self, axis=axis, keepdims=keepdims)
+
+    def sum(self, axis=None, keepdims=False):
+        from .reductions import sum
+        return sum(self, axis=axis, keepdims=keepdims)
+
+    def mean(self, axis=None, keepdims=False):
+        from .reductions import mean
+        return mean(self, axis=axis, keepdims=keepdims)
+
+    def std(self, axis=None, keepdims=False, ddof=0):
+        from .reductions import std
+        return std(self, axis=axis, keepdims=keepdims, ddof=ddof)
+
+    def var(self, axis=None, keepdims=False, ddof=0):
+        from .reductions import var
+        return var(self, axis=axis, keepdims=keepdims, ddof=ddof)
+
 
 def from_array(x, blockshape=None, name=None, **kwargs):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
+
+    Example
+    -------
 
     >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
     >>> a = da.from_array(x, blockshape=(1000, 1000))  # doctest: +SKIP
@@ -484,12 +596,13 @@ def atop(func, out, out_ind, *args):
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    shapes = dict((a, a.shape) for a, _ in arginds)
-    dims = broadcast_dimensions(arginds, shapes)
+    shapes = dict((a.name, a.shape) for a, _ in arginds)
+    nameinds = [(a.name, i) for a, i in arginds]
+    dims = broadcast_dimensions(nameinds, shapes)
     shape = tuple(dims[i] for i in out_ind)
 
-    blockdim_dict = dict((a, a.blockdims) for a, _ in arginds)
-    blockdimss = broadcast_dimensions(arginds, blockdim_dict)
+    blockdim_dict = dict((a.name, a.blockdims) for a, _ in arginds)
+    blockdimss = broadcast_dimensions(nameinds, blockdim_dict)
     blockdims = tuple(blockdimss[i] for i in out_ind)
 
     dsks = [a.dask for a, _ in arginds]
@@ -527,7 +640,7 @@ def stack(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [Array.from_array(np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [from_array(np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.stack(data, axis=0)
@@ -589,7 +702,7 @@ def concatenate(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [Array.from_array(np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [from_array(np.ones((4, 4)), blockshape=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.concatenate(data, axis=0)
@@ -698,3 +811,90 @@ def insert_to_ooc(out, arr):
     name = 'store-%s' % arr.name
     return dict(((name,) + t[1:], (store, t) + t[1:])
                 for t in core.flatten(arr._keys()))
+
+
+def partial_by_order(op, other):
+    """
+
+    >>> f = partial_by_order(add, [(1, 10)])
+    >>> f(5)
+    15
+    """
+    def f(*args):
+        args2 = list(args)
+        for i, arg in other:
+            args2.insert(i, arg)
+        return op(*args2)
+    return f
+
+
+def elemwise(op, *args, **kwargs):
+    """ Apply elementwise function across arguments
+
+    Respects broadcasting rules
+
+    >>> elemwise(add, x, y)  # doctest: +SKIP
+    >>> elemwise(sin, x)  # doctest: +SKIP
+
+    See also:
+        atop
+    """
+    name = kwargs.get('name') or next(names)
+    out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
+                   for arg in args)
+    expr_inds = tuple(range(out_ndim))[::-1]
+
+    arrays = [arg for arg in args if isinstance(arg, Array)]
+    other = [(i, arg) for i, arg in enumerate(args) if not isinstance(arg, Array)]
+
+    if other:
+        op2 = partial_by_order(op, other)
+    else:
+        op2 = op
+
+    return atop(op2, name, expr_inds,
+                *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays))
+
+
+def wrap_elemwise(func):
+    """ Wrap up numpy function into dask.array """
+    f = partial(elemwise, func)
+    f.__doc__ = func.__doc__
+    f.__name__ = func.__name__
+    return f
+
+
+arccos = wrap_elemwise(np.arccos)
+arcsin = wrap_elemwise(np.arcsin)
+arctan = wrap_elemwise(np.arctan)
+arctanh = wrap_elemwise(np.arctanh)
+arccosh = wrap_elemwise(np.arccosh)
+arcsinh = wrap_elemwise(np.arcsinh)
+arctan2 = wrap_elemwise(np.arctan2)
+
+ceil = wrap_elemwise(np.ceil)
+copysign = wrap_elemwise(np.copysign)
+cos = wrap_elemwise(np.cos)
+cosh = wrap_elemwise(np.cosh)
+degrees = wrap_elemwise(np.degrees)
+exp = wrap_elemwise(np.exp)
+expm1 = wrap_elemwise(np.expm1)
+fabs = wrap_elemwise(np.fabs)
+floor = wrap_elemwise(np.floor)
+fmod = wrap_elemwise(np.fmod)
+frexp = wrap_elemwise(np.frexp)
+hypot = wrap_elemwise(np.hypot)
+isinf = wrap_elemwise(np.isinf)
+isnan = wrap_elemwise(np.isnan)
+ldexp = wrap_elemwise(np.ldexp)
+log = wrap_elemwise(np.log)
+log10 = wrap_elemwise(np.log10)
+log1p = wrap_elemwise(np.log1p)
+modf = wrap_elemwise(np.modf)
+radians = wrap_elemwise(np.radians)
+sin = wrap_elemwise(np.sin)
+sinh = wrap_elemwise(np.sinh)
+sqrt = wrap_elemwise(np.sqrt)
+tan = wrap_elemwise(np.tan)
+tanh = wrap_elemwise(np.tanh)
+trunc = wrap_elemwise(np.trunc)

@@ -4,18 +4,18 @@ import dask
 from dask.array.core import *
 from dask.utils import raises
 from toolz import merge
+from operator import getitem, add, mul
 
 
 inc = lambda x: x + 1
-add = lambda x, y: x + y
 
 
 def test_getem():
     assert getem('X', blocksize=(2, 3), shape=(4, 6)) == \
-    {('X', 0, 0): (operator.getitem, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (operator.getitem, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (operator.getitem, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (operator.getitem, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
 
 
 def test_top():
@@ -66,6 +66,10 @@ def test_rec_concatenate():
 
 
 def eq(a, b):
+    if isinstance(a, Array):
+        a = a.compute()
+    if isinstance(b, Array):
+        b = b.compute()
     c = a == b
     if isinstance(c, np.ndarray):
         c = c.all()
@@ -196,8 +200,6 @@ def test_stack():
             stack([a, b, c], axis=2).blockdims
 
 
-
-
 def test_concatenate():
     a, b, c = [Array(getem(name, blocksize=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), blockshape=(2, 3))
@@ -223,3 +225,62 @@ def test_concatenate():
             concatenate([a, b, c], axis=1).blockdims
 
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
+
+
+def test_binops():
+    a = Array(dict((('a', i), '') for i in range(3)),
+              'a', blockdims=((10, 10, 10),))
+    b = Array(dict((('b', i), '') for i in range(3)),
+              'b', blockdims=((10, 10, 10),))
+
+    result = elemwise(add, a, b, name='c')
+    assert result.dask == merge(a.dask, b.dask,
+                                dict((('c', i), (add, ('a', i), ('b', i)))
+                                     for i in range(3)))
+
+    result = elemwise(pow, a, 2, name='c')
+    assert result.dask[('c', 0)][1] == ('a', 0)
+    f = result.dask[('c', 0)][0]
+    assert f(10) == 100
+
+
+def test_operators():
+    x = np.arange(10)
+    y = np.arange(10).reshape((10, 1))
+    a = from_array(x, blockshape=(5,))
+    b = from_array(y, blockshape=(5, 1))
+
+    c = a + 1
+    assert eq(c, x + 1)
+
+    c = a + b
+    assert eq(c, x + x.reshape((10, 1)))
+
+    expr = (3 / a * b)**2 > 5
+    assert eq(expr, (3 / x * y)**2 > 5)
+
+    c = exp(a)
+    assert eq(c, np.exp(x))
+
+
+def test_field_access():
+    x = np.array([(1, 1.0), (2, 2.0)], dtype=[('a', 'i4'), ('b', 'f4')])
+    y = from_array(x, blockshape=(1,))
+    assert eq(y['a'], x['a'])
+    assert eq(y[['b', 'a']], x[['b', 'a']])
+
+
+def test_reductions():
+    x = np.arange(400).reshape((20, 20))
+    a = from_array(x, blockshape=(7, 7))
+
+    assert eq(a.sum(), x.sum())
+    assert eq(a.sum(axis=1), x.sum(axis=1))
+    assert eq(a.sum(axis=1, keepdims=True), x.sum(axis=1, keepdims=True))
+    assert eq(a.mean(), x.mean())
+    assert eq(a.var(axis=(1, 0)), x.var(axis=(1, 0)))
+
+    b = a.sum(keepdims=True)
+    assert b._keys() == [[(b.name, 0, 0)]]
+
+    assert eq(a.std(axis=0, keepdims=True), x.std(axis=0, keepdims=True))
