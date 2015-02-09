@@ -4,18 +4,18 @@ import dask
 from dask.array.core import *
 from dask.utils import raises
 from toolz import merge
+from operator import getitem, add, mul
 
 
 inc = lambda x: x + 1
-add = lambda x, y: x + y
 
 
 def test_getem():
     assert getem('X', blocksize=(2, 3), shape=(4, 6)) == \
-    {('X', 0, 0): (operator.getitem, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (operator.getitem, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (operator.getitem, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (operator.getitem, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
 
 
 def test_top():
@@ -196,8 +196,6 @@ def test_stack():
             stack([a, b, c], axis=2).blockdims
 
 
-
-
 def test_concatenate():
     a, b, c = [Array(getem(name, blocksize=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), blockshape=(2, 3))
@@ -223,3 +221,20 @@ def test_concatenate():
             concatenate([a, b, c], axis=1).blockdims
 
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
+
+
+def test_binops():
+    a = Array(dict((('a', i), '') for i in range(3)),
+              'a', blockdims=((10, 10, 10),))
+    b = Array(dict((('b', i), '') for i in range(3)),
+              'b', blockdims=((10, 10, 10),))
+
+    result = elemwise(add, a, b, name='c')
+    assert result.dask == merge(a.dask, b.dask,
+                                dict((('c', i), (add, ('a', i), ('b', i)))
+                                     for i in range(3)))
+
+    result = elemwise(pow, a, 2, name='c')
+    assert result.dask[('c', 0)][1] == ('a', 0)
+    f = result.dask[('c', 0)][0]
+    assert f(10) == 100

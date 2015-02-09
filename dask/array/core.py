@@ -698,3 +698,46 @@ def insert_to_ooc(out, arr):
     name = 'store-%s' % arr.name
     return dict(((name,) + t[1:], (store, t) + t[1:])
                 for t in core.flatten(arr._keys()))
+
+
+def partial_by_order(op, other):
+    """
+
+    >>> f = partial_by_order(add, (1, 10))
+    >>> f(5)
+    15
+    """
+    def f(*args):
+        args2 = list(args)
+        for i, arg in other:
+            args2.insert(i, arg)
+        return op(*args2)
+    return f
+
+
+def elemwise(op, *args, **kwargs):
+    """ Apply elementwise function across arguments
+
+    Respects broadcasting rules
+
+    >>> elemwise(add, x, y)  # doctest: +SKIP
+    >>> elemwise(sin, x)  # doctest: +SKIP
+
+    See also:
+        atop
+    """
+    name = kwargs['name'] or next(names)
+    out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
+                   for arg in args)
+    expr_inds = tuple(range(out_ndim))[::-1]
+
+    arrays = [arg for arg in args if isinstance(arg, Array)]
+    other = [(i, arg) for i, arg in enumerate(args) if not isinstance(arg, Array)]
+
+    if other:
+        op2 = partial_by_order(op, other)
+    else:
+        op2 = op
+
+    return atop(op2, name, expr_inds,
+                *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays))
