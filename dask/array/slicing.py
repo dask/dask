@@ -417,7 +417,6 @@ def posify_index(shape, ind):
     return ind
 
 
-
 def insert_many(seq, where, val):
     """ Insert value at many locations in sequence
 

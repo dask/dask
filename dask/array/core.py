@@ -524,60 +524,37 @@ class Array(object):
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
 
-    def sum(a, axis=None, keepdims=False):
-        return reduction(a, np.sum, np.sum, axis=axis, keepdims=keepdims)
+    def any(self, axis=None, keepdims=False):
+        from .reductions import any
+        return any(self, axis=axis, keepdims=keepdims)
 
-    def min(a, axis=None, keepdims=False):
-        return reduction(a, np.min, np.min, axis=axis, keepdims=keepdims)
+    def all(self, axis=None, keepdims=False):
+        from .reductions import all
+        return all(self, axis=axis, keepdims=keepdims)
 
-    def max(a, axis=None, keepdims=False):
-        return reduction(a, np.max, np.max, axis=axis, keepdims=keepdims)
+    def min(self, axis=None, keepdims=False):
+        from .reductions import min
+        return min(self, axis=axis, keepdims=keepdims)
 
-    def any(a, axis=None, keepdims=False):
-        return reduction(a, np.any, np.any, axis=axis, keepdims=keepdims)
+    def max(self, axis=None, keepdims=False):
+        from .reductions import max
+        return max(self, axis=axis, keepdims=keepdims)
 
-    def all(a, axis=None, keepdims=False):
-        return reduction(a, np.all, np.all, axis=axis, keepdims=keepdims)
+    def sum(self, axis=None, keepdims=False):
+        from .reductions import sum
+        return sum(self, axis=axis, keepdims=keepdims)
 
-    def mean(a, axis=None, keepdims=False):
-        def chunk(x, **kwargs):
-            n = np.ones_like(x).sum(**kwargs)
-            total = np.sum(x, **kwargs)
-            result = np.empty(shape=n.shape,
-                      dtype=[('total', total.dtype), ('n', n.dtype)])
-            result['n'] = n
-            result['total'] = total
-            return result
-        def agg(pair, **kwargs):
-            return pair['total'].sum(**kwargs) / pair['n'].sum(**kwargs)
-        return reduction(a, chunk, agg, axis=axis, keepdims=keepdims)
+    def mean(self, axis=None, keepdims=False):
+        from .reductions import mean
+        return mean(self, axis=axis, keepdims=keepdims)
 
-    def var(a, axis=None, keepdims=False, ddof=0):
-        def chunk(A, **kwargs):
-            n = np.ones_like(A).sum(**kwargs)
-            x = np.sum(A, dtype='f8', **kwargs)
-            x2 = np.sum(A**2, dtype='f8', **kwargs)
-            result = np.empty(shape=n.shape, dtype=[('x', x.dtype),
-                                                    ('x2', x2.dtype),
-                                                    ('n', n.dtype)])
-            result['x'] = x
-            result['x2'] = x2
-            result['n'] = n
-            return result
+    def std(self, axis=None, keepdims=False, ddof=0):
+        from .reductions import std
+        return std(self, axis=axis, keepdims=keepdims, ddof=ddof)
 
-        def agg(A, **kwargs):
-            x = A['x'].sum(**kwargs)
-            x2 = A['x2'].sum(**kwargs)
-            n = A['n'].sum(**kwargs)
-            result = (x2 / n) - (x / n)**2
-            if ddof:
-                result = result * n / (n - ddof)
-            return result
-
-        return reduction(a, chunk, agg, axis=axis, keepdims=keepdims)
-
-    def std(a, axis=None, keepdims=False, ddof=0):
-        return sqrt(a.var(axis=axis, keepdims=keepdims, ddof=ddof))
+    def var(self, axis=None, keepdims=False, ddof=0):
+        from .reductions import var
+        return var(self, axis=axis, keepdims=keepdims, ddof=ddof)
 
 
 def from_array(x, blockshape=None, name=None, **kwargs):
@@ -907,35 +884,3 @@ sqrt = wrap_elemwise(np.sqrt)
 tan = wrap_elemwise(np.tan)
 tanh = wrap_elemwise(np.tanh)
 trunc = wrap_elemwise(np.trunc)
-
-
-def reduction(x, chunk, aggregate, axis=None, keepdims=None):
-    """ General version of reductions
-
-    >>> reduction(my_array, np.sum, np.sum, axis=0, keepdims=False)  # doctest: +SKIP
-    """
-    if axis is None:
-        axis = tuple(range(x.ndim))
-    if isinstance(axis, int):
-        axis = (axis,)
-
-    chunk2 = partial(chunk, axis=axis, keepdims=True)
-    aggregate2 = partial(aggregate, axis=axis, keepdims=keepdims)
-
-    inds = tuple(range(x.ndim))
-    tmp = atop(chunk2, next(names), inds, x, inds)
-
-    inds2 = tuple(i for i in inds if i not in axis)
-
-    result = atop(compose(aggregate2, curry(_concatenate2, axes=axis)),
-                  next(names), inds2, tmp, inds)
-
-    if keepdims:
-        dsk = result.dask.copy()
-        for k in core.flatten(result._keys()):
-            k2 = (k[0],) + insert_many(k[1:], axis, 0)
-            dsk[k2] = dsk.pop(k)
-        blockdims = insert_many(result.blockdims, axis, [1])
-        return Array(dsk, result.name, blockdims=blockdims)
-    else:
-        return result
