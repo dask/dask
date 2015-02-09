@@ -258,3 +258,6 @@ def test_operators():
 
     expr = (3 / a * b)**2 > 5
     assert eq(expr, (3 / x * y)**2 > 5)
+
+    c = exp(a)
+    assert eq(c, np.exp(x))

@@ -4,7 +4,7 @@ from operator import add, getitem
 from collections import Iterable
 from bisect import bisect
 import operator
-from math import ceil, floor
+import math
 from itertools import product, count
 from collections import Iterator
 from functools import partial, wraps
@@ -31,7 +31,7 @@ def getem(arr, blocksize, shape):
      ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
     """
-    numblocks = tuple([int(ceil(n/k)) for n, k in zip(shape, blocksize)])
+    numblocks = tuple([int(math.ceil(n/k)) for n, k in zip(shape, blocksize)])
     return dict(
                ((arr,) + ijk,
                (getitem,
@@ -796,3 +796,47 @@ def elemwise(op, *args, **kwargs):
 
     return atop(op2, name, expr_inds,
                 *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays))
+
+
+def wrap_elemwise(func):
+    """ Wrap up numpy function into dask.array """
+    f = partial(elemwise, func)
+    f.__doc__ = func.__doc__
+    f.__name__ = func.__name__
+    return f
+
+
+arccos = wrap_elemwise(np.arccos)
+arcsin = wrap_elemwise(np.arcsin)
+arctan = wrap_elemwise(np.arctan)
+arctanh = wrap_elemwise(np.arctanh)
+arccosh = wrap_elemwise(np.arccosh)
+arcsinh = wrap_elemwise(np.arcsinh)
+arctan2 = wrap_elemwise(np.arctan2)
+
+ceil = wrap_elemwise(np.ceil)
+copysign = wrap_elemwise(np.copysign)
+cos = wrap_elemwise(np.cos)
+cosh = wrap_elemwise(np.cosh)
+degrees = wrap_elemwise(np.degrees)
+exp = wrap_elemwise(np.exp)
+expm1 = wrap_elemwise(np.expm1)
+fabs = wrap_elemwise(np.fabs)
+floor = wrap_elemwise(np.floor)
+fmod = wrap_elemwise(np.fmod)
+frexp = wrap_elemwise(np.frexp)
+hypot = wrap_elemwise(np.hypot)
+isinf = wrap_elemwise(np.isinf)
+isnan = wrap_elemwise(np.isnan)
+ldexp = wrap_elemwise(np.ldexp)
+log = wrap_elemwise(np.log)
+log10 = wrap_elemwise(np.log10)
+log1p = wrap_elemwise(np.log1p)
+modf = wrap_elemwise(np.modf)
+radians = wrap_elemwise(np.radians)
+sin = wrap_elemwise(np.sin)
+sinh = wrap_elemwise(np.sinh)
+sqrt = wrap_elemwise(np.sqrt)
+tan = wrap_elemwise(np.tan)
+tanh = wrap_elemwise(np.tanh)
+trunc = wrap_elemwise(np.trunc)
