@@ -103,3 +103,14 @@ creation.
    >>> d = Data(x)
    >>> y = log(d + 1)[:5].sum(axis=1)
    >>> into('myfile.hdf5::/data', y)
+
+
+
+Features
+--------
+
+.. toctree::
+   :maxdepth: 1
+
+   slicing.rst
+   random.rst
