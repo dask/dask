@@ -299,3 +299,12 @@ def test_tensordot():
     #      == tensordot(a, a, axes=((1, 0), (0, 1))).blockdims)
 
     # assert eq(tensordot(a, a), np.tensordot(x, x))
+
+
+def test_dot_method():
+    x = np.arange(400).reshape((20, 20))
+    a = from_array(x, blockshape=(5, 5))
+    y = np.arange(200).reshape((20, 10))
+    b = from_array(y, blockshape=(5, 5))
+
+    assert eq(a.dot(b), x.dot(y))

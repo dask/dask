@@ -469,6 +469,10 @@ class Array(object):
 
         return Array(merge(self.dask, dsk), out, blockdims=blockdims)
 
+    @wraps(np.dot)
+    def dot(self, other):
+        return tensordot(self, other, axes=((self.ndim-1,), (other.ndim-2,)))
+
     def __abs__(self, other):
         return elemwise(operator.abs, self)
     def __add__(self, other):
