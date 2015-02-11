@@ -613,7 +613,7 @@ def atop(func, out, out_ind, *args):
     return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims)
 
 
-def get(dsk, keys, get=core.get, **kwargs):
+def get(dsk, keys, get=threaded.get, **kwargs):
     """ Specialized get function
 
     1. Handle inlining
