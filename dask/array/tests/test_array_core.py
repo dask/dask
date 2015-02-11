@@ -284,3 +284,18 @@ def test_reductions():
     assert b._keys() == [[(b.name, 0, 0)]]
 
     assert eq(a.std(axis=0, keepdims=True), x.std(axis=0, keepdims=True))
+
+
+def test_tensordot():
+    x = np.arange(400).reshape((20, 20))
+    a = from_array(x, blockshape=(5, 5))
+    y = np.arange(200).reshape((20, 10))
+    b = from_array(y, blockshape=(5, 5))
+
+    assert eq(tensordot(a, b, axes=1), np.tensordot(x, y, axes=1))
+    assert eq(tensordot(a, b, axes=(1, 0)), np.tensordot(x, y, axes=(1, 0)))
+
+    # assert (tensordot(a, a).blockdims
+    #      == tensordot(a, a, axes=((1, 0), (0, 1))).blockdims)
+
+    # assert eq(tensordot(a, a), np.tensordot(x, x))

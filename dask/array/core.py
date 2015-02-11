@@ -15,7 +15,7 @@ import numpy as np
 from .slicing import slice_array, insert_many
 from ..utils import deepmap
 from ..async import inline_functions
-from ..optimize import cull
+from ..optimize import cull, inline
 from ..compatibility import unicode
 from .. import threaded, core
 
@@ -619,7 +619,8 @@ def get(dsk, keys, get=core.get, **kwargs):
                              set([getitem, np.transpose]))
     dsk2 = cull(dsk, list(core.flatten(keys)))
     dsk3 = inline_functions(dsk2, fast_functions=fast_functions)
-    return get(dsk3, keys, **kwargs)
+    dsk4 = dsk3
+    return get(dsk4, keys, **kwargs)
 
 
 stacked_names = ('stack-%d' % i for i in count(1))
@@ -778,8 +779,26 @@ ALPHABET = alphabet.upper()
 
 
 @wraps(np.tensordot)
-def tensordot(lhs, rhs, axes=None):
-    left_axes, right_axes = axes
+def tensordot(lhs, rhs, axes=2):
+    if isinstance(axes, Iterable):
+        left_axes, right_axes = axes
+    else:
+        left_axes = tuple(range(lhs.ndim - 1, lhs.ndim - axes - 1, -1))
+        right_axes = tuple(range(0, axes))
+
+    if isinstance(left_axes, int):
+        left_axes = (left_axes,)
+    if isinstance(right_axes, int):
+        right_axes = (right_axes,)
+    if isinstance(left_axes, list):
+        left_axes = tuple(left_axes)
+    if isinstance(right_axes, list):
+        right_axes = tuple(right_axes)
+
+    if len(left_axes) > 1:
+        raise NotImplementedError("Simultaneous Contractions of multiple "
+                "indices not yet supported")
+
     left_index = list(alphabet[:lhs.ndim])
     right_index = list(ALPHABET[:rhs.ndim])
     out_index = left_index + right_index
