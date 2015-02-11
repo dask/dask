@@ -7,6 +7,27 @@ import numpy as np
 slice_names = ('slice-%d' % i for i in count(1))
 
 
+def sanitize_index_lists(ind):
+    """ Handle lists/arrays of integers/bools as indexes
+
+    >>> sanitize_index_lists([2, 3, 5])
+    [2, 3, 5]
+    >>> sanitize_index_lists([True, False, True, False])
+    [0, 2]
+    >>> sanitize_index_lists(np.array([1, 2, 3]))
+    [1, 2, 3]
+    >>> sanitize_index_lists(np.array([False, True, True]))
+    [1, 2]
+    """
+    if not isinstance(ind, (list, np.ndarray)):
+        return ind
+    if isinstance(ind, np.ndarray):
+        ind = ind.tolist()
+    if isinstance(ind, list) and ind and isinstance(ind[0], bool):
+        ind = [a for a, b in enumerate(ind) if b]
+    return ind
+
+
 def slice_array(out_name, in_name, blockdims, index):
     """
     Master function for array slicing
@@ -67,7 +88,7 @@ def slice_array(out_name, in_name, blockdims, index):
     slice_with_lists - handle fancy indexing with lists
     slice_slices_and_integers - handle everything else
     """
-    index = tuple(index)
+    index = tuple(map(sanitize_index_lists, index))
     blockdims = tuple(map(tuple, blockdims))
 
     # x[:, :, :] - Punt and return old value

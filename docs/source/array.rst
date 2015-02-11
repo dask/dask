@@ -1,9 +1,9 @@
 Arrays
 ======
 
-We compute on very large arrays by breaking them up into many small arrays.
-We implement operations on the large array as many small operations on the
-small arrays.  We coordinate these operations through ``dask`` graphs.
+We compute on very large arrays by breaking them up into blocks.
+We implement operations on the large array as many small operations on those
+blocks.  We coordinate these operations through ``dask`` graphs.
 
 Scope
 -----
@@ -59,20 +59,6 @@ arithmetic operators, ufuncs, slicing, dot products, and reductions.
 
    >>> y = log(x + 1)[:5].sum(axis=1)
 
-Alternatively Dask can use Blaze for this same interface.
-
-.. code-block:: Python
-
-   >>> from blaze import Data, log, compute
-   >>> d = Data(x)
-   >>> y = log(d + 1)[:5].sum(axis=1)
-
-   >>> result = compute(y)
-
-This provides a smoother interactive experience, dtype tracking, numba
-acceleration, etc. but does require an extra step.
-
-
 Store
 -----
 
@@ -93,13 +79,15 @@ supports numpy-style item assignment like an ``h5py.Dataset``.
 
    >>> y.store(dset)
 
-Alternatively, if you're comfortable using Blaze and ``into`` then you can jump
-directly from the blaze expression to storage, leaving it to handle dataset
-creation.
 
-.. code-block:: Python
+Features
+--------
 
-   >>> from blaze import Data, log, into
-   >>> d = Data(x)
-   >>> y = log(d + 1)[:5].sum(axis=1)
-   >>> into('myfile.hdf5::/data', y)
+.. toctree::
+   :maxdepth: 1
+
+   array-design.rst
+   slicing.rst
+   stack.rst
+   random.rst
+   blaze.rst
