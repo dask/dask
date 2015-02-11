@@ -112,7 +112,7 @@ Features
 .. toctree::
    :maxdepth: 1
 
-   design.rst
+   array-design.rst
    slicing.rst
    stack.rst
    random.rst
