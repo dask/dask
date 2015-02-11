@@ -113,4 +113,5 @@ Features
    :maxdepth: 1
 
    slicing.rst
+   stack.rst
    random.rst
