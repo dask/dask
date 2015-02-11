@@ -12,6 +12,11 @@ def make_hashable(x):
     except TypeError:
         return hash(str(x))
 
+def lower(func):
+    while hasattr(func, 'func'):
+        func = func
+    return func
+
 
 def to_networkx(d, data_attributes=None, function_attributes=None):
     if data_attributes is None:
@@ -28,7 +33,7 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
             func_node = make_hashable((v, 'function'))
             g.add_node(func_node,
                        shape='circle',
-                       label=func.__name__,
+                       label=lower(func).__name__,
                        **function_attributes.get(k, dict()))
             g.add_edge(k, func_node)
             for dep in sorted(get_dependencies(d, k)):
