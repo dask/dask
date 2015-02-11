@@ -16,7 +16,7 @@ dask array with from the following components
    e.g. ``((5, 5, 5, 5), (8, 8, 8))``
 *  A name to identify which keys in the dask refer to this array, e.g. ``'x'``
 
-By special convenion we refer to each block of the array with a tuple of the
+By special convention we refer to each block of the array with a tuple of the
 form ``(name, i, j, k)`` for ``i, j, k`` being the indices of the block,
 ranging from ``0`` to the number of blocks in that dimension.  The dask must
 hold key-value pairs referring to these keys.  It likely also holds other
@@ -38,12 +38,12 @@ tuples such that the length of the outer tuple is equal to the dimension and
 the lengths of the inner tuples are equal to the number of blocks along each
 dimension.  In the example illustrated above this value is as follows::
 
-    ((5, 5, 5, 5), (8, 8, 8))
+    blockdims = ((5, 5, 5, 5), (8, 8, 8))
 
-Note that these numbers do not necessarily need to be regular.  They often
-start that way but change shape after complex slicing.  Some operations however
-do require/expect certain symmetries in the block-shapes.  Matrix
-multiplication for example requires that blocks on each side have
+Note that these numbers do not necessarily need to be regular.  We often create
+regularly sized grids but blocks change shape after complex slicing.  Beware
+that some operations do expect certain symmetries in the block-shapes.  For
+example matrix multiplication requires that blocks on each side have
 anti-symmetric shapes.
 
 Create an Array Object
@@ -66,8 +66,8 @@ Then one can construct an array::
 
     x = da.Array(dsk, name, blockdims=blockdims)
 
-And so all ``dask.array`` algorithms are essentially just creating dictionaries
-and tracking blockdims shapes.
+So ``dask.array`` operations update dask dictionaries and track blockdims
+shapes.
 
 
 Example - ``eye`` function
@@ -86,7 +86,9 @@ identity matrix
 
        name = next(names)
 
-       dsk = {(name, i, j): eye(blocksize) if i ==j else zeros((blocksize, blocksize))
+       dsk = {(name, i, j): np.eye(blocksize)
+                            if i == j else
+                            np.zeros((blocksize, blocksize))
                 for i in range(n // blocksize)
                 for j in range(n // blocksize)}
 
