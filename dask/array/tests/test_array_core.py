@@ -308,3 +308,10 @@ def test_dot_method():
     b = from_array(y, blockshape=(5, 5))
 
     assert eq(a.dot(b), x.dot(y))
+
+
+def test_T():
+    x = np.arange(400).reshape((20, 20))
+    a = from_array(x, blockshape=(5, 5))
+
+    assert eq(x.T, a.T)

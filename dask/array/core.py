@@ -473,6 +473,10 @@ class Array(object):
     def dot(self, other):
         return tensordot(self, other, axes=((self.ndim-1,), (other.ndim-2,)))
 
+    @property
+    def T(self):
+        return transpose(self)
+
     def __abs__(self, other):
         return elemwise(operator.abs, self)
     def __add__(self, other):
@@ -762,6 +766,7 @@ def concatenate(seq, axis=0):
 
 @wraps(np.transpose)
 def transpose(a, axes=None):
+    axes = axes or tuple(range(a.ndim))[::-1]
     return atop(curry(np.transpose, axes=axes),
                 next(names), axes,
                 a, tuple(range(a.ndim)))
