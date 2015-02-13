@@ -4,37 +4,60 @@ Blaze
 Difference between Dask Arrays and Blaze
 ----------------------------------------
 
-Blaze_ is a library to translate high-level syntax to various computational
-backends; Blaze does no work on its own.  Dask is a computational backend; Dask
-does work.
+Blaze_ and Dask.array both provide array abstractions over biggish data, what
+is the difference?
 
-So you can drive dask arrays from Blaze, but you can also use Dask on its own,
-just as you would use NumPy on its own.
+In short, Blaze is one level more abstract than Dask thinking about syntax
+trees, while Dask is a scheduling system, thinking about blocked algorithms and
+directed acyclic graphs.
+
+Blaze reasons about and optimizes the expressions that a user types in,
+optimizing order of execution, operator fusion, checking type errors, etc..
+Blaze applies these optimizations and then translates to a variety of
+computational systems, passing work off to them.  One such computational system
+in dask.array.
+
+Dask.arrays are fundamentally a way to create task schedules that execute
+blocked matrix algorithms.  Dask.array does not think or optimize at the
+expression level like Blaze.  Instead each operation on dask.arrays produces a new
+dask.array with its own task directed acyclic graph.  Dask.arrays then optimize
+*this* graph in ways very different from how Blaze might act on an expression
+tree.
+
+Example
+-------
+
+.. code-block:: Python
+
+    >>> (((x + 1) * 2) ** 3)
+
+If ``x`` is a dask.array with 1000 blocks then each binary operation adds 1000
+new tasks to the task graph.  Dask is unable to reason effectively about the
+expression that the user has typed in.
+
+However if ``x`` is a Blaze symbol then this graph only has a few nodes (``x``,
+``1``, ``x + 1``, ...) and so Blaze is able to wrap this tree up into a fused
+scalar operation.  If we then decide to execute the expression against
+dask.array then Blaze can intelligently craft Numba_ ufuncs for dask.array to
+use.
 
 
 Why use Blaze?
 --------------
 
-Blaze can reason about and optimize your expressions at a higher level.
-
-Each operation on a dask array immediately produces a new task graph, so the
-following Python code results in two operations on every block
-
-.. code-block:: Python
-
-   >>> ((x + 1) + 1)
-
-Blaze thinks about this expression as an abstract syntax tree before it sends
-it to Dask, which would immediately distribute these operations as lots of
-little tasks in a dictionary.
+Blaze and Dask have orthogonal sets of optimizations.  When we use them
+together we can optimize first the expression tree and then translate to dask
+and optimize the task dependency graph.
 
 Currently Blaze offers the following concrete benefits:
 
+*  Smoother immediate feedback for type and shape errors
+*  DType tracking
 *  Numba integration for elementwise operations
-*  DType and shape tracking
 *  Integration with other Blaze projects like `Blaze Server`_
 
-This comes at a cost of indirection which may confuse new users.
+However this comes at a cost of indirection and potential confusion.
+
 
 How to use Blaze with Dask
 --------------------------
@@ -51,9 +74,6 @@ We can drive dask arrays with Blaze.
 
    >>> result = compute(y)                      # Fall back to dask
 
-This provides a smoother interactive experience, dtype tracking, numba
-acceleration, etc. but does require an extra step.
-
 If you're comfortable using Blaze and ``into`` you can jump directly from the
 blaze expression to storage, leaving it to handle dataset creation.
 
@@ -67,3 +87,4 @@ blaze expression to storage, leaving it to handle dataset creation.
 
 .. _`Blaze Server`: http://blaze.pydata.org/docs/dev/server.html
 .. _Blaze: http://continuum.io/open-source/blaze/
+.. _Numba: http://numba.pydata.org/
