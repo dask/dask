@@ -41,7 +41,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'dask'
-copyright = u'2015, Matthew Rocklin'
+copyright = u'2015, Continuum Analytics'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -247,8 +247,8 @@ texinfo_documents = [
 # Bibliographic Dublin Core info.
 epub_title = u'dask'
 epub_author = u'Matthew Rocklin'
-epub_publisher = u'Matthew Rocklin'
-epub_copyright = u'2015, Matthew Rocklin'
+epub_publisher = u'Continuum Analytics'
+epub_copyright = u'2015, Continuum Analytics'
 
 # The language of the text. It defaults to the language option
 # or en if the language is not set.
