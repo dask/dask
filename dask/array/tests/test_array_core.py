@@ -244,6 +244,12 @@ def test_binops():
     assert f(10) == 100
 
 
+def test_elemwise_on_scalars():
+    x = np.arange(10)
+    a = from_array(x, blockshape=(5,))
+    assert eq(a.sum()**2, x.sum()**2)
+
+
 def test_operators():
     x = np.arange(10)
     y = np.arange(10).reshape((10, 1))
