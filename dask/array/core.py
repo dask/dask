@@ -477,7 +477,7 @@ class Array(object):
     def T(self):
         return transpose(self)
 
-    def __abs__(self, other):
+    def __abs__(self):
         return elemwise(operator.abs, self)
     def __add__(self, other):
         return elemwise(operator.add, self, other)
@@ -515,7 +515,7 @@ class Array(object):
         return elemwise(operator.mul, other, self)
     def __ne__(self, other):
         return elemwise(operator.ne, self, other)
-    def __neg__(self, other):
+    def __neg__(self):
         return elemwise(operator.neg, self)
     def __or__(self, other):
         return elemwise(operator.or_, self, other)
