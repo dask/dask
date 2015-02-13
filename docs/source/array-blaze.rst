@@ -7,9 +7,9 @@ Difference between Dask Arrays and Blaze
 Blaze_ and Dask.array both provide array abstractions over biggish data, what
 is the difference?
 
-In short, Blaze is one level more abstract than Dask thinking about syntax
-trees, while Dask is a scheduling system, thinking about blocked algorithms and
-directed acyclic graphs.
+In short, Blaze is one level more abstract than Dask.  Blaze is an expression
+system and thinks about syntax trees while Dask is a scheduling system and
+thinks about blocked algorithms and directed acyclic graphs.
 
 Blaze reasons about and optimizes the expressions that a user types in,
 optimizing order of execution, operator fusion, checking type errors, etc..
@@ -24,8 +24,14 @@ dask.array with its own task directed acyclic graph.  Dask.arrays then optimize
 *this* graph in ways very different from how Blaze might act on an expression
 tree.
 
+Finally, Blaze is general while Dask.array is specific to blocked NumPy
+algorithms.
+
+
 Example
 -------
+
+Consider the following scalar expression on the array ``x``.
 
 .. code-block:: Python
 
@@ -52,7 +58,7 @@ and optimize the task dependency graph.
 Currently Blaze offers the following concrete benefits:
 
 *  Smoother immediate feedback for type and shape errors
-*  DType tracking
+*  dtype tracking
 *  Numba integration for elementwise operations
 *  Integration with other Blaze projects like `Blaze Server`_
 
