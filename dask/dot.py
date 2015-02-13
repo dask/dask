@@ -12,9 +12,10 @@ def make_hashable(x):
     except TypeError:
         return hash(str(x))
 
+
 def lower(func):
     while hasattr(func, 'func'):
-        func = func
+        func = func.func
     return func
 
 

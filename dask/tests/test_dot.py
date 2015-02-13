@@ -1,5 +1,6 @@
 import networkx as nx
-from dask.dot import to_networkx, dot_graph
+from functools import partial
+from dask.dot import to_networkx, dot_graph, lower
 import os
 
 
@@ -21,6 +22,9 @@ def test_to_networkx():
     assert isinstance(g, nx.DiGraph)
     assert all(n in g.node for n in ['x', 'a', 'z', 'b', 'y'])
 
+
+def test_lower():
+    assert lower(partial(add, 1)) is add
 
 def test_dot_graph():
     fn = 'test_dot_graph'

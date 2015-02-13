@@ -503,3 +503,14 @@ def state_to_networkx(dsk, state):
     from .dot import to_networkx
     data, func = color_nodes(dsk, state)
     return to_networkx(dsk, data_attributes=data, function_attributes=func)
+
+
+def apply_sync(func, args=(), kwds={}):
+    """ A naive synchronous version of apply_async """
+    return func(*args, **kwds)
+
+
+def get_sync(dsk, keys, **kwargs):
+    from .compatibility import Queue
+    queue = Queue()
+    return get_async(apply_sync, 1, dsk, keys, queue=queue, **kwargs)

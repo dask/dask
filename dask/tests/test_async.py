@@ -80,3 +80,13 @@ def test_state_to_networkx():
     g = state_to_networkx(dsk, state)
     assert isinstance(g, nx.DiGraph)
 
+
+def test_get():
+    dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
+    assert get_sync(dsk, 'w') == 4
+    assert get_sync(dsk, ['w', 'z']) == (4, 2)
+
+
+def test_nested_get():
+    dsk = {'x': 1, 'y': 2, 'a': (add, 'x', 'y'), 'b': (sum, ['x', 'y'])}
+    assert get_sync(dsk, ['a', 'b']) == (3, 3)
