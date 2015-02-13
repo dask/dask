@@ -64,6 +64,13 @@ Currently Blaze offers the following concrete benefits:
 
 However this comes at a cost of indirection and potential confusion.
 
+These different projects (Blaze -> dask.array -> NumPy -> Numba) act as
+different stages in a compiler.  They start at abstract syntax trees, move to
+task DAGs, then to in-core computations, finally to LLVM and beyond.  For
+simple problems you may only need to think about the middle of this chain
+(NumPy, dask.array) but as you require more performance optimizations you
+extend your interest to the outer edges (Blaze, Numba).
+
 
 How to use Blaze with Dask
 --------------------------
