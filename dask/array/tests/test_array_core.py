@@ -323,3 +323,13 @@ def test_T():
     a = from_array(x, blockshape=(5, 5))
 
     assert eq(x.T, a.T)
+
+
+def test_norm():
+    a = np.arange(200).reshape((20, 10))
+    b = from_array(a, blockshape=(5, 5))
+
+    assert eq(b.vnorm(), np.linalg.norm(a))
+    assert eq(b.vnorm(ord=1), np.linalg.norm(a.flatten(), ord=1))
+    assert eq(b.vnorm(ord=4, axis=0), np.linalg.norm(a, ord=4, axis=0))
+    assert b.vnorm(ord=4, axis=0, keepdims=True).ndim == b.ndim

@@ -578,6 +578,10 @@ class Array(object):
         from .reductions import var
         return var(self, axis=axis, keepdims=keepdims, ddof=ddof)
 
+    def vnorm(self, ord=None, axis=None, keepdims=False):
+        from .reductions import vnorm
+        return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
+
 
 def from_array(x, blockshape=None, name=None, **kwargs):
     """ Create dask array from something that looks like an array

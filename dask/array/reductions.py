@@ -109,3 +109,22 @@ def var(a, axis=None, keepdims=False, ddof=0):
 @wraps(np.std)
 def std(a, axis=None, keepdims=False, ddof=0):
     return sqrt(a.var(axis=axis, keepdims=keepdims, ddof=ddof))
+
+
+def vnorm(a, ord=None, axis=None, keepdims=False):
+    """ Vector norm
+
+    See np.linalg.norm
+    """
+    if ord is None or ord == 'fro':
+        ord = 2
+    if ord == np.inf:
+        return max(abs(a), axis=axis, keepdims=keepdims)
+    elif ord == -np.inf:
+        return min(abs(a), axis=axis, keepdims=keepdims)
+    elif ord == 1:
+        return sum(abs(a), axis=axis, keepdims=keepdims)
+    elif ord % 2 == 0:
+        return sum(a**ord, axis=axis, keepdims=keepdims)**(1./ord)
+    else:
+        return sum(abs(a)**ord, axis=axis, keepdims=keepdims)**(1./ord)
