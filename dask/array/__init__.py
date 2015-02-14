@@ -8,7 +8,7 @@ from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
         ceil, copysign, cos, cosh, degrees, exp, expm1, fabs, floor, fmod,
         frexp, hypot, isinf, isnan, ldexp, log, log10, log1p, modf, radians,
         sin, sinh, sqrt, tan, tanh, trunc)
-from .reductions import (sum, mean, std, var, any, all, min, max)
+from .reductions import (sum, mean, std, var, any, all, min, max, vnorm)
 from . import random
 from .wrap import ones, zeros, empty
 restart_ordering()
