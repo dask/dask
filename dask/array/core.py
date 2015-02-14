@@ -171,7 +171,7 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
 
     g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
 
-    if not set(map(len, g2.values())) == set([1]):
+    if g2 and not set(map(len, g2.values())) == set([1]):
         raise ValueError("Shapes do not align %s" % g)
 
     return valmap(first, g2)
@@ -477,7 +477,7 @@ class Array(object):
     def T(self):
         return transpose(self)
 
-    def __abs__(self, other):
+    def __abs__(self):
         return elemwise(operator.abs, self)
     def __add__(self, other):
         return elemwise(operator.add, self, other)
@@ -515,7 +515,7 @@ class Array(object):
         return elemwise(operator.mul, other, self)
     def __ne__(self, other):
         return elemwise(operator.ne, self, other)
-    def __neg__(self, other):
+    def __neg__(self):
         return elemwise(operator.neg, self)
     def __or__(self, other):
         return elemwise(operator.or_, self, other)
@@ -577,6 +577,10 @@ class Array(object):
     def var(self, axis=None, keepdims=False, ddof=0):
         from .reductions import var
         return var(self, axis=axis, keepdims=keepdims, ddof=ddof)
+
+    def vnorm(self, ord=None, axis=None, keepdims=False):
+        from .reductions import vnorm
+        return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
 
 
 def from_array(x, blockshape=None, name=None, **kwargs):
