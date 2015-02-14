@@ -1,6 +1,9 @@
 Overview
 ========
 
+Dask arrays implement a subset of the NumPy interface on large arrays using
+blocked algorithms and task scheduling.
+
 Scope
 -----
 
