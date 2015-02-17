@@ -57,7 +57,12 @@ class Base(MutableMapping):
 
     def __setitem__(self, key, value):
         if key in self.dsk:
-            raise KeyError("Can not overwrite data")
+            if (self.dsk[key] == value or
+                self.dsk[key] == (getitem, self.cache, key) and
+                self.cache[key] == value):
+                return
+            else:
+                raise KeyError("Can not overwrite data")
         if istask(value):
             self.dsk[key] = value
         else:
