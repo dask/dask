@@ -47,3 +47,6 @@ def test_update():
     db.update(dsk)
 
     assert db['y'] == 2
+
+    assert raises(Exception, lambda: db.update({'x': 2}))
+    assert not raises(Exception, lambda: db.update({'x': 1}))
