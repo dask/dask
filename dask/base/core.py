@@ -1,11 +1,11 @@
-from collections import defaultdict
+from collections import defaultdict, MutableMapping
 from operator import getitem, add
 from datetime import datetime
 from time import time
 from ..core import istask, ishashable
 
 
-class Base(object):
+class Base(MutableMapping):
     """ DaskBase - A storage of data and computation
 
     Example
@@ -94,3 +94,12 @@ class Base(object):
         self.compute_time[key] = end - start
 
         return result
+
+    def __len__(self):
+        return len(self.dsk)
+
+    def __iter__(self):
+        return iter(self.dsk)
+
+    def __delitem__(self, key):
+        raise ValueError("Dask Base does not support deletion")

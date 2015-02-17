@@ -38,3 +38,12 @@ def test_basic():
     def reassign():
         db['x'] = 2
     assert raises(Exception, reassign)
+
+
+def test_update():
+    db = Base()
+
+    dsk = {'x': 1, 'y': (inc, 'x')}
+    db.update(dsk)
+
+    assert db['y'] == 2
