@@ -9,8 +9,10 @@ if PY3:
     import builtins
     from queue import Queue
     unicode = str
+    long = int
 else:
     import __builtin__ as builtins
     from Queue import Queue
     import operator
     unicode = unicode
+    long = long

@@ -22,7 +22,7 @@ try:
     import h5py
     arrays.append(h5py.Dataset)
 
-    @dispatch(h5py.Dataset, int)
+    @dispatch(h5py.Dataset, (int, long))
     def resize(x, size):
         s = list(x.shape)
         s[0] = size
@@ -37,7 +37,7 @@ try:
     import bcolz
     arrays.append(bcolz.carray)
 
-    @dispatch(bcolz.carray, int)
+    @dispatch(bcolz.carray, (int, long))
     def resize(x, size):
         return x.resize(size)
 except ImportError:
