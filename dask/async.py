@@ -30,12 +30,13 @@ Changing state
 
 ### Jobs
 
-1.  ready: A set of ready-to-run tasks
-1.  running: A set of tasks currently in execution
-2.  finished: A set of finished tasks
-3.  waiting: which tasks are still waiting on others :: {key: {keys}}
+1.  ready: A fifo stack of ready-to-run tasks
+2.  ready-set: A set of the data above for rapid access
+3.  running: A set of tasks currently in execution
+4.  finished: A set of finished tasks
+5.  waiting: which tasks are still waiting on others :: {key: {keys}}
     Real-time equivalent of dependencies
-4.  waiting_data: available data to yet-to-be-run-tasks :: {key: {keys}}
+6.  waiting_data: available data to yet-to-be-run-tasks :: {key: {keys}}
     Real-time equivalent of dependents
 
 
@@ -55,7 +56,8 @@ Example
                 'y': set(['w']),
                 'z': set(['w'])},
  'finished': set([]),
- 'ready': set(['z']),
+ 'ready': ['z'],
+ 'ready-set': set(['z']),
  'released': set([]),
  'running': set([]),
  'waiting': {'w': set(['z'])},
@@ -75,9 +77,9 @@ Compute to release data
 When we choose a new task to execute we often have many options.  Policies at
 this stage are cheap and can significantly impact performance.  One could
 imagine policies that expose parallelism, drive towards a paticular output,
-etc..  Our current policy is the compute tasks that free up data resources.
+etc..
 
-See the functions ``choose_task`` and ``score`` for more information
+Our current policy is to run tasks that were most recently made available.
 
 
 Inlining computations
@@ -131,7 +133,8 @@ def start_state_from_dask(dsk, cache=None):
                     'y': set(['w']),
                     'z': set(['w'])},
      'finished': set([]),
-     'ready': set(['z']),
+     'ready': ['z'],
+     'ready-set': set(['z']),
      'released': set([]),
      'running': set([]),
      'waiting': {'w': set(['z'])},
@@ -155,7 +158,8 @@ def start_state_from_dask(dsk, cache=None):
             waiting[b].remove(a)
     waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
 
-    ready = set([k for k, v in waiting.items() if not v])
+    ready_set = set([k for k, v in waiting.items() if not v])
+    ready = sorted(ready_set)
     waiting = dict((k, v) for k, v in waiting.items() if v)
 
     state = {'dependencies': dependencies,
@@ -164,6 +168,7 @@ def start_state_from_dask(dsk, cache=None):
              'waiting_data': waiting_data,
              'cache': cache,
              'ready': ready,
+             'ready-set': ready_set,
              'running': set(),
              'finished': set(),
              'released': set()}
@@ -252,15 +257,16 @@ def finish_task(dsk, key, result, state, results):
     Mutates.  This should run atomically (with a lock).
     """
     state['cache'][key] = result
-    if key in state['ready']:
-        state['ready'].remove(key)
+    if key in state['ready-set']:
+        state['ready-set'].remove(key)
 
     for dep in state['dependents'][key]:
         s = state['waiting'][dep]
         s.remove(key)
         if not s:
             del state['waiting'][dep]
-            state['ready'].add(dep)
+            state['ready-set'].add(dep)
+            state['ready'].append(dep)
 
     for dep in state['dependencies'][key]:
         if dep in state['waiting_data']:
@@ -327,42 +333,9 @@ Task Selection
 We often have a choice among many tasks to run next.  This choice is both
 cheap and can significantly impact performance.
 
-Here we choose tasks that immediately free data resources.
+We currently select tasks that have recently been made ready.  We hope that
+this first-in-first-out policy reduces memory footprint
 '''
-
-def score(key, state):
-    """ Prefer to run tasks that remove need to hold on to data """
-    deps = state['dependencies'][key]
-    wait = state['waiting_data']
-    return sum([1./len(wait[dep])**2 for dep in deps])
-
-
-def choose_task(state, score=score):
-    """
-    Select a task that maximizes scoring function
-
-    Default scoring function selects tasks that free up the maximum number of
-    resources.
-
-    E.g. for ready tasks a, b with dependencies:
-
-        {a: {x, y},
-         b: {x, w}}
-
-    and for data w, x, y, z waiting on the following tasks
-
-        {w: {b, c}
-         x: {a, b, c},
-         y: {a}}
-
-    We choose task a because it will completely free up resource y and
-    partially free up resource x.  Task b only partially frees up resources x
-    and w and completely frees none so it is given a lower score.
-
-    See also:
-        score
-    """
-    return max(state['ready'], key=partial(score, state=state))
 
 '''
 `get`
@@ -419,8 +392,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         if debug_counts and tick[0] % debug_counts == 0:
             visualize(dsk, state, filename='dask_%03d' % tick[0])
         # Choose a good task to compute
-        key = choose_task(state)
-        state['ready'].remove(key)
+        key = state['ready'].pop()
+        state['ready-set'].remove(key)
         state['running'].add(key)
 
         # Prep data to send

@@ -22,7 +22,8 @@ def test_start_state():
                'finished': set([]),
                'released': set([]),
                'running': set([]),
-               'ready': set(['z']),
+               'ready': ['z'],
+               'ready-set': set(['z']),
                'waiting': {'w': set(['z'])},
                'waiting_data': {'x': set(['z']),
                                 'y': set(['w']),
@@ -31,12 +32,14 @@ def test_start_state():
 
 
 def test_start_state_with_independent_but_runnable_tasks():
-    assert start_state_from_dask({'x': (inc, 1)})['ready'] == set(['x'])
+    assert start_state_from_dask({'x': (inc, 1)})['ready'] == ['x']
 
 
 def test_finish_task():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     state = start_state_from_dask(dsk)
+    state['ready'].remove('z')
+    state['ready-set'].remove('z')
     state['running'] = set(['z', 'other-task'])
     task = 'z'
     result = 2
@@ -57,20 +60,11 @@ def test_finish_task():
                          'x': set(['z']),
                          'y': set(['w']),
                          'z': set(['w'])},
-          'ready': set(['w']),
+          'ready': ['w'],
+          'ready-set': set(['w']),
           'waiting': {},
           'waiting_data': {'y': set(['w']),
                            'z': set(['w'])}}
-
-
-def test_choose_task():
-    dsk = {'x': 1, 'y': 1, 'a': (add, 'x', 'y'), 'b': (inc, 'x')}
-    state = start_state_from_dask(dsk)
-    assert choose_task(state) == 'a'  # can remove two data at once
-
-    dsk = {'x': 1, 'y': 1, 'a': (inc, 'x'), 'b': (inc, 'y'), 'c': (inc, 'x')}
-    state = start_state_from_dask(dsk)
-    assert choose_task(state) == 'b'  # only task that removes data
 
 
 def test_state_to_networkx():
