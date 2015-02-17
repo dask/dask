@@ -42,6 +42,7 @@ def test_append_to_array():
     with tmpfile('hdf5') as fn:
         h = into(fn+'::/data', a)
         assert eq(h[:], x)
+        h.file.close()
 
 
 def test_into_inplace():
