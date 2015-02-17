@@ -9,6 +9,7 @@ from operator import add
 import itertools
 from .core import rec_concatenate, Array, getem, get, names, from_array
 from ..core import flatten
+from ..compatibility import long
 
 
 @discover.register(Array)
