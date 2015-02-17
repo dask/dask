@@ -1,2 +1,4 @@
 toolz
 numpy
+psutil
+dill
