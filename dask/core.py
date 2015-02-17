@@ -192,10 +192,7 @@ def get_dependencies(dsk, task, as_list=False):
         elif isinstance(arg, list):
             args.extend(arg)
         else:
-            try:
-                result.append(arg)
-            except TypeError:
-                pass
+            result.append(arg)
     if not result:
         return [] if as_list else set()
     rv = []

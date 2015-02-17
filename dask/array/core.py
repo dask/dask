@@ -324,10 +324,6 @@ def _concatenate2(arrays, axes=[]):
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
     return np.concatenate(arrays, axis=axes[0])
-    if len(axes) == 1:
-        return np.concatenate(arrays, axis=axes[0])
-    else:
-        return np.concatenate
 
 
 def rec_concatenate(arrays, axis=0):

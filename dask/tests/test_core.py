@@ -34,6 +34,7 @@ def test_get():
     assert get(d, ':x') == 1
     assert get(d, ':y') == 2
     assert get(d, ':z') == 3
+    assert get(d, 'pass-through') == 'pass-through'
 
 
 def test_memoized_get():
