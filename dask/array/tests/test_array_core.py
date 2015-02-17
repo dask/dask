@@ -326,7 +326,7 @@ def test_T():
 
 
 def test_norm():
-    a = np.arange(200).reshape((20, 10))
+    a = np.arange(200, dtype='f8').reshape((20, 10))
     b = from_array(a, blockshape=(5, 5))
 
     assert eq(b.vnorm(), np.linalg.norm(a))
