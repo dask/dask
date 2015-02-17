@@ -1,0 +1,7 @@
+recursive-include dask *.py
+
+include requirements.txt
+include setup.py
+include README.rst
+include LICENSE.txt
+include MANIFEST.in
