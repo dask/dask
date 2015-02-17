@@ -5,34 +5,34 @@ from time import time
 from ..core import istask, ishashable
 
 
-class Base(MutableMapping):
-    """ DaskBase - A storage of data and computation
+class Store(MutableMapping):
+    """ Store - A storage of data and computation
 
     Example
     -------
 
-    DaskBase stores data like a dictionary
+    Store data like a dictionary
 
-    >>> import dask
-    >>> db = dask.Base()
-    >>> db['x'] = 10
-    >>> db['x']
+    >>> import dask.store as ds
+    >>> s = ds.Store()
+    >>> s['x'] = 10
+    >>> s['x']
     10
 
-    DaskBase also stores computation on that data
+    Also store computation on that data
 
-    >>> db['y'] = (add, 'x', 5)
+    >>> s['y'] = (add, 'x', 5)
 
     Accessing these keys results in computations.  Results may be cached for
     reuse.
 
-    >>> db['y']
+    >>> s['y']
     15
 
     Design
     ------
 
-    A Base maintains the following state
+    A Store maintains the following state
 
     dsk: dict
         A dask to define all computation
@@ -107,4 +107,4 @@ class Base(MutableMapping):
         return iter(self.dsk)
 
     def __delitem__(self, key):
-        raise ValueError("Dask Base does not support deletion")
+        raise ValueError("Dask Store does not support deletion")
