@@ -1,6 +1,7 @@
 from itertools import count, product
 from toolz import merge, first, accumulate
 from operator import getitem, add
+from ..compatibility import long
 import numpy as np
 
 
@@ -112,7 +113,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
 
     Strips out Nones then hands off to slice_wrap_lists
     """
-    assert all(isinstance(ind, (slice, int, list, type(None)))
+    assert all(isinstance(ind, (slice, int, long, list, type(None)))
                for ind in index)
 
     # Strip Nones from index
@@ -150,7 +151,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     slice_slices_and_integers - handle slicing with slices and integers
     """
     shape = tuple(map(sum, blockdims))
-    assert all(isinstance(i, (slice, list, int)) for i in index)
+    assert all(isinstance(i, (slice, list, int, long)) for i in index)
 
     # Change indices like -1 to 9
     index2 = posify_index(shape, index)
@@ -186,14 +187,14 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
         # After collapsing some axes due to int indices, adjust axis parameter
         axis = where_list[0]
         axis2 = axis - sum(1 for i, ind in enumerate(index2)
-                           if i < axis and isinstance(ind, int))
+                           if i < axis and isinstance(ind, (int, long)))
 
         # Do work
         dsk2 = take(out_name, tmp, blockdims2, index2[axis], axis=axis2)
         dsk3 = merge(dsk, dsk2)
 
     # Replace blockdims of list entries with single block
-    index4 = [ind for ind in index2 if not isinstance(ind, int)]
+    index4 = [ind for ind in index2 if not isinstance(ind, (int, long))]
     blockdims3 = tuple([bd if not isinstance(i, list) else (len(i),)
                         for i, bd in zip(index4, blockdims2)])
 
@@ -211,7 +212,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     """
     shape = tuple(map(sum, blockdims))
 
-    assert all(isinstance(ind, (slice, int)) for ind in index)
+    assert all(isinstance(ind, (slice, int, long)) for ind in index)
     assert len(index) == len(blockdims)
 
     # Get a list (for each dimension) of dicts{blocknum: slice()}
@@ -224,7 +225,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     out_names = product([out_name],
                         *[range(len(d))
                             for d, i in zip(block_slices, index)
-                            if not isinstance(i, int)])
+                            if not isinstance(i, (int, long))])
 
     all_slices = list(product(*[i.values() for i in block_slices]))
 
@@ -234,7 +235,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     new_blockdims = [new_blockdim(d, db, i)
                      for d, i, db in zip(shape, index, blockdims)
-                     if not isinstance(i, int)]
+                     if not isinstance(i, (int, long))]
 
     return dsk_out, new_blockdims
 
@@ -299,7 +300,7 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
-    if isinstance(index, int):
+    if isinstance(index, (int, long)):
         i = 0
         ind = index
         lens = list(lengths)
@@ -428,7 +429,7 @@ def posify_index(shape, ind):
     """
     if isinstance(ind, tuple):
         return tuple(map(posify_index, shape, ind))
-    if isinstance(ind, int):
+    if isinstance(ind, (int, long)):
         if ind < 0:
             return ind + shape
         else:
@@ -465,6 +466,6 @@ def new_blockdim(dim_shape, lengths, index):
     """
     if isinstance(index, list):
         return [len(index)]
-    assert not isinstance(index, int)
+    assert not isinstance(index, (int, long))
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
     return [(slc.stop - slc.start) // slc.step for _, slc in pairs]
