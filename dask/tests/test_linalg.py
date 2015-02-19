@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import numpy as np
 from dask.array import from_array
 from dask.array.linalg import tsqr
