@@ -13,6 +13,6 @@ def test_tsqr():
     q = np.array(q)
     r = np.array(r)
 
-    assert np.allclose(mat, np.dot(q, r))
-    assert np.allclose(np.eye(n, n), np.dot(q.T, q))
-    assert np.all(r == np.triu(r))
+    assert np.allclose(mat, np.dot(q, r))  # accuracy check
+    assert np.allclose(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
+    assert np.all(r == np.triu(r))  # r must be upper triangular
