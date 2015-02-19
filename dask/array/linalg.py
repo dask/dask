@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import numpy as np
 from itertools import count, product
 import dask.array as da
