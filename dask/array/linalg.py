@@ -1,26 +1,9 @@
-"""
-   Copyright (c) 2015, Mariano Tepper, Duke University.
-   All rights reserved.
-
-   This file is part of dask and is under the BSD 3-Clause License,
-   which can be found at http://opensource.org/licenses/BSD-3-Clause
-"""
-
 import numpy as np
 from itertools import count, product
 import dask.array as da
-from math import ceil
 import operator
 
 names = ('tsqr_%d' % i for i in count(1))
-
-
-def _findnumblocks(shape, blockshape):
-    def div_ceil(t):
-        return int(ceil(float(t[0]) / t[1]))
-
-    nb = [div_ceil(elem) for elem in zip(*[shape, blockshape])]
-    return tuple(nb)
 
 
 def qr(data, name=None):
@@ -48,13 +31,12 @@ def qr(data, name=None):
             "Input must have the following properites:\n"
             "  1. Have two dimensions\n"
             "  2. Have only one column of blocks")
-    blockshape = (data.blockdims[0][0], data.blockdims[1][0])
-    m, n = data.shape
 
     prefix = name or next(names)
     prefix += '_'
 
-    numblocks = _findnumblocks(data.shape, blockshape)
+    m, n = data.shape
+    numblocks = (len(data.blockdims[0]), 1)
 
     name_qr_st1 = prefix + 'QR_st1'
     dsk_qr_st1 = da.core.top(np.linalg.qr, name_qr_st1, 'ij', data.name, 'ij',
@@ -69,13 +51,10 @@ def qr(data, name=None):
                  for i in xrange(numblocks[0])}
 
     # Stacking for in-core QR computation
-    def _vstack(*args):
-        tup = tuple(args)
-        return np.vstack(tup)
-
-    to_stack = [_vstack] + [(name_r_st1, i, 0) for i in xrange(numblocks[0])]
+    to_stack = [(name_r_st1, i, 0) for i in xrange(numblocks[0])]
     name_r_st1_stacked = prefix + 'R_st1_stacked'
-    dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): tuple(to_stack)}
+    dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack,
+                                                      (tuple, to_stack))}
     # In-core QR computation
     name_qr_st2 = prefix + 'QR_st2'
     dsk_qr_st2 = da.core.top(np.linalg.qr, name_qr_st2, 'ij',
@@ -119,7 +98,7 @@ def qr(data, name=None):
     dsk_r.update(dsk_qr_st2)
     dsk_r.update(dsk_r_st2)
 
-    q = da.Array(dsk_q, name_q_st3, shape=data.shape, blockshape=blockshape)
+    q = da.Array(dsk_q, name_q_st3, shape=data.shape, blockdims=data.blockdims)
     r = da.Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
 
     return q, r
