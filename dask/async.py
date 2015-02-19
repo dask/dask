@@ -410,7 +410,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['waiting'] or state['ready'] or state['running']:
         key, res, tb = queue.get()
         if isinstance(res, Exception):
-            raise type(res)(" Execption in remote Process\n\n"
+            raise type(res)(" Exception in remote process\n\n"
                 + str(res) + "\n\nTraceback:\n" + tb)
         finish_task(dsk, key, res, state, results)
         while state['ready'] and len(state['running']) < num_workers:
