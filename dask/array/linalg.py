@@ -6,7 +6,7 @@ import operator
 names = ('tsqr_%d' % i for i in count(1))
 
 
-def qr(data, name=None):
+def tsqr(data, name=None):
     """
     Implementation of the direct TSQR, as presented in:
 
@@ -16,14 +16,17 @@ def qr(data, name=None):
     IEEE International Conference on Big Data, 2013.
     http://arxiv.org/abs/1301.1071
 
-    :param data: dask array object
+    :param data:
     Shape of the blocks that will be used to compute
     the blocked QR decomposition. We have the restrictions:
     - blockshape[1] == data.shape[1]
     - blockshape[0]*data.shape[1] must fit in main memory
-    :return: tuple of dask.array.Array
-    First and second tuple elements correspond to Q and R, of the
-    QR decomposition.
+    :type data: dask.array.Array
+    :param name: Name of array in dask
+    :type name: basestring
+    :return: First and second tuple elements correspond to Q and R, of
+    the QR decomposition.
+    :rtype: tuple of dask.array.Array
     """
     if not (data.ndim == 2 and                    # Is a matrix
             len(data.blockdims[1]) == 1):         # Only one column block
@@ -102,3 +105,11 @@ def qr(data, name=None):
     r = da.Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
 
     return q, r
+
+
+def qr(data, name=None):
+    """
+    In the future, we might have different implementations depending on
+    the shape of the input matrix
+    """
+    return tsqr(data, name)
