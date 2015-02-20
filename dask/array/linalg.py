@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import numpy as np
 from itertools import count, product
-import dask.array as da
+from .core import top, Array
 import operator
 
 names = ('tsqr_%d' % i for i in count(1))
@@ -43,8 +43,8 @@ def tsqr(data, name=None):
     numblocks = (len(data.blockdims[0]), 1)
 
     name_qr_st1 = prefix + 'QR_st1'
-    dsk_qr_st1 = da.core.top(np.linalg.qr, name_qr_st1, 'ij', data.name, 'ij',
-                             numblocks={data.name: numblocks})
+    dsk_qr_st1 = top(np.linalg.qr, name_qr_st1, 'ij', data.name, 'ij',
+                     numblocks={data.name: numblocks})
     # qr[0]
     name_q_st1 = prefix + 'Q_st1'
     dsk_q_st1 = dict(((name_q_st1, i, 0),
@@ -64,9 +64,9 @@ def tsqr(data, name=None):
                                                       (tuple, to_stack))}
     # In-core QR computation
     name_qr_st2 = prefix + 'QR_st2'
-    dsk_qr_st2 = da.core.top(np.linalg.qr, name_qr_st2, 'ij',
-                             name_r_st1_stacked, 'ij',
-                             numblocks={name_r_st1_stacked: (1, 1)})
+    dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij',
+                     name_r_st1_stacked, 'ij',
+                     numblocks={name_r_st1_stacked: (1, 1)})
     # qr[0]
     name_q_st2_aux = prefix + 'Q_st2_aux'
     dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
@@ -82,7 +82,7 @@ def tsqr(data, name=None):
     dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
 
     name_q_st3 = prefix + 'Q'
-    dsk_q_st3 = da.core.top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
+    dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
                             name_q_st2, 'ij',
                             numblocks={name_q_st1: numblocks,
                                        name_q_st2: numblocks})
@@ -105,8 +105,8 @@ def tsqr(data, name=None):
     dsk_r.update(dsk_qr_st2)
     dsk_r.update(dsk_r_st2)
 
-    q = da.Array(dsk_q, name_q_st3, shape=data.shape, blockdims=data.blockdims)
-    r = da.Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
+    q = Array(dsk_q, name_q_st3, shape=data.shape, blockdims=data.blockdims)
+    r = Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
 
     return q, r
 

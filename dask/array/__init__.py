@@ -6,5 +6,5 @@ from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
         frexp, hypot, isinf, isnan, ldexp, log, log10, log1p, modf, radians,
         sin, sinh, sqrt, tan, tanh, trunc)
 from .reductions import (sum, mean, std, var, any, all, min, max, vnorm)
-from . import random
+from . import random, linalg
 from .wrap import ones, zeros, empty
