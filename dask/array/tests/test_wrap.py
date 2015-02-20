@@ -6,6 +6,11 @@ def test_ones():
     x = np.array(a)
     assert (x == np.ones((10, 10), 'i4')).all()
 
+def test_size_as_list():
+    a = ones([10, 10], 'i4', blockshape=(4, 4))
+    x = np.array(a)
+    assert (x == np.ones((10, 10), 'i4')).all()
+
 def test_singleton_size():
     a = ones(10, 'i4', blockshape=(4,))
     x = np.array(a)

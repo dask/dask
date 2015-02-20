@@ -44,7 +44,7 @@ def wrap_func_size_as_kwarg(func, *args, **kwargs):
     else:
         size = kwargs.pop('size')
 
-    if not isinstance(size, tuple):
+    if not isinstance(size, (tuple, list)):
         size = (size,)
 
     blockshape = kwargs.pop('blockshape', None)
@@ -75,7 +75,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     else:
         shape = kwargs.pop('shape')
 
-    if not isinstance(shape, tuple):
+    if not isinstance(shape, (tuple, list)):
         shape = (shape,)
 
     blockshape = kwargs.pop('blockshape', None)
