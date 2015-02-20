@@ -86,9 +86,9 @@ identity matrix
 
        name = next(names)
 
-       dsk = {(name, i, j): np.eye(blocksize)
+       dsk = {(name, i, j): (np.eye, blocksize)
                             if i == j else
-                            np.zeros((blocksize, blocksize))
+                            (np.zeros, (blocksize, blocksize))
                 for i in range(n // blocksize)
                 for j in range(n // blocksize)}
 
