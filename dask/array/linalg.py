@@ -7,6 +7,14 @@ import operator
 names = ('tsqr_%d' % i for i in count(1))
 
 
+def _cumsum_blocks(it):
+    total = 0
+    for x in it:
+        total_previous = total
+        total += x
+        yield (total_previous, total)
+
+
 def tsqr(data, name=None):
     """
     Implementation of the direct TSQR, as presented in:
@@ -62,6 +70,7 @@ def tsqr(data, name=None):
     name_r_st1_stacked = prefix + 'R_st1_stacked'
     dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack,
                                                       (tuple, to_stack))}
+
     # In-core QR computation
     name_qr_st2 = prefix + 'QR_st2'
     dsk_qr_st2 = da.core.top(np.linalg.qr, name_qr_st2, 'ij',
@@ -71,12 +80,12 @@ def tsqr(data, name=None):
     name_q_st2_aux = prefix + 'Q_st2_aux'
     dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
                                               (name_qr_st2, 0, 0), 0)}
+    block_slices = ((slice(e[0], e[1]), slice(0, n))
+                    for e in _cumsum_blocks(data.blockdims[0]))
     name_q_st2 = prefix + 'Q_st2'
-    dsk_q_st2 = dict(((name_q_st2,) + ijk,
-                      (operator.getitem, (name_q_st2_aux, 0, 0),
-                       tuple(slice(i * d, (i + 1) * d) for i, d in
-                             zip(ijk, (n, n)))))
-                     for ijk in product(*map(range, numblocks)))
+    dsk_q_st2 = dict(((name_q_st2,) + (i, 0),
+                      (operator.getitem, (name_q_st2_aux, 0, 0), b))
+                     for i, b in enumerate(block_slices))
     # qr[1]
     name_r_st2 = prefix + 'R'
     dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
