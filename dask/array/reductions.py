@@ -4,7 +4,8 @@ import numpy as np
 from functools import partial, wraps
 from toolz import compose, curry
 
-from .core import _concatenate2, insert_many, Array, atop, names, sqrt
+from .core import (_concatenate2, insert_many, Array, atop, names, sqrt,
+        elemwise)
 from ..core import flatten
 
 
@@ -53,6 +54,16 @@ def min(a, axis=None, keepdims=False):
 @wraps(np.max)
 def max(a, axis=None, keepdims=False):
     return reduction(a, np.max, np.max, axis=axis, keepdims=keepdims)
+
+
+@wraps(np.argmin)
+def argmin(a, axis=0):
+    return arg_reduction(a, np.min, np.argmin, axis=axis)
+
+
+@wraps(np.argmax)
+def argmax(a, axis=0):
+    return arg_reduction(a, np.max, np.argmax, axis=axis)
 
 
 @wraps(np.any)
@@ -128,3 +139,40 @@ def vnorm(a, ord=None, axis=None, keepdims=False):
         return sum(a**ord, axis=axis, keepdims=keepdims)**(1./ord)
     else:
         return sum(abs(a)**ord, axis=axis, keepdims=keepdims)**(1./ord)
+
+
+def arg_aggregate(func, argfunc, dims, pairs):
+    """
+
+    >>> pairs = [([4, 3, 5], [10, 11, 12]),
+    ...          ([3, 5, 1], [1, 2, 3])]
+    >>> arg_aggregate(np.min, np.argmin, (100, 100), pairs)
+    array([101, 11, 103])
+    """
+    pairs = list(pairs)
+    mins, argmins = zip(*pairs)
+    mins = np.array(mins)
+    argmins = np.array(argmins)
+    args = argfunc(mins, axis=0)
+
+    offsets = np.add.accumulate([0] + list(dims)[:-1])
+    offsets = offsets.reshape((len(offsets),) + (1,) * (argmins.ndim - 1))
+    return np.choose(args, argmins + offsets)
+
+
+def arg_reduction(a, func, argfunc, axis=0):
+    """ General version of argmin/argmax
+
+    >>> arg_reduction(my_array, np.min, axis=0)  # doctest: +SKIP
+    """
+    assert isinstance(axis, int)
+
+    def argreduce(x):
+        """ Get both min/max and argmin/argmax of each block """
+        return (func(x, axis=axis), argfunc(x, axis=axis))
+
+    a2 = elemwise(argreduce, a)
+
+    return atop(partial(arg_aggregate, func, argfunc, a.blockdims[axis]),
+                next(names), [i for i in range(a.ndim) if i != axis],
+                a2, list(range(a.ndim)))
