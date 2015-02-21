@@ -57,12 +57,12 @@ def max(a, axis=None, keepdims=False):
 
 
 @wraps(np.argmin)
-def argmin(a, axis=0):
+def argmin(a, axis=None):
     return arg_reduction(a, np.min, np.argmin, axis=axis)
 
 
 @wraps(np.argmax)
-def argmax(a, axis=0):
+def argmax(a, axis=None):
     return arg_reduction(a, np.max, np.argmax, axis=axis)
 
 
@@ -165,7 +165,11 @@ def arg_reduction(a, func, argfunc, axis=0):
 
     >>> arg_reduction(my_array, np.min, axis=0)  # doctest: +SKIP
     """
-    assert isinstance(axis, int)
+    if not isinstance(axis, int):
+        raise ValueError("Must specify integer axis= keyword argument.\n"
+                "For example:\n"
+                "  Before:  x.argmin()\n"
+                "  After:   x.argmin(axis=0)\n")
 
     def argreduce(x):
         """ Get both min/max and argmin/argmax of each block """

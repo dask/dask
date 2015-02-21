@@ -558,11 +558,11 @@ class Array(object):
         from .reductions import max
         return max(self, axis=axis, keepdims=keepdims)
 
-    def argmin(self, axis=0):
+    def argmin(self, axis=None):
         from .reductions import argmin
         return argmin(self, axis=axis)
 
-    def argmax(self, axis=0):
+    def argmax(self, axis=None):
         from .reductions import argmax
         return argmax(self, axis=axis)
 
