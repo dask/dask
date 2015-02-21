@@ -570,6 +570,10 @@ class Array(object):
         from .reductions import sum
         return sum(self, axis=axis, keepdims=keepdims)
 
+    def prod(self, axis=None, keepdims=False):
+        from .reductions import prod
+        return prod(self, axis=axis, keepdims=keepdims)
+
     def mean(self, axis=None, keepdims=False):
         from .reductions import mean
         return mean(self, axis=axis, keepdims=keepdims)

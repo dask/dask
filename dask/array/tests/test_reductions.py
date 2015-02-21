@@ -10,10 +10,10 @@ def eq(a, b):
         a = a.compute()
     if isinstance(b, da.Array):
         b = b.compute()
-    c = a == b
-    if isinstance(c, np.ndarray):
-        c = c.all()
-    return c
+    if isinstance(a, (np.generic, np.ndarray)):
+        return np.allclose(a, b)
+    else:
+        return a == b
 
 
 def test_arg_reduction():
@@ -31,3 +31,18 @@ def test_reductions():
     assert eq(a.argmax(axis=0), x.argmax(axis=0))
     # assert eq(a.argmin(), x.argmin())
 
+
+def test_nan():
+    x = np.array([[1, np.nan, 3, 4],
+                  [5, 6, 7, np.nan],
+                  [9, 10, 11, 12]])
+    d = da.from_array(x, blockshape=(2, 2))
+
+    assert eq(np.nansum(x), da.nansum(d))
+    assert eq(np.nanprod(x), da.nanprod(d))
+    assert eq(np.nansum(x, axis=0), da.nansum(d, axis=0))
+    assert eq(np.nanmean(x, axis=1), da.nanmean(d, axis=1))
+    assert eq(np.nanmin(x, axis=1), da.nanmin(d, axis=1))
+    assert eq(np.nanmax(x, axis=(0, 1)), da.nanmax(d, axis=(0, 1)))
+    assert eq(np.nanvar(x), da.nanvar(d))
+    assert eq(np.nanstd(x, axis=0), da.nanstd(d, axis=0))
