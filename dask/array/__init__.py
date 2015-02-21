@@ -7,6 +7,6 @@ from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
         sin, sinh, sqrt, tan, tanh, trunc)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          nansum, nanprod, nanmean, nanstd, nanvar, nanmin,
-                         nanmax)
+                         nanmax, nanargmin, nanargmax)
 from . import random, linalg
 from .wrap import ones, zeros, empty

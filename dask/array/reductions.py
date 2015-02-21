@@ -66,9 +66,19 @@ def argmin(a, axis=None):
     return arg_reduction(a, np.min, np.argmin, axis=axis)
 
 
+@wraps(np.nanargmin)
+def nanargmin(a, axis=None):
+    return arg_reduction(a, np.nanmin, np.nanargmin, axis=axis)
+
+
 @wraps(np.argmax)
 def argmax(a, axis=None):
     return arg_reduction(a, np.max, np.argmax, axis=axis)
+
+
+@wraps(np.nanargmax)
+def nanargmax(a, axis=None):
+    return arg_reduction(a, np.nanmax, np.nanargmax, axis=axis)
 
 
 @wraps(np.any)

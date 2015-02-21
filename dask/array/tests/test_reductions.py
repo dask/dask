@@ -46,3 +46,5 @@ def test_nan():
     assert eq(np.nanmax(x, axis=(0, 1)), da.nanmax(d, axis=(0, 1)))
     assert eq(np.nanvar(x), da.nanvar(d))
     assert eq(np.nanstd(x, axis=0), da.nanstd(d, axis=0))
+    assert eq(np.nanargmin(x, axis=0), da.nanargmin(d, axis=0))
+    assert eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
