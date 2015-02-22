@@ -938,3 +938,11 @@ sqrt = wrap_elemwise(np.sqrt)
 tan = wrap_elemwise(np.tan)
 tanh = wrap_elemwise(np.tanh)
 trunc = wrap_elemwise(np.trunc)
+
+
+def variadic_choose(a, *choices):
+    return np.choose(a, choices)
+
+@wraps(np.choose)
+def choose(a, choices):
+    return elemwise(variadic_choose, a, *choices)
