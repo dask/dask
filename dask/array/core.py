@@ -956,10 +956,13 @@ def coarsen(reduction, x, axes):
         raise ValueError(
             "Coarsening factor does not align with block dimensions")
 
+    if 'dask' in reduction.func_code.co_filename:
+        reduction = getattr(np, reduction.__name__)
+
     name = next(names)
     dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes))
                 for key in core.flatten(x._keys()))
-    blockdims = tuple(tuple(bd / axes.get(i, 1) for bd in bds)
+    blockdims = tuple(tuple(int(bd / axes.get(i, 1)) for bd in bds)
                       for i, bds in enumerate(x.blockdims))
 
     return Array(merge(x.dask, dsk), name, blockdims=blockdims)

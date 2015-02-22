@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import dask
+import dask.array as da
 from dask.array.core import *
 from dask.utils import raises
 from toolz import merge
@@ -351,3 +352,5 @@ def test_coarsen():
 
     assert eq(chunk.coarsen(np.sum, x, {0: 2, 1: 4}),
                     coarsen(np.sum, d, {0: 2, 1: 4}))
+    assert eq(chunk.coarsen(np.sum, x, {0: 2, 1: 4}),
+                    coarsen(da.sum, d, {0: 2, 1: 4}))
