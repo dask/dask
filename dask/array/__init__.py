@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 from ..utils import ignoring
-from .core import Array, stack, concatenate, tensordot, transpose, from_array
+from .core import (Array, stack, concatenate, tensordot, transpose, from_array,
+        choose)
 from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
         ceil, copysign, cos, cosh, degrees, exp, expm1, fabs, floor, fmod,
         frexp, hypot, isinf, isnan, ldexp, log, log10, log1p, modf, radians,

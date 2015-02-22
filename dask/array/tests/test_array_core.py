@@ -333,3 +333,13 @@ def test_norm():
     assert eq(b.vnorm(ord=1), np.linalg.norm(a.flatten(), ord=1))
     assert eq(b.vnorm(ord=4, axis=0), np.linalg.norm(a, ord=4, axis=0))
     assert b.vnorm(ord=4, axis=0, keepdims=True).ndim == b.ndim
+
+
+def test_choose():
+    x = np.random.randint(10, size=(15, 16))
+    d = from_array(x, blockshape=(4, 5))
+    y = np.random.randint(10, size=15)
+    e = from_array(y, blockshape=(4,))
+
+    assert eq(choose(d > 5, [0, d]), np.choose(x > 5, [0, x]))
+    assert eq(choose(d > 5, [-d, d]), np.choose(x > 5, [-x, x]))
