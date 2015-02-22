@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
+
 from collections import Iterator
+from contextlib import contextmanager
 
 def raises(err, lamda):
     try:
@@ -24,3 +26,11 @@ def deepmap(func, *seqs):
         return [deepmap(func, *items) for items in zip(*seqs)]
     else:
         return func(*seqs)
+
+
+@contextmanager
+def ignoring(*exceptions):
+    try:
+        yield
+    except exceptions:
+        pass
