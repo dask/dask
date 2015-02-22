@@ -343,3 +343,11 @@ def test_choose():
 
     assert eq(choose(d > 5, [0, d]), np.choose(x > 5, [0, x]))
     assert eq(choose(d > 5, [-d, d]), np.choose(x > 5, [-x, x]))
+
+
+def test_coarsen():
+    x = np.random.randint(10, size=(24, 24))
+    d = from_array(x, blockshape=(4, 8))
+
+    assert eq(chunk.coarsen(np.sum, x, {0: 2, 1: 4}),
+                    coarsen(np.sum, d, {0: 2, 1: 4}))
