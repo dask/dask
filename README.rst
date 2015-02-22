@@ -3,28 +3,27 @@ Dask
 
 |Build Status| |Doc Status|
 
-A minimal task scheduling abstraction.
+A minimal task scheduling abstraction and parallel arrays.
 
-See Dask documentation at http://dask.readthedocs.org
+*  ``dask`` is a specification to describe task dependency graphs.
+*  ``dask.array`` is a drop-in NumPy replacement (for a subset of NumPy) that encodes blocked algorithms in ``dask`` dependency graphs.
+*  ``dask.async`` is a shared-memory asynchronous scheduler that efficiently executes ``dask`` dependency graphs on multiple cores.
 
-LICENSE
--------
+See full dask documentation at http://dask.readthedocs.org
 
-New BSD. See `License File <https://github.com/ContinuumIO/dask/blob/master/LICENSE.txt>`__.
 
 Install
 -------
-
-``dask`` is not yet on any package index.  It is still experimental.
 
 ::
 
     python setup.py install
 
-Example
--------
 
-Consider the following simple program
+Dask Graphs
+-----------
+
+Consider the following simple program:
 
 .. code-block:: python
 
@@ -38,7 +37,7 @@ Consider the following simple program
    y = inc(x)
    z = add(y, 10)
 
-We encode this as a dictionary in the following way
+We encode this as a dictionary in the following way:
 
 .. code-block:: python
 
@@ -56,20 +55,54 @@ interpreter.
    :align: right
 
 
+Dask Arrays
+-----------
+
+The ``dask.array`` module creates these graphs from NumPy-like operations
+
+.. code-block:: python
+
+   >>> import dask.array as da
+   >>> x = da.random.random((4, 4), blockshape=(2, 2))
+   >>> x.T[0, 3].dask
+   {('x', 0, 0): (np.random.random, (2, 2)),
+    ('x', 0, 1): (np.random.random, (2, 2)),
+    ('x', 1, 0): (np.random.random, (2, 2)),
+    ('x', 1, 1): (np.random.random, (2, 2)),
+    ('y', 0, 0): (np.transpose, ('x', 0, 0)),
+    ('y', 0, 1): (np.transpose, ('x', 1, 0)),
+    ('y', 1, 0): (np.transpose, ('x', 0, 1)),
+    ('y', 1, 1): (np.transpose, ('x', 1, 1)),
+    ('z',): (getitem, ('y', 0, 1), (0, 1))}
+
+Finally, a scheduler executes these graphs to achieve the intended result.  The
+``dask.async`` module contains a shared memory scheduler that efficiently
+leverages multiple cores.
+
+
 Dependencies
 ------------
 
-``dask.core`` supports Python 2.6+ and Python 3.2+ with a common codebase.  It
-is pure Python and requires no dependencies beyond the standard library.
+``dask.core`` supports Python 2.6+ and Python 3.3+ with a common codebase.  It
+is pure Python and requires no dependencies beyond the standard library. It is
+a light weight dependency.
 
-It is, in short, a light weight dependency.
+``dask.array`` depends on ``numpy``.
 
-The threaded implementation depends on networkx.  The ``Array`` dataset depends
-on ``numpy`` and the ``blaze`` family of projects.
+``dask.bag`` depends on ``toolz`` and ``dill``.
+
+
+LICENSE
+-------
+
+New BSD. See `License File <https://github.com/ContinuumIO/dask/blob/master/LICENSE.txt>`__.
 
 
 Related Work
 ------------
+
+Task Scheduling
+```````````````
 
 One might ask why we didn't use one of these other fine libraries:
 
@@ -92,6 +125,33 @@ Most task schedulers in the Python ecosystem target long-running batch jobs,
 often for processing large amounts of text and aren't appropriate for executing
 multi-core numerics.
 
+
+Arrays
+``````
+
+There are many "Big NumPy Array" or general distributed array solutions all
+with fine characteristics.  Some projects in the Python ecosystem include the
+following:
+
+*  Spartan_
+*  Distarray_
+*  Biggus_
+
+There is a rich history of distributed array computing.  An incomplete sampling
+includes the following projects:
+
+* Elemental_
+* Plasma_
+* Arrays in MLlib_
+
+
+.. _Spartan: https://github.com/spartan-array/spartan
+.. _Distarray: http://docs.enthought.com/distarray/
+.. _Biggus: https://github.com/SciTools/biggus
+
+.. _MLlib: http://spark.apache.org/docs/1.1.0/mllib-data-types.html
+.. _Elemental: http://libelemental.org/
+.. _Plasma: http://icl.cs.utk.edu/plasma/
 
 .. _Luigi: http://luigi.readthedocs.org
 .. _Joblib: https://pythonhosted.org/joblib/index.html
