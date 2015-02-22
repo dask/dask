@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import dask.array as da
+from dask.utils import ignoring
 from dask.array.reductions import arg_aggregate
 import numpy as np
 
@@ -39,7 +40,6 @@ def test_nan():
     d = da.from_array(x, blockshape=(2, 2))
 
     assert eq(np.nansum(x), da.nansum(d))
-    assert eq(np.nanprod(x), da.nanprod(d))
     assert eq(np.nansum(x, axis=0), da.nansum(d, axis=0))
     assert eq(np.nanmean(x, axis=1), da.nanmean(d, axis=1))
     assert eq(np.nanmin(x, axis=1), da.nanmin(d, axis=1))
@@ -48,3 +48,5 @@ def test_nan():
     assert eq(np.nanstd(x, axis=0), da.nanstd(d, axis=0))
     assert eq(np.nanargmin(x, axis=0), da.nanargmin(d, axis=0))
     assert eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
+    with ignoring(AttributeError):
+        assert eq(np.nanprod(x), da.nanprod(d))

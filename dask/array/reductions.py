@@ -7,6 +7,7 @@ from toolz import compose, curry
 from .core import (_concatenate2, insert_many, Array, atop, names, sqrt,
         elemwise)
 from ..core import flatten
+from ..utils import ignoring
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None):
@@ -96,9 +97,10 @@ def nansum(a, axis=None, keepdims=False):
     return reduction(a, np.nansum, np.sum, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.nanprod)
-def nanprod(a, axis=None, keepdims=False):
-    return reduction(a, np.nanprod, np.prod, axis=axis, keepdims=keepdims)
+with ignoring(AttributeError):
+    @wraps(np.nanprod)
+    def nanprod(a, axis=None, keepdims=False):
+        return reduction(a, np.nanprod, np.prod, axis=axis, keepdims=keepdims)
 
 
 @wraps(np.nanmin)
