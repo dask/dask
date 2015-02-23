@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import add, getitem
+import inspect
 from collections import Iterable
 from bisect import bisect
 import operator
@@ -956,7 +957,7 @@ def coarsen(reduction, x, axes):
         raise ValueError(
             "Coarsening factor does not align with block dimensions")
 
-    if 'dask' in reduction.func_code.co_filename:
+    if 'dask' in inspect.getfile(reduction):
         reduction = getattr(np, reduction.__name__)
 
     name = next(names)
