@@ -18,6 +18,12 @@ def lower(func):
         func = func.func
     return func
 
+def name(func):
+    try:
+        return lower(func).__name__
+    except AttributeError:
+        return 'func'
+
 
 def to_networkx(d, data_attributes=None, function_attributes=None):
     if data_attributes is None:
@@ -34,7 +40,7 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
             func_node = make_hashable((v, 'function'))
             g.add_node(func_node,
                        shape='circle',
-                       label=lower(func).__name__,
+                       label=name(func),
                        **function_attributes.get(k, dict()))
             g.add_edge(k, func_node)
             for dep in sorted(get_dependencies(d, k)):
