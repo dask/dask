@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import add, getitem
+import inspect
 from collections import Iterable
 from bisect import bisect
 import operator
@@ -12,6 +13,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
         merge, curry, compose)
 import numpy as np
+from . import chunk
 from .slicing import slice_array, insert_many
 from ..utils import deepmap
 from ..async import inline_functions
@@ -946,3 +948,22 @@ def variadic_choose(a, *choices):
 @wraps(np.choose)
 def choose(a, choices):
     return elemwise(variadic_choose, a, *choices)
+
+
+@wraps(chunk.coarsen)
+def coarsen(reduction, x, axes):
+    if not all(bd % div == 0 for i, div in axes.items()
+                             for bd in x.blockdims[i]):
+        raise ValueError(
+            "Coarsening factor does not align with block dimensions")
+
+    if 'dask' in inspect.getfile(reduction):
+        reduction = getattr(np, reduction.__name__)
+
+    name = next(names)
+    dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes))
+                for key in core.flatten(x._keys()))
+    blockdims = tuple(tuple(int(bd / axes.get(i, 1)) for bd in bds)
+                      for i, bds in enumerate(x.blockdims))
+
+    return Array(merge(x.dask, dsk), name, blockdims=blockdims)
