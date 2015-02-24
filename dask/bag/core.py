@@ -9,7 +9,6 @@ from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map, partition_all,
         filter, pluck)
 try:
-    import doesnotexist
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
             compose, second, count, pluck)
 except ImportError:
