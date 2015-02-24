@@ -145,7 +145,7 @@ def start_state_from_dask(dsk, cache=None):
     if cache is None:
         cache = dict()
     for k, v in dsk.items():
-        if not istask(v):
+        if not istask(v) and v not in dsk:
             cache[k] = v
 
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)

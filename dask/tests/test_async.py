@@ -30,6 +30,11 @@ def test_start_state():
                                 'z': set(['w'])}}
 
 
+def test_start_state_with_redirects():
+    dsk = {'x': 1, 'y': 'x', 'z': (inc, 'y')}
+    result = start_state_from_dask(dsk)
+    assert result['cache'] == {'x': 1}
+
 
 def test_start_state_with_independent_but_runnable_tasks():
     assert start_state_from_dask({'x': (inc, 1)})['ready'] == ['x']
