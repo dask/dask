@@ -339,11 +339,19 @@ def test_norm():
 def test_choose():
     x = np.random.randint(10, size=(15, 16))
     d = from_array(x, blockshape=(4, 5))
-    y = np.random.randint(10, size=15)
-    e = from_array(y, blockshape=(4,))
 
     assert eq(choose(d > 5, [0, d]), np.choose(x > 5, [0, x]))
     assert eq(choose(d > 5, [-d, d]), np.choose(x > 5, [-x, x]))
+
+
+def test_where():
+    x = np.random.randint(10, size=(15, 16))
+    d = from_array(x, blockshape=(4, 5))
+    y = np.random.randint(10, size=15)
+    e = from_array(y, blockshape=(4,))
+
+    assert eq(where(d > 5, d, 0), np.where(x > 5, x, 0))
+    assert eq(where(d > 5, d, -e[:, None]), np.where(x > 5, x, -y[:, None]))
 
 
 def test_coarsen():
