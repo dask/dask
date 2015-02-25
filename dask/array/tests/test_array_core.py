@@ -354,3 +354,9 @@ def test_coarsen():
                     coarsen(np.sum, d, {0: 2, 1: 4}))
     assert eq(chunk.coarsen(np.sum, x, {0: 2, 1: 4}),
                     coarsen(da.sum, d, {0: 2, 1: 4}))
+
+
+def test_constant():
+    d = da.constant(2, blockdims=((2, 2), (3, 3)))
+    assert d.blockdims == ((2, 2), (3, 3))
+    assert (np.array(d)[:] == 2).all()

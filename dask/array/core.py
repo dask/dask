@@ -967,3 +967,29 @@ def coarsen(reduction, x, axes):
                       for i, bds in enumerate(x.blockdims))
 
     return Array(merge(x.dask, dsk), name, blockdims=blockdims)
+
+
+constant_names = ('constant-%d' % i for i in count(1))
+
+
+def constant(value, shape=None, blockshape=None, blockdims=None, dtype=None):
+    """ An array with a constant value
+
+    >>> x = constant(5, shape=(4, 4), blockshape=(2, 2))
+    >>> np.array(x)
+    array([[5, 5, 5, 5],
+           [5, 5, 5, 5],
+           [5, 5, 5, 5],
+           [5, 5, 5, 5]])
+    """
+    name = next(constant_names)
+    if shape and blockshape and not blockdims:
+        blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+                          for d, bd in zip(shape, blockshape))
+
+    keys = product([name], *[range(len(bd)) for bd in blockdims])
+    shapes = product(*blockdims)
+    vals = [(chunk.constant, value, shape) for shape in shapes]
+    dsk = dict(zip(keys, vals))
+
+    return Array(dsk, name, blockdims=blockdims)
