@@ -1,7 +1,7 @@
 from operator import getitem
 from ..core import flatten
 from .core import Array, rec_concatenate, map_blocks, concatenate
-from . import chunk
+from . import chunk, core
 import numpy as np
 from collections import Iterator, Iterable
 from toolz import merge, pipe, concat, partition, partial
@@ -159,3 +159,16 @@ def periodic(x, axis, depth):
     r = x[right]
 
     return concatenate([r, x, l], axis=axis)
+
+
+def constant(x, axis, depth, value):
+    """ Copy a slice of an array around to its other side
+
+    Useful to create periodic boundary conditions for ghost
+    """
+    blockdims = list(x.blockdims)
+    blockdims[axis] = (depth,)
+
+    c = core.constant(value, blockdims=tuple(blockdims))
+
+    return concatenate([c, x, c], axis=axis)
