@@ -1,6 +1,7 @@
 from operator import getitem
 from ..core import flatten
-from .core import Array, rec_concatenate
+from .core import Array, rec_concatenate, map_blocks
+from . import chunk
 import numpy as np
 from collections import Iterator, Iterable
 from toolz import merge, pipe, concat, partition, partial
@@ -125,3 +126,18 @@ def ghost(x, axes):
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),
                  name, blockdims=blockdims)
+
+
+def internal_trim(x, axes=None):
+    """ Trim sides from each block
+
+    This couples well with the ghost operation, which may leave excess data on
+    each block
+
+    See also
+        chunk.trim
+        map_blocks
+    """
+    blockdims = tuple([tuple([d - axes.get(i, 0)*2 for d in bd])
+                       for i, bd in enumerate(x.blockdims)])
+    return map_blocks(x, partial(chunk.trim, axes=axes), blockdims=blockdims)

@@ -50,3 +50,10 @@ def test_arange_2d():
         [56, 57, 58, 59, 60,   59, 60, 61, 62, 63]])
 
     assert eq(result, expected)
+
+
+def test_internal_trim():
+    d = da.ones((40, 60), blockshape=(10, 10))
+    e = internal_trim(d, axes={0: 1, 1: 2})
+
+    assert e.blockdims == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
