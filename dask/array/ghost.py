@@ -1,6 +1,6 @@
 from operator import getitem
 from ..core import flatten
-from .core import Array, rec_concatenate, map_blocks
+from .core import Array, rec_concatenate, map_blocks, concatenate
 from . import chunk
 import numpy as np
 from collections import Iterator, Iterable
@@ -141,3 +141,21 @@ def internal_trim(x, axes=None):
     blockdims = tuple([tuple([d - axes.get(i, 0)*2 for d in bd])
                        for i, bd in enumerate(x.blockdims)])
     return map_blocks(x, partial(chunk.trim, axes=axes), blockdims=blockdims)
+
+
+def periodic(x, axis, depth):
+    """ Copy a slice of an array around to its other side
+
+    Useful to create periodic boundary conditions for ghost
+    """
+
+    left =  ((slice(None, None, None),) * axis
+           + (slice(0, depth),)
+           + (slice(None, None, None),) * (x.ndim - axis - 1))
+    right = ((slice(None, None, None),) * axis
+           + (slice(-depth, None),)
+           + (slice(None, None, None),) * (x.ndim - axis - 1))
+    l = x[left]
+    r = x[right]
+
+    return concatenate([r, x, l], axis=axis)
