@@ -68,9 +68,9 @@ def test_rec_concatenate():
 
 def eq(a, b):
     if isinstance(a, Array):
-        a = a.compute()
+        a = a.compute(get=dask.get)
     if isinstance(b, Array):
-        b = b.compute()
+        b = b.compute(get=dask.get)
     c = a == b
     if isinstance(c, np.ndarray):
         c = c.all()
@@ -383,3 +383,11 @@ def test_map_blocks():
     e = d.map_blocks(lambda x: x[::2, ::2], blockdims=((4, 4, 2), (4, 4, 2)))
 
     assert eq(e, x[::2, ::2])
+
+
+def test_fromfunction():
+    def f(x, y):
+        return x + y
+    d = fromfunction(f, shape=(5, 5), blockshape=(2, 2))
+
+    assert eq(d, np.fromfunction(f, shape=(5, 5)))

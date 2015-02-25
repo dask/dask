@@ -15,7 +15,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
 import numpy as np
 from . import chunk
 from .slicing import slice_array, insert_many
-from ..utils import deepmap
+from ..utils import deepmap, ignoring
 from ..async import inline_functions
 from ..optimize import cull, inline
 from ..compatibility import unicode
@@ -1029,5 +1029,46 @@ def constant(value, shape=None, blockshape=None, blockdims=None, dtype=None):
     shapes = product(*blockdims)
     vals = [(chunk.constant, value, shape) for shape in shapes]
     dsk = dict(zip(keys, vals))
+
+    return Array(dsk, name, blockdims=blockdims)
+
+
+def offset_func(func, offset, *args):
+    """  Offsets inputs by offset
+
+    >>> double = lambda x: x * 2
+    >>> offset_func(double, (10,), 1)
+    22
+    >>> offset_func(double, (10,), 300)
+    620
+    """
+    def _offset(*args):
+        args2 = list(map(add, args, offset))
+        return func(*args2)
+
+    with ignoring(Exception):
+        _offset.__name__ = 'offset_' + func.__name__
+
+    return _offset
+
+
+fromfunction_names = ('fromfunction-%d' % i for i in count(1))
+
+@wraps(np.fromfunction)
+def fromfunction(func, shape=None, blockshape=None, blockdims=None):
+    name = next(fromfunction_names)
+    if shape and blockshape and not blockdims:
+        blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+                          for d, bd in zip(shape, blockshape))
+
+    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
+    aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in blockdims]
+    offsets = list(product(*aggdims))
+    shapes = list(product(*blockdims))
+
+    values = [(np.fromfunction, offset_func(func, offset), shape)
+                for offset, shape in zip(offsets, shapes)]
+
+    dsk = dict(zip(keys, values))
 
     return Array(dsk, name, blockdims=blockdims)
