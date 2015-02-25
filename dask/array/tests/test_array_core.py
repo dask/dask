@@ -385,6 +385,19 @@ def test_map_blocks():
     assert eq(e, x[::2, ::2])
 
 
+def test_map_blocks():
+    x = np.arange(10)
+    d = from_array(x, blockshape=(2,))
+
+    def func(block, block_id=None):
+        return np.ones_like(block) * sum(block_id)
+
+    d = d.map_blocks(func)
+    expected = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
+
+    assert eq(d, expected)
+
+
 def test_fromfunction():
     def f(x, y):
         return x + y

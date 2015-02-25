@@ -368,6 +368,13 @@ def map_blocks(x, func, blockshape=None, blockdims=None):
     Or, if the result is ragged, provide a blockdims
 
     >>> y = x.map_blocks(lambda x: x[::2], blockdims=((2, 2),))
+
+    Your block function can learn where in the array it is if it supports a
+    block_id keyword argument.  This will receive entries like (2, 0, 1), the
+    position of the block in the dask array.
+
+    >>> def func(block, block_id=None):
+    ...     pass
     """
     if blockshape is not None:
         blockdims = tuple([nb * (bs,)
@@ -376,7 +383,13 @@ def map_blocks(x, func, blockshape=None, blockdims=None):
         blockdims = x.blockdims
 
     name = next(names)
-    dsk = dict(((name,) + k[1:], (func, k)) for k in core.flatten(x._keys()))
+
+    spec = inspect.getargspec(func)
+    if 'block_id' in spec.args:
+        dsk = dict(((name,) + k[1:], (partial(func, block_id=k[1:]), k))
+                    for k in core.flatten(x._keys()))
+    else:
+        dsk = dict(((name,) + k[1:], (func, k)) for k in core.flatten(x._keys()))
 
     return Array(merge(dsk, x.dask), name, blockdims=blockdims)
 
