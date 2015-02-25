@@ -348,6 +348,39 @@ def rec_concatenate(arrays, axis=0):
     return np.concatenate(arrays, axis=axis)
 
 
+def map_blocks(x, func, blockshape=None, blockdims=None):
+    """ Map a function across all blocks of a dask array
+
+    You must also specify the blockdims/blockshape of the resulting array.  If
+    you don't then we assume that the resulting array has the same block
+    structure as the input.
+
+    >>> import dask.array as da
+    >>> x = da.ones((8,), blockshape=(4,))
+
+    >>> np.array(x.map_blocks(lambda x: x + 1))
+    array([ 2.,  2.,  2.,  2.,  2.,  2.,  2.,  2.])
+
+    If function changes shape of the blocks provide a blockshape
+
+    >>> y = x.map_blocks(lambda x: x[::2], blockshape=(2,))
+
+    Or, if the result is ragged, provide a blockdims
+
+    >>> y = x.map_blocks(lambda x: x[::2], blockdims=((2, 2),))
+    """
+    if blockshape is not None:
+        blockdims = tuple([nb * (bs,)
+                            for nb, bs in zip(x.numblocks, blockshape)])
+    if blockdims is None:
+        blockdims = x.blockdims
+
+    name = next(names)
+    dsk = dict(((name,) + k[1:], (func, k)) for k in core.flatten(x._keys()))
+
+    return Array(merge(dsk, x.dask), name, blockdims=blockdims)
+
+
 class Array(object):
     """ Array object holding a dask
 
@@ -591,6 +624,11 @@ class Array(object):
     def vnorm(self, ord=None, axis=None, keepdims=False):
         from .reductions import vnorm
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
+
+    @wraps(map_blocks)
+    def map_blocks(self, func, blockshape=None, blockdims=None):
+        return map_blocks(self, func, blockshape=blockshape,
+                blockdims=blockdims)
 
 
 def from_array(x, blockshape=None, name=None, **kwargs):

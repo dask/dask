@@ -360,3 +360,26 @@ def test_constant():
     d = da.constant(2, blockdims=((2, 2), (3, 3)))
     assert d.blockdims == ((2, 2), (3, 3))
     assert (np.array(d)[:] == 2).all()
+
+
+def test_map_blocks():
+    inc = lambda x: x + 1
+
+    x = np.arange(400).reshape((20, 20))
+    d = from_array(x, blockshape=(7, 7))
+
+    e = d.map_blocks(inc)
+
+    assert d.blockdims == e.blockdims
+    assert eq(e, x + 1)
+
+    d = from_array(x, blockshape=(10, 10))
+    e = d.map_blocks(lambda x: x[::2, ::2], blockshape=(5, 5))
+
+    assert e.blockdims == ((5, 5), (5, 5))
+    assert eq(e, x[::2, ::2])
+
+    d = from_array(x, blockshape=(8, 8))
+    e = d.map_blocks(lambda x: x[::2, ::2], blockdims=((4, 4, 2), (4, 4, 2)))
+
+    assert eq(e, x[::2, ::2])
