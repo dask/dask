@@ -130,7 +130,7 @@ def ghost_internal(x, axes):
                  name, blockdims=blockdims)
 
 
-def internal_trim(x, axes=None):
+def trim_internal(x, axes=None):
     """ Trim sides from each block
 
     This couples well with the ghost operation, which may leave excess data on

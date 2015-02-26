@@ -53,9 +53,9 @@ def test_ghost_internal():
     assert eq(result, expected)
 
 
-def test_internal_trim():
+def test_trim_internal():
     d = da.ones((40, 60), blockshape=(10, 10))
-    e = internal_trim(d, axes={0: 1, 1: 2})
+    e = trim_internal(d, axes={0: 1, 1: 2})
 
     assert e.blockdims == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
