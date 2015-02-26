@@ -42,13 +42,34 @@ ghost function:
 .. code-block:: python
 
    >>> import dask.array as da
-   >>> x = da.ones((25, 25), blockshape=(5, 5))
-   >>> x.blockdims
-   ((5, 5, 5, 5, 5), (5, 5, 5, 5, 5))
+   >>> import numpy as np
 
-   >>> g = da.ghost.ghost(g, axes={0: 2, 1: 2})
+   >>> x = np.arange(64).reshape((8, 8))
+   >>> d = da.from_array(x, blockshape=(4, 4))
+   >>> d.blockdims
+   ((4, 4), (4, 4))
+
+   >>> g = da.ghost.ghost(d, depth={0: 2, 1: 1}, kind={0: 100, 1: 'reflect'})
    >>> g.blockdims
-   ((7, 9, 9, 9, 7), (7, 9, 9, 9, 7))
+   ((8, 8), (6, 6))
+
+   >>> np.array(g)
+   array([[100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+          [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+          [  0,   0,   1,   2,   3,   4,   3,   4,   5,   6,   7,   7],
+          [  8,   8,   9,  10,  11,  12,  11,  12,  13,  14,  15,  15],
+          [ 16,  16,  17,  18,  19,  20,  19,  20,  21,  22,  23,  23],
+          [ 24,  24,  25,  26,  27,  28,  27,  28,  29,  30,  31,  31],
+          [ 32,  32,  33,  34,  35,  36,  35,  36,  37,  38,  39,  39],
+          [ 40,  40,  41,  42,  43,  44,  43,  44,  45,  46,  47,  47],
+          [ 16,  16,  17,  18,  19,  20,  19,  20,  21,  22,  23,  23],
+          [ 24,  24,  25,  26,  27,  28,  27,  28,  29,  30,  31,  31],
+          [ 32,  32,  33,  34,  35,  36,  35,  36,  37,  38,  39,  39],
+          [ 40,  40,  41,  42,  43,  44,  43,  44,  45,  46,  47,  47],
+          [ 48,  48,  49,  50,  51,  52,  51,  52,  53,  54,  55,  55],
+          [ 56,  56,  57,  58,  59,  60,  59,  60,  61,  62,  63,  63],
+          [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+          [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
 
 
 Map a function across blocks
@@ -62,7 +83,7 @@ each block
 
    >>> from scipy.ndimage.filters import gaussian_filter
    >>> def func(block):
-   ...    return gaussian_filter(block, sigma=2)
+   ...    return gaussian_filter(block, sigma=1)
 
    >>> filt = g.map_blocks(func)
 
@@ -94,8 +115,8 @@ Trim Excess
 -----------
 
 After mapping a blocked function you may want to trim off the borders from each
-block by the same amount by which it was expanded.  The function
-``trim_internal`` is useful here and takes the same ``axes`` keyword argument
+block by the same amount by which they were expanded.  The function
+``trim_internal`` is useful here and takes the same ``depth`` argument
 given to ``ghost``.
 
 .. code-block:: python
@@ -103,27 +124,34 @@ given to ``ghost``.
    >>> x.blockdims
    ((10, 10, 10, 10), (10, 10, 10, 10))
 
-   >>> da.ghost.trim_internal(x, axes={0: 2, 1: 2})
-   ((6, 6, 6, 6), (6, 6, 6, 6))
+   >>> da.ghost.trim_internal(x, {0: 2, 1: 1})
+   ((6, 6, 6, 6), (8, 8, 8, 8))
 
 
 *Note: at the moment ``trim`` cuts indiscriminately from the boundaries as
-well.  This does not match ``ghost`` and may not be desired.*
+well.  If you don't specify a boundary kind then this may not be desired.*
+
 
 Boundaries
 ----------
 
-Before ghosting you may want to extend your array in order to provide a
-buffer on the boundary.  The following functions may be useful here:
+While ghosting you can specify how to handle the boundaries.  Current policies
+include the following:
 
-*  ``periodic(x, axis=0, depth=2)`` - Pad the left and right borders with the
-   right and left slices of depth 2
-*  ``constant(x, axis=1, depth=2, value=-1)``  Pad the top and bottom borders
-   with the value -1
+*  ``periodic`` - wrap borders around to the other side
+*  ``reflect`` - reflect each border outwards
+*  ``any-constant`` - pad the border with this value
+
+So an example boundary kind argument might look like the following
+
+.. code-block:: python
+
+   {0: 'periodic',
+    1: 'reflect',
+    2: np.nan}
 
 Alternatively you can use functions like ``da.fromfunction`` and
 ``da.concatenate`` to pad arbitrarily.
-
 
 .. _Life: http://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
 .. _Numba: http://numba.pydata.org/
