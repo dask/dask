@@ -490,7 +490,9 @@ def is_full_slice(task):
     """
     return (isinstance(task, tuple) and
             task[0] == getitem and
-            all(ind == slice(None, None, None) for ind in task[2]))
+            (task[2] == slice(None, None, None) or
+             isinstance(task[2], tuple) and
+             all(ind == slice(None, None, None) for ind in task[2])))
 
 def remove_full_slices(dsk):
     """ Remove full slices from dask
