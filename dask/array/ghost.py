@@ -74,7 +74,7 @@ def reshape(shape, seq):
     if len(shape) == 1:
         return list(seq)
     else:
-        n = len(seq) / shape[0]
+        n = int(len(seq) / shape[0])
         return [reshape(shape[1:], part) for part in partition(n, seq)]
 
 
