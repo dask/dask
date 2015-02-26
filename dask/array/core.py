@@ -384,8 +384,11 @@ def map_blocks(x, func, blockshape=None, blockdims=None):
 
     name = next(names)
 
-    spec = inspect.getargspec(func)
-    if 'block_id' in spec.args:
+    try:
+        spec = inspect.getargspec(func)
+    except:
+        spec = None
+    if spec and 'block_id' in spec.args:
         dsk = dict(((name,) + k[1:], (partial(func, block_id=k[1:]), k))
                     for k in core.flatten(x._keys()))
     else:
