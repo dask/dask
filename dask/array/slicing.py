@@ -269,12 +269,12 @@ def _slice_1d(dim_shape, lengths, index):
     100 length array cut into length 20 pieces, slice 0:35
 
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(0, 35))
-    {0: slice(0, 20, 1), 1: slice(0, 15, 1)}
+    {0: slice(None, None, None), 1: slice(0, 15, 1)}
 
     Support irregular blocks and various slices
 
     >>> _slice_1d(100, [20, 10, 10, 10, 25, 25], slice(10, 35))
-    {0: slice(10, 20, 1), 1: slice(0, 10, 1), 2: slice(0, 5, 1)}
+    {0: slice(10, 20, 1), 1: slice(None, None, None), 2: slice(0, 5, 1)}
 
     Support step sizes
 
@@ -349,6 +349,11 @@ def _slice_1d(dim_shape, lengths, index):
                 start = tail_index[i] - 1 - length - offset
 
             stop += length
+
+    # replace 0:20:1 with : if appropriate
+    for k, v in d.items():
+        if v == slice(0, lengths[k], 1):
+            d[k] = slice(None, None, None)
 
     return d
 
@@ -468,4 +473,6 @@ def new_blockdim(dim_shape, lengths, index):
         return [len(index)]
     assert not isinstance(index, (int, long))
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
-    return [(slc.stop - slc.start) // slc.step for _, slc in pairs]
+    slices = [slice(0, lengths[i], 1) if slc == slice(None, None, None) else slc
+                for i, slc in pairs]
+    return [(slc.stop - slc.start) // slc.step for slc in slices]

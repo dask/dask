@@ -91,7 +91,7 @@ def test_slicing_with_singleton_dimensions():
     x = dx.name
     y = arr.name
     assert arr.dask[(y, 0)] == (getitem, (x, 1, 2), (slice(1, 4, 1), 2))
-    assert arr.dask[(y, 1)] == (getitem, (x, 2, 2), (slice(0, 4, 1), 2))
+    assert arr.dask[(y, 1)] == (getitem, (x, 2, 2), (slice(None, None, None), 2))
     assert arr.dask[(y, 2)] == (getitem, (x, 3, 2), (slice(0, 3, 1), 2))
     assert all(len(k) == 2 for k in arr._keys())
 

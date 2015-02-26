@@ -1,4 +1,5 @@
 import dask
+import dask.array as da
 from dask.array.slicing import slice_array, _slice_1d, take
 from operator import getitem
 import numpy as np
@@ -6,7 +7,7 @@ from pprint import pprint
 
 
 def test_slice_1d():
-    expected = {0: slice(10, 25, 1), 1: slice(0, 25, 1), 2: slice(0, 1, 1)}
+    expected = {0: slice(10, 25, 1), 1: slice(None, None, None), 2: slice(0, 1, 1)}
     result = _slice_1d(100, [25]*4, slice(10, 51, None))
     assert expected == result
 
@@ -165,10 +166,10 @@ def test_slice_array_2d():
                                (slice(13, 20, 2), slice(10, 20, 1))),
                  ('y', 0, 1): (getitem,
                                ('x', 0, 1),
-                               (slice(13, 20, 2), slice(0, 20, 1))),
+                               (slice(13, 20, 2), slice(None, None, None))),
                  ('y', 0, 2): (getitem,
                                ('x', 0, 2),
-                               (slice(13, 20, 2), slice(0, 5, 1)))}
+                               (slice(13, 20, 2), slice(None, None, None)))}
 
     result, blockdims = slice_array('y', 'x', [[20], [20, 20, 5]],
                         [slice(13,None,2), slice(10, None, 1)])
@@ -181,10 +182,10 @@ def test_slice_array_2d():
                                (5, slice(10, 20, 1))),
                  ('y', 1): (getitem,
                                ('x', 0, 1),
-                               (5, slice(0, 20, 1))),
+                               (5, slice(None, None, None))),
                  ('y', 2): (getitem,
                                ('x', 0, 2),
-                               (5, slice(0, 5, 1)))}
+                               (5, slice(None, None, None)))}
 
     result, blockdims = slice_array('y', 'x', ([20], [20, 20, 5]),
                         [5, slice(10, None, 1)])
@@ -210,7 +211,7 @@ def test_slicing_with_singleton_indices():
     result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
                                     (slice(0, 5), 8))
 
-    expected = {('y', 0): (getitem, ('x', 0, 1), (slice(0, 5, 1), 3))}
+    expected = {('y', 0): (getitem, ('x', 0, 1), (slice(None, None, None), 3))}
 
     assert expected == result
 
@@ -222,10 +223,10 @@ def test_slicing_with_newaxis():
     expected = {
         ('y', 0, 0, 0): (getitem,
                           ('x', 0, 0),
-                          (slice(0, 3, 1), None, slice(0, 5, 1))),
+                          (slice(0, 3, 1), None, slice(None, None, None))),
         ('y', 0, 0, 1): (getitem,
                           ('x', 0, 1),
-                          (slice(0, 3, 1), None, slice(0, 5, 1)))
+                          (slice(0, 3, 1), None, slice(None, None, None)))
       }
 
     assert expected == result
@@ -316,3 +317,9 @@ def test_slicing_with_numpy_arrays():
                          (i, slice(None, None, None)))
     assert bd1 == bd3
     assert a == c
+
+
+def test_slicing_and_blockdims():
+    o = da.ones((24, 16), blockdims=((4, 8, 8, 4), (2, 6, 6, 2)))
+    t = o[4:-4, 2:-2]
+    assert t.blockdims == ((8, 8), (6, 6))
