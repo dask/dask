@@ -72,12 +72,34 @@ ghost function:
           [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
 
 
+Boundaries
+----------
+
+While ghosting you can specify how to handle the boundaries.  Current policies
+include the following:
+
+*  ``periodic`` - wrap borders around to the other side
+*  ``reflect`` - reflect each border outwards
+*  ``any-constant`` - pad the border with this value
+
+So an example boundary kind argument might look like the following
+
+.. code-block:: python
+
+   {0: 'periodic',
+    1: 'reflect',
+    2: np.nan}
+
+Alternatively you can use functions like ``da.fromfunction`` and
+``da.concatenate`` to pad arbitrarily.
+
+
 Map a function across blocks
 ----------------------------
 
-We can now map a function across each of these larger blocks.  That function
-can use the additional information from the neighbors that is stored locally in
-each block
+Ghosting goes hand-in-hand with mapping a function across blocks.  This
+function can now use the additional information copied over from the neighbors
+that is not stored locally in each block
 
 .. code-block:: python
 
@@ -132,26 +154,19 @@ given to ``ghost``.
 well.  If you don't specify a boundary kind then this may not be desired.*
 
 
-Boundaries
-----------
+Full Workflow
+-------------
 
-While ghosting you can specify how to handle the boundaries.  Current policies
-include the following:
-
-*  ``periodic`` - wrap borders around to the other side
-*  ``reflect`` - reflect each border outwards
-*  ``any-constant`` - pad the border with this value
-
-So an example boundary kind argument might look like the following
+And so a pretty typical ghosting workflow includes ``ghost``, ``map_blocks``,
+and ``trim_internal``
 
 .. code-block:: python
 
-   {0: 'periodic',
-    1: 'reflect',
-    2: np.nan}
+   >>> x = ...
+   >>> g = da.ghost.ghost(x, depth={0: 2, 1: 2}, kind={0: 'periodic', 1: 'periodic'})
+   >>> g2 = g.map_blocks(myfunc)
+   >>> result = da.ghost.trim_internal(g2, {0: 2, 1: 2})
 
-Alternatively you can use functions like ``da.fromfunction`` and
-``da.concatenate`` to pad arbitrarily.
 
 .. _Life: http://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
 .. _Numba: http://numba.pydata.org/
