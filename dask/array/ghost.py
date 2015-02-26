@@ -121,7 +121,9 @@ def ghost(x, axes):
                          (rec_concatenate, (concrete, expand_key2(k))))
                         for k in interior_keys)
 
-    blockdims = [[bd + axes.get(i, 0) * 2 for bd in bds]
+    blockdims = [  [bds[0] + axes.get(i, 0)]
+                 + [bd + axes.get(i, 0) * 2 for bd in bds[1:-1]]
+                 + [bds[-1] + axes.get(i, 0)]
                  for i, bds in enumerate(x.blockdims)]
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),

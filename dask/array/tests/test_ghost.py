@@ -33,6 +33,7 @@ def test_arange_2d():
 
     g = ghost(d, {0: 2, 1: 1})
     result = g.compute(get=get)
+    assert g.blockdims == ((6, 6), (5, 5))
 
     expected = np.array([
         [ 0,  1,  2,  3,  4,    3,  4,  5,  6,  7],
