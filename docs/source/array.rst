@@ -18,4 +18,5 @@ Features
    slicing.rst
    stack.rst
    random.rst
+   ghost.rst
    array-blaze.rst
