@@ -14,7 +14,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         merge, curry, compose)
 import numpy as np
 from . import chunk
-from .slicing import slice_array, insert_many
+from .slicing import slice_array, insert_many, remove_full_slices
 from ..utils import deepmap, ignoring
 from ..async import inline_functions
 from ..optimize import cull, inline
@@ -694,8 +694,8 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     fast_functions=kwargs.get('fast_functions',
                              set([getitem, np.transpose]))
     dsk2 = cull(dsk, list(core.flatten(keys)))
-    dsk3 = inline_functions(dsk2, fast_functions=fast_functions)
-    dsk4 = dsk3
+    dsk3 = remove_full_slices(dsk2)
+    dsk4 = inline_functions(dsk3, fast_functions=fast_functions)
     return get(dsk4, keys, **kwargs)
 
 
