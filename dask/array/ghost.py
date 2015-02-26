@@ -272,5 +272,7 @@ def ghost(x, depth, kind):
     """
     x2 = boundaries(x, depth, kind)
     x3 = ghost_internal(x2, depth)
-    x4 = chunk.trim(x3, dict((k, v*2) for k, v in depth.items()))
+    trim = dict((k, v*2 if kind.get(k, None) is not None else 0)
+                for k, v in depth.items())
+    x4 = chunk.trim(x3, trim)
     return x4

@@ -13,8 +13,9 @@ blocks.  Example operations include the following:
 
 Dask.array supports these operations by creating a new dask.array where each
 block is slightly expanded by the borders of its neighbors.  This costs an
-excess copy but allows localized functions to evaluate in an embarrassing
-manner.  We call this process ghosting.
+excess copy and the communication of many small chunks but allows localized
+functions to evaluate in an embarrassing manner.  We call this process
+*ghosting*.
 
 Ghosting
 --------
@@ -94,7 +95,7 @@ Trim Excess
 
 After mapping a blocked function you may want to trim off the borders from each
 block by the same amount by which it was expanded.  The function
-``internal_trim`` is useful here and takes the same ``axes`` keyword argument
+``trim_internal`` is useful here and takes the same ``axes`` keyword argument
 given to ``ghost``.
 
 .. code-block:: python
@@ -102,7 +103,7 @@ given to ``ghost``.
    >>> x.blockdims
    ((10, 10, 10, 10), (10, 10, 10, 10))
 
-   >>> da.ghost.internal_trim(x, axes={0: 2, 1: 2})
+   >>> da.ghost.trim_internal(x, axes={0: 2, 1: 2})
    ((6, 6, 6, 6), (6, 6, 6, 6))
 
 
