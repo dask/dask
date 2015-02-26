@@ -1004,6 +1004,11 @@ def choose(a, choices):
     return elemwise(variadic_choose, a, *choices)
 
 
+@wraps(np.where)
+def where(condition, x, y):
+    return choose(condition, [y, x])
+
+
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes):
     if not all(bd % div == 0 for i, div in axes.items()
