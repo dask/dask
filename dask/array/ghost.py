@@ -190,3 +190,28 @@ def constant(x, axis, depth, value):
     c = core.constant(value, blockdims=tuple(blockdims))
 
     return concatenate([c, x, c], axis=axis)
+
+
+def boundaries(x, depth=None, kind=None):
+    """ Add boundary conditions to an array before ghosting
+
+    See Also
+    --------
+
+    periodic
+    constant
+    """
+    if not isinstance(kind, dict):
+        kind = dict((i, kind) for i in range(x.ndim))
+    if not isinstance(depth, dict):
+        depth = dict((i, depth) for i in range(x.ndim))
+
+    for i in range(x.ndim):
+        if kind.get(i) == 'periodic':
+            x = periodic(x, i, depth[i])
+        elif kind.get(i) == 'reflect':
+            x = reflect(x, i, depth[i])
+        elif i in kind:
+            x = constant(x, i, depth[i], kind[i])
+
+    return x
