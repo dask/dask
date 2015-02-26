@@ -1053,9 +1053,10 @@ def offset_func(func, offset, *args):
     """  Offsets inputs by offset
 
     >>> double = lambda x: x * 2
-    >>> offset_func(double, (10,), 1)
+    >>> f = offset_func(double, (10,))
+    >>> f(1)
     22
-    >>> offset_func(double, (10,), 300)
+    >>> f(300)
     620
     """
     def _offset(*args):
