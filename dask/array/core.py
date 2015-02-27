@@ -454,6 +454,10 @@ class Array(object):
     def shape(self):
         return tuple(map(sum, self.blockdims))
 
+    def __repr__(self):
+        return ("dask.array<%s, shape=%s, blockdims=%s>" %
+                (self.name, self.shape, self.blockdims))
+
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
 

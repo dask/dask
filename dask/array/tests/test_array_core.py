@@ -417,3 +417,10 @@ def test_fromfunction():
 def test_from_function_requires_block_args():
     x = np.arange(10)
     assert raises(Exception, lambda: from_array(x))
+
+
+def test_repr():
+    d = da.ones((4, 4), blockshape=(2, 2))
+    assert d.name in repr(d)
+    assert str(d.shape) in repr(d)
+    assert str(d.blockdims) in repr(d)
