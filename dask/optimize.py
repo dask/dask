@@ -1,5 +1,6 @@
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, add, inc, ishashable)
+from toolz import identity
 
 
 def cull(dsk, keys):
@@ -217,8 +218,9 @@ def dealias(dsk):
 
     >>> dealias(dsk)  # doctest: +SKIP
     {'a': (range, 5),
-     'e': (sum, 'a'),
-     'f': (inc, 'e')}
+     'd': (sum, 'a'),
+     'e': (identity, 'd'),
+     'f': (inc, 'd')}
     """
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     dependents = reverse_dict(dependencies)
@@ -226,13 +228,17 @@ def dealias(dsk):
     aliases = set((k for k, task in dsk.items() if ishashable(task) and task in dsk))
     roots = set((k for k, v in dependents.items() if not v))
 
-    dsk2 = inline(dsk, aliases)
+    dsk2 = inline(dsk, aliases - roots, inline_constants=False)
     dsk3 = dsk2.copy()
+
+    dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk2)
+    dependents = reverse_dict(dependencies)
+
     for k in roots & aliases:
-        k2 = dsk[k]
-        for dep in dependents[k2]:
-            if dep != k:
-                dsk3[dep] = subs(dsk3[dep], k2, k)
-        dsk3[k] = dsk3[k2]
-        del dsk3[k2]
+        k2 = dsk3[k]
+        if len(dependents[k2]) == 1:
+            dsk3[k] = dsk3[k2]
+            del dsk3[k2]
+        else:
+            dsk3[k] = (identity, k2)
     return dsk3
