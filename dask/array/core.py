@@ -25,22 +25,35 @@ from .. import threaded, core
 names = ('x_%d' % i for i in count(1))
 
 
-def getem(arr, blocksize, shape):
+def getem(arr, blockdims=None, blockshape=None, shape=None):
     """ Dask getting various chunks from an array-like
 
-    >>> getem('X', blocksize=(2, 3), shape=(4, 6))  # doctest: +SKIP
+    >>> getem('X', blockshape=(2, 3), shape=(4, 6))  # doctest: +SKIP
+    {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
+
+    >>> getem('X', blockdims=((2, 2), (3, 3)))  # doctest: +SKIP
     {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
      ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
      ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
     """
-    numblocks = tuple([int(math.ceil(n/k)) for n, k in zip(shape, blocksize)])
-    return dict(
-               ((arr,) + ijk,
-               (getitem,
-                 arr,
-                 tuple(slice(i*d, (i+1)*d) for i, d in zip(ijk, blocksize))))
-               for ijk in product(*map(range, numblocks)))
+    if not blockdims:
+        blockdims = blockdims_from_blockshape(shape, blockshape)
+
+    cumdims = [list(accumulate(add, (0,) + bds[:-1])) for bds in blockdims]
+    keys = list(product([arr], *[range(len(bds)) for bds in blockdims]))
+
+    shapes = product(*blockdims)
+    starts = product(*cumdims)
+
+    values = ((getitem, arr) + (tuple(slice(s, s+dim)
+                                 for s, dim in zip(start, shape)),)
+                for start, shape in zip(starts, shapes))
+
+    return dict(zip(keys, values))
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -397,6 +410,15 @@ def map_blocks(x, func, blockshape=None, blockdims=None):
     return Array(merge(dsk, x.dask), name, blockdims=blockdims)
 
 
+def blockdims_from_blockshape(shape, blockshape):
+    """
+
+    >>> blockdims_from_blockshape((10, 10), (4, 3))
+    ((4, 4, 2), (3, 3, 3, 1))
+    """
+    return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+                              for d, bd in zip(shape, blockshape))
+
 class Array(object):
     """ Array object holding a dask
 
@@ -418,9 +440,8 @@ class Array(object):
     def __init__(self, dask, name, shape=None, blockshape=None, blockdims=None):
         self.dask = dask
         self.name = name
-        if shape is not None and blockshape is not None:
-            blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
-                              for d, bd in zip(shape, blockshape))
+        if blockdims is None:
+            blockdims = blockdims_from_blockshape(shape, blockshape)
         if blockdims is None:
             raise ValueError("Either give shape and blockshape or blockdims")
         self.blockdims = tuple(map(tuple, blockdims))
@@ -647,7 +668,7 @@ class Array(object):
                 blockdims=blockdims)
 
 
-def from_array(x, blockshape=None, name=None, **kwargs):
+def from_array(x, blockdims=None, blockshape=None, name=None, **kwargs):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -658,9 +679,11 @@ def from_array(x, blockshape=None, name=None, **kwargs):
     >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
     >>> a = da.from_array(x, blockshape=(1000, 1000))  # doctest: +SKIP
     """
+    if blockdims is None:
+        blockdims = blockdims_from_blockshape(x.shape, blockshape)
     name = name or next(names)
-    dask = merge({name: x}, getem(name, blockshape, x.shape))
-    return Array(dask, name, shape=x.shape, blockshape=blockshape)
+    dask = merge({name: x}, getem(name, blockdims=blockdims))
+    return Array(dask, name, blockdims=blockdims)
 
 
 def atop(func, out, out_ind, *args):
@@ -1043,8 +1066,7 @@ def constant(value, shape=None, blockshape=None, blockdims=None, dtype=None):
     """
     name = next(constant_names)
     if shape and blockshape and not blockdims:
-        blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
-                          for d, bd in zip(shape, blockshape))
+        blockdims = blockdims_from_blockshape(shape, blockshape)
 
     keys = product([name], *[range(len(bd)) for bd in blockdims])
     shapes = product(*blockdims)
@@ -1080,8 +1102,7 @@ fromfunction_names = ('fromfunction-%d' % i for i in count(1))
 def fromfunction(func, shape=None, blockshape=None, blockdims=None):
     name = next(fromfunction_names)
     if shape and blockshape and not blockdims:
-        blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
-                          for d, bd in zip(shape, blockshape))
+        blockdims = blockdims_from_blockshape(shape, blockshape)
 
     keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in blockdims]
