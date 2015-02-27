@@ -5,7 +5,7 @@ Some array operations require communication of borders between neighboring
 blocks.  Example operations include the following:
 
 *  Convolve a filter across an image
-*  Rolling sum/mean/max, ...
+*  Sliding sum/mean/max, ...
 *  Search for image motifs like a Gaussian blob that might span the border of a
    block
 *  Evalute a partial derivative
