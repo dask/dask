@@ -454,6 +454,13 @@ class Array(object):
     def shape(self):
         return tuple(map(sum, self.blockdims))
 
+    @property
+    def dtype(self):
+        if self.shape:
+            return self[(0,) * self.ndim].compute().dtype
+        else:
+            return self.compute().dtype
+
     def __repr__(self):
         return ("dask.array<%s, shape=%s, blockdims=%s>" %
                 (self.name, self.shape, self.blockdims))

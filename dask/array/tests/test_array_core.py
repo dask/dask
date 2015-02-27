@@ -432,3 +432,11 @@ def test_slicing_with_ellipsis():
 
     assert eq(d[..., 1], x[..., 1])
     assert eq(d[0, ..., 1], x[0, ..., 1])
+
+
+def test_dtype():
+    d = da.ones((4, 4), blockshape=(2, 2))
+
+    assert d.dtype == d.compute().dtype
+    assert (d * 1.0).dtype == (d + 1.0).compute().dtype
+    assert d.sum().dtype == d.sum().compute().dtype  # no shape
