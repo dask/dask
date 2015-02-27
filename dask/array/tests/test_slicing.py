@@ -326,16 +326,13 @@ def test_slicing_and_blockdims():
 
 
 def test_optimize_slicing():
-    dsk = {'a': list(range(10)),
+    dsk = {'a': (range, 10),
            'b': (getitem, 'a', (slice(None, None, None),)),
            'c': (getitem, 'b', (slice(None, None, None),)),
            'd': (getitem, 'c', (slice(None, 5, None),)),
            'e': (getitem, 'd', (slice(None, None, None),))}
 
-    expected = {'a': list(range(10)),
-                'b': 'a',
-                'c': 'b',
-                'd': (getitem, 'c', (slice(None, 5, None),)),
-                'e': 'd'}
+    expected = {'a': (range, 10),
+                'e': (getitem, 'a', (slice(None, 5, None),))}
 
     assert remove_full_slices(dsk) == expected

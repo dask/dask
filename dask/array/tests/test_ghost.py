@@ -7,9 +7,9 @@ from dask.core import get
 
 def eq(a, b):
     if isinstance(a, Array):
-        a = a.compute()
+        a = a.compute(get=dask.get)
     if isinstance(b, Array):
-        b = b.compute()
+        b = b.compute(get=dask.get)
     c = a == b
     if isinstance(c, np.ndarray):
         c = c.all()

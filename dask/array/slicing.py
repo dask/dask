@@ -2,6 +2,7 @@ from itertools import count, product
 from toolz import merge, first, accumulate
 from operator import getitem, add
 from ..compatibility import long
+from ..optimize import dealias
 import numpy as np
 
 
@@ -504,18 +505,18 @@ def remove_full_slices(dsk):
     -------
 
 
-    >>> dsk = {'a': 'foo',
+    >>> dsk = {'a': (range, 5),
     ...        'b': (getitem, 'a', (slice(None, None, None),)),
     ...        'c': (getitem, 'b', (slice(None, None, None),)),
     ...        'd': (getitem, 'c', (slice(None, 5, None),)),
     ...        'e': (getitem, 'd', (slice(None, None, None),))}
 
     >>> remove_full_slices(dsk)  # doctest: +SKIP
-    {'a': 'foo',
-     'b': 'a',
-     'c': 'b',
-     'd': (getitem, 'c', (slice(None, 5, None),)),
-     'e': 'd'}
+    {'a': (range, 5),
+     'e': (getitem, 'a', (slice(None, 5, None),))}
     """
-    return dict((k, task if not is_full_slice(task) else task[1])
+    full_slice_keys = set(k for k, task in dsk.items() if is_full_slice(task))
+    dsk2 = dict((k, task[1] if k in full_slice_keys else task)
                  for k, task in dsk.items())
+    dsk3 = dealias(dsk2)
+    return dsk3
