@@ -212,8 +212,9 @@ def arg_aggregate(func, argfunc, dims, pairs):
 
     >>> pairs = [([4, 3, 5], [10, 11, 12]),
     ...          ([3, 5, 1], [1, 2, 3])]
-    >>> arg_aggregate(np.min, np.argmin, (100, 100), pairs)
-    array([101, 11, 103])
+    >>> agg = arg_aggregate(np.min, np.argmin, (100, 100), pairs)
+    >>> agg.tolist()
+    [101, 11, 103]
     """
     pairs = list(pairs)
     mins, argmins = zip(*pairs)
