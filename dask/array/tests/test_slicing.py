@@ -267,6 +267,7 @@ def test_take():
 
     assert result == expected
 
+
 def test_slice_lists():
     y, blockdims = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
                                 ([1, 2, 9], slice(None, None, None)))

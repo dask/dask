@@ -424,3 +424,11 @@ def test_repr():
     assert d.name in repr(d)
     assert str(d.shape) in repr(d)
     assert str(d.blockdims) in repr(d)
+
+
+def test_slicing_with_ellipsis():
+    x = np.arange(256).reshape((4, 4, 4, 4))
+    d = da.from_array(x, blockshape=((2, 2, 2, 2)))
+
+    assert eq(d[..., 1], x[..., 1])
+    assert eq(d[0, ..., 1], x[0, ..., 1])
