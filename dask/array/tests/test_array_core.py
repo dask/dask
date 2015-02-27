@@ -12,7 +12,7 @@ inc = lambda x: x + 1
 
 
 def test_getem():
-    assert getem('X', blocksize=(2, 3), shape=(4, 6)) == \
+    assert getem('X', blockshape=(2, 3), shape=(4, 6)) == \
     {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
      ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
      ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
@@ -83,8 +83,8 @@ def test_chunked_dot_product():
 
     d = {'x': x, 'o': o}
 
-    getx = getem('x', (5, 5), (20, 20))
-    geto = getem('o', (5, 5), (20, 20))
+    getx = getem('x', blockshape=(5, 5), shape=(20, 20))
+    geto = getem('o', blockshape=(5, 5), shape=(20, 20))
 
     result = top(dotmany, 'out', 'ik', 'x', 'ij', 'o', 'jk',
                  numblocks={'x': (4, 4), 'o': (4, 4)})
@@ -100,7 +100,7 @@ def test_chunked_transpose_plus_one():
 
     d = {'x': x}
 
-    getx = getem('x', (5, 5), (20, 20))
+    getx = getem('x', blockshape=(5, 5), shape=(20, 20))
 
     f = lambda x: x.T + 1
     comp = top(f, 'out', 'ij', 'x', 'ji', numblocks={'x': (4, 4)})
@@ -127,7 +127,7 @@ def test_Array():
     shape = (1000, 1000)
     blockshape = (100, 100)
     name = 'x'
-    dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
+    dsk = merge({name: 'some-array'}, getem(name, shape=shape, blockshape=blockshape))
     a = Array(dsk, name, shape, blockshape)
 
     assert a.numblocks == (10, 10)
@@ -147,7 +147,7 @@ def test_numblocks_suppoorts_singleton_block_dims():
     shape = (100, 10)
     blockshape = (10, 10)
     name = 'x'
-    dsk = merge({name: 'some-array'}, getem(name, shape, blockshape))
+    dsk = merge({name: 'some-array'}, getem(name, shape=shape, blockshape=blockshape))
     a = Array(dsk, name, shape, blockshape)
 
     assert set(concat(a._keys())) == set([('x', i, 0) for i in range(100//10)])
@@ -170,7 +170,7 @@ def test_Array_computation():
 
 
 def test_stack():
-    a, b, c = [Array(getem(name, blocksize=(2, 3), shape=(4, 6)),
+    a, b, c = [Array(getem(name, blockshape=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), blockshape=(2, 3))
                 for name in 'ABC']
 
@@ -202,7 +202,7 @@ def test_stack():
 
 
 def test_concatenate():
-    a, b, c = [Array(getem(name, blocksize=(2, 3), shape=(4, 6)),
+    a, b, c = [Array(getem(name, blockshape=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), blockshape=(2, 3))
                 for name in 'ABC']
 
@@ -412,3 +412,23 @@ def test_fromfunction():
     d = fromfunction(f, shape=(5, 5), blockshape=(2, 2))
 
     assert eq(d, np.fromfunction(f, shape=(5, 5)))
+
+
+def test_from_function_requires_block_args():
+    x = np.arange(10)
+    assert raises(Exception, lambda: from_array(x))
+
+
+def test_repr():
+    d = da.ones((4, 4), blockshape=(2, 2))
+    assert d.name in repr(d)
+    assert str(d.shape) in repr(d)
+    assert str(d.blockdims) in repr(d)
+
+
+def test_slicing_with_ellipsis():
+    x = np.arange(256).reshape((4, 4, 4, 4))
+    d = da.from_array(x, blockshape=((2, 2, 2, 2)))
+
+    assert eq(d[..., 1], x[..., 1])
+    assert eq(d[0, ..., 1], x[0, ..., 1])

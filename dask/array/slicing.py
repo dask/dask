@@ -90,6 +90,7 @@ def slice_array(out_name, in_name, blockdims, index):
     slice_with_lists - handle fancy indexing with lists
     slice_slices_and_integers - handle everything else
     """
+    index = replace_ellipsis(len(blockdims), index)
     index = tuple(map(sanitize_index_lists, index))
     blockdims = tuple(map(tuple, blockdims))
 
@@ -495,6 +496,7 @@ def is_full_slice(task):
              isinstance(task[2], tuple) and
              all(ind == slice(None, None, None) for ind in task[2])))
 
+
 def remove_full_slices(dsk):
     """ Remove full slices from dask
 
@@ -520,3 +522,20 @@ def remove_full_slices(dsk):
                  for k, task in dsk.items())
     dsk3 = dealias(dsk2)
     return dsk3
+
+
+def replace_ellipsis(n, index):
+    """ Replace ... with slices, :, : ,:
+
+    >>> replace_ellipsis(4, (3, Ellipsis, 2))
+    (3, slice(None, None, None), slice(None, None, None), 2)
+    """
+    # Careful about using in or index because index may contain arrays
+    isellipsis = [i for i, ind in enumerate(index) if ind is Ellipsis]
+    if not isellipsis:
+        return index
+    else:
+        loc = isellipsis[0]
+    return (index[:loc]
+          + (slice(None, None, None),) * (n - len(index) + 1)
+          + index[loc+1:])
