@@ -1,5 +1,6 @@
 from .core import (istask, get_dependencies, subs, toposort, flatten,
-                   reverse_dict, add, inc)
+                   reverse_dict, add, inc, ishashable)
+from toolz import identity
 
 
 def cull(dsk, keys):
@@ -113,7 +114,7 @@ def inline(dsk, keys=None, inline_constants=True):
     """
     if keys is None:
         keys  = set()
-    elif isinstance(keys, list):
+    elif isinstance(keys, (set, tuple, list)):
         keys = set(keys)
     else:
         keys = set([keys])
@@ -195,3 +196,49 @@ def unwrap_partial(func):
         func = func.func
     return func
 
+
+def dealias(dsk):
+    """ Remove aliases from dask
+
+    Removes and renames aliases using ``inline``.  Keeps aliases at the top of
+    the DAG to ensure entry points stay the same.
+
+    Aliases are not expected by schedulers.  It's unclear that this is a legal
+    state.
+
+    Example
+    -------
+
+    >>> dsk = {'a': (range, 5),
+    ...        'b': 'a',
+    ...        'c': 'b',
+    ...        'd': (sum, 'c'),
+    ...        'e': 'd',
+    ...        'f': (inc, 'd')}
+
+    >>> dealias(dsk)  # doctest: +SKIP
+    {'a': (range, 5),
+     'd': (sum, 'a'),
+     'e': (identity, 'd'),
+     'f': (inc, 'd')}
+    """
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependents = reverse_dict(dependencies)
+
+    aliases = set((k for k, task in dsk.items() if ishashable(task) and task in dsk))
+    roots = set((k for k, v in dependents.items() if not v))
+
+    dsk2 = inline(dsk, aliases - roots, inline_constants=False)
+    dsk3 = dsk2.copy()
+
+    dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk2)
+    dependents = reverse_dict(dependencies)
+
+    for k in roots & aliases:
+        k2 = dsk3[k]
+        if len(dependents[k2]) == 1:
+            dsk3[k] = dsk3[k2]
+            del dsk3[k2]
+        else:
+            dsk3[k] = (identity, k2)
+    return dsk3

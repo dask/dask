@@ -14,8 +14,8 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         merge, curry, compose)
 import numpy as np
 from . import chunk
-from .slicing import slice_array, insert_many
-from ..utils import deepmap
+from .slicing import slice_array, insert_many, remove_full_slices
+from ..utils import deepmap, ignoring
 from ..async import inline_functions
 from ..optimize import cull, inline
 from ..compatibility import unicode
@@ -348,6 +348,55 @@ def rec_concatenate(arrays, axis=0):
     return np.concatenate(arrays, axis=axis)
 
 
+def map_blocks(x, func, blockshape=None, blockdims=None):
+    """ Map a function across all blocks of a dask array
+
+    You must also specify the blockdims/blockshape of the resulting array.  If
+    you don't then we assume that the resulting array has the same block
+    structure as the input.
+
+    >>> import dask.array as da
+    >>> x = da.ones((8,), blockshape=(4,))
+
+    >>> np.array(x.map_blocks(lambda x: x + 1))
+    array([ 2.,  2.,  2.,  2.,  2.,  2.,  2.,  2.])
+
+    If function changes shape of the blocks provide a blockshape
+
+    >>> y = x.map_blocks(lambda x: x[::2], blockshape=(2,))
+
+    Or, if the result is ragged, provide a blockdims
+
+    >>> y = x.map_blocks(lambda x: x[::2], blockdims=((2, 2),))
+
+    Your block function can learn where in the array it is if it supports a
+    block_id keyword argument.  This will receive entries like (2, 0, 1), the
+    position of the block in the dask array.
+
+    >>> def func(block, block_id=None):
+    ...     pass
+    """
+    if blockshape is not None:
+        blockdims = tuple([nb * (bs,)
+                            for nb, bs in zip(x.numblocks, blockshape)])
+    if blockdims is None:
+        blockdims = x.blockdims
+
+    name = next(names)
+
+    try:
+        spec = inspect.getargspec(func)
+    except:
+        spec = None
+    if spec and 'block_id' in spec.args:
+        dsk = dict(((name,) + k[1:], (partial(func, block_id=k[1:]), k))
+                    for k in core.flatten(x._keys()))
+    else:
+        dsk = dict(((name,) + k[1:], (func, k)) for k in core.flatten(x._keys()))
+
+    return Array(merge(dsk, x.dask), name, blockdims=blockdims)
+
+
 class Array(object):
     """ Array object holding a dask
 
@@ -592,6 +641,11 @@ class Array(object):
         from .reductions import vnorm
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
 
+    @wraps(map_blocks)
+    def map_blocks(self, func, blockshape=None, blockdims=None):
+        return map_blocks(self, func, blockshape=blockshape,
+                blockdims=blockdims)
+
 
 def from_array(x, blockshape=None, name=None, **kwargs):
     """ Create dask array from something that looks like an array
@@ -640,8 +694,8 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     fast_functions=kwargs.get('fast_functions',
                              set([getitem, np.transpose]))
     dsk2 = cull(dsk, list(core.flatten(keys)))
-    dsk3 = inline_functions(dsk2, fast_functions=fast_functions)
-    dsk4 = dsk3
+    dsk3 = remove_full_slices(dsk2)
+    dsk4 = inline_functions(dsk3, fast_functions=fast_functions)
     return get(dsk4, keys, **kwargs)
 
 
@@ -972,3 +1026,71 @@ def coarsen(reduction, x, axes):
                       for i, bds in enumerate(x.blockdims))
 
     return Array(merge(x.dask, dsk), name, blockdims=blockdims)
+
+
+constant_names = ('constant-%d' % i for i in count(1))
+
+
+def constant(value, shape=None, blockshape=None, blockdims=None, dtype=None):
+    """ An array with a constant value
+
+    >>> x = constant(5, shape=(4, 4), blockshape=(2, 2))
+    >>> np.array(x)
+    array([[5, 5, 5, 5],
+           [5, 5, 5, 5],
+           [5, 5, 5, 5],
+           [5, 5, 5, 5]])
+    """
+    name = next(constant_names)
+    if shape and blockshape and not blockdims:
+        blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+                          for d, bd in zip(shape, blockshape))
+
+    keys = product([name], *[range(len(bd)) for bd in blockdims])
+    shapes = product(*blockdims)
+    vals = [(chunk.constant, value, shape) for shape in shapes]
+    dsk = dict(zip(keys, vals))
+
+    return Array(dsk, name, blockdims=blockdims)
+
+
+def offset_func(func, offset, *args):
+    """  Offsets inputs by offset
+
+    >>> double = lambda x: x * 2
+    >>> f = offset_func(double, (10,))
+    >>> f(1)
+    22
+    >>> f(300)
+    620
+    """
+    def _offset(*args):
+        args2 = list(map(add, args, offset))
+        return func(*args2)
+
+    with ignoring(Exception):
+        _offset.__name__ = 'offset_' + func.__name__
+
+    return _offset
+
+
+fromfunction_names = ('fromfunction-%d' % i for i in count(1))
+
+@wraps(np.fromfunction)
+def fromfunction(func, shape=None, blockshape=None, blockdims=None):
+    name = next(fromfunction_names)
+    if shape and blockshape and not blockdims:
+        blockdims = tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
+                          for d, bd in zip(shape, blockshape))
+
+    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
+    aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in blockdims]
+    offsets = list(product(*aggdims))
+    shapes = list(product(*blockdims))
+
+    values = [(np.fromfunction, offset_func(func, offset), shape)
+                for offset, shape in zip(offsets, shapes)]
+
+    dsk = dict(zip(keys, values))
+
+    return Array(dsk, name, blockdims=blockdims)

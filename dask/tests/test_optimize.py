@@ -1,6 +1,7 @@
-from toolz import partial
+from toolz import partial, identity
 from dask.utils import raises
-from dask.optimize import cull, fuse, inline, inline_functions, functions_of
+from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
+        dealias)
 
 
 def inc(x):
@@ -158,3 +159,30 @@ def test_functions_of():
     assert functions_of(a) == set()
     assert functions_of((a,)) == set([a])
 
+
+def test_dealias():
+    dsk = {'a': (range, 5),
+           'b': 'a',
+           'c': 'b',
+           'd': (sum, 'c'),
+           'e': 'd',
+           'g': 'e',
+           'f': (inc, 'd')}
+
+    expected = {'a': (range, 5),
+                'd': (sum, 'a'),
+                'g': (identity, 'd'),
+                'f': (inc, 'd')}
+
+    assert dealias(dsk)  == expected
+
+
+    dsk = {'a': (range, 5),
+           'b': 'a',
+           'c': 'a'}
+
+    expected = {'a': (range, 5),
+                'b': (identity, 'a'),
+                'c': (identity, 'a')}
+
+    assert dealias(dsk)  == expected

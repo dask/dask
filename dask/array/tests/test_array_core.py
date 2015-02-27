@@ -68,9 +68,9 @@ def test_rec_concatenate():
 
 def eq(a, b):
     if isinstance(a, Array):
-        a = a.compute()
+        a = a.compute(get=dask.get)
     if isinstance(b, Array):
-        b = b.compute()
+        b = b.compute(get=dask.get)
     c = a == b
     if isinstance(c, np.ndarray):
         c = c.all()
@@ -362,3 +362,53 @@ def test_coarsen():
                     coarsen(np.sum, d, {0: 2, 1: 4}))
     assert eq(chunk.coarsen(np.sum, x, {0: 2, 1: 4}),
                     coarsen(da.sum, d, {0: 2, 1: 4}))
+
+
+def test_constant():
+    d = da.constant(2, blockdims=((2, 2), (3, 3)))
+    assert d.blockdims == ((2, 2), (3, 3))
+    assert (np.array(d)[:] == 2).all()
+
+
+def test_map_blocks():
+    inc = lambda x: x + 1
+
+    x = np.arange(400).reshape((20, 20))
+    d = from_array(x, blockshape=(7, 7))
+
+    e = d.map_blocks(inc)
+
+    assert d.blockdims == e.blockdims
+    assert eq(e, x + 1)
+
+    d = from_array(x, blockshape=(10, 10))
+    e = d.map_blocks(lambda x: x[::2, ::2], blockshape=(5, 5))
+
+    assert e.blockdims == ((5, 5), (5, 5))
+    assert eq(e, x[::2, ::2])
+
+    d = from_array(x, blockshape=(8, 8))
+    e = d.map_blocks(lambda x: x[::2, ::2], blockdims=((4, 4, 2), (4, 4, 2)))
+
+    assert eq(e, x[::2, ::2])
+
+
+def test_map_blocks():
+    x = np.arange(10)
+    d = from_array(x, blockshape=(2,))
+
+    def func(block, block_id=None):
+        return np.ones_like(block) * sum(block_id)
+
+    d = d.map_blocks(func)
+    expected = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
+
+    assert eq(d, expected)
+
+
+def test_fromfunction():
+    def f(x, y):
+        return x + y
+    d = fromfunction(f, shape=(5, 5), blockshape=(2, 2))
+
+    assert eq(d, np.fromfunction(f, shape=(5, 5)))

@@ -1,5 +1,5 @@
 import numpy as np
-from dask.array.chunk import coarsen
+from dask.array.chunk import coarsen, trim
 
 def eq(a, b):
     c = a == b
