@@ -222,7 +222,7 @@ def boundaries(x, depth=None, kind=None):
     return x
 
 
-def ghost(x, depth, kind):
+def ghost(x, depth, boundary):
     """ Share boundaries between neighboring blocks
 
     Parameters
@@ -232,8 +232,8 @@ def ghost(x, depth, kind):
         A dask array
     depth: dict
         The size of the shared boundary per axis
-    kind: dict
-        The kind of boundary condition on each axis
+    boundary: dict
+        The boundary of boundary condition on each axis
 
     The axes dict informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
@@ -248,7 +248,8 @@ def ghost(x, depth, kind):
     >>> d.blockdims
     ((4, 4), (4, 4))
 
-    >>> g = da.ghost.ghost(d, depth={0: 2, 1: 1}, kind={0: 100, 1: 'reflect'})
+    >>> g = da.ghost.ghost(d, depth={0: 2, 1: 1},
+    ...                       boundary={0: 100, 1: 'reflect'})
     >>> g.blockdims
     ((8, 8), (6, 6))
 
@@ -270,9 +271,9 @@ def ghost(x, depth, kind):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
-    x2 = boundaries(x, depth, kind)
+    x2 = boundaries(x, depth, boundary)
     x3 = ghost_internal(x2, depth)
-    trim = dict((k, v*2 if kind.get(k, None) is not None else 0)
+    trim = dict((k, v*2 if boundary.get(k, None) is not None else 0)
                 for k, v in depth.items())
     x4 = chunk.trim(x3, trim)
     return x4

@@ -49,7 +49,8 @@ ghost function:
    >>> d.blockdims
    ((4, 4), (4, 4))
 
-   >>> g = da.ghost.ghost(d, depth={0: 2, 1: 1}, kind={0: 100, 1: 'reflect'})
+   >>> g = da.ghost.ghost(d, depth={0: 2, 1: 1},
+   ...                       boundary={0: 100, 1: 'reflect'})
    >>> g.blockdims
    ((8, 8), (6, 6))
 
@@ -163,7 +164,8 @@ and ``trim_internal``
 .. code-block:: python
 
    >>> x = ...
-   >>> g = da.ghost.ghost(x, depth={0: 2, 1: 2}, kind={0: 'periodic', 1: 'periodic'})
+   >>> g = da.ghost.ghost(x, depth={0: 2, 1: 2},
+   ...                       boundary={0: 'periodic', 1: 'periodic'})
    >>> g2 = g.map_blocks(myfunc)
    >>> result = da.ghost.trim_internal(g2, {0: 2, 1: 2})
 

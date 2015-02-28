@@ -122,7 +122,7 @@ def test_boundaries():
 def test_ghost():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, blockshape=(4, 4))
-    g = ghost(d, depth={0: 2, 1: 1}, kind={0: 100, 1: 'reflect'})
+    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'reflect'})
     assert g.blockdims == ((8, 8), (6, 6))
     expected = np.array(
       [[100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
@@ -143,5 +143,5 @@ def test_ghost():
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     assert eq(g, expected)
 
-    g = ghost(d, depth={0: 2, 1: 1}, kind={0: 100})
+    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
     assert g.blockdims == ((8, 8), (5, 5))
