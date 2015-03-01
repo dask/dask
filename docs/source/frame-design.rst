@@ -40,6 +40,9 @@ DataFrame Metadata
    :align: right
    :alt: A dask frame
 
+*We separate blocks over the index.  Our new equivalent of ``blockdims``
+involves ranges of index values, not locations.*
+
 The ``blockdims`` tuple represents the block structure of a dask array in all dimensions.  In Frames we have only one dimension (simpler) but that dimension may be within other ordered dimensions like time or text.  Additionally there is no clear way to determine how many elements may be within two bounds from the metadata alone (e.g. how many records in the month of July).
 
 We define a Frame as a sequence of blocks, where each block is a Pandas DataFrame.  This sequence is sorted along an index column so that the index of all records in block ``i`` is less than the index of all records in block ``i+1``.  We store this information in a ``blockdivs`` attribute.  In the example to the right we index our frame by time and separate blocks by month.  Note that blocks may be of varying size.
@@ -50,6 +53,9 @@ We store the separation points (e.g. ``2014-02-01T00:00:00``) in the
 
 Easy Operations
 ---------------
+
+*Easy operations are easy to implement.  Hard operations are easy if they align
+with the index*
 
 Embarrassingly parallel operations between frames with identical block structure is trivial to implement with this setup.  This includes operations like arithmetic and filtering of rows or columns.
 
@@ -86,6 +92,7 @@ We'll discuss external sorting and then dask organization.
 Sorting
 -------
 
+*We sort a large index from disk through a variant of merge sort.*
 
 .. image:: images/frame-sort.png
    :width: 15%
@@ -114,6 +121,8 @@ Encoding the shuffle in dask is a bit complex but relatively tame when compared 
 
 Evaluation
 ----------
+
+*Every time we re-index our data we need to evaluate the whole graph.*
 
 To do the above sort we need to evaluate our current dask graph; this is
 unfortuante and breaks with the style set by ``dask.array`` that we could
