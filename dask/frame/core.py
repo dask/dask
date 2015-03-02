@@ -156,11 +156,11 @@ def read_csv(fn, *args, **kwargs):
     header = kwargs.get('header', 1)
 
     nlines = linecount(fn) - header
-    nchunks = int(ceil(nlines / chunksize))
+    nchunks = int(ceil(1.0 * nlines / chunksize))
 
     read = next(read_csv_names)
 
-    blockdivs = tuple(range(chunksize, nlines, chunksize))[:-1]
+    blockdivs = tuple(range(chunksize, nlines, chunksize))
 
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
     load.update({(read, i): (get_chunk, (read, i-1), chunksize*i)

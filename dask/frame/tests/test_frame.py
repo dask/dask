@@ -66,3 +66,7 @@ def test_read_csv():
         f = df.read_csv(fn, chunksize=3)
         assert f.npartitions == 2
         assert eq(f, pd.read_csv(fn))
+
+    with filetext(text) as fn:
+        f = df.read_csv(fn, chunksize=4)
+        assert f.npartitions == 2
