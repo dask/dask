@@ -11,9 +11,9 @@ import numpy as np
 import operator
 
 
-def get(dsk, keys, **kwargs):
+def get(dsk, keys, get=get_sync, **kwargs):
     # Do frame specific optimizations
-    return get_sync(dsk, keys, **kwargs)  # use synchronous scheduler for now
+    return get(dsk, keys, **kwargs)  # use synchronous scheduler for now
 
 
 names = ('f-%d' % i for i in count(1))
@@ -45,6 +45,11 @@ class Frame(object):
             dsk = dict(((name, i), (operator.getitem, (self.name, i), key))
                         for i in range(self.npartitions))
             return Frame(merge(self.dask, dsk), name, self.blockdivs)
+        if isinstance(key, Frame) and self.blockdivs == key.blockdivs:
+            dsk = dict(((name, i), (operator.getitem, (self.name, i),
+                                                       (key.name, i)))
+                        for i in range(self.npartitions))
+            return Frame(merge(self.dask, key.dask, dsk), name, self.blockdivs)
         raise NotImplementedError()
 
     # Examples of elementwise behavior
@@ -52,6 +57,10 @@ class Frame(object):
         return elemwise(operator.add, self, other)
     def __radd__(self, other):
         return elemwise(operator.add, other, self)
+    def __gt__(self, other):
+        return elemwise(operator.gt, self, other)
+    def __rgt__(self, other):
+        return elemwise(operator.gt, other, self)
 
     # Examples of reduction behavior
     def sum(self):

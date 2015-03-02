@@ -3,12 +3,13 @@ from dask.frame.core import linecount
 import pandas.util.testing as tm
 import pandas as pd
 from dask.utils import filetext
+import dask
 
 def eq(a, b):
     if isinstance(a, df.Frame):
-        a = a.compute()
+        a = a.compute(get=dask.get)
     if isinstance(b, df.Frame):
-        b = b.compute()
+        b = b.compute(get=dask.get)
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b)
         return True
@@ -38,6 +39,9 @@ def test_frame():
     assert d['b'].max().compute() == 6
 
     assert eq(d.head(2), dsk[('x', 0)].head(2))
+
+    full = d.compute()
+    assert eq(d[d['b'] > 2], full[full['b'] > 2])
 
 
 text = """
