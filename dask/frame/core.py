@@ -43,8 +43,14 @@ class Frame(object):
 
     def __getitem__(self, key):
         name = next(names)
-        if isinstance(key, (str, list)):
+        if isinstance(key, (str, unicode)):
             dsk = dict(((name, i), (operator.getitem, (self.name, i), key))
+                        for i in range(self.npartitions))
+            return Frame(merge(self.dask, dsk), name, self.blockdivs)
+        if isinstance(key, list):
+            dsk = dict(((name, i), (operator.getitem,
+                                     (self.name, i),
+                                     (list, key)))
                         for i in range(self.npartitions))
             return Frame(merge(self.dask, dsk), name, self.blockdivs)
         if isinstance(key, Frame) and self.blockdivs == key.blockdivs:
