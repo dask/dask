@@ -2,6 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from contextlib import contextmanager
+import os
+import tempfile
 
 def raises(err, lamda):
     try:
@@ -34,3 +36,34 @@ def ignoring(*exceptions):
         yield
     except exceptions:
         pass
+
+
+@contextmanager
+def tmpfile(extension=''):
+    extension = '.' + extension.lstrip('.')
+    handle, filename = tempfile.mkstemp(extension)
+    os.close(handle)
+    os.remove(filename)
+
+    yield filename
+
+    if os.path.exists(filename):
+        if os.path.isdir(filename):
+            shutil.rmtree(filename)
+        else:
+            os.remove(filename)
+
+
+@contextmanager
+def filetext(text, extension='', open=open, mode='w'):
+    with tmpfile(extension=extension) as filename:
+        f = open(filename, mode=mode)
+        try:
+            f.write(text)
+        finally:
+            try:
+                f.close()
+            except AttributeError:
+                pass
+
+        yield filename
