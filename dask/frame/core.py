@@ -9,11 +9,13 @@ from operator import getitem
 import pandas as pd
 import numpy as np
 import operator
+from ..optimize import cull, fuse
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
-    # Do frame specific optimizations
-    return get(dsk, keys, **kwargs)  # use synchronous scheduler for now
+    dsk2 = cull(dsk, list(core.flatten(keys)))
+    dsk3 = fuse(dsk2)
+    return get(dsk3, keys, **kwargs)  # use synchronous scheduler for now
 
 
 names = ('f-%d' % i for i in count(1))
@@ -79,10 +81,16 @@ class Frame(object):
 
         return Frame(merge(dsk, self.dask), name, self.blockdivs)
 
-    def head(self, n):
+    def head(self, n=10, compute=True):
         name = next(names)
         dsk = {(name, 0): (pd.DataFrame.head, (self.name, 0), n)}
-        return Frame(merge(self.dask, dsk), name, [])
+
+        result = Frame(merge(self.dask, dsk), name, [])
+
+        if compute:
+            result = result.compute()
+        return result
+
 
 
 def elemwise(op, *args):
@@ -146,7 +154,7 @@ def read_csv(fn, *args, **kwargs):
 
     read = next(read_csv_names)
 
-    blockdivs = tuple(range(chunksize, nlines, chunksize))
+    blockdivs = tuple(range(chunksize, nlines, chunksize))[:-1]
 
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
     load.update({(read, i): (get_chunk, (read, i-1), chunksize*i)
