@@ -1,6 +1,3 @@
-from ..async import get_sync
-from .. import core
-from ..array.core import partial_by_order
 from itertools import count
 from math import ceil
 import toolz
@@ -9,7 +6,12 @@ from operator import getitem
 import pandas as pd
 import numpy as np
 import operator
+
 from ..optimize import cull, fuse
+from .. import core
+from ..array.core import partial_by_order
+from ..async import get_sync
+from ..compatibility import unicode
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
@@ -163,11 +165,12 @@ def read_csv(fn, *args, **kwargs):
     blockdivs = tuple(range(chunksize, nlines, chunksize))
 
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
-    load.update({(read, i): (get_chunk, (read, i-1), chunksize*i)
-                for i in range(nchunks)})
+    load.update(dict(((read, i), (get_chunk, (read, i-1), chunksize*i))
+                     for i in range(nchunks)))
 
     name = next(names)
 
-    dsk = {(name, i): (getitem, (read, i), 0) for i in range(nchunks)}
+    dsk = dict(((name, i), (getitem, (read, i), 0))
+                for i in range(nchunks))
 
     return Frame(merge(dsk, load), name, blockdivs)
