@@ -1,6 +1,8 @@
 import dask.frame as df
+from dask.frame.core import linecount
 import pandas.util.testing as tm
 import pandas as pd
+from dask.utils import filetext
 
 def eq(a, b):
     if isinstance(a, df.Frame):
@@ -34,3 +36,26 @@ def test_frame():
 
     assert d['b'].sum().compute() == 4+5+6 + 3+2+1 + 0+0+0
     assert d['b'].max().compute() == 6
+
+
+text = """
+name,amount
+Alice,100
+Bob,-200
+Charlie,300
+Dennis,400
+Edith,-500
+Frank,600
+""".strip()
+
+
+def test_linecount():
+    with filetext(text) as fn:
+        assert linecount(fn) == 7
+
+
+def test_read_csv():
+    with filetext(text) as fn:
+        f = df.read_csv(fn, chunksize=3)
+        assert f.npartitions == 2
+        assert eq(f, pd.read_csv(fn))

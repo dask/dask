@@ -2,7 +2,10 @@ from ..async import get_sync
 from .. import core
 from ..array.core import partial_by_order
 from itertools import count
-from toolz import merge
+from math import ceil
+import toolz
+from toolz import merge, partial
+from operator import getitem
 import pandas as pd
 import numpy as np
 import operator
@@ -103,3 +106,40 @@ def reduction(x, chunk, aggregate):
     dsk2 = {(b, 0): (aggregate, (tuple, [(a, i) for i in range(x.npartitions)]))}
 
     return Frame(merge(x.dask, dsk, dsk2), b, [])
+
+
+def linecount(fn):
+    with open(fn) as f:
+        result = toolz.count(f)
+    return result
+
+
+read_csv_names = ('readcsv-%d' % i for i in count(1))
+
+def get_chunk(x, start):
+    if isinstance(x, tuple):
+        x = x[1]
+    df = x.get_chunk()
+    df.index += start
+    return df, x
+
+def read_csv(fn, *args, **kwargs):
+    chunksize = kwargs.get('chunksize', 2**20)
+    header = kwargs.get('header', 1)
+
+    nlines = linecount(fn) - header
+    nchunks = int(ceil(nlines / chunksize))
+
+    read = next(read_csv_names)
+
+    blockdivs = tuple(range(chunksize, nlines, chunksize))
+
+    load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
+    load.update({(read, i): (get_chunk, (read, i-1), chunksize*i)
+                for i in range(nchunks)})
+
+    name = next(names)
+
+    dsk = {(name, i): (getitem, (read, i), 0) for i in range(nchunks)}
+
+    return Frame(merge(dsk, load), name, blockdivs)
