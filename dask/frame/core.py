@@ -70,6 +70,11 @@ class Frame(object):
 
         return Frame(merge(dsk, self.dask), name, self.blockdivs)
 
+    def head(self, n):
+        name = next(names)
+        dsk = {(name, 0): (pd.DataFrame.head, (self.name, 0), n)}
+        return Frame(merge(self.dask, dsk), name, [])
+
 
 def elemwise(op, *args):
     name = next(names)

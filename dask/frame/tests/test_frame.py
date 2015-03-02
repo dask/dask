@@ -37,6 +37,8 @@ def test_frame():
     assert d['b'].sum().compute() == 4+5+6 + 3+2+1 + 0+0+0
     assert d['b'].max().compute() == 6
 
+    assert eq(d.head(2), dsk[('x', 0)].head(2))
+
 
 text = """
 name,amount
