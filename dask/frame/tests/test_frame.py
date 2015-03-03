@@ -46,6 +46,8 @@ def test_frame():
     assert eq(d[['a', 'b']], full[['a', 'b']])
     assert eq(d.a, full.a)
 
+    assert repr(d) == repr(full.head(3))
+
 
 
 text = """

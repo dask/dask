@@ -1,6 +1,7 @@
 from itertools import count
 from math import ceil
 import toolz
+import os
 from toolz import merge, partial
 from operator import getitem
 import pandas as pd
@@ -168,6 +169,9 @@ class Frame(object):
             result = result.compute()
         return result
 
+    def __repr__(self):
+        return repr(self.head())
+
 
 def head(x, n):
     return x.head(n)
@@ -211,7 +215,8 @@ def reduction(x, chunk, aggregate):
 
 
 def linecount(fn):
-    with open(fn) as f:
+    """ Count the number of lines in a textfile """
+    with open(os.path.expanduser(fn)) as f:
         result = toolz.count(f)
     return result
 
