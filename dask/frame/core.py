@@ -151,7 +151,7 @@ class Frame(object):
 
     def head(self, n=10, compute=True):
         name = next(names)
-        dsk = {(name, 0): (pd.DataFrame.head, (self.name, 0), n)}
+        dsk = {(name, 0): (head, (self.name, 0), n)}
 
         result = Frame(merge(self.dask, dsk), name, [])
 
@@ -159,6 +159,9 @@ class Frame(object):
             result = result.compute()
         return result
 
+
+def head(x, n):
+    return x.head(n)
 
 
 def elemwise(op, *args):
