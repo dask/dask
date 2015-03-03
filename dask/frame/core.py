@@ -62,6 +62,15 @@ class Frame(object):
             return Frame(merge(self.dask, key.dask, dsk), name, self.blockdivs)
         raise NotImplementedError()
 
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            name = next(names)
+            dsk = dict(((name, i), (getattr, (self.name, i), key))
+                        for i in range(self.npartitions))
+            return Frame(merge(self.dask, dsk), name, self.blockdivs)
+
     # Examples of elementwise behavior
     def __abs__(self):
         return elemwise(operator.abs, self)

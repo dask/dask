@@ -44,6 +44,8 @@ def test_frame():
     full = d.compute()
     assert eq(d[d['b'] > 2], full[full['b'] > 2])
     assert eq(d[['a', 'b']], full[['a', 'b']])
+    assert eq(d.a, full.a)
+
 
 
 text = """
