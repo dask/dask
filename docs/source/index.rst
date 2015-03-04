@@ -18,6 +18,7 @@ Contents
    overview.rst
    spec.rst
    array.rst
+   faq.rst
 
 Into is part of the Open Source Blaze_ projects supported by `Continuum Analytics`_
 
