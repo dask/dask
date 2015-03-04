@@ -1,0 +1,106 @@
+Create Dask Arrays
+==================
+
+We store and manipulate large arrays in a wide variety of ways.  There are some
+standards like HDF5 and NetCDF but just as often people use custom storage
+solutions.  This page talks about how to build dask graphs to interact with
+your array.
+
+In principle we need functions that return NumPy arrays.  These functions and
+their arrangement can be as simple or as complex as the situation dictates.
+
+
+Simple case - Format Supports NumPy Slicing
+-------------------------------------------
+
+Many formats have Python projects that expose storage using NumPy slicing syntax.
+For example the HDF5 file format has the ``h5py`` project, which provides a
+``Dataset`` object into which we can slice in NumPy fashion
+
+.. code-block:: Python
+
+   >>> import h5py
+   >>> f = h5py.File('myfile.hdf5') # HDF5 file
+   >>> d = f['/data/path']          # Pointer on on-disk array
+   >>> d.shape                      # d can be very large
+   (1000000, 1000000)
+
+   >>> x = d[:5, :5]                # We slice to get numpy arrays
+
+It is common for Python wrappers of on-disk arrayformats to present a NumPy
+slicing syntax.  The full dataset looks like a NumPy array with ``.shape`` and
+``.dtype`` attributes even though the data hasn't yet been loaded in and still
+lives on disk.  Slicing in to this array-like object fetches the appropriate
+data from disk and returns that region as an in-memory NumPy array.
+
+For this common case ``dask.array`` presents the convenience function
+``da.from_array``
+
+.. code-block:: Python
+
+   >>> import dask.array as da
+   >>> x = da.from_array(d, blockshape=(1000, 1000))
+
+
+Concatenation and Stacking
+--------------------------
+
+Often we store data in several different locations and want to stitch them
+together.  For this case please see docs on `concatenation and stacking`_.
+
+
+Complex case
+------------
+
+If your format does not provide a convenient slicing solution you will need to
+dive down one layer to interact with dask dictionaries.  Your goal is to create
+a dictionary with tasks that create NumPy arrays, see docs on `array design`_
+before continuing with this subsection.
+
+To construct a dask array manually you need a dict with tasks that form numpy
+arrays
+
+.. code-block:: Python
+
+   dsk = {('x', 0): (f, ...),
+          ('x', 1), (f, ...),
+          ('x', 2): (f, ...)}
+
+And a blockdims tuple that defines the shapes of your blocks along each
+dimension
+
+.. code-block:: Python
+
+   blockdims = [(1000, 1000, 1000)]
+
+For the tasks ``(f, ...)`` your choice of function ``f`` and arguments ``...``
+is up to you.  You have the full freedom of the Python language here as long as
+your function, when run with those arguments, produces the appropriate NumPy
+array.
+
+Example
+```````
+
+As an example we might load a grid of pickle files known to contain 1000
+by 1000 NumPy arrays
+
+.. code-block:: Python
+
+   def load(fn):
+       with open(fn) as f:
+           result = pickle.load(f)
+        return result
+
+   dsk = {('x', 0, 0): (load, 'block-0-0.pkl'),
+          ('x', 0, 1): (load, 'block-0-1.pkl'),
+          ('x', 0, 2): (load, 'block-0-2.pkl'),
+          ('x', 1, 0): (load, 'block-1-0.pkl'),
+          ('x', 1, 1): (load, 'block-1-1.pkl'),
+          ('x', 1, 2): (load, 'block-1-2.pkl')}
+
+    blockdims = ((1000, 1000), (1000, 1000, 1000))
+
+    x = da.Array(dsk, 'x', blockdims=blockdims)
+
+.. _`concatenation and stacking`: stack.html
+.. _`array design`: array-design.html

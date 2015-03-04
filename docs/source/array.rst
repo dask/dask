@@ -15,6 +15,7 @@ Features
 
    array-overview.rst
    array-design.rst
+   array-creation.rst
    slicing.rst
    stack.rst
    random.rst
