@@ -228,7 +228,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task, data, queue):
+def execute_task(key, task, data, queue, raise_on_exception=False):
     """
     Compute task and handle all administration
 
@@ -239,12 +239,16 @@ def execute_task(key, task, data, queue):
         result = _execute_task(task, data)
         result = key, result, None
     except Exception as e:
+        if raise_on_exception:
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         result = key, e, tb
     try:
         queue.put(result)
     except Exception as e:
+        if raise_on_exception:
+            raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         queue.put((key, e, tb))
@@ -345,7 +349,8 @@ The main function of the scheduler.  Get is the main entry point.
 '''
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-                debug_counts=None, queue=None, **kwargs):
+                debug_counts=None, queue=None, raise_on_exception=False,
+                **kwargs):
     """ Asynchronous get function
 
     Parameters
@@ -400,7 +405,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         data = dict((dep, state['cache'][dep])
                     for dep in get_dependencies(dsk, key))
         # Submit
-        apply_async(execute_task, args=[key, dsk[key], data, queue])
+        apply_async(execute_task, args=[key, dsk[key], data, queue,
+                                        raise_on_exception])
 
     # Seed initial tasks into the thread pool
     while state['ready'] and len(state['running']) < num_workers:
@@ -486,4 +492,5 @@ def apply_sync(func, args=(), kwds={}):
 def get_sync(dsk, keys, **kwargs):
     from .compatibility import Queue
     queue = Queue()
-    return get_async(apply_sync, 1, dsk, keys, queue=queue, **kwargs)
+    return get_async(apply_sync, 1, dsk, keys, queue=queue,
+            raise_on_exception=True, **kwargs)

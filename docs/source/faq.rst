@@ -12,11 +12,12 @@ Frequently Asked Questions
     ``dask.get`` or ``dask.async.get_sync`` by providing a ``get=`` keyword
     to the ``compute`` method::
 
-        my_array.compute(get=dask.get)
+        my_array.compute(get=dask.async.get_sync)
 
-    ``dask.async.get_sync`` is still fairly fast though doesn't provide as deep
-    of introspection.  ``dask.get`` provides full introspection with tools like
-    ``pdb`` but does not cache data well.
+    Both ``dask.async.get_sync`` and ``dask.get`` will provide traceback
+    traversals.  ``dask.async.get_sync`` uses the same machinery of the async
+    schedulers but with only one worker.  ``dask.get`` is dead-simple but does
+    not cache data and so can be slow for some workloads.
 
 
 .. _`inspect docs`: inspect.html
