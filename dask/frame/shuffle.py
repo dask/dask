@@ -15,45 +15,6 @@ index_names = ('index-%d' % i for i in count(1))
 length_names = ('len-%d' % i for i in count(1))
 
 
-def shard_and_store(ser, chunksize, cache, key_prefix):
-    """ Concat, sort, and store results in blocks
-
-    Parameters
-    ----------
-
-    ser: A Pandas Series or NumPy ndarray
-    chunksize: int
-        The size of chunk into which we break the series
-    cache: MutableMapping
-        The location of the chunks
-    key_prefix: tuple
-        The prefix of the key under which we store the chunks
-
-    Returns
-    -------
-
-    The keys under which we can find the chunks of the series
-
-    >>> cache = dict()
-    >>> s = pd.Series(['a', 'b', 'c', 'd'])
-    >>> shard_and_store(s, chunksize=2, cache=cache, key_prefix=('a', 1))
-    [('a', 1, 0), ('a', 1, 1)]
-
-    See also:
-        concat_and_sort
-    """
-    keys = []
-    for i, ind in enumerate(range(0, len(ser), chunksize)):
-        key = key_prefix + (i,)
-        keys.append(key)
-        if isinstance(ser, pd.Series):
-            cache[key] = ser.iloc[ind:ind+chunksize]
-        elif isinstance(ser, np.ndarray):
-            cache[key] = ser[ind:ind+chunksize]
-
-    return keys
-
-
 def set_index(f, index, npartitions=None, cache=dict, sortsize=2**24,
         chunksize=2**20, out_chunksize=2**24, empty=np.empty):
     """ Set Frame index to new column
@@ -126,40 +87,6 @@ def set_index(f, index, npartitions=None, cache=dict, sortsize=2**24,
     dsk = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
 
     return Frame(dsk, new_keys[0][0], blockdivs)
-
-
-def iterate_array_from(start, x, blocksize=256):
-    """ Iterator of array starting at particular index
-
-    >>> x = np.arange(10) * 2
-    >>> seq = iterate_array_from(3, x)
-    >>> next(seq)
-    6
-    >>> next(seq)
-    8
-    """
-    for i in range(start, len(x), blocksize):
-        chunk = x[i: i+blocksize]
-        for row in chunk.tolist():
-            yield row
-
-
-def consistent_until(x, start):
-    """ Finds last index after ind with the same value as x[ind]
-
-    >>> x = np.array([10, 20, 30, 30, 30, 40, 50])
-    >>> consistent_until(x, 0)  # x[0] repeats only until x[0], x[1] differs
-    (0, 20)
-    >>> consistent_until(x, 1)  # x[1] repeats only until x[1], x[2] differs
-    (1, 30)
-    >>> consistent_until(x, 2)  # x[2] repeats until x[4], x[5] differs
-    (4, 40)
-    """
-    start_val = x[start]
-    for i, val in enumerate(iterate_array_from(start, x)):
-        if val != start_val:
-            return start + i - 1, val
-    return None, None
 
 
 def shard_df_on_index(df, blockdivs):
@@ -386,15 +313,6 @@ def blockdivs_by_sort(cache, index_name, lengths, npartitions, chunksize,
     emerge(seqs, out=sort_storage, dtype=dtype, out_chunksize=out_chunksize)
 
     # Find good break points in that array
-    indices = []
-    blockdivs = []
-    i = out_chunksize
-    while i < len(sort_storage):
-        ind, val = consistent_until(sort_storage, i)
-        if ind is None:
-            break
-        indices.append(ind)
-        blockdivs.append(val)
-        i = ind + out_chunksize
+    blockdivs = list(sort_storage[::out_chunksize])[:-1]
 
     return blockdivs
