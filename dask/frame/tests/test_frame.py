@@ -75,3 +75,19 @@ def test_read_csv():
     with filetext(text) as fn:
         f = df.read_csv(fn, chunksize=4)
         assert f.npartitions == 2
+
+
+def test_set_index():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
+                                  index=[0, 1, 3]),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 5, 8]},
+                                  index=[5, 6, 8]),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
+                                  index=[9, 9, 9])}
+    d = df.Frame(dsk, 'x', [4, 9])
+    full = d.compute()
+
+    d2 = df.core.set_index(d, 'b', npartitions=3, out_chunksize=3)
+
+    assert d2.npartitions == 3
+    assert eq(d2, full.set_index('b'))

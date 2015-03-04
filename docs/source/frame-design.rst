@@ -119,6 +119,17 @@ External sorting does not require creativity on our part.  There are straightfor
 Encoding the shuffle in dask is a bit complex but relatively tame when compared to some of the things we've had to do with ndarrays.
 
 
+Approximate Quantiles
+---------------------
+
+*Maybe there are cheaper ways to find ``blockdivs`` than sorting*
+
+After playing around with this I'm no longer certain that we need an
+external sort.  If we don't need very well balanced block sizes then it may
+be sufficient to provide approximate quantiles.  This can likely be done
+through sampling and sorting in-core.
+
+
 Evaluation
 ----------
 
