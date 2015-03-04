@@ -46,7 +46,7 @@ def test_frame():
     assert eq(d[['a', 'b']], full[['a', 'b']])
     assert eq(d.a, full.a)
 
-    assert repr(d) == repr(full.head(3))
+    assert repr(d)
 
 
 
@@ -102,7 +102,7 @@ def test_shard_df_on_index():
     f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
                       index=[1, 2, 3, 4, 4])
 
-    result = list(df.core.shard_df_on_index(f, [2, 7]))
+    result = list(df.shuffle.shard_df_on_index(f, [2, 7]))
     assert eq(result[0], f.loc[[1]])
     assert eq(result[1], f.loc[[2, 3, 4]])
     assert eq(result[2], pd.DataFrame(columns=['a', 'b'], dtype=f.dtypes))
