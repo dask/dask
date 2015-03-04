@@ -20,3 +20,4 @@ Features
    random.rst
    ghost.rst
    array-blaze.rst
+   inspect.rst
