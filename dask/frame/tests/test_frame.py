@@ -88,9 +88,12 @@ def test_set_index():
     full = d.compute()
 
     d2 = df.core.set_index(d, 'b', npartitions=3, out_chunksize=3)
-
     assert d2.npartitions == 3
-    assert eq(d2, full.set_index('b'))
+    assert eq(d2, full.set_index('b').sort())
+
+    d3 = df.core.set_index(d, d.b, npartitions=3, out_chunksize=3)
+    assert d3.npartitions == 3
+    assert eq(d3, full.set_index(full.b))
 
 
 def test_shuffle():
@@ -104,3 +107,13 @@ def test_shuffle():
 
     result = df.core.shuffle(cache, keys, blockdivs)
     assert eq(cache[result[0]], 0)
+
+
+def test_shard_df_on_index():
+    f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
+                      index=[1, 2, 3, 4, 4])
+
+    result = list(df.core.shard_df_on_index(f, [2, 7]))
+    assert eq(result[0], f.loc[[1]])
+    assert eq(result[1], f.loc[[2, 3, 4]])
+    assert eq(result[2], pd.DataFrame(columns=['a', 'b'], dtype=f.dtypes))

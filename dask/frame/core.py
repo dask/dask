@@ -2,7 +2,7 @@ from itertools import count
 from math import ceil
 import toolz
 import os
-from toolz import merge, partial, accumulate
+from toolz import merge, partial, accumulate, unique
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
@@ -21,6 +21,7 @@ def get(dsk, keys, get=get_sync, **kwargs):
     return get(dsk3, keys, **kwargs)  # use synchronous scheduler for now
 
 
+tokens = ('-%d' % i for i in count(1))
 names = ('f-%d' % i for i in count(1))
 
 
@@ -276,8 +277,9 @@ def concat_and_sort(seriess, offset=0):
         if total:
             s.index += total + offset
         total += len(s)
-    ser = pd.concat(seriess, axis=0)
-    ser.sort()
+    df = pd.concat(list(map(pd.DataFrame, seriess)), axis=0)
+    ser = df[df.columns[0]]
+    ser = ser.sort(inplace=False)
     return ser
 
 
@@ -347,98 +349,66 @@ def set_index(f, index, npartitions=None, cache=dict, sortsize=2**24,
     npartitions = npartitions or f.npartitions
     if callable(cache):
         cache = cache()
-    if isinstance(index, (str, unicode)):
-        index = f[index]
 
-    assert f.blockdivs == index.blockdivs
+    """
+    We now use dask to compute indexes and reindex blocks
 
-    store = next(store_names)
-    indexname = next(store_names)
-    length = next(length_names)
+    1.  Compute each block of the dask
+    2.  Set its index to match index
+    3.  Pull out the index to separate data
+    4.  Store all blocks
+    5.  Store all indexes
+    6.  Compute the lengths of all blocks
+    """
+    set_index = 'set-index' + next(tokens)
+    indexname = 'index' + next(tokens)
+    store = 'store-block' + next(tokens)
+    store_index = 'store-index' + next(tokens)
+    length = 'len-of-index' + next(tokens)
 
-    _stores = {(store, i): (setitem, cache, (tuple, [f.name, i]), (f.name, i))
+    if isinstance(index, Frame) and index.blockdivs == f.blockdivs:
+        _set_index = {(set_index, i): (pd.DataFrame.set_index,
+                                        (f.name, i), (index.name, i))
+                    for i in range(f.npartitions)}
+    elif isinstance(index, (str, unicode)):
+        _set_index = {(set_index, i): (pd.DataFrame.set_index,
+                                        (f.name, i), index)
+                    for i in range(f.npartitions)}
+    else:
+        raise ValueError("Invalid index")
+    _indexes = {(indexname, i): (getattr, (set_index, i), 'index')
                 for i in range(f.npartitions)}
-    _indexes = {(indexname, i): (setitem, cache,
-                                 (tuple, [index.name, i]),
-                                 (index.name, i))
-                for i in range(index.npartitions)}
-    _lengths = {(length, i): (len, (index.name, i))
-                for i in range(index.npartitions)}
+    _stores = {(store, i): (setitem, cache,
+                                (tuple, [set_index, i]),
+                                (set_index, i))
+                for i in range(f.npartitions)}
+    _store_indexes = {(store_index, i): (setitem, cache,
+                                         (tuple, [indexname, i]),
+                                         (indexname, i))
+                for i in range(f.npartitions)}
+    _lengths = {(length, i): (len, (indexname, i))
+                for i in range(f.npartitions)}
 
-    dsk = merge(f.dask, index.dask, _stores, _indexes, _lengths)
+    dsk = merge(f.dask, _set_index, _indexes, _stores, _store_indexes, _lengths)
+    if isinstance(index, Frame):
+        dsk.update(index.dask)
     keys = [sorted(_lengths.keys()),
             sorted(_stores.keys()),
-            sorted(_indexes.keys())]
+            sorted(_store_indexes.keys())]
 
     # Compute the frame and store blocks and index-blocks into cache
     lengths = get(dsk, keys)[0]
 
-    # Collect index-blocks into larger clumps for more efficient in-core sorting
-    total = 0
-    grouped_indices = []
-    grouped_lengths = []
-    tmp_ind = []
-    tmp_len = []
-    for i, l in enumerate(lengths):
-        tmp_ind.append((index.name, i))
-        tmp_len.append(l)
-        total += l
-        if total < sortsize:
-            grouped_indices.append(tmp_ind)
-            grouped_lengths.append(tmp_len)
-            tmp_ind = []
-            tmp_len = []
+    blockdivs = blockdivs_by_sort(cache, indexname,
+                            lengths, npartitions, chunksize, empty, sortsize,
+                            out_chunksize)
 
-    # Lengths of blocks of indexes - [10, 15, 10, 20]
-    total_lengths = list(map(sum, grouped_lengths))
-    # Accumlated lengths - [0, 10, 25, 35]
-    acc_lengths = list(accumulate(operator.add, [0] + total_lengths[:-1]))
+    old_keys = [(set_index, i) for i in range(f.npartitions)]
+    new_keys = shuffle(cache, old_keys, blockdivs, delete=False)
 
-    # Accumulate several series together, then sort, shard, and store
-    sort = next(sort_names)
-    store2 = next(store_names)
-    first_sort = {(sort, i): (store_shards,
-                               (shard, chunksize,
-                                 (series_to_recarray,
-                                   (concat_and_sort, inds, acc_lengths[i]))),
-                               cache, (store2, i))
-                    for i, inds in enumerate(grouped_indices)}
+    dsk = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
 
-    cache_dsk = {k: (getitem, cache, (tuple, list(k))) for k in cache}
-
-    # Execute, dumping sorted shards into cache
-    # TODO: cull
-    blockkeys = get(merge(cache_dsk, first_sort), sorted(first_sort.keys()))
-
-    # Get out one of the indices to get the proper dtype
-    an_index_chunk = cache[(blockkeys[0][0])]
-    dtype = an_index_chunk.dtype
-    value_name = dtype.names[-1]
-
-    # Merge all of the shared blocks together into one large array
-    from .esort import emerge
-    seqs = [[cache[key] for key in bk] for bk in blockkeys]
-    sort_storage = empty(shape=sum(total_lengths), dtype=dtype)
-    emerge(seqs, out=sort_storage, key=lambda x: x[1], dtype=dtype,
-            out_chunksize=4)
-
-    # Find good break points in that array
-    indices = []
-    blockdivs = []
-    i = out_chunksize
-    while i < len(sort_storage):
-        ind, val = consistent_until(sort_storage[value_name], i)
-        if ind is None:
-            break
-        indices.append(ind)
-        blockdivs.append(val)
-        i = ind + out_chunksize
-
-
-
-
-
-    return blockkeys
+    return Frame(dsk, new_keys[0][0], blockdivs)
 
 
 def iterate_array_from(start, x, blocksize=256):
@@ -460,13 +430,13 @@ def iterate_array_from(start, x, blocksize=256):
 def consistent_until(x, start):
     """ Finds last index after ind with the same value as x[ind]
 
-    >>> np.array([10, 20, 30, 30, 30, 40, 50])
+    >>> x = np.array([10, 20, 30, 30, 30, 40, 50])
     >>> consistent_until(x, 0)  # x[0] repeats only until x[0], x[1] differs
-    0, 20
+    (0, 20)
     >>> consistent_until(x, 1)  # x[1] repeats only until x[1], x[2] differs
-    1, 30
+    (1, 30)
     >>> consistent_until(x, 2)  # x[2] repeats until x[4], x[5] differs
-    4, 50
+    (4, 40)
     """
     start_val = x[start]
     for i, val in enumerate(iterate_array_from(start, x)):
@@ -505,11 +475,32 @@ def shard_df_on_index(df, blockdivs):
         a  b
     4  40  1
     """
-    cuts = pd.cut(df.index, [df.index.min()] + blockdivs + [df.index.max() + 1],
+    blockdivs = list(blockdivs)
+    cuts = pd.cut(df.index, [min(blockdivs[0], df.index.min()) - 100]
+                          + blockdivs
+                          + [max(df.index.max(), blockdivs[-1]) + 1],
                   right=False, include_lowest=True)
     groups = df.groupby(cuts).groups
     for i, cut in enumerate(cuts.categories):
-        yield df.loc[groups[cut]]
+        if cut in groups:
+            yield df.loc[list(unique(groups[cut]))]
+        else:
+            yield empty_like(df)
+
+
+def empty_like(df):
+    """
+
+    >>> df = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
+    ...                   index=['a', 'b', 'c', 'd', 'e'])
+    >>> empty_like(df)
+    Empty DataFrame
+    Columns: [a, b]
+    Index: []
+    """
+    return pd.DataFrame(columns=df.columns,
+                        dtype=df.dtypes,
+                        index=type(df.index)([]))
 
 
 def store_shards(shards, cache, key_prefix):
@@ -535,6 +526,7 @@ def shard(n, x):
     """
     for i in range(0, len(x), n):
         yield x[i: i + n]
+
 
 shuffle_names = ('shuffle-%d' % i for i in count(1))
 
@@ -599,7 +591,7 @@ def shuffle(cache, keys, blockdivs, delete=False):
     data_dsk = {('load', i): (getitem, cache, (tuple, list(key)))
                 for i, key in enumerate(keys)}
     store = {('store', i): (store_shards,
-                        (shard_df_on_index, ('load', i), (list, blockdivs)),
+                        (shard_df_on_index, ('load', i), blockdivs),
                         cache, ['shard', i])
                 for i in range(nin)}
 
@@ -626,3 +618,71 @@ def shuffle(cache, keys, blockdivs, delete=False):
 
     # Return relevant keys from the cache
     return [(name, i) for i in range(nout)]
+
+
+def blockdivs_by_sort(cache, index_name, lengths, npartitions, chunksize,
+        empty, sortsize, out_chunksize):
+    """
+    Compute proper divisions in to index by performing external sort
+    """
+    # Collect index-blocks into larger clumps for more efficient in-core sorting
+    total = 0
+    grouped_indices = []
+    grouped_lengths = []
+    tmp_ind = []
+    tmp_len = []
+    for i, l in enumerate(lengths):
+        tmp_ind.append((index_name, i))
+        tmp_len.append(l)
+        total += l
+        if total < sortsize:
+            grouped_indices.append(tmp_ind)
+            grouped_lengths.append(tmp_len)
+            tmp_ind = []
+            tmp_len = []
+
+    # Lengths of blocks of indexes - [10, 15, 10, 20]
+    total_lengths = list(map(sum, grouped_lengths))
+    # Accumlated lengths - [0, 10, 25, 35]
+    acc_lengths = list(accumulate(operator.add, [0] + total_lengths[:-1]))
+
+    # Accumulate several series together, then sort, shard, and store
+    sort = next(sort_names)
+    store2 = next(store_names)
+    first_sort = {(sort, i): (store_shards,
+                               (shard, chunksize,
+                                 (series_to_recarray,
+                                   (concat_and_sort, inds, acc_lengths[i]))),
+                               cache, (store2, i))
+                    for i, inds in enumerate(grouped_indices)}
+
+    cache_dsk = {k: (getitem, cache, (tuple, list(k))) for k in cache}
+
+    # Execute, dumping sorted shards into cache
+    blockkeys = get(merge(cache_dsk, first_sort), sorted(first_sort.keys()))
+
+    # Get out one of the indices to get the proper dtype
+    an_index_chunk = cache[(blockkeys[0][0])]
+    dtype = an_index_chunk.dtype
+    value_name = dtype.names[-1]
+
+    # Merge all of the shared blocks together into one large array
+    from .esort import emerge
+    seqs = [[cache[key] for key in bk] for bk in blockkeys]
+    sort_storage = empty(shape=sum(total_lengths), dtype=dtype)
+    emerge(seqs, out=sort_storage, key=lambda x: x[1], dtype=dtype,
+            out_chunksize=out_chunksize)
+
+    # Find good break points in that array
+    indices = []
+    blockdivs = []
+    i = out_chunksize
+    while i < len(sort_storage):
+        ind, val = consistent_until(sort_storage[value_name], i)
+        if ind is None:
+            break
+        indices.append(ind)
+        blockdivs.append(val)
+        i = ind + out_chunksize
+
+    return blockdivs
