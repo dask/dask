@@ -313,6 +313,50 @@ def blockdivs_by_sort(cache, index_name, lengths, npartitions, chunksize,
     emerge(seqs, out=sort_storage, dtype=dtype, out_chunksize=out_chunksize)
 
     # Find good break points in that array
-    blockdivs = list(sort_storage[::out_chunksize])[:-1]
+    # blockdivs = list(sort_storage[::out_chunksize])[:-1]
+    indices = []
+    blockdivs = []
+    i = out_chunksize
+    while i < len(sort_storage):
+        ind, val = consistent_until(sort_storage, i)
+        if ind is None:
+            break
+        indices.append(ind)
+        blockdivs.append(val)
+        i = ind + out_chunksize
 
     return blockdivs
+
+
+def iterate_array_from(start, x, blocksize=256):
+    """ Iterator of array starting at particular index
+
+    >>> x = np.arange(10) * 2
+    >>> seq = iterate_array_from(3, x)
+    >>> next(seq)
+    6
+    >>> next(seq)
+    8
+    """
+    for i in range(start, len(x), blocksize):
+        chunk = x[i: i+blocksize]
+        for row in chunk.tolist():
+            yield row
+
+
+def consistent_until(x, start):
+    """ Finds last index after ind with the same value as x[ind]
+
+    >>> x = np.array([10, 20, 30, 30, 30, 40, 50])
+    >>> consistent_until(x, 0)  # x[0] repeats only until x[0], x[1] differs
+    (0, 20)
+    >>> consistent_until(x, 1)  # x[1] repeats only until x[1], x[2] differs
+    (1, 30)
+    >>> consistent_until(x, 2)  # x[2] repeats until x[4], x[5] differs
+    (4, 40)
+    """
+    start_val = x[start]
+    for i, val in enumerate(iterate_array_from(start, x)):
+        if val != start_val:
+            return start + i - 1, val
+    return None, None
