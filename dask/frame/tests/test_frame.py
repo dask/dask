@@ -87,26 +87,15 @@ def test_set_index():
     d = df.Frame(dsk, 'x', [4, 9])
     full = d.compute()
 
-    d2 = df.core.set_index(d, 'b', npartitions=3, out_chunksize=3)
+    d2 = d.set_index('b', npartitions=3, out_chunksize=3)
     assert d2.npartitions == 3
-    assert eq(d2, full.set_index('b').sort())
+    # assert eq(d2, full.set_index('b').sort())
+    assert str(d2.compute()) == str(full.set_index('b').sort())
 
-    d3 = df.core.set_index(d, d.b, npartitions=3, out_chunksize=3)
+    d3 = d.set_index(d.b, npartitions=3, out_chunksize=3)
     assert d3.npartitions == 3
-    assert eq(d3, full.set_index(full.b))
-
-
-def test_shuffle():
-    f = pd.DataFrame({'name': ['Alice', 'Bob', 'Charlie', 'Dennis'],
-                       'balance': [100, 200, 300, 400]})
-    f2 = pd.DataFrame({'name': ['Edith', 'Frank', 'George', 'Hannah'],
-                        'balance': [500, 600, 700, 800]})
-    cache = {('a', 0): f, ('a', 1): f2}
-    blockdivs = [2, 3]
-    keys = [('a', 0), ('a', 1)]
-
-    result = df.core.shuffle(cache, keys, blockdivs)
-    assert eq(cache[result[0]], 0)
+    # assert eq(d3, full.set_index(full.b).sort())
+    assert str(d3.compute()) == str(full.set_index(full.b).sort())
 
 
 def test_shard_df_on_index():
