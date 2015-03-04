@@ -518,6 +518,7 @@ def store_shards(shards, cache, key_prefix):
     See Also:
         shard_on_index
     """
+    key_prefix = tuple(key_prefix)
     keys = []
     for i, shard in enumerate(shards):
         key = key_prefix + (i,)
@@ -534,3 +535,94 @@ def shard(n, x):
     """
     for i in range(0, len(x), n):
         yield x[i: i + n]
+
+shuffle_names = ('shuffle-%d' % i for i in count(1))
+
+def shuffle(cache, keys, blockdivs, delete=False):
+    """ Shuffle DataFrames on index
+
+    We shuffle a collection of DataFrames to obtain a new collection where each
+    block of the new collection is coalesced in to partition ranges given by
+    blockdims.
+
+    This shuffle happens in the context of a MutableMapping.  This Mapping
+    could support out-of-core storage.
+
+    Example
+    -------
+
+    Prepare some data indexed by normal integers
+
+    >>> a0 = pd.DataFrame({'name': ['Alice', 'Bob', 'Charlie', 'Dennis'],
+    ...                   'balance': [100, 200, 300, 400]})
+    >>> a1 = pd.DataFrame({'name': ['Edith', 'Frank', 'George', 'Hannah'],
+    ...                    'balance': [500, 600, 700, 800]})
+
+    Present that data in a dict
+
+    >>> cache = {('a', 0): a0, ('a', 1): a1}
+
+    Define the partitions of the out-blocks
+
+    >>> blockdivs = [2, 3]  # Partition to [-oo, 2), [2, 3), [3, oo)
+
+    Perform the shuffle, see new keys in the mapping
+
+    >>> keys = shuffle(cache, [('a', 0), ('a', 1)], blockdivs)
+    >>> keys  # New output keys
+    [('shuffle-1', 0), ('shuffle-1', 1), ('shuffle-1', 2)]
+
+    >>> cache[keys[0]]
+       balance   name
+    0      100  Alice
+    0      500  Edith
+    1      200    Bob
+    1      600  Frank
+
+    >>> cache[keys[1]]
+       balance     name
+    2      300  Charlie
+    2      700   George
+
+    >>> cache[keys[2]]
+       balance    name
+    3      400  Dennis
+    3      800  Hannah
+
+    In this example the index happened to be a typical integer index.  This
+    isn't necessary though.  Any index should do.
+    """
+    nin = len(keys)
+    nout = len(blockdivs) + 1
+
+    # Emit shards out from old blocks
+    data_dsk = {('load', i): (getitem, cache, (tuple, list(key)))
+                for i, key in enumerate(keys)}
+    store = {('store', i): (store_shards,
+                        (shard_df_on_index, ('load', i), (list, blockdivs)),
+                        cache, ['shard', i])
+                for i in range(nin)}
+
+    get(merge(data_dsk, store), list(store.keys()))
+
+    # Collect shards together to form new blocks
+    name = next(shuffle_names)
+    load_shards = {('shard', j, i): (getitem, cache, (tuple, ['shard', j, i]))
+                    for j in range(nin) for i in range(nout)}
+    concat = {('concat', i): (pd.DataFrame.sort, (pd.concat, (list,
+                            [('shard', j, i) for j in range(nin)])))
+                for i in range(nout)}
+    store2 = {('store', i): (setitem, cache, (tuple, [name, i]), ('concat', i))
+                for i in range(nout)}
+
+    get(merge(load_shards, concat, store2), list(store2.keys()))
+
+    # Are we trying to save space?
+    if delete:
+        for key in keys:
+            del cache[key]
+        for shard in load_shards.keys():
+            del cache[shard]
+
+    # Return relevant keys from the cache
+    return [(name, i) for i in range(nout)]

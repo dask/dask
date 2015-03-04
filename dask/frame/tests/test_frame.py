@@ -91,3 +91,16 @@ def test_set_index():
 
     assert d2.npartitions == 3
     assert eq(d2, full.set_index('b'))
+
+
+def test_shuffle():
+    f = pd.DataFrame({'name': ['Alice', 'Bob', 'Charlie', 'Dennis'],
+                       'balance': [100, 200, 300, 400]})
+    f2 = pd.DataFrame({'name': ['Edith', 'Frank', 'George', 'Hannah'],
+                        'balance': [500, 600, 700, 800]})
+    cache = {('a', 0): f, ('a', 1): f2}
+    blockdivs = [2, 3]
+    keys = [('a', 0), ('a', 1)]
+
+    result = df.core.shuffle(cache, keys, blockdivs)
+    assert eq(cache[result[0]], 0)
