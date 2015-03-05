@@ -83,6 +83,9 @@ class Frame(object):
         from .shuffle import set_index
         return set_index(self, other, **kwargs)
 
+    def groupby(self, key):
+        return GroupBy(self, key)
+
     def __abs__(self):
         return elemwise(operator.abs, self)
     def __add__(self, other):
@@ -277,3 +280,45 @@ def read_csv(fn, *args, **kwargs):
                 for i in range(nchunks))
 
     return Frame(merge(dsk, load), name, one_chunk.columns, blockdivs)
+
+
+class GroupBy(object):
+    def __init__(self, frame, index, **kwargs):
+        self.frame = frame
+        self.index = index
+        self.kwargs = kwargs
+
+    def apply(self, func):
+        f = set_index(self.frame, self.index, **self.kwargs)
+        return f.map_blocks(lambda df: df.groupby(level=0).apply(func))
+
+    def __getitem__(self, key):
+        if key in self.frame.columns:
+            return SeriesGroupBy(frame, index, key)
+        else:
+            raise KeyError()
+
+    def __dir__(self):
+        return sorted(set(list(dir(type(self))) + list(self.frame.columns)))
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            try:
+                return self[key]
+            except KeyError:
+                raise AttributeError()
+
+class SeriesGroupBy(object):
+    def __init__(self, frame, index, key):
+        self.frame = frame
+        self.index = index
+        self.key = key
+
+    def apply(func):
+        f = set_index(self.frame, self.index, **self.kwargs)
+        return f.map_blocks(lambda df: df.groupby(level=0)[self.key].apply(func))
+
+
+from .shuffle import set_index
