@@ -120,16 +120,17 @@ def shard_df_on_index(df, blockdivs):
     4  40  1
     """
     blockdivs = list(blockdivs)
-    cuts = pd.cut(df.index, [min(blockdivs[0], df.index.min()) - 100]
-                          + blockdivs
-                          + [max(df.index.max(), blockdivs[-1]) + 1],
-                  right=False, include_lowest=True)
-    groups = df.groupby(cuts).groups
-    for i, cut in enumerate(cuts.categories):
-        if cut in groups:
-            yield df.loc[list(unique(groups[cut]))]
-        else:
-            yield empty_like(df)
+    i = 0
+    start = 0
+    df = df.sort()
+    L = list(df.index)
+    n = len(L)
+    for bd in blockdivs:
+        while n > i and L[i] < bd:
+            i += 1
+        yield df.iloc[start:i]
+        start = i
+    yield df.iloc[start:]
 
 
 def empty_like(df):
@@ -184,7 +185,7 @@ def shuffle(cache, keys, blockdivs, delete=False):
 
     We shuffle a collection of DataFrames to obtain a new collection where each
     block of the new collection is coalesced in to partition ranges given by
-    blockdims.
+    blockdivs.
 
     This shuffle happens in the context of a MutableMapping.  This Mapping
     could support out-of-core storage.

@@ -1,5 +1,6 @@
 import dask.frame as df
 from dask.frame.core import linecount
+from dask.frame.shuffle import shard_df_on_index
 import pandas.util.testing as tm
 import pandas as pd
 from dask.utils import filetext
@@ -106,3 +107,21 @@ def test_shard_df_on_index():
     assert eq(result[0], f.loc[[1]])
     assert eq(result[1], f.loc[[2, 3, 4]])
     assert eq(result[2], pd.DataFrame(columns=['a', 'b'], dtype=f.dtypes))
+
+
+def test_shard_df_on_index():
+    f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
+                      index=['a', 'b', 'c', 'd', 'e'])
+    result = list(shard_df_on_index(f, ['b', 'd']))
+    assert eq(result[0], f.iloc[:1])
+    assert eq(result[1], f.iloc[1:3])
+    assert eq(result[2], f.iloc[3:])
+
+
+    f = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
+                     index=[0, 1, 3]).set_index('b').sort()
+
+    result = list(shard_df_on_index(f, [4, 9]))
+    assert eq(result[0], f.iloc[0:1])
+    assert eq(result[1], f.iloc[1:3])
+    assert eq(result[2], f.iloc[3:])
