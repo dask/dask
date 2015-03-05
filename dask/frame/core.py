@@ -2,7 +2,7 @@ from itertools import count
 from math import ceil
 import toolz
 import os
-from toolz import merge, partial, accumulate, unique
+from toolz import merge, partial, accumulate, unique, first, dissoc
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
@@ -25,9 +25,10 @@ names = ('f-%d' % i for i in count(1))
 
 
 class Frame(object):
-    def __init__(self, dask, name, blockdivs):
+    def __init__(self, dask, name, columns, blockdivs):
         self.dask = dask
         self.name = name
+        self.columns = tuple(columns)
         self.blockdivs = tuple(blockdivs)
 
     @property
@@ -47,30 +48,36 @@ class Frame(object):
     def __getitem__(self, key):
         name = next(names)
         if isinstance(key, (str, unicode)):
-            dsk = dict(((name, i), (operator.getitem, (self.name, i), key))
-                        for i in range(self.npartitions))
-            return Frame(merge(self.dask, dsk), name, self.blockdivs)
+            if key in self.columns:
+                dsk = dict(((name, i), (operator.getitem, (self.name, i), key))
+                            for i in range(self.npartitions))
+                return Frame(merge(self.dask, dsk), name, [key], self.blockdivs)
         if isinstance(key, list):
-            dsk = dict(((name, i), (operator.getitem,
-                                     (self.name, i),
-                                     (list, key)))
-                        for i in range(self.npartitions))
-            return Frame(merge(self.dask, dsk), name, self.blockdivs)
+            if all(k in self.columns for k in key):
+                dsk = dict(((name, i), (operator.getitem,
+                                         (self.name, i),
+                                         (list, key)))
+                            for i in range(self.npartitions))
+                return Frame(merge(self.dask, dsk), name, key, self.blockdivs)
         if isinstance(key, Frame) and self.blockdivs == key.blockdivs:
             dsk = dict(((name, i), (operator.getitem, (self.name, i),
                                                        (key.name, i)))
                         for i in range(self.npartitions))
-            return Frame(merge(self.dask, key.dask, dsk), name, self.blockdivs)
+            return Frame(merge(self.dask, key.dask, dsk), name,
+                         self.columns, self.blockdivs)
         raise NotImplementedError()
 
     def __getattr__(self, key):
         try:
             return object.__getattribute__(self, key)
         except AttributeError:
-            name = next(names)
-            dsk = dict(((name, i), (getattr, (self.name, i), key))
-                        for i in range(self.npartitions))
-            return Frame(merge(self.dask, dsk), name, self.blockdivs)
+            try:
+                return self[key]
+            except NotImplementedError:
+                raise AttributeError()
+
+    def __dir__(self):
+        return sorted(set(list(dir(type(self))) + list(self.columns)))
 
     def set_index(self, other, **kwargs):
         from .shuffle import set_index
@@ -155,18 +162,20 @@ class Frame(object):
     def count(self):
         return reduction(self, pd.Series.count, np.sum)
 
-    def map_blocks(self, func):
+    def map_blocks(self, func, columns=None):
+        if columns is None:
+            columns = self.columns
         name = next(names)
         dsk = dict(((name, i), (func, (self.name, i)))
                     for i in range(self.npartitions))
 
-        return Frame(merge(dsk, self.dask), name, self.blockdivs)
+        return Frame(merge(dsk, self.dask), name, columns, self.blockdivs)
 
     def head(self, n=10, compute=True):
         name = next(names)
         dsk = {(name, 0): (head, (self.name, 0), n)}
 
-        result = Frame(merge(self.dask, dsk), name, [])
+        result = Frame(merge(self.dask, dsk), name, self.columns, [])
 
         if compute:
             result = result.compute()
@@ -179,6 +188,14 @@ class Frame(object):
 
 def head(x, n):
     return x.head(n)
+
+
+def consistent_name(names):
+    names = set(n for n in names if n is not None)
+    if len(names) == 1:
+        return first(names)
+    else:
+        return None
 
 
 def elemwise(op, *args):
@@ -199,8 +216,10 @@ def elemwise(op, *args):
     dsk = dict(((name, i), (op2,) + frs)
                 for i, frs in enumerate(zip(*[f._keys() for f in frames])))
 
+    columns = [consistent_name(n for f in frames for n in f.columns)]
+
     return Frame(merge(dsk, *[f.dask for f in frames]),
-                 name, frames[0].blockdivs)
+                 name, columns, frames[0].blockdivs)
 
 
 def reduction(x, chunk, aggregate):
@@ -215,7 +234,7 @@ def reduction(x, chunk, aggregate):
     b = next(names)
     dsk2 = {(b, 0): (aggregate, (tuple, [(a, i) for i in range(x.npartitions)]))}
 
-    return Frame(merge(x.dask, dsk, dsk2), b, [])
+    return Frame(merge(x.dask, dsk, dsk2), b, x.columns, [])
 
 
 def linecount(fn):
@@ -245,6 +264,9 @@ def read_csv(fn, *args, **kwargs):
 
     blockdivs = tuple(range(chunksize, nlines, chunksize))
 
+    one_chunk = pd.read_csv(fn, *args, nrows=100, **dissoc(kwargs,
+        'chunksize'))
+
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
     load.update(dict(((read, i), (get_chunk, (read, i-1), chunksize*i))
                      for i in range(nchunks)))
@@ -254,5 +276,4 @@ def read_csv(fn, *args, **kwargs):
     dsk = dict(((name, i), (getitem, (read, i), 0))
                 for i in range(nchunks))
 
-    return Frame(merge(dsk, load), name, blockdivs)
-
+    return Frame(merge(dsk, load), name, one_chunk.columns, blockdivs)

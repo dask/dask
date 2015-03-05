@@ -86,7 +86,7 @@ def set_index(f, index, npartitions=None, cache=dict, sortsize=2**24,
 
     dsk = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
 
-    return Frame(dsk, new_keys[0][0], blockdivs)
+    return Frame(dsk, new_keys[0][0], f.columns, blockdivs)
 
 
 def shard_df_on_index(df, blockdivs):

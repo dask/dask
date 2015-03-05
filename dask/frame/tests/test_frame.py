@@ -3,7 +3,7 @@ from dask.frame.core import linecount
 from dask.frame.shuffle import shard_df_on_index
 import pandas.util.testing as tm
 import pandas as pd
-from dask.utils import filetext
+from dask.utils import filetext, raises
 import dask
 
 def eq(a, b):
@@ -20,21 +20,24 @@ def eq(a, b):
     assert a == b
 
 
-def test_frame():
-    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
-                                  index=[0, 1, 3]),
-           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
-                                  index=[5, 6, 8]),
-           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
-                                  index=[9, 9, 9])}
-    d = df.Frame(dsk, 'x', [4, 9])
+dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
+                              index=[0, 1, 3]),
+       ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
+                              index=[5, 6, 8]),
+       ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
+                              index=[9, 9, 9])}
+d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
 
+
+def test_frame():
     result = (d['a'] + 1).compute()
     expected = pd.Series([2, 3, 4, 5, 6, 7, 8, 9, 10],
                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
                         name='a')
 
     assert eq(result, expected)
+
+    assert list(d.columns) == list(['a', 'b'])
 
     assert d['b'].sum().compute() == 4+5+6 + 3+2+1 + 0+0+0
     assert d['b'].max().compute() == 6
@@ -49,6 +52,19 @@ def test_frame():
 
     assert repr(d)
 
+
+def test_attributes():
+    assert 'a' in dir(d)
+    assert 'foo' not in dir(d)
+    assert raises(AttributeError, lambda: d.foo)
+
+
+def test_column_names():
+    assert d.columns == ('a', 'b')
+    assert d[['b', 'a']].columns == ('b', 'a')
+    assert d['a'].columns == ('a',)
+    assert (d['a'] + 1).columns == ('a',)
+    assert (d['a'] + d['b']).columns == (None,)
 
 
 text = """
@@ -70,6 +86,7 @@ def test_linecount():
 def test_read_csv():
     with filetext(text) as fn:
         f = df.read_csv(fn, chunksize=3)
+        assert list(f.columns) == ['name', 'amount']
         assert f.npartitions == 2
         assert eq(f, pd.read_csv(fn))
 
@@ -85,7 +102,7 @@ def test_set_index():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
                                   index=[9, 9, 9])}
-    d = df.Frame(dsk, 'x', [4, 9])
+    d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
     d2 = d.set_index('b', npartitions=3, out_chunksize=3)
