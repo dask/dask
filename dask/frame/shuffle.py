@@ -16,7 +16,7 @@ length_names = ('len-%d' % i for i in count(1))
 
 
 def set_index(f, index, npartitions=None, cache=dict, sortsize=2**24,
-        chunksize=2**20, out_chunksize=2**24, empty=np.empty):
+        chunksize=2**20, out_chunksize=2**16, empty=np.empty):
     """ Set Frame index to new column
 
     Sorts index and realigns frame to new sorted order.  This shuffles and

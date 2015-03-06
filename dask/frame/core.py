@@ -83,8 +83,8 @@ class Frame(object):
         from .shuffle import set_index
         return set_index(self, other, **kwargs)
 
-    def groupby(self, key):
-        return GroupBy(self, key)
+    def groupby(self, key, **kwargs):
+        return GroupBy(self, key, **kwargs)
 
     def __abs__(self):
         return elemwise(operator.abs, self)
