@@ -282,6 +282,33 @@ def read_csv(fn, *args, **kwargs):
     return Frame(merge(dsk, load), name, one_chunk.columns, blockdivs)
 
 
+from_array_names = ('from-array-%d' % i for i in count(1))
+
+
+def from_array(x, chunksize=50000):
+    """ Read dask frame from any slicable array with record dtype
+
+    Uses getitem syntax to pull slices out of the array.  The array need not be
+    a NumPy array but must support slicing syntax
+
+        x[50000:100000]
+
+    and have a record dtype
+
+        x.dtype == [('name', 'O'), ('balance', 'i8')]
+
+    """
+    columns = tuple(x.dtype.names)
+    blockdivs = tuple(range(chunksize, len(x), chunksize))
+    name = next(from_array_names)
+    dsk = {(name, i): (pd.DataFrame,
+                        (getitem, x,
+                            (slice(i * chunksize, (i + 1) * chunksize),)))
+            for i in range(0, len(x) // chunksize + 1)}
+
+    return Frame(dsk, name, columns, blockdivs)
+
+
 class GroupBy(object):
     def __init__(self, frame, index, **kwargs):
         self.frame = frame

@@ -3,6 +3,7 @@ from dask.frame.core import linecount
 from dask.frame.shuffle import shard_df_on_index
 import pandas.util.testing as tm
 import pandas as pd
+import numpy as np
 from dask.utils import filetext, raises
 import dask
 
@@ -142,3 +143,14 @@ def test_shard_df_on_index():
     assert eq(result[0], f.iloc[0:1])
     assert eq(result[1], f.iloc[1:3])
     assert eq(result[2], f.iloc[3:])
+
+
+def test_from_array():
+    x = np.array([(i, i*10) for i in range(10)],
+                 dtype=[('a', 'i4'), ('b', 'i4')])
+    d = df.from_array(x, chunksize=4)
+
+    assert list(d.columns) == ['a', 'b']
+    assert d.blockdivs == (4, 8)
+
+    assert (d.compute().to_records(index=False) == x).all()
