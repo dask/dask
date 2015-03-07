@@ -28,7 +28,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
 d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
-
+full = d.compute()
 
 def test_frame():
     result = (d['a'] + 1).compute()
@@ -55,6 +55,8 @@ def test_frame():
     assert np.allclose(d.b.std().compute(), full.b.std())
 
     assert repr(d)
+
+
 
 
 def test_attributes():
@@ -157,3 +159,21 @@ def test_from_array():
     assert d.blockdivs == (4, 8)
 
     assert (d.compute().to_records(index=False) == x).all()
+
+
+def test_split_apply_combine_on_series():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 6], 'b': [4, 2., 7]},
+                                  index=[0, 1, 3]),
+           ('x', 1): pd.DataFrame({'a': [4, 2, 6], 'b': [3, 3, 1]},
+                                  index=[5, 6, 8]),
+           ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
+                                  index=[9, 9, 9])}
+    d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+    full = d.compute()
+
+    assert eq(d.groupby('b').a.sum(), full.groupby('b').a.sum())
+    assert eq(d.groupby('b').a.min(), full.groupby('b').a.min())
+    assert eq(d.groupby('a').b.max(), full.groupby('a').b.max())
+    assert eq(d.groupby('b').a.count(), full.groupby('b').a.count())
+
+    assert eq(d.groupby('a').b.mean(), full.groupby('a').b.mean())

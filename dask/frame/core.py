@@ -349,7 +349,7 @@ class GroupBy(object):
 
     def __getitem__(self, key):
         if key in self.frame.columns:
-            return SeriesGroupBy(frame, index, key)
+            return SeriesGroupBy(self.frame, self.index, key)
         else:
             raise KeyError()
 
@@ -374,6 +374,59 @@ class SeriesGroupBy(object):
     def apply(func):
         f = set_index(self.frame, self.index, **self.kwargs)
         return f.map_blocks(lambda df: df.groupby(level=0)[self.key].apply(func))
+
+    def sum(self):
+        chunk = lambda df: df.groupby(self.index)[self.key].sum()
+        agg = lambda df: df.groupby(level=0).sum()
+        return aca(self.frame, chunk, agg, [self.key])
+
+    def min(self):
+        chunk = lambda df: df.groupby(self.index)[self.key].min()
+        agg = lambda df: df.groupby(level=0).min()
+        return aca(self.frame, chunk, agg, [self.key])
+
+    def max(self):
+        chunk = lambda df: df.groupby(self.index)[self.key].max()
+        agg = lambda df: df.groupby(level=0).max()
+        return aca(self.frame, chunk, agg, [self.key])
+
+    def count(self):
+        chunk = lambda df: df.groupby(self.index)[self.key].count()
+        agg = lambda df: df.groupby(level=0).sum()
+        return aca(self.frame, chunk, agg, [self.key])
+
+    def mean(self):
+        def chunk(df):
+            g = df.groupby(self.index)
+            return g.agg({self.key: ['sum', 'count']})
+        def agg(df):
+            g = df.groupby(level=0)
+            x = g.agg({(self.key, 'sum'): 'sum',
+                       (self.key, 'count'): 'sum'})
+            return 1.0 * x[self.key]['sum'] / x[self.key]['count']
+        return aca(self.frame, chunk, agg, [])
+
+
+def _groupby(df, index):
+    return df.groupby(index)
+
+def apply_concat_apply(x, chunk, aggregate, columns):
+    """ Apply a function to blocks, the concat, then apply again
+
+    >>> aggregate(f, func_per_block, func_on_aggregate)  # doctest: +SKIP
+    """
+    a = next(names)
+    dsk = dict(((a, i), (chunk, (x.name, i)))
+                for i in range(x.npartitions))
+
+    b = next(names)
+    dsk2 = {(b, 0): (aggregate,
+                      (pd.concat,
+                        (list, [(a, i) for i in range(x.npartitions)])))}
+
+    return Frame(merge(x.dask, dsk, dsk2), b, x.columns, [])
+
+aca = apply_concat_apply
 
 
 from .shuffle import set_index
