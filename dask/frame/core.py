@@ -1,5 +1,5 @@
 from itertools import count
-from math import ceil
+from math import ceil, sqrt
 import toolz
 import os
 from toolz import merge, partial, accumulate, unique, first, dissoc
@@ -164,6 +164,34 @@ class Frame(object):
         return reduction(self, pd.Series.min, np.min)
     def count(self):
         return reduction(self, pd.Series.count, np.sum)
+
+    def mean(self):
+        def chunk(ser):
+            return (ser.sum(), ser.count())
+        def agg(seq):
+            sums, counts = list(zip(*seq))
+            return 1.0 * sum(sums) / sum(counts)
+        return reduction(self, chunk, agg)
+
+    def var(self, ddof=1):
+        def chunk(ser):
+            return (ser.sum(), (ser**2).sum(), ser.count())
+        def agg(seq):
+            x, x2, n = list(zip(*seq))
+            x = float(sum(x))
+            x2 = float(sum(x2))
+            n = sum(n)
+            result = (x2 / n) - (x / n)**2
+            if ddof:
+                result = result * n / (n - ddof)
+            return result
+        return reduction(self, chunk, agg)
+
+    def std(self, ddof=1):
+        name = next(names)
+        f = self.var(ddof=ddof)
+        dsk = {(name, 0): (sqrt, (f.name, 0))}
+        return Frame(merge(f.dask, dsk), name, [], [])
 
     def map_blocks(self, func, columns=None):
         if columns is None:

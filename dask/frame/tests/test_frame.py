@@ -50,6 +50,9 @@ def test_frame():
     assert eq(d[d['b'] > 2], full[full['b'] > 2])
     assert eq(d[['a', 'b']], full[['a', 'b']])
     assert eq(d.a, full.a)
+    assert d.b.mean().compute() == full.b.mean()
+    assert np.allclose(d.b.var().compute(), full.b.var())
+    assert np.allclose(d.b.std().compute(), full.b.std())
 
     assert repr(d)
 
