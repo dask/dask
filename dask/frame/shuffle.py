@@ -52,7 +52,9 @@ def set_index(f, index, npartitions=None, cache=dict, sortsize=2**24,
                     for i in range(f.npartitions)}
     else:
         raise ValueError("Invalid index")
-    _indexes = {(indexname, i): (getattr, (set_index, i), 'index')
+    _indexes = {(indexname, i): (getattr,
+                                  (getattr, (set_index, i), 'index'),
+                                  'values')
                 for i in range(f.npartitions)}
     _stores = {(store, i): (setitem, cache,
                                 (tuple, [set_index, i]),
