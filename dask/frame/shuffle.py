@@ -3,6 +3,7 @@ from toolz import merge, accumulate, unique
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
+from chest import Chest
 
 from .core import Frame, get
 from ..compatibility import unicode
@@ -15,7 +16,7 @@ index_names = ('index-%d' % i for i in count(1))
 length_names = ('len-%d' % i for i in count(1))
 
 
-def set_index(f, index, npartitions=None, cache=dict, sortsize=2**24,
+def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
         chunksize=2**20, out_chunksize=2**16, empty=np.empty):
     """ Set Frame index to new column
 

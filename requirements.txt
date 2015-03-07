@@ -2,3 +2,4 @@ toolz
 numpy
 psutil
 dill
+chest
