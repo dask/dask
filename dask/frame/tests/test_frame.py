@@ -172,8 +172,10 @@ def test_split_apply_combine_on_series():
     full = d.compute()
 
     assert eq(d.groupby('b').a.sum(), full.groupby('b').a.sum())
+    assert eq(d.groupby(d.b + 1).a.sum(), full.groupby(full.b + 1).a.sum())
     assert eq(d.groupby('b').a.min(), full.groupby('b').a.min())
     assert eq(d.groupby('a').b.max(), full.groupby('a').b.max())
     assert eq(d.groupby('b').a.count(), full.groupby('b').a.count())
 
     assert eq(d.groupby('a').b.mean(), full.groupby('a').b.mean())
+    assert eq(d.groupby(d.a > 3).b.mean(), full.groupby(full.a > 3).b.mean())

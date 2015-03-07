@@ -8,6 +8,7 @@ from chest import Chest
 from .core import Frame, get
 from ..compatibility import unicode
 
+
 tokens = ('-%d' % i for i in count(1))
 
 store_names = ('store-%d' % i for i in count(1))

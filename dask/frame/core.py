@@ -376,55 +376,85 @@ class SeriesGroupBy(object):
         return f.map_blocks(lambda df: df.groupby(level=0)[self.key].apply(func))
 
     def sum(self):
-        chunk = lambda df: df.groupby(self.index)[self.key].sum()
+        chunk = lambda df, index: df.groupby(index)[self.key].sum()
         agg = lambda df: df.groupby(level=0).sum()
-        return aca(self.frame, chunk, agg, [self.key])
+        return aca([self.frame, self.index],
+                   chunk=chunk, aggregate=agg, columns=[self.key])
 
     def min(self):
-        chunk = lambda df: df.groupby(self.index)[self.key].min()
+        chunk = lambda df, index: df.groupby(index)[self.key].min()
         agg = lambda df: df.groupby(level=0).min()
-        return aca(self.frame, chunk, agg, [self.key])
+        return aca([self.frame, self.index],
+                   chunk=chunk, aggregate=agg, columns=[self.key])
 
     def max(self):
-        chunk = lambda df: df.groupby(self.index)[self.key].max()
+        chunk = lambda df, index: df.groupby(index)[self.key].max()
         agg = lambda df: df.groupby(level=0).max()
-        return aca(self.frame, chunk, agg, [self.key])
+        return aca([self.frame, self.index],
+                   chunk=chunk, aggregate=agg, columns=[self.key])
 
     def count(self):
-        chunk = lambda df: df.groupby(self.index)[self.key].count()
+        chunk = lambda df, index: df.groupby(index)[self.key].count()
         agg = lambda df: df.groupby(level=0).sum()
-        return aca(self.frame, chunk, agg, [self.key])
+        return aca([self.frame, self.index],
+                   chunk=chunk, aggregate=agg, columns=[self.key])
 
     def mean(self):
-        def chunk(df):
-            g = df.groupby(self.index)
+        def chunk(df, index):
+            g = df.groupby(index)
             return g.agg({self.key: ['sum', 'count']})
         def agg(df):
             g = df.groupby(level=0)
             x = g.agg({(self.key, 'sum'): 'sum',
                        (self.key, 'count'): 'sum'})
             return 1.0 * x[self.key]['sum'] / x[self.key]['count']
-        return aca(self.frame, chunk, agg, [])
+        return aca([self.frame, self.index],
+                   chunk=chunk, aggregate=agg, columns=[])
 
 
 def _groupby(df, index):
     return df.groupby(index)
 
-def apply_concat_apply(x, chunk, aggregate, columns):
+def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
     """ Apply a function to blocks, the concat, then apply again
 
-    >>> aggregate(f, func_per_block, func_on_aggregate)  # doctest: +SKIP
+    Parameters
+    ----------
+
+    args: dask.Frames
+        All frames should be partitioned and indexed equivalently
+    chunk: function [block-per-arg] -> block
+        Function to operate on each block of data
+    aggregate: function concatenated-block -> block
+        Function to operate on the concatenated result of chunk
+
+    >>> def chunk(a_block, b_block):
+    ...     pass
+
+    >>> def agg(df):
+    ...     pass
+
+    >>> apply_concat_apply([a, b], chunk=chunk, aggregate=agg)  # doctest: +SKIP
     """
+    if not isinstance(args, (tuple, list)):
+        args = [args]
+    assert all(arg.npartitions == args[0].npartitions
+                for arg in args
+                if isinstance(arg, Frame))
     a = next(names)
-    dsk = dict(((a, i), (chunk, (x.name, i)))
-                for i in range(x.npartitions))
+    dsk = dict(((a, i), (apply, chunk, (list, [(x.name, i)
+                                                if isinstance(x, Frame)
+                                                else x for x in args])))
+                for i in range(args[0].npartitions))
 
     b = next(names)
     dsk2 = {(b, 0): (aggregate,
                       (pd.concat,
-                        (list, [(a, i) for i in range(x.npartitions)])))}
+                        (list, [(a, i) for i in range(args[0].npartitions)])))}
 
-    return Frame(merge(x.dask, dsk, dsk2), b, x.columns, [])
+    return Frame(
+            merge(dsk, dsk2, *[a.dask for a in args if isinstance(a, Frame)]),
+            b, columns, [])
 
 aca = apply_concat_apply
 
