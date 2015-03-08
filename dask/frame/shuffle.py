@@ -482,7 +482,7 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     # the behavior of different interpolation methods should be
     # investigated further.
     if interpolation == 'linear':
-        np.interp(desired_q, combined_q, combined_vals)
+        rv = np.interp(desired_q, combined_q, combined_vals)
     else:
         left = np.searchsorted(combined_q, desired_q, side='left')
         right = np.searchsorted(combined_q, desired_q, side='right') - 1
