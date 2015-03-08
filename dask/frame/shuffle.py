@@ -1,5 +1,5 @@
 from itertools import count
-from toolz import merge, accumulate, unique
+from toolz import merge, accumulate, unique, merge_sorted
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
@@ -435,3 +435,74 @@ def consistent_until(x, start):
         if val != start_val:
             return start + i - 1, val
     return None, None
+
+
+def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
+    """ Combine several percentile calculations of different data.
+
+    Parameters
+    ----------
+    finalq : numpy.array
+        Percentiles to compute (must use same scale as ``qs``.
+    qs : sequence of numpy.arrays
+        Percentiles calculated on different sets of data.
+    vals : sequence of numpy.arrays
+        Resulting values associated with percentiles ``qs``.
+    Ns : sequence of integers
+        The number of data elements associated with each data set.
+    interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
+        Specify the type of interpolation to use to calculate final
+        percentiles.  For more information, see numpy.percentile.
+    """
+    if len(vals) != len(qs) or len(Ns) != len(qs):
+        raise ValueError('qs, vals, and Ns parameters must be the same length')
+
+    # transform qs and Ns into number of observations between percentiles
+    counts = []
+    for q, N in zip(qs, Ns):
+        count = np.empty(len(q))
+        count[1:] = np.diff(q)
+        count[0] = q[0]
+        count *= N
+        counts.append(count)
+
+    # sort by calculated percentile values, then number of observations
+    combined_vals_counts = merge_sorted(*map(zip, vals, counts))
+    combined_vals, combined_counts = zip(*combined_vals_counts)
+
+    combined_vals = np.array(combined_vals)
+    combined_counts = np.array(combined_counts)
+
+    # percentile-like, but scaled by total number of observations
+    combined_q = np.cumsum(combined_counts)
+
+    # rescale finalq percentiles to match combined_q
+    desired_q = finalq * sum(Ns)
+
+    # the behavior of different interpolation methods should be
+    # investigated further.
+    if interpolation == 'linear':
+        np.interp(desired_q, combined_q, combined_vals)
+    else:
+        left = np.searchsorted(combined_q, desired_q, side='left')
+        right = np.searchsorted(combined_q, desired_q, side='right') - 1
+        lower = np.minimum(left, right)
+        upper = np.maximum(left, right)
+        if interpolation == 'lower':
+            rv = combined_vals[lower]
+        elif interpolation == 'higher':
+            rv = combined_vals[upper]
+        elif interpolation == 'midpoint':
+            rv = 0.5*(combined_vals[lower] + combined_vals[upper])
+        elif interpolation == 'nearest':
+            lower_residual = np.abs(cum[lower] - desired_q)
+            upper_residual = np.abs(cum[upper] - desired_q)
+            mask = lower_residual > upper_residual
+            index = lower  # alias; we no longer need lower
+            index[mask] = upper[mask]
+            rv = combined_vals[index]
+        else:
+            raise ValueError("interpolation can only be 'linear', 'lower', "
+                             "'higher', 'midpoint', or 'nearest'")
+    return rv
+
