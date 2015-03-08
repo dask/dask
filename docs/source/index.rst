@@ -20,7 +20,7 @@ Contents
    array.rst
    faq.rst
 
-Into is part of the Open Source Blaze_ projects supported by `Continuum Analytics`_
+Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 
 .. _Blaze: http://continuum.io/open-source/blaze/
 .. _`Continuum Analytics`: http://continuum.io
