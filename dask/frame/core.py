@@ -13,6 +13,7 @@ from .. import core
 from ..array.core import partial_by_order
 from ..async import get_sync
 from ..compatibility import unicode
+from ..utils import repr_long_list
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
@@ -106,10 +107,8 @@ class Frame(object):
         return elemwise(operator.gt, self, other)
     def __ge__(self, other):
         return elemwise(operator.ge, self, other)
-    def __lshift__(self, other):
-        return elemwise(operator.lshift, self, other)
-    def __rlshift__(self, other):
-        return elemwise(operator.lshift, other, self)
+    def __invert__(self):
+        return elemwise(operator.inv, self)
     def __lt__(self, other):
         return elemwise(operator.lt, self, other)
     def __le__(self, other):
@@ -134,10 +133,6 @@ class Frame(object):
         return elemwise(operator.pow, self, other)
     def __rpow__(self, other):
         return elemwise(operator.pow, other, self)
-    def __rshift__(self, other):
-        return elemwise(operator.rshift, self, other)
-    def __rrshift__(self, other):
-        return elemwise(operator.rshift, other, self)
     def __sub__(self, other):
         return elemwise(operator.sub, self, other)
     def __rsub__(self, other):
@@ -214,7 +209,7 @@ class Frame(object):
 
     def __repr__(self):
         return ("dask.frame<%s, blockdivs=%s>" %
-                (self.name, self.blockdivs))
+                (self.name, repr_long_list(self.blockdivs)))
 
 
 def head(x, n):
@@ -343,6 +338,11 @@ class GroupBy(object):
         self.index = index
         self.kwargs = kwargs
 
+        if isinstance(index, list):
+            assert all(i in frame.columns for i in index)
+        elif not isinstance(index, Frame):
+            assert index in frame.columns
+
     def apply(self, func):
         f = set_index(self.frame, self.index, **self.kwargs)
         return f.map_blocks(lambda df: df.groupby(level=0).apply(func))
@@ -411,9 +411,6 @@ class SeriesGroupBy(object):
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[])
 
-
-def _groupby(df, index):
-    return df.groupby(index)
 
 def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
     """ Apply a function to blocks, the concat, then apply again

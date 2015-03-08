@@ -18,7 +18,8 @@ def eq(a, b):
     if isinstance(a, pd.Series):
         tm.assert_series_equal(a, b)
         return True
-    assert a == b
+    assert np.allclose(a, b)
+    return True
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -40,9 +41,6 @@ def test_frame():
 
     assert list(d.columns) == list(['a', 'b'])
 
-    assert d['b'].sum().compute() == 4+5+6 + 3+2+1 + 0+0+0
-    assert d['b'].max().compute() == 6
-
     assert eq(d.head(2), dsk[('x', 0)].head(2))
     assert eq(d['a'].head(2), dsk[('x', 0)]['a'].head(2))
 
@@ -55,8 +53,6 @@ def test_frame():
     assert np.allclose(d.b.std().compute(), full.b.std())
 
     assert repr(d)
-
-
 
 
 def test_attributes():
@@ -179,3 +175,85 @@ def test_split_apply_combine_on_series():
 
     assert eq(d.groupby('a').b.mean(), full.groupby('a').b.mean())
     assert eq(d.groupby(d.a > 3).b.mean(), full.groupby(full.a > 3).b.mean())
+
+
+def test_arithmetic():
+    assert eq(d.a + d.b, full.a + full.b)
+    assert eq(d.a * d.b, full.a * full.b)
+    assert eq(d.a - d.b, full.a - full.b)
+    assert eq(d.a / d.b, full.a / full.b)
+    assert eq(d.a & d.b, full.a & full.b)
+    assert eq(d.a | d.b, full.a | full.b)
+    assert eq(d.a ^ d.b, full.a ^ full.b)
+    assert eq(d.a // d.b, full.a // full.b)
+    assert eq(d.a ** d.b, full.a ** full.b)
+    assert eq(d.a % d.b, full.a % full.b)
+    assert eq(d.a > d.b, full.a > full.b)
+    assert eq(d.a < d.b, full.a < full.b)
+    assert eq(d.a >= d.b, full.a >= full.b)
+    assert eq(d.a <= d.b, full.a <= full.b)
+    assert eq(d.a == d.b, full.a == full.b)
+    assert eq(d.a != d.b, full.a != full.b)
+
+    assert eq(d.a + 2, full.a + 2)
+    assert eq(d.a * 2, full.a * 2)
+    assert eq(d.a - 2, full.a - 2)
+    assert eq(d.a / 2, full.a / 2)
+    assert eq(d.a & True, full.a & True)
+    assert eq(d.a | True, full.a | True)
+    assert eq(d.a ^ True, full.a ^ True)
+    assert eq(d.a // 2, full.a // 2)
+    assert eq(d.a ** 2, full.a ** 2)
+    assert eq(d.a % 2, full.a % 2)
+    assert eq(d.a > 2, full.a > 2)
+    assert eq(d.a < 2, full.a < 2)
+    assert eq(d.a >= 2, full.a >= 2)
+    assert eq(d.a <= 2, full.a <= 2)
+    assert eq(d.a == 2, full.a == 2)
+    assert eq(d.a != 2, full.a != 2)
+
+    assert eq(2 + d.b, 2 + full.b)
+    assert eq(2 * d.b, 2 * full.b)
+    assert eq(2 - d.b, 2 - full.b)
+    assert eq(2 / d.b, 2 / full.b)
+    assert eq(True & d.b, True & full.b)
+    assert eq(True | d.b, True | full.b)
+    assert eq(True ^ d.b, True ^ full.b)
+    assert eq(2 // d.b, 2 // full.b)
+    assert eq(2 ** d.b, 2 ** full.b)
+    assert eq(2 % d.b, 2 % full.b)
+    assert eq(2 > d.b, 2 > full.b)
+    assert eq(2 < d.b, 2 < full.b)
+    assert eq(2 >= d.b, 2 >= full.b)
+    assert eq(2 <= d.b, 2 <= full.b)
+    assert eq(2 == d.b, 2 == full.b)
+    assert eq(2 != d.b, 2 != full.b)
+
+    assert eq(-d.a, -full.a)
+    assert eq(abs(d.a), abs(full.a))
+    assert eq(~(d.a == d.b), ~(full.a == full.b))
+    assert eq(~(d.a == d.b), ~(full.a == full.b))
+
+
+def test_reductions():
+    assert eq(d.b.sum(), full.b.sum())
+    assert eq(d.b.min(), full.b.min())
+    assert eq(d.b.max(), full.b.max())
+    assert eq(d.b.count(), full.b.count())
+    assert eq(d.b.std(), full.b.std())
+    assert eq(d.b.var(), full.b.var())
+    assert eq(d.b.mean(), full.b.mean())
+
+
+def test_map_blocks():
+    assert eq(d.map_blocks(lambda df: df), full)
+
+
+def test_full_groupby():
+    assert raises(Exception, lambda: d.groupby('does_not_exist'))
+    assert raises(Exception, lambda: d.groupby('a').does_not_exist)
+    assert 'b' in dir(d.groupby('a'))
+    def func(df):
+        df['b'] = df.b - df.b.mean()
+        return df
+    # assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
