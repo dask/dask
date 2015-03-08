@@ -443,7 +443,7 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     Parameters
     ----------
     finalq : numpy.array
-        Percentiles to compute (must use same scale as ``qs``.
+        Percentiles to compute (must use same scale as ``qs``).
     qs : sequence of numpy.arrays
         Percentiles calculated on different sets of data.
     vals : sequence of numpy.arrays
@@ -495,8 +495,8 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
         elif interpolation == 'midpoint':
             rv = 0.5*(combined_vals[lower] + combined_vals[upper])
         elif interpolation == 'nearest':
-            lower_residual = np.abs(cum[lower] - desired_q)
-            upper_residual = np.abs(cum[upper] - desired_q)
+            lower_residual = np.abs(combined_q[lower] - desired_q)
+            upper_residual = np.abs(combined_q[upper] - desired_q)
             mask = lower_residual > upper_residual
             index = lower  # alias; we no longer need lower
             index[mask] = upper[mask]
