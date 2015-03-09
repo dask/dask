@@ -68,8 +68,8 @@ class Item(object):
         self.key = key
         self.get = get
 
-    def compute(self):
-        return self.get(self.dask, self.key)
+    def compute(self, **kwargs):
+        return self.get(self.dask, self.key, **kwargs)
 
     __int__ = __float__ = __complex__ = __bool__ = compute
 
@@ -329,13 +329,15 @@ class Bag(object):
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def __iter__(self):
-        results = self.get(self.dask, self._keys())
+    def compute(self, **kwargs):
+        results = self.get(self.dask, self._keys(), **kwargs)
         if isinstance(results[0], Iterable):
             results = concat(results)
         if not isinstance(results, Iterator):
             results = iter(results)
         return results
+
+    __iter__ = compute
 
 
 def dictitems(d):
