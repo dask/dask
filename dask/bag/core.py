@@ -4,6 +4,7 @@ import itertools
 import math
 from glob import glob
 import heapq
+import inspect
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map, partition_all,
@@ -17,6 +18,7 @@ except ImportError:
 from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse
+from ..compatibility import apply
 
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -163,6 +165,8 @@ class Bag(object):
 
     def map(self, func):
         name = next(names)
+        if takes_multiple_arguments(func):
+            func = curry(apply, func)
         dsk = dict(((name, i), (list, (map, func, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
@@ -349,3 +353,33 @@ class Bag(object):
 def dictitems(d):
     """ A pickleable version of dict.items """
     return list(d.items())
+
+
+def takes_multiple_arguments(func):
+    """
+
+    >>> def f(x, y): pass
+    >>> takes_multiple_arguments(f)
+    True
+
+    >>> def f(x): pass
+    >>> takes_multiple_arguments(f)
+    False
+
+    >>> def f(x, y=None): pass
+    >>> takes_multiple_arguments(f)
+    False
+
+    >>> def f(*args): pass
+    >>> takes_multiple_arguments(f)
+    True
+    """
+    try:
+        spec = inspect.getargspec(func)
+    except:
+        return False
+    if spec.varargs:
+        return True
+    if spec.defaults is None:
+        return len(spec.args) != 1
+    return len(spec.args) - len(spec.defaults) > 1
