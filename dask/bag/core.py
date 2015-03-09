@@ -17,7 +17,7 @@ except ImportError:
 from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse
-
+from .reblock import reblock,intersect_blockdims
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
@@ -172,7 +172,12 @@ class Bag(object):
         dsk = dict(((name, i), (func, (self.name, i)))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
+    def reblock(self, blockdims):
+   
+        old_to_new = intersect_blockdims(self.blockdims, blockdims)
+        curry(reblock, old_to_new, blockdims)
 
+        self.map_partitions()
     def pluck(self, key):
         name = next(names)
         if isinstance(key, list):

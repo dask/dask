@@ -1,7 +1,12 @@
 from __future__ import absolute_import, division, print_function
-
+from itertools import count, product, chain, accumulate
+from operator import getitem, add, mul, ifloordiv
 import numpy as np
+from toolz import merge, reduce
 from dask.utils import ignoring
+from dask.array.core import rec_concatenate, Array
+
+reblock_names  = ('reblock-%d' % i for i in count(1))
 
 def intersect_blockdims_1d(old, new):
 	summ = sum(old)
@@ -52,63 +57,48 @@ def intersect_blockdims_1d(old, new):
 
 			adding = (cnt, slice(start, endd))
 			ret[-1].append(adding)
-		print('so,sn', sum_old, sum_new, ret)
 		if sum_old == summ and sum_new == summ:
 			break
 	return tuple(map(tuple, ret))
 
 def intersect_blockdims(old, new):
-	return tuple(intersect_blockdims_1d(o, n) for o,n in zip(old,new))
+	old_to_new =  tuple(intersect_blockdims_1d(o, n) for o,n in zip(old,new))
+	cross = tuple(product(*old_to_new))
+	cross = tuple(chain(tuple(product(*cr)) for cr in cross))
+	return (old_to_new, cross)
 
 
-import itertools
-from operator import add
-import numpy as np
-from dask.utils import ignoring
-from toolz import accumulate
-
-def cumdims(blockdims):
-    return [list(accumulate(add, (0,) + bds)) for bds in blockdims]
-
-def intersect_blockdims_other(old, new):
-    oc, nc = map(cumdims, (old, new))
-    new_cum = tuple(tuple(zip((0,) * len(nci),  nci,(0,) + nw,  tuple(range(len(nw))))) for nci, nw in zip(nc, new))
-    old_cum = tuple(tuple(zip((1,) * len(oci),  oci,(0,) + od, (None,) + tuple(range(len(od))))) for oci, od in zip(oc, old))
-    breaks = tuple(sorted(oci + nci, key = lambda x: (x[1], x[0])) for oci, nci in zip(old_cum, new_cum))
-
-    old_inds = [ [0] + [b[idx][1] - b[idx-1][1] for idx in range(1,len(b))] for b in breaks]
-    inds = tuple(tuple( b + (o,) for b, o in zip(breaks[idx],old_inds[idx])) for idx in range(len(breaks)))
-    final = []
-    # clean up all these naming messes
-    for ind in inds:
-        old_idx = 0
-        idx_new_old2 = 0
-        ret = [[]]
-        for (is_old, cumm, old_chunk, idx_new_old, length) in ind:
-            if idx_new_old2 != idx_new_old:
-                old_idx = 0
-            if is_old:
-                idx_new_old2 = idx_new_old
-            if length:
-                ret[-1].append((idx_new_old2, slice(old_idx, old_idx + length)))
-            old_idx = old_idx + length
-            if not is_old:
-                ret.append([])
-        final.append(tuple(filter(None, map(tuple, ret))))
-    return tuple(final)
-
-
-def reblock(dsk, old_to_new, block_id):
-    getting = dict()
-    dsk2 = dict()
-    layer1 = map(itertools.product, itertools.product(*old_to_new))
-    # do more stuff here...
-    return layer1
-
-if _ename__ == "__main__":
-    import pprint
-    old = ((20,20,20),(10,)*2)
-    new = ((15,)*2, (15,5))
-    print('With old = ', old, 'new = ', new,'intersect_blockdims = ')
-    i = intersect_blockdims(old, new)
-    pprint.pprint(i)
+def reblock(dsk, blockdims):
+	"""
+	Convert blocks in dsk for new blockdims.
+	"""
+	(old_to_new, crossed) = intersect_blockdims(dsk.blockdims, blockdims)
+	dsk2 = dict()
+	temp_name = next(reblock_names)
+	new_index = tuple(product(*(tuple(range(len(n))) for n in blockdims)))
+	for flat_idx, cross1 in enumerate(crossed):
+		new_idx = new_index[flat_idx]
+		key = (temp_name,) + new_idx
+		cr2 = iter(cross1)
+		old_blocks = tuple(tuple(ind  for ind,_ in cr) for cr in cross1)
+		subdims = tuple(len(set(ss[i] for ss in old_blocks)) for i in range(dsk.ndim))
+		# rec_cat_arg following is to allocate an ndarray of lists
+		# as a template for the argument to rec_concatenate
+		rec_cat_arg =np.empty(subdims).tolist()
+		inds_in_block = product(*(range(s) for s in subdims))
+		for old_block in old_blocks:
+			ind_slics = next(cr2)
+			old_inds = tuple(tuple(s[0] for s in ind_slics) for i in range(dsk.ndim))
+			# list of nd slices
+			slic = tuple(tuple(s[1] for s in ind_slics)  for i in range(dsk.ndim))
+			ind_in_blk = next(inds_in_block)
+			temp = rec_cat_arg
+			for i in range(dsk.ndim -1):  
+				# getitem up to the inner most list in ND array of lists
+				temp = getitem(temp, ind_in_blk[i])
+			for ind, slc in zip(old_inds, slic):
+				# set item there with rec cat slices
+				temp[ind_in_blk[-1]] = (getitem, (dsk.name,) + ind, slc)
+		dsk2[key] = (rec_concatenate, rec_cat_arg)
+	dsk2 = merge(dsk.dask, dsk2)
+	return Array(dsk2, temp_name, blockdims = blockdims)
