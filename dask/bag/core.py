@@ -107,6 +107,9 @@ class Bag(object):
         Or a globstring
 
         >>> b = Bag.from_filenames('myfiles.*.txt')  # doctest: +SKIP
+
+        See also:
+            from_sequence: A more generic bag creation function
         """
         if isinstance(filenames, str):
             filenames = sorted(glob(filenames))
@@ -140,6 +143,9 @@ class Bag(object):
         -------
 
         >>> b = Bag.from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
+
+        See also:
+            from_sequence: Specialized bag creation function for textfiles
         """
         seq = list(seq)
         if npartitions and not partition_size:
