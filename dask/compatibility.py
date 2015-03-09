@@ -10,9 +10,12 @@ if PY3:
     from queue import Queue
     unicode = str
     long = int
+    def apply(func, args):
+        return func(*args)
 else:
     import __builtin__ as builtins
     from Queue import Queue
     import operator
     unicode = unicode
     long = long
+    apply = apply
