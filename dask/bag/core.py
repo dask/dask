@@ -374,7 +374,10 @@ def takes_multiple_arguments(func):
     >>> takes_multiple_arguments(f)
     True
     """
-    spec = inspect.getargspec(func)
+    try:
+        spec = inspect.getargspec(func)
+    except:
+        return False
     if spec.varargs:
         return True
     if spec.defaults is None:
