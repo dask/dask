@@ -85,9 +85,15 @@ class Frame(object):
         return set_index(self, other, **kwargs)
 
     def set_partition(self, column, blockdivs, **kwargs):
+        """ Set explicit blockdivs for new column index
+
+        >>> df2 = df.set_partition('new-index-column', blockdivs=[10, 20, 50])  # doctest: +SKIP
+
+        See also:
+            set_index
+        """
         from .shuffle import set_partition
         return set_partition(self, column, blockdivs, **kwargs)
-
 
     def groupby(self, key, **kwargs):
         return GroupBy(self, key, **kwargs)
