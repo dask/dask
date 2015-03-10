@@ -17,7 +17,6 @@ except ImportError:
 from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse
-from .reblock import reblock,intersect_blockdims
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))

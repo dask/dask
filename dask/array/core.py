@@ -677,8 +677,9 @@ class Array(object):
     def map_blocks(self, func, blockshape=None, blockdims=None):
         return map_blocks(self, func, blockshape=blockshape,
                 blockdims=blockdims)
-
-
+    def reblock(self, blockdims=None, blockshape=None):
+        from .reblock import reblock
+        return reblock(self, blockdims=blockdims, blockshape=blockshape)
 def from_array(x, blockdims=None, blockshape=None, name=None, **kwargs):
     """ Create dask array from something that looks like an array
 
