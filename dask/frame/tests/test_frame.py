@@ -251,6 +251,10 @@ def test_map_blocks():
     assert eq(d.map_blocks(lambda df: df), full)
 
 
+def test_drop_duplicates():
+    assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())
+
+
 def test_full_groupby():
     assert raises(Exception, lambda: d.groupby('does_not_exist'))
     assert raises(Exception, lambda: d.groupby('a').does_not_exist)

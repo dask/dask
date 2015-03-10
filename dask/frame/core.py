@@ -188,6 +188,10 @@ class Frame(object):
         dsk = {(name, 0): (sqrt, (f.name, 0))}
         return Frame(merge(f.dask, dsk), name, [], [])
 
+    def drop_duplicates(self):
+        chunk = lambda s: s.drop_duplicates()
+        return aca(self, chunk=chunk, aggregate=chunk, columns=self.columns)
+
     def map_blocks(self, func, columns=None):
         if columns is None:
             columns = self.columns
