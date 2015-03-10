@@ -44,6 +44,11 @@ def test_map():
     assert c.dask == expected
 
 
+def test_map_function_with_multiple_arguments():
+    b = Bag.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
+    assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
+
+
 def test_filter():
     c = b.filter(iseven)
     expected = merge(dsk, dict(((c.name, i),

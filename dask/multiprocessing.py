@@ -8,8 +8,9 @@ import dill
 import pickle
 from .async import get_async # TODO: get better get
 
+cpu_count = psutil.cpu_count()
 
-def get(dsk, keys, optimizations=[fuse]):
+def get(dsk, keys, optimizations=[fuse], num_workers=cpu_count):
     """ Multiprocessed get function appropriate for Bags """
     pool = multiprocessing.Pool(psutil.cpu_count())
     manager = multiprocessing.Manager()
@@ -22,7 +23,7 @@ def get(dsk, keys, optimizations=[fuse]):
 
     try:
         # Run
-        result = get_async(apply_async, psutil.cpu_count(), dsk2, keys,
+        result = get_async(apply_async, cpu_count, dsk2, keys,
                            queue=queue)
     finally:
         pool.close()
