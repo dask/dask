@@ -263,3 +263,10 @@ def test_full_groupby():
         df['b'] = df.b - df.b.mean()
         return df
     # assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+
+
+def test_set_partition():
+    d2 = d.set_partition('b', [2])
+    assert d2.blockdivs == (2,)
+    expected = full.set_index('b').sort(ascending=True)
+    assert eq(d2, expected)

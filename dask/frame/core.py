@@ -84,6 +84,11 @@ class Frame(object):
         from .shuffle import set_index
         return set_index(self, other, **kwargs)
 
+    def set_partition(self, column, blockdivs, **kwargs):
+        from .shuffle import set_partition
+        return set_partition(self, column, blockdivs, **kwargs)
+
+
     def groupby(self, key, **kwargs):
         return GroupBy(self, key, **kwargs)
 

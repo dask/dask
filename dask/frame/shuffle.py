@@ -17,6 +17,36 @@ index_names = ('index-%d' % i for i in count(1))
 length_names = ('len-%d' % i for i in count(1))
 
 
+def set_partition(f, column, blockdivs, cache=Chest):
+    if callable(cache):
+        cache = cache()
+
+    set_index = 'set-index' + next(tokens)
+    store = 'store-block' + next(tokens)
+
+    # Set index on each block
+    _set_index = {(set_index, i): (pd.DataFrame.set_index,
+                                    (f.name, i), column)
+                for i in range(f.npartitions)}
+
+    # Store each block in cache
+    _stores = {(store, i): (setitem, cache,
+                                (tuple, [set_index, i]),
+                                (set_index, i))
+                for i in range(f.npartitions)}
+
+    import pdb; pdb.set_trace()
+    # Set new local indexes and store to disk
+    get(merge(f.dask, _set_index, _stores), _stores.keys())
+
+    # Do shuffle in cache
+    old_keys = [(set_index, i) for i in range(f.npartitions)]
+    new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
+
+    dsk = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
+
+    return Frame(dsk, new_keys[0][0], f.columns, blockdivs)
+
 def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
         chunksize=2**20, out_chunksize=2**16, empty=np.empty):
     """ Set Frame index to new column
