@@ -280,7 +280,7 @@ def get_chunk(x, start):
     return df, x
 
 def read_csv(fn, *args, **kwargs):
-    chunksize = kwargs.get('chunksize', 2**20)
+    chunksize = kwargs.pop('chunksize', 2**16)
     header = kwargs.get('header', 1)
 
     nlines = linecount(fn) - header
@@ -290,9 +290,9 @@ def read_csv(fn, *args, **kwargs):
 
     blockdivs = tuple(range(chunksize, nlines, chunksize))
 
-    one_chunk = pd.read_csv(fn, *args, nrows=100, **dissoc(kwargs,
-        'chunksize'))
+    one_chunk = pd.read_csv(fn, *args, nrows=100, **kwargs)
 
+    kwargs['chunksize'] = chunksize
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
     load.update(dict(((read, i), (get_chunk, (read, i-1), chunksize*i))
                      for i in range(nchunks)))

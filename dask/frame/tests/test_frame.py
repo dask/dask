@@ -96,6 +96,8 @@ def test_read_csv():
         f = df.read_csv(fn, chunksize=4)
         assert f.npartitions == 2
 
+        f = df.read_csv(fn)
+
 
 def test_set_index():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
