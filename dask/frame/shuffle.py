@@ -7,6 +7,7 @@ from chest import Chest
 
 from .core import Frame, get
 from ..compatibility import unicode
+from ..utils import ignoring
 
 
 tokens = ('-%d' % i for i in count(1))
@@ -15,6 +16,12 @@ store_names = ('store-%d' % i for i in count(1))
 sort_names = ('sort-%d' % i for i in count(1))
 index_names = ('index-%d' % i for i in count(1))
 length_names = ('len-%d' % i for i in count(1))
+
+def getitem2(a, b, default=None):
+    try:
+        return getitem(a, b)
+    except KeyError:
+        return default
 
 
 def set_partition(f, column, blockdivs, cache=Chest):
@@ -35,7 +42,6 @@ def set_partition(f, column, blockdivs, cache=Chest):
                                 (set_index, i))
                 for i in range(f.npartitions)}
 
-    import pdb; pdb.set_trace()
     # Set new local indexes and store to disk
     get(merge(f.dask, _set_index, _stores), _stores.keys())
 
@@ -187,17 +193,27 @@ def empty_like(df):
                         index=index)
 
 
-def store_shards(shards, cache, key_prefix):
-    """ Shard dataframe by ranges on its index, store in cache
+def store_shards(shards, cache, key_prefix, store_empty=False):
+    """
+    Shard dataframe by ranges on its index, store in cache
+
+    Don't store empty shards by default
 
     See Also:
         shard_on_index
+
+    >>> cache = dict()
+    >>> store_shards([[1, 2, 3], [], [4, 5]], cache, ('a', 10))
+    [('a', 10, 0), ('a', 10, 1), ('a', 10, 2)]
+    >>> cache
+    {('a', 10, 0): [1, 2, 3], ('a', 10, 2): [4, 5]}
     """
     key_prefix = tuple(key_prefix)
     keys = []
     for i, shard in enumerate(shards):
         key = key_prefix + (i,)
-        cache[key] = shard
+        if not store_empty and len(shard):
+            cache[key] = shard
         keys.append(key)
     return keys
 
@@ -210,6 +226,29 @@ def shard(n, x):
     """
     for i in range(0, len(x), n):
         yield x[i: i + n]
+
+
+def concat_shards(shards):
+    """ Concatenate shards back in to full DataFrame
+
+    Sorts on index
+    Clears out empty shards
+
+    >>> shards = [pd.DataFrame({'a': [10, 30]}, index=[1, 3]),
+    ...           ('an', 'empty', 'shard'),
+    ...           pd.DataFrame({'a': [20, 40]}, index=[2, 4])]
+    >>> concat_shards(shards)
+        a
+    1  10
+    2  20
+    3  30
+    4  40
+
+    """
+    shards = list(shard for shard in shards
+                    if shard is not None
+                    and not isinstance(shard, tuple))
+    return pd.concat(shards).sort()
 
 
 shuffle_names = ('shuffle-%d' % i for i in count(1))
@@ -283,10 +322,10 @@ def shuffle(cache, keys, blockdivs, delete=False):
 
     # Collect shards together to form new blocks
     name = next(shuffle_names)
-    load_shards = {('shard', j, i): (getitem, cache, (tuple, ['shard', j, i]))
+    load_shards = {('shard', j, i): (getitem2, cache, (tuple, ['shard', j, i]))
                     for j in range(nin) for i in range(nout)}
-    concat = {('concat', i): (pd.DataFrame.sort, (pd.concat, (list,
-                            [('shard', j, i) for j in range(nin)])))
+    concat = {('concat', i): (concat_shards,
+                                [('shard', j, i) for j in range(nin)])
                 for i in range(nout)}
     store2 = {('store', i): (setitem, cache, (tuple, [name, i]), ('concat', i))
                 for i in range(nout)}
@@ -298,7 +337,8 @@ def shuffle(cache, keys, blockdivs, delete=False):
         for key in keys:
             del cache[key]
         for shard in load_shards.keys():
-            del cache[shard]
+            with ignoring(KeyError):
+                del cache[shard]
 
     # Return relevant keys from the cache
     return [(name, i) for i in range(nout)]
