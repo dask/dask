@@ -466,7 +466,14 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
         count *= N
         counts.append(count)
 
-    # sort by calculated percentile values, then number of observations
+    # Sort by calculated percentile values, then number of observations.
+    # >95% of the time in this function is spent in `merge_sorted` below.
+    # An alternative that uses numpy sort is shown.  It is sometimes
+    # comparable to, but typically slower than, `merge_sorted`.
+    #
+    # >>> A = np.concatenate(map(np.array, map(zip, vals, counts)))
+    # >>> A.sort(0, kind='mergesort')
+
     combined_vals_counts = merge_sorted(*map(zip, vals, counts))
     combined_vals, combined_counts = zip(*combined_vals_counts)
 
