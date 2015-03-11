@@ -141,10 +141,11 @@ def mean(a, axis=None, keepdims=False):
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.nanmean)
 def nanmean(a, axis=None, keepdims=False):
     return reduction(a, partial(mean_chunk, sum=np.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims)
+with ignoring(AttributeError):
+    nanmean = wraps(np.nanmean)(nanmean)
 
 def var_chunk(A, sum=np.sum, numel=numel, **kwargs):
     n = numel(A, **kwargs)
@@ -173,19 +174,21 @@ def var(a, axis=None, keepdims=False, ddof=0):
     return reduction(a, var_chunk, partial(var_agg, ddof=ddof), axis=axis, keepdims=keepdims)
 
 
-@wraps(np.nanvar)
 def nanvar(a, axis=None, keepdims=False, ddof=0):
     return reduction(a, partial(var_chunk, sum=np.nansum, numel=nannumel),
                      partial(var_agg, ddof=ddof), axis=axis, keepdims=keepdims)
+with ignoring(AttributeError):
+    nanvar = wraps(np.nanvar)(nanvar)
 
 @wraps(np.std)
 def std(a, axis=None, keepdims=False, ddof=0):
     return sqrt(a.var(axis=axis, keepdims=keepdims, ddof=ddof))
 
 
-@wraps(np.nanstd)
 def nanstd(a, axis=None, keepdims=False, ddof=0):
     return sqrt(nanvar(a, axis=axis, keepdims=keepdims, ddof=ddof))
+with ignoring(AttributeError):
+    nanstd = wraps(np.nanstd)(nanstd)
 
 
 def vnorm(a, ord=None, axis=None, keepdims=False):
