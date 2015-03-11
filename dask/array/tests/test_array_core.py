@@ -444,3 +444,8 @@ def test_dtype():
     assert d.dtype == d.compute().dtype
     assert (d * 1.0).dtype == (d + 1.0).compute().dtype
     assert d.sum().dtype == d.sum().compute().dtype  # no shape
+
+
+def test_blockdims_from_blockshape():
+    assert blockdims_from_blockshape((10, 10), (4, 3)) == ((4, 4, 2), (3, 3, 3, 1))
+    assert raises(ValueError, lambda: blockdims_from_blockshape((10,), None))

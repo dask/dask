@@ -416,6 +416,8 @@ def blockdims_from_blockshape(shape, blockshape):
     >>> blockdims_from_blockshape((10, 10), (4, 3))
     ((4, 4, 2), (3, 3, 3, 1))
     """
+    if blockshape is None:
+        raise ValueError("Must supply a blockshape= keyword argument")
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
                               for d, bd in zip(shape, blockshape))
 
