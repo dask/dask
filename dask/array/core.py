@@ -455,7 +455,7 @@ class Array(object):
         return tuple(map(sum, self.blockdims))
 
     def __len__(self):
-        return self.shape[0]
+        return sum(self.blockdims[0])
 
     @property
     def dtype(self):
