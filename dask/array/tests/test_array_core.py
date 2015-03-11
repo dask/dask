@@ -450,3 +450,8 @@ def test_percentile():
     d = da.from_array(x, blockshape=(3,))
 
     assert eq(da.percentile(d, [0, 50, 100]), [0, 5, 20])
+
+
+    x = np.array(['a', 'a', 'd', 'd', 'd', 'e'])
+    d = da.from_array(x, blockshape=(3,))
+    assert eq(da.percentile(d, [0, 50, 100]), ['a', 'd', 'e'])

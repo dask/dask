@@ -71,6 +71,12 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     qs = list(qs)
     vals = list(vals)
     Ns = list(Ns)
+
+    # TODO: Perform this check above in percentile once dtype checking is easy
+    #       Here we silently change meaning
+    if not np.issubdtype(vals[0].dtype, np.number):
+        interpolation = 'nearest'
+
     if len(vals) != len(qs) or len(Ns) != len(qs):
         raise ValueError('qs, vals, and Ns parameters must be the same length')
 
