@@ -137,6 +137,10 @@ def test_Array():
 
     assert a.blockdims == ((100,) * 10, (100,) * 10)
 
+    assert a.shape == shape
+
+    assert len(a) == shape[0]
+
 
 def test_uneven_blockdims():
     a = Array({}, 'x', shape=(10, 10), blockshape=(3, 3))
