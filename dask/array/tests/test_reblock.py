@@ -30,6 +30,16 @@ def test_intersect_2():
     assert answer == cross
 
 
+def test_reblock_1d():
+    """Try reblocking a random 1d matrix"""
+    a = np.random.uniform(0,1,300)
+    x = da.from_array(a, blockdims = ((100,)*3,))
+    new = ((50,)*6,)
+    x2 =reblock(x, blockdims=new)
+    assert x2.blockdims == new
+    assert np.all(x2.compute() == a)
+
+
 def test_reblock_2d():
     """Try reblocking a random 2d matrix"""
     a = np.random.uniform(0,1,300).reshape((10,30))
@@ -49,6 +59,13 @@ def test_reblock_4d():
     x2 =reblock(x, blockdims = new)
     assert x2.blockdims == new
     assert np.all(x2.compute() == a)
+
+
+def test_reblock_expand():
+    a = np.random.uniform(0,1,100).reshape((10, 10))
+    x = da.from_array(a, blockshape=(5, 5))
+    y = x.reblock(blockdims=((3, 3, 3, 1), (3, 3, 3, 1)))
+    assert np.all(y.compute() == a)
 
 
 def test_reblock_method():

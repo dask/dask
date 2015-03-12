@@ -9,61 +9,81 @@ The reblock module defines:
 from itertools import count, product, chain
 from operator import getitem, add
 import numpy as np
-from toolz import merge
+from toolz import merge, accumulate
 from dask.array.core import rec_concatenate, Array
 from dask.array.core import blockdims_from_blockshape
 
 reblock_names  = ('reblock-%d' % i for i in count(1))
+def cumdims_label(blockdims, const):
+	""" cumdims_label(blockdims, const)
+	Interal utility for cumulative sum with label.
+	>>> cumdims_label(((5,3,3),(2,2,1)),'n')
+		[(('n', 0), ('n', 5), ('n', 8), ('n', 11)),
+		 (('n', 0), ('n', 2), ('n', 4), ('n', 5))]
+	"""
+	return [tuple(zip((const,) * (1+ len(bds)), list(accumulate(add, (0,) + bds)))) for bds in blockdims ]
+def _breakpoints(cumold, cumnew):
+	"""
+	>>> new = cumdims_label(((5,3,3),(2,2,1)),'n')
+    >>> old = cumdims_label(((2,2,1),(5,)),'o')
+    >>> _breakpoints(c[1],old[1])
+	(('n', 0), ('o', 0), ('n', 2), ('n', 4), ('n', 5), ('o', 5))
+	>>> _breakpoints(c[0],old[0])
+		(('n', 0),('o', 0),('o', 2),('o', 4),('n', 5),('o', 5),('n', 8),('n', 11))
+	"""
+	return tuple(sorted(tuple(cumold) + tuple(cumnew), key=lambda x:x[1]))
+    
+def _intersect_1d(breaks):
+	"""Internal utility to intersect blockdims for 1 d
+	after preprocessing.
 
-def intersect_blockdims_1d(old, new):
-	summ = sum(old)
-	if summ != sum(new):
-		raise ValueError('Cannot change size from %r to %r'%(summ, sum(new)))
-	od = enumerate(old)
-	nw = iter(new)
-	ret = []
-	sum_old = 0
-	sum_new = 0
-	while True:
-		while sum_new <= sum_old:
-			try:
-				n = next(nw)
-				if not ret or ret[-1]:
-					ret.append([])
-			except StopIteration:
-				break
-			sum_new += n
-			if sum_new - n < sum_old and sum_new >= sum_old:
-				start = o -leftover
-				endd = o
-				adding = (cnt, slice(start, endd))
-				ret[-1].append(adding)
-		leftover = 0
-		while sum_old < sum_new:
-			try:
-				cnt, o = next(od)
-			except StopIteration:
-				break
-			sum_old += o
-			if sum_old > sum_new and sum_old - o < sum_new:
-				leftover =  (sum_old - sum_new)
-				endd = o - leftover
-				start = 0
-			elif sum_old <= sum_new:
-				start = leftover
-				endd = o
-			elif sum_old < sum_new:
-				start = 0
-				endd = o
-			else:
-				continue
-			adding = (cnt, slice(start, endd))
-			ret[-1].append(adding)
-		if sum_old == summ and sum_new == summ:
-			break
-	return tuple(map(tuple, ret))
+	>>> new = cumdims_label(((5,3,3),(2,2,1)),'n')
+    >>> old = cumdims_label(((2,2,1),(5,)),'o')
+    >>> _intersect_1d(_breakpoints(c[0],old[0])
+		(((0, slice(0, 2, None)), (1, slice(0, 2, None)), (2, slice(0, 1, None))),
+		 ((2, slice(0, 3, None)),),
+		 ((2, slice(3, 6, None)),))
+	>>> _intersect_1d(_breakpoints(c[1],old[1])
 
+		(((0, slice(0, 2, None)),),
+		 ((0, slice(2, 4, None)),),
+		 ((0, slice(4, 5, None)),))
 
+	Parameters:
+		breaks: list of tuples
+			Each tuple is ('o', 8) or ('n', 8)
+			These are pairs of 'o' old or new 'n'
+			indicator with a corresponding cumulative sum.
+		summ: int
+			The shape[dimension_being_passed]
+
+	Uses 'o' and 'n' to make new tuples of slices for 
+	the new block crosswalk to old blocks.
+	"""
+	start = 0
+	last_end = 0
+	old_idx = 0
+	lastbi = ('n',0)
+	ret = [[]]
+	for idx in range(1, len(breaks)):
+		bi = breaks[idx]
+		lastbi = breaks[idx -1]
+		if 'n' in lastbi[0] and bi[1]:
+			ret.append([])
+		if 'o' in lastbi[0]:
+			start = 0
+		else:
+			start = last_end
+		end = bi[1] - lastbi[1] + start
+		last_end = end
+		if bi[1] == lastbi[1]:
+			continue
+		ret[-1].append((old_idx, slice(start, end)))
+		if bi[0] == 'o':
+			old_idx += 1
+			start = 0
+	return tuple(map(tuple, filter(None, ret)))
+	
 def intersect_blockdims(old_blockdims=None, 
 						new_blockdims=None,
 						shape=None,
@@ -95,14 +115,22 @@ def intersect_blockdims(old_blockdims=None,
 
     Note: shape is only required when using old_blockshape or new_blockshape.
 	"""
+	
 	if not old_blockdims:
 		old_blockdims = blockdims_from_blockshape(shape, old_blockshape)
 	if not new_blockdims:
 		new_blockdims = blockdims_from_blockshape(shape, new_blockshape)	
+	global zipped, old_to_new, cross1,cross
+	cmo = cumdims_label(old_blockdims,'o')
+	cmn = cumdims_label(new_blockdims,'n')
+	sums = [sum(o) for o in old_blockdims]
+	sums2 = [sum(n) for n in old_blockdims]
+	if not sums == sums2:
+		raise ValueError('Cannot change dimensions from to %r' % sums2)
 	zipped = zip(old_blockdims,new_blockdims)
-	old_to_new =  tuple(intersect_blockdims_1d(o, n) for o,n in zipped)
-	cross = tuple(product(*old_to_new))
-	cross = tuple(chain(tuple(product(*cr)) for cr in cross))
+	old_to_new =  tuple(_intersect_1d(_breakpoints(cm[0],cm[1])) for cm in zip(cmo, cmn))
+	cross1 = tuple(product(*old_to_new))
+	cross = tuple(chain(tuple(product(*cr)) for cr in cross1))
 	return cross
 
 
@@ -128,9 +156,9 @@ def reblock(x, blockdims=None, blockshape=None ):
 
     Provide one of blockdims or blockshape.
 	"""
-	xshape = tuple(map(sum, x.blockdims))
+	
 	if not blockdims:
-		blockdims = blockdims_from_blockshape(xshape, blockshape)
+		blockdims = blockdims_from_blockshape(x.shape, blockshape)
 	crossed = intersect_blockdims(x.blockdims, blockdims)
 	x2 = dict()
 	temp_name = next(reblock_names)
