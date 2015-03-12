@@ -211,7 +211,9 @@ def store_shards(shards, cache, key_prefix, store_empty=False):
     keys = []
     for i, shard in enumerate(shards):
         key = key_prefix + (i,)
-        if not store_empty and len(shard):
+        # Don't store empty shards, except for one to ensure that
+        # at least one dataframe exists for each group
+        if (not store_empty and len(shard)) or key_prefix[-1] == 0:
             cache[key] = shard
         keys.append(key)
     return keys
