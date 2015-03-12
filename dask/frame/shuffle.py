@@ -1,4 +1,5 @@
 from itertools import count
+from math import ceil
 from toolz import merge, accumulate, unique, merge_sorted
 from operator import getitem, setitem
 import pandas as pd
@@ -116,10 +117,8 @@ def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
     # Compute the frame and store blocks and index-blocks into cache
     lengths = get(dsk, keys)[0]
 
-    # TODO: Replace this with approximate percentile solution
-    blockdivs = blockdivs_by_sort(cache, indexname,
-                            lengths, npartitions, chunksize, empty, sortsize,
-                            out_chunksize)
+    blockdivs = blockdivs_by_approximate_percentiles(cache, indexname,
+                    lengths, out_chunksize)
 
     old_keys = [(set_index, i) for i in range(f.npartitions)]
     new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
@@ -344,7 +343,23 @@ def shuffle(cache, keys, blockdivs, delete=False):
     return [(name, i) for i in range(nout)]
 
 
-def blockdivs_by_sort(cache, index_name, lengths, npartitions, chunksize,
+def blockdivs_by_approximate_percentiles(cache, index_name, lengths,
+        out_chunksize):
+    from dask.array import percentile, Array
+    n = sum(lengths)
+    npartitions = ceil(n / out_chunksize)
+
+    name = 'x' + next(tokens)
+    dsk = {(name, i): (getitem, cache, (index_name, i))
+            for i in range(len(lengths))}
+    x = Array(dsk, name, blockdims=(lengths,))
+    q = np.linspace(0, 100, npartitions + 1)[1:-1]
+
+
+    return percentile(x, q).compute()
+
+
+def blockdivs_by_sort(cache, index_name, lengths, chunksize,
         empty, sortsize, out_chunksize):
     """
     Compute proper divisions in to index by performing external sort
