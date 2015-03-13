@@ -248,7 +248,13 @@ def test_binops():
 def test_elemwise_on_scalars():
     x = np.arange(10)
     a = from_array(x, blockshape=(5,))
+    assert len(a._keys()) == 2
     assert eq(a.sum()**2, x.sum()**2)
+
+    x = np.arange(11)
+    a = from_array(x, blockshape=(5,))
+    assert len(a._keys()) == 3
+    assert eq(a, x)
 
 
 def test_operators():
