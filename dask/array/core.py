@@ -361,6 +361,69 @@ def rec_concatenate(arrays, axis=0):
     return np.concatenate(arrays, axis=axis)
 
 
+def map_blocks_multiple_outputs(x, func, blockshapes=None, blockdimss=None,
+                                nout=None):
+    """ Map a multi-output function across all blocks of a dask array
+
+    Same as ``map_blocks`` but accepts a function that returns an iterable of
+    blocks, e.g.:
+
+    Example
+    -------
+
+    >>> d = da.ones(10, blockshape(5,))
+
+    >>> def func(blk):
+    ...     return (blk + 1, blk - 1)
+
+    >>> a, b = da.map_blocks_multiple_outputs(d, func, blockshapes=[(5,), (5,)])
+
+    Parameters
+    ----------
+
+    x: dask.Array
+    func: function
+    blockshapes: iterable of tuples (optional with blockdimss, nout)
+        A blockshape tuple for each output
+    blockshapes: iterable of tuples (optional with blockshapes, nout)
+        A blockdims tuple for each output
+    nout: int (optional with blockshapes, nout)
+        Number of outputs, blockshape will be assumed equal to the input
+
+    You must supply one of ``blockshapes=`` or ``blockdimss=`` or ``nout=``
+    parameters.  Use ``nout`` if your function preserves shape.  Otherwise use
+    blockshapes or blockdims to specify shapes of the output arrays.
+    """
+    if blockshapes is not None:
+        blockdimss = [tuple([nb * (bs,)
+                            for nb, bs in zip(x.numblocks, blockshape)])
+                        for blockshape in blockshapes]
+    if blockdimss is None:
+        blockdimss = [x.blockdims] * nout
+
+    name = 'user-defined-function-' + next(names)
+
+    try:
+        spec = inspect.getargspec(func)
+    except:
+        spec = None
+    if spec and 'block_id' in spec.args:
+        dsk = dict(((name,) + k[1:], (partial(func, block_id=k[1:]), k))
+                    for k in core.flatten(x._keys()))
+    else:
+        dsk = dict(((name,) + k[1:], (func, k)) for k in core.flatten(x._keys()))
+
+    result = []
+    for i, blockdims in enumerate(blockdimss):
+        new_name = next(names)
+        new_dask = dict(((new_name,) + key[1:], (getitem, key, i))
+                        for key in dsk.keys())
+        result.append(Array(merge(dsk, x.dask, new_dask),
+                            new_name, blockdims=blockdims))
+    return result
+
+
+
 def map_blocks(x, func, blockshape=None, blockdims=None):
     """ Map a function across all blocks of a dask array
 
