@@ -55,6 +55,7 @@ def set_partition(f, column, blockdivs, cache=Chest):
 
     return Frame(dsk, new_keys[0][0], f.columns, blockdivs)
 
+
 def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
         chunksize=2**20, out_chunksize=2**16, empty=np.empty):
     """ Set Frame index to new column
@@ -82,6 +83,7 @@ def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
     store_index = 'store-index' + next(tokens)
     length = 'len-of-index' + next(tokens)
 
+    # Set index of each block internally
     if isinstance(index, Frame) and index.blockdivs == f.blockdivs:
         _set_index = {(set_index, i): (pd.DataFrame.set_index,
                                         (f.name, i), (index.name, i))
@@ -92,6 +94,8 @@ def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
                     for i in range(f.npartitions)}
     else:
         raise ValueError("Invalid index")
+
+    # Store blocks, indices, and lengths in the cache
     _indexes = {(indexname, i): (getattr,
                                   (getattr, (set_index, i), 'index'),
                                   'values')
@@ -107,15 +111,15 @@ def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
     _lengths = {(length, i): (len, (indexname, i))
                 for i in range(f.npartitions)}
 
+    # Merge all of those graphs together and prepare to compute
     dsk = merge(f.dask, _set_index, _indexes, _stores, _store_indexes, _lengths)
-
     if isinstance(index, Frame):
         dsk.update(index.dask)
     keys = [sorted(_lengths.keys()),
             sorted(_stores.keys()),
             sorted(_store_indexes.keys())]
 
-    # Compute the frame and store blocks and index-blocks into cache
+    # Compute and store - get out block lengths
     lengths = get(dsk, keys)[0]
 
     blockdivs = blockdivs_by_approximate_percentiles(cache, indexname,
@@ -227,27 +231,32 @@ def shard(n, x):
         yield x[i: i + n]
 
 
-def concat_shards(shards):
-    """ Concatenate shards back in to full DataFrame
+def load_and_concat_and_store_shards(cache, shard_keys, out_key, delete=True):
+    """ Load shards from cache and concatenate to full DataFrame
 
+    Ignores missing keys
     Sorts on index
-    Clears out empty shards
 
-    >>> shards = [pd.DataFrame({'a': [10, 30]}, index=[1, 3]),
-    ...           ('an', 'empty', 'shard'),
-    ...           pd.DataFrame({'a': [20, 40]}, index=[2, 4])]
-    >>> concat_shards(shards)
+    >>> cache = {('a', 0, 0): pd.DataFrame({'a': [10, 30]}, index=[1, 3]),
+    ...          ('a', 0, 2): pd.DataFrame({'a': [20, 40]}, index=[2, 4])}
+    >>> keys = [('a', 0, 0), ('a', 0, 1), ('a', 0, 2)]
+    >>> _ = load_and_concat_and_store_shards(cache, keys, ('b', 0))
+    >>> cache
         a
     1  10
     2  20
     3  30
     4  40
-
     """
-    shards = list(shard for shard in shards
-                    if shard is not None
-                    and not isinstance(shard, tuple))
-    return pd.concat(shards).sort()
+    keys = [tuple(key) for key in shard_keys]
+    shards = [cache[key] for key in keys if key in cache]
+    result = pd.concat(shards)
+    result.sort(inplace=True)
+    cache[tuple(out_key)] = result
+    if delete:
+        for key in shard_keys:
+            del cache[key]
+    return out_key
 
 
 shuffle_names = ('shuffle-%d' % i for i in count(1))
@@ -321,23 +330,18 @@ def shuffle(cache, keys, blockdivs, delete=False):
 
     # Collect shards together to form new blocks
     name = next(shuffle_names)
-    load_shards = {('shard', j, i): (getitem2, cache, (tuple, ['shard', j, i]))
-                    for j in range(nin) for i in range(nout)}
-    concat = {('concat', i): (concat_shards,
-                                [('shard', j, i) for j in range(nin)])
-                for i in range(nout)}
-    store2 = {('store', i): (setitem, cache, (tuple, [name, i]), ('concat', i))
-                for i in range(nout)}
+    gather = {('gather', i):
+                (load_and_concat_and_store_shards, cache,
+                  [['shard', j, i] for j in range(nin)],
+                  [name, i], True)
+              for i in range(nout)}
 
-    get(merge(load_shards, concat, store2), list(store2.keys()))
+    get(gather, gather.keys())
 
     # Are we trying to save space?
     if delete:
         for key in keys:
             del cache[key]
-        for shard in load_shards.keys():
-            with ignoring(KeyError):
-                del cache[shard]
 
     # Return relevant keys from the cache
     return [(name, i) for i in range(nout)]
