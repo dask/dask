@@ -1,4 +1,5 @@
 from itertools import count
+from collections import Iterator
 from math import ceil
 from toolz import merge, accumulate, unique, merge_sorted
 from operator import getitem, setitem
@@ -158,6 +159,9 @@ def shard_df_on_index(df, blockdivs):
         a  b
     4  40  1
     """
+    if isinstance(blockdivs, Iterator):
+        blockdivs = list(blockdivs)
+    blockdivs = np.array(blockdivs)
     df = df.sort()
     indices = df.index.searchsorted(blockdivs)
     yield df.iloc[:indices[0]]

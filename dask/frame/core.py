@@ -17,9 +17,22 @@ from ..utils import repr_long_list
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
-    dsk2 = cull(dsk, list(core.flatten(keys)))
+    if isinstance(keys, list):
+        dsk2 = cull(dsk, list(core.flatten(keys)))
+    else:
+        dsk2 = cull(dsk, [keys])
     dsk3 = fuse(dsk2)
     return get(dsk3, keys, **kwargs)  # use synchronous scheduler for now
+
+def compute(*args, **kwargs):
+    if len(args) == 1 and isinstance(args[0], (tuple, list)):
+        args = args[0]
+    dsk = merge(*[arg.dask for arg in args])
+    keys = [arg._keys() for arg in args]
+    results = get(dsk, keys, **kwargs)
+
+    return [pd.concat(dfs) if arg.blockdivs else dfs[0]
+            for arg, dfs in zip(args, results)]
 
 
 names = ('f-%d' % i for i in count(1))
@@ -37,11 +50,7 @@ class Frame(object):
         return len(self.blockdivs) + 1
 
     def compute(self, **kwargs):
-        dfs = get(self.dask, self._keys(), **kwargs)
-        if self.blockdivs:
-            return pd.concat(dfs, axis=0)
-        else:
-            return dfs[0]
+        return compute(self, **kwargs)[0]
 
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
@@ -79,6 +88,10 @@ class Frame(object):
 
     def __dir__(self):
         return sorted(set(list(dir(type(self))) + list(self.columns)))
+
+    @property
+    def dtypes(self):
+        return get(self.dask, self._keys()[0]).dtypes
 
     def set_index(self, other, **kwargs):
         from .shuffle import set_index
@@ -225,6 +238,9 @@ class Frame(object):
     def __repr__(self):
         return ("dask.frame<%s, blockdivs=%s>" %
                 (self.name, repr_long_list(self.blockdivs)))
+
+    def categoricalize(self, columns, **kwargs):
+        return categoricalize(self, columns, **kwargs)
 
 
 def head(x, n):
@@ -469,6 +485,26 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
             b, columns, [])
 
 aca = apply_concat_apply
+
+
+def categoricalize(f, columns, **kwargs):
+    """
+    Convert columns to category dtype
+    """
+    if not isinstance(columns, (list, tuple)):
+        columns = [columns]
+
+    distincts = [f[col].drop_duplicates() for col in columns]
+    values = compute(distincts, **kwargs)
+
+    def categorize(block):
+        block = block.copy()
+        for col, vals in zip(columns, values):
+            block[col] = pd.Categorical(block[col], categories=vals,
+                                        ordered=False, name=col)
+        return block
+
+    return f.map_blocks(categorize, columns=f.columns)
 
 
 from .shuffle import set_index

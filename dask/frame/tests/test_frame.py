@@ -1,5 +1,5 @@
 import dask.frame as df
-from dask.frame.core import linecount
+from dask.frame.core import linecount, compute, get
 from dask.frame.shuffle import shard_df_on_index
 import pandas.util.testing as tm
 import pandas as pd
@@ -53,6 +53,7 @@ def test_frame():
     assert np.allclose(d.b.std().compute(), full.b.std())
 
     assert repr(d)
+
 
 
 def test_attributes():
@@ -270,3 +271,27 @@ def test_set_partition():
     assert d2.blockdivs == (2,)
     expected = full.set_index('b').sort(ascending=True)
     assert eq(d2, expected)
+
+
+def test_categoricalize():
+    dsk = {('x', 0): pd.DataFrame({'a': ['Alice', 'Bob', 'Alice'],
+                                   'b': ['C', 'D', 'E']},
+                                   index=[0, 1, 2]),
+           ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
+                                   'b': ['A', 'A', 'B']},
+                                   index=[3, 4, 5])}
+    d = df.Frame(dsk, 'x', ['a', 'b'], [3])
+    full = d.compute()
+
+    c = d.categoricalize('a')
+    cfull = c.compute()
+    assert cfull.dtypes['a'] == 'category'
+    assert cfull.dtypes['b'] == 'O'
+
+    assert list(cfull.a.astype('string')) == list(full.a)
+
+    assert (get(c.dask, c._keys()[:1])[0].dtypes == cfull.dtypes).all()
+
+
+def test_dtype():
+    assert (d.dtypes == full.dtypes).all()
