@@ -158,7 +158,6 @@ def shard_df_on_index(df, blockdivs):
         a  b
     4  40  1
     """
-    blockdivs = list(blockdivs)
     df = df.sort()
     indices = df.index.searchsorted(blockdivs)
     yield df.iloc[:indices[0]]
