@@ -292,6 +292,8 @@ def test_categoricalize():
 
     assert (get(c.dask, c._keys()[:1])[0].dtypes == cfull.dtypes).all()
 
+    assert (d.categoricalize().compute().dtypes == 'category').all()
+
 
 def test_dtype():
     assert (d.dtypes == full.dtypes).all()
