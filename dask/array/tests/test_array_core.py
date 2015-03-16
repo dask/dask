@@ -449,3 +449,11 @@ def test_dtype():
 def test_blockdims_from_blockshape():
     assert blockdims_from_blockshape((10, 10), (4, 3)) == ((4, 4, 2), (3, 3, 3, 1))
     assert raises(ValueError, lambda: blockdims_from_blockshape((10,), None))
+
+
+def test_compute():
+    d = da.ones((4, 4), blockshape=(2, 2))
+    a, b = d + 1, d + 2
+    A, B = compute(a, b)
+    assert eq(A, d + 1)
+    assert eq(B, d + 2)
