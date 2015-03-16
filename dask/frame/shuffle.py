@@ -159,17 +159,12 @@ def shard_df_on_index(df, blockdivs):
     4  40  1
     """
     blockdivs = list(blockdivs)
-    i = 0
-    start = 0
     df = df.sort()
-    L = list(df.index)
-    n = len(L)
-    for bd in blockdivs:
-        while n > i and L[i] < bd:
-            i += 1
-        yield df.iloc[start:i]
-        start = i
-    yield df.iloc[start:]
+    indices = df.index.searchsorted(blockdivs)
+    yield df.iloc[:indices[0]]
+    for i in range(len(indices) - 1):
+        yield df.iloc[indices[i]: indices[i+1]]
+    yield df.iloc[indices[-1]:]
 
 
 def empty_like(df):
