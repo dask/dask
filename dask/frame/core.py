@@ -342,7 +342,7 @@ def from_array(x, chunksize=50000):
     dsk = {(name, i): (pd.DataFrame,
                         (getitem, x,
                             (slice(i * chunksize, (i + 1) * chunksize),)))
-            for i in range(0, int(ceil(len(x) // chunksize)))}
+            for i in range(0, int(ceil(float(len(x)) / chunksize)))}
 
     return Frame(dsk, name, columns, blockdivs)
 
