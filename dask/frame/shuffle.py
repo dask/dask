@@ -241,7 +241,7 @@ def load_and_concat_and_store_shards(cache, shard_keys, out_key, delete=True):
     ...          ('a', 0, 2): pd.DataFrame({'a': [20, 40]}, index=[2, 4])}
     >>> keys = [('a', 0, 0), ('a', 0, 1), ('a', 0, 2)]
     >>> _ = load_and_concat_and_store_shards(cache, keys, ('b', 0))
-    >>> cache
+    >>> cache[('b', 0)]
         a
     1  10
     2  20
@@ -249,12 +249,13 @@ def load_and_concat_and_store_shards(cache, shard_keys, out_key, delete=True):
     4  40
     """
     keys = [tuple(key) for key in shard_keys]
-    shards = [cache[key] for key in keys if key in cache]
+    keys = [key for key in keys if key in cache]
+    shards = [cache[key] for key in keys]
     result = pd.concat(shards)
     result.sort(inplace=True)
     cache[tuple(out_key)] = result
     if delete:
-        for key in shard_keys:
+        for key in keys:
             del cache[key]
     return out_key
 
