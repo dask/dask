@@ -221,6 +221,14 @@ def store_shards(shards, cache, key_prefix, store_empty=False):
     return keys
 
 
+def shard_and_store(cache, df_key, prefix, blockdivs):
+    """ Combine store_shards and shard_df_on_index """
+    df = cache[tuple(df_key)]
+    blockdivs = tuple(blockdivs)
+    prefix = tuple(prefix)
+    shards = shard_df_on_index(df, blockdivs)
+    store_shards(shards, cache, prefix)
+
 def shard(n, x):
     """
 
@@ -319,15 +327,13 @@ def shuffle(cache, keys, blockdivs, delete=False):
     nin = len(keys)
     nout = len(blockdivs) + 1
 
-    # Emit shards out from old blocks
-    data_dsk = {('load', i): (getitem, cache, (tuple, list(key)))
-                for i, key in enumerate(keys)}
-    store = {('store', i): (store_shards,
-                        (shard_df_on_index, ('load', i), blockdivs),
-                        cache, ['shard', i])
-                for i in range(nin)}
+    # categories = categorical_metadata(cache[keys[0]])
 
-    get(merge(data_dsk, store), list(store.keys()))
+
+    # Shards old blocks and store in cache
+    store = {('store', i): shard_and_store(cache, key, ['shard', i], blockdivs)
+                for i, key in enumerate(keys)}
+    get(store, list(store.keys()))
 
     # Collect shards together to form new blocks
     name = next(shuffle_names)
