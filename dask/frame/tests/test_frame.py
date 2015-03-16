@@ -273,7 +273,7 @@ def test_set_partition():
     assert eq(d2, expected)
 
 
-def test_categoricalize():
+def test_categorize():
     dsk = {('x', 0): pd.DataFrame({'a': ['Alice', 'Bob', 'Alice'],
                                    'b': ['C', 'D', 'E']},
                                    index=[0, 1, 2]),
@@ -283,7 +283,7 @@ def test_categoricalize():
     d = df.Frame(dsk, 'x', ['a', 'b'], [3])
     full = d.compute()
 
-    c = d.categoricalize('a')
+    c = d.categorize('a')
     cfull = c.compute()
     assert cfull.dtypes['a'] == 'category'
     assert cfull.dtypes['b'] == 'O'
@@ -292,7 +292,7 @@ def test_categoricalize():
 
     assert (get(c.dask, c._keys()[:1])[0].dtypes == cfull.dtypes).all()
 
-    assert (d.categoricalize().compute().dtypes == 'category').all()
+    assert (d.categorize().compute().dtypes == 'category').all()
 
 
 def test_dtype():

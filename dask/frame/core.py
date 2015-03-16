@@ -239,8 +239,8 @@ class Frame(object):
         return ("dask.frame<%s, blockdivs=%s>" %
                 (self.name, repr_long_list(self.blockdivs)))
 
-    def categoricalize(self, columns=None, **kwargs):
-        return categoricalize(self, columns, **kwargs)
+    def categorize(self, columns=None, **kwargs):
+        return categorize(self, columns, **kwargs)
 
 
 def head(x, n):
@@ -487,7 +487,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
 aca = apply_concat_apply
 
 
-def categoricalize(f, columns=None, **kwargs):
+def categorize(f, columns=None, **kwargs):
     """
     Convert columns to category dtype
     """

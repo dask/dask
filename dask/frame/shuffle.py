@@ -226,6 +226,7 @@ def shard_and_store(cache, df_key, prefix, blockdivs):
     df = cache[tuple(df_key)]
     blockdivs = tuple(blockdivs)
     prefix = tuple(prefix)
+    df = strip_categories(df.copy())
     shards = shard_df_on_index(df, blockdivs)
     store_shards(shards, cache, prefix)
 
@@ -239,7 +240,8 @@ def shard(n, x):
         yield x[i: i + n]
 
 
-def load_and_concat_and_store_shards(cache, shard_keys, out_key, delete=True):
+def load_and_concat_and_store_shards(cache, shard_keys, out_key,
+        categories=None, delete=True):
     """ Load shards from cache and concatenate to full DataFrame
 
     Ignores missing keys
@@ -256,10 +258,12 @@ def load_and_concat_and_store_shards(cache, shard_keys, out_key, delete=True):
     3  30
     4  40
     """
-    keys = [tuple(key) for key in shard_keys]
+    keys = (tuple(key) for key in shard_keys)
     keys = [key for key in keys if key in cache]
     shards = [cache[key] for key in keys]
     result = pd.concat(shards)
+    if categories:
+        result = reapply_categories(result, categories)
     result.sort(inplace=True)
     cache[tuple(out_key)] = result
     if delete:
@@ -270,7 +274,7 @@ def load_and_concat_and_store_shards(cache, shard_keys, out_key, delete=True):
 
 shuffle_names = ('shuffle-%d' % i for i in count(1))
 
-def shuffle(cache, keys, blockdivs, delete=False):
+def shuffle(cache, keys, blockdivs, delete=True):
     """ Shuffle DataFrames on index
 
     We shuffle a collection of DataFrames to obtain a new collection where each
@@ -327,8 +331,7 @@ def shuffle(cache, keys, blockdivs, delete=False):
     nin = len(keys)
     nout = len(blockdivs) + 1
 
-    # categories = categorical_metadata(cache[keys[0]])
-
+    categories = categorical_metadata(cache[keys[0]])
 
     # Shards old blocks and store in cache
     store = {('store', i): shard_and_store(cache, key, ['shard', i], blockdivs)
@@ -340,12 +343,12 @@ def shuffle(cache, keys, blockdivs, delete=False):
     gather = {('gather', i):
                 (load_and_concat_and_store_shards, cache,
                   [['shard', j, i] for j in range(nin)],
-                  [name, i], True)
+                  [name, i], categories, True)
               for i in range(nout)}
 
     get(gather, gather.keys())
 
-    # Are we trying to save space?
+    # Delete old blocks
     if delete:
         for key in keys:
             del cache[key]
@@ -489,7 +492,7 @@ def strip_categories(df):
     2  0
     """
     for name in df.columns:
-        if df.dtypes[name] == 'category':
+        if isinstance(df.dtypes[name], pd.core.common.CategoricalDtype):
             df[name] = df[name].cat.codes
     return df
 
@@ -500,11 +503,10 @@ def categorical_metadata(df):
     >>> df = pd.DataFrame({'a': pd.Categorical(['Alice', 'Bob', 'Alice'])})
     >>> categorical_metadata(df)
     {'a': {'ordered': True, 'categories': Index([u'Alice', u'Bob'], dtype='object')}}
-
     """
     result = dict()
-    for name, in df.columns:
-        if df.dtypes[name] == 'category':
+    for name in df.columns:
+        if isinstance(df.dtypes[name], pd.core.common.CategoricalDtype):
             result[name] = {'categories': df[name].cat.categories,
                             'ordered': df[name].cat.ordered}
     return result
@@ -524,9 +526,21 @@ def reapply_categories(df, metadata):
     0  Alice
     1    Bob
     2  Alice
-
     """
     for name, d in metadata.items():
-        df[name] = pd.Series(pd.Categorical.from_codes(df[name],
-                             d['categories'], d['ordered']), name=name)
+        df[name] = pd.Categorical.from_codes(df[name].values,
+                                     d['categories'], d['ordered'])
+        # df[name] = hack_new_categorical(df[name].values, d['categories'],
+        #                                 d['ordered'])
     return df
+
+
+"""
+def hack_new_categorical(codes, categories, ordered):
+    cat = pd.Categorical.__new__(pd.Categorical)
+    cat._codes = codes
+    cat.categories = categories
+    cat.ordered = ordered
+    cat.name = None
+    return cat
+"""
