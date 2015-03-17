@@ -391,12 +391,15 @@ class GroupBy(object):
 
         if isinstance(index, list):
             assert all(i in frame.columns for i in index)
-        elif not isinstance(index, Frame):
+        elif isinstance(index, Frame):
+            assert index.blockdivs == frame.blockdivs
+        else:
             assert index in frame.columns
 
-    def apply(self, func):
+    def apply(self, func, columns=None):
         f = set_index(self.frame, self.index, **self.kwargs)
-        return f.map_blocks(lambda df: df.groupby(level=0).apply(func))
+        return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
+                            columns=columns)
 
     def __getitem__(self, key):
         if key in self.frame.columns:
@@ -422,9 +425,10 @@ class SeriesGroupBy(object):
         self.index = index
         self.key = key
 
-    def apply(func):
+    def apply(func, columns=None):
         f = set_index(self.frame, self.index, **self.kwargs)
-        return f.map_blocks(lambda df: df.groupby(level=0)[self.key].apply(func))
+        return f.map_blocks(lambda df: df.groupby(level=0)[self.key].apply(func),
+                            columns=columns)
 
     def sum(self):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()

@@ -165,13 +165,16 @@ def shard_df_on_index(df, blockdivs):
     """
     if isinstance(blockdivs, Iterator):
         blockdivs = list(blockdivs)
-    blockdivs = np.array(blockdivs)
-    df = df.sort()
-    indices = df.index.searchsorted(blockdivs)
-    yield df.iloc[:indices[0]]
-    for i in range(len(indices) - 1):
-        yield df.iloc[indices[i]: indices[i+1]]
-    yield df.iloc[indices[-1]:]
+    if not blockdivs:
+        yield df
+    else:
+        blockdivs = np.array(blockdivs)
+        df = df.sort()
+        indices = df.index.searchsorted(blockdivs)
+        yield df.iloc[:indices[0]]
+        for i in range(len(indices) - 1):
+            yield df.iloc[indices[i]: indices[i+1]]
+        yield df.iloc[indices[-1]:]
 
 
 def empty_like(df):
@@ -369,6 +372,8 @@ def blockdivs_by_approximate_percentiles(cache, index_name, lengths,
     x = Array(dsk, name, blockdims=(lengths,))
     q = np.linspace(0, 100, npartitions + 1)[1:-1]
 
+    if not q:
+        return []
 
     return percentile(x, q).compute()
 
