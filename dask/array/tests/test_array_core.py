@@ -446,18 +446,3 @@ def test_dtype():
     assert d.dtype == d.compute().dtype
     assert (d * 1.0).dtype == (d + 1.0).compute().dtype
     assert d.sum().dtype == d.sum().compute().dtype  # no shape
-
-
-def test_percentile():
-    d = da.ones((16,), blockshape=(4,))
-    assert eq(da.percentile(d, [0, 50, 100]), [1, 1, 1])
-
-    x = np.array([0, 0, 5, 5, 5, 5, 20, 20])
-    d = da.from_array(x, blockshape=(3,))
-
-    assert eq(da.percentile(d, [0, 50, 100]), [0, 5, 20])
-
-
-    x = np.array(['a', 'a', 'd', 'd', 'd', 'e'])
-    d = da.from_array(x, blockshape=(3,))
-    assert eq(da.percentile(d, [0, 50, 100]), ['a', 'd', 'e'])
