@@ -2,6 +2,7 @@ import dask.frame as df
 from dask.frame.core import linecount, compute, get
 from dask.frame.shuffle import shard_df_on_index
 import pandas.util.testing as tm
+from operator import getitem
 import pandas as pd
 import numpy as np
 from dask.utils import filetext, raises
@@ -297,3 +298,8 @@ def test_categorize():
 
 def test_dtype():
     assert (d.dtypes == full.dtypes).all()
+
+
+def test_cache():
+    d2 = d.cache()
+    assert all(task[0] == getitem for task in d2.dask.values())

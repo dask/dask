@@ -7,6 +7,7 @@ from operator import getitem, setitem
 import pandas as pd
 import numpy as np
 import operator
+from chest import Chest
 
 from ..optimize import cull, fuse
 from .. import core
@@ -107,6 +108,25 @@ class Frame(object):
         """
         from .shuffle import set_partition
         return set_partition(self, column, blockdivs, **kwargs)
+
+    def cache(self, cache=Chest):
+        """ Evaluate frame and store in local cache
+
+        Uses chest by default to store data on disk
+        """
+        if callable(cache):
+            cache = cache()
+
+        # Evaluate and store in cache
+        name = next(names)
+        dsk = dict(((name, i), (setitem, cache, (tuple, list(key)), key))
+                    for i, key in enumerate(self._keys()))
+        get(merge(dsk, self.dask), list(dsk.keys()))
+
+        # Create new Frame pointing to that cache
+        dsk2 = dict((key, (getitem, cache, (tuple, list(key))))
+                    for key in self._keys())
+        return Frame(dsk2, self.name, self.columns, self.blockdivs)
 
     def groupby(self, key, **kwargs):
         return GroupBy(self, key, **kwargs)
