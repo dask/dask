@@ -13,6 +13,7 @@ from ..optimize import cull, fuse
 from .. import core
 from ..array.core import partial_by_order
 from ..async import get_sync
+from ..threaded import get as get_threaded
 from ..compatibility import unicode
 from ..utils import repr_long_list
 

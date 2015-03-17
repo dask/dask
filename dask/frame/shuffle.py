@@ -67,70 +67,67 @@ def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
     if callable(cache):
         cache = cache()
 
-    """
-    We now use dask to compute indexes and reindex blocks
+    token = next(tokens)
 
-    1.  Compute each block of the dask
-    2.  Set its index to match index
-    3.  Pull out the index to separate data
-    4.  Store all blocks
-    5.  Store all indexes
-    6.  Compute the lengths of all blocks
-    """
-    set_index = 'set-index' + next(tokens)
-    indexname = 'index' + next(tokens)
-    store = 'store-block' + next(tokens)
-    store_index = 'store-index' + next(tokens)
-    length = 'len-of-index' + next(tokens)
-
-    # Set index of each block internally
-    if isinstance(index, Frame) and index.blockdivs == f.blockdivs:
-        _set_index = {(set_index, i): (pd.DataFrame.set_index,
-                                        (f.name, i), (index.name, i))
-                    for i in range(f.npartitions)}
-    elif isinstance(index, (str, unicode, int)):
-        _set_index = {(set_index, i): (pd.DataFrame.set_index,
-                                        (f.name, i), index)
-                    for i in range(f.npartitions)}
-    else:
-        raise ValueError("Invalid index")
-
-    # Store blocks, indices, and lengths in the cache
-    _indexes = {(indexname, i): (getattr,
-                                  (getattr, (set_index, i), 'index'),
-                                  'values')
-                for i in range(f.npartitions)}
-    _stores = {(store, i): (setitem, cache,
-                                (tuple, [set_index, i]),
-                                (set_index, i))
-                for i in range(f.npartitions)}
-    _store_indexes = {(store_index, i): (setitem, cache,
-                                         (tuple, [indexname, i]),
-                                         (indexname, i))
-                for i in range(f.npartitions)}
-    _lengths = {(length, i): (len, (indexname, i))
-                for i in range(f.npartitions)}
-
-    # Merge all of those graphs together and prepare to compute
-    dsk = merge(f.dask, _set_index, _indexes, _stores, _store_indexes, _lengths)
+    # Compute and store old blocks and indexes - get out block lengths
     if isinstance(index, Frame):
-        dsk.update(index.dask)
-    keys = [sorted(_lengths.keys()),
-            sorted(_stores.keys()),
-            sorted(_store_indexes.keys())]
+        assert index.blockdivs == f.blockdivs
+        dsk = {('x'+token, i): (set_index_and_store, block, ind, cache, token, i)
+                for i, (block, ind) in enumerate(zip(f._keys(), index._keys()))}
+    else:
+        dsk = {('x'+token, i): (set_index_and_store, block, index, cache, token, i)
+                for i, block in enumerate(f._keys())}
 
-    # Compute and store - get out block lengths
-    lengths = get(dsk, keys)[0]
+    dsk2 = merge(f.dask, dsk)
+    if isinstance(index, Frame):
+        dsk2.update(index.dask)
 
-    blockdivs = blockdivs_by_approximate_percentiles(cache, indexname,
+    lengths = get(dsk2, dsk.keys())
+
+    # Compute regular values on which to divide the new index
+    blockdivs = blockdivs_by_approximate_percentiles(cache, 'index'+token,
                     lengths, out_chunksize)
 
-    old_keys = [(set_index, i) for i in range(f.npartitions)]
+    # Shuffle old blocks into new blocks
+    old_keys = [('old-block'+token, i) for i in range(f.npartitions)]
     new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
 
-    dsk = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
+    dsk3 = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
 
-    return Frame(dsk, new_keys[0][0], f.columns, blockdivs)
+    return Frame(dsk3, new_keys[0][0], f.columns, blockdivs)
+
+
+def set_index_and_store(df, index, cache, token, i):
+    """ Store old block and new index column in cache, return length
+
+    Stores newly indexed dataframe in ``cache['old-block' + token]``
+    Stores new index column in ``cache['index' + token]``
+    Returns length of block
+
+    >>> df = pd.DataFrame({'a': [10, 11, 12], 'b': [10, 20, 30]})
+    >>> cache = dict()
+    >>> set_index_and_store(df, 'a', cache, '-9', 1)
+    3
+    >>> cache[('index-9', 1)]
+    array([10, 11, 12])
+    >>> cache[('old-block-9', 1)]  # doctest: +NORMALIZE_WHITESPACE
+         b
+    a
+    10  10
+    11  20
+    12  30
+    """
+
+    if isinstance(index, pd.Series):
+        cache[('index'+token, i)] = index.values
+    else:
+        cache[('index'+token, i)] = df[index].values
+
+    df2 = df.set_index(index)
+
+    cache[('old-block'+token, i)] = df2
+
+    return len(df2)
 
 
 def shard_df_on_index(df, blockdivs):
@@ -372,7 +369,7 @@ def blockdivs_by_approximate_percentiles(cache, index_name, lengths,
     x = Array(dsk, name, blockdims=(lengths,))
     q = np.linspace(0, 100, npartitions + 1)[1:-1]
 
-    if not q:
+    if not len(q):
         return []
 
     return percentile(x, q).compute()
