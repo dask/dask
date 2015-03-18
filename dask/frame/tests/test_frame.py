@@ -303,3 +303,9 @@ def test_dtype():
 def test_cache():
     d2 = d.cache()
     assert all(task[0] == getitem for task in d2.dask.values())
+
+
+def test_value_counts():
+    result = d.b.value_counts().compute()
+    expected = full.b.value_counts()
+    assert eq(result.sort_index(), expected.sort_index())

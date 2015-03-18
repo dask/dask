@@ -237,6 +237,11 @@ class Frame(object):
         chunk = lambda s: s.drop_duplicates()
         return aca(self, chunk=chunk, aggregate=chunk, columns=self.columns)
 
+    def value_counts(self):
+        chunk = lambda s: s.value_counts()
+        agg = lambda s: s.groupby(level=0).sum()
+        return aca(self, chunk=chunk, aggregate=agg, columns=self.columns)
+
     def map_blocks(self, func, columns=None):
         if columns is None:
             columns = self.columns
