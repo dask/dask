@@ -242,6 +242,12 @@ class Frame(object):
         agg = lambda s: s.groupby(level=0).sum()
         return aca(self, chunk=chunk, aggregate=agg, columns=self.columns)
 
+    def isin(self, other):
+        return elemwise(pd.Series.isin, self, other)
+
+    def __len__(self):
+        return reduction(self, len, np.sum).compute()
+
     def map_blocks(self, func, columns=None):
         if columns is None:
             columns = self.columns

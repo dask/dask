@@ -309,3 +309,11 @@ def test_value_counts():
     result = d.b.value_counts().compute()
     expected = full.b.value_counts()
     assert eq(result.sort_index(), expected.sort_index())
+
+
+def test_isin():
+    assert eq(d.a.isin([0, 1, 2]), full.a.isin([0, 1, 2]))
+
+
+def test_len():
+    assert len(d) == len(full)
