@@ -14,47 +14,6 @@ from ..utils import ignoring
 
 tokens = ('-%d' % i for i in count(1))
 
-store_names = ('store-%d' % i for i in count(1))
-sort_names = ('sort-%d' % i for i in count(1))
-
-def getitem2(a, b, default=None):
-    """ Getitem with default behavior """
-    try:
-        return getitem(a, b)
-    except KeyError:
-        return default
-
-
-def set_partition(f, column, blockdivs, cache=Chest):
-    """ Given known blockdivs, set index and shuffle """
-    if callable(cache):
-        cache = cache()
-
-    set_index = 'set-index' + next(tokens)
-    store = 'store-block' + next(tokens)
-
-    # Set index on each block
-    _set_index = {(set_index, i): (pd.DataFrame.set_index,
-                                    (f.name, i), column)
-                for i in range(f.npartitions)}
-
-    # Store each block in cache
-    _stores = {(store, i): (setitem, cache,
-                                (tuple, [set_index, i]),
-                                (set_index, i))
-                for i in range(f.npartitions)}
-
-    # Set new local indexes and store to disk
-    get(merge(f.dask, _set_index, _stores), _stores.keys())
-
-    # Do shuffle in cache
-    old_keys = [(set_index, i) for i in range(f.npartitions)]
-    new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
-
-    dsk = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
-
-    return Frame(dsk, new_keys[0][0], f.columns, blockdivs)
-
 
 def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
         chunksize=2**20, out_chunksize=2**16, empty=np.empty):
@@ -174,26 +133,6 @@ def shard_df_on_index(df, blockdivs):
         yield df.iloc[indices[-1]:]
 
 
-def empty_like(df):
-    """ Create an empty DataFrame like input
-
-    >>> df = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
-    ...                   index=['a', 'b', 'c', 'd', 'e'])
-    >>> empty_like(df)
-    Empty DataFrame
-    Columns: [a, b]
-    Index: []
-
-    >>> df.index.dtype == empty_like(df).index.dtype
-    True
-    """
-    index = type(df.index)([], dtype=df.index.dtype,
-                               name=df.index.name)
-    return pd.DataFrame(columns=df.columns,
-                        dtype=df.dtypes,
-                        index=index)
-
-
 def store_shards(shards, cache, key_prefix, store_empty=False):
     """
     Shard dataframe by ranges on its index, store in cache
@@ -229,15 +168,6 @@ def shard_and_store(cache, df_key, prefix, blockdivs):
     df = strip_categories(df.copy())
     shards = shard_df_on_index(df, blockdivs)
     store_shards(shards, cache, prefix)
-
-def shard(n, x):
-    """
-
-    >>> list(shard(3, list(range(10))))
-    [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
-    """
-    for i in range(0, len(x), n):
-        yield x[i: i + n]
 
 
 def load_and_concat_and_store_shards(cache, shard_keys, out_key,
@@ -359,6 +289,9 @@ def shuffle(cache, keys, blockdivs, delete=True):
 
 def blockdivs_by_approximate_percentiles(cache, index_name, lengths,
         out_chunksize):
+    """
+    Compute regular block divisions by computing percentiles in parallel
+    """
     from dask.array import percentile, Array
     n = sum(lengths)
     npartitions = ceil(n / out_chunksize)
@@ -373,65 +306,6 @@ def blockdivs_by_approximate_percentiles(cache, index_name, lengths,
         return []
 
     return percentile(x, q).compute()
-
-
-def blockdivs_by_sort(cache, index_name, lengths, chunksize,
-        empty, sortsize, out_chunksize):
-    """
-    Compute proper divisions in to index by performing external sort
-    """
-    # Collect index-blocks into larger clumps for more efficient in-core sorting
-    subtotal = 0
-    total = 0
-    grouped_indices = []
-    tmp_ind = []
-    for i, l in enumerate(lengths):
-        tmp_ind.append((index_name, i))
-        subtotal += l
-        total += l
-        if subtotal < sortsize:
-            grouped_indices.append(tmp_ind)
-            tmp_ind = []
-        else:
-            subtotal = 0
-
-    # Accumulate several series together, then sort, shard, and store
-    sort = next(sort_names)
-    store2 = next(store_names)
-    first_sort = {(sort, i): (store_shards,
-                               (shard, chunksize,
-                                 (np.sort, (np.concatenate, (list, inds)))),
-                               cache, (store2, i))
-                    for i, inds in enumerate(grouped_indices)}
-
-    cache_dsk = {k: (getitem, cache, (tuple, list(k))) for k in cache}
-
-    # Execute, dumping sorted shards into cache
-    blockkeys = get(merge(cache_dsk, first_sort), sorted(first_sort.keys()))
-
-    # Get out one of the indices to get the proper dtype
-    dtype = cache[(blockkeys[0][0])].dtype
-
-    # Merge all of the shared blocks together into one large array
-    from .esort import emerge
-    seqs = [[cache[key] for key in bk] for bk in blockkeys]
-    sort_storage = empty(shape=(total,), dtype=dtype)
-    emerge(seqs, out=sort_storage, dtype=dtype, out_chunksize=out_chunksize)
-
-    # Find good break points in that array
-    # blockdivs = list(sort_storage[::out_chunksize])[:-1]
-    indices = []
-    blockdivs = []
-    i = out_chunksize
-    while i < len(sort_storage):
-        ind, val = consistent_until(sort_storage, i)
-        if ind is None:
-            break
-        indices.append(ind)
-        blockdivs.append(val)
-        i = ind + out_chunksize
-
-    return blockdivs
 
 
 def iterate_array_from(start, x, blocksize=256):
@@ -468,7 +342,9 @@ def consistent_until(x, start):
     return None, None
 
 
-""" Strip and re-apply category information
+"""
+Strip and re-apply category information
+---------------------------------------
 
 Categoricals are great for storage as long as we don't repeatedly store the
 categories themselves many thousands of times.  Lets collect category
@@ -532,17 +408,44 @@ def reapply_categories(df, metadata):
     for name, d in metadata.items():
         df[name] = pd.Categorical.from_codes(df[name].values,
                                      d['categories'], d['ordered'])
-        # df[name] = hack_new_categorical(df[name].values, d['categories'],
-        #                                 d['ordered'])
     return df
 
 
-"""
-def hack_new_categorical(codes, categories, ordered):
-    cat = pd.Categorical.__new__(pd.Categorical)
-    cat._codes = codes
-    cat.categories = categories
-    cat.ordered = ordered
-    cat.name = None
-    return cat
-"""
+def getitem2(a, b, default=None):
+    """ Getitem with default behavior """
+    try:
+        return getitem(a, b)
+    except KeyError:
+        return default
+
+
+def set_partition(f, column, blockdivs, cache=Chest):
+    """ Given known blockdivs, set index and shuffle """
+    if callable(cache):
+        cache = cache()
+
+    set_index = 'set-index' + next(tokens)
+    store = 'store-block' + next(tokens)
+
+    # Set index on each block
+    _set_index = {(set_index, i): (pd.DataFrame.set_index,
+                                    (f.name, i), column)
+                for i in range(f.npartitions)}
+
+    # Store each block in cache
+    _stores = {(store, i): (setitem, cache,
+                                (tuple, [set_index, i]),
+                                (set_index, i))
+                for i in range(f.npartitions)}
+
+    # Set new local indexes and store to disk
+    get(merge(f.dask, _set_index, _stores), _stores.keys())
+
+    # Do shuffle in cache
+    old_keys = [(set_index, i) for i in range(f.npartitions)]
+    new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
+
+    dsk = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
+
+    return Frame(dsk, new_keys[0][0], f.columns, blockdivs)
+
