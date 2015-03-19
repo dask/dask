@@ -20,6 +20,7 @@ install:
   - conda install pytest numpy into pip coverage toolz
   - conda install -c blaze blaze
   - pip install coveralls dill --use-mirrors
+  - pip install git+https://github.com/ContinuumIO/chest
 
   # Install dask
   - python setup.py install
