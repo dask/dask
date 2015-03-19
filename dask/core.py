@@ -265,7 +265,7 @@ def subs(task, key, val):
             arg = subs(arg, key, val)
         elif isinstance(arg, list):
             arg = [subs(x, key, val) for x in arg]
-        elif arg == key:
+        elif type(arg) is type(key) and arg == key:
             arg = val
         newargs.append(arg)
     return task[:1] + tuple(newargs)

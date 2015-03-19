@@ -126,3 +126,12 @@ def test_subs():
     assert subs((sum, [1, 'x']), 'x', 2) == (sum, [1, 2])
     assert subs((sum, [1, ['x']]), 'x', 2) == (sum, [1, [2]])
 
+
+def test_subs_with_unfriendly_eq():
+    try:
+        import numpy as np
+    except:
+        return
+    else:
+        task = (np.sum, np.array([1, 2]))
+        assert (subs(task, (4, 5), 1) == task) is True

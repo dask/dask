@@ -354,11 +354,14 @@ def rec_concatenate(arrays, axis=0):
         arrays = list(arrays)
     if isinstance(arrays[0], Iterator):
         arrays = list(map(list, arrays))
-    if not isinstance(arrays[0], np.ndarray):
+    if not isinstance(arrays[0], np.ndarray) and not hasattr(arrays[0], '__array__'):
         arrays = [rec_concatenate(a, axis=axis + 1) for a in arrays]
     if arrays[0].ndim <= axis:
         arrays = [a[None, ...] for a in arrays]
-    return np.concatenate(arrays, axis=axis)
+    if len(arrays) == 1:
+        return arrays[0]
+    else:
+        return np.concatenate(arrays, axis=axis)
 
 
 def map_blocks(x, func, blockshape=None, blockdims=None):

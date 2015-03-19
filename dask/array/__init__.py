@@ -10,6 +10,7 @@ from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          nansum, nanmean, nanstd, nanvar, nanmin,
                          nanmax, nanargmin, nanargmax)
+from .percentile import percentile
 with ignoring(ImportError):
     from .reductions import nanprod
 from . import random, linalg, ghost
