@@ -1,7 +1,86 @@
 """ A set of NumPy functions to apply per chunk """
 
+from __future__ import absolute_import, division, print_function
+
+from collections import Container, Iterable, Sequence
+from functools import wraps
+from inspect import getargspec
+
 from toolz import concat
 import numpy as np
+
+from ..utils import ignoring
+
+
+def keepdims_wrapper(a_callable):
+    """
+    A wrapper for functions that don't provide keepdims to ensure that they do.
+    """
+
+    if "keepdims" in getargspec(a_callable).args:
+        return a_callable
+
+    @wraps(a_callable)
+    def keepdims_wrapped_callable(x, axis=None, keepdims=None, *args, **kwargs):
+        r = a_callable(x, axis=axis, *args, **kwargs)
+
+        if not keepdims:
+            return r
+
+        axes = axis
+
+        if axes is None:
+            axes = range(x.ndim)
+
+        if not isinstance(axes, (Container, Iterable, Sequence)):
+            axes = [axes]
+
+        r_slice = tuple()
+        for each_axis in range(x.ndim):
+            if each_axis in axes:
+                r_slice += (None,)
+            else:
+                r_slice += (slice(None),)
+
+        r = r[r_slice]
+
+        return r
+
+    return keepdims_wrapped_callable
+
+
+# Wrap NumPy functions to ensure they provide keepdims.
+sum = keepdims_wrapper(np.sum)
+prod = keepdims_wrapper(np.prod)
+min = keepdims_wrapper(np.min)
+max = keepdims_wrapper(np.max)
+argmin = keepdims_wrapper(np.argmin)
+nanargmin = keepdims_wrapper(np.nanargmin)
+argmax = keepdims_wrapper(np.argmax)
+nanargmax = keepdims_wrapper(np.nanargmax)
+any = keepdims_wrapper(np.any)
+all = keepdims_wrapper(np.all)
+nansum = keepdims_wrapper(np.nansum)
+
+with ignoring(AttributeError):
+    nanprod = keepdims_wrapper(np.nanprod)
+
+nanmin = keepdims_wrapper(np.nanmin)
+nanmax = keepdims_wrapper(np.nanmax)
+mean = keepdims_wrapper(np.mean)
+
+with ignoring(AttributeError):
+    nanmean = keepdims_wrapper(np.nanmean)
+
+var = keepdims_wrapper(np.var)
+
+with ignoring(AttributeError):
+    nanvar = keepdims_wrapper(np.nanvar)
+
+std = keepdims_wrapper(np.std)
+
+with ignoring(AttributeError):
+    nanstd = keepdims_wrapper(np.nanstd)
 
 
 def coarsen(reduction, x, axes):

@@ -419,6 +419,8 @@ def blockdims_from_blockshape(shape, blockshape):
     >>> blockdims_from_blockshape((10, 10), (4, 3))
     ((4, 4, 2), (3, 3, 3, 1))
     """
+    if blockshape is None:
+        raise ValueError("Must supply a blockshape= keyword argument")
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
                               for d, bd in zip(shape, blockshape))
 
@@ -456,6 +458,9 @@ class Array(object):
     @property
     def shape(self):
         return tuple(map(sum, self.blockdims))
+
+    def __len__(self):
+        return sum(self.blockdims[0])
 
     @property
     def dtype(self):
@@ -522,13 +527,7 @@ class Array(object):
         return target
 
     def compute(self, **kwargs):
-        result = get(self.dask, self._keys(), **kwargs)
-        if self.shape:
-            result = rec_concatenate(result)
-        else:
-            while isinstance(result, Iterable):
-                result = result[0]
-        return result
+        return compute(self, **kwargs)
 
     __float__ = __int__ = __bool__ = __complex__ = compute
 
@@ -734,6 +733,42 @@ def get(dsk, keys, get=threaded.get, **kwargs):
     dsk3 = remove_full_slices(dsk2)
     dsk4 = inline_functions(dsk3, fast_functions=fast_functions)
     return get(dsk4, keys, **kwargs)
+
+
+def unpack_singleton(x):
+    """
+
+    >>> unpack_singleton([[[[1]]]])
+    1
+    """
+    while isinstance(x, Iterable):
+        x = x[0]
+    return x
+
+
+def compute(*args, **kwargs):
+    """ Evaluate several dask arrays at once
+
+    Example
+    -------
+
+    >>> import dask.array as da
+    >>> d = da.ones((4, 4), blockshape=(2, 2))
+    >>> a = d + 1  # two different dask arrays
+    >>> b = d + 2
+    >>> A, B = da.compute(a, b)  # Compute both simultaneously
+    """
+
+    dsk = merge(*[arg.dask for arg in args])
+    keys = [arg._keys() for arg in args]
+    results = get(dsk, keys, **kwargs)
+
+    results2 = [rec_concatenate(x) if arg.shape else unpack_singleton(x)
+                for x, arg in zip(results, args)]
+    if len(results2) == 1:
+        return results2[0]
+    else:
+        return results2
 
 
 stacked_names = ('stack-%d' % i for i in count(1))

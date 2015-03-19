@@ -137,6 +137,10 @@ def test_Array():
 
     assert a.blockdims == ((100,) * 10, (100,) * 10)
 
+    assert a.shape == shape
+
+    assert len(a) == shape[0]
+
 
 def test_uneven_blockdims():
     a = Array({}, 'x', shape=(10, 10), blockshape=(3, 3))
@@ -446,3 +450,16 @@ def test_dtype():
     assert d.dtype == d.compute().dtype
     assert (d * 1.0).dtype == (d + 1.0).compute().dtype
     assert d.sum().dtype == d.sum().compute().dtype  # no shape
+
+
+def test_blockdims_from_blockshape():
+    assert blockdims_from_blockshape((10, 10), (4, 3)) == ((4, 4, 2), (3, 3, 3, 1))
+    assert raises(ValueError, lambda: blockdims_from_blockshape((10,), None))
+
+
+def test_compute():
+    d = da.ones((4, 4), blockshape=(2, 2))
+    a, b = d + 1, d + 2
+    A, B = compute(a, b)
+    assert eq(A, d + 1)
+    assert eq(B, d + 2)

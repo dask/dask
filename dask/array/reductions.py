@@ -7,6 +7,7 @@ from toolz import compose, curry
 from .core import (_concatenate2, insert_many, Array, atop, names, sqrt,
         elemwise)
 from ..core import flatten
+from . import chunk
 from ..utils import ignoring
 
 
@@ -42,88 +43,88 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None):
         return result
 
 
-@wraps(np.sum)
+@wraps(chunk.sum)
 def sum(a, axis=None, keepdims=False):
-    return reduction(a, np.sum, np.sum, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.prod)
+@wraps(chunk.prod)
 def prod(a, axis=None, keepdims=False):
-    return reduction(a, np.prod, np.prod, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.prod, chunk.prod, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.min)
+@wraps(chunk.min)
 def min(a, axis=None, keepdims=False):
-    return reduction(a, np.min, np.min, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.min, chunk.min, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.max)
+@wraps(chunk.max)
 def max(a, axis=None, keepdims=False):
-    return reduction(a, np.max, np.max, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.max, chunk.max, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.argmin)
+@wraps(chunk.argmin)
 def argmin(a, axis=None):
-    return arg_reduction(a, np.min, np.argmin, axis=axis)
+    return arg_reduction(a, chunk.min, chunk.argmin, axis=axis)
 
 
-@wraps(np.nanargmin)
+@wraps(chunk.nanargmin)
 def nanargmin(a, axis=None):
-    return arg_reduction(a, np.nanmin, np.nanargmin, axis=axis)
+    return arg_reduction(a, chunk.nanmin, chunk.nanargmin, axis=axis)
 
 
-@wraps(np.argmax)
+@wraps(chunk.argmax)
 def argmax(a, axis=None):
-    return arg_reduction(a, np.max, np.argmax, axis=axis)
+    return arg_reduction(a, chunk.max, chunk.argmax, axis=axis)
 
 
-@wraps(np.nanargmax)
+@wraps(chunk.nanargmax)
 def nanargmax(a, axis=None):
-    return arg_reduction(a, np.nanmax, np.nanargmax, axis=axis)
+    return arg_reduction(a, chunk.nanmax, chunk.nanargmax, axis=axis)
 
 
-@wraps(np.any)
+@wraps(chunk.any)
 def any(a, axis=None, keepdims=False):
-    return reduction(a, np.any, np.any, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.any, chunk.any, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.all)
+@wraps(chunk.all)
 def all(a, axis=None, keepdims=False):
-    return reduction(a, np.all, np.all, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.all, chunk.all, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.nansum)
+@wraps(chunk.nansum)
 def nansum(a, axis=None, keepdims=False):
-    return reduction(a, np.nansum, np.sum, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.nansum, chunk.sum, axis=axis, keepdims=keepdims)
 
 
 with ignoring(AttributeError):
-    @wraps(np.nanprod)
+    @wraps(chunk.nanprod)
     def nanprod(a, axis=None, keepdims=False):
-        return reduction(a, np.nanprod, np.prod, axis=axis, keepdims=keepdims)
+        return reduction(a, chunk.nanprod, chunk.prod, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.nanmin)
+@wraps(chunk.nanmin)
 def nanmin(a, axis=None, keepdims=False):
-    return reduction(a, np.nanmin, np.min, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.nanmin, chunk.min, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.nanmax)
+@wraps(chunk.nanmax)
 def nanmax(a, axis=None, keepdims=False):
-    return reduction(a, np.nanmax, np.max, axis=axis, keepdims=keepdims)
+    return reduction(a, chunk.nanmax, chunk.max, axis=axis, keepdims=keepdims)
 
 
 def numel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return np.sum(np.ones_like(x), **kwargs)
+    return chunk.sum(np.ones_like(x), **kwargs)
 
 
 def nannumel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return np.sum(~np.isnan(x), **kwargs)
+    return chunk.sum(~np.isnan(x), **kwargs)
 
 
-def mean_chunk(x, sum=np.sum, numel=numel, **kwargs):
+def mean_chunk(x, sum=chunk.sum, numel=numel, **kwargs):
     n = numel(x, **kwargs)
     total = sum(x, **kwargs)
     result = np.empty(shape=n.shape,
@@ -136,17 +137,18 @@ def mean_agg(pair, **kwargs):
     return pair['total'].sum(**kwargs) / pair['n'].sum(**kwargs)
 
 
-@wraps(np.mean)
+@wraps(chunk.mean)
 def mean(a, axis=None, keepdims=False):
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims)
 
 
-@wraps(np.nanmean)
 def nanmean(a, axis=None, keepdims=False):
-    return reduction(a, partial(mean_chunk, sum=np.nansum, numel=nannumel),
+    return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims)
+with ignoring(AttributeError):
+    nanmean = wraps(chunk.nanmean)(nanmean)
 
-def var_chunk(A, sum=np.sum, numel=numel, **kwargs):
+def var_chunk(A, sum=chunk.sum, numel=numel, **kwargs):
     n = numel(A, **kwargs)
     x = sum(A, dtype='f8', **kwargs)
     x2 = sum(A**2, dtype='f8', **kwargs)
@@ -168,24 +170,26 @@ def var_agg(A, ddof=None, **kwargs):
     return result
 
 
-@wraps(np.var)
+@wraps(chunk.var)
 def var(a, axis=None, keepdims=False, ddof=0):
     return reduction(a, var_chunk, partial(var_agg, ddof=ddof), axis=axis, keepdims=keepdims)
 
 
-@wraps(np.nanvar)
 def nanvar(a, axis=None, keepdims=False, ddof=0):
-    return reduction(a, partial(var_chunk, sum=np.nansum, numel=nannumel),
+    return reduction(a, partial(var_chunk, sum=chunk.nansum, numel=nannumel),
                      partial(var_agg, ddof=ddof), axis=axis, keepdims=keepdims)
+with ignoring(AttributeError):
+    nanvar = wraps(chunk.nanvar)(nanvar)
 
-@wraps(np.std)
+@wraps(chunk.std)
 def std(a, axis=None, keepdims=False, ddof=0):
     return sqrt(a.var(axis=axis, keepdims=keepdims, ddof=ddof))
 
 
-@wraps(np.nanstd)
 def nanstd(a, axis=None, keepdims=False, ddof=0):
     return sqrt(nanvar(a, axis=axis, keepdims=keepdims, ddof=ddof))
+with ignoring(AttributeError):
+    nanstd = wraps(chunk.nanstd)(nanstd)
 
 
 def vnorm(a, ord=None, axis=None, keepdims=False):
