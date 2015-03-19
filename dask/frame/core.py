@@ -1,5 +1,6 @@
 from itertools import count
 from math import ceil, sqrt
+from functools import wraps
 import toolz
 import os
 from toolz import merge, partial, accumulate, unique, first, dissoc
@@ -19,6 +20,7 @@ from ..utils import repr_long_list
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
+    """ Get function with optimizations specialized to dask.frame """
     if isinstance(keys, list):
         dsk2 = cull(dsk, list(core.flatten(keys)))
     else:
@@ -26,7 +28,9 @@ def get(dsk, keys, get=get_sync, **kwargs):
     dsk3 = fuse(dsk2)
     return get(dsk3, keys, **kwargs)  # use synchronous scheduler for now
 
+
 def compute(*args, **kwargs):
+    """ Compute multiple frames at once """
     if len(args) == 1 and isinstance(args[0], (tuple, list)):
         args = args[0]
     dsk = merge(*[arg.dask for arg in args])
@@ -41,6 +45,25 @@ names = ('f-%d' % i for i in count(1))
 
 
 class Frame(object):
+    """
+    Dask.Frame implements a DataFrame as a sequence of pandas DataFrames
+
+    Dask.frame is a work in progress.  It is buggy and far from complete.
+    Please do not use it yet.
+
+    Parameters
+    ----------
+
+    dask: dict
+        The dask graph to compute this frame
+    name: str
+        The key prefix that specifies which keys in the dask comprise this
+        particular Frame
+    columns: list of strings
+        Column names.  This metadata aids usability
+    blockdivs: tuple of index values
+        Values along which we partition our blocks on the index
+    """
     def __init__(self, dask, name, columns, blockdivs):
         self.dask = dask
         self.name = name
@@ -96,7 +119,6 @@ class Frame(object):
         return get(self.dask, self._keys()[0]).dtypes
 
     def set_index(self, other, **kwargs):
-        from .shuffle import set_index
         return set_index(self, other, **kwargs)
 
     def set_partition(self, column, blockdivs, **kwargs):
@@ -107,7 +129,6 @@ class Frame(object):
         See also:
             set_index
         """
-        from .shuffle import set_partition
         return set_partition(self, column, blockdivs, **kwargs)
 
     def cache(self, cache=Chest):
@@ -276,10 +297,15 @@ class Frame(object):
 
 
 def head(x, n):
+    """ First n elements of dask.frame """
     return x.head(n)
 
 
 def consistent_name(names):
+    """ New name for series in elementwise operation
+
+    If all truthy names are the same, choose that one, otherwise, choose None
+    """
     names = set(n for n in names if n is not None)
     if len(names) == 1:
         return first(names)
@@ -288,6 +314,7 @@ def consistent_name(names):
 
 
 def elemwise(op, *args):
+    """ Elementwise operation for dask.frames """
     name = next(names)
 
     frames = [arg for arg in args if isinstance(arg, Frame)]
@@ -327,7 +354,11 @@ def reduction(x, chunk, aggregate):
 
 
 def linecount(fn):
-    """ Count the number of lines in a textfile """
+    """ Count the number of lines in a textfile
+
+    We need this to build the graph for read_csv.  This is much faster than
+    actually parsing the file, but still costly.
+    """
     with open(os.path.expanduser(fn)) as f:
         result = toolz.count(f)
     return result
@@ -342,6 +373,7 @@ def get_chunk(x, start):
     df.index += start
     return df, x
 
+@wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
     chunksize = kwargs.pop('chunksize', 2**16)
     header = kwargs.get('header', 1)
@@ -525,7 +557,9 @@ aca = apply_concat_apply
 
 def categorize(f, columns=None, **kwargs):
     """
-    Convert columns to category dtype
+    Convert columns of dask.frame to category dtype
+
+    This greatly aids performance, both in-memory and in spilling to disk
     """
     if columns is None:
         dtypes = f.dtypes
@@ -547,4 +581,4 @@ def categorize(f, columns=None, **kwargs):
     return f.map_blocks(categorize, columns=f.columns)
 
 
-from .shuffle import set_index
+from .shuffle import set_index, set_partition

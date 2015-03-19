@@ -16,10 +16,9 @@ tokens = ('-%d' % i for i in count(1))
 
 store_names = ('store-%d' % i for i in count(1))
 sort_names = ('sort-%d' % i for i in count(1))
-index_names = ('index-%d' % i for i in count(1))
-length_names = ('len-%d' % i for i in count(1))
 
 def getitem2(a, b, default=None):
+    """ Getitem with default behavior """
     try:
         return getitem(a, b)
     except KeyError:
@@ -27,6 +26,7 @@ def getitem2(a, b, default=None):
 
 
 def set_partition(f, column, blockdivs, cache=Chest):
+    """ Given known blockdivs, set index and shuffle """
     if callable(cache):
         cache = cache()
 
