@@ -43,7 +43,7 @@ def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
     if isinstance(index, Frame):
         dsk2.update(index.dask)
 
-    lengths = get(dsk2, dsk.keys())
+    lengths = get(dsk2, list(dsk.keys()))
 
     # Compute regular values on which to divide the new index
     blockdivs = blockdivs_by_approximate_percentiles(cache, 'index'+token,
@@ -279,7 +279,7 @@ def shuffle(cache, keys, blockdivs, delete=True):
                      [name, i], categories, True))
               for i in range(nout))
 
-    get(gather, gather.keys())
+    get(gather, list(gather.keys()))
 
     # Delete old blocks
     if delete:
@@ -441,7 +441,7 @@ def set_partition(f, column, blockdivs, cache=Chest):
                 for i in range(f.npartitions))
 
     # Set new local indexes and store to disk
-    get(merge(f.dask, _set_index, _stores), _stores.keys())
+    get(merge(f.dask, _set_index, _stores), list(_stores.keys()))
 
     # Do shuffle in cache
     old_keys = [(set_index, i) for i in range(f.npartitions)]

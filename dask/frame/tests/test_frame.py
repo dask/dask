@@ -289,7 +289,7 @@ def test_categorize():
     assert cfull.dtypes['a'] == 'category'
     assert cfull.dtypes['b'] == 'O'
 
-    assert list(cfull.a.astype('string')) == list(full.a)
+    assert list(cfull.a.astype('O')) == list(full.a)
 
     assert (get(c.dask, c._keys()[:1])[0].dtypes == cfull.dtypes).all()
 
