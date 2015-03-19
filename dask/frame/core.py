@@ -420,10 +420,10 @@ def from_array(x, chunksize=50000):
     columns = tuple(x.dtype.names)
     blockdivs = tuple(range(chunksize, len(x), chunksize))
     name = next(from_array_names)
-    dsk = {(name, i): (pd.DataFrame,
-                        (getitem, x,
-                            (slice(i * chunksize, (i + 1) * chunksize),)))
-            for i in range(0, int(ceil(float(len(x)) / chunksize)))}
+    dsk = dict(((name, i), (pd.DataFrame,
+                             (getitem, x,
+                             (slice(i * chunksize, (i + 1) * chunksize),))))
+            for i in range(0, int(ceil(float(len(x)) / chunksize))))
 
     return Frame(dsk, name, columns, blockdivs)
 

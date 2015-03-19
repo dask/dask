@@ -31,11 +31,13 @@ def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
     # Compute and store old blocks and indexes - get out block lengths
     if isinstance(index, Frame):
         assert index.blockdivs == f.blockdivs
-        dsk = {('x'+token, i): (set_index_and_store, block, ind, cache, token, i)
-                for i, (block, ind) in enumerate(zip(f._keys(), index._keys()))}
+        dsk = dict((('x'+token, i),
+                    (set_index_and_store, block, ind, cache, token, i))
+                for i, (block, ind) in enumerate(zip(f._keys(), index._keys())))
     else:
-        dsk = {('x'+token, i): (set_index_and_store, block, index, cache, token, i)
-                for i, block in enumerate(f._keys())}
+        dsk = dict((('x'+token, i),
+                    (set_index_and_store, block, index, cache, token, i))
+                for i, block in enumerate(f._keys()))
 
     dsk2 = merge(f.dask, dsk)
     if isinstance(index, Frame):
@@ -51,7 +53,7 @@ def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
     old_keys = [('old-block'+token, i) for i in range(f.npartitions)]
     new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
 
-    dsk3 = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
+    dsk3 = dict((k, (getitem, cache, (tuple, list(k)))) for k in new_keys)
 
     return Frame(dsk3, new_keys[0][0], f.columns, blockdivs)
 
@@ -264,17 +266,18 @@ def shuffle(cache, keys, blockdivs, delete=True):
     categories = categorical_metadata(cache[keys[0]])
 
     # Shards old blocks and store in cache
-    store = {('store', i): shard_and_store(cache, key, ['shard', i], blockdivs)
-                for i, key in enumerate(keys)}
+    store = dict((('store', i),
+                  shard_and_store(cache, key, ['shard', i], blockdivs))
+                for i, key in enumerate(keys))
     get(store, list(store.keys()))
 
     # Collect shards together to form new blocks
     name = next(shuffle_names)
-    gather = {('gather', i):
-                (load_and_concat_and_store_shards, cache,
-                  [['shard', j, i] for j in range(nin)],
-                  [name, i], categories, True)
-              for i in range(nout)}
+    gather = dict((('gather', i),
+                   (load_and_concat_and_store_shards, cache,
+                     [['shard', j, i] for j in range(nin)],
+                     [name, i], categories, True))
+              for i in range(nout))
 
     get(gather, gather.keys())
 
@@ -297,8 +300,8 @@ def blockdivs_by_approximate_percentiles(cache, index_name, lengths,
     npartitions = ceil(n / out_chunksize)
 
     name = 'x' + next(tokens)
-    dsk = {(name, i): (getitem, cache, (index_name, i))
-            for i in range(len(lengths))}
+    dsk = dict(((name, i), (getitem, cache, (index_name, i)))
+                for i in range(len(lengths)))
     x = Array(dsk, name, blockdims=(lengths,))
     q = np.linspace(0, 100, npartitions + 1)[1:-1]
 
@@ -428,15 +431,14 @@ def set_partition(f, column, blockdivs, cache=Chest):
     store = 'store-block' + next(tokens)
 
     # Set index on each block
-    _set_index = {(set_index, i): (pd.DataFrame.set_index,
-                                    (f.name, i), column)
-                for i in range(f.npartitions)}
+    _set_index = dict(((set_index, i),
+                       (pd.DataFrame.set_index, (f.name, i), column))
+                      for i in range(f.npartitions))
 
     # Store each block in cache
-    _stores = {(store, i): (setitem, cache,
-                                (tuple, [set_index, i]),
-                                (set_index, i))
-                for i in range(f.npartitions)}
+    _stores = dict(((store, i),
+                    (setitem, cache, (tuple, [set_index, i]), (set_index, i)))
+                for i in range(f.npartitions))
 
     # Set new local indexes and store to disk
     get(merge(f.dask, _set_index, _stores), _stores.keys())
@@ -445,7 +447,7 @@ def set_partition(f, column, blockdivs, cache=Chest):
     old_keys = [(set_index, i) for i in range(f.npartitions)]
     new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
 
-    dsk = {k: (getitem, cache, (tuple, list(k))) for k in new_keys}
+    dsk = dict((k, (getitem, cache, (tuple, list(k)))) for k in new_keys)
 
     return Frame(dsk, new_keys[0][0], f.columns, blockdivs)
 
