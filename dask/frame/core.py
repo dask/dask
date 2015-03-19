@@ -333,7 +333,7 @@ def linecount(fn):
     return result
 
 
-read_csv_names = ('readcsv-%d' % i for i in count(1))
+read_csv_names = ('_readcsv-%d' % i for i in count(1))
 
 def get_chunk(x, start):
     if isinstance(x, tuple):
