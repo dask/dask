@@ -463,3 +463,9 @@ def test_compute():
     A, B = compute(a, b)
     assert eq(A, d + 1)
     assert eq(B, d + 2)
+
+
+def test_np_array_with_zero_dimensions():
+    d = da.ones((4, 4), blockshape=(2, 2))
+    assert eq(np.array(d.sum()), np.array(d.compute().sum()))
+
