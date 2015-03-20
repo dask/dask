@@ -20,7 +20,6 @@ from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse
 from ..compatibility import apply
 
-
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
 

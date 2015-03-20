@@ -15,3 +15,4 @@ with ignoring(ImportError):
     from .reductions import nanprod
 from . import random, linalg, ghost
 from .wrap import ones, zeros, empty
+from .reblock import reblock, intersect_blockdims
