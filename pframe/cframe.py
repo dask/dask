@@ -3,6 +3,7 @@ import os
 import numpy as np
 from convert import from_blocks
 import tempfile
+from .utils import ignoring
 
 
 class cframe(object):
@@ -61,9 +62,9 @@ class cframe(object):
 
     def __del__(self):
         if self._explicitly_given_path:
-            if os.path.exists(self.rootdir):
+            with ignoring(IOError):
                 self.flush()
-        elif os.path.exists(self.rootdir):
+        else:
             self.drop()
 
     def drop(self):
