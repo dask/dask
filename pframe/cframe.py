@@ -20,7 +20,7 @@ class cframe(object):
     """
     def __init__(self, df, rootdir=None, **kwargs):
         if rootdir is None:
-            rootdir = tempfile.mkdtemp('cframe')
+            rootdir = tempfile.mkdtemp('.cframe')
             self._explicitly_given_path = False
         else:
             os.mkdir(rootdir)

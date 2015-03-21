@@ -80,7 +80,8 @@ class pframe(object):
         self.index_name = like.index.name
 
         self.categories = categorical_metadata(like)
-        like2 = strip_categories(like.copy())
+        like2 = strip_categories(like.copy()).iloc[:10]
+
 
         # TODO:    Handle categoricals
         #          Raise on Object dtype
