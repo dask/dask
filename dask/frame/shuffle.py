@@ -16,13 +16,13 @@ from ..utils import ignoring
 tokens = ('-%d' % i for i in count(1))
 
 
-def set_index(f, index, npartitions=None, cache=Chest, out_chunksize=2**16):
+def set_index(f, index, npartitions=None, cache=Chest):
     """ Set Frame index to new column
 
     Sorts index and realigns frame to new sorted order.  This shuffles and
     repartitions your data.
     """
-
+    npartitions = npartitions or f.npartitions
     if not isinstance(index, Frame):
         index2 = f[index]
     else:

@@ -110,15 +110,18 @@ def test_set_index():
     d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
-    d2 = d.set_index('b', npartitions=3, out_chunksize=3)
+    d2 = d.set_index('b', npartitions=3)
     assert d2.npartitions == 3
     # assert eq(d2, full.set_index('b').sort())
     assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
 
-    d3 = d.set_index(d.b, npartitions=3, out_chunksize=3)
+    d3 = d.set_index(d.b, npartitions=3)
     assert d3.npartitions == 3
     # assert eq(d3, full.set_index(full.b).sort())
     assert str(d3.compute().sort(['a'])) == str(full.set_index(full.b).sort(['a']))
+
+    d2 = d.set_index('b')
+    assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
 
 
 def test_from_array():
