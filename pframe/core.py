@@ -77,7 +77,12 @@ class pframe(object):
         self.dtypes = like.dtypes
         # TODO:    Handle categoricals
         #          Raise on Object dtype
-        #          Sane default compression
+
+        # Compression
+        # TODO:    Sane default compression
+        if not kwargs:
+            cp = bcolz.cparams(clevel=0, shuffle=False, cname=None)
+            kwargs['cparams'] = cp
 
         # Create partitions
         npartitions = len(blockdivs) + 1
@@ -107,6 +112,16 @@ class pframe(object):
     @property
     def cbytes(self):
         return sum(part.cbytes for part in self.partitions)
+
+    def __del__(self):
+        if self._explicitly_given_path:
+            if os.path.exists(self.path):
+                self.flush()
+        elif os.path.exists(self.path):
+            self.drop()
+
+    def drop(self):
+        shutil.rmtree(self.path)
 
 
 def shard_df_on_index(df, blockdivs):
