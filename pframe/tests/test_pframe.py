@@ -41,6 +41,10 @@ def test_n_c_bytes():
     assert 0 < pf.cbytes < 1000000
 
 
+def test_npartitions():
+    assert pf.npartitions == 2
+
+
 def test_categoricals():
     df = pd.DataFrame({'a': pd.Categorical(['Alice', 'Bob', 'Alice'])})
     pf = pframe(like=df, blockdivs=[2])

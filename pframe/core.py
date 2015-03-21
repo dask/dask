@@ -115,6 +115,10 @@ class pframe(object):
     def to_dataframe(self):
         return pd.concat(list(self), axis=0, copy=False)
 
+    @property
+    def npartitions(self):
+        return len(self.partitions)
+
     def get_partition(self, i):
         assert 0 <= i < len(self.partitions)
         return reapply_categories(self.partitions[i].to_dataframe(),
