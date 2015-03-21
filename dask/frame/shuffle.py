@@ -6,8 +6,9 @@ from operator import getitem, setitem
 import pandas as pd
 import numpy as np
 from chest import Chest
+from pframe import pframe
 
-from .core import Frame, get
+from .core import Frame, get, names
 from ..compatibility import unicode
 from ..utils import ignoring
 
@@ -15,8 +16,7 @@ from ..utils import ignoring
 tokens = ('-%d' % i for i in count(1))
 
 
-def set_index(f, index, npartitions=None, cache=Chest, sortsize=2**24,
-        chunksize=2**20, out_chunksize=2**16, empty=np.empty):
+def set_index(f, index, npartitions=None, cache=Chest, out_chunksize=2**16):
     """ Set Frame index to new column
 
     Sorts index and realigns frame to new sorted order.  This shuffles and
@@ -123,7 +123,7 @@ def shard_df_on_index(df, blockdivs):
     """
     if isinstance(blockdivs, Iterator):
         blockdivs = list(blockdivs)
-    if not blockdivs:
+    if not len(blockdivs):
         yield df
     else:
         blockdivs = np.array(blockdivs)
@@ -133,6 +133,7 @@ def shard_df_on_index(df, blockdivs):
         for i in range(len(indices) - 1):
             yield df.iloc[indices[i]: indices[i+1]]
         yield df.iloc[indices[-1]:]
+
 
 
 def store_shards(shards, cache, key_prefix, store_empty=False):
@@ -422,32 +423,33 @@ def getitem2(a, b, default=None):
         return default
 
 
-def set_partition(f, column, blockdivs, cache=Chest):
-    """ Given known blockdivs, set index and shuffle """
-    if callable(cache):
-        cache = cache()
+partition_names = ('set_partition-%d' % i for i in count(1))
 
-    set_index = 'set-index' + next(tokens)
-    store = 'store-block' + next(tokens)
+def set_partition(f, index, blockdivs, **kwargs):
+    """ Set new partitioning along index given blockdivs """
+    name = next(names)
+    if isinstance(index, Frame):
+        assert index.blockdivs == f.blockdivs
+        dsk = dict(((name, i), (pd.DataFrame.set_index, block, ind))
+                for i, (block, ind) in enumerate(zip(f._keys(), index._keys())))
+        f2 = Frame(merge(f.dask, index.dask, dsk), name, f.columns, f.blockdivs)
+    else:
+        dsk = dict(((name, i), (pd.DataFrame.set_index, block, index))
+                for i, block in enumerate(f._keys()))
+        f2 = Frame(merge(f.dask, dsk), name, f.columns, f.blockdivs)
 
-    # Set index on each block
-    _set_index = dict(((set_index, i),
-                       (pd.DataFrame.set_index, (f.name, i), column))
-                      for i in range(f.npartitions))
+    head = f2.head()
+    pf = pframe(like=head, blockdivs=blockdivs, **kwargs)
 
-    # Store each block in cache
-    _stores = dict(((store, i),
-                    (setitem, cache, (tuple, [set_index, i]), (set_index, i)))
-                for i in range(f.npartitions))
+    def append(block):
+        pf.append(block)
+        return 0
 
-    # Set new local indexes and store to disk
-    get(merge(f.dask, _set_index, _stores), list(_stores.keys()))
+    f2.map_blocks(append, columns=['a']).compute()
+    pf.flush()
 
-    # Do shuffle in cache
-    old_keys = [(set_index, i) for i in range(f.npartitions)]
-    new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
+    name = next(partition_names)
+    dsk2 = dict(((name, i), (pframe.get_partition, pf, i))
+                for i in range(pf.npartitions))
 
-    dsk = dict((k, (getitem, cache, (tuple, list(k)))) for k in new_keys)
-
-    return Frame(dsk, new_keys[0][0], f.columns, blockdivs)
-
+    return Frame(dsk2, name, head.columns, blockdivs)

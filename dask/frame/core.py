@@ -29,6 +29,15 @@ def get(dsk, keys, get=get_sync, **kwargs):
     return get(dsk3, keys, **kwargs)  # use synchronous scheduler for now
 
 
+def concat(args):
+    """ Generic concat operation """
+    if not args:
+        return args
+    if isinstance(args[0], (pd.DataFrame, pd.Series)):
+        return pd.concat(args)
+    return args
+
+
 def compute(*args, **kwargs):
     """ Compute multiple frames at once """
     if len(args) == 1 and isinstance(args[0], (tuple, list)):
@@ -37,7 +46,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    return [pd.concat(dfs) if arg.blockdivs else dfs[0]
+    return [concat(dfs) if arg.blockdivs else dfs[0]
             for arg, dfs in zip(args, results)]
 
 
