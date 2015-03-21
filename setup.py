@@ -17,3 +17,18 @@ setup(name='dask',
                         else ''),
       install_requires=(list(open('requirements.txt').read().strip().split('\n'))),
       zip_safe=False)
+
+
+setup(name='pframe',
+      version=dask.__version__,
+      description='Partitioned on-disk storage of DataFrames',
+      url='http://github.com/ContinuumIO/dask/',
+      maintainer='Matthew Rocklin',
+      maintainer_email='mrocklin@gmail.com',
+      license='BSD',
+      keywords='pandas partitioning out-of-core',
+      packages=['pframe'],
+      long_description=(open('README.rst').read() if exists('README.rst')
+                        else ''),
+      install_requires=(list(open('pframe.requirements.txt').read().strip().split('\n'))),
+      zip_safe=False)
