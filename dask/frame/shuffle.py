@@ -22,40 +22,14 @@ def set_index(f, index, npartitions=None, cache=Chest, out_chunksize=2**16):
     Sorts index and realigns frame to new sorted order.  This shuffles and
     repartitions your data.
     """
-    npartitions = npartitions or f.npartitions
-    if callable(cache):
-        cache = cache()
 
-    token = next(tokens)
-
-    # Compute and store old blocks and indexes - get out block lengths
-    if isinstance(index, Frame):
-        assert index.blockdivs == f.blockdivs
-        dsk = dict((('x'+token, i),
-                    (set_index_and_store, block, ind, cache, token, i))
-                for i, (block, ind) in enumerate(zip(f._keys(), index._keys())))
+    if not isinstance(index, Frame):
+        index2 = f[index]
     else:
-        dsk = dict((('x'+token, i),
-                    (set_index_and_store, block, index, cache, token, i))
-                for i, block in enumerate(f._keys()))
+        index2 = index
 
-    dsk2 = merge(f.dask, dsk)
-    if isinstance(index, Frame):
-        dsk2.update(index.dask)
-
-    lengths = get(dsk2, list(dsk.keys()))
-
-    # Compute regular values on which to divide the new index
-    blockdivs = blockdivs_by_approximate_percentiles(cache, 'index'+token,
-                    lengths, out_chunksize)
-
-    # Shuffle old blocks into new blocks
-    old_keys = [('old-block'+token, i) for i in range(f.npartitions)]
-    new_keys = shuffle(cache, old_keys, blockdivs, delete=True)
-
-    dsk3 = dict((k, (getitem, cache, (tuple, list(k)))) for k in new_keys)
-
-    return Frame(dsk3, new_keys[0][0], f.columns, blockdivs)
+    blockdivs = index2.quantiles(np.linspace(0, 100, npartitions+1)[1:-1])
+    return f.set_partition(index, blockdivs)
 
 
 def set_index_and_store(df, index, cache, token, i):

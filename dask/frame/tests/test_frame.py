@@ -114,12 +114,12 @@ def test_set_index():
     d2 = d.set_index('b', npartitions=3, out_chunksize=3)
     assert d2.npartitions == 3
     # assert eq(d2, full.set_index('b').sort())
-    assert str(d2.compute()) == str(full.set_index('b').sort())
+    assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
 
     d3 = d.set_index(d.b, npartitions=3, out_chunksize=3)
     assert d3.npartitions == 3
     # assert eq(d3, full.set_index(full.b).sort())
-    assert str(d3.compute()) == str(full.set_index(full.b).sort())
+    assert str(d3.compute().sort(['a'])) == str(full.set_index(full.b).sort(['a']))
 
 
 def test_shard_df_on_index():
