@@ -11,6 +11,9 @@ df2 = pd.DataFrame({'a': [10, 20, 30],
                     'b': [40, 50, 60],
                     'c': [10., 20., 30.]}, index=[2, 4, 6])
 
+df1.index.name = 'i'
+df2.index.name = 'i'
+
 pf = pframe(like=df1, blockdivs=[4])
 pf.append(df1)
 pf.append(df2)
@@ -20,12 +23,15 @@ def test_append():
     a = pd.DataFrame({'a': [1, 2, 10],
                       'b': [4, 5, 40],
                       'c': [1., 2., 10.]}, index=[1, 3, 2])
+    a.index.name = 'i'
     b = pd.DataFrame({'a': [3, 20, 30],
                       'b': [6, 50, 60],
                       'c': [3., 20., 30.]}, index=[5, 4, 6])
+    b.index.name = 'i'
 
-    tm.assert_frame_equal(pf.partitions[0].to_dataframe(), a)
-    tm.assert_frame_equal(pf.partitions[1].to_dataframe(), b)
+    tm.assert_frame_equal(pf.get_partition(0), a)
+    tm.assert_frame_equal(pf.get_partition(1), b)
+
 
 def test_head():
     assert isinstance(pf.head(), pd.DataFrame)

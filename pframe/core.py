@@ -77,6 +77,7 @@ class pframe(object):
         # Store Metadata
         self.columns = like.columns
         self.dtypes = like.dtypes
+        self.index_name = like.index.name
 
         self.categories = categorical_metadata(like)
         like2 = strip_categories(like.copy())
@@ -121,8 +122,10 @@ class pframe(object):
 
     def get_partition(self, i):
         assert 0 <= i < len(self.partitions)
-        return reapply_categories(self.partitions[i].to_dataframe(),
-                                  self.categories)
+        df = reapply_categories(self.partitions[i].to_dataframe(),
+                                self.categories)
+        df.index.name = self.index_name
+        return df
 
     def __iter__(self):
         for part in self.partitions:
