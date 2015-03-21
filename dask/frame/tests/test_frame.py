@@ -1,6 +1,5 @@
 import dask.frame as df
 from dask.frame.core import linecount, compute, get
-from dask.frame.shuffle import shard_df_on_index
 import pandas.util.testing as tm
 from operator import getitem
 import pandas as pd
@@ -32,6 +31,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
 d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
 full = d.compute()
 
+
 def test_frame():
     result = (d['a'] + 1).compute()
     expected = pd.Series([2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -54,7 +54,6 @@ def test_frame():
     assert np.allclose(d.b.std().compute(), full.b.std())
 
     assert repr(d)
-
 
 
 def test_attributes():
@@ -120,34 +119,6 @@ def test_set_index():
     assert d3.npartitions == 3
     # assert eq(d3, full.set_index(full.b).sort())
     assert str(d3.compute().sort(['a'])) == str(full.set_index(full.b).sort(['a']))
-
-
-def test_shard_df_on_index():
-    f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
-                      index=[1, 2, 3, 4, 4])
-
-    result = list(df.shuffle.shard_df_on_index(f, [2, 7]))
-    assert eq(result[0], f.loc[[1]])
-    assert eq(result[1], f.loc[[2, 3, 4]])
-    assert eq(result[2], pd.DataFrame(columns=['a', 'b'], dtype=f.dtypes))
-
-
-def test_shard_df_on_index():
-    f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
-                      index=['a', 'b', 'c', 'd', 'e'])
-    result = list(shard_df_on_index(f, ['b', 'd']))
-    assert eq(result[0], f.iloc[:1])
-    assert eq(result[1], f.iloc[1:3])
-    assert eq(result[2], f.iloc[3:])
-
-
-    f = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
-                     index=[0, 1, 3]).set_index('b').sort()
-
-    result = list(shard_df_on_index(f, [4, 9]))
-    assert eq(result[0], f.iloc[0:1])
-    assert eq(result[1], f.iloc[1:3])
-    assert eq(result[2], f.iloc[3:])
 
 
 def test_from_array():
