@@ -1,4 +1,4 @@
-from pframe.core import pframe
+from pframe.core import pframe, shard_df_on_index
 
 import pandas as pd
 import shutil
@@ -65,3 +65,30 @@ def test_categoricals():
 def test_raise_on_object_dtype():
     df = pd.DataFrame({'a': ['Alice', 'Bob', 'Alice']})
     assert raises(Exception, lambda: pframe(like=df, blockdivs=['Bob']))
+
+
+def test_shard_df_on_index():
+    f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
+                      index=[1, 2, 3, 4, 4])
+
+    result = list(shard_df_on_index(f, [2, 7]))
+    tm.assert_frame_equal(result[0], f.loc[[1]])
+    tm.assert_frame_equal(result[1], f.loc[[2, 3, 4]])
+    tm.assert_frame_equal(result[2], pd.DataFrame(columns=['a', 'b'],
+                                                  dtype=f.dtypes))
+
+    f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
+                      index=['a', 'b', 'c', 'd', 'e'])
+    result = list(shard_df_on_index(f, ['b', 'd']))
+    tm.assert_frame_equal(result[0], f.iloc[:1])
+    tm.assert_frame_equal(result[1], f.iloc[1:3])
+    tm.assert_frame_equal(result[2], f.iloc[3:])
+
+
+    f = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
+                     index=[0, 1, 3]).set_index('b').sort()
+
+    result = list(shard_df_on_index(f, [4, 9]))
+    tm.assert_frame_equal(result[0], f.iloc[0:1])
+    tm.assert_frame_equal(result[1], f.iloc[1:3])
+    tm.assert_frame_equal(result[2], f.iloc[3:])
