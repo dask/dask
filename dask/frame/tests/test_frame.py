@@ -317,3 +317,10 @@ def test_isin():
 
 def test_len():
     assert len(d) == len(full)
+
+
+def test_quantiles():
+    result = d.b.quantiles([30, 70])
+    assert len(result) == 2
+    assert result[0] == 0
+    assert 3 < result[1] < 7

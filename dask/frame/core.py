@@ -295,6 +295,14 @@ class Frame(object):
     def categorize(self, columns=None, **kwargs):
         return categorize(self, columns, **kwargs)
 
+    def quantiles(self, q):
+        """ Approximate quantiles of column
+
+        q : list/array of floats
+            Iterable of numbers ranging from 0 to 100 for the desired quantiles
+        """
+        return quantiles(self, q)
+
 
 def head(x, n):
     """ First n elements of dask.frame """
@@ -582,6 +590,28 @@ def categorize(f, columns=None, **kwargs):
         return block
 
     return f.map_blocks(categorize, columns=f.columns)
+
+
+def quantiles(f, q, **kwargs):
+    """ Approximate quantiles of column
+
+    q : list/array of floats
+        Iterable of numbers ranging from 0 to 100 for the desired quantiles
+    """
+    assert len(f.columns) == 1
+    from dask.array.percentile import _percentile, merge_percentiles
+    name = next(names)
+    val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), q)
+            for i, key in enumerate(f._keys())}
+    name2 = next(names)
+    len_dsk = {(name2, i): (len, key) for i, key in enumerate(f._keys())}
+
+    vals, lens = get(merge(val_dsk, len_dsk, f.dask),
+                     [sorted(val_dsk.keys()), sorted(len_dsk.keys())])
+
+    result = merge_percentiles(q, [q] * f.npartitions, vals, lens)
+
+    return result
 
 
 from .shuffle import set_index, set_partition
