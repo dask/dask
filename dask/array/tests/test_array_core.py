@@ -469,3 +469,8 @@ def test_np_array_with_zero_dimensions():
     d = da.ones((4, 4), blockshape=(2, 2))
     assert eq(np.array(d.sum()), np.array(d.compute().sum()))
 
+
+def test_unique():
+    x = np.array([1, 2, 4, 4, 5, 2])
+    d = da.from_array(x, blockshape=(3,))
+    assert eq(da.unique(d), np.unique(x))
