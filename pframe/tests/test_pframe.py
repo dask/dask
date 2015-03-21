@@ -39,3 +39,12 @@ def test_metadata():
 def test_n_c_bytes():
     assert 0 < pf.nbytes < 1000000
     assert 0 < pf.cbytes < 1000000
+
+
+def test_categoricals():
+    df = pd.DataFrame({'a': pd.Categorical(['Alice', 'Bob', 'Alice'])})
+    pf = pframe(like=df, blockdivs=[2])
+    pf.append(df)
+    assert pf.partitions[0].blocks[0].dtype == 'i1'
+
+    tm.assert_frame_equal(pf.to_dataframe(), df)

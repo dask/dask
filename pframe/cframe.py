@@ -17,7 +17,6 @@ class cframe(object):
 
     *  Partial reads by row slicing
     *  Partial column reads
-    *  Categories?
     """
     def __init__(self, df, rootdir=None, **kwargs):
         if rootdir is None:

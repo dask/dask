@@ -5,8 +5,11 @@ from math import log, ceil
 from collections import Iterator
 import os
 import numpy as np
+import shutil
 
 from .cframe import cframe
+from .categories import (strip_categories, categorical_metadata,
+        reapply_categories)
 
 
 class pframe(object):
@@ -35,11 +38,11 @@ class pframe(object):
     DataFrame will be split accordingly.
 
     >>> pf.append(df)
-    >>> pf.partitions[0].to_dataframe()
+    >>> pf.get_partition(0)
        a  b  c
     1  1  4  1
     3  2  5  2
-    >>> pf.partitions[1].to_dataframe()
+    >>> pf.get_partition(1)
        a  b  c
     5  3  6  3
 
@@ -52,13 +55,12 @@ class pframe(object):
 
     The partitions grow accordingly.
 
-    >>> pf.partitions[0].to_dataframe()
+    >>> pf.get_partition(0)
         a   b   c
     1   1   4   1
     3   2   5   2
     2  10  40  10
     """
-
     def __init__(self, like, blockdivs, path=None, **kwargs):
         # Create directory
         if path is None:
@@ -75,6 +77,10 @@ class pframe(object):
         # Store Metadata
         self.columns = like.columns
         self.dtypes = like.dtypes
+
+        self.categories = categorical_metadata(like)
+        like2 = strip_categories(like.copy())
+
         # TODO:    Handle categoricals
         #          Raise on Object dtype
 
@@ -88,7 +94,7 @@ class pframe(object):
         npartitions = len(blockdivs) + 1
         logn = int(ceil(log(npartitions, 10)))
         subpath = 'part-%0' + str(logn) + 'd'
-        self.partitions = [cframe(like, rootdir=os.path.join(path, subpath % i),
+        self.partitions = [cframe(like2, rootdir=os.path.join(path, subpath % i),
                                   **kwargs)
                             for i in range(npartitions)]
 
@@ -96,6 +102,7 @@ class pframe(object):
         return self.partitions[0].head(n)
 
     def append(self, df):
+        df = strip_categories(df.copy())
         shards = shard_df_on_index(df, self.blockdivs)
         for shard, cf in zip(shards, self.partitions):
             if len(shard):
@@ -104,6 +111,18 @@ class pframe(object):
     def flush(self):
         for part in self.partitions:
             part.flush()
+
+    def to_dataframe(self):
+        return pd.concat(list(self), axis=0, copy=False)
+
+    def get_partition(self, i):
+        assert 0 <= i < len(self.partitions)
+        return reapply_categories(self.partitions[i].to_dataframe(),
+                                  self.categories)
+
+    def __iter__(self):
+        for part in self.partitions:
+            yield reapply_categories(part.to_dataframe(), self.categories)
 
     @property
     def nbytes(self):
