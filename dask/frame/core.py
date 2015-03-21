@@ -35,6 +35,11 @@ def concat(args):
         return args
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
         return pd.concat(args)
+    if isinstance(args[0], (pd.Index)):
+        result = pd.concat(map(pd.Series, args))
+        result = type(args[0])(result.values)
+        result.name = args[0].name
+        return result
     return args
 
 
@@ -119,6 +124,13 @@ class Frame(object):
                 return self[key]
             except NotImplementedError:
                 raise AttributeError()
+
+    @property
+    def index(self):
+        name = next(names)
+        dsk = dict(((name, i), (getattr, key, 'index'))
+                   for i, key in enumerate(self._keys()))
+        return Frame(merge(dsk, self.dask), name, [], self.blockdivs)
 
     def __dir__(self):
         return sorted(set(list(dir(type(self))) + list(self.columns)))

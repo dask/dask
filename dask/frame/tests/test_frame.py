@@ -298,3 +298,7 @@ def test_quantiles():
     assert len(result) == 2
     assert result[0] == 0
     assert 3 < result[1] < 7
+
+
+def test_index():
+    assert eq(d.index, full.index)
