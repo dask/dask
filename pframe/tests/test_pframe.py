@@ -3,6 +3,7 @@ from pframe.core import pframe
 import pandas as pd
 import shutil
 from pandas.util import testing as tm
+from pframe.utils import raises
 
 df1 = pd.DataFrame({'a': [1, 2, 3],
                     'b': [4, 5, 6],
@@ -59,3 +60,8 @@ def test_categoricals():
     assert pf.partitions[0].blocks[0].dtype == 'i1'
 
     tm.assert_frame_equal(pf.to_dataframe(), df)
+
+
+def test_raise_on_object_dtype():
+    df = pd.DataFrame({'a': ['Alice', 'Bob', 'Alice']})
+    assert raises(Exception, lambda: pframe(like=df, blockdivs=['Bob']))
