@@ -302,3 +302,18 @@ def test_quantiles():
 
 def test_index():
     assert eq(d.index, full.index)
+
+
+def test_from_bcolz():
+    try:
+        import bcolz
+    except ImportError:
+        pass
+    else:
+        t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
+                         names=['x', 'y', 'a'])
+        d = df.from_bcolz(t, chunksize=2)
+        assert d.npartitions == 2
+        assert d.dtypes['a'] == 'category'
+        assert list(d.x.compute()) == [1, 2, 3]
+        assert list(d.a.compute()) == ['a', 'b', 'a']

@@ -1,7 +1,8 @@
 from itertools import count
 from collections import Iterator
 from math import ceil
-from toolz import merge, accumulate, unique, merge_sorted
+from toolz import merge, accumulate, merge_sorted
+import toolz
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np

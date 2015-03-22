@@ -10,6 +10,7 @@ import numpy as np
 import operator
 from chest import Chest
 
+from .. import array as da
 from ..optimize import cull, fuse
 from .. import core
 from ..array.core import partial_by_order
@@ -458,6 +459,58 @@ def from_array(x, chunksize=50000):
 
     return Frame(dsk, name, columns, blockdivs)
 
+
+from pframe.categories import reapply_categories
+
+def from_bcolz(x, chunksize=None, index=None, categorize=True):
+    """ Read dask frame from bcolz.ctable
+
+    Parameters
+    ----------
+
+    x : bcolz.ctable
+        Input data
+    chunksize : int (optional)
+        The size of blocks to pull out from ctable.  Ideally as large as can
+        comfortably fit in memory
+    categorize : bool (defaults to True)
+        Automatically categorize all string dtypes
+
+    See Also
+    --------
+
+    from_array: more generic function not optimized for bcolz
+    """
+    bc_chunklen = max(x[name].chunklen for name in x.names)
+    if chunksize is None and bc_chunklen > 10000:
+        chunksize = bc_chunklen
+
+    categories = dict()
+    if categorize:
+        for name in x.names:
+            if (np.issubdtype(x.dtype[name], np.string_) or
+                np.issubdtype(x.dtype[name], np.object_)):
+                a = da.from_array(x[name], blockshape=(chunksize*10,))
+                categories[name] = {
+                    'categories': pd.Index(da.unique(a), dtype=x.dtype[name]),
+                    'ordered': True}
+
+    columns = tuple(x.dtype.names)
+    blockdivs = tuple(range(chunksize, len(x), chunksize))
+    new_name = next(from_array_names)
+    dsk = dict(((new_name, i),
+        (pd.DataFrame,
+          (dict, (zip,
+            x.names,
+            [(getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),))
+             if name not in categories else
+             (pd.Categorical,
+               (getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),)),
+               categories[name]['categories'])
+             for name in x.names]))))
+           for i in range(0, int(ceil(float(len(x)) / chunksize))))
+
+    return Frame(dsk, new_name, columns, blockdivs)
 
 class GroupBy(object):
     def __init__(self, frame, index, **kwargs):
