@@ -493,9 +493,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None):
             if (np.issubdtype(x.dtype[name], np.string_) or
                 np.issubdtype(x.dtype[name], np.object_)):
                 a = da.from_array(x[name], blockshape=(chunksize*len(x.names),))
-                categories[name] = {
-                    'categories': pd.Index(da.unique(a), dtype=x.dtype[name]),
-                    'ordered': True}
+                categories[name] = da.unique(a)
 
     columns = tuple(x.dtype.names)
     blockdivs = tuple(range(chunksize, len(x), chunksize))
@@ -506,9 +504,12 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None):
             x.names,
             [(getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),))
              if name not in categories else
-             (pd.Categorical,
-               (getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),)),
-               categories[name]['categories'])
+             (pd.Categorical.from_codes,
+                 (np.searchsorted,
+                   categories[name],
+                   (getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),))),
+                 categories[name],
+                 True)
              for name in x.names]))))
            for i in range(0, int(ceil(float(len(x)) / chunksize))))
 
