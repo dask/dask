@@ -34,8 +34,10 @@ def concat(args):
     if not args:
         return args
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
+        args = [arg for arg in args if len(arg)]
         return pd.concat(args)
     if isinstance(args[0], (pd.Index)):
+        args = [arg for arg in args if len(arg)]
         result = pd.concat(map(pd.Series, args))
         result = type(args[0])(result.values)
         result.name = args[0].name
@@ -495,10 +497,11 @@ class GroupBy(object):
 
 
 class SeriesGroupBy(object):
-    def __init__(self, frame, index, key):
+    def __init__(self, frame, index, key, **kwargs):
         self.frame = frame
         self.index = index
         self.key = key
+        self.kwargs = kwargs
 
     def apply(func, columns=None):
         f = set_index(self.frame, self.index, **self.kwargs)

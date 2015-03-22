@@ -16,7 +16,7 @@ from ..utils import ignoring
 tokens = ('-%d' % i for i in count(1))
 
 
-def set_index(f, index, npartitions=None, cache=Chest):
+def set_index(f, index, npartitions=None, **kwargs):
     """ Set Frame index to new column
 
     Sorts index and realigns frame to new sorted order.  This shuffles and
@@ -29,13 +29,14 @@ def set_index(f, index, npartitions=None, cache=Chest):
         index2 = index
 
     blockdivs = index2.quantiles(np.linspace(0, 100, npartitions+1)[1:-1])
-    return f.set_partition(index, blockdivs)
+    return f.set_partition(index, blockdivs, **kwargs)
 
 
 partition_names = ('set_partition-%d' % i for i in count(1))
 
 def set_partition(f, index, blockdivs, **kwargs):
     """ Set new partitioning along index given blockdivs """
+    blockdivs = unique(blockdivs)
     name = next(names)
     if isinstance(index, Frame):
         assert index.blockdivs == f.blockdivs
@@ -62,3 +63,10 @@ def set_partition(f, index, blockdivs, **kwargs):
                 for i in range(pf.npartitions))
 
     return Frame(dsk2, name, head.columns, blockdivs)
+
+
+def unique(blockdivs):
+    if isinstance(blockdivs, np.ndarray):
+        return np.unique(blockdivs)
+    if isinstance(blockdivs, (tuple, list, Iterator)):
+        return tuple(toolz.unique(blockdivs))
