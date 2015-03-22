@@ -6,6 +6,7 @@ from collections import Iterator
 import os
 import numpy as np
 import shutil
+from threading import Lock
 
 from .cframe import cframe
 from .categories import (strip_categories, categorical_metadata,
@@ -98,6 +99,7 @@ class pframe(object):
         self.partitions = [cframe(like2, rootdir=os.path.join(path, subpath % i),
                                   **kwargs)
                             for i in range(npartitions)]
+        self.lock = Lock()
 
     def head(self, n=10):
         return self.partitions[0].head(n)
@@ -105,13 +107,15 @@ class pframe(object):
     def append(self, df):
         df = strip_categories(df.copy())
         shards = shard_df_on_index(df, self.blockdivs)
-        for shard, cf in zip(shards, self.partitions):
-            if len(shard):
-                cf.append(shard)
+        with self.lock:
+            for shard, cf in zip(shards, self.partitions):
+                if len(shard):
+                    cf.append(shard)
 
     def flush(self):
-        for part in self.partitions:
-            part.flush()
+        with self.lock:
+            for part in self.partitions:
+                part.flush()
 
     def to_dataframe(self):
         return pd.concat(list(self), axis=0, copy=False)
@@ -128,16 +132,19 @@ class pframe(object):
         return df
 
     def __iter__(self):
-        for part in self.partitions:
-            yield reapply_categories(part.to_dataframe(), self.categories)
+        with self.lock:
+            for part in self.partitions:
+                yield reapply_categories(part.to_dataframe(), self.categories)
 
     @property
     def nbytes(self):
-        return sum(part.nbytes for part in self.partitions)
+        with self.lock:
+            return sum(part.nbytes for part in self.partitions)
 
     @property
     def cbytes(self):
-        return sum(part.cbytes for part in self.partitions)
+        with self.lock:
+            return sum(part.cbytes for part in self.partitions)
 
     def __del__(self):
         if self._explicitly_given_path:
@@ -147,7 +154,8 @@ class pframe(object):
             self.drop()
 
     def drop(self):
-        shutil.rmtree(self.path)
+        with self.lock:
+            shutil.rmtree(self.path)
 
 
 def shard_df_on_index(df, blockdivs):
