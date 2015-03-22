@@ -462,7 +462,7 @@ def from_array(x, chunksize=50000):
 
 from pframe.categories import reapply_categories
 
-def from_bcolz(x, chunksize=None, index=None, categorize=True):
+def from_bcolz(x, chunksize=None, categorize=True, index=None):
     """ Read dask frame from bcolz.ctable
 
     Parameters
@@ -475,6 +475,8 @@ def from_bcolz(x, chunksize=None, index=None, categorize=True):
         comfortably fit in memory
     categorize : bool (defaults to True)
         Automatically categorize all string dtypes
+    index : string (optional)
+        Column to make the index
 
     See Also
     --------
@@ -490,7 +492,7 @@ def from_bcolz(x, chunksize=None, index=None, categorize=True):
         for name in x.names:
             if (np.issubdtype(x.dtype[name], np.string_) or
                 np.issubdtype(x.dtype[name], np.object_)):
-                a = da.from_array(x[name], blockshape=(chunksize*10,))
+                a = da.from_array(x[name], blockshape=(chunksize*len(x.names),))
                 categories[name] = {
                     'categories': pd.Index(da.unique(a), dtype=x.dtype[name]),
                     'ordered': True}
@@ -510,7 +512,17 @@ def from_bcolz(x, chunksize=None, index=None, categorize=True):
              for name in x.names]))))
            for i in range(0, int(ceil(float(len(x)) / chunksize))))
 
-    return Frame(dsk, new_name, columns, blockdivs)
+    result = Frame(dsk, new_name, columns, blockdivs)
+
+    if index:
+        assert index in x.names
+        a = da.from_array(x[index], blockshape=(chunksize*len(x.names),))
+        q = np.linspace(1, 100, len(x) / chunksize + 2)[1:-1]
+        blockdivs = da.percentile(a, q).compute()
+        return set_partition(result, index, blockdivs)
+    else:
+        return result
+
 
 class GroupBy(object):
     def __init__(self, frame, index, **kwargs):

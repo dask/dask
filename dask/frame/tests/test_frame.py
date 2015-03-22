@@ -315,5 +315,8 @@ def test_from_bcolz():
         d = df.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
         assert d.dtypes['a'] == 'category'
-        assert list(d.x.compute()) == [1, 2, 3]
-        assert list(d.a.compute()) == ['a', 'b', 'a']
+        assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
+        assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
+
+        d = df.from_bcolz(t, chunksize=2, index='x')
+        assert list(d.index.compute()) == [1, 2, 3]
