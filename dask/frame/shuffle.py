@@ -9,6 +9,7 @@ import numpy as np
 from chest import Chest
 from pframe import pframe
 
+from .. import threaded
 from .core import Frame, get, names
 from ..compatibility import unicode
 from ..utils import ignoring
@@ -56,7 +57,7 @@ def set_partition(f, index, blockdivs, **kwargs):
         pf.append(block)
         return 0
 
-    f2.map_blocks(append, columns=['a']).compute()
+    f2.map_blocks(append, columns=['a']).compute(get=threaded.get)
     pf.flush()
 
     name = next(partition_names)
