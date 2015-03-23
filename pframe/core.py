@@ -126,9 +126,10 @@ class pframe(object):
 
     def get_partition(self, i):
         assert 0 <= i < len(self.partitions)
-        df = reapply_categories(self.partitions[i].to_dataframe(),
-                                self.categories)
-        df.index.name = self.index_name
+        with self.lock:
+            df = reapply_categories(self.partitions[i].to_dataframe(),
+                                    self.categories)
+            df.index.name = self.index_name
         return df
 
     def __iter__(self):
@@ -147,11 +148,11 @@ class pframe(object):
             return sum(part.cbytes for part in self.partitions)
 
     def __del__(self):
-        if self._explicitly_given_path:
-            if os.path.exists(self.path):
-                self.flush()
-        elif os.path.exists(self.path):
-            self.drop()
+        if not self._explicitly_given_path:
+            try:
+                self.drop()
+            except IOError:
+                pass
 
     def drop(self):
         with self.lock:

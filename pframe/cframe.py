@@ -19,7 +19,7 @@ class cframe(object):
     *  Partial reads by row slicing
     *  Partial column reads
     """
-    def __init__(self, df, rootdir=None, **kwargs):
+    def __init__(self, df, rootdir=None, chunklen=2**16, **kwargs):
         if rootdir is None:
             rootdir = tempfile.mkdtemp('.cframe')
             self._explicitly_given_path = False
@@ -29,11 +29,12 @@ class cframe(object):
 
         self.blocks = [bcolz.zeros(rootdir=os.path.join(rootdir, '%d.bcolz' % i),
                                    shape=(0, blk.values.shape[0]),
-                                   dtype=blk.values.dtype, safe=False, **kwargs)
+                                   dtype=blk.values.dtype, safe=False,
+                                   chunklen=chunklen, **kwargs)
                         for i, blk in enumerate(df._data.blocks)]
         self.columns = df.columns
         self.index = bcolz.zeros(shape=(0,), dtype=df.index.values.dtype,
-                                 safe=False, **kwargs)
+                                 safe=False, chunklen=chunklen, **kwargs)
         self.placement = [ b.mgr_locs.as_array for b in df._data.blocks ]
         self.rootdir = rootdir
 
@@ -62,8 +63,10 @@ class cframe(object):
 
     def __del__(self):
         if self._explicitly_given_path:
-            with ignoring(IOError):
+            try:
                 self.flush()
+            except IOError:
+                pass
         else:
             self.drop()
 
