@@ -560,6 +560,10 @@ class Array(object):
     def T(self):
         return transpose(self)
 
+    @wraps(np.transpose)
+    def transpose(self, axes=None):
+        return transpose(self, axes)
+
     def __abs__(self):
         return elemwise(operator.abs, self)
     def __add__(self, other):

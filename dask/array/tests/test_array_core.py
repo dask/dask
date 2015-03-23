@@ -111,6 +111,14 @@ def test_chunked_transpose_plus_one():
     assert eq(rec_concatenate(out), x.T + 1)
 
 
+def test_transpose():
+    x = np.arange(240).reshape((4, 6, 10))
+    d = da.from_array(x, blockshape=(2, 3, 4))
+
+    assert eq(d.transpose((2, 0, 1)),
+              x.transpose((2, 0, 1)))
+
+
 def test_broadcast_dimensions_works_with_singleton_dimensions():
     argpairs = [('x', 'i')]
     numblocks = {'x': ((1,),)}
