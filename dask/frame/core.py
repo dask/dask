@@ -462,7 +462,7 @@ def from_array(x, chunksize=50000):
 
 from pframe.categories import reapply_categories
 
-def from_bcolz(x, chunksize=None, categorize=True, index=None):
+def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     """ Read dask frame from bcolz.ctable
 
     Parameters
@@ -520,7 +520,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None):
         a = da.from_array(x[index], blockshape=(chunksize*len(x.names),))
         q = np.linspace(1, 100, len(x) / chunksize + 2)[1:-1]
         blockdivs = da.percentile(a, q).compute()
-        return set_partition(result, index, blockdivs)
+        return set_partition(result, index, blockdivs, **kwargs)
     else:
         return result
 

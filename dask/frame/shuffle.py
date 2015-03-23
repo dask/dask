@@ -36,7 +36,7 @@ def set_index(f, index, npartitions=None, **kwargs):
 
 partition_names = ('set_partition-%d' % i for i in count(1))
 
-def set_partition(f, index, blockdivs, **kwargs):
+def set_partition(f, index, blockdivs, get=threaded.get, **kwargs):
     """ Set new partitioning along index given blockdivs """
     blockdivs = unique(blockdivs)
     name = next(names)
@@ -57,7 +57,7 @@ def set_partition(f, index, blockdivs, **kwargs):
         pf.append(block)
         return 0
 
-    f2.map_blocks(append, columns=['a']).compute(get=threaded.get)
+    f2.map_blocks(append, columns=['a']).compute(get=get)
     pf.flush()
 
     name = next(partition_names)
