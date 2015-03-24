@@ -102,7 +102,7 @@ class pframe(object):
         self.lock = Lock()
 
     def head(self, n=10):
-        return self.partitions[0].head(n)
+        return self.get_partition(0).head(n)
 
     def append(self, df):
         df = strip_categories(df.copy())
@@ -124,18 +124,21 @@ class pframe(object):
     def npartitions(self):
         return len(self.partitions)
 
-    def get_partition(self, i):
+    def get_partition(self, i, has_lock=False):
         assert 0 <= i < len(self.partitions)
-        with self.lock:
-            df = reapply_categories(self.partitions[i].to_dataframe(),
-                                    self.categories)
-            df.index.name = self.index_name
+        if not has_lock:
+            self.lock.acquire()
+        df = reapply_categories(self.partitions[i].to_dataframe(),
+                                self.categories)
+        df.index.name = self.index_name
+        if not has_lock:
+            self.lock.release()
         return df
 
     def __iter__(self):
         with self.lock:
-            for part in self.partitions:
-                yield reapply_categories(part.to_dataframe(), self.categories)
+            for i in range(self.npartitions):
+                yield self.get_partition(i, has_lock=True)
 
     @property
     def nbytes(self):
