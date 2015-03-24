@@ -20,6 +20,7 @@ from ..async import inline_functions
 from ..optimize import cull, inline
 from ..compatibility import unicode
 from .. import threaded, core
+from ..context import _globals
 
 
 names = ('x_%d' % i for i in count(1))
@@ -727,12 +728,13 @@ def atop(func, out, out_ind, *args):
     return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims)
 
 
-def get(dsk, keys, get=threaded.get, **kwargs):
+def get(dsk, keys, get=None, **kwargs):
     """ Specialized get function
 
     1. Handle inlining
     2. Use custom score function
     """
+    get = get or _globals['get'] or threaded.get
     fast_functions=kwargs.get('fast_functions',
                              set([getitem, np.transpose]))
     dsk2 = cull(dsk, list(core.flatten(keys)))
