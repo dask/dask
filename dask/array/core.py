@@ -585,6 +585,8 @@ class Array(object):
         return elemwise(operator.gt, self, other)
     def __ge__(self, other):
         return elemwise(operator.ge, self, other)
+    def __invert__(self):
+        return elemwise(operator.invert, self)
     def __lshift__(self, other):
         return elemwise(operator.lshift, self, other)
     def __rlshift__(self, other):
@@ -607,6 +609,8 @@ class Array(object):
         return elemwise(operator.neg, self)
     def __or__(self, other):
         return elemwise(operator.or_, self, other)
+    def __pos__(self):
+        return self
     def __ror__(self, other):
         return elemwise(operator.or_, other, self)
     def __pow__(self, other):
@@ -1074,6 +1078,16 @@ sqrt = wrap_elemwise(np.sqrt)
 tan = wrap_elemwise(np.tan)
 tanh = wrap_elemwise(np.tanh)
 trunc = wrap_elemwise(np.trunc)
+
+
+def isnull(values):
+    """ pandas.isnull for dask arrays """
+    import pandas as pd
+    return elemwise(pd.isnull, values)
+
+def notnull(values):
+    """ pandas.notnull for dask arrays """
+    return ~isnull(values)
 
 
 def variadic_choose(a, *choices):
