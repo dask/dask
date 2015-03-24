@@ -9,6 +9,7 @@ from multiprocessing.pool import ThreadPool
 import psutil
 from .async import get_async, inc, add
 from .compatibility import Queue
+from .context import _globals
 
 
 NUM_CPUS = psutil.cpu_count()
@@ -40,7 +41,7 @@ def get(dsk, result, nthreads=NUM_CPUS, cache=None, debug_counts=None, **kwargs)
     >>> get(dsk, ['w', 'y'])
     (4, 2)
     """
-    pool = ThreadPool(nthreads)
+    pool = _globals['pool'] or ThreadPool(nthreads)
     queue = Queue()
     try:
         results = get_async(pool.apply_async, nthreads, dsk, result,
