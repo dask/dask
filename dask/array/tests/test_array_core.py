@@ -257,6 +257,13 @@ def test_binops():
     assert f(10) == 100
 
 
+def test_isnull():
+    x = np.array([1, np.nan])
+    a = from_array(x, blockshape=(2,))
+    assert eq(isnull(a), np.isnan(x))
+    assert eq(notnull(a), ~np.isnan(x))
+
+
 def test_elemwise_on_scalars():
     x = np.arange(10)
     a = from_array(x, blockshape=(5,))
@@ -288,6 +295,7 @@ def test_operators():
     assert eq(c, np.exp(x))
 
     assert eq(abs(-a), a)
+    assert eq(a, +x)
 
 
 def test_field_access():

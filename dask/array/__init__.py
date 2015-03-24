@@ -6,7 +6,7 @@ from .core import (Array, stack, concatenate, tensordot, transpose, from_array,
 from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
         ceil, copysign, cos, cosh, degrees, exp, expm1, fabs, floor, fmod,
         frexp, hypot, isinf, isnan, ldexp, log, log10, log1p, modf, radians,
-        sin, sinh, sqrt, tan, tanh, trunc)
+        sin, sinh, sqrt, tan, tanh, trunc, isnull, notnull)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          nansum, nanmean, nanstd, nanvar, nanmin,
                          nanmax, nanargmin, nanargmax)
