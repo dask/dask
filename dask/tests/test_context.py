@@ -1,4 +1,4 @@
-from dask.context import set_options
+from dask.context import set_options, _globals
 import dask.array as da
 import dask
 
@@ -21,3 +21,15 @@ def test_with_get():
     # Make sure we've cleaned up
     assert x.sum().compute() == 10
     assert var[0] == 1
+
+
+def test_set_options_context_manger():
+    with set_options(foo='bar'):
+        assert _globals['foo'] == 'bar'
+    assert _globals['foo'] is None
+
+    try:
+        set_options(foo='baz')
+        assert _globals['foo'] == 'baz'
+    finally:
+        del _globals['foo']

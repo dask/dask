@@ -8,8 +8,7 @@ from collections import defaultdict
 _globals = defaultdict(lambda: None)
 
 
-@contextmanager
-def set_options(**kwargs):
+class set_options(object):
     """ Set global state within controled context
 
     This lets you specify various global settings in a tightly controlled with
@@ -25,12 +24,13 @@ def set_options(**kwargs):
     >>> with set_options(get=dask.get):  # doctest: +SKIP
     ...     x = np.array(x)  # uses dask.get internally
     """
-    old = _globals.copy()
+    def __init__(self, **kwargs):
+        self.old = _globals.copy()
+        _globals.update(kwargs)
 
-    _globals.update(kwargs)
+    def __enter__(self):
+        return
 
-    try:
-        yield
-    finally:
+    def __exit__(self, type, value, traceback):
         _globals.clear()
-        _globals.update(old)
+        _globals.update(self.old)
