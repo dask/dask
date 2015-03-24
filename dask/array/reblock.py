@@ -22,6 +22,8 @@ def cumdims_label(blockdims, const):
 		 (('n', 0), ('n', 2), ('n', 4), ('n', 5))]
 	"""
 	return [tuple(zip((const,) * (1+ len(bds)), list(accumulate(add, (0,) + bds)))) for bds in blockdims ]
+
+
 def _breakpoints(cumold, cumnew):
 	"""
 	>>> new = cumdims_label(((5,3,3),(2,2,1)),'n')
@@ -33,17 +35,18 @@ def _breakpoints(cumold, cumnew):
 	"""
 	return tuple(sorted(tuple(cumold) + tuple(cumnew), key=lambda x:x[1]))
     
+
 def _intersect_1d(breaks):
 	"""Internal utility to intersect blockdims for 1 d
 	after preprocessing.
 
 	>>> new = cumdims_label(((5,3,3),(2,2,1)),'n')
     >>> old = cumdims_label(((2,2,1),(5,)),'o')
-    >>> _intersect_1d(_breakpoints(c[0],old[0])
+    >>> _intersect_1d(_breakpoints(old[0],new[0])
 		(((0, slice(0, 2, None)), (1, slice(0, 2, None)), (2, slice(0, 1, None))),
 		 ((2, slice(0, 3, None)),),
 		 ((2, slice(3, 6, None)),))
-	>>> _intersect_1d(_breakpoints(c[1],old[1])
+	>>> _intersect_1d(_breakpoints(old[1],new[1])
 
 		(((0, slice(0, 2, None)),),
 		 ((0, slice(2, 4, None)),),
