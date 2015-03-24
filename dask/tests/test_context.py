@@ -1,4 +1,4 @@
-from dask.context import context
+from dask.context import set_options
 import dask.array as da
 import dask
 
@@ -14,7 +14,7 @@ def test_with_get():
     assert x.sum().compute() == 10
     assert var[0] == 0
 
-    with context(get=myget):
+    with set_options(get=myget):
         assert x.sum().compute() == 10
     assert var[0] == 1
 

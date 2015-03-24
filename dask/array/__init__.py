@@ -15,4 +15,4 @@ with ignoring(ImportError):
     from .reductions import nanprod
 from . import random, linalg, ghost
 from .wrap import ones, zeros, empty
-from ..context import context
+from ..context import set_options

@@ -9,7 +9,7 @@ _globals = defaultdict(lambda: None)
 
 
 @contextmanager
-def context(**kwargs):
+def set_options(**kwargs):
     """ Set global state within controled context
 
     This lets you specify various global settings in a tightly controlled with
@@ -22,7 +22,7 @@ def context(**kwargs):
     Example
     -------
 
-    >>> with context(get=dask.get):
+    >>> with set_options(get=dask.get):  # doctest: +SKIP
     ...     x = np.array(x)  # uses dask.get internally
     """
     old = _globals.copy()
