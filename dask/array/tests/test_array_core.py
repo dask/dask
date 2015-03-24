@@ -485,3 +485,41 @@ def test_np_array_with_zero_dimensions():
     d = da.ones((4, 4), blockshape=(2, 2))
     assert eq(np.array(d.sum()), np.array(d.compute().sum()))
 
+
+def test_dtype_complex():
+    x = np.arange(24).reshape((4, 6)).astype('f4')
+    y = np.arange(24).reshape((4, 6)).astype('i8')
+    z = np.arange(24).reshape((4, 6)).astype('i2')
+
+    a = da.from_array(x, blockshape=(2, 3))
+    b = da.from_array(y, blockshape=(2, 3))
+    c = da.from_array(z, blockshape=(2, 3))
+
+    def eq(a, b):
+        return (isinstance(a, np.dtype) and
+                isinstance(b, np.dtype) and
+                str(a) == str(b))
+
+    assert eq(a._dtype, x.dtype)
+    assert eq(b._dtype, y.dtype)
+
+    assert eq((a + 1)._dtype, (x + 1).dtype)
+    assert eq((a + b)._dtype, (x + y).dtype)
+    assert eq(a.T._dtype, x.T.dtype)
+    assert eq(a[:3]._dtype, x[:3].dtype)
+    assert eq((a.dot(b.T))._dtype, (x.dot(y.T)).dtype)
+
+    assert eq(stack([a, b])._dtype, np.vstack([x, y]).dtype)
+    assert eq(concatenate([a, b])._dtype, np.concatenate([x, y]).dtype)
+
+    x = np.array([('a', 1)], dtype=[('text', 'S1'), ('numbers', 'i4')])
+    d = da.from_array(x, blockshape=(1,))
+
+    assert eq(d['text']._dtype, x['text'].dtype)
+    assert eq(d[['numbers', 'text']]._dtype, x[['numbers', 'text']].dtype)
+
+    assert eq(b.std()._dtype, y.std().dtype)
+    assert eq(c.sum()._dtype, z.sum().dtype)
+    assert eq(a.min()._dtype, a.min().dtype)
+    assert eq(b.std()._dtype, b.std().dtype)
+    assert eq(a.argmin(axis=0)._dtype, a.argmin(axis=0).dtype)
