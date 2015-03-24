@@ -11,7 +11,7 @@ from collections import Iterator
 from functools import partial, wraps
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
-        merge, curry, compose)
+        merge, curry, compose, reduce)
 import numpy as np
 from . import chunk
 from .slicing import slice_array, insert_many, remove_full_slices
