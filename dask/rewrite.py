@@ -5,8 +5,6 @@ from dask.core import istask, subs
 def head(task):
     """Return the top level node of a task"""
 
-    if task is None:
-        return None
     if istask(task):
         return task[0]
     elif isinstance(task, list):
@@ -32,9 +30,14 @@ class Traverser(object):
     def __init__(self, term, stack=None):
         self._term = term
         if not stack:
-            self._stack = deque([None])
+            self._stack = deque([END])
         else:
             self._stack = stack
+
+    def __iter__(self):
+        while self.current is not END:
+            yield self.current
+            self.next()
 
     def copy(self):
         return Traverser(self._term, deque(self._stack))
@@ -46,8 +49,7 @@ class Traverser(object):
             self._term = self._stack.pop()
         else:
             self._term = subterms[0]
-            for t in reversed(subterms[1:]):
-                self._stack.append(t)
+            self._stack.extend(reversed(subterms[1:]))
 
     @property
     def current(self):
@@ -57,32 +59,23 @@ class Traverser(object):
         self._term = self._stack.pop()
 
 
-def preorder_traversal(task):
-    """Traverse a task."""
-    for item in task:
-        if isinstance(item, tuple):
-            for i in preorder_traversal(item):
-                yield i
-        elif isinstance(item, list):
-            yield list
-            for i in preorder_traversal(item):
-                yield i
-        else:
-            yield item
+class Token(object):
+    """A token object.
 
-
-class Var(object):
-    """A variable object. Matches with any node."""
+    Used to express certain objects in the traversal of a task or pattern."""
 
     def __init__(self, name):
         self.name = name
 
     def __repr__(self):
-        return self._name
+        return self.name
 
 
 # A variable to represent *all* variables in a discrimination net
-VAR = Var('?')
+VAR = Token('?')
+# Represents the end of the traversal of an expression. We can't use `None`,
+# 'False', etc... here, as anything may be an argument to a function.
+END = Token('end')
 
 
 class Node(tuple):
@@ -123,13 +116,11 @@ class RewriteRule(object):
     """
 
     def __init__(self, lhs, rhs, vars=()):
-        if not istask(lhs) or not istask(rhs):
-            raise TypeError("lhs and rhs must both be tasks")
         if not isinstance(vars, tuple):
             raise TypeError("vars must be a tuple of variables")
         self.lhs = lhs
         self.rhs = rhs
-        self._varlist = [t for t in preorder_traversal(lhs) if t in vars]
+        self._varlist = [t for t in Traverser(lhs) if t in vars]
         # Reduce vars down to just variables found in lhs
         self.vars = tuple(set(self._varlist))
 
@@ -166,7 +157,7 @@ class RuleSet(object):
         curr_node = self._net
         ind = len(self._rules)
         # List of variables, in order they appear in the POT of the term
-        for t in preorder_traversal(rule.lhs):
+        for t in Traverser(rule.lhs):
             prev_node = curr_node
             if t in vars:
                 t = VAR
@@ -204,14 +195,15 @@ class RuleSet(object):
     def _rewrite(self, term):
         """Apply the rewrite rules in RuleSet to top level of term"""
 
-        try:
-            rule, sd = next(self.iter_matches(term))
+        for rule, sd in self.iter_matches(term):
             term = rule.rhs
             for key, val in sd.items():
                 term = subs(term, key, val)
-            return term
-        except StopIteration:
-            return term
+            # We use for (...) because it's fast in all cases for getting the
+            # first element from the match iterator. As we only want that
+            # element, we break here
+            break
+        return term
 
     def rewrite(self, term, strategy="bottom_up"):
         """Apply the rule set to ``term``.
@@ -269,7 +261,7 @@ def _match(S, N):
                 N = n
                 S.next()
                 continue
-            if S.current is None:
+            if S.current is END:
                 yield N.patterns, matches
             try:
                 (S, N) = stack.pop()
@@ -297,8 +289,7 @@ def _process_match(rule, syms):
     subs = {}
     varlist = rule._varlist
     if not len(varlist) == len(syms):
-        print(rule, syms, varlist)
-        assert 0 == 1
+        raise RuntimeError("length of varlist doesn't match length of syms.")
     for v, s in zip(varlist, syms):
         if v in subs and subs[v] is not s:
             return None
