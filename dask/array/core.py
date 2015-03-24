@@ -11,7 +11,7 @@ from collections import Iterator
 from functools import partial, wraps
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
-        merge, curry, compose, reduce, memoize)
+        merge, curry, compose, reduce)
 import numpy as np
 from . import chunk
 from .slicing import slice_array, insert_many, remove_full_slices
@@ -468,7 +468,7 @@ class Array(object):
         return sum(self.blockdims[0])
 
     @property
-    @memoize
+    @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].blockdims))
     def dtype(self):
         if self._dtype is not None:
             return self._dtype
@@ -1126,6 +1126,7 @@ def isnull(values):
     """ pandas.isnull for dask arrays """
     import pandas as pd
     return elemwise(pd.isnull, values)
+
 
 def notnull(values):
     """ pandas.notnull for dask arrays """
