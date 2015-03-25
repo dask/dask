@@ -1114,7 +1114,6 @@ expm1 = wrap_elemwise(np.expm1)
 fabs = wrap_elemwise(np.fabs)
 floor = wrap_elemwise(np.floor)
 fmod = wrap_elemwise(np.fmod)
-frexp = wrap_elemwise(np.frexp)
 hypot = wrap_elemwise(np.hypot)
 isinf = wrap_elemwise(np.isinf, dtype='bool')
 isnan = wrap_elemwise(np.isnan, dtype='bool')
@@ -1122,7 +1121,6 @@ ldexp = wrap_elemwise(np.ldexp)
 log = wrap_elemwise(np.log)
 log10 = wrap_elemwise(np.log10)
 log1p = wrap_elemwise(np.log1p)
-modf = wrap_elemwise(np.modf)
 radians = wrap_elemwise(np.radians)
 sin = wrap_elemwise(np.sin)
 sinh = wrap_elemwise(np.sinh)
@@ -1130,6 +1128,63 @@ sqrt = wrap_elemwise(np.sqrt)
 tan = wrap_elemwise(np.tan)
 tanh = wrap_elemwise(np.tanh)
 trunc = wrap_elemwise(np.trunc)
+
+def frexp(x):
+    tmp = elemwise(np.frexp, x)
+    left = next(names)
+    right = next(names)
+    ldsk = dict(((left,) + key[1:], (getitem, key, 0))
+                for key in core.flatten(tmp._keys()))
+    rdsk = dict(((right,) + key[1:], (getitem, key, 1))
+                for key in core.flatten(tmp._keys()))
+
+    if x._dtype is not None:
+        a = np.empty((1,), dtype=x._dtype)
+        l, r = np.frexp(a)
+        ldt = l.dtype
+        rdt = r.dtype
+    else:
+        ldt = None
+        rdt = None
+
+    L = Array(merge(tmp.dask, ldsk), left, blockdims=tmp.blockdims,
+                dtype=ldt)
+
+    R = Array(merge(tmp.dask, rdsk), right, blockdims=tmp.blockdims,
+                dtype=rdt)
+
+    return L, R
+
+frexp.__doc__ = np.frexp
+
+
+def modf(x):
+    tmp = elemwise(np.modf, x)
+    left = next(names)
+    right = next(names)
+    ldsk = dict(((left,) + key[1:], (getitem, key, 0))
+                for key in core.flatten(tmp._keys()))
+    rdsk = dict(((right,) + key[1:], (getitem, key, 1))
+                for key in core.flatten(tmp._keys()))
+
+    if x._dtype is not None:
+        a = np.empty((1,), dtype=x._dtype)
+        l, r = np.modf(a)
+        ldt = l.dtype
+        rdt = r.dtype
+    else:
+        ldt = None
+        rdt = None
+
+    L = Array(merge(tmp.dask, ldsk), left, blockdims=tmp.blockdims,
+                dtype=ldt)
+
+    R = Array(merge(tmp.dask, rdsk), right, blockdims=tmp.blockdims,
+                dtype=rdt)
+
+    return L, R
+
+modf.__doc__ = np.modf
 
 
 def isnull(values):
