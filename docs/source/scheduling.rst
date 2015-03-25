@@ -43,6 +43,27 @@ Full dask ``get`` functions exist in each of ``dask.threaded.get``,
 ``dask.multiprocessing.get`` and ``dask.async.get_sync`` respectively.
 
 
+Policy
+------
+
+The asynchronous scheduler maintains indexed data structures showing which
+tasks depend on which data, what data is available, what data is waiting on
+what tasks to complete before it can be released, and what tasks are currently
+running.  It can update these in constant time relative to the number of total
+and available tasks.  These indexed structures make the dask async scheduler
+scalable to very many tasks on a single machine.
+
+.. image:: images/async-embarassing.gif
+   :width: 50 %
+   :align: right
+   :alt: Embarassingly parallel dask flow
+
+To keep the memory footprint small we choose to keep ready-to-run tasks in a
+LIFO stack such that the most recently made available tasks get priority.  This
+encourages chains of related tasks to complete before starting new chains.
+This is also queryable in constant time.
+
+
 Performance
 -----------
 
