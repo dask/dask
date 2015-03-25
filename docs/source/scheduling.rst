@@ -58,7 +58,7 @@ granularity of our parallelism.  Below we measure overhead of the async
 scheduler with different apply functions (threaded, sync, multiprocessing), and
 under different kinds of load (embarassingly parallel, dense communication).
 
-The quickest/simplest test we can do it to use ipython's ``imeit``
+The quickest/simplest test we can do it to use IPython's ``timeit`` magic.
 
 .. code-block:: python
 
@@ -80,9 +80,22 @@ Around 500 microseconds per task.  About 100ms of this is from overhead
    In [7]: %timeit x.compute()
    10 loops, best of 3: 103 ms per loop
 
-We measure scaling in two directions, increasing the number of tasks in an
-embarrassingly parallel fashion
+Most of this overhead is from spinning up a ThreadPool each time.  This can be
+mediated by using a global or contextual pool
 
+.. code-block:: python
+
+   >>> from multiprocessing.pool import ThreadPool
+   >>> pool = ThreadPool()
+   >>> da.set_options(pool=pool)  # set global threadpool
+
+   or
+
+   >>> with set_options(pool=pool)  # use threadpool throughout with block
+   ...     ...
+
+We now measure scaling the number of tasks and scaling the density of the
+graph.
 
 .. image:: images/trivial.png
    :width: 30 %
@@ -101,7 +114,7 @@ down in the microsecond range.
 .. image:: images/scaling-nodes.png
 
 .. image:: images/crosstalk.png
-   :width: 30 %
+   :width: 40 %
    :align: right
    :alt: Adding edges
 
