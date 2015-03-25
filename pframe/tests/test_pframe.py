@@ -44,8 +44,8 @@ def test_metadata():
 
 
 def test_n_c_bytes():
-    assert 0 < pf.nbytes < 1000000
-    assert 0 < pf.cbytes < 1000000
+    assert 0 < pf.nbytes < 10000000
+    assert 0 < pf.cbytes < 10000000
 
 
 def test_npartitions():

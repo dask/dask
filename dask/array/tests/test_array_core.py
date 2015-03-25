@@ -684,4 +684,3 @@ def test_reductions():
     assert eq(da.nansum(a), np.nansum(x))
     assert eq(da.nanvar(a), np.nanvar(x))
     assert eq(da.nanstd(a), np.nanstd(x))
->>>>>>> master
