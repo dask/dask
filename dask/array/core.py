@@ -579,6 +579,11 @@ class Array(object):
     def transpose(self, axes=None):
         return transpose(self, axes)
 
+    def astype(self, dtype, **kwargs):
+        """ Copy of the array, cast to a specified type """
+        return elemwise(partial(np.ndarray.astype, dtype=dtype, **kwargs),
+                        self, dtype=dtype)
+
     def __abs__(self):
         return elemwise(operator.abs, self)
     def __add__(self, other):
@@ -1059,14 +1064,19 @@ def elemwise(op, *args, **kwargs):
     arrays = [arg for arg in args if isinstance(arg, Array)]
     other = [(i, arg) for i, arg in enumerate(args) if not isinstance(arg, Array)]
 
-    if not all(a._dtype is not None for a in arrays):
+    if 'dtype' in kwargs:
+        dt = kwargs['dtype']
+    elif not all(a._dtype is not None for a in arrays):
         dt = None
-    elif all(hasattr(a, 'dtype') for a in args):  # Just numpy like things
-        dt = reduce(np.promote_types, [a.dtype for a in args])
-    else: # crap, value dependent
-        vals = [np.empty((1,), dtype=a.dtype) if hasattr(a, 'dtype') else a
+    else:
+
+        vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
+                if hasattr(a, 'dtype') else a
                 for a in args]
-        dt = op(*vals).dtype
+        try:
+            dt = op(*vals).dtype
+        except AttributeError:
+            dt = None
 
     if other:
         op2 = partial_by_order(op, other)
@@ -1078,9 +1088,9 @@ def elemwise(op, *args, **kwargs):
                 dtype=dt)
 
 
-def wrap_elemwise(func):
+def wrap_elemwise(func, **kwargs):
     """ Wrap up numpy function into dask.array """
-    f = partial(elemwise, func)
+    f = partial(elemwise, func, **kwargs)
     f.__doc__ = func.__doc__
     f.__name__ = func.__name__
     return f
@@ -1104,15 +1114,13 @@ expm1 = wrap_elemwise(np.expm1)
 fabs = wrap_elemwise(np.fabs)
 floor = wrap_elemwise(np.floor)
 fmod = wrap_elemwise(np.fmod)
-frexp = wrap_elemwise(np.frexp)
 hypot = wrap_elemwise(np.hypot)
-isinf = wrap_elemwise(np.isinf)
-isnan = wrap_elemwise(np.isnan)
+isinf = wrap_elemwise(np.isinf, dtype='bool')
+isnan = wrap_elemwise(np.isnan, dtype='bool')
 ldexp = wrap_elemwise(np.ldexp)
 log = wrap_elemwise(np.log)
 log10 = wrap_elemwise(np.log10)
 log1p = wrap_elemwise(np.log1p)
-modf = wrap_elemwise(np.modf)
 radians = wrap_elemwise(np.radians)
 sin = wrap_elemwise(np.sin)
 sinh = wrap_elemwise(np.sinh)
@@ -1121,11 +1129,68 @@ tan = wrap_elemwise(np.tan)
 tanh = wrap_elemwise(np.tanh)
 trunc = wrap_elemwise(np.trunc)
 
+def frexp(x):
+    tmp = elemwise(np.frexp, x)
+    left = next(names)
+    right = next(names)
+    ldsk = dict(((left,) + key[1:], (getitem, key, 0))
+                for key in core.flatten(tmp._keys()))
+    rdsk = dict(((right,) + key[1:], (getitem, key, 1))
+                for key in core.flatten(tmp._keys()))
+
+    if x._dtype is not None:
+        a = np.empty((1,), dtype=x._dtype)
+        l, r = np.frexp(a)
+        ldt = l.dtype
+        rdt = r.dtype
+    else:
+        ldt = None
+        rdt = None
+
+    L = Array(merge(tmp.dask, ldsk), left, blockdims=tmp.blockdims,
+                dtype=ldt)
+
+    R = Array(merge(tmp.dask, rdsk), right, blockdims=tmp.blockdims,
+                dtype=rdt)
+
+    return L, R
+
+frexp.__doc__ = np.frexp
+
+
+def modf(x):
+    tmp = elemwise(np.modf, x)
+    left = next(names)
+    right = next(names)
+    ldsk = dict(((left,) + key[1:], (getitem, key, 0))
+                for key in core.flatten(tmp._keys()))
+    rdsk = dict(((right,) + key[1:], (getitem, key, 1))
+                for key in core.flatten(tmp._keys()))
+
+    if x._dtype is not None:
+        a = np.empty((1,), dtype=x._dtype)
+        l, r = np.modf(a)
+        ldt = l.dtype
+        rdt = r.dtype
+    else:
+        ldt = None
+        rdt = None
+
+    L = Array(merge(tmp.dask, ldsk), left, blockdims=tmp.blockdims,
+                dtype=ldt)
+
+    R = Array(merge(tmp.dask, rdsk), right, blockdims=tmp.blockdims,
+                dtype=rdt)
+
+    return L, R
+
+modf.__doc__ = np.modf
+
 
 def isnull(values):
     """ pandas.isnull for dask arrays """
     import pandas as pd
-    return elemwise(pd.isnull, values)
+    return elemwise(pd.isnull, values, dtype='bool')
 
 
 def notnull(values):
@@ -1162,7 +1227,11 @@ def coarsen(reduction, x, axes):
     blockdims = tuple(tuple(int(bd / axes.get(i, 1)) for bd in bds)
                       for i, bds in enumerate(x.blockdims))
 
-    return Array(merge(x.dask, dsk), name, blockdims=blockdims)
+    if x._dtype is not None:
+        dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
+    else:
+        dt = None
+    return Array(merge(x.dask, dsk), name, blockdims=blockdims, dtype=dt)
 
 
 constant_names = ('constant-%d' % i for i in count(1))
@@ -1213,7 +1282,7 @@ def offset_func(func, offset, *args):
 fromfunction_names = ('fromfunction-%d' % i for i in count(1))
 
 @wraps(np.fromfunction)
-def fromfunction(func, shape=None, blockshape=None, blockdims=None):
+def fromfunction(func, shape=None, blockshape=None, blockdims=None, dtype=None):
     name = next(fromfunction_names)
     if shape and blockshape and not blockdims:
         blockdims = blockdims_from_blockshape(shape, blockshape)
@@ -1228,4 +1297,4 @@ def fromfunction(func, shape=None, blockshape=None, blockdims=None):
 
     dsk = dict(zip(keys, values))
 
-    return Array(dsk, name, blockdims=blockdims)
+    return Array(dsk, name, blockdims=blockdims, dtype=dtype)

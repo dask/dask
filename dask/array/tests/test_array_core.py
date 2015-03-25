@@ -68,13 +68,30 @@ def test_rec_concatenate():
 
 def eq(a, b):
     if isinstance(a, Array):
+        adt = a._dtype
         a = a.compute(get=dask.get)
+    else:
+        adt = getattr(a, 'dtype', None)
     if isinstance(b, Array):
+        bdt = b._dtype
         b = b.compute(get=dask.get)
+    else:
+        bdt = getattr(b, 'dtype', None)
+
+    if not str(adt) == str(bdt):
+        return False
+
+    try:
+        return np.allclose(a, b)
+    except TypeError:
+        pass
+
     c = a == b
+
     if isinstance(c, np.ndarray):
-        c = c.all()
-    return c
+        return c.all()
+    else:
+        return c
 
 
 def test_chunked_dot_product():
@@ -426,7 +443,7 @@ def test_map_blocks():
     def func(block, block_id=None):
         return np.ones_like(block) * sum(block_id)
 
-    d = d.map_blocks(func)
+    d = d.map_blocks(func, dtype='i8')
     expected = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
 
     assert eq(d, expected)
@@ -435,7 +452,7 @@ def test_map_blocks():
 def test_fromfunction():
     def f(x, y):
         return x + y
-    d = fromfunction(f, shape=(5, 5), blockshape=(2, 2))
+    d = fromfunction(f, shape=(5, 5), blockshape=(2, 2), dtype='f8')
 
     assert eq(d, np.fromfunction(f, shape=(5, 5)))
 
@@ -512,14 +529,152 @@ def test_dtype_complex():
     assert eq(stack([a, b])._dtype, np.vstack([x, y]).dtype)
     assert eq(concatenate([a, b])._dtype, np.concatenate([x, y]).dtype)
 
+    assert eq(b.std()._dtype, y.std().dtype)
+    assert eq(c.sum()._dtype, z.sum().dtype)
+    assert eq(a.min()._dtype, a.min().dtype)
+    assert eq(b.std()._dtype, b.std().dtype)
+    assert eq(a.argmin(axis=0)._dtype, a.argmin(axis=0).dtype)
+
+    assert eq(da.sin(z)._dtype, np.sin(c).dtype)
+    assert eq(da.exp(b)._dtype, np.exp(y).dtype)
+    assert eq(da.floor(a)._dtype, np.floor(x).dtype)
+    assert eq(da.isnan(b)._dtype, np.isnan(y).dtype)
+    assert da.isnull(b)._dtype == 'bool'
+    assert da.notnull(b)._dtype == 'bool'
+
     x = np.array([('a', 1)], dtype=[('text', 'S1'), ('numbers', 'i4')])
     d = da.from_array(x, blockshape=(1,))
 
     assert eq(d['text']._dtype, x['text'].dtype)
     assert eq(d[['numbers', 'text']]._dtype, x[['numbers', 'text']].dtype)
 
-    assert eq(b.std()._dtype, y.std().dtype)
-    assert eq(c.sum()._dtype, z.sum().dtype)
-    assert eq(a.min()._dtype, a.min().dtype)
-    assert eq(b.std()._dtype, b.std().dtype)
-    assert eq(a.argmin(axis=0)._dtype, a.argmin(axis=0).dtype)
+
+def test_astype():
+    x = np.ones(5, dtype='f4')
+    d = da.from_array(x, blockshape=(2,))
+
+    assert d.astype('i8')._dtype == 'i8'
+    assert eq(d.astype('i8'), x.astype('i8'))
+
+
+def test_arithmetic():
+    x = np.arange(5).astype('f4') + 2
+    y = np.arange(5).astype('i8') + 2
+    a = da.from_array(x, blockshape=(2,))
+    b = da.from_array(y, blockshape=(2,))
+    assert eq(a + b, x + y)
+    assert eq(a * b, x * y)
+    assert eq(a - b, x - y)
+    assert eq(a / b, x / y)
+    assert eq(b & b, y & y)
+    assert eq(b | b, y | y)
+    assert eq(b ^ b, y ^ y)
+    assert eq(a // b, x // y)
+    assert eq(a ** b, x ** y)
+    assert eq(a % b, x % y)
+    assert eq(a > b, x > y)
+    assert eq(a < b, x < y)
+    assert eq(a >= b, x >= y)
+    assert eq(a <= b, x <= y)
+    assert eq(a == b, x == y)
+    assert eq(a != b, x != y)
+
+    assert eq(a + 2, x + 2)
+    assert eq(a * 2, x * 2)
+    assert eq(a - 2, x - 2)
+    assert eq(a / 2, x / 2)
+    assert eq(b & True, y & True)
+    assert eq(b | True, y | True)
+    assert eq(b ^ True, y ^ True)
+    assert eq(a // 2, x // 2)
+    assert eq(a ** 2, x ** 2)
+    assert eq(a % 2, x % 2)
+    assert eq(a > 2, x > 2)
+    assert eq(a < 2, x < 2)
+    assert eq(a >= 2, x >= 2)
+    assert eq(a <= 2, x <= 2)
+    assert eq(a == 2, x == 2)
+    assert eq(a != 2, x != 2)
+
+    assert eq(2 + b, 2 + y)
+    assert eq(2 * b, 2 * y)
+    assert eq(2 - b, 2 - y)
+    assert eq(2 / b, 2 / y)
+    assert eq(True & b, True & y)
+    assert eq(True | b, True | y)
+    assert eq(True ^ b, True ^ y)
+    assert eq(2 // b, 2 // y)
+    assert eq(2 ** b, 2 ** y)
+    assert eq(2 % b, 2 % y)
+    assert eq(2 > b, 2 > y)
+    assert eq(2 < b, 2 < y)
+    assert eq(2 >= b, 2 >= y)
+    assert eq(2 <= b, 2 <= y)
+    assert eq(2 == b, 2 == y)
+    assert eq(2 != b, 2 != y)
+
+    assert eq(-a, -x)
+    assert eq(abs(a), abs(x))
+    assert eq(~(a == b), ~(x == y))
+    assert eq(~(a == b), ~(x == y))
+
+    assert eq(da.arcsin(b/10), np.arcsin(y/10))
+    assert eq(da.arccos(b/10), np.arccos(y/10))
+    assert eq(da.arctan(b/10), np.arctan(y/10))
+    assert eq(da.arctanh(b/10), np.arctanh(y/10))
+    assert eq(da.arccosh(b*10), np.arccosh(y*10))
+    assert eq(da.arcsinh(b*10), np.arcsinh(y*10))
+    assert eq(da.arctan2(b*10, a), np.arctan2(y*10, x))
+    assert eq(da.ceil(a), np.ceil(x))
+    assert eq(da.copysign(a - 3, b), np.copysign(x - 3, y))
+    assert eq(da.cos(b), np.cos(y))
+    assert eq(da.cosh(b), np.cosh(y))
+    assert eq(da.degrees(b), np.degrees(y))
+    assert eq(da.exp(b), np.exp(y))
+    assert eq(da.expm1(b), np.expm1(y))
+    assert eq(da.fabs(b), np.fabs(y))
+    assert eq(da.floor(a * 0.5), np.floor(x * 0.5))
+    assert eq(da.fmod(a * 12, b), np.fmod(x * 12, y))
+    assert eq(da.hypot(a, b), np.hypot(x, y))
+    assert eq(da.isinf(a), np.isinf(x))
+    assert eq(da.isnan(a), np.isnan(x))
+    assert eq(da.ldexp(a, b), np.ldexp(x, y))
+    assert eq(da.log(a), np.log(x))
+    assert eq(da.log10(a), np.log10(x))
+    assert eq(da.log1p(a), np.log1p(x))
+    assert eq(da.radians(a), np.radians(x))
+    assert eq(da.sin(a), np.sin(x))
+    assert eq(da.sinh(a), np.sinh(x))
+    assert eq(da.sqrt(a), np.sqrt(x))
+    assert eq(da.tan(a), np.tan(x))
+    assert eq(da.tanh(a), np.tanh(x))
+    assert eq(da.trunc(a / 2), np.trunc(x / 2))
+
+    l1, l2 = da.frexp(a)
+    r1, r2 = np.frexp(x)
+    assert eq(l1, r1)
+    assert eq(l2, r2)
+
+    l1, l2 = da.modf(a)
+    r1, r2 = np.modf(x)
+    assert eq(l1, r1)
+    assert eq(l2, r2)
+
+def test_reductions():
+    x = np.arange(5).astype('f4')
+    a = da.from_array(x, blockshape=(2,))
+
+    assert eq(da.all(a), np.all(x))
+    assert eq(da.any(a), np.any(x))
+    assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
+    assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
+    assert eq(da.max(a), np.max(x))
+    assert eq(da.mean(a), np.mean(x))
+    assert eq(da.min(a), np.min(x))
+    assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
+    assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
+    assert eq(da.nanmax(a), np.nanmax(x))
+    assert eq(da.nanmin(a), np.nanmin(x))
+    assert eq(da.nansum(a), np.nansum(x))
+    assert eq(da.nanvar(a), np.nanvar(x))
+    assert eq(da.nanstd(a), np.nanstd(x))
