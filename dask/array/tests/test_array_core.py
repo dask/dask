@@ -542,5 +542,5 @@ def test_astype():
     x = np.ones(5, dtype='f4')
     d = da.from_array(x, blockshape=(2,))
 
-    assert d.astype('i8') == 'i8'
+    assert d.astype('i8')._dtype == 'i8'
     assert eq(d.astype('i8'), x.astype('i8'))
