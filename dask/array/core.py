@@ -414,6 +414,83 @@ def map_blocks(x, func, blockshape=None, blockdims=None, dtype=None):
     return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=dtype)
 
 
+def compute(*args, **kwargs):
+    """ Evaluate several dask arrays at once
+
+    Example
+    -------
+
+    >>> import dask.array as da
+    >>> d = da.ones((4, 4), blockshape=(2, 2))
+    >>> a = d + 1  # two different dask arrays
+    >>> b = d + 2
+    >>> A, B = da.compute(a, b)  # Compute both simultaneously
+    """
+
+    dsk = merge(*[arg.dask for arg in args])
+    keys = [arg._keys() for arg in args]
+    results = get(dsk, keys, **kwargs)
+
+    results2 = [rec_concatenate(x) if arg.shape else unpack_singleton(x)
+                for x, arg in zip(results, args)]
+    if len(results2) == 1:
+        return results2[0]
+    else:
+        return results2
+
+
+def store(sources, targets, **kwargs):
+    """ Store dask arrays in array-like objects, overwrite data in target
+
+    This stores dask arrays into object that supports numpy-style setitem
+    indexing.  It stores values chunk by chunk so that it does not have to
+    fill up memory.  For best performance you can align the block size of
+    the storage target with the block size of your array.
+
+    If your data fits in memory then you may prefer calling
+    ``np.array(myarray)`` instead.
+
+    Parameters
+    ----------
+
+    sources: Array or iterable of Arrays
+    targets: array-like or iterable of array-likes
+        These should support setitem syntax ``target[10:20] = ...``
+
+    Examples
+    --------
+
+    >>> x = ...  # doctest: +SKIP
+
+    >>> import h5py  # doctest: +SKIP
+    >>> f = h5py.File('myfile.hdf5')  # doctest: +SKIP
+    >>> dset = f.create_dataset('/data', shape=x.shape,
+    ...                                  chunks=x.blockshape,
+    ...                                  dtype='f8')  # doctest: +SKIP
+
+    >>> store(x, dset)  # doctest: +SKIP
+
+    Alternatively store many arrays at the same time
+
+    >>> store([x, y, z], [dset1, dset2, dset3])  # doctest: +SKIP
+    """
+    single_output = True
+    if not isinstance(sources, (list, tuple)):
+        sources = [sources]
+    if not isinstance(targets, (list, tuple)):
+        targets = [targets]
+        single_output = False
+
+    updates = [insert_to_ooc(tgt, src) for tgt, src in zip(targets, sources)]
+    dsk = merge([src.dask for src in sources] + updates)
+    keys = [key for u in updates for key in u]
+    get(dsk, keys, **kwargs)
+
+    if single_output:
+        targets = targets[0]
+    return targets
+
+
 def blockdims_from_blockshape(shape, blockshape):
     """
 
@@ -507,35 +584,11 @@ class Array(object):
             x = np.array(x)
         return x
 
+    @wraps(store)
     def store(self, target, **kwargs):
-        """ Store dask array in array-like object, overwrite data in target
+        return store([self], [target], **kwargs)
 
-        This stores a dask into an object that supports numpy-style setitem
-        indexing.  It stores values chunk by chunk so that it does not have to
-        fill up memory.  For best performance you can align the block size of
-        the storage target with the block size of your array.
-
-        If your data fits in memory then you may prefer calling
-        ``np.array(myarray)`` instead.
-
-        Examples
-        --------
-
-        >>> x = ...  # doctest: +SKIP
-
-        >>> import h5py  # doctest: +SKIP
-        >>> f = h5py.File('myfile.hdf5')  # doctest: +SKIP
-        >>> dset = f.create_dataset('/data', shape=x.shape,
-        ...                                  chunks=x.blockshape,
-        ...                                  dtype='f8')  # doctest: +SKIP
-
-        >>> x.store(dset)  # doctest: +SKIP
-        """
-        update = insert_to_ooc(target, self)
-        dsk = merge(self.dask, update)
-        get(dsk, list(update.keys()), **kwargs)
-        return target
-
+    @wraps(compute)
     def compute(self, **kwargs):
         return compute(self, **kwargs)
 
@@ -772,31 +825,6 @@ def unpack_singleton(x):
     while isinstance(x, Iterable):
         x = x[0]
     return x
-
-
-def compute(*args, **kwargs):
-    """ Evaluate several dask arrays at once
-
-    Example
-    -------
-
-    >>> import dask.array as da
-    >>> d = da.ones((4, 4), blockshape=(2, 2))
-    >>> a = d + 1  # two different dask arrays
-    >>> b = d + 2
-    >>> A, B = da.compute(a, b)  # Compute both simultaneously
-    """
-
-    dsk = merge(*[arg.dask for arg in args])
-    keys = [arg._keys() for arg in args]
-    results = get(dsk, keys, **kwargs)
-
-    results2 = [rec_concatenate(x) if arg.shape else unpack_singleton(x)
-                for x, arg in zip(results, args)]
-    if len(results2) == 1:
-        return results2[0]
-    else:
-        return results2
 
 
 stacked_names = ('stack-%d' % i for i in count(1))
