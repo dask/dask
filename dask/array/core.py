@@ -1059,14 +1059,17 @@ def elemwise(op, *args, **kwargs):
     arrays = [arg for arg in args if isinstance(arg, Array)]
     other = [(i, arg) for i, arg in enumerate(args) if not isinstance(arg, Array)]
 
-    if not all(a._dtype is not None for a in arrays):
+    if 'dtype' in kwargs:
+        dt = kwargs['dtype']
+    elif not all(a._dtype is not None for a in arrays):
         dt = None
-    elif all(hasattr(a, 'dtype') for a in args):  # Just numpy like things
-        dt = reduce(np.promote_types, [a.dtype for a in args])
-    else: # crap, value dependent
+    else:
         vals = [np.empty((1,), dtype=a.dtype) if hasattr(a, 'dtype') else a
                 for a in args]
-        dt = op(*vals).dtype
+        try:
+            dt = op(*vals).dtype
+        except AttributeError:
+            dt = None
 
     if other:
         op2 = partial_by_order(op, other)
@@ -1078,9 +1081,9 @@ def elemwise(op, *args, **kwargs):
                 dtype=dt)
 
 
-def wrap_elemwise(func):
+def wrap_elemwise(func, **kwargs):
     """ Wrap up numpy function into dask.array """
-    f = partial(elemwise, func)
+    f = partial(elemwise, func, **kwargs)
     f.__doc__ = func.__doc__
     f.__name__ = func.__name__
     return f
@@ -1106,8 +1109,8 @@ floor = wrap_elemwise(np.floor)
 fmod = wrap_elemwise(np.fmod)
 frexp = wrap_elemwise(np.frexp)
 hypot = wrap_elemwise(np.hypot)
-isinf = wrap_elemwise(np.isinf)
-isnan = wrap_elemwise(np.isnan)
+isinf = wrap_elemwise(np.isinf, dtype='bool')
+isnan = wrap_elemwise(np.isnan, dtype='bool')
 ldexp = wrap_elemwise(np.ldexp)
 log = wrap_elemwise(np.log)
 log10 = wrap_elemwise(np.log10)

@@ -512,19 +512,19 @@ def test_dtype_complex():
     assert eq(stack([a, b])._dtype, np.vstack([x, y]).dtype)
     assert eq(concatenate([a, b])._dtype, np.concatenate([x, y]).dtype)
 
-    x = np.array([('a', 1)], dtype=[('text', 'S1'), ('numbers', 'i4')])
-    d = da.from_array(x, blockshape=(1,))
-
-    assert eq(d['text']._dtype, x['text'].dtype)
-    assert eq(d[['numbers', 'text']]._dtype, x[['numbers', 'text']].dtype)
-
     assert eq(b.std()._dtype, y.std().dtype)
     assert eq(c.sum()._dtype, z.sum().dtype)
     assert eq(a.min()._dtype, a.min().dtype)
     assert eq(b.std()._dtype, b.std().dtype)
     assert eq(a.argmin(axis=0)._dtype, a.argmin(axis=0).dtype)
 
-    assert eq(da.sin(b), np.sin(y).dtype)
-    assert eq(da.exp(b), np.exp(y).dtype)
-    assert eq(da.floor(b), np.floor(y).dtype)
-    assert eq(da.isnan(b), np.isnan(y).dtype)
+    assert eq(da.sin(z)._dtype, np.sin(c).dtype)
+    assert eq(da.exp(b)._dtype, np.exp(y).dtype)
+    assert eq(da.floor(a)._dtype, np.floor(x).dtype)
+    assert eq(da.isnan(b)._dtype, np.isnan(y).dtype)
+
+    x = np.array([('a', 1)], dtype=[('text', 'S1'), ('numbers', 'i4')])
+    d = da.from_array(x, blockshape=(1,))
+
+    assert eq(d['text']._dtype, x['text'].dtype)
+    assert eq(d[['numbers', 'text']]._dtype, x[['numbers', 'text']].dtype)
