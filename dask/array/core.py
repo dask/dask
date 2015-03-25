@@ -1135,7 +1135,7 @@ trunc = wrap_elemwise(np.trunc)
 def isnull(values):
     """ pandas.isnull for dask arrays """
     import pandas as pd
-    return elemwise(pd.isnull, values)
+    return elemwise(pd.isnull, values, dtype='bool')
 
 
 def notnull(values):
@@ -1172,7 +1172,11 @@ def coarsen(reduction, x, axes):
     blockdims = tuple(tuple(int(bd / axes.get(i, 1)) for bd in bds)
                       for i, bds in enumerate(x.blockdims))
 
-    return Array(merge(x.dask, dsk), name, blockdims=blockdims)
+    if x._dtype is not None:
+        dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
+    else:
+        dt = None
+    return Array(merge(x.dask, dsk), name, blockdims=blockdims, dtype=dt)
 
 
 constant_names = ('constant-%d' % i for i in count(1))
@@ -1223,7 +1227,7 @@ def offset_func(func, offset, *args):
 fromfunction_names = ('fromfunction-%d' % i for i in count(1))
 
 @wraps(np.fromfunction)
-def fromfunction(func, shape=None, blockshape=None, blockdims=None):
+def fromfunction(func, shape=None, blockshape=None, blockdims=None, dtype=None):
     name = next(fromfunction_names)
     if shape and blockshape and not blockdims:
         blockdims = blockdims_from_blockshape(shape, blockshape)
@@ -1238,4 +1242,4 @@ def fromfunction(func, shape=None, blockshape=None, blockdims=None):
 
     dsk = dict(zip(keys, values))
 
-    return Array(dsk, name, blockdims=blockdims)
+    return Array(dsk, name, blockdims=blockdims, dtype=dtype)

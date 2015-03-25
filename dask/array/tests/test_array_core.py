@@ -68,13 +68,19 @@ def test_rec_concatenate():
 
 def eq(a, b):
     if isinstance(a, Array):
+        adt = a._dtype
         a = a.compute(get=dask.get)
+    else:
+        adt = getattr(a, 'dtype', None)
     if isinstance(b, Array):
+        bdt = b._dtype
         b = b.compute(get=dask.get)
+    else:
+        bdt = getattr(b, 'dtype', None)
     c = a == b
     if isinstance(c, np.ndarray):
         c = c.all()
-    return c
+    return c and str(adt) == str(bdt)
 
 
 def test_chunked_dot_product():
@@ -426,7 +432,7 @@ def test_map_blocks():
     def func(block, block_id=None):
         return np.ones_like(block) * sum(block_id)
 
-    d = d.map_blocks(func)
+    d = d.map_blocks(func, dtype='i8')
     expected = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
 
     assert eq(d, expected)
@@ -435,7 +441,7 @@ def test_map_blocks():
 def test_fromfunction():
     def f(x, y):
         return x + y
-    d = fromfunction(f, shape=(5, 5), blockshape=(2, 2))
+    d = fromfunction(f, shape=(5, 5), blockshape=(2, 2), dtype='f8')
 
     assert eq(d, np.fromfunction(f, shape=(5, 5)))
 
@@ -522,6 +528,8 @@ def test_dtype_complex():
     assert eq(da.exp(b)._dtype, np.exp(y).dtype)
     assert eq(da.floor(a)._dtype, np.floor(x).dtype)
     assert eq(da.isnan(b)._dtype, np.isnan(y).dtype)
+    assert da.isnull(b)._dtype == 'bool'
+    assert da.notnull(b)._dtype == 'bool'
 
     x = np.array([('a', 1)], dtype=[('text', 'S1'), ('numbers', 'i4')])
     d = da.from_array(x, blockshape=(1,))
