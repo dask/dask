@@ -17,8 +17,9 @@ except ImportError:
 
 from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
-from ..optimize import fuse
+from ..optimize import fuse, cull
 from ..compatibility import apply
+from ..context import _globals
 
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -56,7 +57,14 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-get = curry(mpget, optimizations=[fuse, lazify])
+def get(dsk, keys, get=None, **kwargs):
+    get = get or _globals['get'] or mpget
+
+    dsk2 = cull(dsk, keys)
+    dsk3 = fuse(dsk2)
+    dsk4 = lazify(dsk3)
+
+    return get(dsk, keys, **kwargs)
 
 
 def list2(seq):

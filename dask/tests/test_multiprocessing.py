@@ -1,6 +1,10 @@
 from dask.multiprocessing import get, dill_apply_async
+from dask.context import set_options
 import multiprocessing
 import dill
+
+
+inc = lambda x: x + 1
 
 
 def test_apply_lambda():
@@ -41,3 +45,10 @@ def test_unpicklable_results_genreate_errors():
     except Exception as e:
         # can't use type because pickle / cPickle distinction
         assert type(e).__name__ == 'PicklingError'
+
+
+def test_reuse_pool():
+    pool = multiprocessing.Pool()
+    with set_options(pool=pool):
+        assert get({'x': (inc, 1)}, 'x') == 2
+        assert get({'x': (inc, 1)}, 'x') == 2
