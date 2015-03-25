@@ -492,6 +492,8 @@ def test_store():
     assert (at == 2).all()
     assert (bt == 3).all()
 
+    assert raises(ValueError, lambda: store([a], [at, bt]))
+
 
 def test_np_array_with_zero_dimensions():
     d = da.ones((4, 4), blockshape=(2, 2))

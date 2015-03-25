@@ -481,6 +481,10 @@ def store(sources, targets, **kwargs):
         targets = [targets]
         single_output = False
 
+    if len(sources) != len(targets):
+        raise ValueError("Different number of sources [%d] and targets [%d]"
+                        % (len(sources), len(targets)))
+
     updates = [insert_to_ooc(tgt, src) for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
