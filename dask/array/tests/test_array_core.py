@@ -77,10 +77,21 @@ def eq(a, b):
         b = b.compute(get=dask.get)
     else:
         bdt = getattr(b, 'dtype', None)
+
+    if not str(adt) == str(bdt):
+        return False
+
+    try:
+        return np.allclose(a, b)
+    except TypeError:
+        pass
+
     c = a == b
+
     if isinstance(c, np.ndarray):
-        c = c.all()
-    return c and str(adt) == str(bdt)
+        return c.all()
+    else:
+        return c
 
 
 def test_chunked_dot_product():
@@ -648,3 +659,22 @@ def test_arithmetic():
     r1, r2 = np.modf(x)
     assert eq(l1, r1)
     assert eq(l2, r2)
+
+def test_reductions():
+    x = np.arange(5).astype('f4')
+    a = da.from_array(x, blockshape=(2,))
+
+    assert eq(da.all(a), np.all(x))
+    assert eq(da.any(a), np.any(x))
+    assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
+    assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
+    assert eq(da.max(a), np.max(x))
+    assert eq(da.mean(a), np.mean(x))
+    assert eq(da.min(a), np.min(x))
+    assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
+    assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
+    assert eq(da.nanmax(a), np.nanmax(x))
+    assert eq(da.nanmin(a), np.nanmin(x))
+    assert eq(da.nansum(a), np.nansum(x))
+    assert eq(da.nanvar(a), np.nanvar(x))
+    assert eq(da.nanstd(a), np.nanstd(x))
