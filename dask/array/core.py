@@ -1069,7 +1069,9 @@ def elemwise(op, *args, **kwargs):
     elif not all(a._dtype is not None for a in arrays):
         dt = None
     else:
-        vals = [np.empty((1,), dtype=a.dtype) if hasattr(a, 'dtype') else a
+
+        vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
+                if hasattr(a, 'dtype') else a
                 for a in args]
         try:
             dt = op(*vals).dtype
