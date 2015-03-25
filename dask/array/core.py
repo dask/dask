@@ -579,6 +579,11 @@ class Array(object):
     def transpose(self, axes=None):
         return transpose(self, axes)
 
+    def astype(self, dtype, **kwargs):
+        """ Copy of the array, cast to a specified type """
+        return elemwise(partial(np.ndarray.astype, dtype=dtype, **kwargs),
+                        self, dtype=dtype)
+
     def __abs__(self):
         return elemwise(operator.abs, self)
     def __add__(self, other):

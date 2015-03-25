@@ -528,3 +528,11 @@ def test_dtype_complex():
 
     assert eq(d['text']._dtype, x['text'].dtype)
     assert eq(d[['numbers', 'text']]._dtype, x[['numbers', 'text']].dtype)
+
+
+def test_astype():
+    x = np.ones(5, dtype='f4')
+    d = da.from_array(x, blockshape=(2,))
+
+    assert d.astype('i8') == 'i8'
+    assert eq(d.astype('i8'), x.astype('i8'))
