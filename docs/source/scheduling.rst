@@ -84,16 +84,13 @@ We measure scaling in two directions, increasing the number of tasks in an
 embarrassingly parallel fashion
 
 
-Linear scaling with number of tasks
-```````````````````````````````````
-
 .. image:: images/trivial.png
    :width: 30 %
+   :align: right
    :alt: Adding nodes
 
-.. image:: images/scaling-nodes.png
-   :width: 60 %
-   :align: right
+Linear scaling with number of tasks
+```````````````````````````````````
 
 As we increase the number of tasks in a graph we see that the scheduling
 overhead grows linearly.  The asymptotic cost per task depends on the
@@ -101,23 +98,22 @@ scheduler.  The schedulers that depend on some sort of asynchronous pool have
 costs in the few milliseconds.  The schedulers that are single threaded are
 down in the microsecond range.
 
-
-Linear scaling with number of edges
-```````````````````````````````````
-
+.. image:: images/scaling-nodes.png
 
 .. image:: images/crosstalk.png
    :width: 30 %
+   :align: right
    :alt: Adding edges
 
-.. image:: images/scaling-edges.png
-   :width: 60 %
-   :align: right
+Linear scaling with number of edges
+```````````````````````````````````
 
 As we increase the number of edges per task we see that scheduling overhead
 again increases linearly.  Note that neither the naive core scheduler nor the
 multiprocessing scheduler are good at workflows with non-trivial cross-task
 communication; they have been removed from the plot.
+
+.. image:: images/scaling-edges.png
 
 `Script available here`_
 

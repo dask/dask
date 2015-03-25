@@ -19,6 +19,7 @@ Contents
    spec.rst
    array.rst
    frame.rst
+   scheduling.rst
    faq.rst
 
 Dask is part of the Blaze_ project supported by `Continuum Analytics`_
