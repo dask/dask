@@ -8,6 +8,7 @@ from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
         frexp, hypot, isinf, isnan, ldexp, log, log10, log1p, modf, radians,
         sin, sinh, sqrt, tan, tanh, trunc, isnull, notnull)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
+                         argmin, argmax,
                          nansum, nanmean, nanstd, nanvar, nanmin,
                          nanmax, nanargmin, nanargmax)
 from .percentile import percentile

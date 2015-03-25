@@ -100,13 +100,13 @@ def nanargmax(a, axis=None):
 @wraps(chunk.any)
 def any(a, axis=None, keepdims=False):
     return reduction(a, chunk.any, chunk.any, axis=axis, keepdims=keepdims,
-                     dtype=np.bool_)
+                     dtype='bool')
 
 
 @wraps(chunk.all)
 def all(a, axis=None, keepdims=False):
     return reduction(a, chunk.all, chunk.all, axis=axis, keepdims=keepdims,
-                     dtype=np.bool_)
+                     dtype='bool')
 
 
 @wraps(chunk.nansum)
@@ -167,15 +167,24 @@ def mean_agg(pair, **kwargs):
 
 @wraps(chunk.mean)
 def mean(a, axis=None, keepdims=False):
+    if a._dtype is not None:
+        dt = np.mean(np.empty(shape=(1,), dtype=a._dtype)).dtype
+    else:
+        dt = None
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims,
-                     dtype='f8')
+                     dtype=dt)
 
 
 def nanmean(a, axis=None, keepdims=False):
+    if a._dtype is not None:
+        dt = np.mean(np.empty(shape=(1,), dtype=a._dtype)).dtype
+    else:
+        dt = None
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
-                     mean_agg, axis=axis, keepdims=keepdims, dtype='f8')
+                     mean_agg, axis=axis, keepdims=keepdims, dtype=dt)
 with ignoring(AttributeError):
     nanmean = wraps(chunk.nanmean)(nanmean)
+
 
 def var_chunk(A, sum=chunk.sum, numel=numel, **kwargs):
     n = numel(A, **kwargs)
@@ -201,13 +210,22 @@ def var_agg(A, ddof=None, **kwargs):
 
 @wraps(chunk.var)
 def var(a, axis=None, keepdims=False, ddof=0):
+    if a._dtype is not None:
+        dt = np.var(np.empty(shape=(1,), dtype=a._dtype)).dtype
+    else:
+        dt = None
     return reduction(a, var_chunk, partial(var_agg, ddof=ddof), axis=axis,
-                     keepdims=keepdims, dtype='f8')
+                     keepdims=keepdims, dtype=dt)
 
 
 def nanvar(a, axis=None, keepdims=False, ddof=0):
+    if a._dtype is not None:
+        dt = np.var(np.empty(shape=(1,), dtype=a._dtype)).dtype
+    else:
+        dt = None
     return reduction(a, partial(var_chunk, sum=chunk.nansum, numel=nannumel),
-                     partial(var_agg, ddof=ddof), axis=axis, keepdims=keepdims)
+                     partial(var_agg, ddof=ddof), axis=axis, keepdims=keepdims,
+                     dtype=dt)
 with ignoring(AttributeError):
     nanvar = wraps(chunk.nanvar)(nanvar)
 
