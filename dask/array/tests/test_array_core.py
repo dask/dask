@@ -644,4 +644,7 @@ def test_arithmetic():
     assert eq(l1, r1)
     assert eq(l2, r2)
 
-    assert eq(da.modf(a / 2), np.modf(x / 2))
+    l1, l2 = da.modf(a)
+    r1, r2 = np.modf(x)
+    assert eq(l1, r1)
+    assert eq(l2, r2)
