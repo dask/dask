@@ -1,0 +1,124 @@
+Scheduling
+==========
+
+High level objects like ``Array``, ``Bag``, and ``Frame`` create task
+dependency graphs.  These encode blocked algorithms that accomplish macro-scale
+effects with many small tasks, each of which is suitable to run on a single
+worker.  Neither the high-level objects nor the task graphs that they create encode
+the order of computation nor on which workers each task will execute.
+This is handled separately by schedulers.
+
+This separation between graph creation and graph execution is key to dask's
+design and somewhat particular among similar systems.
+
+Schedulers execute a task dependency graph using whatever workers they have
+available.  Schedulers can range in complexity from a quick, 20-line
+single-threaded Python function, to large distributed systems.  At the time of
+writing the dask library holds two sechedulers
+
+1.  A tiny reference scheduler
+2.  A multi-core asynchronous scheduler suitable for multi-threading or
+    multi-processing in shared memory
+
+These schedulers are ignorant of the macro-scale operations or the fact that
+they operate on arrays, dataframes, etc..  They only know how to execute Python
+functions on data in a way that is consistent with the graph's data
+dependencies.  At this stage we have lost all top-level information.
+
+The rest of this document largely covers the asynchronous scheduler.
+
+
+Async
+=====
+
+The asynchronous scheduler requires an ``apply_async`` function and a
+``Queue``.  These determine the kind of worker and parallelism that we exploit.
+``apply_async`` functions can be found in the following places
+
+*  ``multithreading.Pool().apply_async`` - uses multiple processes
+*  ``multithreading.pool.ThreadPool().apply_async`` - uses multiple threads
+*  ``dask.async.apply_sync`` - uses only the main thread (useful for debugging)
+
+Full dask ``get`` functions exist in each of ``dask.threaded.get``,
+``dask.multiprocessing.get`` and ``dask.async.get_sync`` respectively.
+
+
+Performance
+-----------
+
+**tl;dr** The threaded scheduler behaves roughly as follows:
+
+*  1ms overhead per task
+*  100ms startup time (if you want to make a new ThreadPool each time)
+*  Linear scaling with number of tasks
+*  Linear scaling with number of dependencies per task
+
+Schedulers introduce overhead.  This overhead effectively limits the
+granularity of our parallelism.  Below we measure overhead of the async
+scheduler with different apply functions (threaded, sync, multiprocessing), and
+under different kinds of load (embarassingly parallel, dense communication).
+
+The quickest/simplest test we can do it to use ipython's ``imeit``
+
+.. code-block:: python
+
+   In [1]: import dask.array as da
+
+   In [2]: x = da.ones(1000, blockshape=(2,)).sum()
+
+   In [3]: len(x.dask)
+   Out[3]: 1001
+
+   In [4]: %timeit x.compute()
+   1 loops, best of 3: 550 ms per loop
+
+Around 500 microseconds per task.  About 100ms of this is from overhead
+
+.. code-block:: python
+
+   In [6]: x = da.ones(1000, blockshape=(1000,)).sum()
+   In [7]: %timeit x.compute()
+   10 loops, best of 3: 103 ms per loop
+
+We measure scaling in two directions, increasing the number of tasks in an
+embarrassingly parallel fashion
+
+
+Linear scaling with number of tasks
+```````````````````````````````````
+
+.. image:: images/trivial.png
+   :width: 30 %
+   :alt: Adding nodes
+
+.. image:: images/scaling-nodes.png
+   :width: 60 %
+   :align: right
+
+As we increase the number of tasks in a graph we see that the scheduling
+overhead grows linearly.  The asymptotic cost per task depends on the
+scheduler.  The schedulers that depend on some sort of asynchronous pool have
+costs in the few milliseconds.  The schedulers that are single threaded are
+down in the microsecond range.
+
+
+Linear scaling with number of edges
+```````````````````````````````````
+
+
+.. image:: images/crosstalk.png
+   :width: 30 %
+   :alt: Adding edges
+
+.. image:: images/scaling-edges.png
+   :width: 60 %
+   :align: right
+
+As we increase the number of edges per task we see that scheduling overhead
+again increases linearly.  Note that neither the naive core scheduler nor the
+multiprocessing scheduler are good at workflows with non-trivial cross-task
+communication; they have been removed from the plot.
+
+`Script available here`_
+
+.. _`Script available here`: https://github.com/ContinuumIO/dask/tree/master/docs/source/scripts/scheduling.py
