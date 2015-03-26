@@ -2,6 +2,7 @@ from itertools import count
 from math import ceil, sqrt
 from functools import wraps
 import toolz
+import bisect
 import os
 from toolz import merge, partial, accumulate, unique, first, dissoc
 from operator import getitem, setitem
@@ -17,7 +18,7 @@ from ..array.core import partial_by_order
 from ..async import get_sync
 from ..threaded import get as get_threaded
 from ..compatibility import unicode, apply
-from ..utils import repr_long_list
+from ..utils import repr_long_list, IndexCallable
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
@@ -327,6 +328,44 @@ class Frame(object):
         """
         return quantiles(self, q)
 
+    def _partition_of_index_value(self, val):
+        """ In which partition does this value lie? """
+        return bisect.bisect_right(self.blockdivs, val)
+
+    def _loc(self, ind):
+        name = next(names)
+        if not isinstance(ind, slice):
+            part = self._partition_of_index_value(ind)
+            dsk = {(name, 0): (lambda df: df.loc[ind], (self.name, part))}
+            return Frame(merge(self.dask, dsk), name, self.columns, [])
+        else:
+            assert ind.step in (None, 1)
+            if ind.start:
+                start = self._partition_of_index_value(ind.start)
+            else:
+                start = 0
+            if ind.stop is not None:
+                stop = self._partition_of_index_value(ind.stop)
+            else:
+                stop = self.npartitions - 1
+            if stop == start:
+                dsk = {(name, 0): (_loc, (self.name, start), ind.start, ind.stop)}
+            else:
+                dsk = merge(
+                  {(name, 0): (_loc, (self.name, start), ind.start, None)},
+                  dict(((name, i), (self.name, start + i))
+                      for i in range(1, stop - start)),
+                  {(name, stop - start): (_loc, (self.name, stop), None, ind.stop)})
+
+            return Frame(merge(self.dask, dsk), name, self.columns,
+                         self.blockdivs[start:stop])
+
+    @property
+    def loc(self):
+        return IndexCallable(self._loc)
+
+def _loc(df, start, stop):
+    return df.loc[slice(start, stop)]
 
 def head(x, n):
     """ First n elements of dask.frame """

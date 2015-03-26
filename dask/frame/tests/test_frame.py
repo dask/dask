@@ -320,3 +320,10 @@ def test_from_bcolz():
 
         d = df.from_bcolz(t, chunksize=2, index='x')
         assert list(d.index.compute()) == [1, 2, 3]
+
+
+def test_loc():
+    assert eq(d.loc[5], full.loc[5])
+    assert eq(d.loc[3:8], full.loc[3:8])
+    assert eq(d.loc[:8], full.loc[:8])
+    assert eq(d.loc[3:], full.loc[3:])
