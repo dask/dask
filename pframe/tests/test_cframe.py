@@ -10,16 +10,15 @@ def test_convert():
                        'b': [4, 5, 6],
                        'c': [1., 2., 3.]}, index=[5, 3, 3])
     cf = cframe(df)
-    assert cf.blocks[0].dtype == df._data.blocks[0].dtype
-    assert set([cf.blocks[0].shape[1], cf.blocks[1].shape[1]]) == set([1, 2])
+    assert all(cf.blocks[col].dtype == df.dtypes[col] for col in df.columns)
 
     cf.append(df)
-    assert len(cf.blocks[0]) == len(df)
+    assert all(len(cf.blocks[col]) == len(df) for col in cf.columns)
 
     df2 = cf.to_dataframe()
     tm.assert_frame_equal(df, df2)
 
     cf.append(df)
-    assert len(cf.blocks[0]) == 2*len(df)
+    assert len(cf) == 2*len(df)
 
     assert list(cf.to_dataframe()['a']) == [1, 2, 3, 1, 2, 3]

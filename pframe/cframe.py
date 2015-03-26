@@ -1,6 +1,7 @@
 import bcolz
 import os
 import numpy as np
+import pandas as pd
 from convert import from_blocks
 import tempfile
 from .utils import ignoring
@@ -9,9 +10,19 @@ from .utils import ignoring
 class cframe(object):
     """ BColz on-disk DataFrame, stored as raw as possible
 
-    Stores the dataframe blocks directly in bcolz arrays.  Supports efficient
-    append of new DataFrames and the extraction of all data in to a new
-    DataFrame.
+    Stores the dataframe columns directly in bcolz arrays.  Supports efficient
+    append of new DataFrames and the extraction of all data to a new DataFrame.
+
+    Stores the following
+
+    blocks: dict {column-name: bcolz.carray}
+        Holds a carray for each column
+    index: carray
+        Holds carray for the index
+    rootdir: str
+        Directory holding all of the block carrays
+    columns: list
+        Column identifiers (usually strings)
 
     TODO
     ----
@@ -27,37 +38,39 @@ class cframe(object):
             os.mkdir(rootdir)
             self._explicitly_given_path = True
 
-        self.blocks = [bcolz.zeros(rootdir=os.path.join(rootdir, '%d.bcolz' % i),
-                                   shape=(0, blk.values.shape[0]),
-                                   dtype=blk.values.dtype, safe=False,
-                                   chunklen=chunklen, **kwargs)
-                        for i, blk in enumerate(df._data.blocks)]
+        self.blocks = dict((col,
+                       bcolz.zeros(rootdir=os.path.join(rootdir, '%s.bcolz' % col),
+                                   shape=(0,),
+                                   dtype=df.dtypes[col], safe=False,
+                                   chunklen=chunklen, **kwargs))
+                        for col in df.columns)
         self.columns = df.columns
         self.index = bcolz.zeros(shape=(0,), dtype=df.index.values.dtype,
                                  safe=False, chunklen=chunklen, **kwargs)
-        self.placement = [ b.mgr_locs.as_array for b in df._data.blocks ]
         self.rootdir = rootdir
 
     def append(self, df):
-        for a, b in zip(self.blocks, df._data.blocks):
-            # TODO: is it better to store many columns or have fewer writes?
-            a.append(flip(b.values))
+        for block in df._data.blocks:
+            for i, loc in enumerate(block.mgr_locs.as_array):
+                self.blocks[self.columns[loc]].append(block.values[i])
         self.index.append(df.index.values)
 
     def to_dataframe(self):
-        blocks = [flip(block[:]) for block in self.blocks]
-        return from_blocks(blocks, self.index[:], self.columns, self.placement)
+        return pd.DataFrame(dict((col, self.blocks[col][:]) for col in
+            self.columns), index=self.index[:], columns=self.columns)
 
     @property
     def nbytes(self):
-        return self.index.nbytes + sum(block.nbytes for block in self.blocks)
+        return self.index.nbytes + sum(block.nbytes for block
+                                        in self.blocks.values())
 
     @property
     def cbytes(self):
-        return self.index.cbytes + sum(block.cbytes for block in self.blocks)
+        return self.index.cbytes + sum(block.cbytes for block
+                                        in self.blocks.values())
 
     def flush(self):
-        for block in self.blocks:
+        for block in self.blocks.values():
             block.flush()
         self.index.flush()
 
@@ -76,9 +89,5 @@ class cframe(object):
     def head(self, n=10):
         return self.to_dataframe().head(n)
 
-
-def flip(x):
-    """ Change striding and data ordering while leaving semantics intact """
-    y = np.empty(shape=x.T.shape, dtype=x.T.dtype)
-    y[:] = x.T
-    return y
+    def __len__(self):
+        return len(self.blocks[self.columns[0]])

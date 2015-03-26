@@ -57,7 +57,7 @@ def test_categoricals():
                        'b': pd.Categorical([1, 2, 3])})
     pf = pframe(like=df, blockdivs=[2])
     pf.append(df)
-    assert pf.partitions[0].blocks[0].dtype == 'i1'
+    assert pf.partitions[0].blocks['a'].dtype == 'i1'
 
     tm.assert_frame_equal(pf.to_dataframe(), df)
 
