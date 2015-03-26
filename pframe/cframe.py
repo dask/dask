@@ -63,7 +63,7 @@ class cframe(object):
                              name=columns)
         else:
             return pd.DataFrame(dict((col, self.blocks[col][:]) for col in
-                self.columns), index=self.index[:], columns=columns)
+                columns), index=self.index[:], columns=columns)
 
     @property
     def nbytes(self):
