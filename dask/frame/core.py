@@ -364,6 +364,11 @@ class Frame(object):
     def loc(self):
         return IndexCallable(self._loc)
 
+    @property
+    def iloc(self):
+        raise AttributeError("Dask frame does not support iloc")
+
+
 def _loc(df, start, stop):
     return df.loc[slice(start, stop)]
 

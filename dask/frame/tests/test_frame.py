@@ -327,3 +327,7 @@ def test_loc():
     assert eq(d.loc[3:8], full.loc[3:8])
     assert eq(d.loc[:8], full.loc[:8])
     assert eq(d.loc[3:], full.loc[3:])
+
+
+def test_iloc_raises():
+    assert raises(AttributeError, lambda: d.iloc[:5])
