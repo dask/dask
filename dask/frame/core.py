@@ -767,7 +767,7 @@ def get(dsk, keys, get=get_sync, **kwargs):
     else:
         dsk2 = cull(dsk, [keys])
     dsk3 = fuse(dsk2)
-    dsk4 = rewrite_rules.rewrite(dsk3)
+    dsk4 = valmap(rewrite_rules.rewrite, dsk3)
     return get(dsk4, keys, **kwargs)  # use synchronous scheduler for now
 
 

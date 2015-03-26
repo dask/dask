@@ -1,5 +1,6 @@
 import dask.frame as dfr
 from dask.frame.core import linecount, compute, get
+from toolz import valmap
 import pandas.util.testing as tm
 from operator import getitem
 import pandas as pd
@@ -368,11 +369,17 @@ def test_from_pframe():
 
 
 def test_column_optimizations_with_pframe_and_rewrite():
-    dsk = {('x', i): (getitem, (pframe.get_partition, pf, i), (list, ['a', 'b']))
+    from dask.frame.core import rewrite_rules
+    dfs = list(dsk.values())
+    pf = pframe(like=dfs[0], blockdivs=[5])
+    for df in dfs:
+        pf.append(df)
+
+    dsk2 = {('x', i): (getitem, (pframe.get_partition, pf, i), (list, ['a', 'b']))
             for i in [1, 2, 3]}
 
     expected = {('x', i): (pframe.get_partition, pf, i, (list, ['a', 'b']))
             for i in [1, 2, 3]}
-    result = rewrite_rules.rewrite(dsk)
+    result = valmap(rewrite_rules.rewrite, dsk2)
 
     assert result == expected
