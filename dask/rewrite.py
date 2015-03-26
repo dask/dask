@@ -25,10 +25,27 @@ def args(task):
 
 
 class Traverser(object):
-    """Traverser interface for tasks"""
+    """Traverser interface for tasks.
+
+    Class for storing the state while performing a preorder-traversal of a
+    task.
+
+    Parameters
+    ----------
+    term : task
+        The task to be traversed
+
+    Attributes
+    ----------
+    term
+        The current element in the traversal
+    current
+        The head of the current element in the traversal. This is simply `head`
+        applied to the attribute `term`.
+    """
 
     def __init__(self, term, stack=None):
-        self._term = term
+        self.term = term
         if not stack:
             self._stack = deque([END])
         else:
@@ -40,23 +57,31 @@ class Traverser(object):
             self.next()
 
     def copy(self):
-        return Traverser(self._term, deque(self._stack))
+        """Copy the traverser in its current state.
+
+        This allows the traversal to be pushed onto a stack, for easy
+        backtracking."""
+
+        return Traverser(self.term, deque(self._stack))
 
     def next(self):
-        subterms = args(self._term)
+        """Proceed to the next term in the preorder traversal."""
+
+        subterms = args(self.term)
         if not subterms:
             # No subterms, pop off stack
-            self._term = self._stack.pop()
+            self.term = self._stack.pop()
         else:
-            self._term = subterms[0]
+            self.term = subterms[0]
             self._stack.extend(reversed(subterms[1:]))
 
     @property
     def current(self):
-        return head(self._term)
+        return head(self.term)
 
     def skip(self):
-        self._term = self._stack.pop()
+        """Skip over all subterms of the current level in the traversal"""
+        self.term = self._stack.pop()
 
 
 class Token(object):
@@ -102,17 +127,29 @@ class Node(tuple):
 class RewriteRule(object):
     """A rewrite rule.
 
-    Expresses ``lhs`` -> ``rhs``, for variables ``vars``.
+    Expresses `lhs` -> `rhs`, for variables `vars`.
 
     Parameters
     ----------
-
     lhs : task
         The left-hand-side of the rewrite rule.
     rhs : task
         The right-hand-side of the rewrite rule.
-    vars: tuple
-        Tuple of variables found in the lhs.
+    vars: tuple, optional
+        Tuple of variables found in the lhs. Variables can be represented as
+        any hashable object; a good convention is to use strings. If there are
+        no variables, this can be omitted.
+
+    Example
+    -------
+    Here's a `RewriteRule` to replace all nested calls to `list`, so that
+    `(list, (list, 'x'))` is replaced with `(list, 'x')`, where `'x'` is a
+    variable.
+
+    >>> lhs = (list, (list, 'x'))
+    >>> rhs = (list, 'x')
+    >>> variables = ('x',)
+    >>> rule = RewriteRule(lhs, rhs, variables)
     """
 
     def __init__(self, lhs, rhs, vars=()):
@@ -122,10 +159,11 @@ class RewriteRule(object):
         self.rhs = rhs
         self._varlist = [t for t in Traverser(lhs) if t in vars]
         # Reduce vars down to just variables found in lhs
-        self.vars = tuple(set(self._varlist))
+        self.vars = tuple(sorted(set(self._varlist)))
 
     def __str__(self):
-        return "RewriteRule({0}, {1}, {2})".format(self.lhs, self.rhs, self.vars)
+        return "RewriteRule({0}, {1}, {2})".format(self.lhs, self.rhs,
+                self.vars)
 
     def __repr__(self):
         return str(self)
@@ -134,28 +172,42 @@ class RewriteRule(object):
 class RuleSet(object):
     """A set of rewrite rules.
 
-    Forms a structure for fast rewriting over a set of rewrite rules.
+    Forms a structure for fast rewriting over a set of rewrite rules. This
+    allows for syntactic matching of terms to patterns for many patterns at
+    the same time.
 
-    Parameters:
-    -----------
-    rules: RewriteRule
-        One or instances of RewriteRule
+    Attributes
+    ----------
+    rules : list
+        A list of `RewriteRule`s included in the `RuleSet`.
     """
 
     def __init__(self, *rules):
+        """Create a `RuleSet` for a number of rules
+
+        Parameters
+        ----------
+        rules
+            One or more instances of RewriteRule
+        """
         self._net = Node()
-        self._rules = []
+        self.rules = []
         for p in rules:
             self.add(p)
 
     def add(self, rule):
-        """Add a rule to the RuleSet."""
+        """Add a rule to the RuleSet.
+
+        Parameters
+        ----------
+        rule : RewriteRule
+        """
 
         if not isinstance(rule, RewriteRule):
             raise TypeError("rule must be instance of RewriteRule")
         vars = rule.vars
         curr_node = self._net
-        ind = len(self._rules)
+        ind = len(self.rules)
         # List of variables, in order they appear in the POT of the term
         for t in Traverser(rule.lhs):
             prev_node = curr_node
@@ -168,26 +220,25 @@ class RuleSet(object):
                 curr_node = curr_node.edges[t]
         # We've reached a leaf node. Add the term index to this leaf.
         prev_node.edges[t].patterns.append(ind)
-        self._rules.append(rule)
+        self.rules.append(rule)
 
     def iter_matches(self, term):
-        """Lazily find matchings for term from the RuleSet.
+        """A generator that lazily finds matchings for term from the RuleSet.
 
-        Paramters:
-        ----------
+        Paramters
+        ---------
         term : task
 
-        Returns:
-        --------
-        A generator that yields tuples of ``(rule, subs)``, where ``rule`` is
-        the rewrite rule being matched, and ``subs`` is a dictionary mapping
-        the variables in that lhs of the rule to their matching values in the
-        term."""
+        Yields
+        ------
+        Tuples of `(rule, subs)`, where `rule` is the rewrite rule being
+        matched, and `subs` is a dictionary mapping the variables in the lhs
+        of the rule to their matching values in the term."""
 
         S = Traverser(term)
         for m, syms in _match(S, self._net):
             for i in m:
-                rule = self._rules[i]
+                rule = self.rules[i]
                 subs = _process_match(rule, syms)
                 if subs is not None:
                     yield rule, subs
@@ -205,21 +256,48 @@ class RuleSet(object):
             break
         return term
 
-    def rewrite(self, term, strategy="bottom_up"):
-        """Apply the rule set to ``term``.
+    def rewrite(self, task, strategy="bottom_up"):
+        """Apply the `RuleSet` to `task`.
 
-        Parameters:
-        -----------
-        term: dask, or a task
-            The item to be rewritten
+        This applies the most specific matching rule in the RuleSet to the
+        task, using the provided strategy.
+
+        Parameters
+        ----------
+        term: a task
+            The task to be rewritten
         strategy: str, optional
             The rewriting strategy to use. Options are "bottom_up" (default),
             or "top_level".
+
+        Example
+        -------
+        Suppose there was a function `add` that returned the sum of 2 numbers,
+        and another function `double` that returned twice its input:
+
+        >>> add = lambda x, y: x + y
+        >>> double = lambda x: 2*x
+
+        Now suppose `double` was *significantly* faster than `add`, so
+        you'd like to replace all expressions `(add, x, x)` with `(double,
+        x)`, where `x` is a variable. This can be expressed as a rewrite rule:
+
+        >>> rule = RewriteRule((add, 'x', 'x'), (double, 'x'), ('x',))
+        >>> rs = RuleSet(rule)
+
+        This can then be applied to terms to perform the rewriting:
+
+        >>> term = (add, (add, 2, 2), (add, 2, 2))
+        >>> rs.rewrite(term)
+        (double, (double, 2))
+
+        If we only wanted to apply this to the top level of the term, the
+        `strategy` kwarg can be set to "top_level".
+
+        >>> rs.rewrite(term)
+        (double, (add, 2, 2))
         """
-        func = strategies[strategy]
-        if isinstance(term, dict):
-            return dict((k, func(self, v)) for (k, v) in term.items())
-        return func(self, term)
+        return strategies[strategy](self, task)
 
 
 def _top_level(net, term):
@@ -243,47 +321,54 @@ def _match(S, N):
     """Structural matching of term S to discrimination net node N."""
 
     stack = deque()
-    matches = deque()
     restore_state_flag = False
+    # matches are stored in a tuple, because all mutations result in a copy,
+    # preventing operations from changing matches stored on the stack.
+    matches = ()
     while True:
-        n = N.edges.get(VAR, None)
-        if n and restore_state_flag:
-            matches.pop()
-        if n and not restore_state_flag:
-            stack.append((S.copy(), N))
-            matches.append(S._term)
-            S.skip()
-            N = n
-        else:
+        if S.current is END:
+            yield N.patterns, matches
+        try:
+            # This try-except block is to catch hashing errors from un-hashable
+            # types. This allows for variables to be matched with un-hashable
+            # objects.
             n = N.edges.get(S.current, None)
-            if n:
-                restore_state_flag = False
+            if n and not restore_state_flag:
+                stack.append((S.copy(), N, matches))
                 N = n
                 S.next()
                 continue
-            if S.current is END:
-                yield N.patterns, matches
-            try:
-                (S, N) = stack.pop()
-                restore_state_flag = True
-            except:
-                return
+        except TypeError:
+            pass
+        n = N.edges.get(VAR, None)
+        if n:
+            restore_state_flag = False
+            matches = matches + (S.term,)
+            S.skip()
+            N = n
+            continue
+        try:
+            # Backtrack here
+            (S, N, matches) = stack.pop()
+            restore_state_flag = True
+        except:
+            return
 
 
 def _process_match(rule, syms):
     """Process a match to determine if it is correct, and to find the correct
     substitution that will convert the term into the pattern.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     rule : RewriteRule
     syms : iterable
         Iterable of subterms that match a corresponding variable.
 
-    Returns:
-    --------
+    Returns
+    -------
     A dictionary of {vars : subterms} describing the substitution to make the
-    pattern equivalent with the term. Returns ``None`` if the match is
+    pattern equivalent with the term. Returns `None` if the match is
     invalid."""
 
     subs = {}
@@ -291,7 +376,7 @@ def _process_match(rule, syms):
     if not len(varlist) == len(syms):
         raise RuntimeError("length of varlist doesn't match length of syms.")
     for v, s in zip(varlist, syms):
-        if v in subs and subs[v] is not s:
+        if v in subs and subs[v] != s:
             return None
         else:
             subs[v] = s
