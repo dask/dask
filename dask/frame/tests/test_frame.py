@@ -1,4 +1,4 @@
-import dask.frame as df
+import dask.frame as dfr
 from dask.frame.core import linecount, compute, get
 import pandas.util.testing as tm
 from operator import getitem
@@ -8,11 +8,12 @@ from dask.utils import filetext, raises, tmpfile
 import gzip
 import bz2
 import dask
+from pframe import pframe
 
 def eq(a, b):
-    if isinstance(a, df.Frame):
+    if isinstance(a, dfr.Frame):
         a = a.compute(get=dask.get)
-    if isinstance(b, df.Frame):
+    if isinstance(b, dfr.Frame):
         b = b.compute(get=dask.get)
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b)
@@ -30,7 +31,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
 full = d.compute()
 
 
@@ -110,16 +111,16 @@ def test_linecount_gzip():
 
 def test_read_csv():
     with filetext(text) as fn:
-        f = df.read_csv(fn, chunksize=3)
+        f = dfr.read_csv(fn, chunksize=3)
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions == 2
         assert eq(f, pd.read_csv(fn))
 
     with filetext(text) as fn:
-        f = df.read_csv(fn, chunksize=4)
+        f = dfr.read_csv(fn, chunksize=4)
         assert f.npartitions == 2
 
-        f = df.read_csv(fn)
+        f = dfr.read_csv(fn)
 
 
 def test_set_index():
@@ -129,7 +130,7 @@ def test_set_index():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
                                   index=[9, 9, 9])}
-    d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
     d2 = d.set_index('b', npartitions=3)
@@ -149,7 +150,7 @@ def test_set_index():
 def test_from_array():
     x = np.array([(i, i*10) for i in range(10)],
                  dtype=[('a', 'i4'), ('b', 'i4')])
-    d = df.from_array(x, chunksize=4)
+    d = dfr.from_array(x, chunksize=4)
 
     assert list(d.columns) == ['a', 'b']
     assert d.blockdivs == (4, 8)
@@ -164,7 +165,7 @@ def test_split_apply_combine_on_series():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
                                   index=[9, 9, 9])}
-    d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
     assert eq(d.groupby('b').a.sum(), full.groupby('b').a.sum())
@@ -277,7 +278,7 @@ def test_categorize():
            ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
                                    'b': ['A', 'A', 'B']},
                                    index=[3, 4, 5])}
-    d = df.Frame(dsk, 'x', ['a', 'b'], [3])
+    d = dfr.Frame(dsk, 'x', ['a', 'b'], [3])
     full = d.compute()
 
     c = d.categorize('a')
@@ -334,13 +335,13 @@ def test_from_bcolz():
     else:
         t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                          names=['x', 'y', 'a'])
-        d = df.from_bcolz(t, chunksize=2)
+        d = dfr.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
         assert str(d.dtypes['a']) == 'category'
         assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
         assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
 
-        d = df.from_bcolz(t, chunksize=2, index='x')
+        d = dfr.from_bcolz(t, chunksize=2, index='x')
         assert list(d.index.compute()) == [1, 2, 3]
 
 
