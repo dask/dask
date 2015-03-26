@@ -1,11 +1,11 @@
 from __future__ import absolute_import
 import numpy as np
 from itertools import count, product
-from .core import top, Array
+from .core import top, dotmany, Array
+from dask.dot import dot_graph
 import operator
 
 names = ('tsqr_%d' % i for i in count(1))
-
 
 def _cumsum_blocks(it):
     total = 0
@@ -15,7 +15,7 @@ def _cumsum_blocks(it):
         yield (total_previous, total)
 
 
-def tsqr(data, name=None):
+def tsqr(data, name=None, compute_svd=False):
     """
     Implementation of the direct TSQR, as presented in:
 
@@ -71,8 +71,7 @@ def tsqr(data, name=None):
                                                       (tuple, to_stack))}
     # In-core QR computation
     name_qr_st2 = prefix + 'QR_st2'
-    dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij',
-                     name_r_st1_stacked, 'ij',
+    dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
                      numblocks={name_r_st1_stacked: (1, 1)})
     # qr[0]
     name_q_st2_aux = prefix + 'Q_st2_aux'
@@ -91,9 +90,8 @@ def tsqr(data, name=None):
 
     name_q_st3 = prefix + 'Q'
     dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
-                            name_q_st2, 'ij',
-                            numblocks={name_q_st1: numblocks,
-                                       name_q_st2: numblocks})
+                    name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
+                                                 name_q_st2: numblocks})
 
     dsk_q = {}
     dsk_q.update(data.dask)
@@ -113,10 +111,52 @@ def tsqr(data, name=None):
     dsk_r.update(dsk_qr_st2)
     dsk_r.update(dsk_r_st2)
 
-    q = Array(dsk_q, name_q_st3, shape=data.shape, blockdims=data.blockdims)
-    r = Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
+    if not compute_svd:
+        q = Array(dsk_q, name_q_st3, shape=data.shape, blockdims=data.blockdims)
+        r = Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
+        return q, r
+    else:
+        # In-core SVD computation
+        name_svd_st2 = prefix + 'SVD_st2'
+        dsk_svd_st2 = top(np.linalg.svd, name_svd_st2, 'ij', name_r_st2, 'ij',
+                          numblocks={name_r_st2: (1, 1)})
+        # svd[0]
+        name_u_st2 = prefix + 'U_st2'
+        dsk_u_st2 = {(name_u_st2, 0, 0): (operator.getitem,
+                                          (name_svd_st2, 0, 0), 0)}
+        # svd[1]
+        name_s_st2 = prefix + 'S'
+        dsk_s_st2 = {(name_s_st2, 0): (operator.getitem,
+                                       (name_svd_st2, 0, 0), 1)}
+        # svd[2]
+        name_v_st2 = prefix + 'V'
+        dsk_v_st2 = {(name_v_st2, 0, 0): (operator.getitem,
+                                          (name_svd_st2, 0, 0), 2)}
+        # Q * U
+        name_u_st4 = prefix + 'U'
+        dsk_u_st4 = top(dotmany, name_u_st4, 'ij', name_q_st3, 'ik',
+                        name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
+                                                     name_u_st2: (1, 1)})
 
-    return q, r
+        dsk_u = {}
+        dsk_u.update(dsk_q)
+        dsk_u.update(dsk_r)
+        dsk_u.update(dsk_svd_st2)
+        dsk_u.update(dsk_u_st2)
+        dsk_u.update(dsk_u_st4)
+        dsk_s = {}
+        dsk_s.update(dsk_r)
+        dsk_s.update(dsk_svd_st2)
+        dsk_s.update(dsk_s_st2)
+        dsk_v = {}
+        dsk_v.update(dsk_r)
+        dsk_v.update(dsk_svd_st2)
+        dsk_v.update(dsk_v_st2)
+
+        u = Array(dsk_u, name_u_st4, shape=data.shape, blockdims=data.blockdims)
+        s = Array(dsk_s, name_s_st2, shape=(n,), blockshape=(n, n))
+        v = Array(dsk_v, name_v_st2, shape=(n, n), blockshape=(n, n))
+        return u, s, v
 
 
 def qr(data, name=None):
@@ -125,3 +165,11 @@ def qr(data, name=None):
     the shape of the input matrix
     """
     return tsqr(data, name)
+
+
+def svd(data, name=None):
+    """
+    In the future, we might have different implementations depending on
+    the shape of the input matrix
+    """
+    return tsqr(data, name, compute_svd=True)
