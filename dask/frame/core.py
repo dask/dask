@@ -12,6 +12,7 @@ import operator
 from chest import Chest
 import gzip
 import bz2
+from pframe import pframe
 
 from .. import array as da
 from ..optimize import cull, fuse
@@ -21,16 +22,6 @@ from ..async import get_sync
 from ..threaded import get as get_threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable
-
-
-def get(dsk, keys, get=get_sync, **kwargs):
-    """ Get function with optimizations specialized to dask.frame """
-    if isinstance(keys, list):
-        dsk2 = cull(dsk, list(core.flatten(keys)))
-    else:
-        dsk2 = cull(dsk, [keys])
-    dsk3 = fuse(dsk2)
-    return get(dsk3, keys, **kwargs)  # use synchronous scheduler for now
 
 
 def concat(args):
@@ -754,6 +745,30 @@ def quantiles(f, q, **kwargs):
     result = merge_percentiles(q, [q] * f.npartitions, vals, lens)
 
     return result
+
+
+3################
+# Optimizations #
+3################
+
+
+a, b, c = '~a', '~b', '~c'
+from dask.rewrite import RuleSet, RewriteRule
+
+rewrite_rules = RuleSet(RewriteRule((getitem, (pframe.get_partition, a, b), c),
+                                    (pframe.get_partition, a, b, c),
+                                    (a, b, c)))
+
+
+def get(dsk, keys, get=get_sync, **kwargs):
+    """ Get function with optimizations specialized to dask.frame """
+    if isinstance(keys, list):
+        dsk2 = cull(dsk, list(core.flatten(keys)))
+    else:
+        dsk2 = cull(dsk, [keys])
+    dsk3 = fuse(dsk2)
+    dsk4 = rewrite_rules.rewrite(dsk3)
+    return get(dsk4, keys, **kwargs)  # use synchronous scheduler for now
 
 
 from .shuffle import set_index, set_partition

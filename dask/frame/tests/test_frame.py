@@ -353,3 +353,25 @@ def test_loc():
 
 def test_iloc_raises():
     assert raises(AttributeError, lambda: d.iloc[:5])
+
+
+def test_from_pframe():
+    dfs = list(dsk.values())
+    pf = pframe(like=dfs[0], blockdivs=[5])
+    for df in dfs:
+        pf.append(df)
+
+    d = dfr.from_pframe(pf)
+    assert list(d.columns) == list(dfs[0].columns)
+    assert list(d.blockdivs) == list(pf.blockdivs)
+
+
+def test_column_optimizations_with_pframe_and_rewrite():
+    dsk = {('x', i): (getitem, (pframe.get_partition, pf, i), (list, ['a', 'b']))
+            for i in [1, 2, 3]}
+
+    expected = {('x', i): (pframe.get_partition, pf, i, (list, ['a', 'b']))
+            for i in [1, 2, 3]}
+    result = rewrite_rules.rewrite(dsk)
+
+    assert result == expected
