@@ -18,10 +18,11 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest numpy into pip coverage toolz bcolz pandas
+  - conda install pytest numpy into pip coverage toolz pandas
   - conda install -c blaze blaze
   - pip install coveralls dill --use-mirrors
   - pip install git+https://github.com/ContinuumIO/chest
+  - pip install git+https://github.com/blosc/bcolz --upgrade
 
   # Install dask
   - python setup.py install
