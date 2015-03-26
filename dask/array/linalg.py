@@ -1,8 +1,7 @@
 from __future__ import absolute_import
 import numpy as np
-from itertools import count, product
+from itertools import count
 from .core import top, dotmany, Array
-from dask.dot import dot_graph
 import operator
 
 names = ('tsqr_%d' % i for i in count(1))
