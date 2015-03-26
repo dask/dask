@@ -441,8 +441,9 @@ def linecount(fn):
     """
     extension = os.path.splitext(fn)[-1].lstrip('.')
     myopen = opens.get(extension, open)
-    with myopen(os.path.expanduser(fn)) as f:
-        result = toolz.count(f)
+    f = myopen(os.path.expanduser(fn))
+    result = toolz.count(f)
+    f.close()
     return result
 
 
@@ -541,6 +542,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     if categorize:
         for name in x.names:
             if (np.issubdtype(x.dtype[name], np.string_) or
+                np.issubdtype(x.dtype[name], np.unicode_) or
                 np.issubdtype(x.dtype[name], np.object_)):
                 a = da.from_array(x[name], blockshape=(chunksize*len(x.names),))
                 categories[name] = da.unique(a)
@@ -744,7 +746,7 @@ def quantiles(f, q, **kwargs):
     val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
                    for i, key in enumerate(f._keys()))
     name2 = next(names)
-    len_dsk = {(name2, i): (len, key) for i, key in enumerate(f._keys())}
+    len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(f._keys()))
 
     vals, lens = get(merge(val_dsk, len_dsk, f.dask),
                      [sorted(val_dsk.keys()), sorted(len_dsk.keys())])

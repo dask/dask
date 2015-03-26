@@ -90,19 +90,21 @@ def test_linecount():
 
 def test_linecount_bz2():
     with tmpfile('bz2') as fn:
-        with bz2.BZ2File(fn, 'w') as f:
-            for line in text.split('\n'):
-                f.write(line)
-                f.write('\n')
+        f = bz2.BZ2File(fn, 'wb')
+        for line in text.split('\n'):
+            f.write(line.encode('ascii'))
+            f.write(b'\n')
+        f.close()
         assert linecount(fn) == 7
 
 
 def test_linecount_gzip():
     with tmpfile('gz') as fn:
-        with gzip.open(fn, 'w') as f:
-            for line in text.split('\n'):
-                f.write(line)
-                f.write('\n')
+        f = gzip.open(fn, 'wb')
+        for line in text.split('\n'):
+            f.write(line.encode('ascii'))
+            f.write(b'\n')
+        f.close()
         assert linecount(fn) == 7
 
 
@@ -265,7 +267,7 @@ def test_set_partition():
     d2 = d.set_partition('b', [2])
     assert d2.blockdivs == (2,)
     expected = full.set_index('b').sort(ascending=True)
-    assert eq(d2, expected)
+    assert eq(d2.compute().sort(ascending=True), expected)
 
 
 def test_categorize():
@@ -334,7 +336,7 @@ def test_from_bcolz():
                          names=['x', 'y', 'a'])
         d = df.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
-        assert d.dtypes['a'] == 'category'
+        assert str(d.dtypes['a']) == 'category'
         assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
         assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
 
