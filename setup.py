@@ -20,7 +20,7 @@ setup(name='dask',
 
 
 setup(name='pframe',
-      version=dask.__version__,
+      version='0.1.0',
       description='Partitioned on-disk storage of DataFrames',
       url='http://github.com/ContinuumIO/dask/',
       maintainer='Matthew Rocklin',
