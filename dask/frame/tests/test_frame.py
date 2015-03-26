@@ -4,7 +4,9 @@ import pandas.util.testing as tm
 from operator import getitem
 import pandas as pd
 import numpy as np
-from dask.utils import filetext, raises
+from dask.utils import filetext, raises, tmpfile
+import gzip
+import bz2
 import dask
 
 def eq(a, b):
@@ -83,6 +85,24 @@ Frank,600
 
 def test_linecount():
     with filetext(text) as fn:
+        assert linecount(fn) == 7
+
+
+def test_linecount_bz2():
+    with tmpfile('bz2') as fn:
+        with bz2.BZ2File(fn, 'w') as f:
+            for line in text.split('\n'):
+                f.write(line)
+                f.write('\n')
+        assert linecount(fn) == 7
+
+
+def test_linecount_gzip():
+    with tmpfile('gz') as fn:
+        with gzip.open(fn, 'w') as f:
+            for line in text.split('\n'):
+                f.write(line)
+                f.write('\n')
         assert linecount(fn) == 7
 
 

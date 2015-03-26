@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np
 import operator
 from chest import Chest
+import gzip
+import bz2
 
 from .. import array as da
 from ..optimize import cull, fuse
@@ -429,13 +431,17 @@ def reduction(x, chunk, aggregate):
     return Frame(merge(x.dask, dsk, dsk2), b, x.columns, [])
 
 
+opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
+
 def linecount(fn):
     """ Count the number of lines in a textfile
 
     We need this to build the graph for read_csv.  This is much faster than
     actually parsing the file, but still costly.
     """
-    with open(os.path.expanduser(fn)) as f:
+    extension = os.path.splitext(fn)[-1].lstrip('.')
+    myopen = opens.get(extension, open)
+    with myopen(os.path.expanduser(fn)) as f:
         result = toolz.count(f)
     return result
 
