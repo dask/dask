@@ -1330,3 +1330,11 @@ def fromfunction(func, shape=None, blockshape=None, blockdims=None, dtype=None):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, blockdims=blockdims, dtype=dtype)
+
+
+@wraps(np.unique)
+def unique(x):
+    name = next(names)
+    dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
+    parts = get(merge(dsk, x.dask), list(dsk.keys()))
+    return np.unique(np.concatenate(parts))

@@ -1,11 +1,12 @@
 import dask.frame as df
 from dask.frame.core import linecount, compute, get
-from dask.frame.shuffle import shard_df_on_index
 import pandas.util.testing as tm
 from operator import getitem
 import pandas as pd
 import numpy as np
-from dask.utils import filetext, raises
+from dask.utils import filetext, raises, tmpfile
+import gzip
+import bz2
 import dask
 
 def eq(a, b):
@@ -32,6 +33,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
 d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
 full = d.compute()
 
+
 def test_frame():
     result = (d['a'] + 1).compute()
     expected = pd.Series([2, 3, 4, 5, 6, 7, 8, 9, 10],
@@ -54,7 +56,6 @@ def test_frame():
     assert np.allclose(d.b.std().compute(), full.b.std())
 
     assert repr(d)
-
 
 
 def test_attributes():
@@ -87,6 +88,26 @@ def test_linecount():
         assert linecount(fn) == 7
 
 
+def test_linecount_bz2():
+    with tmpfile('bz2') as fn:
+        f = bz2.BZ2File(fn, 'wb')
+        for line in text.split('\n'):
+            f.write(line.encode('ascii'))
+            f.write(b'\n')
+        f.close()
+        assert linecount(fn) == 7
+
+
+def test_linecount_gzip():
+    with tmpfile('gz') as fn:
+        f = gzip.open(fn, 'wb')
+        for line in text.split('\n'):
+            f.write(line.encode('ascii'))
+            f.write(b'\n')
+        f.close()
+        assert linecount(fn) == 7
+
+
 def test_read_csv():
     with filetext(text) as fn:
         f = df.read_csv(fn, chunksize=3)
@@ -111,43 +132,18 @@ def test_set_index():
     d = df.Frame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
-    d2 = d.set_index('b', npartitions=3, out_chunksize=3)
+    d2 = d.set_index('b', npartitions=3)
     assert d2.npartitions == 3
     # assert eq(d2, full.set_index('b').sort())
-    assert str(d2.compute()) == str(full.set_index('b').sort())
+    assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
 
-    d3 = d.set_index(d.b, npartitions=3, out_chunksize=3)
+    d3 = d.set_index(d.b, npartitions=3)
     assert d3.npartitions == 3
     # assert eq(d3, full.set_index(full.b).sort())
-    assert str(d3.compute()) == str(full.set_index(full.b).sort())
+    assert str(d3.compute().sort(['a'])) == str(full.set_index(full.b).sort(['a']))
 
-
-def test_shard_df_on_index():
-    f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
-                      index=[1, 2, 3, 4, 4])
-
-    result = list(df.shuffle.shard_df_on_index(f, [2, 7]))
-    assert eq(result[0], f.loc[[1]])
-    assert eq(result[1], f.loc[[2, 3, 4]])
-    assert eq(result[2], pd.DataFrame(columns=['a', 'b'], dtype=f.dtypes))
-
-
-def test_shard_df_on_index():
-    f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
-                      index=['a', 'b', 'c', 'd', 'e'])
-    result = list(shard_df_on_index(f, ['b', 'd']))
-    assert eq(result[0], f.iloc[:1])
-    assert eq(result[1], f.iloc[1:3])
-    assert eq(result[2], f.iloc[3:])
-
-
-    f = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
-                     index=[0, 1, 3]).set_index('b').sort()
-
-    result = list(shard_df_on_index(f, [4, 9]))
-    assert eq(result[0], f.iloc[0:1])
-    assert eq(result[1], f.iloc[1:3])
-    assert eq(result[2], f.iloc[3:])
+    d2 = d.set_index('b')
+    assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
 
 
 def test_from_array():
@@ -271,7 +267,7 @@ def test_set_partition():
     d2 = d.set_partition('b', [2])
     assert d2.blockdivs == (2,)
     expected = full.set_index('b').sort(ascending=True)
-    assert eq(d2, expected)
+    assert eq(d2.compute().sort(ascending=True), expected)
 
 
 def test_categorize():
@@ -317,3 +313,43 @@ def test_isin():
 
 def test_len():
     assert len(d) == len(full)
+
+
+def test_quantiles():
+    result = d.b.quantiles([30, 70])
+    assert len(result) == 2
+    assert result[0] == 0
+    assert 3 < result[1] < 7
+
+
+def test_index():
+    assert eq(d.index, full.index)
+
+
+def test_from_bcolz():
+    try:
+        import bcolz
+    except ImportError:
+        pass
+    else:
+        t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
+                         names=['x', 'y', 'a'])
+        d = df.from_bcolz(t, chunksize=2)
+        assert d.npartitions == 2
+        assert str(d.dtypes['a']) == 'category'
+        assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
+        assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
+
+        d = df.from_bcolz(t, chunksize=2, index='x')
+        assert list(d.index.compute()) == [1, 2, 3]
+
+
+def test_loc():
+    assert eq(d.loc[5], full.loc[5])
+    assert eq(d.loc[3:8], full.loc[3:8])
+    assert eq(d.loc[:8], full.loc[:8])
+    assert eq(d.loc[3:], full.loc[3:])
+
+
+def test_iloc_raises():
+    assert raises(AttributeError, lambda: d.iloc[:5])

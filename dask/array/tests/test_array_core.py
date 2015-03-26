@@ -517,6 +517,12 @@ def test_np_array_with_zero_dimensions():
     assert eq(np.array(d.sum()), np.array(d.compute().sum()))
 
 
+def test_unique():
+    x = np.array([1, 2, 4, 4, 5, 2])
+    d = da.from_array(x, blockshape=(3,))
+    assert eq(da.unique(d), np.unique(x))
+
+
 def test_dtype_complex():
     x = np.arange(24).reshape((4, 6)).astype('f4')
     y = np.arange(24).reshape((4, 6)).astype('i8')

@@ -2,6 +2,7 @@ from itertools import count
 from math import ceil, sqrt
 from functools import wraps
 import toolz
+import bisect
 import os
 from toolz import merge, partial, accumulate, unique, first, dissoc
 from operator import getitem, setitem
@@ -9,14 +10,17 @@ import pandas as pd
 import numpy as np
 import operator
 from chest import Chest
+import gzip
+import bz2
 
+from .. import array as da
 from ..optimize import cull, fuse
 from .. import core
 from ..array.core import partial_by_order
 from ..async import get_sync
 from ..threaded import get as get_threaded
 from ..compatibility import unicode, apply
-from ..utils import repr_long_list
+from ..utils import repr_long_list, IndexCallable
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
@@ -29,6 +33,22 @@ def get(dsk, keys, get=get_sync, **kwargs):
     return get(dsk3, keys, **kwargs)  # use synchronous scheduler for now
 
 
+def concat(args):
+    """ Generic concat operation """
+    if not args:
+        return args
+    if isinstance(args[0], (pd.DataFrame, pd.Series)):
+        args = [arg for arg in args if len(arg)]
+        return pd.concat(args)
+    if isinstance(args[0], (pd.Index)):
+        args = [arg for arg in args if len(arg)]
+        result = pd.concat(map(pd.Series, args))
+        result = type(args[0])(result.values)
+        result.name = args[0].name
+        return result
+    return args
+
+
 def compute(*args, **kwargs):
     """ Compute multiple frames at once """
     if len(args) == 1 and isinstance(args[0], (tuple, list)):
@@ -37,7 +57,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    return [pd.concat(dfs) if arg.blockdivs else dfs[0]
+    return [concat(dfs) if arg.blockdivs else dfs[0]
             for arg, dfs in zip(args, results)]
 
 
@@ -110,6 +130,13 @@ class Frame(object):
                 return self[key]
             except NotImplementedError:
                 raise AttributeError()
+
+    @property
+    def index(self):
+        name = next(names)
+        dsk = dict(((name, i), (getattr, key, 'index'))
+                   for i, key in enumerate(self._keys()))
+        return Frame(merge(dsk, self.dask), name, [], self.blockdivs)
 
     def __dir__(self):
         return sorted(set(list(dir(type(self))) + list(self.columns)))
@@ -295,6 +322,57 @@ class Frame(object):
     def categorize(self, columns=None, **kwargs):
         return categorize(self, columns, **kwargs)
 
+    def quantiles(self, q):
+        """ Approximate quantiles of column
+
+        q : list/array of floats
+            Iterable of numbers ranging from 0 to 100 for the desired quantiles
+        """
+        return quantiles(self, q)
+
+    def _partition_of_index_value(self, val):
+        """ In which partition does this value lie? """
+        return bisect.bisect_right(self.blockdivs, val)
+
+    def _loc(self, ind):
+        name = next(names)
+        if not isinstance(ind, slice):
+            part = self._partition_of_index_value(ind)
+            dsk = {(name, 0): (lambda df: df.loc[ind], (self.name, part))}
+            return Frame(merge(self.dask, dsk), name, self.columns, [])
+        else:
+            assert ind.step in (None, 1)
+            if ind.start:
+                start = self._partition_of_index_value(ind.start)
+            else:
+                start = 0
+            if ind.stop is not None:
+                stop = self._partition_of_index_value(ind.stop)
+            else:
+                stop = self.npartitions - 1
+            if stop == start:
+                dsk = {(name, 0): (_loc, (self.name, start), ind.start, ind.stop)}
+            else:
+                dsk = merge(
+                  {(name, 0): (_loc, (self.name, start), ind.start, None)},
+                  dict(((name, i), (self.name, start + i))
+                      for i in range(1, stop - start)),
+                  {(name, stop - start): (_loc, (self.name, stop), None, ind.stop)})
+
+            return Frame(merge(self.dask, dsk), name, self.columns,
+                         self.blockdivs[start:stop])
+
+    @property
+    def loc(self):
+        return IndexCallable(self._loc)
+
+    @property
+    def iloc(self):
+        raise AttributeError("Dask frame does not support iloc")
+
+
+def _loc(df, start, stop):
+    return df.loc[slice(start, stop)]
 
 def head(x, n):
     """ First n elements of dask.frame """
@@ -353,14 +431,19 @@ def reduction(x, chunk, aggregate):
     return Frame(merge(x.dask, dsk, dsk2), b, x.columns, [])
 
 
+opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
+
 def linecount(fn):
     """ Count the number of lines in a textfile
 
     We need this to build the graph for read_csv.  This is much faster than
     actually parsing the file, but still costly.
     """
-    with open(os.path.expanduser(fn)) as f:
-        result = toolz.count(f)
+    extension = os.path.splitext(fn)[-1].lstrip('.')
+    myopen = opens.get(extension, open)
+    f = myopen(os.path.expanduser(fn))
+    result = toolz.count(f)
+    f.close()
     return result
 
 
@@ -428,6 +511,72 @@ def from_array(x, chunksize=50000):
     return Frame(dsk, name, columns, blockdivs)
 
 
+from pframe.categories import reapply_categories
+
+def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
+    """ Read dask frame from bcolz.ctable
+
+    Parameters
+    ----------
+
+    x : bcolz.ctable
+        Input data
+    chunksize : int (optional)
+        The size of blocks to pull out from ctable.  Ideally as large as can
+        comfortably fit in memory
+    categorize : bool (defaults to True)
+        Automatically categorize all string dtypes
+    index : string (optional)
+        Column to make the index
+
+    See Also
+    --------
+
+    from_array: more generic function not optimized for bcolz
+    """
+    bc_chunklen = max(x[name].chunklen for name in x.names)
+    if chunksize is None and bc_chunklen > 10000:
+        chunksize = bc_chunklen
+
+    categories = dict()
+    if categorize:
+        for name in x.names:
+            if (np.issubdtype(x.dtype[name], np.string_) or
+                np.issubdtype(x.dtype[name], np.unicode_) or
+                np.issubdtype(x.dtype[name], np.object_)):
+                a = da.from_array(x[name], blockshape=(chunksize*len(x.names),))
+                categories[name] = da.unique(a)
+
+    columns = tuple(x.dtype.names)
+    blockdivs = tuple(range(chunksize, len(x), chunksize))
+    new_name = next(from_array_names)
+    dsk = dict(((new_name, i),
+        (pd.DataFrame,
+          (dict, (zip,
+            x.names,
+            [(getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),))
+             if name not in categories else
+             (pd.Categorical.from_codes,
+                 (np.searchsorted,
+                   categories[name],
+                   (getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),))),
+                 categories[name],
+                 True)
+             for name in x.names]))))
+           for i in range(0, int(ceil(float(len(x)) / chunksize))))
+
+    result = Frame(dsk, new_name, columns, blockdivs)
+
+    if index:
+        assert index in x.names
+        a = da.from_array(x[index], blockshape=(chunksize*len(x.names),))
+        q = np.linspace(1, 100, len(x) / chunksize + 2)[1:-1]
+        blockdivs = da.percentile(a, q).compute()
+        return set_partition(result, index, blockdivs, **kwargs)
+    else:
+        return result
+
+
 class GroupBy(object):
     def __init__(self, frame, index, **kwargs):
         self.frame = frame
@@ -466,10 +615,11 @@ class GroupBy(object):
 
 
 class SeriesGroupBy(object):
-    def __init__(self, frame, index, key):
+    def __init__(self, frame, index, key, **kwargs):
         self.frame = frame
         self.index = index
         self.key = key
+        self.kwargs = kwargs
 
     def apply(func, columns=None):
         f = set_index(self.frame, self.index, **self.kwargs)
@@ -582,6 +732,28 @@ def categorize(f, columns=None, **kwargs):
         return block
 
     return f.map_blocks(categorize, columns=f.columns)
+
+
+def quantiles(f, q, **kwargs):
+    """ Approximate quantiles of column
+
+    q : list/array of floats
+        Iterable of numbers ranging from 0 to 100 for the desired quantiles
+    """
+    assert len(f.columns) == 1
+    from dask.array.percentile import _percentile, merge_percentiles
+    name = next(names)
+    val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
+                   for i, key in enumerate(f._keys()))
+    name2 = next(names)
+    len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(f._keys()))
+
+    vals, lens = get(merge(val_dsk, len_dsk, f.dask),
+                     [sorted(val_dsk.keys()), sorted(len_dsk.keys())])
+
+    result = merge_percentiles(q, [q] * f.npartitions, vals, lens)
+
+    return result
 
 
 from .shuffle import set_index, set_partition

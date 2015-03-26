@@ -1,6 +1,7 @@
 from toolz import merge, merge_sorted
 from itertools import count
 from functools import wraps
+from collections import Iterator
 import numpy as np
 
 from .core import Array
@@ -8,6 +9,8 @@ from .core import Array
 
 @wraps(np.percentile)
 def _percentile(a, q, interpolation='linear'):
+    if isinstance(q, Iterator):
+        q = list(q)
     if str(a.dtype) == 'category':
         result = np.percentile(a.codes, q, interpolation=interpolation)
         import pandas as pd
@@ -64,14 +67,15 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     Example
     -------
 
-    >>> qs = [np.array([20, 40, 60, 80]), np.array([20, 40, 60, 80])]
+    >>> finalq = [10, 20, 30, 40, 50, 60, 70, 80]
+    >>> qs = [[20, 40, 60, 80], [20, 40, 60, 80]]
     >>> vals = [np.array([1, 2, 3, 4]), np.array([10, 11, 12, 13])]
     >>> Ns = [100, 100]  # Both original arrays had 100 elements
-    >>> finalq = np.array([10, 20, 30, 40, 50, 60, 70, 80])
 
     >>> merge_percentiles(finalq, qs, vals, Ns)
     array([ 1,  2,  3,  4, 10, 11, 12, 13])
     """
+    finalq = np.array(finalq)
     qs = list(qs)
     vals = list(vals)
     Ns = list(Ns)
