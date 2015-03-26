@@ -498,6 +498,20 @@ def test_compute():
     assert eq(B, d + 2)
 
 
+def test_store():
+    d = da.ones((4, 4), blockshape=(2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.empty(shape=(4, 4))
+    bt = np.empty(shape=(4, 4))
+
+    store([a, b], [at, bt])
+    assert (at == 2).all()
+    assert (bt == 3).all()
+
+    assert raises(ValueError, lambda: store([a], [at, bt]))
+
+
 def test_np_array_with_zero_dimensions():
     d = da.ones((4, 4), blockshape=(2, 2))
     assert eq(np.array(d.sum()), np.array(d.compute().sum()))
