@@ -741,8 +741,8 @@ def quantiles(f, q, **kwargs):
     assert len(f.columns) == 1
     from dask.array.percentile import _percentile, merge_percentiles
     name = next(names)
-    val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), q)
-            for i, key in enumerate(f._keys())}
+    val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
+                   for i, key in enumerate(f._keys()))
     name2 = next(names)
     len_dsk = {(name2, i): (len, key) for i, key in enumerate(f._keys())}
 

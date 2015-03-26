@@ -2,7 +2,7 @@ import bcolz
 import os
 import numpy as np
 import pandas as pd
-from convert import from_blocks
+from .convert import from_blocks
 import tempfile
 from .utils import ignoring
 
