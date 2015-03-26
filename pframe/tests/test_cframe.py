@@ -18,7 +18,13 @@ def test_convert():
     df2 = cf.to_dataframe()
     tm.assert_frame_equal(df, df2)
 
+    # Test column access
+    assert list(cf.to_dataframe(columns=['c', 'a']).columns) == ['c', 'a']
+    tm.assert_frame_equal(cf.to_dataframe(columns=['c', 'a']), df[['c', 'a']])
+    assert isinstance(cf.to_dataframe(columns='a'), pd.Series)
+
     cf.append(df)
     assert len(cf) == 2*len(df)
 
     assert list(cf.to_dataframe()['a']) == [1, 2, 3, 1, 2, 3]
+

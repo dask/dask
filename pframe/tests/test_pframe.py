@@ -33,6 +33,8 @@ def test_append():
     tm.assert_frame_equal(pf.get_partition(0), a)
     tm.assert_frame_equal(pf.get_partition(1), b)
 
+    tm.assert_frame_equal(pf.get_partition(1, ['c', 'b']), b[['c', 'b']])
+
 
 def test_head():
     assert isinstance(pf.head(), pd.DataFrame)

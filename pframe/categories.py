@@ -64,7 +64,7 @@ def reapply_categories(df, metadata):
     2  Alice
     """
     for name, d in metadata.items():
-        df[name] = pd.Categorical.from_codes(df[name].values,
-                                     d['categories'], d['ordered'])
+        if name in df.columns:
+            df[name] = pd.Categorical.from_codes(df[name].values,
+                                         d['categories'], d['ordered'])
     return df
-

@@ -61,6 +61,14 @@ class pframe(object):
     1   1   4   1
     3   2   5   2
     2  10  40  10
+
+    Can pull out columns selectively if desired
+
+    >>> pf.get_partition(0, columns=['c', 'b'])
+        c   b
+    1   1   4
+    3   2   5
+    2  10  40
     """
     def __init__(self, like, blockdivs, path=None, **kwargs):
         # Create directory
@@ -124,16 +132,16 @@ class pframe(object):
     def npartitions(self):
         return len(self.partitions)
 
-    def get_partition(self, i, has_lock=False):
+    def get_partition(self, i, columns=None, has_lock=False):
         assert 0 <= i < len(self.partitions)
         if not has_lock:
             self.lock.acquire()
-        df = reapply_categories(self.partitions[i].to_dataframe(),
-                                self.categories)
-        df.index.name = self.index_name
+        df = self.partitions[i].to_dataframe(columns=columns)
+        df2 = reapply_categories(df, self.categories)
+        df2.index.name = self.index_name
         if not has_lock:
             self.lock.release()
-        return df
+        return df2
 
     def __iter__(self):
         with self.lock:

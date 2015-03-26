@@ -55,9 +55,15 @@ class cframe(object):
                 self.blocks[self.columns[loc]].append(block.values[i])
         self.index.append(df.index.values)
 
-    def to_dataframe(self):
-        return pd.DataFrame(dict((col, self.blocks[col][:]) for col in
-            self.columns), index=self.index[:], columns=self.columns)
+    def to_dataframe(self, columns=None):
+        columns = self.columns if columns is None else columns
+        if not isinstance(columns, (list, tuple, pd.Index)):
+            return pd.Series(self.blocks[columns][:],
+                             index=self.index[:],
+                             name=columns)
+        else:
+            return pd.DataFrame(dict((col, self.blocks[col][:]) for col in
+                self.columns), index=self.index[:], columns=columns)
 
     @property
     def nbytes(self):
