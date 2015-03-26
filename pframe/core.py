@@ -21,9 +21,6 @@ class pframe(object):
 
     Stores data using bcolz carrays with optional compression.
 
-    Stores data in custom format to match Pandas internal format for rapid
-    conversion to with Pandas dataframes.
-
     Example
     -------
 

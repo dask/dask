@@ -28,7 +28,6 @@ class cframe(object):
     ----
 
     *  Partial reads by row slicing
-    *  Partial column reads
     """
     def __init__(self, df, rootdir=None, chunklen=2**16, **kwargs):
         if rootdir is None:
