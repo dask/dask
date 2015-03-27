@@ -107,5 +107,37 @@ blocks and then reconstruct those shards in new blocks.  We do this by
 leveraging in-core pandas segmentation on each block, and then using a special
 appendable on-disk data structure, pframe_.
 
+
+Supported API
+-------------
+
+Dask frame supports the following API from Pandas
+
+* Trivially parallelizable (fast):
+    *  Elementwise operations:  ``df.x + df.y``
+    *  Row-wise selections:  ``df[df.x > 0]``
+    *  Loc:  ``df.loc[4.0:10.5]``
+    *  Common aggregations:  ``df.x.max()``
+    *  Is in:  ``df[df.x.isin([1, 2, 3])]``
+* Cleverly parallelizable (also fast):
+    *  groupby-aggregate (with common aggregations): ``df.groupby(df.x).y.max()``
+    *  value_counts:  ``df.x.value_counts``
+    *  Drop duplicates:  ``df.x.drop_duplicates()``
+* Requires shuffle (slow-ish, unless on index)
+    *  Set index:  ``df.set_index(df.x)``
+    *  groupby-apply (with anything):  ``df.groupby(df.x).apply(myfunc)``
+* Ingest
+    *  ``pd.read_csv``  (in all its glory)
+
+Dask frame also introduces some new API
+
+* Requires full dataset read, but otherwise fast
+    *  Approximate quantiles:  ``df.x.quantiles([25, 50, 75])``
+    *  Convert object dtypes to categoricals:  ``df.categorize()``
+* Ingest
+    *  Read from bcolz (efficient on-disk column-store):
+      ``from_bcolz(x, index='mycol', categorize=True)``
+
+
 .. _Chest: http://github.com/ContinuumIO/chest
 .. _pframe: pframe.html
