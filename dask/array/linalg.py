@@ -14,9 +14,7 @@ def _cumsum_blocks(it):
         yield (total_previous, total)
 
 
-def tsqr(data, name=None, compute_svd=False):
-    """
-    Implementation of the direct TSQR, as presented in:
+shared_docstring = """direct TSQR algorithm, as presented in:
 
     A. Benson, D. Gleich, and J. Demmel.
     Direct QR factorizations for tall-and-skinny matrices in
@@ -31,14 +29,10 @@ def tsqr(data, name=None, compute_svd=False):
     - blockshape[0]*data.shape[1] must fit in main memory
     :type data: dask.array.Array
     :param name: Name of array in dask
-    :type name: basestring
-    :param compute_svd: If False (default) it computes a QR
-    decomposition. If True, it computes n SVD decomposition
-    :type compute_svd: Boolean
-    :return: First and second tuple elements correspond to Q and R, of
-    the QR decomposition.
-    :rtype: tuple of dask.array.Array
-    """
+    :type name: basestring"""
+
+
+def tsqr(data, name=None, compute_svd=False):
     if not (data.ndim == 2 and                    # Is a matrix
             len(data.blockdims[1]) == 1):         # Only one column block
         raise ValueError(
@@ -162,16 +156,34 @@ def tsqr(data, name=None, compute_svd=False):
 
 
 def qr(data, name=None):
-    """
-    In the future, we might have different implementations depending on
-    the shape of the input matrix
-    """
     return tsqr(data, name)
 
 
 def svd(data, name=None):
-    """
-    In the future, we might have different implementations depending on
-    the shape of the input matrix
-    """
     return tsqr(data, name, compute_svd=True)
+
+
+qr_return_docstring = """
+    First and second tuple elements correspond to the
+    factors Q and R  of the QR decomposition, respectively."""
+
+svd_return_docstring = """
+    First, second, and third tuple elements correspond to the
+    factors U, S, and V  of the QR decomposition, respectively."""
+
+tsqr.__doc__ = """The """ + shared_docstring + """
+    :param compute_svd: If False (default) it computes a QR
+    decomposition. If True, it computes n SVD decomposition
+    :type compute_svd: Boolean
+    :return: If compute_svd is False:""" + qr_return_docstring + """
+    If compute_svd is True:""" + svd_return_docstring + """
+    :rtype: tuple of dask.array.Array
+    """
+qr.__doc__ = """QR decomposition via the """ + shared_docstring + """
+    :return: """ + qr_return_docstring + """
+    :rtype: tuple of dask.array.Array
+    """
+svd.__doc__ = """SVD decomposition via the """ + shared_docstring + """
+    :return: """ + svd_return_docstring + """
+    :rtype: tuple of dask.array.Array
+    """
