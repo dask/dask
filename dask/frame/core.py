@@ -13,6 +13,7 @@ from chest import Chest
 import gzip
 import bz2
 from pframe import pframe
+import bcolz
 
 from .. import array as da
 from ..optimize import cull, fuse
@@ -504,7 +505,7 @@ def from_array(x, chunksize=50000):
 
 from pframe.categories import reapply_categories
 
-def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
+def from_bcolz(x, chunksize=None, categorize=True, index=None, columns=None, **kwargs):
     """ Read dask frame from bcolz.ctable
 
     Parameters
@@ -542,18 +543,10 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     blockdivs = tuple(range(chunksize, len(x), chunksize))
     new_name = next(from_array_names)
     dsk = dict(((new_name, i),
-        (pd.DataFrame,
-          (dict, (zip,
-            x.names,
-            [(getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),))
-             if name not in categories else
-             (pd.Categorical.from_codes,
-                 (np.searchsorted,
-                   categories[name],
-                   (getitem, x[name], (slice(i * chunksize, (i + 1) * chunksize),))),
-                 categories[name],
-                 True)
-             for name in x.names]))))
+                (dataframe_from_ctable,
+                  x,
+                  (slice(i * chunksize, (i + 1) * chunksize),),
+                  columns, categories))
            for i in range(0, int(ceil(float(len(x)) / chunksize))))
 
     result = Frame(dsk, new_name, columns, blockdivs)
@@ -566,6 +559,58 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
         return set_partition(result, index, blockdivs, **kwargs)
     else:
         return result
+
+
+def dataframe_from_ctable(x, slc, columns=None, categories=None):
+    """ Get DataFrame from bcolz.ctable
+
+    Parameters
+    ----------
+
+    x: bcolz.ctable
+    slc: slice
+    columns: list of column names or None
+
+    >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
+    >>> get_dataframe_from_ctable(x, slice(1, 3))
+       a   b
+    0  2  20
+    1  3  30
+
+    >>> get_dataframe_from_ctable(x, slice(1, 3), columns=['b'])
+        b
+    0  20
+    1  30
+
+    >>> get_dataframe_from_ctable(x, slice(1, 3), columns='b')
+    0    20
+    1    30
+    Name: b, dtype: int64
+
+    """
+    if columns is not None:
+        if isinstance(columns, tuple):
+            columns = list(columns)
+        x = x[columns]
+
+    name = next(names)
+
+    if isinstance(x, bcolz.ctable):
+        chunks = [x[name][slc] for name in x.names]
+        if categories is not None:
+            chunks = [pd.Categorical.from_codes(np.searchsorted(categories[name],
+                                                                chunk),
+                                                categories[name], True)
+                       if name in categories else chunk
+                       for name, chunk in zip(x.names, chunks)]
+        return pd.DataFrame(dict(zip(x.names, chunks)))
+    elif isinstance(x, bcolz.carray):
+        chunk = x[slc]
+        if categories is not None and columns and columns in categories:
+            chunk = pc.Categorical.from_codes(
+                        np.searchsorted(categories[columns], chunk),
+                        categories[columns], True)
+        return pd.Series(chunk, name=columns)
 
 
 class GroupBy(object):
