@@ -25,13 +25,16 @@ def tsqr(data, name=None, compute_svd=False):
         IEEE International Conference on Big Data, 2013.
         http://arxiv.org/abs/1301.1071
 
+    This algorithm is used to compute both the QR decomposition and the
+    Singular Value Decomposition.  It requires that the input array have a
+    single column of blocks, each of which fit in memory.
+
     Parameters
     ----------
 
     data: Array
-
-    This algorithm only works with a single column of blocks, each of which
-    fits in memory.
+    compute_svd: bool
+        Whether to compute the SVD rather than the QR decomposition
 
     See Also
     --------
@@ -201,7 +204,7 @@ def svd(data, name=None):
     -------
 
     u:  Array, unitary / orthogonal
-    s:  Array, singular values
+    s:  Array, singular values in decreasing order (largest first)
     v:  Array, unitary / orthogonal
 
     See Also
