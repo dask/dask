@@ -30,21 +30,33 @@ def strip_categories(df):
     for name in df.columns:
         if isinstance(df.dtypes[name], pd.core.common.CategoricalDtype):
             df[name] = df[name].cat.codes
+
+    if hasattr(pd, 'CategoricalIndex'):  # Pandas 0.16.1
+        if isinstance(df.index, pd.CategoricalIndex):
+            df.index = pd.Index(df.index.codes)
+
     return df
 
 
 def categorical_metadata(df):
     """ Collects category metadata
 
-    >>> df = pd.DataFrame({'a': pd.Categorical(['Alice', 'Bob', 'Alice'])})
+    >>> cat = pd.Categorical(['Alice', 'Bob', 'Alice'], ordered=False)
+    >>> df = pd.DataFrame({'a': cat})
     >>> categorical_metadata(df)  # doctest: +SKIP
-    {'a': {'ordered': True, 'categories': Index([u'Alice', u'Bob'], dtype='object')}}
+    {'a': {'ordered': False, 'categories': Index([u'Alice', u'Bob'], dtype='object')}}
     """
     result = dict()
     for name in df.columns:
         if isinstance(df.dtypes[name], pd.core.common.CategoricalDtype):
             result[name] = {'categories': df[name].cat.categories,
                             'ordered': df[name].cat.ordered}
+
+    if hasattr(pd, 'CategoricalIndex'):  # Pandas 0.16.1
+        if isinstance(df.index, pd.CategoricalIndex):
+            result['_index'] = {'categories': df.index.categories,
+                                'ordered': False}
+
     return result
 
 
@@ -63,8 +75,22 @@ def reapply_categories(df, metadata):
     1    Bob
     2  Alice
     """
-    for name, d in metadata.items():
-        if name in df.columns:
-            df[name] = pd.Categorical.from_codes(df[name].values,
-                                         d['categories'], d['ordered'])
+    if isinstance(df, pd.Series):
+        if df.name in metadata:
+            d = metadata[df.name]
+            df = pd.Series(pd.Categorical.from_codes(df.values,
+                                d['categories'], d['ordered']))
+    else:
+        for name, d in metadata.items():
+            if name in df.columns:
+                df[name] = pd.Categorical.from_codes(df[name].values,
+                                             d['categories'], d['ordered'])
+
+    if hasattr(pd, 'CategoricalIndex'):  # Pandas 0.16.1
+        if '_index' in metadata:
+            cat = pd.Categorical.from_codes(df.index.values,
+                                            metadata['_index']['categories'],
+                                            metadata['_index']['ordered'])
+            df.index = pd.CategoricalIndex(cat, df.index.name)
+
     return df

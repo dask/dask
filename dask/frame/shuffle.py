@@ -60,15 +60,36 @@ def set_partition(f, index, blockdivs, get=threaded.get, **kwargs):
     f2.map_blocks(append, columns=['a']).compute(get=get)
     pf.flush()
 
-    name = next(partition_names)
-    dsk2 = dict(((name, i), (pframe.get_partition, pf, i))
+    return from_pframe(pf)
+
+
+def from_pframe(pf):
+    """ Load dask.array from pframe """
+    name = next(names)
+    dsk = dict(((name, i), (pframe.get_partition, pf, i))
                 for i in range(pf.npartitions))
 
-    return Frame(dsk2, name, head.columns, blockdivs)
+    return Frame(dsk, name, pf.columns, pf.blockdivs)
 
 
 def unique(blockdivs):
+    """ Polymorphic unique function
+
+    >>> list(unique([1, 2, 3, 1, 2, 3]))
+    [1, 2, 3]
+
+    >>> unique(np.array([1, 2, 3, 1, 2, 3]))
+    array([1, 2, 3])
+
+    >>> unique(pd.Categorical(['Alice', 'Bob', 'Alice'], ordered=False))
+    [Alice, Bob]
+    Categories (2, object): [Alice, Bob]
+    """
     if isinstance(blockdivs, np.ndarray):
         return np.unique(blockdivs)
+    if isinstance(blockdivs, pd.Categorical):
+        return pd.Categorical.from_codes(np.unique(blockdivs.codes),
+                blockdivs.categories, blockdivs.ordered)
     if isinstance(blockdivs, (tuple, list, Iterator)):
         return tuple(toolz.unique(blockdivs))
+    raise NotImplementedError()
