@@ -15,6 +15,8 @@ def test_reapply_categories():
 
 
 def test_index_categorical():
+    if not hasattr(pd, 'CategoricalIndex'):
+        return
     df = pd.DataFrame({'a': [1, 2, 3]},
                       index=pd.Categorical(['Alice', 'Bob', 'Alice']))
 
