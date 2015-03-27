@@ -205,22 +205,30 @@ def test_stack():
 
     s = stack([a, b, c], axis=0)
 
+    colon = slice(None, None, None)
+
     assert s.shape == (3, 4, 6)
     assert s.blockdims == ((1, 1, 1), (2, 2), (3, 3))
-    assert s.dask[(s.name, 0, 1, 0)] == ('A', 1, 0)
-    assert s.dask[(s.name, 2, 1, 0)] == ('C', 1, 0)
+    assert s.dask[(s.name, 0, 1, 0)] == (getitem, ('A', 1, 0),
+                                          (None, colon, colon))
+    assert s.dask[(s.name, 2, 1, 0)] == (getitem, ('C', 1, 0),
+                                          (None, colon, colon))
 
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
     assert s2.blockdims == ((2, 2), (1, 1, 1), (3, 3))
-    assert s2.dask[(s2.name, 0, 1, 0)] == ('B', 0, 0)
-    assert s2.dask[(s2.name, 1, 1, 0)] == ('B', 1, 0)
+    assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('B', 0, 0),
+                                            (colon, None, colon))
+    assert s2.dask[(s2.name, 1, 1, 0)] == (getitem, ('B', 1, 0),
+                                            (colon, None, colon))
 
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
     assert s2.blockdims == ((2, 2), (3, 3), (1, 1, 1))
-    assert s2.dask[(s2.name, 0, 1, 0)] == ('A', 0, 1)
-    assert s2.dask[(s2.name, 1, 1, 2)] == ('C', 1, 1)
+    assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('A', 0, 1),
+                                            (colon, colon, None))
+    assert s2.dask[(s2.name, 1, 1, 2)] == (getitem, ('C', 1, 1),
+                                            (colon, colon, None))
 
     assert raises(ValueError, lambda: stack([a, b, c], axis=3))
 
@@ -228,6 +236,14 @@ def test_stack():
 
     assert stack([a, b, c], axis=-1).blockdims == \
             stack([a, b, c], axis=2).blockdims
+
+
+def test_short_stack():
+    x = np.array([1])
+    d = da.from_array(x, blockshape=(1,))
+    s = da.stack([d])
+    assert s.shape == (1, 1)
+    assert get(s.dask, s._keys())[0][0].shape == (1, 1)
 
 
 def test_concatenate():
