@@ -32,6 +32,9 @@ def tsqr(data, name=None, compute_svd=False):
     :type data: dask.array.Array
     :param name: Name of array in dask
     :type name: basestring
+    :param compute_svd: If False (default) it computes a QR
+    decomposition. If True, it computes n SVD decomposition
+    :type compute_svd: Boolean
     :return: First and second tuple elements correspond to Q and R, of
     the QR decomposition.
     :rtype: tuple of dask.array.Array
