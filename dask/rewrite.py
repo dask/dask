@@ -288,13 +288,13 @@ class RuleSet(object):
         This can then be applied to terms to perform the rewriting:
 
         >>> term = (add, (add, 2, 2), (add, 2, 2))
-        >>> rs.rewrite(term)
+        >>> rs.rewrite(term)  # doctest: +SKIP
         (double, (double, 2))
 
         If we only wanted to apply this to the top level of the term, the
         `strategy` kwarg can be set to "top_level".
 
-        >>> rs.rewrite(term)
+        >>> rs.rewrite(term)  # doctest: +SKIP
         (double, (add, 2, 2))
         """
         return strategies[strategy](self, task)
