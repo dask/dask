@@ -1,5 +1,5 @@
 import dask.frame as dfr
-from dask.frame.core import linecount, compute, get
+from dask.frame.core import linecount, compute, get, dataframe_from_ctable
 from toolz import valmap
 import pandas.util.testing as tm
 from operator import getitem
@@ -9,7 +9,9 @@ from dask.utils import filetext, raises, tmpfile
 import gzip
 import bz2
 import dask
+import bcolz
 from pframe import pframe
+from dask.frame.core import rewrite_rules
 
 def eq(a, b):
     if isinstance(a, dfr.Frame):
@@ -370,8 +372,6 @@ def test_from_pframe():
 
 
 def test_column_optimizations_with_pframe_and_rewrite():
-    from dask.frame.core import rewrite_rules
-
     dsk2 = {('x', i): (getitem, (pframe.get_partition, pf, i), (list, ['a', 'b']))
             for i in [1, 2, 3]}
 
@@ -381,6 +381,21 @@ def test_column_optimizations_with_pframe_and_rewrite():
 
     assert result == expected
 
+
+def test_column_optimizations_with_bcolz_and_rewrite():
+    bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
+    dsk2 = {('x', i): ('func',
+                        (getitem,
+                          (dataframe_from_ctable, bc, slice(0, 2), {}, None),
+                          (list, ['a', 'b'])))
+            for i in [1, 2, 3]}
+
+    expected = {('x', i): ('func', (dataframe_from_ctable,
+                                     bc, slice(0, 2), {}, (list, ['a', 'b'])))
+            for i in [1, 2, 3]}
+    result = valmap(rewrite_rules.rewrite, dsk2)
+
+    assert result == expected
 
 def test_column_store_from_pframe():
     d = dfr.from_pframe(pf)

@@ -797,12 +797,16 @@ def quantiles(f, q, **kwargs):
 3################
 
 
-a, b, c = '~a', '~b', '~c'
+a, b, c, d, e = '~a', '~b', '~c', '~d', '~e'
 from dask.rewrite import RuleSet, RewriteRule
 
-rewrite_rules = RuleSet(RewriteRule((getitem, (pframe.get_partition, a, b), c),
-                                    (pframe.get_partition, a, b, c),
-                                    (a, b, c)))
+rewrite_rules = RuleSet(
+        RewriteRule((getitem, (pframe.get_partition, a, b), c),
+                    (pframe.get_partition, a, b, c),
+                    (a, b, c)),
+        RewriteRule((getitem, (dataframe_from_ctable, a, b, None, c), d),
+                    (dataframe_from_ctable, a, b, d, c),
+                    (a, b, c, d)))
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
