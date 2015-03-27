@@ -68,6 +68,8 @@ def reapply_categories(df, metadata):
             d = metadata[df.name]
             return pd.Series(pd.Categorical.from_codes(df.values,
                                 d['categories'], d['ordered']))
+        else:
+            return df
 
     for name, d in metadata.items():
         if name in df.columns:

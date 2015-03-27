@@ -356,13 +356,14 @@ def test_loc():
 def test_iloc_raises():
     assert raises(AttributeError, lambda: d.iloc[:5])
 
+dfs = list(dsk.values())
+dfs = list(dsk.values())
+pf = pframe(like=dfs[0], blockdivs=[5])
+for df in dfs:
+    pf.append(df)
+
 
 def test_from_pframe():
-    dfs = list(dsk.values())
-    pf = pframe(like=dfs[0], blockdivs=[5])
-    for df in dfs:
-        pf.append(df)
-
     d = dfr.from_pframe(pf)
     assert list(d.columns) == list(dfs[0].columns)
     assert list(d.blockdivs) == list(pf.blockdivs)
@@ -370,10 +371,6 @@ def test_from_pframe():
 
 def test_column_optimizations_with_pframe_and_rewrite():
     from dask.frame.core import rewrite_rules
-    dfs = list(dsk.values())
-    pf = pframe(like=dfs[0], blockdivs=[5])
-    for df in dfs:
-        pf.append(df)
 
     dsk2 = {('x', i): (getitem, (pframe.get_partition, pf, i), (list, ['a', 'b']))
             for i in [1, 2, 3]}
@@ -383,3 +380,9 @@ def test_column_optimizations_with_pframe_and_rewrite():
     result = valmap(rewrite_rules.rewrite, dsk2)
 
     assert result == expected
+
+
+def test_column_store_from_pframe():
+    d = dfr.from_pframe(pf)
+    assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
+    assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))

@@ -4,7 +4,7 @@ from functools import wraps
 import toolz
 import bisect
 import os
-from toolz import merge, partial, accumulate, unique, first, dissoc
+from toolz import merge, partial, accumulate, unique, first, dissoc, valmap
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
