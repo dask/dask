@@ -890,8 +890,12 @@ def stack(seq, axis=0):
     keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
 
     names = [a.name for a in seq]
-    values = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
+    inputs = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
                 for key in keys]
+    values = [(getitem, inp, (slice(None, None, None),) * axis
+                           + (None,)
+                           + (slice(None, None, None),) * (ndim - axis))
+                for inp in inputs]
 
     dsk = dict(zip(keys, values))
     dsk2 = merge(dsk, *[a.dask for a in seq])
