@@ -73,7 +73,23 @@ def from_pframe(pf):
 
 
 def unique(blockdivs):
+    """ Polymorphic unique function
+
+    >>> list(unique([1, 2, 3, 1, 2, 3]))
+    [1, 2, 3]
+
+    >>> unique(np.array([1, 2, 3, 1, 2, 3]))
+    array([1, 2, 3])
+
+    >>> unique(pd.Categorical(['Alice', 'Bob', 'Alice']))
+    [Alice, Bob]
+    Categories (2, object): [Alice, Bob]
+    """
     if isinstance(blockdivs, np.ndarray):
         return np.unique(blockdivs)
+    if isinstance(blockdivs, pd.Categorical):
+        return pd.Categorical.from_codes(np.unique(blockdivs.codes),
+                blockdivs.categories, blockdivs.ordered)
     if isinstance(blockdivs, (tuple, list, Iterator)):
         return tuple(toolz.unique(blockdivs))
+    raise NotImplementedError()
