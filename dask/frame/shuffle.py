@@ -81,7 +81,7 @@ def unique(blockdivs):
     >>> unique(np.array([1, 2, 3, 1, 2, 3]))
     array([1, 2, 3])
 
-    >>> unique(pd.Categorical(['Alice', 'Bob', 'Alice']))
+    >>> unique(pd.Categorical(['Alice', 'Bob', 'Alice'], ordered=False))
     [Alice, Bob]
     Categories (2, object): [Alice, Bob]
     """
