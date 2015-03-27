@@ -358,7 +358,12 @@ def test_loc():
 def test_iloc_raises():
     assert raises(AttributeError, lambda: d.iloc[:5])
 
-dfs = list(dsk.values())
+
+#####################
+# Play with PFrames #
+#####################
+
+
 dfs = list(dsk.values())
 pf = pframe(like=dfs[0], blockdivs=[5])
 for df in dfs:

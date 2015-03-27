@@ -505,7 +505,7 @@ def from_array(x, chunksize=50000):
 
 from pframe.categories import reapply_categories
 
-def from_bcolz(x, chunksize=None, categorize=True, index=None, columns=None, **kwargs):
+def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     """ Read dask frame from bcolz.ctable
 
     Parameters
@@ -546,7 +546,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, columns=None, **k
                 (dataframe_from_ctable,
                   x,
                   (slice(i * chunksize, (i + 1) * chunksize),),
-                  columns, categories))
+                  None, categories))
            for i in range(0, int(ceil(float(len(x)) / chunksize))))
 
     result = Frame(dsk, new_name, columns, blockdivs)
@@ -801,9 +801,11 @@ a, b, c, d, e = '~a', '~b', '~c', '~d', '~e'
 from dask.rewrite import RuleSet, RewriteRule
 
 rewrite_rules = RuleSet(
+        # Merge column access into pframe loading
         RewriteRule((getitem, (pframe.get_partition, a, b), c),
                     (pframe.get_partition, a, b, c),
                     (a, b, c)),
+        # Merge column access into bcolz loading
         RewriteRule((getitem, (dataframe_from_ctable, a, b, c, d), e),
                     (dataframe_from_ctable, a, b, e, d),
                     (a, b, c, d, e)))
