@@ -28,8 +28,8 @@ install:
   - python setup.py install
 
 script:
-    - py.test dask --verbose
-    - py.test pframe --verbose
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then py.test --doctest-modules dask --verbose; else py.test dask --verbose; fi
+    - py.test pframe --doctest-modules --verbose
 
 after_success:
     - coveralls
