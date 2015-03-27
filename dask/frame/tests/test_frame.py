@@ -372,11 +372,14 @@ def test_from_pframe():
 
 
 def test_column_optimizations_with_pframe_and_rewrite():
-    dsk2 = {('x', i): (getitem, (pframe.get_partition, pf, i), (list, ['a', 'b']))
-            for i in [1, 2, 3]}
+    dsk2 = dict((('x', i), (getitem,
+                             (pframe.get_partition, pf, i),
+                             (list, ['a', 'b'])))
+            for i in [1, 2, 3])
 
-    expected = {('x', i): (pframe.get_partition, pf, i, (list, ['a', 'b']))
-            for i in [1, 2, 3]}
+    expected = dict((('x', i),
+                     (pframe.get_partition, pf, i, (list, ['a', 'b'])))
+            for i in [1, 2, 3])
     result = valmap(rewrite_rules.rewrite, dsk2)
 
     assert result == expected
@@ -386,15 +389,16 @@ def test_column_optimizations_with_bcolz_and_rewrite():
     bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
     func = lambda x: x
     for cols in [None, 'abc', ['abc']]:
-        dsk2 = {('x', i): (func,
-                            (getitem,
-                              (dataframe_from_ctable, bc, slice(0, 2), cols, {}),
-                              (list, ['a', 'b'])))
-                for i in [1, 2, 3]}
+        dsk2 = dict((('x', i),
+                     (func,
+                       (getitem,
+                         (dataframe_from_ctable, bc, slice(0, 2), cols, {}),
+                         (list, ['a', 'b']))))
+                for i in [1, 2, 3])
 
-        expected = {('x', i): (func, (dataframe_from_ctable,
-                                       bc, slice(0, 2), (list, ['a', 'b']), {}))
-                for i in [1, 2, 3]}
+        expected = dict((('x', i), (func, (dataframe_from_ctable,
+                                     bc, slice(0, 2), (list, ['a', 'b']), {})))
+                for i in [1, 2, 3])
         result = valmap(rewrite_rules.rewrite, dsk2)
 
         assert result == expected
