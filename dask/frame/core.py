@@ -607,7 +607,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     elif isinstance(x, bcolz.carray):
         chunk = x[slc]
         if categories is not None and columns and columns in categories:
-            chunk = pc.Categorical.from_codes(
+            chunk = pd.Categorical.from_codes(
                         np.searchsorted(categories[columns], chunk),
                         categories[columns], True)
         return pd.Series(chunk, name=columns)
@@ -792,9 +792,9 @@ def quantiles(f, q, **kwargs):
     return result
 
 
-3################
+#################
 # Optimizations #
-3################
+#################
 
 
 a, b, c, d, e = '~a', '~b', '~c', '~d', '~e'
@@ -804,9 +804,9 @@ rewrite_rules = RuleSet(
         RewriteRule((getitem, (pframe.get_partition, a, b), c),
                     (pframe.get_partition, a, b, c),
                     (a, b, c)),
-        RewriteRule((getitem, (dataframe_from_ctable, a, b, None, c), d),
-                    (dataframe_from_ctable, a, b, d, c),
-                    (a, b, c, d)))
+        RewriteRule((getitem, (dataframe_from_ctable, a, b, c, d), e),
+                    (dataframe_from_ctable, a, b, e, d),
+                    (a, b, c, d, e)))
 
 
 def get(dsk, keys, get=get_sync, **kwargs):

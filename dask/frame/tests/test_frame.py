@@ -384,18 +384,21 @@ def test_column_optimizations_with_pframe_and_rewrite():
 
 def test_column_optimizations_with_bcolz_and_rewrite():
     bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
-    dsk2 = {('x', i): ('func',
-                        (getitem,
-                          (dataframe_from_ctable, bc, slice(0, 2), {}, None),
-                          (list, ['a', 'b'])))
-            for i in [1, 2, 3]}
+    func = lambda x: x
+    for cols in [None, 'abc', ['abc']]:
+        dsk2 = {('x', i): (func,
+                            (getitem,
+                              (dataframe_from_ctable, bc, slice(0, 2), cols, {}),
+                              (list, ['a', 'b'])))
+                for i in [1, 2, 3]}
 
-    expected = {('x', i): ('func', (dataframe_from_ctable,
-                                     bc, slice(0, 2), {}, (list, ['a', 'b'])))
-            for i in [1, 2, 3]}
-    result = valmap(rewrite_rules.rewrite, dsk2)
+        expected = {('x', i): (func, (dataframe_from_ctable,
+                                       bc, slice(0, 2), (list, ['a', 'b']), {}))
+                for i in [1, 2, 3]}
+        result = valmap(rewrite_rules.rewrite, dsk2)
 
-    assert result == expected
+        assert result == expected
+
 
 def test_column_store_from_pframe():
     d = dfr.from_pframe(pf)
