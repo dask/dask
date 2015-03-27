@@ -37,7 +37,7 @@ def categorical_metadata(df):
     """ Collects category metadata
 
     >>> df = pd.DataFrame({'a': pd.Categorical(['Alice', 'Bob', 'Alice'])})
-    >>> categorical_metadata(df)
+    >>> categorical_metadata(df)  # doctest: +SKIP
     {'a': {'ordered': True, 'categories': Index([u'Alice', u'Bob'], dtype='object')}}
     """
     result = dict()
