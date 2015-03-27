@@ -572,17 +572,17 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     columns: list of column names or None
 
     >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
-    >>> get_dataframe_from_ctable(x, slice(1, 3))
+    >>> dataframe_from_ctable(x, slice(1, 3))
        a   b
     0  2  20
     1  3  30
 
-    >>> get_dataframe_from_ctable(x, slice(1, 3), columns=['b'])
+    >>> dataframe_from_ctable(x, slice(1, 3), columns=['b'])
         b
     0  20
     1  30
 
-    >>> get_dataframe_from_ctable(x, slice(1, 3), columns='b')
+    >>> dataframe_from_ctable(x, slice(1, 3), columns='b')
     0    20
     1    30
     Name: b, dtype: int64
