@@ -158,7 +158,7 @@ def fuse_slice(a, b):
         j = 0
         result = list()
         for i in range(len(a)):
-            if isinstance(a[i], int):
+            if isinstance(a[i], int) or j == len(b):
                 result.append(a[i])
                 continue
             while b[j] is None:  # insert Nones on the rhs
@@ -167,8 +167,7 @@ def fuse_slice(a, b):
             result.append(fuse_slice(a[i], b[j]))
             j += 1
         while j < len(b):  # anything leftover on the right?
-            assert b[j] is None
-            result.append(None)
+            result.append(b[j])
             j += 1
         return tuple(result)
     raise NotImplementedError()

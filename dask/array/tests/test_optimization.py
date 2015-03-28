@@ -30,6 +30,14 @@ def test_fuse_getitem():
                         (slice(None, None), 5)),
               (getitem, 'x', (None, 5))),
 
+             ((getitem, (getitem, 'x', (slice(1000, 2000), slice(10, 20))),
+                        (slice(5, 10),)),
+              (getitem, 'x', (slice(1005, 1010), slice(10, 20)))),
+
+             ((getitem, (getitem, 'x', (slice(1000, 2000),)),
+                        (slice(5, 10), slice(10, 20))),
+              (getitem, 'x', (slice(1005, 1010), slice(10, 20))))
+
         ]
 
     for inp, expected in pairs:
