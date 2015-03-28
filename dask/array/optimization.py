@@ -112,6 +112,9 @@ def fuse_slice(a, b):
     >>> fuse_slice(slice(1000, 2000, 5), 10)
     1050
 
+    >>> fuse_slice(slice(1000, 2000, 5), [1, 2, 3])
+    [1005, 1010, 1015]
+
     >>> fuse_slice(slice(1000, 2000, 5), slice(10, 20, 2))
     slice(1050, 1100, 10)
 
@@ -126,7 +129,9 @@ def fuse_slice(a, b):
         b = normalize_slice(b)
 
     if isinstance(a, slice) and isinstance(b, int):
-        return a.start + b*(a.step if a.step is not None else 1)
+        if b < 0:
+            raise NotImplementedError()
+        return a.start + b*a.step
     if isinstance(a, slice) and isinstance(b, slice):
         start = a.start + a.step * b.start
         if b.stop is not None:
@@ -143,6 +148,10 @@ def fuse_slice(a, b):
         if step == 1:
             step = None
         return slice(start, stop, step)
+    if isinstance(b, list):
+        return [fuse_slice(a, bb) for bb in b]
+    if isinstance(a, list) and isinstance(b, (int, slice)):
+        return a[b]
     if isinstance(a, tuple) and not isinstance(b, tuple):
         b = (b,)
     if isinstance(a, tuple) and isinstance(b, tuple):

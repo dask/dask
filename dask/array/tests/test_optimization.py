@@ -1,5 +1,6 @@
 from dask.array.optimization import (getitem, rewrite_rules, optimize,
         remove_full_slices, fuse_slice)
+from dask.utils import raises
 
 
 def test_fuse_getitem():
@@ -70,6 +71,18 @@ def test_fuse_slice():
             (1, None)
     assert fuse_slice((1, slice(10, 20)), (None, None, 3, None)) == \
             (1, None, None, 13, None)
+
+    assert (raises(NotImplementedError,
+                  lambda: fuse_slice(slice(10, 15, 2), -1)) or
+            fuse_slice(slice(10, 15, 2), -1) == 14)
+
+
+def test_fuse_slice_with_lists():
+    assert fuse_slice(slice(10, 20, 2), [1, 2, 3]) == [12, 14, 16]
+    assert fuse_slice([10, 20, 30, 40, 50], [3, 1, 2]) == [40, 20, 30]
+    assert fuse_slice([10, 20, 30, 40, 50], 3) == 40
+    assert fuse_slice([10, 20, 30, 40, 50], -1) == 50
+    assert fuse_slice([10, 20, 30, 40, 50], slice(1, None, 2)) == [20, 40]
 
 
 def test_hard_fuse_slice_cases():
