@@ -12,7 +12,7 @@ setup(name='dask',
       maintainer_email='mrocklin@gmail.com',
       license='BSD',
       keywords='task-scheduling parallelism',
-      packages=['dask', 'dask.array', 'dask.bag', 'dask.store', 'dask.frame'],
+      packages=['dask', 'dask.array', 'dask.bag', 'dask.store', 'dask.dataframe'],
       long_description=(open('README.rst').read() if exists('README.rst')
                         else ''),
       install_requires=(list(open('requirements.txt').read().strip().split('\n'))),
