@@ -54,6 +54,14 @@ rule3 = RewriteRule((add, (inc, "a"), (inc, "a")), (add, (double, "a"), 2), vars
 rule4 = RewriteRule((add, (inc, "b"), (inc, "a")), (add, (add, "a", "b"), 2), vars)
 # sum([c, b, a]) -> add(add(a, b), c)
 rule5 = RewriteRule((sum, ["c", "b", "a"]), (add, (add, "a", "b"), "c"), vars)
+# list(x) -> x if x is a list
+def repl_list(sd):
+    x = sd['x']
+    if isinstance(x, list):
+        return x
+    else:
+        return (list, x)
+rule6 = RewriteRule((list, 'x'), repl_list, ('x',))
 
 
 def test_RewriteRule():
@@ -70,14 +78,21 @@ def test_RewriteRule():
     assert rule5._varlist == ["c", "b", "a"]
 
 
-rules = [rule1, rule2, rule3, rule4, rule5]
+def test_RewriteRuleSubs():
+    # Test both rhs substitution and callable rhs
+    assert rule1.subs({'a': 1}) == (inc, 1)
+    assert rule6.subs({'x': [1, 2, 3]}) == [1, 2, 3]
+
+
+rules = [rule1, rule2, rule3, rule4, rule5, rule6]
 rs = RuleSet(*rules)
 
 
 def test_RuleSet():
-    net = ({sum: ({list: ({VAR: ({VAR: ({VAR: ({}, [4])}, [])}, [])}, [])},
-        []), add: ({inc: ({VAR: ({inc: ({VAR: ({}, [2, 3])}, [])}, [])}, []),
-            VAR: ({1: ({}, [0]), VAR: ({}, [1])}, [])}, [])}, [])
+    net = ({add: ({VAR: ({VAR: ({}, [1]), 1: ({}, [0])}, []),
+          inc: ({VAR: ({inc: ({VAR: ({}, [2, 3])}, [])}, [])}, [])}, []),
+          list: ({VAR: ({}, [5])}, []), sum: ({list: ({VAR: ({VAR: ({VAR:
+          ({}, [4])}, [])}, [])}, [])}, [])}, [])
     assert rs._net == net
     assert rs.rules == rules
 
@@ -121,3 +136,8 @@ def test_rewrite():
     assert new_term == (add, (add, (double, 1), 2), (inc, 1))
     term = (add, (add, (add, (add, 1, 2), (add, 1, 2)), (add, (add, 1, 2), (add, 1, 2))), 1)
     assert rs.rewrite(term) == (inc, (double, (double, (add, 1, 2))))
+    # Callable RewriteRule rhs
+    term = (list, [1, 2, 3])
+    assert rs.rewrite(term) == [1, 2, 3]
+    term = (list, (map, inc, [1, 2, 3]))
+    assert rs.rewrite(term) == term
