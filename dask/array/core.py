@@ -616,7 +616,7 @@ class Array(object):
         if not isinstance(index, tuple):
             index = (index,)
 
-        if all(i == slice(None, None, None) for i in index):
+        if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
         dsk, blockdims = slice_array(out, self.name, self.blockdims, index)

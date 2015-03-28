@@ -493,6 +493,14 @@ def test_slicing_with_ellipsis():
     assert eq(d[0, ..., 1], x[0, ..., 1])
 
 
+def test_slicing_with_ndarray():
+    x = np.arange(64).reshape((8, 8))
+    d = da.from_array(x, blockshape=((4, 4)))
+
+    assert eq(d[np.arange(8)], x)
+    assert eq(d[np.ones(8, dtype=bool)], x)
+
+
 def test_dtype():
     d = da.ones((4, 4), blockshape=(2, 2))
 
