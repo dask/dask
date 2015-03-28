@@ -22,6 +22,10 @@ from ..compatibility import unicode
 from .. import threaded, core
 
 
+
+
+
+
 names = ('x_%d' % i for i in count(1))
 
 
@@ -419,6 +423,17 @@ def blockdims_from_blockshape(shape, blockshape):
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
                               for d, bd in zip(shape, blockshape))
 
+def binary_op(op, x, y, name=None):
+    """
+    """
+    if hasattr(y,'blockdims') and hasattr(x, 'blockdims'):
+        if y.shape == x.shape and y.blockdims != x.blockdims:
+            return elemwise(op, x, y.reblock(blockdims=x.blockdims))
+        if np.prod(y.shape) != np.prod(x.shape):
+            raise ValueError('y shape %r != x shape %r'% (y.shape, x.shape))
+    return elemwise(op, x, y, name=name)
+
+
 class Array(object):
     """ Array object holding a dask
 
@@ -559,71 +574,71 @@ class Array(object):
     def __abs__(self):
         return elemwise(operator.abs, self)
     def __add__(self, other):
-        return elemwise(operator.add, self, other)
+        return binary_op(add, self, other)
     def __radd__(self, other):
-        return elemwise(operator.add, other, self)
+        return binary_op(add, other, self)
     def __and__(self, other):
-        return elemwise(operator.and_, self, other)
+        return binary_op(operator.and_, self, other)
     def __rand__(self, other):
-        return elemwise(operator.and_, other, self)
+        return binary_op(operator.and_, other, self)
     def __div__(self, other):
-        return elemwise(operator.div, self, other)
+        return binary_op(operator.div, self, other)
     def __rdiv__(self, other):
-        return elemwise(operator.div, other, self)
+        return binary_op(operator.div, other, self)
     def __eq__(self, other):
-        return elemwise(operator.eq, self, other)
+        return binary_op(operator.eq, self, other)
     def __gt__(self, other):
-        return elemwise(operator.gt, self, other)
+        return binary_op(operator.gt, self, other)
     def __ge__(self, other):
-        return elemwise(operator.ge, self, other)
+        return binary_op(operator.ge, self, other)
     def __lshift__(self, other):
-        return elemwise(operator.lshift, self, other)
+        return binary_op(operator.lshift, self, other)
     def __rlshift__(self, other):
-        return elemwise(operator.lshift, other, self)
+        return binary_op(operator.lshift, other, self)
     def __lt__(self, other):
-        return elemwise(operator.lt, self, other)
+        return binary_op(operator.lt, self, other)
     def __le__(self, other):
-        return elemwise(operator.le, self, other)
+        return binary_op(operator.le, self, other)
     def __mod__(self, other):
-        return elemwise(operator.mod, self, other)
+        return binary_op(operator.mod, self, other)
     def __rmod__(self, other):
-        return elemwise(operator.mod, other, self)
+        return binary_op(operator.mod, other, self)
     def __mul__(self, other):
-        return elemwise(operator.mul, self, other)
+        return binary_op(operator.mul, self, other)
     def __rmul__(self, other):
-        return elemwise(operator.mul, other, self)
+        return binary_op(operator.mul, other, self)
     def __ne__(self, other):
-        return elemwise(operator.ne, self, other)
+        return binary_op(operator.ne, self, other)
     def __neg__(self):
         return elemwise(operator.neg, self)
     def __or__(self, other):
-        return elemwise(operator.or_, self, other)
+        return binary_op(operator.or_, self, other)
     def __ror__(self, other):
-        return elemwise(operator.or_, other, self)
+        return binary_op(operator.or_, other, self)
     def __pow__(self, other):
-        return elemwise(operator.pow, self, other)
+        return binary_op(operator.pow, self, other)
     def __rpow__(self, other):
-        return elemwise(operator.pow, other, self)
+        return binary_op(operator.pow, other, self)
     def __rshift__(self, other):
-        return elemwise(operator.rshift, self, other)
+        return binary_op(operator.rshift, self, other)
     def __rrshift__(self, other):
-        return elemwise(operator.rshift, other, self)
+        return binary_op(operator.rshift, other, self)
     def __sub__(self, other):
-        return elemwise(operator.sub, self, other)
+        return binary_op(operator.sub, self, other)
     def __rsub__(self, other):
-        return elemwise(operator.sub, other, self)
+        return binary_op(operator.sub, other, self)
     def __truediv__(self, other):
-        return elemwise(operator.truediv, self, other)
+        return binary_op(operator.truediv, self, other)
     def __rtruediv__(self, other):
-        return elemwise(operator.truediv, other, self)
+        return binary_op(operator.truediv, other, self)
     def __floordiv__(self, other):
-        return elemwise(operator.floordiv, self, other)
+        return binary_op(operator.floordiv, self, other)
     def __rfloordiv__(self, other):
-        return elemwise(operator.floordiv, other, self)
+        return binary_op(operator.floordiv, other, self)
     def __xor__(self, other):
-        return elemwise(operator.xor, self, other)
+        return binary_op(operator.xor, self, other)
     def __rxor__(self, other):
-        return elemwise(operator.xor, other, self)
+        return binary_op(operator.xor, other, self)
 
     def any(self, axis=None, keepdims=False):
         from .reductions import any
