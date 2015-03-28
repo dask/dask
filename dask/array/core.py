@@ -14,10 +14,11 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         merge, curry, compose, reduce)
 import numpy as np
 from . import chunk
-from .slicing import slice_array, insert_many, remove_full_slices
+from .slicing import slice_array, insert_many
 from ..utils import deepmap, ignoring
 from ..async import inline_functions
 from ..optimize import cull, inline
+from .optimization import optimize
 from ..compatibility import unicode
 from .. import threaded, core
 from ..context import _globals
@@ -809,19 +810,6 @@ def atop(func, out, out_ind, *args, **kwargs):
     return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims,
                 dtype=dtype)
 
-def optimize(dsk, keys, **kwargs):
-    """ Optimize dask for array computation
-
-    1.  Cull tasks not necessary to evaluate keys
-    2.  Remove full slicing, e.g. x[:]
-    3.  Inline fast functions like getitem and np.transpose
-    """
-    fast_functions=kwargs.get('fast_functions',
-                             set([getitem, np.transpose]))
-    dsk2 = cull(dsk, list(core.flatten(keys)))
-    dsk3 = remove_full_slices(dsk2)
-    dsk4 = inline_functions(dsk3, fast_functions=fast_functions)
-    return dsk4
 
 def get(dsk, keys, get=None, **kwargs):
     """ Specialized get function

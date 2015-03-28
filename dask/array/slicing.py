@@ -2,7 +2,6 @@ from itertools import count, product
 from toolz import merge, first, accumulate
 from operator import getitem, add
 from ..compatibility import long
-from ..optimize import dealias
 import numpy as np
 
 
@@ -478,50 +477,6 @@ def new_blockdim(dim_shape, lengths, index):
     slices = [slice(0, lengths[i], 1) if slc == slice(None, None, None) else slc
                 for i, slc in pairs]
     return [(slc.stop - slc.start) // slc.step for slc in slices]
-
-
-def is_full_slice(task):
-    """
-
-    >>> is_full_slice((getitem, 'x',
-    ...                 (slice(None, None, None), slice(None, None, None))))
-    True
-    >>> is_full_slice((getitem, 'x',
-    ...                 (slice(5, 20, 1), slice(None, None, None))))
-    False
-    """
-    return (isinstance(task, tuple) and
-            task[0] == getitem and
-            (task[2] == slice(None, None, None) or
-             isinstance(task[2], tuple) and
-             all(ind == slice(None, None, None) for ind in task[2])))
-
-
-def remove_full_slices(dsk):
-    """ Remove full slices from dask
-
-    See Also:
-        dask.optimize.inline
-
-    Example
-    -------
-
-
-    >>> dsk = {'a': (range, 5),
-    ...        'b': (getitem, 'a', (slice(None, None, None),)),
-    ...        'c': (getitem, 'b', (slice(None, None, None),)),
-    ...        'd': (getitem, 'c', (slice(None, 5, None),)),
-    ...        'e': (getitem, 'd', (slice(None, None, None),))}
-
-    >>> remove_full_slices(dsk)  # doctest: +SKIP
-    {'a': (range, 5),
-     'e': (getitem, 'a', (slice(None, 5, None),))}
-    """
-    full_slice_keys = set(k for k, task in dsk.items() if is_full_slice(task))
-    dsk2 = dict((k, task[1] if k in full_slice_keys else task)
-                 for k, task in dsk.items())
-    dsk3 = dealias(dsk2)
-    return dsk3
 
 
 def replace_ellipsis(n, index):
