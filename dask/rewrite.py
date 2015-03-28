@@ -153,6 +153,20 @@ class RewriteRule(object):
     >>> rhs = (list, 'x')
     >>> variables = ('x',)
     >>> rule = RewriteRule(lhs, rhs, variables)
+
+    Here's a more complicated rule that uses a callable right-hand-side. A
+    callable `rhs` takes in a dictionary mapping variables to their matching
+    values. This rule replaces all occurrences of `(list, 'x')` with `'x'` if
+    `'x'` is a list itself.
+
+    >>> lhs = (list, 'x')
+    >>> def repl_list(sd):
+    ...     x = sd['x']
+    ...     if isinstance(x, list):
+    ...         return x
+    ...     else:
+    ...         return (list, x)
+    >>> rule = RewriteRule(lhs, repl_list, variables)
     """
 
     def __init__(self, lhs, rhs, vars=()):
