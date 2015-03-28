@@ -1,5 +1,6 @@
-import dask.frame as dfr
-from dask.frame.core import linecount, compute, get, dataframe_from_ctable
+import dask.dataframe as dd
+from dask.dataframe.core import (linecount, compute, get,
+        dataframe_from_ctable, rewrite_rules)
 from toolz import valmap
 import pandas.util.testing as tm
 from operator import getitem
@@ -11,12 +12,11 @@ import bz2
 import dask
 import bcolz
 from pframe import pframe
-from dask.frame.core import rewrite_rules
 
 def eq(a, b):
-    if isinstance(a, dfr.Frame):
+    if hasattr(a, 'dask'):
         a = a.compute(get=dask.get)
-    if isinstance(b, dfr.Frame):
+    if hasattr(b, 'dask'):
         b = b.compute(get=dask.get)
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b)
@@ -34,11 +34,11 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
 full = d.compute()
 
 
-def test_frame():
+def test_Dataframe():
     result = (d['a'] + 1).compute()
     expected = pd.Series([2, 3, 4, 5, 6, 7, 8, 9, 10],
                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
@@ -60,6 +60,12 @@ def test_frame():
     assert np.allclose(d.b.std().compute(), full.b.std())
 
     assert repr(d)
+
+
+def test_Series():
+    assert isinstance(d.a, dd.Series)
+    assert isinstance(d.a + 1, dd.Series)
+    assert raises(Exception, lambda: d + 1)
 
 
 def test_attributes():
@@ -114,16 +120,16 @@ def test_linecount_gzip():
 
 def test_read_csv():
     with filetext(text) as fn:
-        f = dfr.read_csv(fn, chunksize=3)
+        f = dd.read_csv(fn, chunksize=3)
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions == 2
         assert eq(f, pd.read_csv(fn))
 
     with filetext(text) as fn:
-        f = dfr.read_csv(fn, chunksize=4)
+        f = dd.read_csv(fn, chunksize=4)
         assert f.npartitions == 2
 
-        f = dfr.read_csv(fn)
+        f = dd.read_csv(fn)
 
 
 def test_set_index():
@@ -133,7 +139,7 @@ def test_set_index():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
                                   index=[9, 9, 9])}
-    d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
     d2 = d.set_index('b', npartitions=3)
@@ -153,7 +159,7 @@ def test_set_index():
 def test_from_array():
     x = np.array([(i, i*10) for i in range(10)],
                  dtype=[('a', 'i4'), ('b', 'i4')])
-    d = dfr.from_array(x, chunksize=4)
+    d = dd.from_array(x, chunksize=4)
 
     assert list(d.columns) == ['a', 'b']
     assert d.blockdivs == (4, 8)
@@ -168,7 +174,7 @@ def test_split_apply_combine_on_series():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
                                   index=[9, 9, 9])}
-    d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
     assert eq(d.groupby('b').a.sum(), full.groupby('b').a.sum())
@@ -281,7 +287,7 @@ def test_categorize():
            ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
                                    'b': ['A', 'A', 'B']},
                                    index=[3, 4, 5])}
-    d = dfr.Frame(dsk, 'x', ['a', 'b'], [3])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [3])
     full = d.compute()
 
     c = d.categorize('a')
@@ -338,13 +344,13 @@ def test_from_bcolz():
     else:
         t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                          names=['x', 'y', 'a'])
-        d = dfr.from_bcolz(t, chunksize=2)
+        d = dd.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
         assert str(d.dtypes['a']) == 'category'
         assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
         assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
 
-        d = dfr.from_bcolz(t, chunksize=2, index='x')
+        d = dd.from_bcolz(t, chunksize=2, index='x')
         assert list(d.index.compute()) == [1, 2, 3]
 
 
@@ -371,7 +377,7 @@ for df in dfs:
 
 
 def test_from_pframe():
-    d = dfr.from_pframe(pf)
+    d = dd.from_pframe(pf)
     assert list(d.columns) == list(dfs[0].columns)
     assert list(d.blockdivs) == list(pf.blockdivs)
 
@@ -410,6 +416,6 @@ def test_column_optimizations_with_bcolz_and_rewrite():
 
 
 def test_column_store_from_pframe():
-    d = dfr.from_pframe(pf)
+    d = dd.from_pframe(pf)
     assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
     assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
