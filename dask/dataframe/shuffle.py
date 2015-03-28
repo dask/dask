@@ -10,7 +10,7 @@ from chest import Chest
 from pframe import pframe
 
 from .. import threaded
-from .core import DataFrame, get, names
+from .core import DataFrame, Series, get, names
 from ..compatibility import unicode
 from ..utils import ignoring
 
@@ -25,7 +25,7 @@ def set_index(f, index, npartitions=None, **kwargs):
     repartitions your data.
     """
     npartitions = npartitions or f.npartitions
-    if not isinstance(index, DataFrame):
+    if not isinstance(index, Series):
         index2 = f[index]
     else:
         index2 = index
@@ -40,16 +40,16 @@ def set_partition(f, index, blockdivs, get=threaded.get, **kwargs):
     """ Set new partitioning along index given blockdivs """
     blockdivs = unique(blockdivs)
     name = next(names)
-    if isinstance(index, DataFrame):
+    if isinstance(index, Series):
         assert index.blockdivs == f.blockdivs
-        dsk = dict(((name, i), (pd.DataFrame.set_index, block, ind))
+        dsk = dict(((name, i), (f._partition_type.set_index, block, ind))
                 for i, (block, ind) in enumerate(zip(f._keys(), index._keys())))
-        f2 = DataFrame(merge(f.dask, index.dask, dsk), name,
-                       f.columns, f.blockdivs)
+        f2 = type(f)(merge(f.dask, index.dask, dsk), name,
+                       f.column_info, f.blockdivs)
     else:
-        dsk = dict(((name, i), (pd.DataFrame.set_index, block, index))
+        dsk = dict(((name, i), (f._partition_type.set_index, block, index))
                 for i, block in enumerate(f._keys()))
-        f2 = DataFrame(merge(f.dask, dsk), name, f.columns, f.blockdivs)
+        f2 = type(f)(merge(f.dask, dsk), name, f.column_info, f.blockdivs)
 
     head = f2.head()
     pf = pframe(like=head, blockdivs=blockdivs, **kwargs)
@@ -58,7 +58,7 @@ def set_partition(f, index, blockdivs, get=threaded.get, **kwargs):
         pf.append(block)
         return 0
 
-    f2.map_blocks(append, columns=['a']).compute(get=get)
+    f2.map_blocks(append).compute(get=get)
     pf.flush()
 
     return from_pframe(pf)

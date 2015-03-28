@@ -14,9 +14,9 @@ import bcolz
 from pframe import pframe
 
 def eq(a, b):
-    if isinstance(a, dd.DataFrame):
+    if hasattr(a, 'dask'):
         a = a.compute(get=dask.get)
-    if isinstance(b, dd.DataFrame):
+    if hasattr(b, 'dask'):
         b = b.compute(get=dask.get)
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b)
@@ -60,6 +60,12 @@ def test_Dataframe():
     assert np.allclose(d.b.std().compute(), full.b.std())
 
     assert repr(d)
+
+
+def test_Series():
+    assert isinstance(d.a, dd.Series)
+    assert isinstance(d.a + 1, dd.Series)
+    assert raises(Exception, lambda: d + 1)
 
 
 def test_attributes():

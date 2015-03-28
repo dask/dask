@@ -56,32 +56,25 @@ def compute(*args, **kwargs):
 names = ('f-%d' % i for i in count(1))
 
 
-class DataFrame(object):
+class Scalar(object):
+    """ A Dask-thing to represent a scalar
+
+    TODO: Clean up this abstraction
     """
-    Implements out-of-core DataFrame as a sequence of pandas DataFrames
+    def __init__(self, dsk, _name):
+        self.dask = dsk
+        self._name = _name
+        self.blockdivs = []
 
-    This is a work in progress.  It is buggy and far from complete.
-    Please do not use it yet.
+    def _keys(self):
+        return [(self._name, 0)]
 
-    Parameters
-    ----------
+    def compute(self, **kwargs):
+        return compute(self, **kwargs)[0]
 
-    dask: dict
-        The dask graph to compute this Dataframe
-    name: str
-        The key prefix that specifies which keys in the dask comprise this
-        particular DataFrame
-    columns: list of strings
-        Column names.  This metadata aids usability
-    blockdivs: tuple of index values
-        Values along which we partition our blocks on the index
-    """
-    def __init__(self, dask, name, columns, blockdivs):
-        self.dask = dask
-        self.name = name
-        self.columns = tuple(columns)
-        self.blockdivs = tuple(blockdivs)
 
+class _Frame(object):
+    """ Superclass for DataFrame and Series """
     @property
     def npartitions(self):
         return len(self.blockdivs) + 1
@@ -90,67 +83,14 @@ class DataFrame(object):
         return compute(self, **kwargs)[0]
 
     def _keys(self):
-        return [(self.name, i) for i in range(self.npartitions)]
-
-    def __getitem__(self, key):
-        name = next(names)
-        if isinstance(key, (str, unicode)):
-            if key in self.columns:
-                dsk = dict(((name, i), (operator.getitem, (self.name, i), key))
-                            for i in range(self.npartitions))
-                return DataFrame(merge(self.dask, dsk), name,
-                                 [key], self.blockdivs)
-        if isinstance(key, list):
-            if all(k in self.columns for k in key):
-                dsk = dict(((name, i), (operator.getitem,
-                                         (self.name, i),
-                                         (list, key)))
-                            for i in range(self.npartitions))
-                return DataFrame(merge(self.dask, dsk), name,
-                                 key, self.blockdivs)
-        if isinstance(key, DataFrame) and self.blockdivs == key.blockdivs:
-            dsk = dict(((name, i), (operator.getitem, (self.name, i),
-                                                       (key.name, i)))
-                        for i in range(self.npartitions))
-            return DataFrame(merge(self.dask, key.dask, dsk), name,
-                             self.columns, self.blockdivs)
-        raise NotImplementedError()
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            try:
-                return self[key]
-            except NotImplementedError:
-                raise AttributeError()
+        return [(self._name, i) for i in range(self.npartitions)]
 
     @property
     def index(self):
         name = next(names)
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
-        return DataFrame(merge(dsk, self.dask), name, [], self.blockdivs)
-
-    def __dir__(self):
-        return sorted(set(list(dir(type(self))) + list(self.columns)))
-
-    @property
-    def dtypes(self):
-        return get(self.dask, self._keys()[0]).dtypes
-
-    def set_index(self, other, **kwargs):
-        return set_index(self, other, **kwargs)
-
-    def set_partition(self, column, blockdivs, **kwargs):
-        """ Set explicit blockdivs for new column index
-
-        >>> df2 = df.set_partition('new-index-column', blockdivs=[10, 20, 50])  # doctest: +SKIP
-
-        See also:
-            set_index
-        """
-        return set_partition(self, column, blockdivs, **kwargs)
+        return Index(merge(dsk, self.dask), name, None, self.blockdivs)
 
     def cache(self, cache=Chest):
         """ Evaluate Dataframe and store in local cache
@@ -169,10 +109,137 @@ class DataFrame(object):
         # Create new Frame pointing to that cache
         dsk2 = dict((key, (getitem, cache, (tuple, list(key))))
                     for key in self._keys())
-        return DataFrame(dsk2, self.name, self.columns, self.blockdivs)
+        return type(self)(dsk2, name, self.column_info, self.blockdivs)
 
-    def groupby(self, key, **kwargs):
-        return GroupBy(self, key, **kwargs)
+    def drop_duplicates(self):
+        chunk = lambda s: s.drop_duplicates()
+        return aca(self, chunk=chunk, aggregate=chunk, columns=self.columns)
+
+    def __len__(self):
+        return reduction(self, len, np.sum).compute()
+
+    def map_blocks(self, func, columns=None):
+        """ Apply Python function on each DataFrame block
+
+        Provide columns of the output if they are not the same as the input.
+        """
+        if columns is None:
+            columns = self.column_info
+        name = next(names)
+        dsk = dict(((name, i), (func, (self._name, i)))
+                    for i in range(self.npartitions))
+
+        return type(self)(merge(dsk, self.dask), name,
+                          columns, self.blockdivs)
+
+    def head(self, n=10, compute=True):
+        """ First n rows of the dataset
+
+        Caveat, the only checks the first n rows of the first partition.
+        """
+        name = next(names)
+        dsk = {(name, 0): (head, (self._name, 0), n)}
+
+        result = type(self)(merge(self.dask, dsk), name,
+                            self.column_info, [])
+
+        if compute:
+            result = result.compute()
+        return result
+
+    def _partition_of_index_value(self, val):
+        """ In which partition does this value lie? """
+        return bisect.bisect_right(self.blockdivs, val)
+
+    def _loc(self, ind):
+        """ Helper function for the .loc accessor """
+        name = next(names)
+        if not isinstance(ind, slice):
+            part = self._partition_of_index_value(ind)
+            dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
+            return type(self)(merge(self.dask, dsk), name,
+                              self.column_info, [])
+        else:
+            assert ind.step in (None, 1)
+            if ind.start:
+                start = self._partition_of_index_value(ind.start)
+            else:
+                start = 0
+            if ind.stop is not None:
+                stop = self._partition_of_index_value(ind.stop)
+            else:
+                stop = self.npartitions - 1
+            if stop == start:
+                dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
+            else:
+                dsk = merge(
+                  {(name, 0): (_loc, (self._name, start), ind.start, None)},
+                  dict(((name, i), (self._name, start + i))
+                      for i in range(1, stop - start)),
+                  {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
+
+            return type(self)(merge(self.dask, dsk), name, self.column_info,
+                              self.blockdivs[start:stop])
+
+    @property
+    def loc(self):
+        return IndexCallable(self._loc)
+
+    @property
+    def iloc(self):
+        raise AttributeError("Dask Dataframe does not support iloc")
+
+
+class Series(_Frame):
+    """ Out-of-core Series object
+
+    Mimics ``pandas.Series``.
+
+    See Also
+    --------
+
+    dask.dataframe.DataFrame
+    """
+    _partition_type = pd.Series
+    def __init__(self, dsk, _name, name, blockdivs):
+        self.dask = dsk
+        self._name = _name
+        self.name = name
+        self.blockdivs = blockdivs
+
+    @property
+    def dtype(self):
+        return self.head().dtype
+
+    @property
+    def column_info(self):
+        return self.name
+
+    @property
+    def columns(self):
+        return (self.name,)
+
+    def __repr__(self):
+        return ("dd.Series<%s, blockdivs=%s>" %
+                (self._name, repr_long_list(self.blockdivs)))
+
+    def quantiles(self, q):
+        """ Approximate quantiles of column
+
+        q : list/array of floats
+            Iterable of numbers ranging from 0 to 100 for the desired quantiles
+        """
+        return quantiles(self, q)
+
+    def __getitem__(self, key):
+        name = next(names)
+        if isinstance(key, Series) and self.blockdivs == key.blockdivs:
+            dsk = dict(((name, i), (operator.getitem, (self._name, i),
+                                                       (key._name, i)))
+                        for i in range(self.npartitions))
+            return Series(merge(self.dask, key.dask, dsk), name,
+                          self.name, self.blockdivs)
+        raise NotImplementedError()
 
     def __abs__(self):
         return elemwise(operator.abs, self)
@@ -237,7 +304,6 @@ class DataFrame(object):
     def __rxor__(self, other):
         return elemwise(operator.xor, other, self)
 
-    # Examples of reduction behavior
     def sum(self):
         return reduction(self, pd.Series.sum, np.sum)
     def max(self):
@@ -272,12 +338,8 @@ class DataFrame(object):
     def std(self, ddof=1):
         name = next(names)
         f = self.var(ddof=ddof)
-        dsk = {(name, 0): (sqrt, (f.name, 0))}
-        return DataFrame(merge(f.dask, dsk), name, [], [])
-
-    def drop_duplicates(self):
-        chunk = lambda s: s.drop_duplicates()
-        return aca(self, chunk=chunk, aggregate=chunk, columns=self.columns)
+        dsk = {(name, 0): (sqrt, (f._name, 0))}
+        return Scalar(merge(f.dask, dsk), name)
 
     def value_counts(self):
         chunk = lambda s: s.value_counts()
@@ -287,89 +349,111 @@ class DataFrame(object):
     def isin(self, other):
         return elemwise(pd.Series.isin, self, other)
 
-    def __len__(self):
-        return reduction(self, len, np.sum).compute()
 
-    def map_blocks(self, func, columns=None):
-        if columns is None:
-            columns = self.columns
+class Index(Series):
+    pass
+
+
+class DataFrame(_Frame):
+    """
+    Implements out-of-core DataFrame as a sequence of pandas DataFrames
+
+    This is a work in progress.  It is buggy and far from complete.
+    Please do not use it yet.
+
+    Parameters
+    ----------
+
+    dask: dict
+        The dask graph to compute this Dataframe
+    name: str
+        The key prefix that specifies which keys in the dask comprise this
+        particular DataFrame
+    columns: list of strings
+        Column names.  This metadata aids usability
+    blockdivs: tuple of index values
+        Values along which we partition our blocks on the index
+    """
+    _partition_type = pd.DataFrame
+    def __init__(self, dask, name, columns, blockdivs):
+        self.dask = dask
+        self._name = name
+        self.columns = tuple(columns)
+        self.blockdivs = tuple(blockdivs)
+
+    def __getitem__(self, key):
         name = next(names)
-        dsk = dict(((name, i), (func, (self.name, i)))
-                    for i in range(self.npartitions))
+        if isinstance(key, (str, unicode)):
+            if key in self.columns:
+                dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
+                            for i in range(self.npartitions))
+                return Series(merge(self.dask, dsk), name,
+                              key, self.blockdivs)
+        if isinstance(key, list):
+            if all(k in self.columns for k in key):
+                dsk = dict(((name, i), (operator.getitem,
+                                         (self._name, i),
+                                         (list, key)))
+                            for i in range(self.npartitions))
+                return DataFrame(merge(self.dask, dsk), name,
+                                 key, self.blockdivs)
+        if isinstance(key, Series) and self.blockdivs == key.blockdivs:
+            dsk = dict(((name, i), (operator.getitem, (self._name, i),
+                                                       (key._name, i)))
+                        for i in range(self.npartitions))
+            return DataFrame(merge(self.dask, key.dask, dsk), name,
+                             self.columns, self.blockdivs)
+        raise NotImplementedError()
 
-        return DataFrame(merge(dsk, self.dask), name, columns, self.blockdivs)
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            try:
+                return self[key]
+            except NotImplementedError:
+                raise AttributeError()
 
-    def head(self, n=10, compute=True):
-        name = next(names)
-        dsk = {(name, 0): (head, (self.name, 0), n)}
-
-        result = DataFrame(merge(self.dask, dsk), name, self.columns, [])
-
-        if compute:
-            result = result.compute()
-        return result
+    def __dir__(self):
+        return sorted(set(list(dir(type(self))) + list(self.columns)))
 
     def __repr__(self):
-        return ("dask.frame<%s, blockdivs=%s>" %
-                (self.name, repr_long_list(self.blockdivs)))
+        return ("dd.DataFrame<%s, blockdivs=%s>" %
+                (self._name, repr_long_list(self.blockdivs)))
+
+    @property
+    def dtypes(self):
+        return get(self.dask, self._keys()[0]).dtypes
+
+    def set_index(self, other, **kwargs):
+        return set_index(self, other, **kwargs)
+
+    def set_partition(self, column, blockdivs, **kwargs):
+        """ Set explicit blockdivs for new column index
+
+        >>> df2 = df.set_partition('new-index-column', blockdivs=[10, 20, 50])  # doctest: +SKIP
+
+        See also:
+            set_index
+        """
+        return set_partition(self, column, blockdivs, **kwargs)
+
+    @property
+    def column_info(self):
+        return self.columns
+
+    def groupby(self, key, **kwargs):
+        return GroupBy(self, key, **kwargs)
 
     def categorize(self, columns=None, **kwargs):
         return categorize(self, columns, **kwargs)
-
-    def quantiles(self, q):
-        """ Approximate quantiles of column
-
-        q : list/array of floats
-            Iterable of numbers ranging from 0 to 100 for the desired quantiles
-        """
-        return quantiles(self, q)
-
-    def _partition_of_index_value(self, val):
-        """ In which partition does this value lie? """
-        return bisect.bisect_right(self.blockdivs, val)
-
-    def _loc(self, ind):
-        name = next(names)
-        if not isinstance(ind, slice):
-            part = self._partition_of_index_value(ind)
-            dsk = {(name, 0): (lambda df: df.loc[ind], (self.name, part))}
-            return DataFrame(merge(self.dask, dsk), name, self.columns, [])
-        else:
-            assert ind.step in (None, 1)
-            if ind.start:
-                start = self._partition_of_index_value(ind.start)
-            else:
-                start = 0
-            if ind.stop is not None:
-                stop = self._partition_of_index_value(ind.stop)
-            else:
-                stop = self.npartitions - 1
-            if stop == start:
-                dsk = {(name, 0): (_loc, (self.name, start), ind.start, ind.stop)}
-            else:
-                dsk = merge(
-                  {(name, 0): (_loc, (self.name, start), ind.start, None)},
-                  dict(((name, i), (self.name, start + i))
-                      for i in range(1, stop - start)),
-                  {(name, stop - start): (_loc, (self.name, stop), None, ind.stop)})
-
-            return DataFrame(merge(self.dask, dsk), name, self.columns,
-                             self.blockdivs[start:stop])
-
-    @property
-    def loc(self):
-        return IndexCallable(self._loc)
-
-    @property
-    def iloc(self):
-        raise AttributeError("Dask Dataframe does not support iloc")
 
 
 def _loc(df, start, stop):
     return df.loc[slice(start, stop)]
 
 def head(x, n):
-    """ First n elements of dask.Dataframe """
+    """ First n elements of dask.Dataframe or dask.Series """
     return x.head(n)
 
 
@@ -378,9 +462,17 @@ def consistent_name(names):
 
     If all truthy names are the same, choose that one, otherwise, choose None
     """
-    names = set(n for n in names if n is not None)
-    if len(names) == 1:
-        return first(names)
+    allnames = set()
+    for name in names:
+        if name is None:
+            continue
+        if isinstance(name, (tuple, list)):
+            allnames.update(name)
+        else:
+            allnames.add(name)
+
+    if len(allnames) == 1:
+        return first(allnames)
     else:
         return None
 
@@ -389,9 +481,9 @@ def elemwise(op, *args):
     """ Elementwise operation for dask.Dataframes """
     name = next(names)
 
-    frames = [arg for arg in args if isinstance(arg, DataFrame)]
+    frames = [arg for arg in args if isinstance(arg, _Frame)]
     other = [(i, arg) for i, arg in enumerate(args)
-                      if not isinstance(arg, DataFrame)]
+                      if not isinstance(arg, _Frame)]
 
     if other:
         op2 = partial_by_order(op, other)
@@ -404,10 +496,10 @@ def elemwise(op, *args):
     dsk = dict(((name, i), (op2,) + frs)
                 for i, frs in enumerate(zip(*[f._keys() for f in frames])))
 
-    columns = [consistent_name(n for f in frames for n in f.columns)]
+    column_name = consistent_name(n for f in frames for n in f.columns)
 
-    return DataFrame(merge(dsk, *[f.dask for f in frames]),
-                     name, columns, frames[0].blockdivs)
+    return Series(merge(dsk, *[f.dask for f in frames]),
+                  name, column_name, frames[0].blockdivs)
 
 
 def reduction(x, chunk, aggregate):
@@ -416,13 +508,13 @@ def reduction(x, chunk, aggregate):
     >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
     """
     a = next(names)
-    dsk = dict(((a, i), (chunk, (x.name, i)))
+    dsk = dict(((a, i), (chunk, (x._name, i)))
                 for i in range(x.npartitions))
 
     b = next(names)
     dsk2 = {(b, 0): (aggregate, (tuple, [(a,i) for i in range(x.npartitions)]))}
 
-    return DataFrame(merge(x.dask, dsk, dsk2), b, x.columns, [])
+    return Scalar(merge(x.dask, dsk, dsk2), b)
 
 
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
@@ -623,7 +715,7 @@ class GroupBy(object):
 
         if isinstance(index, list):
             assert all(i in frame.columns for i in index)
-        elif isinstance(index, DataFrame):
+        elif isinstance(index, Series):
             assert index.blockdivs == frame.blockdivs
         else:
             assert index in frame.columns
@@ -726,10 +818,10 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
         args = [args]
     assert all(arg.npartitions == args[0].npartitions
                 for arg in args
-                if isinstance(arg, DataFrame))
+                if isinstance(arg, _Frame))
     a = next(names)
-    dsk = dict(((a, i), (apply, chunk, (list, [(x.name, i)
-                                                if isinstance(x, DataFrame)
+    dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)
+                                                if isinstance(x, _Frame)
                                                 else x for x in args])))
                 for i in range(args[0].npartitions))
 
@@ -738,9 +830,9 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
                       (pd.concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
 
-    return DataFrame(
+    return type(args[0])(
             merge(dsk, dsk2, *[a.dask for a in args
-                                      if isinstance(a, DataFrame)]),
+                                      if isinstance(a, _Frame)]),
             b, columns, [])
 
 
