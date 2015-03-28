@@ -10,7 +10,7 @@ from chest import Chest
 from pframe import pframe
 
 from .. import threaded
-from .core import Frame, get, names
+from .core import DataFrame, get, names
 from ..compatibility import unicode
 from ..utils import ignoring
 
@@ -19,13 +19,13 @@ tokens = ('-%d' % i for i in count(1))
 
 
 def set_index(f, index, npartitions=None, **kwargs):
-    """ Set Frame index to new column
+    """ Set DataFrame index to new column
 
-    Sorts index and realigns frame to new sorted order.  This shuffles and
+    Sorts index and realigns Dataframe to new sorted order.  This shuffles and
     repartitions your data.
     """
     npartitions = npartitions or f.npartitions
-    if not isinstance(index, Frame):
+    if not isinstance(index, DataFrame):
         index2 = f[index]
     else:
         index2 = index
@@ -40,15 +40,16 @@ def set_partition(f, index, blockdivs, get=threaded.get, **kwargs):
     """ Set new partitioning along index given blockdivs """
     blockdivs = unique(blockdivs)
     name = next(names)
-    if isinstance(index, Frame):
+    if isinstance(index, DataFrame):
         assert index.blockdivs == f.blockdivs
         dsk = dict(((name, i), (pd.DataFrame.set_index, block, ind))
                 for i, (block, ind) in enumerate(zip(f._keys(), index._keys())))
-        f2 = Frame(merge(f.dask, index.dask, dsk), name, f.columns, f.blockdivs)
+        f2 = DataFrame(merge(f.dask, index.dask, dsk), name,
+                       f.columns, f.blockdivs)
     else:
         dsk = dict(((name, i), (pd.DataFrame.set_index, block, index))
                 for i, block in enumerate(f._keys()))
-        f2 = Frame(merge(f.dask, dsk), name, f.columns, f.blockdivs)
+        f2 = DataFrame(merge(f.dask, dsk), name, f.columns, f.blockdivs)
 
     head = f2.head()
     pf = pframe(like=head, blockdivs=blockdivs, **kwargs)
@@ -69,7 +70,7 @@ def from_pframe(pf):
     dsk = dict(((name, i), (pframe.get_partition, pf, i))
                 for i in range(pf.npartitions))
 
-    return Frame(dsk, name, pf.columns, pf.blockdivs)
+    return DataFrame(dsk, name, pf.columns, pf.blockdivs)
 
 
 def unique(blockdivs):

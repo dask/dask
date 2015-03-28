@@ -14,9 +14,9 @@ from pframe import pframe
 from dask.frame.core import rewrite_rules
 
 def eq(a, b):
-    if isinstance(a, dfr.Frame):
+    if isinstance(a, dfr.DataFrame):
         a = a.compute(get=dask.get)
-    if isinstance(b, dfr.Frame):
+    if isinstance(b, dfr.DataFrame):
         b = b.compute(get=dask.get)
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b)
@@ -34,11 +34,11 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+d = dfr.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
 full = d.compute()
 
 
-def test_frame():
+def test_Dataframe():
     result = (d['a'] + 1).compute()
     expected = pd.Series([2, 3, 4, 5, 6, 7, 8, 9, 10],
                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
@@ -133,7 +133,7 @@ def test_set_index():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
                                   index=[9, 9, 9])}
-    d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dfr.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
     d2 = d.set_index('b', npartitions=3)
@@ -168,7 +168,7 @@ def test_split_apply_combine_on_series():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
                                   index=[9, 9, 9])}
-    d = dfr.Frame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dfr.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
     full = d.compute()
 
     assert eq(d.groupby('b').a.sum(), full.groupby('b').a.sum())
@@ -281,7 +281,7 @@ def test_categorize():
            ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
                                    'b': ['A', 'A', 'B']},
                                    index=[3, 4, 5])}
-    d = dfr.Frame(dsk, 'x', ['a', 'b'], [3])
+    d = dfr.DataFrame(dsk, 'x', ['a', 'b'], [3])
     full = d.compute()
 
     c = d.categorize('a')

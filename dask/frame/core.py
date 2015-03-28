@@ -56,21 +56,21 @@ def compute(*args, **kwargs):
 names = ('f-%d' % i for i in count(1))
 
 
-class Frame(object):
+class DataFrame(object):
     """
-    Dask.Frame implements a DataFrame as a sequence of pandas DataFrames
+    Implements out-of-core DataFrame as a sequence of pandas DataFrames
 
-    Dask.frame is a work in progress.  It is buggy and far from complete.
+    This is a work in progress.  It is buggy and far from complete.
     Please do not use it yet.
 
     Parameters
     ----------
 
     dask: dict
-        The dask graph to compute this frame
+        The dask graph to compute this Dataframe
     name: str
         The key prefix that specifies which keys in the dask comprise this
-        particular Frame
+        particular DataFrame
     columns: list of strings
         Column names.  This metadata aids usability
     blockdivs: tuple of index values
@@ -98,20 +98,22 @@ class Frame(object):
             if key in self.columns:
                 dsk = dict(((name, i), (operator.getitem, (self.name, i), key))
                             for i in range(self.npartitions))
-                return Frame(merge(self.dask, dsk), name, [key], self.blockdivs)
+                return DataFrame(merge(self.dask, dsk), name,
+                                 [key], self.blockdivs)
         if isinstance(key, list):
             if all(k in self.columns for k in key):
                 dsk = dict(((name, i), (operator.getitem,
                                          (self.name, i),
                                          (list, key)))
                             for i in range(self.npartitions))
-                return Frame(merge(self.dask, dsk), name, key, self.blockdivs)
-        if isinstance(key, Frame) and self.blockdivs == key.blockdivs:
+                return DataFrame(merge(self.dask, dsk), name,
+                                 key, self.blockdivs)
+        if isinstance(key, DataFrame) and self.blockdivs == key.blockdivs:
             dsk = dict(((name, i), (operator.getitem, (self.name, i),
                                                        (key.name, i)))
                         for i in range(self.npartitions))
-            return Frame(merge(self.dask, key.dask, dsk), name,
-                         self.columns, self.blockdivs)
+            return DataFrame(merge(self.dask, key.dask, dsk), name,
+                             self.columns, self.blockdivs)
         raise NotImplementedError()
 
     def __getattr__(self, key):
@@ -128,7 +130,7 @@ class Frame(object):
         name = next(names)
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
-        return Frame(merge(dsk, self.dask), name, [], self.blockdivs)
+        return DataFrame(merge(dsk, self.dask), name, [], self.blockdivs)
 
     def __dir__(self):
         return sorted(set(list(dir(type(self))) + list(self.columns)))
@@ -151,7 +153,7 @@ class Frame(object):
         return set_partition(self, column, blockdivs, **kwargs)
 
     def cache(self, cache=Chest):
-        """ Evaluate frame and store in local cache
+        """ Evaluate Dataframe and store in local cache
 
         Uses chest by default to store data on disk
         """
@@ -167,7 +169,7 @@ class Frame(object):
         # Create new Frame pointing to that cache
         dsk2 = dict((key, (getitem, cache, (tuple, list(key))))
                     for key in self._keys())
-        return Frame(dsk2, self.name, self.columns, self.blockdivs)
+        return DataFrame(dsk2, self.name, self.columns, self.blockdivs)
 
     def groupby(self, key, **kwargs):
         return GroupBy(self, key, **kwargs)
@@ -271,7 +273,7 @@ class Frame(object):
         name = next(names)
         f = self.var(ddof=ddof)
         dsk = {(name, 0): (sqrt, (f.name, 0))}
-        return Frame(merge(f.dask, dsk), name, [], [])
+        return DataFrame(merge(f.dask, dsk), name, [], [])
 
     def drop_duplicates(self):
         chunk = lambda s: s.drop_duplicates()
@@ -295,13 +297,13 @@ class Frame(object):
         dsk = dict(((name, i), (func, (self.name, i)))
                     for i in range(self.npartitions))
 
-        return Frame(merge(dsk, self.dask), name, columns, self.blockdivs)
+        return DataFrame(merge(dsk, self.dask), name, columns, self.blockdivs)
 
     def head(self, n=10, compute=True):
         name = next(names)
         dsk = {(name, 0): (head, (self.name, 0), n)}
 
-        result = Frame(merge(self.dask, dsk), name, self.columns, [])
+        result = DataFrame(merge(self.dask, dsk), name, self.columns, [])
 
         if compute:
             result = result.compute()
@@ -331,7 +333,7 @@ class Frame(object):
         if not isinstance(ind, slice):
             part = self._partition_of_index_value(ind)
             dsk = {(name, 0): (lambda df: df.loc[ind], (self.name, part))}
-            return Frame(merge(self.dask, dsk), name, self.columns, [])
+            return DataFrame(merge(self.dask, dsk), name, self.columns, [])
         else:
             assert ind.step in (None, 1)
             if ind.start:
@@ -351,8 +353,8 @@ class Frame(object):
                       for i in range(1, stop - start)),
                   {(name, stop - start): (_loc, (self.name, stop), None, ind.stop)})
 
-            return Frame(merge(self.dask, dsk), name, self.columns,
-                         self.blockdivs[start:stop])
+            return DataFrame(merge(self.dask, dsk), name, self.columns,
+                             self.blockdivs[start:stop])
 
     @property
     def loc(self):
@@ -360,14 +362,14 @@ class Frame(object):
 
     @property
     def iloc(self):
-        raise AttributeError("Dask frame does not support iloc")
+        raise AttributeError("Dask Dataframe does not support iloc")
 
 
 def _loc(df, start, stop):
     return df.loc[slice(start, stop)]
 
 def head(x, n):
-    """ First n elements of dask.frame """
+    """ First n elements of dask.Dataframe """
     return x.head(n)
 
 
@@ -384,12 +386,12 @@ def consistent_name(names):
 
 
 def elemwise(op, *args):
-    """ Elementwise operation for dask.frames """
+    """ Elementwise operation for dask.Dataframes """
     name = next(names)
 
-    frames = [arg for arg in args if isinstance(arg, Frame)]
+    frames = [arg for arg in args if isinstance(arg, DataFrame)]
     other = [(i, arg) for i, arg in enumerate(args)
-                      if not isinstance(arg, Frame)]
+                      if not isinstance(arg, DataFrame)]
 
     if other:
         op2 = partial_by_order(op, other)
@@ -404,8 +406,8 @@ def elemwise(op, *args):
 
     columns = [consistent_name(n for f in frames for n in f.columns)]
 
-    return Frame(merge(dsk, *[f.dask for f in frames]),
-                 name, columns, frames[0].blockdivs)
+    return DataFrame(merge(dsk, *[f.dask for f in frames]),
+                     name, columns, frames[0].blockdivs)
 
 
 def reduction(x, chunk, aggregate):
@@ -418,9 +420,9 @@ def reduction(x, chunk, aggregate):
                 for i in range(x.npartitions))
 
     b = next(names)
-    dsk2 = {(b, 0): (aggregate, (tuple, [(a, i) for i in range(x.npartitions)]))}
+    dsk2 = {(b, 0): (aggregate, (tuple, [(a,i) for i in range(x.npartitions)]))}
 
-    return Frame(merge(x.dask, dsk, dsk2), b, x.columns, [])
+    return DataFrame(merge(x.dask, dsk, dsk2), b, x.columns, [])
 
 
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
@@ -473,14 +475,14 @@ def read_csv(fn, *args, **kwargs):
     dsk = dict(((name, i), (getitem, (read, i), 0))
                 for i in range(nchunks))
 
-    return Frame(merge(dsk, load), name, one_chunk.columns, blockdivs)
+    return DataFrame(merge(dsk, load), name, one_chunk.columns, blockdivs)
 
 
 from_array_names = ('from-array-%d' % i for i in count(1))
 
 
 def from_array(x, chunksize=50000):
-    """ Read dask frame from any slicable array with record dtype
+    """ Read dask Dataframe from any slicable array with record dtype
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
     a NumPy array but must support slicing syntax
@@ -500,13 +502,13 @@ def from_array(x, chunksize=50000):
                              (slice(i * chunksize, (i + 1) * chunksize),))))
             for i in range(0, int(ceil(float(len(x)) / chunksize))))
 
-    return Frame(dsk, name, columns, blockdivs)
+    return DataFrame(dsk, name, columns, blockdivs)
 
 
 from pframe.categories import reapply_categories
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
-    """ Read dask frame from bcolz.ctable
+    """ Read dask Dataframe from bcolz.ctable
 
     Parameters
     ----------
@@ -549,7 +551,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
                   None, categories))
            for i in range(0, int(ceil(float(len(x)) / chunksize))))
 
-    result = Frame(dsk, new_name, columns, blockdivs)
+    result = DataFrame(dsk, new_name, columns, blockdivs)
 
     if index:
         assert index in x.names
@@ -621,7 +623,7 @@ class GroupBy(object):
 
         if isinstance(index, list):
             assert all(i in frame.columns for i in index)
-        elif isinstance(index, Frame):
+        elif isinstance(index, DataFrame):
             assert index.blockdivs == frame.blockdivs
         else:
             assert index in frame.columns
@@ -659,7 +661,7 @@ class SeriesGroupBy(object):
 
     def apply(func, columns=None):
         f = set_index(self.frame, self.index, **self.kwargs)
-        return f.map_blocks(lambda df: df.groupby(level=0)[self.key].apply(func),
+        return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
                             columns=columns)
 
     def sum(self):
@@ -705,8 +707,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
     Parameters
     ----------
 
-    args: dask.Frames
-        All frames should be partitioned and indexed equivalently
+    args: dask.DataFrames
+        All Dataframes should be partitioned and indexed equivalently
     chunk: function [block-per-arg] -> block
         Function to operate on each block of data
     aggregate: function concatenated-block -> block
@@ -724,10 +726,10 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
         args = [args]
     assert all(arg.npartitions == args[0].npartitions
                 for arg in args
-                if isinstance(arg, Frame))
+                if isinstance(arg, DataFrame))
     a = next(names)
     dsk = dict(((a, i), (apply, chunk, (list, [(x.name, i)
-                                                if isinstance(x, Frame)
+                                                if isinstance(x, DataFrame)
                                                 else x for x in args])))
                 for i in range(args[0].npartitions))
 
@@ -736,8 +738,9 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
                       (pd.concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
 
-    return Frame(
-            merge(dsk, dsk2, *[a.dask for a in args if isinstance(a, Frame)]),
+    return DataFrame(
+            merge(dsk, dsk2, *[a.dask for a in args
+                                      if isinstance(a, DataFrame)]),
             b, columns, [])
 
 
@@ -812,7 +815,7 @@ rewrite_rules = RuleSet(
 
 
 def get(dsk, keys, get=get_sync, **kwargs):
-    """ Get function with optimizations specialized to dask.frame """
+    """ Get function with optimizations specialized to dask.Dataframe """
     if isinstance(keys, list):
         dsk2 = cull(dsk, list(core.flatten(keys)))
     else:
