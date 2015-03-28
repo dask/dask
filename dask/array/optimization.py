@@ -95,6 +95,8 @@ def normalize_slice(s):
         start = 0
     if step is None:
         step = 1
+    if start < 0 or step < 0 or stop is not None and stop < 0:
+        raise NotImplementedError()
     return slice(start, stop, step)
 
 
@@ -150,9 +152,6 @@ def fuse_slice(a, b):
             if isinstance(a[i], int):
                 result.append(a[i])
                 continue
-            if (isinstance(a, slice) and
-                (a[i].start < 0 or (a[i].stop is not None and a[i].stop < 0))):
-                raise NotImplementedError("Negative slices not supported")
             while b[j] is None:  # insert Nones on the rhs
                 result.append(None)
                 j += 1
