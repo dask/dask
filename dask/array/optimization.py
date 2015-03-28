@@ -115,7 +115,7 @@ def fuse_slice(a, b):
     >>> fuse_slice(slice(1000, 2000, 5), slice(10, 20, 2))
     slice(1050, 1100, 10)
 
-    >>> fuse_slice(None, slice(None, None))
+    >>> fuse_slice(None, slice(None, None))  # doctest: +SKIP
     None
     """
     if a is None and b == slice(None, None):
