@@ -809,6 +809,19 @@ def atop(func, out, out_ind, *args, **kwargs):
     return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims,
                 dtype=dtype)
 
+def optimize(dsk, keys, **kwargs):
+    """ Optimize dask for array computation
+
+    1.  Cull tasks not necessary to evaluate keys
+    2.  Remove full slicing, e.g. x[:]
+    3.  Inline fast functions like getitem and np.transpose
+    """
+    fast_functions=kwargs.get('fast_functions',
+                             set([getitem, np.transpose]))
+    dsk2 = cull(dsk, list(core.flatten(keys)))
+    dsk3 = remove_full_slices(dsk2)
+    dsk4 = inline_functions(dsk3, fast_functions=fast_functions)
+    return dsk4
 
 def get(dsk, keys, get=None, **kwargs):
     """ Specialized get function
@@ -817,12 +830,8 @@ def get(dsk, keys, get=None, **kwargs):
     2. Use custom score function
     """
     get = get or _globals['get'] or threaded.get
-    fast_functions=kwargs.get('fast_functions',
-                             set([getitem, np.transpose]))
-    dsk2 = cull(dsk, list(core.flatten(keys)))
-    dsk3 = remove_full_slices(dsk2)
-    dsk4 = inline_functions(dsk3, fast_functions=fast_functions)
-    return get(dsk4, keys, **kwargs)
+    dsk2 = optimize(dsk, keys, **kwargs)
+    return get(dsk2, keys, **kwargs)
 
 
 def unpack_singleton(x):
