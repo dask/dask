@@ -67,11 +67,11 @@ This is also queryable in constant time.
 Performance
 -----------
 
-**tl;dr** The threaded scheduler behaves roughly as follows:
+**tl;dr** The threaded scheduler overhead behaves roughly as follows:
 
 *  1ms overhead per task
 *  100ms startup time (if you want to make a new ThreadPool each time)
-*  Linear scaling with number of tasks
+*  Constant scaling with number of tasks
 *  Linear scaling with number of dependencies per task
 
 Schedulers introduce overhead.  This overhead effectively limits the
