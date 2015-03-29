@@ -1,14 +1,13 @@
+from operator import add, mul
 from toolz import partial, identity
 from dask.utils import raises
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
-        dealias)
+        dealias, equivalent, sync_vars, merge_sync)
 
 
 def inc(x):
     return x + 1
 
-def add(x, y):
-    return x + y
 
 def double(x):
     return x * 2
@@ -186,3 +185,91 @@ def test_dealias():
                 'c': (identity, 'a')}
 
     assert dealias(dsk)  == expected
+
+
+def test_equivalent():
+    t1 = (add, 'a', 'b')
+    t2 = (add, 'x', 'y')
+
+    assert equivalent(t1, t1)
+    assert not equivalent(t1, t2)
+    assert equivalent(t1, t2, {'x': 'a', 'y': 'b'})
+    assert not equivalent(t1, t2, {'a': 'x'})
+
+    t1 = (add, (double, 'a'), (double, 'a'))
+    t2 = (add, (double, 'b'), (double, 'c'))
+
+    assert equivalent(t1, t1)
+    assert not equivalent(t1, t2)
+    assert equivalent(t1, t2, {'b': 'a', 'c': 'a'})
+    assert not equivalent(t1, t2, {'b': 'a', 'c': 'd'})
+    assert not equivalent(t2, t1, {'a': 'b'})
+
+    # Test literal comparisons
+    assert equivalent(1, 1)
+    assert not equivalent(1, 2)
+    assert equivalent((1, 2, 3), (1, 2, 3))
+
+
+class Uncomparable(object):
+    def __eq__(self, other):
+        raise TypeError("Uncomparable type")
+
+
+def test_equivalence_uncomparable():
+    t1 = Uncomparable()
+    t2 = Uncomparable()
+    assert raises(TypeError, lambda: t1 == t2)
+    assert equivalent(t1, t1)
+    assert not equivalent(t1, t2)
+    assert equivalent((add, t1, 0), (add, t1, 0))
+    assert not equivalent((add, t1, 0), (add, t2, 0))
+
+
+def test_sync_vars():
+    dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
+    dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
+    assert sync_vars(dsk1, dsk2) == {'x': 'a', 'y': 'b'}
+    assert sync_vars(dsk2, dsk1) == {'a': 'x', 'b': 'y'}
+
+    dsk1 = {'a': 1, 'b': 2, 'c': (add, 'a', 'b'), 'd': (inc, (add, 'a', 'b'))}
+    dsk2 = {'x': 1, 'y': 5, 'z': (add, 'x', 'y'), 'w': (inc, (add, 'x', 'y'))}
+    assert sync_vars(dsk1, dsk2) == {'x': 'a'}
+    assert sync_vars(dsk2, dsk1) == {'a': 'x'}
+
+
+def test_sync_uncomparable():
+    t1 = Uncomparable()
+    t2 = Uncomparable()
+    dsk1 = {'a': 1, 'b': t1, 'c': (add, 'a', 'b')}
+    dsk2 = {'x': 1, 'y': t2, 'z': (add, 'y', 'x')}
+    assert sync_vars(dsk1, dsk2) == {'x': 'a'}
+
+    dsk2 = {'x': 1, 'y': t1, 'z': (add, 'y', 'x')}
+    assert sync_vars(dsk1, dsk2) == {'x': 'a', 'y': 'b'}
+
+
+def test_merge_sync():
+    dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
+    dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
+    assert merge_sync(dsk1, dsk2) == {'a': 1, 'b': (add, 'a', 10),
+            'c': (mul, 'b', 5), 'z': (mul, 'b', 2)}
+
+    dsk1 = {'g1': 1,
+            'g2': 2,
+            'g3': (add, 'g1', 1),
+            'g4': (add, 'g2', 1),
+            'g5': (mul, (inc, 'g3'), (inc, 'g4'))}
+    dsk2 = {'h1': 1,
+            'h2': 5,
+            'h3': (add, 'h1', 1),
+            'h4': (add, 'h2', 1),
+            'h5': (mul, (inc, 'h3'), (inc, 'h4'))}
+    assert merge_sync(dsk1, dsk2) == {'g1': 1,
+                                      'g2': 2,
+                                      'g3': (add, 'g1', 1),
+                                      'g4': (add, 'g2', 1),
+                                      'g5': (mul, (inc, 'g3'), (inc, 'g4')),
+                                      'h2': 5,
+                                      'h4': (add, 'h2', 1),
+                                      'h5': (mul, (inc, 'g3'), (inc, 'h4'))}

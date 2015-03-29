@@ -1,5 +1,7 @@
+from itertools import zip_longest
 from .core import (istask, get_dependencies, subs, toposort, flatten,
-                   reverse_dict, add, inc, ishashable)
+                   reverse_dict, add, inc, ishashable, preorder_traversal)
+from .rewrite import END
 from toolz import identity
 
 
@@ -242,3 +244,157 @@ def dealias(dsk):
         else:
             dsk3[k] = (identity, k2)
     return dsk3
+
+
+def equivalent(term1, term2, subs=None):
+    """Determine if two terms are equivalent, modulo variable substitution.
+
+    Equivalent to applying substitutions in `subs` to `term2`, then checking if
+    `term1 == term2`.
+
+    If a subterm doesn't support comparison (i.e. `term1 == term2` errors),
+    returns `False`.
+
+    Parameters
+    ----------
+    term1, term2 : terms
+    subs : dict, optional
+        Mapping of substitutions from `term2` to `term1`
+
+    Example
+    -------
+    >>> from operator import add
+    >>> term1 = (add, 'a', 'b')
+    >>> term2 = (add, 'x', 'y')
+    >>> subs = {'a': 'x', 'b': 'y'}
+    >>> equivalent(term1, term2, subs)
+    True
+    >>> subs = {'a': 'x'}
+    >>> equivalent(term1, term2, subs)
+    False
+    """
+
+    # Quick escape for special cases
+    head_type = type(term1)
+    if type(term2) != head_type:
+        # If terms aren't same type, fail
+        return False
+    elif head_type not in (tuple, list):
+        # For literals, just compare
+        try:
+            # `is` is tried first, to allow objects that don't implement `==`
+            # to work for cases where term1 is term2. If `is` returns False,
+            # and `==` errors, then the only thing we can do is return False.
+            return term1 is term2 or term1 == term2
+        except:
+            return False
+
+    pot1 = preorder_traversal(term1)
+    pot2 = preorder_traversal(term2)
+    subs = {} if subs is None else subs
+
+    for t1, t2 in zip_longest(pot1, pot2, fillvalue=END):
+        if t1 is END or t2 is END:
+            # If terms aren't same length: fail
+            return False
+        elif ishashable(t2) and t2 in subs:
+            val = subs[t2]
+        else:
+            val = t2
+        try:
+            if t1 is not t2 and t1 != val:
+                return False
+        except:
+            return False
+    return True
+
+
+def dependency_dict(dsk):
+    """Create a dict matching ordered dependencies to keys.
+
+    Example
+    -------
+    >>> from operator import add
+    >>> dsk = {'a': 1, 'b': 2, 'c': (add, 'a', 'a'), 'd': (add, 'b', 'a')}
+    >>> dependency_dict(dsk)
+    {(): ['a', 'b'], ('a', 'a'): ['c'], ('b', 'a'): ['d']}
+    """
+
+    dep_dict = {}
+    for key in dsk:
+        deps = tuple(get_dependencies(dsk, key, True))
+        dep_dict.setdefault(deps, []).append(key)
+    return dep_dict
+
+
+def _possible_matches(dep_dict, deps, subs):
+    deps2 = []
+    for d in deps:
+        v = subs.get(d, None)
+        if v is not None:
+            deps2.append(v)
+        else:
+            return []
+    deps2 = tuple(deps2)
+    return dep_dict.get(deps2, [])
+
+
+def sync_vars(dsk1, dsk2):
+    """Return a dict matching vars in `dsk2` to equivalent vars in `dsk1`.
+
+    Parameters
+    ----------
+    dsk1, dsk2 : dasks
+
+    Example
+    -------
+    >>> from operator import add, mul
+    >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
+    >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
+    >>> sync_vars(dsk1, dsk2)
+    {'x': 'a', 'y': 'b'}
+    """
+
+    dep_dict1 = dependency_dict(dsk1)
+    subs = {}
+
+    for key2 in toposort(dsk2):
+        deps = tuple(get_dependencies(dsk2, key2, True))
+        # List of keys in dsk1 that have terms that *may* match key2
+        possible_matches = _possible_matches(dep_dict1, deps, subs)
+        if possible_matches:
+            val2 = dsk2[key2]
+            for key1 in possible_matches:
+                val1 = dsk1[key1]
+                if equivalent(val1, val2, subs):
+                    subs[key2] = key1
+                    break
+    return subs
+
+
+def merge_sync(dsk1, dsk2):
+    """Returns a single dask, with all tasks merged together.
+
+    Parameters
+    ----------
+    dsk1, dsk2 : dasks
+        Variable names in `dsk2` are replaced with equivalent ones in `dsk1`
+        before merging.
+
+    Example
+    -------
+    >>> from operator import add, mul
+    >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
+    >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
+    >>> merge_sync(dsk1, dsk2)
+    {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5), 'z': (mul, 'b', 2)}
+    """
+
+    sd = sync_vars(dsk1, dsk2)
+    new_dsk = dsk1.copy()
+    for key, task in dsk2.items():
+        new_key = sd.get(key, key)
+        for a, b in sd.items():
+            task = subs(task, a, b)
+        new_dsk[new_key] = task
+    return new_dsk
