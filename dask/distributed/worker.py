@@ -45,7 +45,7 @@ class Worker(object):
 
     def get(self, task):
         if isinstance(task, list):
-            return [self.get(item) for item in task]
+            return (self.get(item) for item in task)
 
         if ishashable(task) and task in self.data:
             return self.data[task]
