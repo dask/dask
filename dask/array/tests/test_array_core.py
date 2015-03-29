@@ -423,6 +423,18 @@ def test_coarsen():
                     coarsen(da.sum, d, {0: 2, 1: 4}))
 
 
+def test_broadcast_to():
+    x = np.random.randint(10, size=(5, 1, 6))
+    a = from_array(x, blockshape=(3, 1, 3))
+
+    for shape in [(5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+        assert eq(chunk.broadcast_to(x, shape),
+                        broadcast_to(a, shape))
+
+    assert raises(ValueError, lambda: broadcast_to(a, (2, 1, 6)))
+    assert raises(ValueError, lambda: broadcast_to(a, (3,)))
+
+
 def test_constant():
     d = da.constant(2, blockdims=((2, 2), (3, 3)))
     assert d.blockdims == ((2, 2), (3, 3))
