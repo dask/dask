@@ -460,6 +460,25 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     return nested_get(result, state['cache'])
 
 
+""" Synchronous concrete version of get_async
+
+Usually we supply a multi-core apply_async function.  Here we provide a
+sequential one.  This is useful for debugging and for code dominated by the
+GIL
+"""
+
+def apply_sync(func, args=(), kwds={}):
+    """ A naive synchronous version of apply_async """
+    return func(*args, **kwds)
+
+
+def get_sync(dsk, keys, **kwargs):
+    from .compatibility import Queue
+    queue = Queue()
+    return get_async(apply_sync, 1, dsk, keys, queue=queue,
+            raise_on_exception=True, **kwargs)
+
+
 '''
 Debugging
 ---------
@@ -510,15 +529,3 @@ def state_to_networkx(dsk, state):
     from .dot import to_networkx
     data, func = color_nodes(dsk, state)
     return to_networkx(dsk, data_attributes=data, function_attributes=func)
-
-
-def apply_sync(func, args=(), kwds={}):
-    """ A naive synchronous version of apply_async """
-    return func(*args, **kwds)
-
-
-def get_sync(dsk, keys, **kwargs):
-    from .compatibility import Queue
-    queue = Queue()
-    return get_async(apply_sync, 1, dsk, keys, queue=queue,
-            raise_on_exception=True, **kwargs)
