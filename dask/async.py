@@ -163,16 +163,18 @@ def start_state_from_dask(dsk, cache=None):
     """
     if cache is None:
         cache = dict()
+    data_keys = set()
     for k, v in dsk.items():
         if not istask(v) and (not ishashable(v) or v not in dsk):
             cache[k] = v
+            data_keys.add(k)
 
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     waiting = dict((k, v.copy()) for k, v in dependencies.items()
-                                 if k not in cache)
+                                 if k not in data_keys)
 
     dependents = reverse_dict(dependencies)
-    for a in cache:
+    for a in data_keys:
         for b in dependents[a]:
             waiting[b].remove(a)
     waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
@@ -301,7 +303,8 @@ def finish_task(dsk, key, state, results, delete=True):
                         sum(map(nbytes, state['cache'].values()) / 1e6)))
                 assert dep in state['cache']
                 release_data(dep, state, delete=delete)
-                assert dep not in state['cache']
+                if delete:
+                    assert dep not in state['cache']
         elif delete and dep in state['cache'] and dep not in results:
             release_data(dep, state, delete=delete)
 
