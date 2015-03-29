@@ -273,7 +273,7 @@ def execute_task(key, task, data, queue, raise_on_exception=False):
         queue.put((key, e, tb))
 
 
-def finish_task(dsk, key, result, state, results):
+def finish_task(dsk, key, state, results, delete=True):
     """
     Update executation state after a task finishes
 
@@ -300,10 +300,10 @@ def finish_task(dsk, key, result, state, results):
                     print("Key: %s\tDep: %s\t NBytes: %.2f\t Release" % (key, dep,
                         sum(map(nbytes, state['cache'].values()) / 1e6)))
                 assert dep in state['cache']
-                release_data(dep, state)
+                release_data(dep, state, delete=delete)
                 assert dep not in state['cache']
-        elif dep in state['cache'] and dep not in results:
-            release_data(dep, state)
+        elif delete and dep in state['cache'] and dep not in results:
+            release_data(dep, state, delete=delete)
 
     state['finished'].add(key)
     state['running'].remove(key)
@@ -311,7 +311,7 @@ def finish_task(dsk, key, result, state, results):
     return state
 
 
-def release_data(key, state):
+def release_data(key, state, delete=True):
     """ Remove data from temporary storage
 
     See Also
@@ -323,7 +323,8 @@ def release_data(key, state):
 
     state['released'].add(key)
 
-    del state['cache'][key]
+    if delete:
+        del state['cache'][key]
 
 
 def nested_get(ind, coll, lazy=False):
@@ -446,7 +447,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             raise type(res)(" Exception in remote process\n\n"
                 + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
-        finish_task(dsk, key, res, state, results)
+        finish_task(dsk, key, state, results)
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
 
