@@ -266,10 +266,10 @@ def equivalent(term1, term2, subs=None):
     >>> from operator import add
     >>> term1 = (add, 'a', 'b')
     >>> term2 = (add, 'x', 'y')
-    >>> subs = {'a': 'x', 'b': 'y'}
+    >>> subs = {'x': 'a', 'y': 'b'}
     >>> equivalent(term1, term2, subs)
     True
-    >>> subs = {'a': 'x'}
+    >>> subs = {'x': 'a'}
     >>> equivalent(term1, term2, subs)
     False
     """
@@ -316,7 +316,7 @@ def dependency_dict(dsk):
     -------
     >>> from operator import add
     >>> dsk = {'a': 1, 'b': 2, 'c': (add, 'a', 'a'), 'd': (add, 'b', 'a')}
-    >>> dependency_dict(dsk)
+    >>> dependency_dict(dsk)    # doctest: +SKIP
     {(): ['a', 'b'], ('a', 'a'): ['c'], ('b', 'a'): ['d']}
     """
 
@@ -351,7 +351,7 @@ def sync_vars(dsk1, dsk2):
     >>> from operator import add, mul
     >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
     >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    >>> sync_vars(dsk1, dsk2)
+    >>> sync_vars(dsk1, dsk2)   # doctest: +SKIP
     {'x': 'a', 'y': 'b'}
     """
 
@@ -386,7 +386,7 @@ def merge_sync(dsk1, dsk2):
     >>> from operator import add, mul
     >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
     >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    >>> merge_sync(dsk1, dsk2)
+    >>> merge_sync(dsk1, dsk2)  # doctest: +SKIP
     {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5), 'z': (mul, 'b', 2)}
     """
 
