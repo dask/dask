@@ -1,4 +1,4 @@
-from itertools import zip_longest
+from .compatibility import zip_longest
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, add, inc, ishashable, preorder_traversal)
 from .rewrite import END
