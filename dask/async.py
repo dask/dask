@@ -279,7 +279,6 @@ def finish_task(dsk, key, result, state, results):
 
     Mutates.  This should run atomically (with a lock).
     """
-    state['cache'][key] = result
     if key in state['ready-set']:
         state['ready-set'].remove(key)
 
@@ -446,6 +445,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         if isinstance(res, Exception):
             raise type(res)(" Exception in remote process\n\n"
                 + str(res) + "\n\nTraceback:\n" + tb)
+        state['cache'][key] = res
         finish_task(dsk, key, res, state, results)
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()

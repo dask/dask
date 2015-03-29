@@ -50,6 +50,7 @@ def test_finish_task():
     result = 2
 
     oldstate = deepcopy(state)
+    state['cache']['z'] = result
     finish_task(dsk, task, result, state, set())
 
     assert state == {
