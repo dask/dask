@@ -543,6 +543,15 @@ def test_compute():
     assert eq(B, d + 2)
 
 
+def test_coerce():
+    d = da.from_array(np.array([1]), blockshape=(1,))
+    with dask.set_options(get=dask.get):
+        assert bool(d)
+        assert int(d)
+        assert float(d)
+        assert complex(d)
+
+
 def test_store():
     d = da.ones((4, 4), blockshape=(2, 2))
     a, b = d + 1, d + 2

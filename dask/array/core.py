@@ -597,7 +597,15 @@ class Array(object):
     def compute(self, **kwargs):
         return compute(self, **kwargs)
 
-    __float__ = __int__ = __bool__ = __complex__ = compute
+    def __int__(self):
+        return int(self.compute())
+    def __bool__(self):
+        return bool(self.compute())
+    __nonzero__ = __bool__  # python 2
+    def __float__(self):
+        return float(self.compute())
+    def __complex__(self):
+        return complex(self.compute())
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
