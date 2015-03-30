@@ -6,6 +6,7 @@ The reblock module defines:
     reblock: a function to convert the blocks
         of an existing dask array to new blockdims or blockshape
 """
+
 from itertools import count, product, chain
 from operator import getitem, add
 import numpy as np
@@ -13,52 +14,59 @@ from toolz import merge, accumulate
 from dask.array.core import rec_concatenate, Array
 from dask.array.core import blockdims_from_blockshape
 
+
 reblock_names  = ('reblock-%d' % i for i in count(1))
+
+
 def cumdims_label(blockdims, const):
-    """ cumdims_label(blockdims, const)
-    Interal utility for cumulative sum with label.
-    >>> cumdims_label(((5,3,3),(2,2,1)),'n')
-        [(('n', 0), ('n', 5), ('n', 8), ('n', 11)),
-         (('n', 0), ('n', 2), ('n', 4), ('n', 5))]
+    """ Interal utility for cumulative sum with label.
+
+    >>> cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')  # doctest: +NORMALIZE_WHITESPACE
+    [(('n', 0), ('n', 5), ('n', 8), ('n', 11)),
+     (('n', 0), ('n', 2), ('n', 4), ('n', 5))]
     """
-    return [tuple(zip((const,) * (1+ len(bds)), list(accumulate(add, (0,) + bds)))) for bds in blockdims ]
+    return [tuple(zip((const,) * (1 + len(bds)),
+                      list(accumulate(add, (0,) + bds))))
+              for bds in blockdims ]
 
 
 def _breakpoints(cumold, cumnew):
     """
-    >>> new = cumdims_label(((5,3,3),(2,2,1)),'n')
-    >>> old = cumdims_label(((2,2,1),(5,)),'o')
-    >>> _breakpoints(c[1],old[1])
+
+    >>> new = cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')
+    >>> old = cumdims_label(((2, 2, 1), (5,)), 'o')
+
+    >>> _breakpoints(new[1], old[1])
     (('n', 0), ('o', 0), ('n', 2), ('n', 4), ('n', 5), ('o', 5))
-    >>> _breakpoints(c[0],old[0])
-        (('n', 0),('o', 0),('o', 2),('o', 4),('n', 5),('o', 5),('n', 8),('n', 11))
+    >>> _breakpoints(new[0], old[0])
+    (('n', 0), ('o', 0), ('o', 2), ('o', 4), ('n', 5), ('o', 5), ('n', 8), ('n', 11))
     """
     return tuple(sorted(tuple(cumold) + tuple(cumnew), key=lambda x:x[1]))
 
 
 def _intersect_1d(breaks):
-    """Internal utility to intersect blockdims for 1 d
-    after preprocessing.
+    """
+    Internal utility to intersect blockdims for 1d after preprocessing.
 
-    >>> new = cumdims_label(((5,3,3),(2,2,1)),'n')
-    >>> old = cumdims_label(((2,2,1),(5,)),'o')
-    >>> _intersect_1d(_breakpoints(old[0],new[0])
-        (((0, slice(0, 2, None)), (1, slice(0, 2, None)), (2, slice(0, 1, None))),
-         ((2, slice(0, 3, None)),),
-         ((2, slice(3, 6, None)),))
-    >>> _intersect_1d(_breakpoints(old[1],new[1])
+    >>> old = cumdims_label(((2, 2, 1), (5,)), 'o')
+    >>> new = cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')
 
-        (((0, slice(0, 2, None)),),
-         ((0, slice(2, 4, None)),),
-         ((0, slice(4, 5, None)),))
+    >>> _intersect_1d(_breakpoints(old[0], new[0]))  # doctest: +NORMALIZE_WHITESPACE
+    (((0, slice(0, 2, None)), (1, slice(0, 2, None)), (2, slice(0, 1, None))),
+     ((2, slice(0, 3, None)),),
+     ((2, slice(3, 6, None)),))
+    >>> _intersect_1d(_breakpoints(old[1], new[1]))  # doctest: +NORMALIZE_WHITESPACE
+    (((0, slice(0, 2, None)),),
+     ((0, slice(2, 4, None)),),
+     ((0, slice(4, 5, None)),))
 
-    Parameters:
-        breaks: list of tuples
-            Each tuple is ('o', 8) or ('n', 8)
-            These are pairs of 'o' old or new 'n'
-            indicator with a corresponding cumulative sum.
-        summ: int
-            The shape[dimension_being_passed]
+    Parameters
+    ----------
+
+    breaks: list of tuples
+        Each tuple is ('o', 8) or ('n', 8)
+        These are pairs of 'o' old or new 'n'
+        indicator with a corresponding cumulative sum.
 
     Uses 'o' and 'n' to make new tuples of slices for
     the new block crosswalk to old blocks.
@@ -87,6 +95,7 @@ def _intersect_1d(breaks):
             start = 0
     return tuple(map(tuple, filter(None, ret)))
 
+
 def intersect_blockdims(old_blockdims=None,
                         new_blockdims=None,
                         shape=None,
@@ -95,15 +104,15 @@ def intersect_blockdims(old_blockdims=None,
     """
     Make dask.array slices as intersection of old and new blockdims.
 
-    >>> intersect_blockdims(((4,4),(2,)), ((8,), (1,1)))
-        (((((0, slice(0, 4, None)), (1, slice(0, 4, None))),),
-          (((0, slice(0, 1, None)),), ((0, slice(1, 2, None)),))),
-         ((((0, slice(0, 4, None)), (0, slice(0, 1, None))),
-           ((1, slice(0, 4, None)), (0, slice(0, 1, None)))),
-          (((0, slice(0, 4, None)), (0, slice(1, 2, None))),
-           ((1, slice(0, 4, None)), (0, slice(1, 2, None))))))
+    >>> intersect_blockdims(((4, 4), (2,)),
+    ...                     ((8,), (1, 1)))  # doctest: +NORMALIZE_WHITESPACE
+    ((((0, slice(0, 4, None)), (0, slice(0, 1, None))),
+      ((1, slice(0, 4, None)), (0, slice(0, 1, None)))),
+     (((0, slice(0, 4, None)), (0, slice(1, 2, None))),
+      ((1, slice(0, 4, None)), (0, slice(1, 2, None)))))
 
-    Parameters:
+    Parameters
+    ----------
 
     old_blockdims : iterable of tuples
         block sizes along each dimension (convert from old_blockdims)
@@ -123,7 +132,6 @@ def intersect_blockdims(old_blockdims=None,
         old_blockdims = blockdims_from_blockshape(shape, old_blockshape)
     if not new_blockdims:
         new_blockdims = blockdims_from_blockshape(shape, new_blockshape)
-    global zipped, old_to_new, cross1,cross
     cmo = cumdims_label(old_blockdims,'o')
     cmn = cumdims_label(new_blockdims,'n')
     sums = [sum(o) for o in old_blockdims]
@@ -144,12 +152,14 @@ def reblock(x, blockdims=None, blockshape=None ):
     reblock(x, blockdims=None, blockshape=None )
 
     >>> import dask.array as da
-    >>> old_blockdims = ((2,3,2),)*4
-    >>> new = ((2,4,1), (4, 2, 1), (4, 3), (7,))
     >>> a = np.random.uniform(0, 1, 7**4).reshape((7,) * 4)
-    >>> x = da.from_array(a, blockdims=old)
+    >>> x = da.from_array(a, blockdims=((2, 3, 2),)*4)
     >>> x.blockdims
-    ((2,4,1), (4, 2, 1), (4, 3), (7,))
+    ((2, 3, 2), (2, 3, 2), (2, 3, 2), (2, 3, 2))
+
+    >>> y = reblock(x, blockdims=((2, 4, 1), (4, 2, 1), (4, 3), (7,)))
+    >>> y.blockdims
+    ((2, 4, 1), (4, 2, 1), (4, 3), (7,))
 
     Parameters:
 
@@ -162,6 +172,7 @@ def reblock(x, blockdims=None, blockshape=None ):
 
     if not blockdims:
         blockdims = blockdims_from_blockshape(x.shape, blockshape)
+
     crossed = intersect_blockdims(x.blockdims, blockdims)
     x2 = dict()
     temp_name = next(reblock_names)
