@@ -716,6 +716,9 @@ def test_arithmetic():
     assert eq(l1, r1)
     assert eq(l2, r2)
 
+    assert eq(da.around(a, -1), np.around(x, -1))
+
+
 def test_reductions():
     x = np.arange(5).astype('f4')
     a = da.from_array(x, blockshape=(2,))

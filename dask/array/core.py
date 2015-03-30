@@ -1220,6 +1220,11 @@ def modf(x):
 modf.__doc__ = np.modf
 
 
+@wraps(np.around)
+def around(x, decimals=0):
+    return map_blocks(x, partial(np.around, decimals=decimals), dtype=x.dtype)
+
+
 def isnull(values):
     """ pandas.isnull for dask arrays """
     import pandas as pd
