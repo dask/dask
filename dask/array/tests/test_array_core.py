@@ -734,3 +734,12 @@ def test_reductions():
     assert eq(da.nansum(a), np.nansum(x))
     assert eq(da.nanvar(a), np.nanvar(x))
     assert eq(da.nanstd(a), np.nanstd(x))
+
+
+def test_optimize():
+    x = np.arange(5).astype('f4')
+    a = da.from_array(x, blockshape=(2,))
+    expr = a[1:4] + 1
+    result = optimize(expr.dask, expr._keys())
+    assert isinstance(result, dict)
+    assert all(key in result for key in expr._keys())

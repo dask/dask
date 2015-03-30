@@ -1,6 +1,6 @@
 import dask
 import dask.array as da
-from dask.array.slicing import slice_array, _slice_1d, take, remove_full_slices
+from dask.array.slicing import slice_array, _slice_1d, take
 from operator import getitem
 import numpy as np
 from pprint import pprint
@@ -324,16 +324,3 @@ def test_slicing_and_blockdims():
     o = da.ones((24, 16), blockdims=((4, 8, 8, 4), (2, 6, 6, 2)))
     t = o[4:-4, 2:-2]
     assert t.blockdims == ((8, 8), (6, 6))
-
-
-def test_optimize_slicing():
-    dsk = {'a': (range, 10),
-           'b': (getitem, 'a', (slice(None, None, None),)),
-           'c': (getitem, 'b', (slice(None, None, None),)),
-           'd': (getitem, 'c', (slice(None, 5, None),)),
-           'e': (getitem, 'd', (slice(None, None, None),))}
-
-    expected = {'a': (range, 10),
-                'e': (getitem, 'a', (slice(None, 5, None),))}
-
-    assert remove_full_slices(dsk) == expected
