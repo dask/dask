@@ -297,6 +297,15 @@ def test_isnull():
     assert eq(notnull(a), ~np.isnan(x))
 
 
+def test_isclose():
+    x = np.array([0, np.nan, 1, 1.5])
+    y = np.array([1e-9, np.nan, 1, 2])
+    a = from_array(x, blockshape=(2,))
+    b = from_array(y, blockshape=(2,))
+    assert eq(da.isclose(a, b, equal_nan=True),
+              np.isclose(x, y, equal_nan=True))
+
+
 def test_elemwise_on_scalars():
     x = np.arange(10)
     a = from_array(x, blockshape=(5,))
