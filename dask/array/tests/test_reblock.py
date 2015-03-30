@@ -144,3 +144,7 @@ def test_reblock_blockshape():
     assert np.all(check2.compute() == a)
     assert np.all(check1.compute() == a)
 
+
+def test_dtype():
+    x = da.ones(5, blockshape=(2,))
+    assert x.reblock(blockshape=(1,))._dtype == x._dtype

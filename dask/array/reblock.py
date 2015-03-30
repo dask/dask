@@ -145,7 +145,7 @@ def intersect_blockdims(old_blockdims=None,
     return cross
 
 
-def reblock(x, blockdims=None, blockshape=None ):
+def reblock(x, blockdims=None, blockshape=None):
     """
     Convert blocks in dask array x for new blockdims.
 
@@ -198,4 +198,4 @@ def reblock(x, blockdims=None, blockshape=None ):
                 temp[ind_in_blk[-1]] = (getitem, (x.name,) + ind, slc)
         x2[key] = (rec_concatenate, rec_cat_arg)
     x2 = merge(x.dask, x2)
-    return Array(x2, temp_name, blockdims = blockdims)
+    return Array(x2, temp_name, blockdims = blockdims, dtype=x.dtype)
