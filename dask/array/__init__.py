@@ -15,7 +15,7 @@ from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
 from .percentile import percentile
 with ignoring(ImportError):
     from .reductions import nanprod
-from . import random, linalg, ghost
+from . import random, linalg, ghost, creation
 from .wrap import ones, zeros, empty
 from .reblock import reblock
 from ..context import set_options
