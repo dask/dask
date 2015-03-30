@@ -18,9 +18,12 @@ Contents
    overview.rst
    spec.rst
    array.rst
+   frame.rst
+   pframe.rst
+   scheduling.rst
    faq.rst
 
-Into is part of the Open Source Blaze_ projects supported by `Continuum Analytics`_
+Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 
 .. _Blaze: http://continuum.io/open-source/blaze/
 .. _`Continuum Analytics`: http://continuum.io

@@ -4,6 +4,7 @@ import itertools
 import math
 from glob import glob
 import heapq
+import inspect
 from collections import Iterable, Iterator
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map, partition_all,
@@ -16,7 +17,9 @@ except ImportError:
 
 from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
-from ..optimize import fuse
+from ..optimize import fuse, cull
+from ..compatibility import apply
+from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
@@ -53,7 +56,14 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-get = curry(mpget, optimizations=[fuse, lazify])
+def get(dsk, keys, get=None, **kwargs):
+    get = get or _globals['get'] or mpget
+
+    dsk2 = cull(dsk, keys)
+    dsk3 = fuse(dsk2)
+    dsk4 = lazify(dsk3)
+
+    return get(dsk, keys, **kwargs)
 
 
 def list2(seq):
@@ -67,8 +77,8 @@ class Item(object):
         self.key = key
         self.get = get
 
-    def compute(self):
-        return self.get(self.dask, self.key)
+    def compute(self, **kwargs):
+        return self.get(self.dask, self.key, **kwargs)
 
     __int__ = __float__ = __complex__ = __bool__ = compute
 
@@ -106,6 +116,9 @@ class Bag(object):
         Or a globstring
 
         >>> b = Bag.from_filenames('myfiles.*.txt')  # doctest: +SKIP
+
+        See also:
+            from_sequence: A more generic bag creation function
         """
         if isinstance(filenames, str):
             filenames = sorted(glob(filenames))
@@ -139,6 +152,9 @@ class Bag(object):
         -------
 
         >>> b = Bag.from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
+
+        See also:
+            from_sequence: Specialized bag creation function for textfiles
         """
         seq = list(seq)
         if npartitions and not partition_size:
@@ -156,6 +172,8 @@ class Bag(object):
 
     def map(self, func):
         name = next(names)
+        if takes_multiple_arguments(func):
+            func = curry(apply, func)
         dsk = dict(((name, i), (list, (map, func, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
@@ -328,15 +346,47 @@ class Bag(object):
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def __iter__(self):
-        results = self.get(self.dask, self._keys())
+    def compute(self, **kwargs):
+        results = self.get(self.dask, self._keys(), **kwargs)
         if isinstance(results[0], Iterable):
             results = concat(results)
         if not isinstance(results, Iterator):
             results = iter(results)
         return results
 
+    __iter__ = compute
+
 
 def dictitems(d):
     """ A pickleable version of dict.items """
     return list(d.items())
+
+
+def takes_multiple_arguments(func):
+    """
+
+    >>> def f(x, y): pass
+    >>> takes_multiple_arguments(f)
+    True
+
+    >>> def f(x): pass
+    >>> takes_multiple_arguments(f)
+    False
+
+    >>> def f(x, y=None): pass
+    >>> takes_multiple_arguments(f)
+    False
+
+    >>> def f(*args): pass
+    >>> takes_multiple_arguments(f)
+    True
+    """
+    try:
+        spec = inspect.getargspec(func)
+    except:
+        return False
+    if spec.varargs:
+        return True
+    if spec.defaults is None:
+        return len(spec.args) != 1
+    return len(spec.args) - len(spec.defaults) > 1

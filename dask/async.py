@@ -1,10 +1,29 @@
 """
-An asynchronous shared-memory scheduler for dask graphs.
+Asynchronous Shared-Memory Scheduler for Dask Graphs.
 
-This code is experimental and fairly ugly.  It should probably be rewritten
-before anyone really depends on it.  It is very stateful and error-prone.
+This scheduler coordinates several workers to execute tasks in a dask graph in
+parallel.  It depends on an apply_async function as would be found in thread or
+process Pools and a corresponding Queue for worker-to-scheduler communication.
 
-That being said, it is decently fast.
+It tries to execute tasks in an order which maintains a small memory footprint
+throughout execution.  It does this by running tasks that allow us to release
+data resources.
+
+
+Task Selection Policy
+=====================
+
+When we complete a task we add more data in to our set of available data; this
+new data makes new tasks available.  We preferentially choose tasks that were
+just made available in a last-in-first-out fashion.  We implement this as a
+simple stack.  This results in more depth-first rather than breadth first
+behavior which encourages us to process batches of data to completion before
+starting in on new data when possible.
+
+When the addition of new data readies multiple tasks simultaneously we add
+tasks to the stack in sorted order so that tasks with greater keynames are run
+first.  This can be handy to break ties in a predictable fashion.
+
 
 State
 =====
@@ -264,7 +283,7 @@ def finish_task(dsk, key, result, state, results):
     if key in state['ready-set']:
         state['ready-set'].remove(key)
 
-    for dep in state['dependents'][key]:
+    for dep in sorted(state['dependents'][key]):
         s = state['waiting'][dep]
         s.remove(key)
         if not s:

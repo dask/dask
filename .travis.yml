@@ -1,4 +1,5 @@
 language: python
+sudo: false
 python:
     - "2.6"
     - "2.7"
@@ -17,15 +18,18 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest numpy into pip coverage toolz
+  - conda install pytest numpy into pip coverage toolz pandas cython
   - conda install -c blaze blaze
   - pip install coveralls dill --use-mirrors
+  - pip install git+https://github.com/ContinuumIO/chest
+  - pip install git+https://github.com/blosc/bcolz --upgrade
 
   # Install dask
   - python setup.py install
 
 script:
-    - py.test dask --verbose
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then py.test --doctest-modules dask --verbose; else py.test dask --verbose; fi
+    - py.test pframe --doctest-modules --verbose
 
 after_success:
     - coveralls

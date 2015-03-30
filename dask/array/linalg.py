@@ -1,11 +1,10 @@
 from __future__ import absolute_import
 import numpy as np
-from itertools import count, product
-from .core import top, Array
+from itertools import count
+from .core import top, dotmany, Array
 import operator
 
 names = ('tsqr_%d' % i for i in count(1))
-
 
 def _cumsum_blocks(it):
     total = 0
@@ -15,28 +14,37 @@ def _cumsum_blocks(it):
         yield (total_previous, total)
 
 
-def tsqr(data, name=None):
-    """
-    Implementation of the direct TSQR, as presented in:
+def tsqr(data, name=None, compute_svd=False):
+    """ Direct Tall-and-Skinny QR algorithm
 
-    A. Benson, D. Gleich, and J. Demmel.
-    Direct QR factorizations for tall-and-skinny matrices in
-    MapReduce architectures.
-    IEEE International Conference on Big Data, 2013.
-    http://arxiv.org/abs/1301.1071
+    As presented in:
 
-    :param data:
-    Shape of the blocks that will be used to compute
-    the blocked QR decomposition. We have the restrictions:
-    - blockshape[1] == data.shape[1]
-    - blockshape[0]*data.shape[1] must fit in main memory
-    :type data: dask.array.Array
-    :param name: Name of array in dask
-    :type name: basestring
-    :return: First and second tuple elements correspond to Q and R, of
-    the QR decomposition.
-    :rtype: tuple of dask.array.Array
+        A. Benson, D. Gleich, and J. Demmel.
+        Direct QR factorizations for tall-and-skinny matrices in
+        MapReduce architectures.
+        IEEE International Conference on Big Data, 2013.
+        http://arxiv.org/abs/1301.1071
+
+    This algorithm is used to compute both the QR decomposition and the
+    Singular Value Decomposition.  It requires that the input array have a
+    single column of blocks, each of which fit in memory.
+
+    Parameters
+    ----------
+
+    data: Array
+    compute_svd: bool
+        Whether to compute the SVD rather than the QR decomposition
+
+    See Also
+    --------
+
+    dask.array.linalg.qr - Powered by this algorithm
+    dask.array.linalg.svd - Powered by this algorithm
     """
+
+
+
     if not (data.ndim == 2 and                    # Is a matrix
             len(data.blockdims[1]) == 1):         # Only one column block
         raise ValueError(
@@ -71,8 +79,7 @@ def tsqr(data, name=None):
                                                       (tuple, to_stack))}
     # In-core QR computation
     name_qr_st2 = prefix + 'QR_st2'
-    dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij',
-                     name_r_st1_stacked, 'ij',
+    dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
                      numblocks={name_r_st1_stacked: (1, 1)})
     # qr[0]
     name_q_st2_aux = prefix + 'Q_st2_aux'
@@ -91,9 +98,8 @@ def tsqr(data, name=None):
 
     name_q_st3 = prefix + 'Q'
     dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
-                            name_q_st2, 'ij',
-                            numblocks={name_q_st1: numblocks,
-                                       name_q_st2: numblocks})
+                    name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
+                                                 name_q_st2: numblocks})
 
     dsk_q = {}
     dsk_q.update(data.dask)
@@ -113,15 +119,98 @@ def tsqr(data, name=None):
     dsk_r.update(dsk_qr_st2)
     dsk_r.update(dsk_r_st2)
 
-    q = Array(dsk_q, name_q_st3, shape=data.shape, blockdims=data.blockdims)
-    r = Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
+    if not compute_svd:
+        q = Array(dsk_q, name_q_st3, shape=data.shape, blockdims=data.blockdims)
+        r = Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
+        return q, r
+    else:
+        # In-core SVD computation
+        name_svd_st2 = prefix + 'SVD_st2'
+        dsk_svd_st2 = top(np.linalg.svd, name_svd_st2, 'ij', name_r_st2, 'ij',
+                          numblocks={name_r_st2: (1, 1)})
+        # svd[0]
+        name_u_st2 = prefix + 'U_st2'
+        dsk_u_st2 = {(name_u_st2, 0, 0): (operator.getitem,
+                                          (name_svd_st2, 0, 0), 0)}
+        # svd[1]
+        name_s_st2 = prefix + 'S'
+        dsk_s_st2 = {(name_s_st2, 0): (operator.getitem,
+                                       (name_svd_st2, 0, 0), 1)}
+        # svd[2]
+        name_v_st2 = prefix + 'V'
+        dsk_v_st2 = {(name_v_st2, 0, 0): (operator.getitem,
+                                          (name_svd_st2, 0, 0), 2)}
+        # Q * U
+        name_u_st4 = prefix + 'U'
+        dsk_u_st4 = top(dotmany, name_u_st4, 'ij', name_q_st3, 'ik',
+                        name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
+                                                     name_u_st2: (1, 1)})
 
-    return q, r
+        dsk_u = {}
+        dsk_u.update(dsk_q)
+        dsk_u.update(dsk_r)
+        dsk_u.update(dsk_svd_st2)
+        dsk_u.update(dsk_u_st2)
+        dsk_u.update(dsk_u_st4)
+        dsk_s = {}
+        dsk_s.update(dsk_r)
+        dsk_s.update(dsk_svd_st2)
+        dsk_s.update(dsk_s_st2)
+        dsk_v = {}
+        dsk_v.update(dsk_r)
+        dsk_v.update(dsk_svd_st2)
+        dsk_v.update(dsk_v_st2)
+
+        u = Array(dsk_u, name_u_st4, shape=data.shape, blockdims=data.blockdims)
+        s = Array(dsk_s, name_s_st2, shape=(n,), blockshape=(n, n))
+        v = Array(dsk_v, name_v_st2, shape=(n, n), blockshape=(n, n))
+        return u, s, v
 
 
 def qr(data, name=None):
     """
-    In the future, we might have different implementations depending on
-    the shape of the input matrix
+    Compute the qr factorization of a matrix.
+
+    Example
+    -------
+
+    >>> q, r = da.linalg.qr(x)  # doctest: +SKIP
+
+    Returns
+    -------
+
+    q:  Array, orthonormal
+    r:  Array, upper-triangular
+
+    See Also
+    --------
+
+    np.linalg.qr : Equivalent NumPy Operation
+    dask.array.linalg.tsqr: Actual implementation with citation
     """
     return tsqr(data, name)
+
+
+def svd(data, name=None):
+    """
+    Compute the singular value decomposition of a matrix.
+
+    Example
+    -------
+
+    >>> u, s, v = da.linalg.svd(x)  # doctest: +SKIP
+
+    Returns
+    -------
+
+    u:  Array, unitary / orthogonal
+    s:  Array, singular values in decreasing order (largest first)
+    v:  Array, unitary / orthogonal
+
+    See Also
+    --------
+
+    np.linalg.svd : Equivalent NumPy Operation
+    dask.array.linalg.tsqr: Actual implementation with citation
+    """
+    return tsqr(data, name, compute_svd=True)
