@@ -750,7 +750,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
 
 
 class GroupBy(object):
-    def __init__(self, frame, index, **kwargs):
+    def __init__(self, frame, index=None, **kwargs):
         self.frame = frame
         self.index = index
         self.kwargs = kwargs
@@ -763,7 +763,10 @@ class GroupBy(object):
             assert index in frame.columns
 
     def apply(self, func, columns=None):
-        f = set_index(self.frame, self.index, **self.kwargs)
+        if isinstance(self.index, Series) and self.index._name == self.frame.index._name:
+            f = self.frame
+        else:
+            f = set_index(self.frame, self.index, **self.kwargs)
         return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
                             columns=columns)
 

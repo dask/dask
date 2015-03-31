@@ -19,6 +19,8 @@ def eq(a, b):
     if hasattr(b, 'dask'):
         b = b.compute(get=dask.get)
     if isinstance(a, pd.DataFrame):
+        a = a.sort_index()
+        b = b.sort_index()
         tm.assert_frame_equal(a, b)
         return True
     if isinstance(a, pd.Series):
@@ -164,7 +166,8 @@ def test_read_csv_categorize_and_index():
 
         expected = pd.read_csv(fn).set_index('amount')
         expected['name'] = expected.name.astype('category')
-        assert eq(f, expected.sort_index())
+        assert eq(f, expected)
+
 
 def test_set_index():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
@@ -305,6 +308,18 @@ def test_full_groupby():
         df['b'] = df.b - df.b.mean()
         return df
     # assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+
+
+def test_groupby_on_index():
+    e = d.set_index('a')
+    assert eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
+
+    def func(df):
+        df['b'] = df.b - df.b.mean()
+        return df
+
+    assert eq(d.groupby('a').apply(func),
+              e.groupby(e.index).apply(func))
 
 
 def test_set_partition():
