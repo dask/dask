@@ -1063,7 +1063,7 @@ def insert_to_ooc(out, arr):
     def store(x, *args):
         with lock:
             ind = tuple([slice(loc[i], loc[i+1]) for i, loc in zip(args, locs)])
-            out[ind] = x
+            out[ind] = np.asanyarray(x)
         return None
 
     name = 'store-%s' % arr.name
