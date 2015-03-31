@@ -141,6 +141,20 @@ def test_read_csv_categorize():
         expected['name'] = expected.name.astype('category')
         assert eq(f, expected)
 
+
+datetime_csv_file = """
+name,amount,when
+Alice,100,2014-01-01
+Bob,200,2014-01-01
+Charlie,300,2014-01-01
+""".strip()
+
+def test_read_csv_categorize_with_parse_dates():
+    with filetext(datetime_csv_file) as fn:
+        f = dd.read_csv(fn, chunksize=2, categorize=True, parse_dates=['when'])
+        assert list(f.dtypes) == ['category', 'i8', 'M8[ns]']
+
+
 def test_read_csv_categorize_and_index():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunksize=3, index='amount')

@@ -574,9 +574,11 @@ def read_csv(fn, *args, **kwargs):
         else:
             category_columns = []
         cols = category_columns + ([index] if index else [])
-        d = read_csv(fn, *args, **merge(kwargs, dict(chunksize=chunksize,
-                                                     usecols=cols,
-                                                     categorize=False)))
+        d = read_csv(fn, *args, **merge(kwargs,
+                                        dict(chunksize=chunksize,
+                                             usecols=cols,
+                                             categorize=False,
+                                             parse_dates=None)))
         categories = [d[c].drop_duplicates() for c in category_columns]
         if index:
             quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
