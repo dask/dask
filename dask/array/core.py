@@ -774,7 +774,12 @@ class Array(object):
     @wraps(map_blocks)
     def map_blocks(self, func, blockshape=None, blockdims=None, dtype=None):
         return map_blocks(self, func, blockshape=blockshape,
-                blockdims=blockdims, dtype=dtype)
+                          blockdims=blockdims, dtype=dtype)
+
+
+    def reblock(self, blockdims=None, blockshape=None):
+        from .reblock import reblock
+        return reblock(self, blockdims=blockdims, blockshape=blockshape)
 
 
 def from_array(x, blockdims=None, blockshape=None, name=None, **kwargs):

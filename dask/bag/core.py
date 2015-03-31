@@ -21,7 +21,6 @@ from ..optimize import fuse, cull
 from ..compatibility import apply
 from ..context import _globals
 
-
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
 

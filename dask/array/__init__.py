@@ -17,5 +17,6 @@ with ignoring(ImportError):
     from .reductions import nanprod
 from . import random, linalg, ghost
 from .wrap import ones, zeros, empty
+from .reblock import reblock
 from ..context import set_options
 from .optimization import optimize
