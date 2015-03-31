@@ -8,20 +8,22 @@ import numpy as np
 slice_names = ('slice-%d' % i for i in count(1))
 
 
-def sanitize_index_lists(ind):
-    """ Handle lists/arrays of integers/bools as indexes
+def sanitize_index_elements(ind):
+    """ Sanitize the elements for indexing along one axis
 
-    >>> sanitize_index_lists([2, 3, 5])
+    >>> sanitize_index_elements([2, 3, 5])
     [2, 3, 5]
-    >>> sanitize_index_lists([True, False, True, False])
+    >>> sanitize_index_elements([True, False, True, False])
     [0, 2]
-    >>> sanitize_index_lists(np.array([1, 2, 3]))
+    >>> sanitize_index_elements(np.array([1, 2, 3]))
     [1, 2, 3]
-    >>> sanitize_index_lists(np.array([False, True, True]))
+    >>> sanitize_index_elements(np.array([False, True, True]))
     [1, 2]
+    >>> type(sanitize_index_elements(np.int32(0)))
+    <type 'int'>
     """
-    if not isinstance(ind, (list, np.ndarray)):
-        return ind
+    if isinstance(ind, np.integer):
+        ind = int(ind)
     if isinstance(ind, np.ndarray):
         ind = ind.tolist()
     if isinstance(ind, list) and ind and isinstance(ind[0], bool):
@@ -90,7 +92,7 @@ def slice_array(out_name, in_name, blockdims, index):
     slice_slices_and_integers - handle everything else
     """
     index = replace_ellipsis(len(blockdims), index)
-    index = tuple(map(sanitize_index_lists, index))
+    index = tuple(map(sanitize_index_elements, index))
     blockdims = tuple(map(tuple, blockdims))
 
     # x[:, :, :] - Punt and return old value

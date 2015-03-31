@@ -597,7 +597,15 @@ class Array(object):
     def compute(self, **kwargs):
         return compute(self, **kwargs)
 
-    __float__ = __int__ = __bool__ = __complex__ = compute
+    def __int__(self):
+        return int(self.compute())
+    def __bool__(self):
+        return bool(self.compute())
+    __nonzero__ = __bool__  # python 2
+    def __float__(self):
+        return float(self.compute())
+    def __complex__(self):
+        return complex(self.compute())
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
@@ -1055,7 +1063,7 @@ def insert_to_ooc(out, arr):
     def store(x, *args):
         with lock:
             ind = tuple([slice(loc[i], loc[i+1]) for i, loc in zip(args, locs)])
-            out[ind] = x
+            out[ind] = np.asanyarray(x)
         return None
 
     name = 'store-%s' % arr.name
@@ -1220,6 +1228,11 @@ def modf(x):
 modf.__doc__ = np.modf
 
 
+@wraps(np.around)
+def around(x, decimals=0):
+    return map_blocks(x, partial(np.around, decimals=decimals), dtype=x.dtype)
+
+
 def isnull(values):
     """ pandas.isnull for dask arrays """
     import pandas as pd
@@ -1229,6 +1242,12 @@ def isnull(values):
 def notnull(values):
     """ pandas.notnull for dask arrays """
     return ~isnull(values)
+
+
+@wraps(np.isclose)
+def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
+    func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    return elemwise(func, arr1, arr2, dtype='bool')
 
 
 def variadic_choose(a, *choices):

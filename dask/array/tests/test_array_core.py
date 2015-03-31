@@ -297,6 +297,15 @@ def test_isnull():
     assert eq(notnull(a), ~np.isnan(x))
 
 
+def test_isclose():
+    x = np.array([0, np.nan, 1, 1.5])
+    y = np.array([1e-9, np.nan, 1, 2])
+    a = from_array(x, blockshape=(2,))
+    b = from_array(y, blockshape=(2,))
+    assert eq(da.isclose(a, b, equal_nan=True),
+              np.isclose(x, y, equal_nan=True))
+
+
 def test_elemwise_on_scalars():
     x = np.arange(10)
     a = from_array(x, blockshape=(5,))
@@ -534,6 +543,15 @@ def test_compute():
     assert eq(B, d + 2)
 
 
+def test_coerce():
+    d = da.from_array(np.array([1]), blockshape=(1,))
+    with dask.set_options(get=dask.get):
+        assert bool(d)
+        assert int(d)
+        assert float(d)
+        assert complex(d)
+
+
 def test_store():
     d = da.ones((4, 4), blockshape=(2, 2))
     a, b = d + 1, d + 2
@@ -715,6 +733,9 @@ def test_arithmetic():
     r1, r2 = np.modf(x)
     assert eq(l1, r1)
     assert eq(l2, r2)
+
+    assert eq(da.around(a, -1), np.around(x, -1))
+
 
 def test_reductions():
     x = np.arange(5).astype('f4')
