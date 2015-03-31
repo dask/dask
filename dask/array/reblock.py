@@ -33,13 +33,13 @@ def cumdims_label(blockdims, const):
 def _breakpoints(cumold, cumnew):
     """
 
-    >>> new = cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')
+    >>> new = cumdims_label(((2, 3), (2, 2, 1)), 'n')
     >>> old = cumdims_label(((2, 2, 1), (5,)), 'o')
 
+    >>> _breakpoints(new[0], old[0])
+    (('n', 0), ('o', 0), ('n', 2), ('o', 2), ('o', 4), ('n', 5), ('o', 5))
     >>> _breakpoints(new[1], old[1])
     (('n', 0), ('o', 0), ('n', 2), ('n', 4), ('n', 5), ('o', 5))
-    >>> _breakpoints(new[0], old[0])
-    (('n', 0), ('o', 0), ('o', 2), ('o', 4), ('n', 5), ('o', 5), ('n', 8), ('n', 11))
     """
     return tuple(sorted(tuple(cumold) + tuple(cumnew), key=lambda x:x[1]))
 
@@ -48,13 +48,12 @@ def _intersect_1d(breaks):
     """
     Internal utility to intersect blockdims for 1d after preprocessing.
 
+    >>> new = cumdims_label(((2, 3), (2, 2, 1)), 'n')
     >>> old = cumdims_label(((2, 2, 1), (5,)), 'o')
-    >>> new = cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')
 
     >>> _intersect_1d(_breakpoints(old[0], new[0]))  # doctest: +NORMALIZE_WHITESPACE
-    (((0, slice(0, 2, None)), (1, slice(0, 2, None)), (2, slice(0, 1, None))),
-     ((2, slice(0, 3, None)),),
-     ((2, slice(3, 6, None)),))
+    (((0, slice(0, 2, None)),),
+     ((1, slice(0, 2, None)), (2, slice(0, 1, None))))
     >>> _intersect_1d(_breakpoints(old[1], new[1]))  # doctest: +NORMALIZE_WHITESPACE
     (((0, slice(0, 2, None)),),
      ((0, slice(2, 4, None)),),
