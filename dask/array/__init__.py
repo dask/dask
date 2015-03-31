@@ -18,3 +18,4 @@ with ignoring(ImportError):
 from . import random, linalg, ghost
 from .wrap import ones, zeros, empty
 from ..context import set_options
+from .optimization import optimize
