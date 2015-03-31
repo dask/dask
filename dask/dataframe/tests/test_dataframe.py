@@ -141,6 +141,14 @@ def test_read_csv_categorize():
         expected['name'] = expected.name.astype('category')
         assert eq(f, expected)
 
+def test_read_csv_categorize_and_index():
+    with filetext(text) as fn:
+        f = dd.read_csv(fn, chunksize=3, index='amount')
+        assert f.index.compute().name == 'amount'
+
+        expected = pd.read_csv(fn).set_index('amount')
+        expected['name'] = expected.name.astype('category')
+        assert eq(f, expected.sort_index())
 
 def test_set_index():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
@@ -336,7 +344,7 @@ def test_len():
 
 
 def test_quantiles():
-    result = d.b.quantiles([30, 70])
+    result = d.b.quantiles([30, 70]).compute()
     assert len(result) == 2
     assert result[0] == 0
     assert 3 < result[1] < 7

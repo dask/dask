@@ -4,7 +4,8 @@ from functools import wraps
 import toolz
 import bisect
 import os
-from toolz import merge, partial, accumulate, unique, first, dissoc, valmap
+from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
+        first)
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
@@ -29,6 +30,10 @@ def concat(args):
     """ Generic concat operation """
     if not args:
         return args
+    if isinstance(first(core.flatten(args)), np.ndarray):
+        return da.core.rec_concatenate(args)
+    if len(args) == 1:
+        return args[0]
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
         args = [arg for arg in args if len(arg)]
         return pd.concat(args)
@@ -49,8 +54,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    return [concat(dfs) if arg.blockdivs else dfs[0]
-            for arg, dfs in zip(args, results)]
+    return list(map(concat, results))
 
 
 names = ('f-%d' % i for i in count(1))
@@ -546,7 +550,10 @@ def get_chunk(x, start):
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
     chunksize = kwargs.pop('chunksize', 2**16)
-    categorize = kwargs.pop('categorize', False)
+    categorize = kwargs.pop('categorize', None)
+    index = kwargs.pop('index', None)
+    if index and categorize == None:
+        categorize = True
     header = kwargs.get('header', 1)
 
     nlines = linecount(fn) - header
@@ -558,14 +565,26 @@ def read_csv(fn, *args, **kwargs):
 
     one_chunk = pd.read_csv(fn, *args, nrows=100, **kwargs)
 
-    if categorize:
-        cols = [c for c in one_chunk.dtypes.index if one_chunk.dtypes[c] == 'O']
+    cols = []
+
+    if categorize or index:
+        if categorize:
+            category_columns = [c for c in one_chunk.dtypes.index
+                                   if one_chunk.dtypes[c] == 'O']
+        else:
+            category_columns = []
+        cols = category_columns + ([index] if index else [])
         d = read_csv(fn, *args, **merge(kwargs, dict(chunksize=chunksize,
                                                      usecols=cols,
                                                      categorize=False)))
-        categories = [d[c].drop_duplicates() for c in cols]
-        categories = compute(*categories)
-        categories = dict(zip(cols, categories))
+        categories = [d[c].drop_duplicates() for c in category_columns]
+        if index:
+            quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
+            result = compute(quantiles, *categories)
+            quantiles, categories = result[0], result[1:]
+        else:
+            categories = compute(*categories)
+        categories = dict(zip(category_columns, categories))
 
     kwargs['chunksize'] = chunksize
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
@@ -582,6 +601,9 @@ def read_csv(fn, *args, **kwargs):
     if categorize:
         func = partial(categorize_block, categories=categories)
         result = result.map_blocks(func, columns=result.columns)
+
+    if index:
+        result = set_partition(result, index, quantiles)
 
     return result
 
@@ -901,12 +923,13 @@ def quantiles(f, q, **kwargs):
     name2 = next(names)
     len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(f._keys()))
 
-    vals, lens = get(merge(val_dsk, len_dsk, f.dask),
-                     [sorted(val_dsk.keys()), sorted(len_dsk.keys())])
+    name3 = next(names)
+    merge_dsk = {(name3, 0): (merge_percentiles, q, [q] * f.npartitions,
+                                                sorted(val_dsk),
+                                                sorted(len_dsk))}
 
-    result = merge_percentiles(q, [q] * f.npartitions, vals, lens)
-
-    return result
+    dsk = merge(f.dask, val_dsk, len_dsk, merge_dsk)
+    return da.Array(dsk, name3, blockdims=((len(q),),))
 
 
 #################
