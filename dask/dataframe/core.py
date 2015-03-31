@@ -91,7 +91,7 @@ class _Frame(object):
 
     @property
     def index(self):
-        name = next(names)
+        name = self._name + '-index'
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
         return Index(merge(dsk, self.dask), name, None, self.blockdivs)
@@ -386,14 +386,15 @@ class DataFrame(_Frame):
         self.blockdivs = tuple(blockdivs)
 
     def __getitem__(self, key):
-        name = next(names)
         if isinstance(key, (str, unicode)):
+            name = self._name + '.' + key
             if key in self.columns:
                 dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                             for i in range(self.npartitions))
                 return Series(merge(self.dask, dsk), name,
                               key, self.blockdivs)
         if isinstance(key, list):
+            name = '%s[%s]' % (self._name, str(key))
             if all(k in self.columns for k in key):
                 dsk = dict(((name, i), (operator.getitem,
                                          (self._name, i),
@@ -402,6 +403,7 @@ class DataFrame(_Frame):
                 return DataFrame(merge(self.dask, dsk), name,
                                  key, self.blockdivs)
         if isinstance(key, Series) and self.blockdivs == key.blockdivs:
+            name = next(names)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))

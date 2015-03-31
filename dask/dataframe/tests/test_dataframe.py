@@ -59,6 +59,8 @@ def test_Dataframe():
     assert np.allclose(d.b.var().compute(), full.b.var())
     assert np.allclose(d.b.std().compute(), full.b.std())
 
+    assert d.index._name == d.index._name  # this is deterministic
+
     assert repr(d)
 
 
