@@ -132,6 +132,16 @@ def test_read_csv():
         f = dd.read_csv(fn)
 
 
+def test_read_csv_categorize():
+    with filetext(text) as fn:
+        f = dd.read_csv(fn, chunksize=3, categorize=True)
+        assert list(f.dtypes) == ['category', 'i8']
+
+        expected = pd.read_csv(fn)
+        expected['name'] = expected.name.astype('category')
+        assert eq(f, expected)
+
+
 def test_set_index():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
                                   index=[0, 1, 3]),

@@ -546,6 +546,7 @@ def get_chunk(x, start):
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
     chunksize = kwargs.pop('chunksize', 2**16)
+    categorize = kwargs.pop('categorize', False)
     header = kwargs.get('header', 1)
 
     nlines = linecount(fn) - header
@@ -557,6 +558,15 @@ def read_csv(fn, *args, **kwargs):
 
     one_chunk = pd.read_csv(fn, *args, nrows=100, **kwargs)
 
+    if categorize:
+        cols = [c for c in one_chunk.dtypes.index if one_chunk.dtypes[c] == 'O']
+        d = read_csv(fn, *args, **merge(kwargs, dict(chunksize=chunksize,
+                                                     usecols=cols,
+                                                     categorize=False)))
+        categories = [d[c].drop_duplicates() for c in cols]
+        categories = compute(*categories)
+        categories = dict(zip(cols, categories))
+
     kwargs['chunksize'] = chunksize
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
     load.update(dict(((read, i), (get_chunk, (read, i-1), chunksize*i))
@@ -567,7 +577,13 @@ def read_csv(fn, *args, **kwargs):
     dsk = dict(((name, i), (getitem, (read, i), 0))
                 for i in range(nchunks))
 
-    return DataFrame(merge(dsk, load), name, one_chunk.columns, blockdivs)
+    result = DataFrame(merge(dsk, load), name, one_chunk.columns, blockdivs)
+
+    if categorize:
+        func = partial(categorize_block, categories=categories)
+        result = result.map_blocks(func, columns=result.columns)
+
+    return result
 
 
 from_array_names = ('from-array-%d' % i for i in count(1))
@@ -838,6 +854,18 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
 
 aca = apply_concat_apply
 
+def categorize_block(df, categories):
+    """ Categorize a dataframe with given categories
+
+    df: DataFrame
+    categories: dict mapping column name to iterable of categories
+    """
+    df = df.copy()
+    for col, vals in categories.items():
+        df[col] = pd.Categorical(df[col], categories=vals,
+                                    ordered=False, name=col)
+    return df
+
 
 def categorize(f, columns=None, **kwargs):
     """
@@ -855,14 +883,8 @@ def categorize(f, columns=None, **kwargs):
     distincts = [f[col].drop_duplicates() for col in columns]
     values = compute(distincts, **kwargs)
 
-    def categorize(block):
-        block = block.copy()
-        for col, vals in zip(columns, values):
-            block[col] = pd.Categorical(block[col], categories=vals,
-                                        ordered=False, name=col)
-        return block
-
-    return f.map_blocks(categorize, columns=f.columns)
+    func = partial(categorize_block, categories=dict(zip(columns, values)))
+    return f.map_blocks(func, columns=f.columns)
 
 
 def quantiles(f, q, **kwargs):
