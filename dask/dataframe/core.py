@@ -4,7 +4,8 @@ from functools import wraps
 import toolz
 import bisect
 import os
-from toolz import merge, partial, accumulate, unique, first, dissoc, valmap
+from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
+        first)
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
@@ -29,6 +30,10 @@ def concat(args):
     """ Generic concat operation """
     if not args:
         return args
+    if isinstance(first(core.flatten(args)), np.ndarray):
+        return da.core.rec_concatenate(args)
+    if len(args) == 1:
+        return args[0]
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
         args = [arg for arg in args if len(arg)]
         return pd.concat(args)
@@ -49,8 +54,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    return [concat(dfs) if arg.blockdivs else dfs[0]
-            for arg, dfs in zip(args, results)]
+    return list(map(concat, results))
 
 
 names = ('f-%d' % i for i in count(1))
@@ -87,7 +91,7 @@ class _Frame(object):
 
     @property
     def index(self):
-        name = next(names)
+        name = self._name + '-index'
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
         return Index(merge(dsk, self.dask), name, None, self.blockdivs)
@@ -382,14 +386,15 @@ class DataFrame(_Frame):
         self.blockdivs = tuple(blockdivs)
 
     def __getitem__(self, key):
-        name = next(names)
         if isinstance(key, (str, unicode)):
+            name = self._name + '.' + key
             if key in self.columns:
                 dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                             for i in range(self.npartitions))
                 return Series(merge(self.dask, dsk), name,
                               key, self.blockdivs)
         if isinstance(key, list):
+            name = '%s[%s]' % (self._name, str(key))
             if all(k in self.columns for k in key):
                 dsk = dict(((name, i), (operator.getitem,
                                          (self._name, i),
@@ -398,6 +403,7 @@ class DataFrame(_Frame):
                 return DataFrame(merge(self.dask, dsk), name,
                                  key, self.blockdivs)
         if isinstance(key, Series) and self.blockdivs == key.blockdivs:
+            name = next(names)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
@@ -546,6 +552,10 @@ def get_chunk(x, start):
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
     chunksize = kwargs.pop('chunksize', 2**16)
+    categorize = kwargs.pop('categorize', None)
+    index = kwargs.pop('index', None)
+    if index and categorize == None:
+        categorize = True
     header = kwargs.get('header', 1)
 
     nlines = linecount(fn) - header
@@ -557,6 +567,29 @@ def read_csv(fn, *args, **kwargs):
 
     one_chunk = pd.read_csv(fn, *args, nrows=100, **kwargs)
 
+    cols = []
+
+    if categorize or index:
+        if categorize:
+            category_columns = [c for c in one_chunk.dtypes.index
+                                   if one_chunk.dtypes[c] == 'O']
+        else:
+            category_columns = []
+        cols = category_columns + ([index] if index else [])
+        d = read_csv(fn, *args, **merge(kwargs,
+                                        dict(chunksize=chunksize,
+                                             usecols=cols,
+                                             categorize=False,
+                                             parse_dates=None)))
+        categories = [d[c].drop_duplicates() for c in category_columns]
+        if index:
+            quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
+            result = compute(quantiles, *categories)
+            quantiles, categories = result[0], result[1:]
+        else:
+            categories = compute(*categories)
+        categories = dict(zip(category_columns, categories))
+
     kwargs['chunksize'] = chunksize
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
     load.update(dict(((read, i), (get_chunk, (read, i-1), chunksize*i))
@@ -567,7 +600,16 @@ def read_csv(fn, *args, **kwargs):
     dsk = dict(((name, i), (getitem, (read, i), 0))
                 for i in range(nchunks))
 
-    return DataFrame(merge(dsk, load), name, one_chunk.columns, blockdivs)
+    result = DataFrame(merge(dsk, load), name, one_chunk.columns, blockdivs)
+
+    if categorize:
+        func = partial(categorize_block, categories=categories)
+        result = result.map_blocks(func, columns=result.columns)
+
+    if index:
+        result = set_partition(result, index, quantiles)
+
+    return result
 
 
 from_array_names = ('from-array-%d' % i for i in count(1))
@@ -708,7 +750,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
 
 
 class GroupBy(object):
-    def __init__(self, frame, index, **kwargs):
+    def __init__(self, frame, index=None, **kwargs):
         self.frame = frame
         self.index = index
         self.kwargs = kwargs
@@ -721,7 +763,10 @@ class GroupBy(object):
             assert index in frame.columns
 
     def apply(self, func, columns=None):
-        f = set_index(self.frame, self.index, **self.kwargs)
+        if isinstance(self.index, Series) and self.index._name == self.frame.index._name:
+            f = self.frame
+        else:
+            f = set_index(self.frame, self.index, **self.kwargs)
         return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
                             columns=columns)
 
@@ -838,6 +883,18 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
 
 aca = apply_concat_apply
 
+def categorize_block(df, categories):
+    """ Categorize a dataframe with given categories
+
+    df: DataFrame
+    categories: dict mapping column name to iterable of categories
+    """
+    df = df.copy()
+    for col, vals in categories.items():
+        df[col] = pd.Categorical(df[col], categories=vals,
+                                    ordered=False, name=col)
+    return df
+
 
 def categorize(f, columns=None, **kwargs):
     """
@@ -855,14 +912,8 @@ def categorize(f, columns=None, **kwargs):
     distincts = [f[col].drop_duplicates() for col in columns]
     values = compute(distincts, **kwargs)
 
-    def categorize(block):
-        block = block.copy()
-        for col, vals in zip(columns, values):
-            block[col] = pd.Categorical(block[col], categories=vals,
-                                        ordered=False, name=col)
-        return block
-
-    return f.map_blocks(categorize, columns=f.columns)
+    func = partial(categorize_block, categories=dict(zip(columns, values)))
+    return f.map_blocks(func, columns=f.columns)
 
 
 def quantiles(f, q, **kwargs):
@@ -879,12 +930,13 @@ def quantiles(f, q, **kwargs):
     name2 = next(names)
     len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(f._keys()))
 
-    vals, lens = get(merge(val_dsk, len_dsk, f.dask),
-                     [sorted(val_dsk.keys()), sorted(len_dsk.keys())])
+    name3 = next(names)
+    merge_dsk = {(name3, 0): (merge_percentiles, q, [q] * f.npartitions,
+                                                sorted(val_dsk),
+                                                sorted(len_dsk))}
 
-    result = merge_percentiles(q, [q] * f.npartitions, vals, lens)
-
-    return result
+    dsk = merge(f.dask, val_dsk, len_dsk, merge_dsk)
+    return da.Array(dsk, name3, blockdims=((len(q),),))
 
 
 #################

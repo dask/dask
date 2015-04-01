@@ -30,7 +30,9 @@ def set_index(f, index, npartitions=None, **kwargs):
     else:
         index2 = index
 
-    blockdivs = index2.quantiles(np.linspace(0, 100, npartitions+1)[1:-1])
+    blockdivs = (index2
+                  .quantiles(np.linspace(0, 100, npartitions+1)[1:-1])
+                  .compute())
     return f.set_partition(index, blockdivs, **kwargs)
 
 
