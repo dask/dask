@@ -771,12 +771,12 @@ def test_lazy_apply():
     d = da.from_array(x, blockshape=(5,))
     def func(a):
         return a.sum() / a.min()
-    e = da.lazy_apply(func, d, dtype='f8', shape=())
+    e = da.core.lazy_apply(func, d, dtype='f8', shape=())
 
     assert isinstance(e, da.Array)
     assert len(e._keys()) == 1
 
     assert eq(e, func(x))
 
-    e = da.lazy_apply(lambda x: x, d, dtype='i8')
+    e = da.core.lazy_apply(lambda x: x, d, dtype='i8')
     assert eq(e, d)
