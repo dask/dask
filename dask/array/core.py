@@ -1343,10 +1343,12 @@ def insert(arr, obj, values, axis):
 
     if getattr(values, 'ndim', 0) == 0:
         # we need to turn values into a dask array
+        name = next(names)
+        dtype = getattr(values, 'dtype', type(values))
+        values = Array({(name,): values}, name, blockdims=(), dtype=dtype)
+
         values_shape = tuple(len(obj) if axis == n else s
                              for n, s in enumerate(arr.shape))
-        dtype = getattr(values, 'dtype', type(values))
-        values = constant(values, (1,), blockshape=(1,), dtype=dtype)
         values = broadcast_to(values, values_shape)
 
     values_blockdims = tuple(values_bd if axis == n else arr_bd
