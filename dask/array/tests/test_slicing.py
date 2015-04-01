@@ -1,9 +1,21 @@
 import dask
 import dask.array as da
+from dask.array import Array
 from dask.array.slicing import slice_array, _slice_1d, take
 from operator import getitem
 import numpy as np
-from pprint import pprint
+
+
+def eq(a, b):
+    if isinstance(a, da.Array):
+        a = a.compute(get=dask.get)
+    if isinstance(b, da.Array):
+        b = b.compute(get=dask.get)
+
+    c = a == b
+    if isinstance(c, np.ndarray):
+        c = c.all()
+    return c
 
 
 def test_slice_1d():
@@ -324,3 +336,10 @@ def test_slicing_and_blockdims():
     o = da.ones((24, 16), blockdims=((4, 8, 8, 4), (2, 6, 6, 2)))
     t = o[4:-4, 2:-2]
     assert t.blockdims == ((8, 8), (6, 6))
+
+
+def test_slice_stop_0():
+    # from gh-125
+    a = da.ones(10, blockshape=(10,))[:0].compute()
+    b = np.ones(10)[:0]
+    assert eq(a, b)
