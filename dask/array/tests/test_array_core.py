@@ -504,6 +504,7 @@ def test_repr():
     assert d.name in repr(d)
     assert str(d.shape) in repr(d)
     assert str(d.blockdims) in repr(d)
+    assert str(d._dtype) in repr(d)
 
 
 def test_slicing_with_ellipsis():
