@@ -15,6 +15,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
 import numpy as np
 from . import chunk
 from .slicing import slice_array, insert_many
+from .utils import concrete
 from ..utils import deepmap, ignoring
 from ..async import inline_functions
 from ..optimize import cull, inline
@@ -1391,3 +1392,28 @@ def unique(x):
     dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
     parts = get(merge(dsk, x.dask), list(dsk.keys()))
     return np.unique(np.concatenate(parts))
+
+
+def lazy_apply(func, x, dtype=None, shape=None):
+    """ Apply function to entire array in lazy fashion
+
+    This applies a Python function on to the dask array.  The dask array will
+    be materialized fully in memory before the function is applied.
+
+    >>> import dask.array as da
+    >>> x = da.ones(5, blockshape=(2,))
+    >>> y = da.lazy_apply(np.sum, x)
+    >>> y
+    dask.array<x_11, shape=(5,), blockdims=((5,),)>
+    >>> y.compute()
+    array([ 5.])
+    """
+    if shape is None:
+        shape = x.shape
+
+    blockdims = tuple((d,) for d in shape)
+
+    name = next(names)
+    dsk = {(name,) + (0,) * len(shape): (func, (rec_concatenate, (concrete, x._keys())))}
+
+    return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=dtype)
