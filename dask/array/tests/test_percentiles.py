@@ -44,3 +44,8 @@ def test_percentile_with_categoricals():
     p = da.percentile(x, [50])
     assert (p.compute().categories == x0.categories).all()
     assert (p.compute().codes == [0]).all()
+
+
+def test_percentiles_with_empty_arrays():
+    x = da.ones(10, blockdims=((5, 0, 5),))
+    assert da.percentile(x, [10, 50, 90]).compute().tolist() == [1, 1, 1]
