@@ -353,6 +353,10 @@ class Series(_Frame):
     def isin(self, other):
         return elemwise(pd.Series.isin, self, other)
 
+    @wraps(pd.Series.map)
+    def map(self, arg, na_action=None):
+        return elemwise(pd.Series.map, self, arg, na_action, name=self.name)
+
 
 class Index(Series):
     pass
@@ -500,9 +504,9 @@ def consistent_name(names):
 def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
     columns = kwargs.get('columns', None)
-    _name = kwargs.get('_name', None)
+    name = kwargs.get('name', None)
 
-    name = next(names)
+    _name = next(names)
 
     frames = [arg for arg in args if isinstance(arg, _Frame)]
     other = [(i, arg) for i, arg in enumerate(args)
@@ -516,17 +520,17 @@ def elemwise(op, *args, **kwargs):
     assert all(f.blockdivs == frames[0].blockdivs for f in frames)
     assert all(f.npartitions == frames[0].npartitions for f in frames)
 
-    dsk = dict(((name, i), (op2,) + frs)
+    dsk = dict(((_name, i), (op2,) + frs)
                 for i, frs in enumerate(zip(*[f._keys() for f in frames])))
 
     if columns is not None:
         return DataFrame(merge(dsk, *[f.dask for f in frames]),
-                         name, columns, frames[0].blockdivs)
+                         _name, columns, frames[0].blockdivs)
     else:
-        column_name = _name or consistent_name(n for f in frames
+        column_name = name or consistent_name(n for f in frames
                                                  for n in f.columns)
         return Series(merge(dsk, *[f.dask for f in frames]),
-                      name, column_name, frames[0].blockdivs)
+                      _name, column_name, frames[0].blockdivs)
 
 
 def reduction(x, chunk, aggregate):

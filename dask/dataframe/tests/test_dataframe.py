@@ -473,3 +473,7 @@ def test_column_store_from_pframe():
 def test_assign():
     assert eq(d.assign(c=d.a + 1, e=d.a + d.b),
               full.assign(c=full.a + 1, e=full.a + full.b))
+
+
+def test_map():
+    assert eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
