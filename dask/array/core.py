@@ -352,6 +352,8 @@ def rec_concatenate(arrays, axis=0):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
+    if not arrays:
+        return np.array([])
     if isinstance(arrays, Iterator):
         arrays = list(arrays)
     if isinstance(arrays[0], Iterator):
