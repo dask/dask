@@ -560,8 +560,8 @@ class Array(object):
             return self.compute().dtype
 
     def __repr__(self):
-        return ("dask.array<%s, shape=%s, blockdims=%s>" %
-                (self.name, self.shape, self.blockdims))
+        return ("dask.array<%s, shape=%s, blockdims=%s, dtype=%s>" %
+                (self.name, self.shape, self.blockdims, self._dtype))
 
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
