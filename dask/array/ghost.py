@@ -2,8 +2,8 @@ from operator import getitem
 from ..core import flatten
 from .core import Array, rec_concatenate, map_blocks, concatenate
 from . import chunk, core
+from .utils import concrete
 import numpy as np
-from collections import Iterator, Iterable
 from toolz import merge, pipe, concat, partition, partial
 from toolz.curried import map
 from itertools import product, count
@@ -76,21 +76,6 @@ def reshape(shape, seq):
     else:
         n = int(len(seq) / shape[0])
         return [reshape(shape[1:], part) for part in partition(n, seq)]
-
-
-def concrete(seq):
-    """ Make nested iterators concrete lists
-
-    >>> data = [[1, 2], [3, 4]]
-    >>> seq = iter(map(iter, data))
-    >>> concrete(seq)
-    [[1, 2], [3, 4]]
-    """
-    if isinstance(seq, Iterator):
-        seq = list(seq)
-    if isinstance(seq, list):
-        seq = list(map(concrete, seq))
-    return seq
 
 
 def ghost_internal(x, axes):
