@@ -1403,8 +1403,8 @@ def lazy_apply(func, x, dtype=None, shape=None):
     >>> import dask.array as da
     >>> x = da.ones(5, blockshape=(2,))
     >>> y = da.lazy_apply(np.sum, x)
-    >>> y
-    dask.array<x_11, shape=(5,), blockdims=((5,),)>
+    >>> y  # doctest: +SKIP
+    dask.array<x, shape=(5,), blockdims=((5,),)>
     >>> y.compute()
     array([ 5.])
     """
