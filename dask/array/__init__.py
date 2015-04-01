@@ -20,3 +20,4 @@ from .wrap import ones, zeros, empty
 from .reblock import reblock
 from ..context import set_options
 from .optimization import optimize
+from .creation import arange, linspace
