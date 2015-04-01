@@ -88,6 +88,11 @@ def test_slice_1d():
     result = _slice_1d(100, [20, 20, 20, 20, 20], slice(20, 0, -1))
     assert expected == result
 
+    #x[:0]
+    expected = {}
+    result = _slice_1d(100, [20, 20, 20, 20, 20], slice(0))
+    assert expected == result
+
     #x=range(99)
     expected = {0: slice(-3, -21, -3),
                 1: slice(-2, -21, -3),

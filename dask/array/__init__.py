@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from ..utils import ignoring
 from .core import (Array, stack, concatenate, take, tensordot, transpose,
-        from_array, choose, where, coarsen, broadcast_to, constant,
+        from_array, choose, where, coarsen, insert, broadcast_to, constant,
         fromfunction, compute, unique, store)
 from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
         ceil, copysign, cos, cosh, degrees, exp, expm1, fabs, floor, fmod,
