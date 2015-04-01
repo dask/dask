@@ -62,8 +62,7 @@ def linspace(start, stop, num=50, blocksize=None, dtype=None):
 
     for i, bs in enumerate(blocksizes):
         blockstop = blockstart + ((bs - 1) * space)
-        task = (curry(np.linspace, blockstart, blockstop, num=bs,
-                      dtype=dtype),)
+        task = (curry(np.linspace, dtype=dtype), blockstart, blockstop, bs)
         blockstart = blockstart + (space * bs)
         dsk[(name, i)] = task
 
