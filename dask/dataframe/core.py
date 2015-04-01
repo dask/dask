@@ -36,6 +36,8 @@ def concat(args):
         return args[0]
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
         args = [arg for arg in args if len(arg)]
+        if not args:
+            return args[0]
         return pd.concat(args)
     if isinstance(args[0], (pd.Index)):
         args = [arg for arg in args if len(arg)]

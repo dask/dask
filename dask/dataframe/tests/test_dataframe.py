@@ -1,6 +1,6 @@
 import dask.dataframe as dd
 from dask.dataframe.core import (linecount, compute, get,
-        dataframe_from_ctable, rewrite_rules)
+        dataframe_from_ctable, rewrite_rules, concat)
 from toolz import valmap
 import pandas.util.testing as tm
 from operator import getitem
@@ -477,3 +477,9 @@ def test_assign():
 
 def test_map():
     assert eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
+
+
+def test_concat():
+    x = concat([pd.DataFrame(columns=['a', 'b'])])
+    assert list(x.columns) == ['a', 'b']
+    assert len(x) == 0
