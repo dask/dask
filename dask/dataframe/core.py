@@ -5,7 +5,7 @@ import toolz
 import bisect
 import os
 from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
-        first)
+        first, partition)
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
@@ -454,6 +454,20 @@ class DataFrame(_Frame):
     def categorize(self, columns=None, **kwargs):
         return categorize(self, columns, **kwargs)
 
+    @wraps(pd.DataFrame.assign)
+    def assign(self, **kwargs):
+        pairs = list(sum(kwargs.items(), ()))
+
+        # Figure out columns of the output
+        df = pd.DataFrame(columns=self.columns)
+        df2 = df.assign(**dict((k, []) for k in kwargs))
+
+        return elemwise(_assign, self, *pairs, columns=list(df2.columns))
+
+
+def _assign(df, *pairs):
+    kwargs = dict(partition(2, pairs))
+    return df.assign(**kwargs)
 
 def _loc(df, start, stop):
     return df.loc[slice(start, stop)]
@@ -483,8 +497,11 @@ def consistent_name(names):
         return None
 
 
-def elemwise(op, *args):
+def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
+    columns = kwargs.get('columns', None)
+    _name = kwargs.get('_name', None)
+
     name = next(names)
 
     frames = [arg for arg in args if isinstance(arg, _Frame)]
@@ -502,10 +519,14 @@ def elemwise(op, *args):
     dsk = dict(((name, i), (op2,) + frs)
                 for i, frs in enumerate(zip(*[f._keys() for f in frames])))
 
-    column_name = consistent_name(n for f in frames for n in f.columns)
-
-    return Series(merge(dsk, *[f.dask for f in frames]),
-                  name, column_name, frames[0].blockdivs)
+    if columns is not None:
+        return DataFrame(merge(dsk, *[f.dask for f in frames]),
+                         name, columns, frames[0].blockdivs)
+    else:
+        column_name = _name or consistent_name(n for f in frames
+                                                 for n in f.columns)
+        return Series(merge(dsk, *[f.dask for f in frames]),
+                      name, column_name, frames[0].blockdivs)
 
 
 def reduction(x, chunk, aggregate):

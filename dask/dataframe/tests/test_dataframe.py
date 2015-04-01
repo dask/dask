@@ -468,3 +468,8 @@ def test_column_store_from_pframe():
     d = dd.from_pframe(pf)
     assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
     assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
+
+
+def test_assign():
+    assert eq(d.assign(c=d.a + 1, e=d.a + d.b),
+              full.assign(c=full.a + 1, e=full.a + full.b))
