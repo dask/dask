@@ -9,6 +9,8 @@ from .core import Array
 
 @wraps(np.percentile)
 def _percentile(a, q, interpolation='linear'):
+    if not len(a):
+        return None
     if isinstance(q, Iterator):
         q = list(q)
     if str(a.dtype) == 'category':
@@ -81,6 +83,8 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     qs = list(map(list, qs))
     vals = list(vals)
     Ns = list(Ns)
+
+    qs, vals, Ns = zip(*[(q, val, N) for q, val, N in zip(qs, vals, Ns) if N])
 
     # TODO: Perform this check above in percentile once dtype checking is easy
     #       Here we silently change meaning
