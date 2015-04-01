@@ -35,10 +35,10 @@ def concat(args):
     if len(args) == 1:
         return args[0]
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
-        args = [arg for arg in args if len(arg)]
-        if not args:
+        args2 = [arg for arg in args if len(arg)]
+        if not args2:
             return args[0]
-        return pd.concat(args)
+        return pd.concat(args2)
     if isinstance(args[0], (pd.Index)):
         args = [arg for arg in args if len(arg)]
         result = pd.concat(map(pd.Series, args))

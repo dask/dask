@@ -480,6 +480,7 @@ def test_map():
 
 
 def test_concat():
-    x = concat([pd.DataFrame(columns=['a', 'b'])])
+    x = concat([pd.DataFrame(columns=['a', 'b']),
+                pd.DataFrame(columns=['a', 'b'])])
     assert list(x.columns) == ['a', 'b']
     assert len(x) == 0
