@@ -407,7 +407,7 @@ def take(outname, inname, blockdims, index, axis=0):
 
     colon = slice(None, None, None)
 
-    rev_index = tuple(map(sorted(index).index, index))
+    rev_index = list(map(sorted(index).index, index))
     vals = [(getitem, (np.concatenate,
                   (list, [(getitem, ((inname,) + d[:axis] + (i,) + d[axis+1:]),
                                    ((colon,)*axis + (IL,) + (colon,)*(n-axis-1)))
