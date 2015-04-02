@@ -1001,6 +1001,15 @@ def concatenate(seq, axis=0):
     return Array(dsk2, name, shape, blockdims=blockdims, dtype=dt)
 
 
+@wraps(np.take)
+def take(a, indices, axis):
+    if not -a.ndim <= axis < a.ndim:
+        raise ValueError('axis=(%s) out of bounds' % axis)
+    if axis < 0:
+        axis += a.ndim
+    return a[(slice(None),) * axis + (indices,)]
+
+
 @wraps(np.transpose)
 def transpose(a, axes=None):
     axes = axes or tuple(range(a.ndim))[::-1]
