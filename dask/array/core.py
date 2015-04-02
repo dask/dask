@@ -1332,7 +1332,10 @@ def insert(arr, obj, values, axis):
 
     if isinstance(obj, slice):
         obj = np.arange(*obj.indices(arr.shape[axis]))
-    obj = np.atleast_1d(obj)
+    obj = np.asarray(obj)
+    scalar_obj = obj.ndim == 0
+    if scalar_obj:
+        obj = np.atleast_1d(obj)
 
     obj = np.where(obj < 0, obj + arr.shape[axis], obj)
     if (np.diff(obj) < 0).any():
@@ -1350,6 +1353,8 @@ def insert(arr, obj, values, axis):
         values_shape = tuple(len(obj) if axis == n else s
                              for n, s in enumerate(arr.shape))
         values = broadcast_to(values, values_shape)
+    elif scalar_obj:
+        values = values[(slice(None),) * axis + (None,)]
 
     values_blockdims = tuple(values_bd if axis == n else arr_bd
                              for n, (arr_bd, values_bd)

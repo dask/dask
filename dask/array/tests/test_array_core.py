@@ -458,6 +458,8 @@ def test_insert():
                  insert(a, slice(1, 4), -1, axis=1))
     assert eq(np.insert(x, [2] * 3 + [5] * 2, y, axis=0),
                  insert(a, [2] * 3 + [5] * 2, b, axis=0))
+    assert eq(np.insert(x, 0, y[0], axis=1),
+                 insert(a, 0, b[0], axis=1))
     assert raises(NotImplementedError, lambda: insert(a, [4, 2], -1, axis=0))
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=2))
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=-3))
