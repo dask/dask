@@ -1394,11 +1394,23 @@ def unique(x):
     return np.unique(np.concatenate(parts))
 
 
-def lazy_apply(func, x, dtype=None, shape=None):
-    """ Apply function to entire array in lazy fashion
+def lazy_apply(func, *args, **kwargs):
+    """ Apply function to arrays in lazy fashion
 
-    This applies a Python function on to the dask array.  The dask array will
+    This applies a Python function on to dask arrays.  The dask arrays will
     be materialized fully in memory before the function is applied.
+
+    Parameters
+    ----------
+
+    func: function
+    args: dask arrays
+        dask arrays to send to the function
+    shape: tuple
+    dtype: np.dtype (optional)
+
+    Example
+    -------
 
     >>> import dask.array as da
     >>> x = da.ones(5, blockshape=(2,))
@@ -1408,12 +1420,23 @@ def lazy_apply(func, x, dtype=None, shape=None):
     >>> y.compute()
     array([ 5.])
     """
+    dtype = kwargs.get('dtype', None)
+    shape = kwargs.get('shape', None)
+
     if shape is None:
-        shape = x.shape
+        if len(args) == 1:
+            shape = args[0].shape
+        else:
+            raise ValueError("Must provide ``shape=`` keyword argument ")
+
 
     blockdims = tuple((d,) for d in shape)
 
     name = next(names)
-    dsk = {(name,) + (0,) * len(shape): (func, (rec_concatenate, (concrete, x._keys())))}
+    dsk = {(name,) + (0,) * len(shape):
+            (func,) + tuple((rec_concatenate,
+                              (concrete, arg._keys()))
+                              for arg in args)}
 
-    return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=dtype)
+    return Array(merge(dsk, *[arg.dask for arg in args]),
+                 name, blockdims=blockdims, dtype=dtype)

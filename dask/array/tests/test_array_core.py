@@ -769,14 +769,15 @@ def test_optimize():
 def test_lazy_apply():
     x = np.arange(10)
     d = da.from_array(x, blockshape=(5,))
-    def func(a):
-        return a.sum() / a.min()
-    e = da.core.lazy_apply(func, d, dtype='f8', shape=())
+    def func(a, b):
+        return a.sum() - b.min()
+
+    e = da.core.lazy_apply(func, d, -d, dtype='i8', shape=())
 
     assert isinstance(e, da.Array)
     assert len(e._keys()) == 1
 
-    assert eq(e, func(x))
+    assert eq(e, func(x, -x))
 
     e = da.core.lazy_apply(lambda x: x, d, dtype='i8')
     assert eq(e, d)
