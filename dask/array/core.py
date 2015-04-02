@@ -11,7 +11,7 @@ from collections import Iterator
 from functools import partial, wraps
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
-        merge, curry, compose, reduce)
+        merge, curry, compose, reduce, interleave, sliding_window)
 import numpy as np
 from . import chunk
 from .slicing import slice_array, insert_many
@@ -1305,6 +1305,69 @@ def coarsen(reduction, x, axes):
     else:
         dt = None
     return Array(merge(x.dask, dsk), name, blockdims=blockdims, dtype=dt)
+
+
+def split_at_breaks(array, breaks, axis=0):
+    """ Split an array into a list of arrays (using slices) at the given breaks
+
+    >>> split_at_breaks(np.arange(6), [3, 5])
+    [array([0, 1, 2]), array([3, 4]), array([5])]
+    """
+    padded_breaks = concat([[None], breaks, [None]])
+    slices = [slice(i, j) for i, j in sliding_window(2, padded_breaks)]
+    preslice = (slice(None),) * axis
+    split_array = [array[preslice + (s,)] for s in slices]
+    return split_array
+
+
+@wraps(np.insert)
+def insert(arr, obj, values, axis):
+    # axis is a required argument here to avoid needing to deal with the numpy
+    # default case (which reshapes the array to make it flat)
+    if not -arr.ndim <= axis < arr.ndim:
+        raise IndexError('axis %r is out of bounds for an array of dimension '
+                         '%s' % (axis, arr.ndim))
+    if axis < 0:
+        axis += arr.ndim
+
+    if isinstance(obj, slice):
+        obj = np.arange(*obj.indices(arr.shape[axis]))
+    obj = np.asarray(obj)
+    scalar_obj = obj.ndim == 0
+    if scalar_obj:
+        obj = np.atleast_1d(obj)
+
+    obj = np.where(obj < 0, obj + arr.shape[axis], obj)
+    if (np.diff(obj) < 0).any():
+        raise NotImplementedError(
+            'da.insert only implemented for monotonic ``obj`` argument')
+
+    split_arr = split_at_breaks(arr, np.unique(obj), axis)
+
+    if getattr(values, 'ndim', 0) == 0:
+        # we need to turn values into a dask array
+        name = next(names)
+        dtype = getattr(values, 'dtype', type(values))
+        values = Array({(name,): values}, name, blockdims=(), dtype=dtype)
+
+        values_shape = tuple(len(obj) if axis == n else s
+                             for n, s in enumerate(arr.shape))
+        values = broadcast_to(values, values_shape)
+    elif scalar_obj:
+        values = values[(slice(None),) * axis + (None,)]
+
+    values_blockdims = tuple(values_bd if axis == n else arr_bd
+                             for n, (arr_bd, values_bd)
+                             in enumerate(zip(arr.blockdims,
+                                              values.blockdims)))
+    values = values.reblock(values_blockdims)
+
+    counts = np.bincount(obj)[:-1]
+    values_breaks = np.cumsum(counts[counts > 0])
+    split_values = split_at_breaks(values, values_breaks, axis)
+
+    interleaved = interleave([split_arr, split_values])
+    return concatenate(list(interleaved), axis=axis)
 
 
 @wraps(chunk.broadcast_to)
