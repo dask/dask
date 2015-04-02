@@ -448,8 +448,9 @@ def test_insert():
     b = from_array(y, blockshape=(4, 4))
 
     assert eq(np.insert(x, 0, -1, axis=0), insert(a, 0, -1, axis=0))
-    assert eq(np.insert(x, 3, -1, axis=0), insert(a, 3, -1, axis=0))
+    assert eq(np.insert(x, 3, -1, axis=-1), insert(a, 3, -1, axis=-1))
     assert eq(np.insert(x, 5, -1, axis=1), insert(a, 5, -1, axis=1))
+    assert eq(np.insert(x, -1, -1, axis=-2), insert(a, -1, -1, axis=-2))
     assert eq(np.insert(x, [2, 3, 3], -1, axis=1),
                  insert(a, [2, 3, 3], -1, axis=1))
     assert eq(np.insert(x, [2, 3, 8, 8, -2, -2], -1, axis=0),
