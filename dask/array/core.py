@@ -1158,38 +1158,83 @@ def wrap_elemwise(func, **kwargs):
     return f
 
 
-arccos = wrap_elemwise(np.arccos)
-arcsin = wrap_elemwise(np.arcsin)
-arctan = wrap_elemwise(np.arctan)
-arctanh = wrap_elemwise(np.arctanh)
-arccosh = wrap_elemwise(np.arccosh)
-arcsinh = wrap_elemwise(np.arcsinh)
-arctan2 = wrap_elemwise(np.arctan2)
+# ufuncs, copied from this page:
+# http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
-ceil = wrap_elemwise(np.ceil)
-copysign = wrap_elemwise(np.copysign)
-cos = wrap_elemwise(np.cos)
-cosh = wrap_elemwise(np.cosh)
-degrees = wrap_elemwise(np.degrees)
+# math operations
+logaddexp = wrap_elemwise(np.logaddexp)
+logaddexp2 = wrap_elemwise(np.logaddexp2)
+conj = wrap_elemwise(np.conj)
 exp = wrap_elemwise(np.exp)
-expm1 = wrap_elemwise(np.expm1)
-fabs = wrap_elemwise(np.fabs)
-floor = wrap_elemwise(np.floor)
-fmod = wrap_elemwise(np.fmod)
-hypot = wrap_elemwise(np.hypot)
-isinf = wrap_elemwise(np.isinf, dtype='bool')
-isnan = wrap_elemwise(np.isnan, dtype='bool')
-ldexp = wrap_elemwise(np.ldexp)
 log = wrap_elemwise(np.log)
+log2 = wrap_elemwise(np.log2)
 log10 = wrap_elemwise(np.log10)
 log1p = wrap_elemwise(np.log1p)
-radians = wrap_elemwise(np.radians)
-sin = wrap_elemwise(np.sin)
-sinh = wrap_elemwise(np.sinh)
+expm1 = wrap_elemwise(np.expm1)
 sqrt = wrap_elemwise(np.sqrt)
+square = wrap_elemwise(np.square)
+
+# trigonometric functions
+sin = wrap_elemwise(np.sin)
+cos = wrap_elemwise(np.cos)
 tan = wrap_elemwise(np.tan)
+arcsin = wrap_elemwise(np.arcsin)
+arccos = wrap_elemwise(np.arccos)
+arctan = wrap_elemwise(np.arctan)
+arctan2 = wrap_elemwise(np.arctan2)
+hypot = wrap_elemwise(np.hypot)
+sinh = wrap_elemwise(np.sinh)
+cosh = wrap_elemwise(np.cosh)
 tanh = wrap_elemwise(np.tanh)
+arcsinh = wrap_elemwise(np.arcsinh)
+arccosh = wrap_elemwise(np.arccosh)
+arctanh = wrap_elemwise(np.arctanh)
+deg2rad = wrap_elemwise(np.deg2rad)
+rad2deg = wrap_elemwise(np.rad2deg)
+
+# comparison functions
+logical_and = wrap_elemwise(np.logical_and, dtype='bool')
+logical_or = wrap_elemwise(np.logical_or, dtype='bool')
+logical_xor = wrap_elemwise(np.logical_xor, dtype='bool')
+logical_not = wrap_elemwise(np.logical_not, dtype='bool')
+maximum = wrap_elemwise(np.maximum)
+minimum = wrap_elemwise(np.minimum)
+fmax = wrap_elemwise(np.fmax)
+fmin = wrap_elemwise(np.fmin)
+
+# floating functions
+isreal = wrap_elemwise(np.isreal, dtype='bool')
+iscomplex = wrap_elemwise(np.iscomplex, dtype='bool')
+isfinite = wrap_elemwise(np.isfinite, dtype='bool')
+isinf = wrap_elemwise(np.isinf, dtype='bool')
+isnan = wrap_elemwise(np.isnan, dtype='bool')
+signbit = wrap_elemwise(np.signbit, dtype='bool')
+copysign = wrap_elemwise(np.copysign)
+nextafter = wrap_elemwise(np.nextafter)
+# modf: see below
+ldexp = wrap_elemwise(np.ldexp)
+# frexp: see below
+fmod = wrap_elemwise(np.fmod)
+floor = wrap_elemwise(np.floor)
+ceil = wrap_elemwise(np.ceil)
 trunc = wrap_elemwise(np.trunc)
+
+# more math routines, from this page:
+# http://docs.scipy.org/doc/numpy/reference/routines.math.html
+degrees = wrap_elemwise(np.degrees)
+radians = wrap_elemwise(np.radians)
+
+rint = wrap_elemwise(np.rint)
+fix = wrap_elemwise(np.fix)
+
+angle = wrap_elemwise(np.angle)
+real = wrap_elemwise(np.real)
+imag = wrap_elemwise(np.imag)
+
+clip = wrap_elemwise(np.clip)
+fabs = wrap_elemwise(np.fabs)
+sign = wrap_elemwise(np.fabs)
+
 
 def frexp(x):
     tmp = elemwise(np.frexp, x)

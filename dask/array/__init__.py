@@ -4,10 +4,14 @@ from ..utils import ignoring
 from .core import (Array, stack, concatenate, take, tensordot, transpose,
         from_array, choose, where, coarsen, insert, broadcast_to, constant,
         fromfunction, compute, unique, store)
-from .core import (arccos, arcsin, arctan, arctanh, arccosh, arcsinh, arctan2,
-        ceil, copysign, cos, cosh, degrees, exp, expm1, fabs, floor, fmod,
-        frexp, hypot, isinf, isnan, ldexp, log, log10, log1p, modf, radians,
-        sin, sinh, sqrt, tan, tanh, trunc, around, isnull, notnull, isclose)
+from .core import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
+        expm1, sqrt, square, sin, cos, tan, arcsin, arccos, arctan, arctan2,
+        hypot, sinh, cosh, tanh, arcsinh, arccosh, arctanh, deg2rad, rad2deg,
+        logical_and, logical_or, logical_xor, logical_not, maximum, minimum,
+        fmax, fmin, isreal, iscomplex, isfinite, isinf, isnan, signbit,
+        copysign, nextafter, ldexp, fmod, floor, ceil, trunc, degrees, radians,
+        rint, fix, angle, real, imag, clip, fabs, sign, frexp, modf, around,
+        isnull, notnull, isclose)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          argmin, argmax,
                          nansum, nanmean, nanstd, nanvar, nanmin,
