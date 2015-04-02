@@ -273,6 +273,15 @@ def test_concatenate():
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
+def test_take():
+    x = np.arange(400).reshape((20, 20))
+    a = from_array(x, blockshape=(5, 5))
+
+    assert eq(np.take(x, 3, axis=0), take(a, 3, axis=0))
+    assert eq(np.take(x, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
+    assert raises(ValueError, lambda: take(a, 3, axis=2))
+
+
 def test_binops():
     a = Array(dict((('a', i), '') for i in range(3)),
               'a', blockdims=((10, 10, 10),))
