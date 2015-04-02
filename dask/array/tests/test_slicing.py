@@ -253,7 +253,7 @@ def test_take():
                 [(getitem, ('x', 0), ([1, 3, 5],)),
                  (getitem, ('x', 2), ([7],))]),
                0),
-             ((2, 0, 3, 1),))}
+             ([2, 0, 3, 1],))}
     assert result == expected
 
     result = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
@@ -263,7 +263,7 @@ def test_take():
                 [(getitem, ('x', 0, j), ([1, 3, 5], slice(None, None, None))),
                  (getitem, ('x', 2, j), ([7], slice(None, None, None)))]),
                 0),
-              ((2, 0, 3, 1), slice(None, None, None))))
+              ([2, 0, 3, 1], slice(None, None, None))))
             for j in range(2))
     assert result == expected
 
@@ -274,7 +274,7 @@ def test_take():
                 [(getitem, ('x', i, 0), (slice(None, None, None), [1, 3, 5])),
                  (getitem, ('x', i, 1), (slice(None, None, None), [17]))]),
                 1),
-             (slice(None, None, None), (2, 0, 3, 1))))
+             (slice(None, None, None), [2, 0, 3, 1])))
            for i in range(4))
 
     assert result == expected
@@ -295,7 +295,7 @@ def test_slice_lists():
                            ([0], slice(None, None, None))),
                            ]),
                         0),
-                       ((0, 1, 2), slice(None, None, None))))
+                       ([0, 1, 2], slice(None, None, None))))
                 for i in range(4))
 
     assert blockdims == ((3,), (3, 3, 3, 1))
@@ -343,3 +343,10 @@ def test_slice_stop_0():
     a = da.ones(10, blockshape=(10,))[:0].compute()
     b = np.ones(10)[:0]
     assert eq(a, b)
+
+
+def test_slice_list_then_None():
+    x = da.zeros(shape=(5, 5), blockshape=(3, 3))
+    y = x[[2, 1]][None]
+
+    assert eq(y, np.zeros((1, 2, 5)))
