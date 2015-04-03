@@ -84,7 +84,10 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     vals = list(vals)
     Ns = list(Ns)
 
-    qs, vals, Ns = zip(*[(q, val, N) for q, val, N in zip(qs, vals, Ns) if N])
+    L = list(zip(*[(q, val, N) for q, val, N in zip(qs, vals, Ns) if N]))
+    if not L:
+        raise ValueError("No non-trivial arrays found")
+    qs, vals, Ns = L
 
     # TODO: Perform this check above in percentile once dtype checking is easy
     #       Here we silently change meaning
