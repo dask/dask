@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from toolz import merge, join, reduceby, pipe, filter
 import numpy as np
 from dask.bag.core import Bag, lazify, lazify_task, fuse, map
-from into.utils import filetexts
+from dask.utils import filetexts
 
 from collections import Iterator
 
