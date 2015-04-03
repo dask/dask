@@ -551,6 +551,13 @@ class Array(object):
     def __len__(self):
         return sum(self.blockdims[0])
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
     @property
     @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].blockdims))
     def dtype(self):
