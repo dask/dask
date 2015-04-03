@@ -41,6 +41,21 @@ def istask(x):
     return isinstance(x, tuple) and x and callable(x[0])
 
 
+def preorder_traversal(task):
+    """A generator to preorder-traverse a task."""
+
+    for item in task:
+        if istask(item):
+            for i in preorder_traversal(item):
+                yield i
+        elif isinstance(item, list):
+            yield list
+            for i in preorder_traversal(item):
+                yield i
+        else:
+            yield item
+
+
 def _get_task(d, task, maxdepth=1000):
     # non-recursive.  DAG property is checked upon reaching maxdepth.
     _iter = lambda *args: iter(args)
@@ -382,4 +397,3 @@ def isdag(d, keys):
     getcycle
     """
     return not getcycle(d, keys)
-
