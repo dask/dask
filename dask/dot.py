@@ -42,19 +42,19 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
                        shape='circle',
                        label=name(func),
                        **function_attributes.get(k, dict()))
-            g.add_edge(k, func_node)
+            g.add_edge(func_node, k)
             for dep in sorted(get_dependencies(d, k)):
                 arg2 = make_hashable(dep)
                 g.add_node(arg2,
                            label=str(dep),
                            shape='box',
                            **data_attributes.get(dep, dict()))
-                g.add_edge(func_node, arg2)
+                g.add_edge(arg2, func_node)
         else:
             if v not in d:
                 g.add_node(k, label='%s=%s' % (k, v), **data_attributes.get(k, dict()))
             else:  # alias situation
-                g.add_edge(k, v)
+                g.add_edge(v, k)
 
     return g
 
@@ -62,6 +62,7 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
 def write_networkx_to_dot(dg, filename='mydask'):
     import os
     p = nx.to_pydot(dg)
+    p.set_rankdir('BT')
     with open(filename + '.dot', 'w') as f:
         f.write(p.to_string())
 

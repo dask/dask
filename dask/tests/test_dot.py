@@ -41,4 +41,4 @@ def test_dot_graph():
 
 def test_aliases():
     g = to_networkx({'x': 1, 'y': 'x'})
-    assert 'x' in g.edge['y']
+    assert 'y' in g.edge['x']
