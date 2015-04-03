@@ -31,16 +31,16 @@ def getem(arr, blockdims=None, blockshape=None, shape=None):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', blockshape=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (np.asarray, (getitem, 'X', (slice(0, 2), slice(0, 3)))),
+     ('X', 1, 0): (np.asarray, (getitem, 'X', (slice(2, 4), slice(0, 3)))),
+     ('X', 1, 1): (np.asarray, (getitem, 'X', (slice(2, 4), slice(3, 6)))),
+     ('X', 0, 1): (np.asarray, (getitem, 'X', (slice(0, 2), slice(3, 6))))}
 
     >>> getem('X', blockdims=((2, 2), (3, 3)))  # doctest: +SKIP
-    {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (np.asarray, (getitem, 'X', (slice(0, 2), slice(0, 3)))),
+     ('X', 1, 0): (np.asarray, (getitem, 'X', (slice(2, 4), slice(0, 3)))),
+     ('X', 1, 1): (np.asarray, (getitem, 'X', (slice(2, 4), slice(3, 6)))),
+     ('X', 0, 1): (np.asarray, (getitem, 'X', (slice(0, 2), slice(3, 6))))}
     """
     if not blockdims:
         blockdims = blockdims_from_blockshape(shape, blockshape)
@@ -51,8 +51,8 @@ def getem(arr, blockdims=None, blockshape=None, shape=None):
     shapes = product(*blockdims)
     starts = product(*cumdims)
 
-    values = ((getitem, arr) + (tuple(slice(s, s+dim)
-                                 for s, dim in zip(start, shape)),)
+    values = ((np.asarray, (getitem, arr) + (tuple(slice(s, s+dim)
+                                 for s, dim in zip(start, shape)),))
                 for start, shape in zip(starts, shapes))
 
     return dict(zip(keys, values))

@@ -13,10 +13,10 @@ inc = lambda x: x + 1
 
 def test_getem():
     assert getem('X', blockshape=(2, 3), shape=(4, 6)) == \
-    {('X', 0, 0): (getitem, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getitem, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getitem, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getitem, 'X', (slice(0, 2), slice(3, 6)))}
+    {('X', 0, 0): (np.asarray, (getitem, 'X', (slice(0, 2), slice(0, 3)))),
+     ('X', 1, 0): (np.asarray, (getitem, 'X', (slice(2, 4), slice(0, 3)))),
+     ('X', 1, 1): (np.asarray, (getitem, 'X', (slice(2, 4), slice(3, 6)))),
+     ('X', 0, 1): (np.asarray, (getitem, 'X', (slice(0, 2), slice(3, 6))))}
 
 
 def test_top():
@@ -832,3 +832,31 @@ def test_optimize():
     result = optimize(expr.dask, expr._keys())
     assert isinstance(result, dict)
     assert all(key in result for key in expr._keys())
+
+
+def test_slicing_with_non_ndarrays():
+    class ARangeSlice(object):
+        def __init__(self, start, stop):
+            self.start = start
+            self.stop = stop
+
+        def __array__(self):
+            return np.arange(self.start, self.stop)
+
+    class ARangeSlicable(object):
+        dtype = 'i8'
+
+        def __init__(self, n):
+            self.n = n
+
+        @property
+        def shape(self):
+            return (self.n,)
+
+        def __getitem__(self, key):
+            return ARangeSlice(key[0].start, key[0].stop)
+
+
+    x = da.from_array(ARangeSlicable(10), blockshape=(4,))
+
+    assert eq((x + 1).sum(), (np.arange(10) + 1).sum())
