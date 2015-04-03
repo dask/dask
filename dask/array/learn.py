@@ -69,11 +69,11 @@ def fit(model, x, y, get=threaded.get, **kwargs):
 
     name = next(names)
     dsk = {(name, -1): model}
-    dsk.update({(name, i): (_partial_fit, (name, i - 1),
+    dsk.update(dict(((name, i), (_partial_fit, (name, i - 1),
                                           (x.name, i, 0),
                                           (y.name, i),
-                                          kwargs)
-                    for i in range(nblocks)})
+                                          kwargs))
+                    for i in range(nblocks)))
 
     return get(merge(x.dask, y.dask, dsk), (name, nblocks - 1))
 
