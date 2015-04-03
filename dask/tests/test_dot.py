@@ -38,3 +38,7 @@ def test_dot_graph():
         for f in fns:
             if os.path.exists(f):
                 os.remove(f)
+
+def test_aliases():
+    g = to_networkx({'x': 1, 'y': 'x'})
+    assert 'x' in g.edge['y']

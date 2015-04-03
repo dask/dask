@@ -51,7 +51,10 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
                            **data_attributes.get(dep, dict()))
                 g.add_edge(func_node, arg2)
         else:
-            g.add_node(k, label='%s=%s' % (k, v), **data_attributes.get(k, dict()))
+            if v not in d:
+                g.add_node(k, label='%s=%s' % (k, v), **data_attributes.get(k, dict()))
+            else:  # alias situation
+                g.add_edge(k, v)
 
     return g
 
