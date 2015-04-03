@@ -39,7 +39,8 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     >>> from sklearn.linear_model import SGDClassifier
     >>> sgd = SGDClassifier()
 
-    >>> da.learn.fit(sgd, X, y, classes=[1, 0])
+    >>> sgd = da.learn.fit(sgd, X, y, classes=[1, 0])
+    >>> sgd  # doctest: +SKIP
     SGDClassifier(alpha=0.0001, class_weight=None, epsilon=0.1, eta0=0.0,
            fit_intercept=True, l1_ratio=0.15, learning_rate='optimal',
            loss='hinge', n_iter=5, n_jobs=1, penalty='l2', power_t=0.5,
