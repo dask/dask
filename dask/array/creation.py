@@ -122,22 +122,23 @@ def arange(*args, **kwargs):
 
     dtype = kwargs.get('dtype', None)
 
-    num = abs((stop - start) / step)
-    if (num % step) != 0:
+    range_ = stop - start
+    num = int(abs(range_ // step))
+    if (range_ % step) != 0:
         num += 1
 
     # compute blocksizes
     blocksizes = _get_blocksizes(num, blocksize)
 
-    blockstart = start
-
     name = next(arange_names)
     dsk = {}
+    elem_count = 0
 
     for i, bs in enumerate(blocksizes):
-        blockstop = blockstart + (bs * step)
+        blockstart = start + (elem_count * step)
+        blockstop = start + ((elem_count + bs) * step)
         task = (np.arange, blockstart, blockstop, step, dtype)
-        blockstart = blockstop
         dsk[(name, i)] = task
+        elem_count += bs
 
     return Array(dsk, name, blockdims=(blocksizes,), dtype=dtype)
