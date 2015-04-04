@@ -4,6 +4,7 @@ from dask.array import Array
 from dask.array.slicing import slice_array, _slice_1d, take
 from operator import getitem
 import numpy as np
+from toolz import merge
 
 
 def eq(a, b):
@@ -251,7 +252,7 @@ def test_slicing_with_newaxis():
 
 
 def test_take():
-    result = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     expected = {('y', 0):
             (getitem,
               (np.concatenate, (list,
@@ -259,9 +260,10 @@ def test_take():
                  (getitem, ('x', 2), ([7],))]),
                0),
              ([2, 0, 3, 1],))}
-    assert result == expected
+    assert dsk == expected
+    assert blockdims == ((4,),)
 
-    result = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
     expected = dict((('y', 0, j),
             (getitem,
               (np.concatenate, (list,
@@ -270,9 +272,11 @@ def test_take():
                 0),
               ([2, 0, 3, 1], slice(None, None, None))))
             for j in range(2))
-    assert result == expected
+    assert dsk == expected
+    assert blockdims == ((4,), (20, 20))
 
-    result = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
+
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
     expected = dict((('y', i, 0),
             (getitem,
               (np.concatenate, (list,
@@ -281,13 +285,32 @@ def test_take():
                 1),
              (slice(None, None, None), [2, 0, 3, 1])))
            for i in range(4))
+    assert dsk == expected
+    assert blockdims == ((20, 20, 20, 20), (4,))
 
-    assert result == expected
+
+def test_take_sorted():
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    expected = {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
+                ('y', 1): (getitem, ('x', 2), ([7],))}
+    assert dsk == expected
+    assert blockdims == ((3, 1),)
+
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], axis=1)
+    expected = merge(
+            dict((('y', i, 0),
+                  (getitem, ('x', i, 0), (slice(None, None, None), [1, 3, 5])))
+                  for i in range(4)),
+            dict((('y', i, 1),
+                  (getitem, ('x', i, 1), (slice(None, None, None), [17])))
+                  for i in range(4)))
+    assert dsk == expected
+    assert blockdims == ((20, 20, 20, 20), (3, 1))
 
 
 def test_slice_lists():
     y, blockdims = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
-                                ([1, 2, 9], slice(None, None, None)))
+                                ([2, 1, 9], slice(None, None, None)))
     assert y == \
         dict((('y', 0, i), (getitem,
                        (np.concatenate,
@@ -300,7 +323,7 @@ def test_slice_lists():
                            ([0], slice(None, None, None))),
                            ]),
                         0),
-                       ([0, 1, 2], slice(None, None, None))))
+                       ([1, 0, 2], slice(None, None, None))))
                 for i in range(4))
 
     assert blockdims == ((3,), (3, 3, 3, 1))

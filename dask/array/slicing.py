@@ -178,9 +178,8 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     if all(isinstance(i, list) or i == slice(None, None, None)
             for i in index2):
         axis = where_list[0]
-        dsk3 = take(out_name, in_name, blockdims, index2[where_list[0]],
-                    axis=axis)
-        blockdims2 = blockdims
+        blockdims2, dsk3 = take(out_name, in_name, blockdims,
+                                index2[where_list[0]], axis=axis)
     # Mixed case. Both slices/integers and lists. slice/integer then take
     else:
         # Do first pass without lists
@@ -193,15 +192,11 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
                            if i < axis and isinstance(ind, (int, long)))
 
         # Do work
-        dsk2 = take(out_name, tmp, blockdims2, index2[axis], axis=axis2)
+        blockdims2, dsk2 = take(out_name, tmp, blockdims2, index2[axis],
+                                axis=axis2)
         dsk3 = merge(dsk, dsk2)
 
-    # Replace blockdims of list entries with single block
-    index4 = [ind for ind in index2 if not isinstance(ind, (int, long))]
-    blockdims3 = tuple([bd if not isinstance(i, list) else (len(i),)
-                        for i, bd in zip(index4, blockdims2)])
-
-    return dsk3, blockdims3
+    return dsk3, blockdims2
 
 
 def slice_slices_and_integers(out_name, in_name, blockdims, index):
@@ -383,6 +378,70 @@ def partition_by_size(sizes, seq):
     return result
 
 
+def issorted(seq):
+    """ Is sequence sorted?
+
+    >>> issorted([1, 2, 3])
+    True
+    >>> issorted([3, 1, 2])
+    False
+    """
+    if not seq:
+        return True
+    x = seq[0]
+    for elem in seq[1:]:
+        if elem < x:
+            return False
+        x = elem
+    return True
+
+
+colon = slice(None, None, None)
+
+
+def take_sorted(outname, inname, blockdims, index, axis=0):
+    """ Index array with sorted list index
+
+    Forms a dask for the following case
+
+        x[:, [1, 3, 5, 10], ...]
+
+    where the index, ``[1, 3, 5, 10]`` is sorted in non-decreasing order.
+
+    >>> take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)  # doctest: +SKIP
+    {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
+     ('y', 1): (getitem, ('x', 2), ([7],))}
+
+    See also:
+        take - calls this function
+    """
+    n = len(blockdims)
+    sizes = blockdims[axis]  # the blocksizes on the axis that we care about
+
+    index_lists = partition_by_size(sizes, sorted(index))
+    where_index = [i for i, il in enumerate(index_lists) if il]
+    index_lists = [il for il in index_lists if il]
+
+    dims = [range(len(bd)) for bd in blockdims]
+
+    indims = list(dims)
+    indims[axis] = list(range(len(where_index)))
+    keys = list(product([outname], *indims))
+
+    outdims = list(dims)
+    outdims[axis] = where_index
+    slices = [[colon]*len(bd) for bd in blockdims]
+    slices[axis] = index_lists
+    slices = list(product(*slices))
+    inkeys = list(product([inname], *outdims))
+    values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
+
+    blockdims2 = list(blockdims)
+    blockdims2[axis] = tuple(map(len, index_lists))
+
+    return tuple(blockdims2), dict(zip(keys, values))
+
+
 def take(outname, inname, blockdims, index, axis=0):
     """ Index array with an iterable of index
 
@@ -395,7 +454,16 @@ def take(outname, inname, blockdims, index, axis=0):
                                            (getitem, ('x', 2), ([7],))],
                                           0),
                          (2, 0, 4, 1))}
+
+    When list is sorted we retain original block structure
+
+    >>> take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)  # doctest: +SKIP
+    {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
+     ('y', 2): (getitem, ('x', 2), ([7],))}
     """
+    if issorted(index):
+        return take_sorted(outname, inname, blockdims, index, axis)
+
     n = len(blockdims)
     sizes = blockdims[axis]  # the blocksizes on the axis that we care about
 
@@ -404,8 +472,6 @@ def take(outname, inname, blockdims, index, axis=0):
     dims = [[0] if axis == i else list(range(len(bd)))
                 for i, bd in enumerate(blockdims)]
     keys = list(product([outname], *dims))
-
-    colon = slice(None, None, None)
 
     rev_index = list(map(sorted(index).index, index))
     vals = [(getitem, (np.concatenate,
@@ -417,7 +483,10 @@ def take(outname, inname, blockdims, index, axis=0):
                      ((colon,)*axis + (rev_index,) + (colon,)*(n-axis-1)))
             for d in product(*dims)]
 
-    return dict(zip(keys, vals))
+    blockdims2 = list(blockdims)
+    blockdims2[axis] = (len(index),)
+
+    return tuple(blockdims2), dict(zip(keys, vals))
 
 
 def posify_index(shape, ind):
