@@ -148,3 +148,13 @@ def test_reblock_blockshape():
 def test_dtype():
     x = da.ones(5, blockshape=(2,))
     assert x.reblock(blockshape=(1,))._dtype == x._dtype
+
+
+def test_reblock_with_dict():
+    x = da.ones((24, 24), blockshape=(4, 8))
+    y = x.reblock(blockshape={0: 12})
+    assert y.blockdims == ((12, 12), (8, 8, 8))
+
+    x = da.ones((24, 24), blockshape=(4, 8))
+    y = x.reblock(blockdims={0: (12, 12)})
+    assert y.blockdims == ((12, 12), (8, 8, 8))
