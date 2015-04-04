@@ -1438,29 +1438,21 @@ def broadcast_to(x, shape):
     return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=x.dtype)
 
 
-constant_names = ('constant-%d' % i for i in count(1))
-
-
-def constant(value, shape=None, blockshape=None, blockdims=None, dtype=None):
-    """ An array with a constant value
-
-    >>> x = constant(5, shape=(4, 4), blockshape=(2, 2))
-    >>> np.array(x)
-    array([[5, 5, 5, 5],
-           [5, 5, 5, 5],
-           [5, 5, 5, 5],
-           [5, 5, 5, 5]])
-    """
-    name = next(constant_names)
+@wraps(np.full)
+def full(shape, value, blockshape=None, blockdims=None, dtype=None):
+    name = next(names)
     if shape and blockshape and not blockdims:
         blockdims = blockdims_from_blockshape(shape, blockshape)
 
+    if dtype is None:
+        dtype = np.full((1,), value).dtype
+
     keys = product([name], *[range(len(bd)) for bd in blockdims])
     shapes = product(*blockdims)
-    vals = [(chunk.constant, value, shape) for shape in shapes]
+    vals = [(np.full, shape, value, dtype) for shape in shapes]
     dsk = dict(zip(keys, vals))
 
-    return Array(dsk, name, blockdims=blockdims)
+    return Array(dsk, name, blockdims=blockdims, dtype=dtype)
 
 
 def offset_func(func, offset, *args):

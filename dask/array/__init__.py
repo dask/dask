@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from ..utils import ignoring
 from .core import (Array, stack, concatenate, take, tensordot, transpose,
-        from_array, choose, where, coarsen, insert, broadcast_to, constant,
+        from_array, choose, where, coarsen, insert, broadcast_to, full,
         fromfunction, compute, unique, store)
 from .core import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
         expm1, sqrt, square, sin, cos, tan, arcsin, arccos, arctan, arctan2,

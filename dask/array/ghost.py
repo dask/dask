@@ -185,14 +185,12 @@ def reflect(x, axis, depth):
 
 
 def constant(x, axis, depth, value):
-    """ Copy a slice of an array around to its other side
-
-    Useful to create periodic boundary conditions for ghost
-    """
+    """ Add constant slice to either side of array """
     blockdims = list(x.blockdims)
     blockdims[axis] = (depth,)
 
-    c = core.constant(value, blockdims=tuple(blockdims))
+    c = core.full(tuple(map(sum, blockdims)), value,
+                  blockdims=tuple(blockdims), dtype=x._dtype)
 
     return concatenate([c, x, c], axis=axis)
 
