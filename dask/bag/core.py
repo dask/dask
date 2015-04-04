@@ -167,6 +167,18 @@ class Bag(object):
         dsk2 = {(b, 0): (list, (topk, k, (concat, list(dsk.keys()))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
+    def distinct(self):
+        """ Distinct elements of collection
+
+        Unordered without repeats.
+        """
+        a = next(names)
+        dsk = dict(((a, i), (set, key)) for i, key in enumerate(self._keys()))
+        b = next(names)
+        dsk2 = {(b, 0): (apply, set.union, (list, list(dsk.keys())))}
+
+        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+
     def _reduction(self, perpartition, aggregate):
         a = next(names)
         b = next(names)

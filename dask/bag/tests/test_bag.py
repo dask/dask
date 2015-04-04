@@ -76,6 +76,10 @@ def test_fold_computation():
     assert int(b.fold(add)) == sum(L)
 
 
+def test_distinct():
+    assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
+
+
 def test_frequencies():
     assert dict(list(b.frequencies())) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
 
