@@ -91,6 +91,13 @@ class _Frame(object):
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
     @property
     def index(self):
         name = self._name + '-index'
@@ -985,15 +992,20 @@ rewrite_rules = RuleSet(
                     (a, b, c, d, e)))
 
 
-def get(dsk, keys, get=get_sync, **kwargs):
-    """ Get function with optimizations specialized to dask.Dataframe """
+def optimize(dsk, keys, **kwargs):
     if isinstance(keys, list):
         dsk2 = cull(dsk, list(core.flatten(keys)))
     else:
         dsk2 = cull(dsk, [keys])
     dsk3 = fuse(dsk2)
     dsk4 = valmap(rewrite_rules.rewrite, dsk3)
-    return get(dsk4, keys, **kwargs)  # use synchronous scheduler for now
+    return dsk4
+
+
+def get(dsk, keys, get=get_sync, **kwargs):
+    """ Get function with optimizations specialized to dask.Dataframe """
+    dsk2 = optimize(dsk, keys, **kwargs)
+    return get(dsk2, keys, **kwargs)  # use synchronous scheduler for now
 
 
 from .shuffle import set_index, set_partition
