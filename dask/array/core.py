@@ -1438,23 +1438,6 @@ def broadcast_to(x, shape):
     return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=x.dtype)
 
 
-@wraps(np.full)
-def full(shape, value, blockshape=None, blockdims=None, dtype=None):
-    name = next(names)
-    if shape and blockshape and not blockdims:
-        blockdims = blockdims_from_blockshape(shape, blockshape)
-
-    if dtype is None:
-        dtype = np.full((1,), value).dtype
-
-    keys = product([name], *[range(len(bd)) for bd in blockdims])
-    shapes = product(*blockdims)
-    vals = [(np.full, shape, value, dtype) for shape in shapes]
-    dsk = dict(zip(keys, vals))
-
-    return Array(dsk, name, blockdims=blockdims, dtype=dtype)
-
-
 def offset_func(func, offset, *args):
     """  Offsets inputs by offset
 

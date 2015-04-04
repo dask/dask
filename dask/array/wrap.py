@@ -87,6 +87,9 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     if not blockdims and blockshape:
         blockdims = blockdims_from_blockshape(shape, blockshape)
 
+    if dtype is None:
+        dtype = func(shape, *args, **kwargs).dtype
+
     name = name or next(names)
 
     keys = product([name], *[range(len(bd)) for bd in blockdims])
@@ -120,3 +123,4 @@ w = wrap(wrap_func_shape_as_first_arg)
 ones = w(np.ones, dtype='f8')
 zeros = w(np.zeros, dtype='f8')
 empty = w(np.empty, dtype='f8')
+full = w(np.full)
