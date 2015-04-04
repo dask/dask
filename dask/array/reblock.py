@@ -159,7 +159,7 @@ def blockdims_dict_to_tuple(old, new):
 def blockshape_dict_to_tuple(old_blockdims, d):
     """
 
-    >>> blockshape_dict_to_tuple((4, 4), (5, 5)), {1: 3})
+    >>> blockshape_dict_to_tuple(((4, 4), (5, 5)), {1: 3})
     ((4, 4), (3, 3, 3, 1))
     """
     shape = tuple(map(sum, old_blockdims))
