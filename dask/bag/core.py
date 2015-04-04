@@ -301,6 +301,21 @@ class Bag(object):
             results = iter(results)
         return results
 
+    def concat(self):
+        """ Concatenate nested lists into one long list
+
+        >>> b = from_sequence([[1], [2, 3]])
+        >>> list(b)
+        [[1], [2, 3]]
+
+        >>> list(b.concat())
+        [1, 2, 3]
+        """
+        name = next(names)
+        dsk = dict(((name, i), (list, (concat, (self.name, i))))
+                        for i in range(self.npartitions))
+        return Bag(merge(self.dask, dsk), name, self.npartitions)
+
     __iter__ = compute
 
 

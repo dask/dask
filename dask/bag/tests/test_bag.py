@@ -194,3 +194,8 @@ def test_product():
     y = db.from_sequence([10, 20, 30])
     z = x.product(y)
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
+
+
+def test_concat():
+    b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
+    assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])
