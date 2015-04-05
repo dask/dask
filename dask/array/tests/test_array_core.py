@@ -604,6 +604,8 @@ def test_store():
     assert (bt == 3).all()
 
     assert raises(ValueError, lambda: store([a], [at, bt]))
+    assert raises(ValueError, lambda: store(at, at))
+    assert raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
 def test_np_array_with_zero_dimensions():
