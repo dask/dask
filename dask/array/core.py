@@ -477,25 +477,21 @@ def store(sources, targets, **kwargs):
 
     >>> store([x, y, z], [dset1, dset2, dset3])  # doctest: +SKIP
     """
-    single_output = True
-    if not isinstance(sources, (list, tuple)):
+    if isinstance(sources, Array):
         sources = [sources]
-    if not isinstance(targets, (list, tuple)):
         targets = [targets]
-        single_output = False
+
+    if any(not isinstance(s, Array) for s in sources):
+        raise ValueError("All sources must be dask array objects")
 
     if len(sources) != len(targets):
         raise ValueError("Different number of sources [%d] and targets [%d]"
-                        % (len(sources), len(targets)))
+                         % (len(sources), len(targets)))
 
     updates = [insert_to_ooc(tgt, src) for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
     get(dsk, keys, **kwargs)
-
-    if single_output:
-        targets = targets[0]
-    return targets
 
 
 def blockdims_from_blockshape(shape, blockshape):
