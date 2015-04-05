@@ -420,6 +420,10 @@ def map_blocks(x, func, blockshape=None, blockdims=None, dtype=None):
 def compute(*args, **kwargs):
     """ Evaluate several dask arrays at once
 
+    The result of this function is always a tuple of numpy arrays. To evaluate
+    a single dask array into a numpy array, use ``myarray.compute()`` or simply
+    ``np.array(myarray)``.
+
     Example
     -------
 
@@ -429,17 +433,13 @@ def compute(*args, **kwargs):
     >>> b = d + 2
     >>> A, B = da.compute(a, b)  # Compute both simultaneously
     """
-
     dsk = merge(*[arg.dask for arg in args])
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    results2 = [rec_concatenate(x) if arg.shape else unpack_singleton(x)
-                for x, arg in zip(results, args)]
-    if len(results2) == 1:
-        return results2[0]
-    else:
-        return results2
+    results2 = tuple(rec_concatenate(x) if arg.shape else unpack_singleton(x)
+                     for x, arg in zip(results, args))
+    return results2
 
 
 def store(sources, targets, **kwargs):
@@ -604,7 +604,8 @@ class Array(object):
 
     @wraps(compute)
     def compute(self, **kwargs):
-        return compute(self, **kwargs)
+        result, = compute(self, **kwargs)
+        return result
 
     def __int__(self):
         return int(self.compute())
