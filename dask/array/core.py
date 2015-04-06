@@ -34,9 +34,10 @@ def getarray(a, b):
     array([1, 2, 3])
     """
     c = a[b]
-    if not isinstance(c, np.ndarray):
+    if type(c) != np.ndarray:
         c = np.asarray(c)
     return c
+
 
 from .optimization import optimize
 

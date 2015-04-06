@@ -37,7 +37,7 @@ def is_full_slice(task):
     False
     """
     return (isinstance(task, tuple) and
-            (task[0] == getitem or task[0] == getarray) and
+            (task[0] in (getitem, getarray) and
             (task[2] == slice(None, None, None) or
              isinstance(task[2], tuple) and
              all(ind == slice(None, None, None) for ind in task[2])))
@@ -86,6 +86,9 @@ def fuse_slice_dict(match):
 
 rewrite_rules = RuleSet(
         RewriteRule((getitem, (getitem, x, a), b),
+                    fuse_slice_dict,
+                    (a, b, x)),
+        RewriteRule((getarray, (getitem, x, a), b),
                     fuse_slice_dict,
                     (a, b, x)),
         RewriteRule((getarray, (getarray, x, a), b),

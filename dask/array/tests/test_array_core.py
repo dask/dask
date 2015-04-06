@@ -860,3 +860,7 @@ def test_slicing_with_non_ndarrays():
     x = da.from_array(ARangeSlicable(10), blockshape=(4,))
 
     assert eq((x + 1).sum(), (np.arange(10) + 1).sum())
+
+
+def test_getarray():
+    assert type(getarray(np.matrix([[1]]), 0)) == np.ndarray
