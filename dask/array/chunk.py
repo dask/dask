@@ -131,17 +131,6 @@ def coarsen(reduction, x, axes):
     return reduction(x.reshape(newshape), axis=tuple(range(1, x.ndim*2, 2)))
 
 
-def constant(value, shape):
-    """ Make a new array with a constant value
-
-    >>> constant(5, (4,))
-    array([5, 5, 5, 5])
-    """
-    x = np.empty(shape=shape, dtype=np.array(value).dtype)
-    x.fill(value)
-    return x
-
-
 def trim(x, axes=None):
     """ Trim boundaries off of array
 
