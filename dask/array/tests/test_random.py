@@ -1,7 +1,6 @@
 import numpy as np
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
-from dask.array.into import into
 
 
 def test_random():
@@ -11,7 +10,7 @@ def test_random():
     assert a.shape == (10, 10)
     assert a.blockdims == ((5, 5), (5, 5))
 
-    x = set(into(np.ndarray, a).flat)
+    x = set(np.array(a).flat)
 
     assert len(x) > 90
 
@@ -23,7 +22,7 @@ def test_parametrized_random_function():
     assert a.shape == (10, 10)
     assert a.blockdims == ((5, 5), (5, 5))
 
-    x = into(np.ndarray, a)
+    x = np.array(a)
     assert 10 < x.mean() < 100000
 
     y = set(x.flat)
@@ -33,7 +32,7 @@ def test_parametrized_random_function():
 def test_kwargs():
     a = normal(loc=10.0, scale=0.1, size=(10, 10), blockshape=(5, 5))
     assert isinstance(a, Array)
-    x = into(np.ndarray, a)
+    x = np.array(a)
     assert 8 < x.mean() < 12
 
 
