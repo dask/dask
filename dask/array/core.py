@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import add, getitem
+import operator
 import inspect
 from collections import Iterable
 from bisect import bisect
@@ -18,7 +19,6 @@ from .slicing import slice_array, insert_many
 from ..utils import deepmap, ignoring
 from ..async import inline_functions
 from ..optimize import cull, inline
-from .optimization import optimize
 from ..compatibility import unicode
 from .. import threaded, core
 from ..context import _globals
@@ -27,20 +27,33 @@ from ..context import _globals
 names = ('x_%d' % i for i in count(1))
 
 
+def getarray(a, b):
+    """ Mimics getitem but includes call to np.asarray
+
+    >>> getarray([1, 2, 3, 4, 5], slice(1, 4))
+    array([1, 2, 3])
+    """
+    c = a[b]
+    if not isinstance(c, np.ndarray):
+        c = np.asarray(c)
+    return c
+
+from .optimization import optimize
+
 def getem(arr, blockdims=None, blockshape=None, shape=None):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', blockshape=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (np.asarray, (getitem, 'X', (slice(0, 2), slice(0, 3)))),
-     ('X', 1, 0): (np.asarray, (getitem, 'X', (slice(2, 4), slice(0, 3)))),
-     ('X', 1, 1): (np.asarray, (getitem, 'X', (slice(2, 4), slice(3, 6)))),
-     ('X', 0, 1): (np.asarray, (getitem, 'X', (slice(0, 2), slice(3, 6))))}
+    {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
 
     >>> getem('X', blockdims=((2, 2), (3, 3)))  # doctest: +SKIP
-    {('X', 0, 0): (np.asarray, (getitem, 'X', (slice(0, 2), slice(0, 3)))),
-     ('X', 1, 0): (np.asarray, (getitem, 'X', (slice(2, 4), slice(0, 3)))),
-     ('X', 1, 1): (np.asarray, (getitem, 'X', (slice(2, 4), slice(3, 6)))),
-     ('X', 0, 1): (np.asarray, (getitem, 'X', (slice(0, 2), slice(3, 6))))}
+    {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
     """
     if not blockdims:
         blockdims = blockdims_from_blockshape(shape, blockshape)
@@ -51,8 +64,8 @@ def getem(arr, blockdims=None, blockshape=None, shape=None):
     shapes = product(*blockdims)
     starts = product(*cumdims)
 
-    values = ((np.asarray, (getitem, arr) + (tuple(slice(s, s+dim)
-                                 for s, dim in zip(start, shape)),))
+    values = ((getarray, arr) + (tuple(slice(s, s+dim)
+                                 for s, dim in zip(start, shape)),)
                 for start, shape in zip(starts, shapes))
 
     return dict(zip(keys, values))
@@ -627,7 +640,7 @@ class Array(object):
                 dt = np.dtype([(name, self._dtype[name]) for name in index])
             else:
                 dt = None
-            return elemwise(getitem, self, index, dtype=dt)
+            return elemwise(getarray, self, index, dtype=dt)
 
         # Slicing
         out = next(names)
@@ -916,7 +929,7 @@ def stack(seq, axis=0):
     names = [a.name for a in seq]
     inputs = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
                 for key in keys]
-    values = [(getitem, inp, (slice(None, None, None),) * axis
+    values = [(getarray, inp, (slice(None, None, None),) * axis
                            + (None,)
                            + (slice(None, None, None),) * (ndim - axis))
                 for inp in inputs]

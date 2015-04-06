@@ -2,6 +2,7 @@ from ..optimize import cull, fuse
 from ..core import flatten
 from ..async import inline_functions
 from ..optimize import dealias
+from .core import getarray
 from operator import getitem
 from dask.rewrite import RuleSet, RewriteRule
 from toolz import valmap
@@ -16,7 +17,7 @@ def optimize(dsk, keys, **kwargs):
     3.  Inline fast functions like getitem and np.transpose
     """
     fast_functions=kwargs.get('fast_functions',
-                             set([getitem, np.transpose]))
+                             set([getarray, getitem, np.transpose]))
     dsk2 = cull(dsk, list(flatten(keys)))
     dsk3 = remove_full_slices(dsk2)
     dsk4 = fuse(dsk3)
@@ -36,7 +37,7 @@ def is_full_slice(task):
     False
     """
     return (isinstance(task, tuple) and
-            task[0] == getitem and
+            (task[0] == getitem or task[0] == getarray) and
             (task[2] == slice(None, None, None) or
              isinstance(task[2], tuple) and
              all(ind == slice(None, None, None) for ind in task[2])))
@@ -75,18 +76,24 @@ a, b, x = '~a', '~b', '~x'
 def fuse_slice_dict(match):
     # Making new dimensions?  Need two getitems
     # TODO: well, we could still optimize the non-None axes
-
     try:
         c = fuse_slice(match[a], match[b])
-        return (getitem, match[x], c)
+        return (getarray, match[x], c)
     except NotImplementedError:
-        return (getitem, (getitem, match[x], match[a]),
+        return (getitem, (getarray, match[x], match[a]),
                          match[b])
 
 
-rewrite_rules = RuleSet(RewriteRule((getitem, (getitem, x, a), b),
-                                    fuse_slice_dict,
-                                    (a, b, x)))
+rewrite_rules = RuleSet(
+        RewriteRule((getitem, (getitem, x, a), b),
+                    fuse_slice_dict,
+                    (a, b, x)),
+        RewriteRule((getarray, (getarray, x, a), b),
+                    fuse_slice_dict,
+                    (a, b, x)),
+        RewriteRule((getitem, (getarray, x, a), b),
+                    fuse_slice_dict,
+                    (a, b, x)))
 
 
 def normalize_slice(s):
