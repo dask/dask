@@ -1,7 +1,7 @@
 from operator import getitem
 from ..core import flatten
 from .core import Array, rec_concatenate, map_blocks, concatenate
-from . import chunk, core
+from . import chunk, core, wrap
 import numpy as np
 from collections import Iterator, Iterable
 from toolz import merge, pipe, concat, partition, partial
@@ -189,7 +189,7 @@ def constant(x, axis, depth, value):
     blockdims = list(x.blockdims)
     blockdims[axis] = (depth,)
 
-    c = core.full(tuple(map(sum, blockdims)), value,
+    c = wrap.full(tuple(map(sum, blockdims)), value,
                   blockdims=tuple(blockdims), dtype=x._dtype)
 
     return concatenate([c, x, c], axis=axis)
