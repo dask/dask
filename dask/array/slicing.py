@@ -408,7 +408,10 @@ def take_sorted(outname, inname, blockdims, index, axis=0):
 
     where the index, ``[1, 3, 5, 10]`` is sorted in non-decreasing order.
 
-    >>> take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)  # doctest: +SKIP
+    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    >>> blockdims
+    ((3, 1),)
+    >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
      ('y', 1): (getitem, ('x', 2), ([7],))}
 
@@ -449,7 +452,10 @@ def take(outname, inname, blockdims, index, axis=0):
 
     Mimics ``np.take``
 
-    >>> take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)  # doctest: +SKIP
+    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    >>> blockdims
+    ((4,),)
+    >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, (np.concatenate, [(getitem, ('x', 0), ([1, 3, 5],)),
                                            (getitem, ('x', 2), ([7],))],
                                           0),
@@ -457,7 +463,10 @@ def take(outname, inname, blockdims, index, axis=0):
 
     When list is sorted we retain original block structure
 
-    >>> take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)  # doctest: +SKIP
+    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    >>> blockdims
+    ((3, 1),)
+    >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
      ('y', 2): (getitem, ('x', 2), ([7],))}
     """
