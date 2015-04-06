@@ -2,6 +2,11 @@ from dask.threaded import get
 from dask.async import inc
 from dask.utils import raises
 from operator import add
+from dask.context import set_options
+from multiprocessing.pool import ThreadPool
+
+
+inc = lambda x: x + 1
 
 
 def test_get():
@@ -26,3 +31,9 @@ def bad(x):
 def test_exceptions_rise_to_top():
     dsk = {'x': 1, 'y': (bad, 'x')}
     assert raises(ValueError, lambda: get(dsk, 'y'))
+
+def test_reuse_pool():
+    pool = ThreadPool()
+    with set_options(pool=pool):
+        assert get({'x': (inc, 1)}, 'x') == 2
+        assert get({'x': (inc, 1)}, 'x') == 2

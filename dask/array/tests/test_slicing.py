@@ -1,9 +1,22 @@
 import dask
 import dask.array as da
-from dask.array.slicing import slice_array, _slice_1d, take, remove_full_slices
+from dask.array import Array
+from dask.array.slicing import slice_array, _slice_1d, take
 from operator import getitem
 import numpy as np
-from pprint import pprint
+from toolz import merge
+
+
+def eq(a, b):
+    if isinstance(a, da.Array):
+        a = a.compute(get=dask.get)
+    if isinstance(b, da.Array):
+        b = b.compute(get=dask.get)
+
+    c = a == b
+    if isinstance(c, np.ndarray):
+        c = c.all()
+    return c
 
 
 def test_slice_1d():
@@ -74,6 +87,11 @@ def test_slice_1d():
     expected = {0: slice(-1, -20, -1),
                 1: slice(-20, -21, -1)}
     result = _slice_1d(100, [20, 20, 20, 20, 20], slice(20, 0, -1))
+    assert expected == result
+
+    #x[:0]
+    expected = {}
+    result = _slice_1d(100, [20, 20, 20, 20, 20], slice(0))
     assert expected == result
 
     #x=range(99)
@@ -234,43 +252,65 @@ def test_slicing_with_newaxis():
 
 
 def test_take():
-    result = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     expected = {('y', 0):
             (getitem,
               (np.concatenate, (list,
                 [(getitem, ('x', 0), ([1, 3, 5],)),
                  (getitem, ('x', 2), ([7],))]),
                0),
-             ((2, 0, 3, 1),))}
-    assert result == expected
+             ([2, 0, 3, 1],))}
+    assert dsk == expected
+    assert blockdims == ((4,),)
 
-    result = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
     expected = dict((('y', 0, j),
             (getitem,
               (np.concatenate, (list,
                 [(getitem, ('x', 0, j), ([1, 3, 5], slice(None, None, None))),
                  (getitem, ('x', 2, j), ([7], slice(None, None, None)))]),
                 0),
-              ((2, 0, 3, 1), slice(None, None, None))))
+              ([2, 0, 3, 1], slice(None, None, None))))
             for j in range(2))
-    assert result == expected
+    assert dsk == expected
+    assert blockdims == ((4,), (20, 20))
 
-    result = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
+
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
     expected = dict((('y', i, 0),
             (getitem,
               (np.concatenate, (list,
                 [(getitem, ('x', i, 0), (slice(None, None, None), [1, 3, 5])),
                  (getitem, ('x', i, 1), (slice(None, None, None), [17]))]),
                 1),
-             (slice(None, None, None), (2, 0, 3, 1))))
+             (slice(None, None, None), [2, 0, 3, 1])))
            for i in range(4))
+    assert dsk == expected
+    assert blockdims == ((20, 20, 20, 20), (4,))
 
-    assert result == expected
+
+def test_take_sorted():
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    expected = {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
+                ('y', 1): (getitem, ('x', 2), ([7],))}
+    assert dsk == expected
+    assert blockdims == ((3, 1),)
+
+    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], axis=1)
+    expected = merge(
+            dict((('y', i, 0),
+                  (getitem, ('x', i, 0), (slice(None, None, None), [1, 3, 5])))
+                  for i in range(4)),
+            dict((('y', i, 1),
+                  (getitem, ('x', i, 1), (slice(None, None, None), [17])))
+                  for i in range(4)))
+    assert dsk == expected
+    assert blockdims == ((20, 20, 20, 20), (3, 1))
 
 
 def test_slice_lists():
     y, blockdims = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
-                                ([1, 2, 9], slice(None, None, None)))
+                                ([2, 1, 9], slice(None, None, None)))
     assert y == \
         dict((('y', 0, i), (getitem,
                        (np.concatenate,
@@ -283,7 +323,7 @@ def test_slice_lists():
                            ([0], slice(None, None, None))),
                            ]),
                         0),
-                       ((0, 1, 2), slice(None, None, None))))
+                       ([1, 0, 2], slice(None, None, None))))
                 for i in range(4))
 
     assert blockdims == ((3,), (3, 3, 3, 1))
@@ -326,14 +366,15 @@ def test_slicing_and_blockdims():
     assert t.blockdims == ((8, 8), (6, 6))
 
 
-def test_optimize_slicing():
-    dsk = {'a': (range, 10),
-           'b': (getitem, 'a', (slice(None, None, None),)),
-           'c': (getitem, 'b', (slice(None, None, None),)),
-           'd': (getitem, 'c', (slice(None, 5, None),)),
-           'e': (getitem, 'd', (slice(None, None, None),))}
+def test_slice_stop_0():
+    # from gh-125
+    a = da.ones(10, blockshape=(10,))[:0].compute()
+    b = np.ones(10)[:0]
+    assert eq(a, b)
 
-    expected = {'a': (range, 10),
-                'e': (getitem, 'a', (slice(None, 5, None),))}
 
-    assert remove_full_slices(dsk) == expected
+def test_slice_list_then_None():
+    x = da.zeros(shape=(5, 5), blockshape=(3, 3))
+    y = x[[2, 1]][None]
+
+    assert eq(y, np.zeros((1, 2, 5)))

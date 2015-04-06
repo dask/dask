@@ -75,6 +75,8 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     else:
         shape = kwargs.pop('shape')
 
+    dtype = kwargs.get('dtype', None)
+
     if not isinstance(shape, (tuple, list)):
         shape = (shape,)
 
@@ -94,12 +96,12 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     vals = ((func,) + (s,) + args for s in shapes)
 
     dsk = dict(zip(keys, vals))
-    return Array(dsk, name, shape=shape, blockdims=blockdims)
+    return Array(dsk, name, shape=shape, blockdims=blockdims, dtype=dtype)
 
 
 @curry
-def wrap(wrap_func, func):
-    f = curry(wrap_func, func)
+def wrap(wrap_func, func, **kwargs):
+    f = curry(wrap_func, func, **kwargs)
     f.__doc__ = """
     Blocked variant of %(name)s
 
@@ -115,6 +117,6 @@ def wrap(wrap_func, func):
 
 w = wrap(wrap_func_shape_as_first_arg)
 
-ones = w(np.ones)
-zeros = w(np.zeros)
-empty = w(np.empty)
+ones = w(np.ones, dtype='f8')
+zeros = w(np.zeros, dtype='f8')
+empty = w(np.empty, dtype='f8')

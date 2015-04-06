@@ -17,9 +17,9 @@ except ImportError:
 
 from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
-from ..optimize import fuse
+from ..optimize import fuse, cull
 from ..compatibility import apply
-
+from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
@@ -56,7 +56,14 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-get = curry(mpget, optimizations=[fuse, lazify])
+def get(dsk, keys, get=None, **kwargs):
+    get = get or _globals['get'] or mpget
+
+    dsk2 = cull(dsk, keys)
+    dsk3 = fuse(dsk2)
+    dsk4 = lazify(dsk3)
+
+    return get(dsk, keys, **kwargs)
 
 
 def list2(seq):
@@ -97,71 +104,6 @@ class Bag(object):
         self.name = name
         self.npartitions = npartitions
         self.get = get
-
-    @classmethod
-    def from_filenames(cls, filenames):
-        """ Create dask by loading in lines from many files
-
-        Provide list of filenames
-
-        >>> b = Bag.from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
-
-        Or a globstring
-
-        >>> b = Bag.from_filenames('myfiles.*.txt')  # doctest: +SKIP
-
-        See also:
-            from_sequence: A more generic bag creation function
-        """
-        if isinstance(filenames, str):
-            filenames = sorted(glob(filenames))
-
-        d = dict((('load', i), (list, (open, fn)))
-                 for i, fn in enumerate(filenames))
-        return Bag(d, 'load', len(d))
-
-    @classmethod
-    def from_sequence(cls, seq, partition_size=None, npartitions=None):
-        """ Create dask from Python sequence
-
-        This sequence should be relatively small in memory.  Dask Bag works
-        best when it handles loading your data itself.  Commonly we load a
-        sequence of filenames into a Bag and then use ``.map`` to open them.
-
-        Parameters
-        ----------
-
-        seq: Iterable
-            A sequence of elements to put into the dask
-        partition_size: int (optional)
-            The length of each partition
-        npartitions: int (optional)
-            The number of desired partitions
-
-        It is best to provide either ``partition_size`` or ``npartitions``
-        (though not both.)
-
-        Example
-        -------
-
-        >>> b = Bag.from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
-
-        See also:
-            from_sequence: Specialized bag creation function for textfiles
-        """
-        seq = list(seq)
-        if npartitions and not partition_size:
-            partition_size = int(math.ceil(len(seq) / npartitions))
-        if npartitions is None and partition_size is None:
-            if len(seq) < 100:
-                partition_size = 1
-            else:
-                partition_size = int(len(seq) / 100)
-
-        parts = list(partition_all(partition_size, seq))
-        name = next(load_names)
-        d = dict(((name, i), part) for i, part in enumerate(parts))
-        return Bag(d, name, len(d))
 
     def map(self, func):
         name = next(names)
@@ -223,6 +165,18 @@ class Bag(object):
         dsk = dict(((a, i), (list, (topk, k, (self.name, i))))
                         for i in range(self.npartitions))
         dsk2 = {(b, 0): (list, (topk, k, (concat, list(dsk.keys()))))}
+        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+
+    def distinct(self):
+        """ Distinct elements of collection
+
+        Unordered without repeats.
+        """
+        a = next(names)
+        dsk = dict(((a, i), (set, key)) for i, key in enumerate(self._keys()))
+        b = next(names)
+        dsk2 = {(b, 0): (apply, set.union, (list, list(dsk.keys())))}
+
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
     def _reduction(self, perpartition, aggregate):
@@ -347,6 +301,21 @@ class Bag(object):
             results = iter(results)
         return results
 
+    def concat(self):
+        """ Concatenate nested lists into one long list
+
+        >>> b = from_sequence([[1], [2, 3]])
+        >>> list(b)
+        [[1], [2, 3]]
+
+        >>> list(b.concat())
+        [1, 2, 3]
+        """
+        name = next(names)
+        dsk = dict(((name, i), (list, (concat, (self.name, i))))
+                        for i in range(self.npartitions))
+        return Bag(merge(self.dask, dsk), name, self.npartitions)
+
     __iter__ = compute
 
 
@@ -383,3 +352,68 @@ def takes_multiple_arguments(func):
     if spec.defaults is None:
         return len(spec.args) != 1
     return len(spec.args) - len(spec.defaults) > 1
+
+def from_sequence(seq, partition_size=None, npartitions=None):
+    """ Create dask from Python sequence
+
+    This sequence should be relatively small in memory.  Dask Bag works
+    best when it handles loading your data itself.  Commonly we load a
+    sequence of filenames into a Bag and then use ``.map`` to open them.
+
+    Parameters
+    ----------
+
+    seq: Iterable
+        A sequence of elements to put into the dask
+    partition_size: int (optional)
+        The length of each partition
+    npartitions: int (optional)
+        The number of desired partitions
+
+    It is best to provide either ``partition_size`` or ``npartitions``
+    (though not both.)
+
+    Example
+    -------
+
+    >>> b = from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
+
+    See also:
+        from_filenames: Specialized bag creation function for textfiles
+    """
+    seq = list(seq)
+    if npartitions and not partition_size:
+        partition_size = int(math.ceil(len(seq) / npartitions))
+    if npartitions is None and partition_size is None:
+        if len(seq) < 100:
+            partition_size = 1
+        else:
+            partition_size = int(len(seq) / 100)
+
+    parts = list(partition_all(partition_size, seq))
+    name = next(load_names)
+    d = dict(((name, i), part) for i, part in enumerate(parts))
+    return Bag(d, name, len(d))
+
+
+def from_filenames(filenames):
+    """ Create dask by loading in lines from many files
+
+    Provide list of filenames
+
+    >>> b = from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
+
+    Or a globstring
+
+    >>> b = from_filenames('myfiles.*.txt')  # doctest: +SKIP
+
+    See also:
+        from_sequence: A more generic bag creation function
+    """
+    if isinstance(filenames, str):
+        filenames = sorted(glob(filenames))
+
+    d = dict((('load', i), (list, (open, fn)))
+             for i, fn in enumerate(filenames))
+    return Bag(d, 'load', len(d))
+

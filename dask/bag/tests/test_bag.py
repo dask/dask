@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from toolz import merge, join, reduceby, pipe, filter
 import numpy as np
+import dask.bag as db
 from dask.bag.core import Bag, lazify, lazify_task, fuse, map
 from into.utils import filetexts
 
@@ -45,7 +46,7 @@ def test_map():
 
 
 def test_map_function_with_multiple_arguments():
-    b = Bag.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
+    b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
     assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
 
 
@@ -73,6 +74,10 @@ def test_pluck():
 
 def test_fold_computation():
     assert int(b.fold(add)) == sum(L)
+
+
+def test_distinct():
+    assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
 
 
 def test_frequencies():
@@ -162,21 +167,21 @@ def test_can_use_dict_to_make_concrete():
 
 def test_from_filenames():
     with filetexts({'a1.log': 'A\nB', 'a2.log': 'C\nD'}) as fns:
-        assert set(line.strip() for line in Bag.from_filenames(fns)) == \
+        assert set(line.strip() for line in db.from_filenames(fns)) == \
                 set('ABCD')
-        assert set(line.strip() for line in Bag.from_filenames('a*.log')) == \
+        assert set(line.strip() for line in db.from_filenames('a*.log')) == \
                 set('ABCD')
 
 
 def test_from_sequence():
-    b = Bag.from_sequence([1, 2, 3, 4, 5], npartitions=3)
+    b = db.from_sequence([1, 2, 3, 4, 5], npartitions=3)
     assert len(b.dask) == 3
     assert set(b) == set([1, 2, 3, 4, 5])
 
 
 def test_from_long_sequence():
     L = list(range(1001))
-    b = Bag.from_sequence(L)
+    b = db.from_sequence(L)
     assert set(b) == set(L)
 
 
@@ -185,7 +190,12 @@ def test_product():
     assert b2.npartitions == b.npartitions**2
     assert set(b2) == set([(i, j) for i in L for j in L])
 
-    x = Bag.from_sequence([1, 2, 3, 4])
-    y = Bag.from_sequence([10, 20, 30])
+    x = db.from_sequence([1, 2, 3, 4])
+    y = db.from_sequence([10, 20, 30])
     z = x.product(y)
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
+
+
+def test_concat():
+    b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
+    assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])

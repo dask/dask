@@ -1,5 +1,6 @@
 from dask.utils import raises
-from dask.core import istask, get, get_dependencies, flatten, subs
+from dask.core import (istask, get, get_dependencies, flatten, subs,
+        preorder_traversal)
 
 
 def contains(a, b):
@@ -28,6 +29,15 @@ def test_istask():
 d = {':x': 1,
      ':y': (inc, ':x'),
      ':z': (add, ':x', ':y')}
+
+
+def test_preorder_traversal():
+    t = (add, 1, 2)
+    assert list(preorder_traversal(t)) == [add, 1, 2]
+    t = (add, (add, 1, 2), (add, 3, 4))
+    assert list(preorder_traversal(t)) == [add, add, 1, 2, add, 3, 4]
+    t = (add, (sum, [1, 2]), 3)
+    assert list(preorder_traversal(t)) == [add, sum, list, 1, 2, 3]
 
 
 def test_get():
@@ -126,3 +136,12 @@ def test_subs():
     assert subs((sum, [1, 'x']), 'x', 2) == (sum, [1, 2])
     assert subs((sum, [1, ['x']]), 'x', 2) == (sum, [1, [2]])
 
+
+def test_subs_with_unfriendly_eq():
+    try:
+        import numpy as np
+    except:
+        return
+    else:
+        task = (np.sum, np.array([1, 2]))
+        assert (subs(task, (4, 5), 1) == task) is True

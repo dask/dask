@@ -2,27 +2,28 @@ from itertools import count, product
 from toolz import merge, first, accumulate
 from operator import getitem, add
 from ..compatibility import long
-from ..optimize import dealias
 import numpy as np
 
 
 slice_names = ('slice-%d' % i for i in count(1))
 
 
-def sanitize_index_lists(ind):
-    """ Handle lists/arrays of integers/bools as indexes
+def sanitize_index_elements(ind):
+    """ Sanitize the elements for indexing along one axis
 
-    >>> sanitize_index_lists([2, 3, 5])
+    >>> sanitize_index_elements([2, 3, 5])
     [2, 3, 5]
-    >>> sanitize_index_lists([True, False, True, False])
+    >>> sanitize_index_elements([True, False, True, False])
     [0, 2]
-    >>> sanitize_index_lists(np.array([1, 2, 3]))
+    >>> sanitize_index_elements(np.array([1, 2, 3]))
     [1, 2, 3]
-    >>> sanitize_index_lists(np.array([False, True, True]))
+    >>> sanitize_index_elements(np.array([False, True, True]))
     [1, 2]
+    >>> type(sanitize_index_elements(np.int32(0)))
+    <type 'int'>
     """
-    if not isinstance(ind, (list, np.ndarray)):
-        return ind
+    if isinstance(ind, np.integer):
+        ind = int(ind)
     if isinstance(ind, np.ndarray):
         ind = ind.tolist()
     if isinstance(ind, list) and ind and isinstance(ind[0], bool):
@@ -91,7 +92,7 @@ def slice_array(out_name, in_name, blockdims, index):
     slice_slices_and_integers - handle everything else
     """
     index = replace_ellipsis(len(blockdims), index)
-    index = tuple(map(sanitize_index_lists, index))
+    index = tuple(map(sanitize_index_elements, index))
     blockdims = tuple(map(tuple, blockdims))
 
     # x[:, :, :] - Punt and return old value
@@ -177,9 +178,8 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     if all(isinstance(i, list) or i == slice(None, None, None)
             for i in index2):
         axis = where_list[0]
-        dsk3 = take(out_name, in_name, blockdims, index2[where_list[0]],
-                    axis=axis)
-        blockdims2 = blockdims
+        blockdims2, dsk3 = take(out_name, in_name, blockdims,
+                                index2[where_list[0]], axis=axis)
     # Mixed case. Both slices/integers and lists. slice/integer then take
     else:
         # Do first pass without lists
@@ -192,15 +192,11 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
                            if i < axis and isinstance(ind, (int, long)))
 
         # Do work
-        dsk2 = take(out_name, tmp, blockdims2, index2[axis], axis=axis2)
+        blockdims2, dsk2 = take(out_name, tmp, blockdims2, index2[axis],
+                                axis=axis2)
         dsk3 = merge(dsk, dsk2)
 
-    # Replace blockdims of list entries with single block
-    index4 = [ind for ind in index2 if not isinstance(ind, (int, long))]
-    blockdims3 = tuple([bd if not isinstance(i, list) else (len(i),)
-                        for i, bd in zip(index4, blockdims2)])
-
-    return dsk3, blockdims3
+    return dsk3, blockdims2
 
 
 def slice_slices_and_integers(out_name, in_name, blockdims, index):
@@ -316,7 +312,7 @@ def _slice_1d(dim_shape, lengths, index):
     step = index.step or 1
     if step > 0:
         start = index.start or 0
-        stop = index.stop or dim_shape
+        stop = index.stop if index.stop is not None else dim_shape
     else:
         start = index.start or dim_shape - 1
         start = dim_shape - 1 if start >= dim_shape else start
@@ -382,6 +378,73 @@ def partition_by_size(sizes, seq):
     return result
 
 
+def issorted(seq):
+    """ Is sequence sorted?
+
+    >>> issorted([1, 2, 3])
+    True
+    >>> issorted([3, 1, 2])
+    False
+    """
+    if not seq:
+        return True
+    x = seq[0]
+    for elem in seq[1:]:
+        if elem < x:
+            return False
+        x = elem
+    return True
+
+
+colon = slice(None, None, None)
+
+
+def take_sorted(outname, inname, blockdims, index, axis=0):
+    """ Index array with sorted list index
+
+    Forms a dask for the following case
+
+        x[:, [1, 3, 5, 10], ...]
+
+    where the index, ``[1, 3, 5, 10]`` is sorted in non-decreasing order.
+
+    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    >>> blockdims
+    ((3, 1),)
+    >>> dsk  # doctest: +SKIP
+    {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
+     ('y', 1): (getitem, ('x', 2), ([7],))}
+
+    See also:
+        take - calls this function
+    """
+    n = len(blockdims)
+    sizes = blockdims[axis]  # the blocksizes on the axis that we care about
+
+    index_lists = partition_by_size(sizes, sorted(index))
+    where_index = [i for i, il in enumerate(index_lists) if il]
+    index_lists = [il for il in index_lists if il]
+
+    dims = [range(len(bd)) for bd in blockdims]
+
+    indims = list(dims)
+    indims[axis] = list(range(len(where_index)))
+    keys = list(product([outname], *indims))
+
+    outdims = list(dims)
+    outdims[axis] = where_index
+    slices = [[colon]*len(bd) for bd in blockdims]
+    slices[axis] = index_lists
+    slices = list(product(*slices))
+    inkeys = list(product([inname], *outdims))
+    values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
+
+    blockdims2 = list(blockdims)
+    blockdims2[axis] = tuple(map(len, index_lists))
+
+    return tuple(blockdims2), dict(zip(keys, values))
+
+
 def take(outname, inname, blockdims, index, axis=0):
     """ Index array with an iterable of index
 
@@ -389,12 +452,27 @@ def take(outname, inname, blockdims, index, axis=0):
 
     Mimics ``np.take``
 
-    >>> take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)  # doctest: +SKIP
+    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    >>> blockdims
+    ((4,),)
+    >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, (np.concatenate, [(getitem, ('x', 0), ([1, 3, 5],)),
                                            (getitem, ('x', 2), ([7],))],
                                           0),
                          (2, 0, 4, 1))}
+
+    When list is sorted we retain original block structure
+
+    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    >>> blockdims
+    ((3, 1),)
+    >>> dsk  # doctest: +SKIP
+    {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
+     ('y', 2): (getitem, ('x', 2), ([7],))}
     """
+    if issorted(index):
+        return take_sorted(outname, inname, blockdims, index, axis)
+
     n = len(blockdims)
     sizes = blockdims[axis]  # the blocksizes on the axis that we care about
 
@@ -404,9 +482,7 @@ def take(outname, inname, blockdims, index, axis=0):
                 for i, bd in enumerate(blockdims)]
     keys = list(product([outname], *dims))
 
-    colon = slice(None, None, None)
-
-    rev_index = tuple(map(sorted(index).index, index))
+    rev_index = list(map(sorted(index).index, index))
     vals = [(getitem, (np.concatenate,
                   (list, [(getitem, ((inname,) + d[:axis] + (i,) + d[axis+1:]),
                                    ((colon,)*axis + (IL,) + (colon,)*(n-axis-1)))
@@ -416,7 +492,10 @@ def take(outname, inname, blockdims, index, axis=0):
                      ((colon,)*axis + (rev_index,) + (colon,)*(n-axis-1)))
             for d in product(*dims)]
 
-    return dict(zip(keys, vals))
+    blockdims2 = list(blockdims)
+    blockdims2[axis] = (len(index),)
+
+    return tuple(blockdims2), dict(zip(keys, vals))
 
 
 def posify_index(shape, ind):
@@ -478,50 +557,6 @@ def new_blockdim(dim_shape, lengths, index):
     slices = [slice(0, lengths[i], 1) if slc == slice(None, None, None) else slc
                 for i, slc in pairs]
     return [(slc.stop - slc.start) // slc.step for slc in slices]
-
-
-def is_full_slice(task):
-    """
-
-    >>> is_full_slice((getitem, 'x',
-    ...                 (slice(None, None, None), slice(None, None, None))))
-    True
-    >>> is_full_slice((getitem, 'x',
-    ...                 (slice(5, 20, 1), slice(None, None, None))))
-    False
-    """
-    return (isinstance(task, tuple) and
-            task[0] == getitem and
-            (task[2] == slice(None, None, None) or
-             isinstance(task[2], tuple) and
-             all(ind == slice(None, None, None) for ind in task[2])))
-
-
-def remove_full_slices(dsk):
-    """ Remove full slices from dask
-
-    See Also:
-        dask.optimize.inline
-
-    Example
-    -------
-
-
-    >>> dsk = {'a': (range, 5),
-    ...        'b': (getitem, 'a', (slice(None, None, None),)),
-    ...        'c': (getitem, 'b', (slice(None, None, None),)),
-    ...        'd': (getitem, 'c', (slice(None, 5, None),)),
-    ...        'e': (getitem, 'd', (slice(None, None, None),))}
-
-    >>> remove_full_slices(dsk)  # doctest: +SKIP
-    {'a': (range, 5),
-     'e': (getitem, 'a', (slice(None, 5, None),))}
-    """
-    full_slice_keys = set(k for k, task in dsk.items() if is_full_slice(task))
-    dsk2 = dict((k, task[1] if k in full_slice_keys else task)
-                 for k, task in dsk.items())
-    dsk3 = dealias(dsk2)
-    return dsk3
 
 
 def replace_ellipsis(n, index):
