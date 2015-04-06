@@ -577,6 +577,9 @@ def test_compute():
     assert eq(A, d + 1)
     assert eq(B, d + 2)
 
+    A, = compute(a)
+    assert eq(A, d + 1)
+
 
 def test_coerce():
     d = da.from_array(np.array([1]), blockshape=(1,))
