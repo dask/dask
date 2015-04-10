@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
-import dask
-from dask.array.blaze import *
-from dask.array.into import into
-from into import discover, convert, into
-from collections import Iterable
-from toolz import concat
 from operator import getitem
+
+from dask.array.blaze import compute, symbol
+from odo import discover
+import numpy as np
+
+from dask.array import from_array, Array
 
 
 def eq(a, b):
