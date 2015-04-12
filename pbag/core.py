@@ -47,11 +47,8 @@ class PBag(object):
         self.isopen = False
         self.dump = dump
         self.load = load
-
-    @property
-    def filenames(self):
-        return [os.path.join(self.path, '%d.part' % i)
-                    for i in range(self.npartitions)]
+        self.filenames = [os.path.join(self.path, '%d.part' % i)
+                            for i in range(self.npartitions)]
 
     def _open_files(self):
         if not self.isopen:
