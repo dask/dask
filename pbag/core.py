@@ -4,7 +4,7 @@ except ImportError:
     import pickle
 
 import tempfile
-from cytoolz import groupby, partial, take, concat
+from cytoolz import groupby, take, concat, curry
 import os
 import shutil
 from collections import Iterator, Iterable
@@ -30,7 +30,7 @@ class PBag(object):
     [[0, 'Alice', 100], [0, 'Charlie', 300]]
     """
     def __init__(self, grouper, npartitions, path=None, open=open,
-                 dump=partial(pickle.dump, protocol=pickle.HIGHEST_PROTOCOL),
+                 dump=curry(pickle.dump, protocol=pickle.HIGHEST_PROTOCOL),
                  load=pickle.load):
         self.grouper = grouper
         if path is None:
@@ -62,6 +62,7 @@ class PBag(object):
         if self.isopen:
             for f in self.files:
                 f.close()
+            self.files = []
             self.isopen = False
 
     def __enter__(self):
