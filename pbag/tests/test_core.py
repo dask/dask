@@ -15,3 +15,11 @@ def test_pbag():
         assert pb.get_partition(j) == (
                 [(i, i**2) for i in range(10) if i % 4 == j]
               + [(i, i**3) for i in range(10) if i % 4 == j])
+
+
+def test_load():
+    a = PBag(first, 4)
+    a.extend([(i, i**2) for i in range(10)])
+
+    b = PBag(first, 4, a.path)
+    assert all(a.get_partition(i) == b.get_partition(i) for i in range(4))

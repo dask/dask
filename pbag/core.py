@@ -38,7 +38,8 @@ class PBag(object):
             self._explicitly_given_path = False
         else:
             self.path = path
-            os.mkdir(self.path)
+            if not os.path.exists(path):
+                os.mkdir(self.path)
             self._explicitly_given_path = True
 
         self.npartitions = npartitions
