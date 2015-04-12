@@ -2,16 +2,18 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
+import tempfile
 from glob import glob
 import heapq
 import inspect
-from collections import Iterable, Iterator
+from pbag import PBag
+from collections import Iterable, Iterator, defaultdict
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map, partition_all,
-        filter, pluck)
+        filter, pluck, identity, groupby)
 try:
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
-            compose, second, count, pluck)
+            compose, second, count, pluck, groupby)
 except ImportError:
     pass
 
@@ -104,6 +106,7 @@ class Bag(object):
         self.name = name
         self.npartitions = npartitions
         self.get = get
+        self._resources = list()
 
     @classmethod
     def from_filenames(cls, filenames):
@@ -355,6 +358,48 @@ class Bag(object):
         return results
 
     __iter__ = compute
+
+    def groupby(self, grouper, npartitions=None):
+        if npartitions is None:
+            npartitions = self.npartitions
+
+        paths = [tempfile.mkdtemp('%d.pbag' % i) for i in range(npartitions)]
+        self._resources.extend(paths)
+
+        # Partition data on disk
+        name = next(names)
+        dsk1 = {(name, i): (partition, grouper, (self.name, i), npartitions, path)
+                 for i, path in enumerate(paths)}
+
+
+        # Collect groups
+        name = next(names)
+        dsk2 = {(name, i): (collect, grouper, npartitions, i,
+                                     sorted(dsk1.keys()))
+                for i in range(npartitions)}
+
+        return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
+
+
+def partition(grouper, sequence, npartitions, path):
+    """ Partition a bag along a grouper, store partitions on disk """
+
+    with PBag(grouper, npartitions, path) as pb:
+        pb.extend(sequence)
+
+    return pb
+
+
+def collect(grouper, npartitions, group, pbags):
+    """ Collect partitions from disk and yield k,v group pairs """
+    from pbag import PBag
+    result = defaultdict(list)
+    for pb in pbags:
+        part = pb.get_partition(group)
+        groups = groupby(grouper, part)
+        for k, v in groups.items():
+            result[k].extend(v)
+    return list(result.items())
 
 
 def dictitems(d):

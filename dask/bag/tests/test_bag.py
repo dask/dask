@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join, reduceby, pipe, filter
+from toolz import merge, join, reduceby, pipe, filter, identity, merge_with
 import numpy as np
-from dask.bag.core import Bag, lazify, lazify_task, fuse, map
+from dask.bag.core import Bag, lazify, lazify_task, fuse, map, collect
 from into.utils import filetexts
+from pbag import PBag
 
 from collections import Iterator
 
@@ -189,3 +190,30 @@ def test_product():
     y = Bag.from_sequence([10, 20, 30])
     z = x.product(y)
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
+
+
+def test_groupby():
+    result = dict(b.groupby(identity)) == {0: [0, 0 ,0],
+                                           1: [1, 1, 1],
+                                           2: [2, 2, 2],
+                                           3: [3, 3, 3],
+                                           4: [4, 4, 4]}
+    assert b.groupby(identity).npartitions == b.npartitions
+
+
+def test_collect():
+    a = PBag(identity, 2)
+    with a:
+        a.extend([0, 1, 2, 3])
+
+    b = PBag(identity, 2)
+    with b:
+        b.extend([0, 1, 2, 3])
+
+    result = merge(dict(collect(identity, 2, 0, [a.path, b.path])),
+                   dict(collect(identity, 2, 1, [a.path, b.path])))
+
+    assert result == {0: [0, 0],
+                      1: [1, 1],
+                      2: [2, 2],
+                      3: [3, 3]}
