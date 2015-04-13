@@ -192,15 +192,6 @@ def test_product():
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
 
 
-def test_groupby():
-    result = dict(b.groupby(identity)) == {0: [0, 0 ,0],
-                                           1: [1, 1, 1],
-                                           2: [2, 2, 2],
-                                           3: [3, 3, 3],
-                                           4: [4, 4, 4]}
-    assert b.groupby(identity).npartitions == b.npartitions
-
-
 def test_collect():
     a = PBag(identity, 2)
     with a:
@@ -210,10 +201,19 @@ def test_collect():
     with b:
         b.extend([0, 1, 2, 3])
 
-    result = merge(dict(collect(identity, 2, 0, [a.path, b.path])),
-                   dict(collect(identity, 2, 1, [a.path, b.path])))
+    result = merge(dict(collect(identity, 2, 0, [a, b])),
+                   dict(collect(identity, 2, 1, [a, b])))
 
     assert result == {0: [0, 0],
                       1: [1, 1],
                       2: [2, 2],
                       3: [3, 3]}
+
+
+def test_groupby():
+    result = dict(b.groupby(lambda x: x)) == {0: [0, 0 ,0],
+                                              1: [1, 1, 1],
+                                              2: [2, 2, 2],
+                                              3: [3, 3, 3],
+                                              4: [4, 4, 4]}
+    assert b.groupby(lambda x: x).npartitions == b.npartitions

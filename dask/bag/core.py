@@ -8,6 +8,7 @@ import heapq
 import inspect
 from pbag import PBag
 from collections import Iterable, Iterator, defaultdict
+import toolz
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map, partition_all,
         filter, pluck, identity, groupby)
@@ -363,26 +364,29 @@ class Bag(object):
 
     __iter__ = compute
 
-    def groupby(self, grouper, npartitions=None):
+    def groupby_key(self, npartitions=None):
         if npartitions is None:
             npartitions = self.npartitions
 
         paths = [tempfile.mkdtemp('%d.pbag' % i) for i in range(npartitions)]
-        self._resources.extend(paths)
 
         # Partition data on disk
         name = next(names)
-        dsk1 = {(name, i): (partition, grouper, (self.name, i), npartitions, path)
+        dsk1 = {(name, i): (partition, 0, (self.name, i), npartitions, path)
                  for i, path in enumerate(paths)}
-
 
         # Collect groups
         name = next(names)
-        dsk2 = {(name, i): (collect, grouper, npartitions, i,
+        dsk2 = {(name, i): (collect, 0, npartitions, i,
                                      sorted(dsk1.keys()))
                 for i in range(npartitions)}
 
         return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
+
+    def groupby(self, grouper, npartitions=None):
+        if not callable(grouper):
+            grouper = toolz.itertoolz.getter(grouper)
+        return self.map(lambda x: (grouper(x), x)).groupby_key(npartitions)
 
 
 def partition(grouper, sequence, npartitions, path):
