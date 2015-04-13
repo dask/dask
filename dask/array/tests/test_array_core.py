@@ -478,10 +478,10 @@ def test_broadcast_to():
     assert raises(ValueError, lambda: broadcast_to(a, (3,)))
 
 
-def test_constant():
-    d = da.constant(2, blockdims=((2, 2), (3, 3)))
-    assert d.blockdims == ((2, 2), (3, 3))
-    assert (np.array(d)[:] == 2).all()
+def test_full():
+    d = da.full((3, 4), 2, blockdims=((2, 1), (2, 2)))
+    assert d.blockdims == ((2, 1), (2, 2))
+    assert eq(d, np.full((3, 4), 2))
 
 
 def test_map_blocks():
@@ -576,6 +576,9 @@ def test_compute():
     A, B = compute(a, b)
     assert eq(A, d + 1)
     assert eq(B, d + 2)
+
+    A, = compute(a)
+    assert eq(A, d + 1)
 
 
 def test_coerce():
