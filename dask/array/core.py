@@ -597,6 +597,10 @@ class Array(object):
     def ndim(self):
         return len(self.shape)
 
+    @property
+    def nbytes(self):
+        return np.prod(self.shape) * self.dtype.itemsize
+
     def _keys(self, *args):
         if self.ndim == 0:
             return [(self.name,)]
