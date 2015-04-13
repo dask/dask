@@ -835,3 +835,11 @@ def test_optimize():
     result = optimize(expr.dask, expr._keys())
     assert isinstance(result, dict)
     assert all(key in result for key in expr._keys())
+
+
+def test_squeeze():
+    x = da.ones((10, 1), blockshape=(3, 1))
+
+    assert eq(x.squeeze(), x.compute().squeeze())
+
+    assert x.squeeze().blockdims == ((3, 3, 3, 1),)

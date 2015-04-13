@@ -417,6 +417,23 @@ def map_blocks(x, func, blockshape=None, blockdims=None, dtype=None):
     return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=dtype)
 
 
+@wraps(np.squeeze)
+def squeeze(a, axis=None):
+    if axis is None:
+        axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
+    b = a.map_blocks(partial(np.squeeze, axis=axis), dtype=a.dtype)
+    blockdims = tuple(bd for bd in b.blockdims if bd != (1,))
+    old_keys = list(product([b.name], *[range(len(bd)) for bd in b.blockdims]))
+    new_keys = list(product([b.name], *[range(len(bd)) for bd in blockdims]))
+
+    dsk = b.dask.copy()
+    for o, n in zip(old_keys, new_keys):
+        dsk[n] = dsk[o]
+        del dsk[o]
+
+    return Array(dsk, b.name, blockdims=blockdims, dtype=a.dtype)
+
+
 def compute(*args, **kwargs):
     """ Evaluate several dask arrays at once
 
@@ -786,6 +803,9 @@ class Array(object):
         return map_blocks(self, func, blockshape=blockshape,
                           blockdims=blockdims, dtype=dtype)
 
+    @wraps(squeeze)
+    def squeeze(self):
+        return squeeze(self)
 
     def reblock(self, blockdims=None, blockshape=None):
         from .reblock import reblock
