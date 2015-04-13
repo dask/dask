@@ -539,6 +539,8 @@ def test_repr():
     assert str(d.shape) in repr(d)
     assert str(d.blockdims) in repr(d)
     assert str(d._dtype) in repr(d)
+    d = da.ones((4000, 4), blockshape=(4, 2))
+    assert len(str(d)) < 1000
 
 
 def test_slicing_with_ellipsis():
