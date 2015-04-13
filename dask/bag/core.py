@@ -58,14 +58,18 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-def get(dsk, keys, get=None, **kwargs):
-    get = get or _globals['get'] or mpget
-
+def optimize(dsk, keys):
     dsk2 = cull(dsk, keys)
     dsk3 = fuse(dsk2)
     dsk4 = lazify(dsk3)
+    return dsk4
 
-    return get(dsk, keys, **kwargs)
+def get(dsk, keys, get=None, **kwargs):
+    get = get or _globals['get'] or mpget
+
+    dsk2 = optimize(dsk, keys)
+
+    return get(dsk2, keys, **kwargs)
 
 
 def list2(seq):
