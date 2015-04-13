@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
-import dask
-from dask.array.blaze import *
-from dask.array.into import into
-from into import discover, convert, into
-from collections import Iterable
-from toolz import concat
 from operator import getitem
+
+from dask.array.blaze import compute, symbol
+from odo import discover
+import numpy as np
+
+from dask.array import from_array, Array
 
 
 def eq(a, b):
@@ -21,19 +21,19 @@ def eq(a, b):
 
 
 nx = np.arange(600).reshape((20, 30))
-dx = convert(Array, nx, blockshape=(4, 5))
+dx = from_array(nx, blockshape=(4, 5))
 sx = symbol('x', discover(dx))
 
 ny = np.arange(600).reshape((30, 20))
-dy = convert(Array, ny, blockshape=(5, 4))
+dy = from_array(ny, blockshape=(5, 4))
 sy = symbol('y', discover(dy))
 
 na = np.arange(20)
-da = convert(Array, na, blockshape=(4,))
+da = from_array(na, blockshape=(4,))
 sa = symbol('a', discover(da))
 
 nb = np.arange(30).reshape((30, 1))
-db = convert(Array, nb, blockshape=(5, 1))
+db = from_array(nb, blockshape=(5, 1))
 sb = symbol('b', discover(db))
 
 dask_ns = {sx: dx, sy: dy, sa: da, sb: db}
@@ -58,9 +58,9 @@ def test_compute():
         expected = compute(expr, numpy_ns)
         assert isinstance(result, Array)
         if expr.dshape.shape:
-            result2 = into(np.ndarray, result)
+            result2 = np.array(result)
         else:
-            result2 = into(float, result)
+            result2 = float(result)
         assert eq(result2, expected)
 
 
@@ -98,7 +98,7 @@ def test_slicing_with_singleton_dimensions():
 
 def test_slicing_with_lists():
     nx = np.arange(20).reshape((4, 5))
-    dx = convert(Array, nx, blockshape=(2, 2))
+    dx = from_array(nx, blockshape=(2, 2))
     sx = symbol('x', discover(dx))
 
     expr = sx[[2, 0, 3]]
@@ -125,7 +125,7 @@ def test_slicing_with_lists():
 
 def test_slicing_on_boundary_lines():
     nx = np.arange(100).reshape((10, 10))
-    dx = convert(Array, nx, blockshape=(3, 3))
+    dx = from_array(nx, blockshape=(3, 3))
     sx = symbol('x', discover(dx))
     expr = sx[0, [1, 3, 9, 3]]
 
@@ -135,7 +135,7 @@ def test_slicing_on_boundary_lines():
 
 def test_slicing_with_newaxis():
     nx = np.arange(20).reshape((4, 5))
-    dx = convert(Array, nx, blockshape=(2, 2))
+    dx = from_array(nx, blockshape=(2, 2))
     sx = symbol('x', discover(dx))
 
     expr = sx[:, None, :]
