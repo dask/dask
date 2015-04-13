@@ -1,8 +1,11 @@
+from __future__ import absolute_import, division, print_function
+
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 
+from . import serialize
 import tempfile
 from cytoolz import groupby, take, concat, curry
 import os
@@ -30,8 +33,9 @@ class PBag(object):
     [[0, 'Alice', 100], [0, 'Charlie', 300]]
     """
     def __init__(self, grouper, npartitions, path=None, open=open,
-                 dump=curry(pickle.dump, protocol=pickle.HIGHEST_PROTOCOL),
-                 load=pickle.load):
+                 dump=serialize.dump, load=serialize.load):
+                 # dump=curry(pickle.dump, protocol=pickle.HIGHEST_PROTOCOL),
+                 # load=pickle.load
         self.grouper = grouper
         if path is None:
             self.path = tempfile.mkdtemp('.pbag')
