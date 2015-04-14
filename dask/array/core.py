@@ -15,7 +15,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
 import numpy as np
 from . import chunk
 from .slicing import slice_array, insert_many
-from ..utils import deepmap, ignoring
+from ..utils import deepmap, ignoring, repr_long_list
 from ..async import inline_functions
 from ..optimize import cull, inline
 from .optimization import optimize
@@ -586,8 +586,9 @@ class Array(object):
             return self.compute().dtype
 
     def __repr__(self):
+        blockdims = '(' + ', '.join(map(repr_long_list, self.blockdims)) + ')'
         return ("dask.array<%s, shape=%s, blockdims=%s, dtype=%s>" %
-                (self.name, self.shape, self.blockdims, self._dtype))
+                (self.name, self.shape, blockdims, self._dtype))
 
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
@@ -595,6 +596,16 @@ class Array(object):
     @property
     def ndim(self):
         return len(self.shape)
+
+    @property
+    def size(self):
+        """ Number of elements in array """
+        return np.prod(self.shape)
+
+    @property
+    def nbytes(self):
+        """ Number of bytes in array """
+        return self.size * self.dtype.itemsize
 
     def _keys(self, *args):
         if self.ndim == 0:

@@ -539,6 +539,8 @@ def test_repr():
     assert str(d.shape) in repr(d)
     assert str(d.blockdims) in repr(d)
     assert str(d._dtype) in repr(d)
+    d = da.ones((4000, 4), blockshape=(4, 2))
+    assert len(str(d)) < 1000
 
 
 def test_slicing_with_ellipsis():
@@ -843,3 +845,13 @@ def test_squeeze():
     assert eq(x.squeeze(), x.compute().squeeze())
 
     assert x.squeeze().blockdims == ((3, 3, 3, 1),)
+
+
+def test_size():
+    x = da.ones((10, 2), blockshape=(3, 1))
+    assert x.size == np.array(x).size
+
+
+def test_nbytes():
+    x = da.ones((10, 2), blockshape=(3, 1))
+    assert x.nbytes == np.array(x).nbytes
