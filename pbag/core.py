@@ -57,7 +57,7 @@ class PBag(object):
     def _open_files(self):
         if not self.isopen:
             self.isopen = True
-            self.files = [self.open(fn, 'a') for fn in self.filenames]
+            self.files = [self.open(fn, 'ab') for fn in self.filenames]
 
     def _close_files(self):
         if self.isopen:
@@ -95,7 +95,7 @@ class PBag(object):
             if group:
                 self.dump(group, self.files[k])
 
-    def extend(self, seq, chunksize=100000):
+    def extend(self, seq, chunksize=200000):
         if isinstance(seq, Iterator):
             chunks = partition_all(chunksize, seq)
             for chunk in chunks:
@@ -105,7 +105,7 @@ class PBag(object):
 
     def get_partition(self, i):
         self._close_files()
-        with self.open(self.filenames[i]) as f:
+        with self.open(self.filenames[i], mode='rb') as f:
             segments = []
             while True:
                 try:

@@ -1,4 +1,5 @@
 from pandas import msgpack
+import msgpack
 import struct
 try:
     from StringIO import StringIO
