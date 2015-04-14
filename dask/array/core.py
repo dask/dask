@@ -598,8 +598,14 @@ class Array(object):
         return len(self.shape)
 
     @property
+    def size(self):
+        """ Number of bytes in array """
+        return np.prod(self.shape)
+
+    @property
     def nbytes(self):
-        return np.prod(self.shape) * self.dtype.itemsize
+        """ Number of elements in array """
+        return self.size * self.dtype.itemsize
 
     def _keys(self, *args):
         if self.ndim == 0:

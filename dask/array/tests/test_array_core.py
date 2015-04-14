@@ -847,7 +847,11 @@ def test_squeeze():
     assert x.squeeze().blockdims == ((3, 3, 3, 1),)
 
 
+def test_size():
+    x = da.ones((10, 2), blockshape=(3, 1))
+    assert x.size == np.array(x).size
+
+
 def test_nbytes():
     x = da.ones((10, 2), blockshape=(3, 1))
-
     assert x.nbytes == np.array(x).nbytes
