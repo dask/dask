@@ -211,9 +211,17 @@ def test_collect():
 
 
 def test_groupby():
-    result = dict(b.groupby(lambda x: x)) == {0: [0, 0 ,0],
-                                              1: [1, 1, 1],
-                                              2: [2, 2, 2],
-                                              3: [3, 3, 3],
-                                              4: [4, 4, 4]}
+    result = dict(b.groupby(lambda x: x))
+    assert result == {0: [0, 0 ,0],
+                      1: [1, 1, 1],
+                      2: [2, 2, 2],
+                      3: [3, 3, 3],
+                      4: [4, 4, 4]}
     assert b.groupby(lambda x: x).npartitions == b.npartitions
+
+
+def test_groupby_with_indexer():
+    b = Bag.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
+    result = dict(b.groupby(0))
+    assert result == {1: [[1, 2, 3], [1, 4, 9]],
+                      2: [[2, 3, 4]]}

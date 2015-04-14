@@ -406,7 +406,7 @@ def collect(grouper, npartitions, group, pbags):
         part = pb.get_partition(group)
         groups = groupby(grouper, part)
         for k, v in groups.items():
-            result[k].extend(v)
+            result[k].extend(pluck(1, v))
     return list(result.items())
 
 
