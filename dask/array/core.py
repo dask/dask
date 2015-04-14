@@ -599,12 +599,12 @@ class Array(object):
 
     @property
     def size(self):
-        """ Number of bytes in array """
+        """ Number of elements in array """
         return np.prod(self.shape)
 
     @property
     def nbytes(self):
-        """ Number of elements in array """
+        """ Number of bytes in array """
         return self.size * self.dtype.itemsize
 
     def _keys(self, *args):
