@@ -37,7 +37,7 @@ def test_fuse_getitem():
 
              ((getitem, (getitem, 'x', (slice(1000, 2000),)),
                         (slice(5, 10), slice(10, 20))),
-              (getarray, 'x', (slice(1005, 1010), slice(10, 20))))
+              (getitem, 'x', (slice(1005, 1010), slice(10, 20))))
 
         ]
 
