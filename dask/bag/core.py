@@ -328,7 +328,7 @@ class Bag(object):
 
     __iter__ = compute
 
-    def groupby_key(self, npartitions=None):
+    def groupby(self, grouper, npartitions=None):
         if npartitions is None:
             npartitions = self.npartitions
 
@@ -336,21 +336,16 @@ class Bag(object):
 
         # Partition data on disk
         name = next(names)
-        dsk1 = {(name, i): (partition, 0, (self.name, i), npartitions, path)
+        dsk1 = {(name, i): (partition, grouper, (self.name, i), npartitions, path)
                  for i, path in enumerate(paths)}
 
         # Collect groups
         name = next(names)
-        dsk2 = {(name, i): (collect, 0, npartitions, i,
+        dsk2 = {(name, i): (collect, grouper, npartitions, i,
                                      sorted(dsk1.keys()))
                 for i in range(npartitions)}
 
         return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
-
-    def groupby(self, grouper, npartitions=None):
-        if not callable(grouper):
-            grouper = toolz.itertoolz.getter(grouper)
-        return self.map(lambda x: (grouper(x), x)).groupby_key(npartitions)
 
 
 def partition(grouper, sequence, npartitions, path):
@@ -370,7 +365,7 @@ def collect(grouper, npartitions, group, pbags):
         part = pb.get_partition(group)
         groups = groupby(grouper, part)
         for k, v in groups.items():
-            result[k].extend(pluck(1, v))
+            result[k].extend(v)
     return list(result.items())
 
 
