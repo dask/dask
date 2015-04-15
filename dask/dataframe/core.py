@@ -4,7 +4,8 @@ from functools import wraps
 import toolz
 import bisect
 import os
-from toolz import merge, partial, accumulate, unique, first, dissoc, valmap
+from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
+        first, partition)
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
@@ -29,9 +30,15 @@ def concat(args):
     """ Generic concat operation """
     if not args:
         return args
+    if isinstance(first(core.flatten(args)), np.ndarray):
+        return da.core.rec_concatenate(args)
+    if len(args) == 1:
+        return args[0]
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
-        args = [arg for arg in args if len(arg)]
-        return pd.concat(args)
+        args2 = [arg for arg in args if len(arg)]
+        if not args2:
+            return args[0]
+        return pd.concat(args2)
     if isinstance(args[0], (pd.Index)):
         args = [arg for arg in args if len(arg)]
         result = pd.concat(map(pd.Series, args))
@@ -49,8 +56,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    return [concat(dfs) if arg.blockdivs else dfs[0]
-            for arg, dfs in zip(args, results)]
+    return list(map(concat, results))
 
 
 names = ('f-%d' % i for i in count(1))
@@ -85,9 +91,16 @@ class _Frame(object):
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
     @property
     def index(self):
-        name = next(names)
+        name = self._name + '-index'
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
         return Index(merge(dsk, self.dask), name, None, self.blockdivs)
@@ -349,6 +362,10 @@ class Series(_Frame):
     def isin(self, other):
         return elemwise(pd.Series.isin, self, other)
 
+    @wraps(pd.Series.map)
+    def map(self, arg, na_action=None):
+        return elemwise(pd.Series.map, self, arg, na_action, name=self.name)
+
 
 class Index(Series):
     pass
@@ -382,14 +399,15 @@ class DataFrame(_Frame):
         self.blockdivs = tuple(blockdivs)
 
     def __getitem__(self, key):
-        name = next(names)
         if isinstance(key, (str, unicode)):
+            name = self._name + '.' + key
             if key in self.columns:
                 dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                             for i in range(self.npartitions))
                 return Series(merge(self.dask, dsk), name,
                               key, self.blockdivs)
         if isinstance(key, list):
+            name = '%s[%s]' % (self._name, str(key))
             if all(k in self.columns for k in key):
                 dsk = dict(((name, i), (operator.getitem,
                                          (self._name, i),
@@ -398,6 +416,7 @@ class DataFrame(_Frame):
                 return DataFrame(merge(self.dask, dsk), name,
                                  key, self.blockdivs)
         if isinstance(key, Series) and self.blockdivs == key.blockdivs:
+            name = next(names)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
@@ -448,6 +467,20 @@ class DataFrame(_Frame):
     def categorize(self, columns=None, **kwargs):
         return categorize(self, columns, **kwargs)
 
+    @wraps(pd.DataFrame.assign)
+    def assign(self, **kwargs):
+        pairs = list(sum(kwargs.items(), ()))
+
+        # Figure out columns of the output
+        df = pd.DataFrame(columns=self.columns)
+        df2 = df.assign(**dict((k, []) for k in kwargs))
+
+        return elemwise(_assign, self, *pairs, columns=list(df2.columns))
+
+
+def _assign(df, *pairs):
+    kwargs = dict(partition(2, pairs))
+    return df.assign(**kwargs)
 
 def _loc(df, start, stop):
     return df.loc[slice(start, stop)]
@@ -477,9 +510,12 @@ def consistent_name(names):
         return None
 
 
-def elemwise(op, *args):
+def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
-    name = next(names)
+    columns = kwargs.get('columns', None)
+    name = kwargs.get('name', None)
+
+    _name = next(names)
 
     frames = [arg for arg in args if isinstance(arg, _Frame)]
     other = [(i, arg) for i, arg in enumerate(args)
@@ -493,13 +529,17 @@ def elemwise(op, *args):
     assert all(f.blockdivs == frames[0].blockdivs for f in frames)
     assert all(f.npartitions == frames[0].npartitions for f in frames)
 
-    dsk = dict(((name, i), (op2,) + frs)
+    dsk = dict(((_name, i), (op2,) + frs)
                 for i, frs in enumerate(zip(*[f._keys() for f in frames])))
 
-    column_name = consistent_name(n for f in frames for n in f.columns)
-
-    return Series(merge(dsk, *[f.dask for f in frames]),
-                  name, column_name, frames[0].blockdivs)
+    if columns is not None:
+        return DataFrame(merge(dsk, *[f.dask for f in frames]),
+                         _name, columns, frames[0].blockdivs)
+    else:
+        column_name = name or consistent_name(n for f in frames
+                                                 for n in f.columns)
+        return Series(merge(dsk, *[f.dask for f in frames]),
+                      _name, column_name, frames[0].blockdivs)
 
 
 def reduction(x, chunk, aggregate):
@@ -546,6 +586,10 @@ def get_chunk(x, start):
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
     chunksize = kwargs.pop('chunksize', 2**16)
+    categorize = kwargs.pop('categorize', None)
+    index = kwargs.pop('index', None)
+    if index and categorize == None:
+        categorize = True
     header = kwargs.get('header', 1)
 
     nlines = linecount(fn) - header
@@ -557,6 +601,29 @@ def read_csv(fn, *args, **kwargs):
 
     one_chunk = pd.read_csv(fn, *args, nrows=100, **kwargs)
 
+    cols = []
+
+    if categorize or index:
+        if categorize:
+            category_columns = [c for c in one_chunk.dtypes.index
+                                   if one_chunk.dtypes[c] == 'O']
+        else:
+            category_columns = []
+        cols = category_columns + ([index] if index else [])
+        d = read_csv(fn, *args, **merge(kwargs,
+                                        dict(chunksize=chunksize,
+                                             usecols=cols,
+                                             categorize=False,
+                                             parse_dates=None)))
+        categories = [d[c].drop_duplicates() for c in category_columns]
+        if index:
+            quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
+            result = compute(quantiles, *categories)
+            quantiles, categories = result[0], result[1:]
+        else:
+            categories = compute(*categories)
+        categories = dict(zip(category_columns, categories))
+
     kwargs['chunksize'] = chunksize
     load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
     load.update(dict(((read, i), (get_chunk, (read, i-1), chunksize*i))
@@ -567,7 +634,16 @@ def read_csv(fn, *args, **kwargs):
     dsk = dict(((name, i), (getitem, (read, i), 0))
                 for i in range(nchunks))
 
-    return DataFrame(merge(dsk, load), name, one_chunk.columns, blockdivs)
+    result = DataFrame(merge(dsk, load), name, one_chunk.columns, blockdivs)
+
+    if categorize:
+        func = partial(categorize_block, categories=categories)
+        result = result.map_blocks(func, columns=result.columns)
+
+    if index:
+        result = set_partition(result, index, quantiles)
+
+    return result
 
 
 from_array_names = ('from-array-%d' % i for i in count(1))
@@ -708,7 +784,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
 
 
 class GroupBy(object):
-    def __init__(self, frame, index, **kwargs):
+    def __init__(self, frame, index=None, **kwargs):
         self.frame = frame
         self.index = index
         self.kwargs = kwargs
@@ -721,7 +797,10 @@ class GroupBy(object):
             assert index in frame.columns
 
     def apply(self, func, columns=None):
-        f = set_index(self.frame, self.index, **self.kwargs)
+        if isinstance(self.index, Series) and self.index._name == self.frame.index._name:
+            f = self.frame
+        else:
+            f = set_index(self.frame, self.index, **self.kwargs)
         return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
                             columns=columns)
 
@@ -838,6 +917,18 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
 
 aca = apply_concat_apply
 
+def categorize_block(df, categories):
+    """ Categorize a dataframe with given categories
+
+    df: DataFrame
+    categories: dict mapping column name to iterable of categories
+    """
+    df = df.copy()
+    for col, vals in categories.items():
+        df[col] = pd.Categorical(df[col], categories=vals,
+                                    ordered=False, name=col)
+    return df
+
 
 def categorize(f, columns=None, **kwargs):
     """
@@ -855,14 +946,8 @@ def categorize(f, columns=None, **kwargs):
     distincts = [f[col].drop_duplicates() for col in columns]
     values = compute(distincts, **kwargs)
 
-    def categorize(block):
-        block = block.copy()
-        for col, vals in zip(columns, values):
-            block[col] = pd.Categorical(block[col], categories=vals,
-                                        ordered=False, name=col)
-        return block
-
-    return f.map_blocks(categorize, columns=f.columns)
+    func = partial(categorize_block, categories=dict(zip(columns, values)))
+    return f.map_blocks(func, columns=f.columns)
 
 
 def quantiles(f, q, **kwargs):
@@ -879,12 +964,13 @@ def quantiles(f, q, **kwargs):
     name2 = next(names)
     len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(f._keys()))
 
-    vals, lens = get(merge(val_dsk, len_dsk, f.dask),
-                     [sorted(val_dsk.keys()), sorted(len_dsk.keys())])
+    name3 = next(names)
+    merge_dsk = {(name3, 0): (merge_percentiles, q, [q] * f.npartitions,
+                                                sorted(val_dsk),
+                                                sorted(len_dsk))}
 
-    result = merge_percentiles(q, [q] * f.npartitions, vals, lens)
-
-    return result
+    dsk = merge(f.dask, val_dsk, len_dsk, merge_dsk)
+    return da.Array(dsk, name3, blockdims=((len(q),),))
 
 
 #################
@@ -906,15 +992,20 @@ rewrite_rules = RuleSet(
                     (a, b, c, d, e)))
 
 
-def get(dsk, keys, get=get_sync, **kwargs):
-    """ Get function with optimizations specialized to dask.Dataframe """
+def optimize(dsk, keys, **kwargs):
     if isinstance(keys, list):
         dsk2 = cull(dsk, list(core.flatten(keys)))
     else:
         dsk2 = cull(dsk, [keys])
     dsk3 = fuse(dsk2)
     dsk4 = valmap(rewrite_rules.rewrite, dsk3)
-    return get(dsk4, keys, **kwargs)  # use synchronous scheduler for now
+    return dsk4
+
+
+def get(dsk, keys, get=get_sync, **kwargs):
+    """ Get function with optimizations specialized to dask.Dataframe """
+    dsk2 = optimize(dsk, keys, **kwargs)
+    return get(dsk2, keys, **kwargs)  # use synchronous scheduler for now
 
 
 from .shuffle import set_index, set_partition

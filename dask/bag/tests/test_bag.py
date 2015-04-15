@@ -79,6 +79,10 @@ def test_fold_computation():
     assert int(b.fold(add)) == sum(L)
 
 
+def test_distinct():
+    assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
+
+
 def test_frequencies():
     assert dict(list(b.frequencies())) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
 
@@ -242,3 +246,9 @@ def test_groupby_with_indexer():
     result = dict(b.groupby(0))
     assert result == {1: [[1, 2, 3], [1, 4, 9]],
                       2: [[2, 3, 4]]}
+
+
+
+def test_concat():
+    b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
+    assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])

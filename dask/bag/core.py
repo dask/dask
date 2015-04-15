@@ -114,7 +114,6 @@ class Bag(object):
         self.name = name
         self.npartitions = npartitions
         self.get = get
-        self._resources = list()
 
     def map(self, func):
         name = next(names)
@@ -176,6 +175,18 @@ class Bag(object):
         dsk = dict(((a, i), (list, (topk, k, (self.name, i))))
                         for i in range(self.npartitions))
         dsk2 = {(b, 0): (list, (topk, k, (concat, list(dsk.keys()))))}
+        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+
+    def distinct(self):
+        """ Distinct elements of collection
+
+        Unordered without repeats.
+        """
+        a = next(names)
+        dsk = dict(((a, i), (set, key)) for i, key in enumerate(self._keys()))
+        b = next(names)
+        dsk2 = {(b, 0): (apply, set.union, (list2, list(dsk.keys())))}
+
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
     def _reduction(self, perpartition, aggregate):
@@ -300,6 +311,21 @@ class Bag(object):
             results = iter(results)
         return results
 
+    def concat(self):
+        """ Concatenate nested lists into one long list
+
+        >>> b = from_sequence([[1], [2, 3]])
+        >>> list(b)
+        [[1], [2, 3]]
+
+        >>> list(b.concat())
+        [1, 2, 3]
+        """
+        name = next(names)
+        dsk = dict(((name, i), (list, (concat, (self.name, i))))
+                        for i in range(self.npartitions))
+        return Bag(merge(self.dask, dsk), name, self.npartitions)
+
     __iter__ = compute
 
     def groupby_key(self, npartitions=None):
@@ -372,13 +398,12 @@ def from_filenames(filenames):
         raise ValueError("No filenames found")
 
     extension = os.path.splitext(filenames[0])[1].strip('.')
-
     myopen = opens.get(extension, open)
-
 
     d = dict((('load', i), (list, (myopen, fn)))
              for i, fn in enumerate(filenames))
     return Bag(d, 'load', len(d))
+
 
 def from_sequence(seq, partition_size=None, npartitions=None):
     """ Create dask from Python sequence

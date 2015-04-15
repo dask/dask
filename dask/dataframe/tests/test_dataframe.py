@@ -1,6 +1,6 @@
 import dask.dataframe as dd
 from dask.dataframe.core import (linecount, compute, get,
-        dataframe_from_ctable, rewrite_rules)
+        dataframe_from_ctable, rewrite_rules, concat)
 from toolz import valmap
 import pandas.util.testing as tm
 from operator import getitem
@@ -19,6 +19,8 @@ def eq(a, b):
     if hasattr(b, 'dask'):
         b = b.compute(get=dask.get)
     if isinstance(a, pd.DataFrame):
+        a = a.sort_index()
+        b = b.sort_index()
         tm.assert_frame_equal(a, b)
         return True
     if isinstance(a, pd.Series):
@@ -58,6 +60,8 @@ def test_Dataframe():
     assert d.b.mean().compute() == full.b.mean()
     assert np.allclose(d.b.var().compute(), full.b.var())
     assert np.allclose(d.b.std().compute(), full.b.std())
+
+    assert d.index._name == d.index._name  # this is deterministic
 
     assert repr(d)
 
@@ -130,6 +134,39 @@ def test_read_csv():
         assert f.npartitions == 2
 
         f = dd.read_csv(fn)
+
+
+def test_read_csv_categorize():
+    with filetext(text) as fn:
+        f = dd.read_csv(fn, chunksize=3, categorize=True)
+        assert list(f.dtypes) == ['category', 'i8']
+
+        expected = pd.read_csv(fn)
+        expected['name'] = expected.name.astype('category')
+        assert eq(f, expected)
+
+
+datetime_csv_file = """
+name,amount,when
+Alice,100,2014-01-01
+Bob,200,2014-01-01
+Charlie,300,2014-01-01
+""".strip()
+
+def test_read_csv_categorize_with_parse_dates():
+    with filetext(datetime_csv_file) as fn:
+        f = dd.read_csv(fn, chunksize=2, categorize=True, parse_dates=['when'])
+        assert list(f.dtypes) == ['category', 'i8', 'M8[ns]']
+
+
+def test_read_csv_categorize_and_index():
+    with filetext(text) as fn:
+        f = dd.read_csv(fn, chunksize=3, index='amount')
+        assert f.index.compute().name == 'amount'
+
+        expected = pd.read_csv(fn).set_index('amount')
+        expected['name'] = expected.name.astype('category')
+        assert eq(f, expected)
 
 
 def test_set_index():
@@ -273,6 +310,18 @@ def test_full_groupby():
     # assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
 
 
+def test_groupby_on_index():
+    e = d.set_index('a')
+    assert eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
+
+    def func(df):
+        df['b'] = df.b - df.b.mean()
+        return df
+
+    assert eq(d.groupby('a').apply(func),
+              e.groupby(e.index).apply(func))
+
+
 def test_set_partition():
     d2 = d.set_partition('b', [2])
     assert d2.blockdivs == (2,)
@@ -326,7 +375,7 @@ def test_len():
 
 
 def test_quantiles():
-    result = d.b.quantiles([30, 70])
+    result = d.b.quantiles([30, 70]).compute()
     assert len(result) == 2
     assert result[0] == 0
     assert 3 < result[1] < 7
@@ -419,3 +468,19 @@ def test_column_store_from_pframe():
     d = dd.from_pframe(pf)
     assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
     assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
+
+
+def test_assign():
+    assert eq(d.assign(c=d.a + 1, e=d.a + d.b),
+              full.assign(c=full.a + 1, e=full.a + full.b))
+
+
+def test_map():
+    assert eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
+
+
+def test_concat():
+    x = concat([pd.DataFrame(columns=['a', 'b']),
+                pd.DataFrame(columns=['a', 'b'])])
+    assert list(x.columns) == ['a', 'b']
+    assert len(x) == 0

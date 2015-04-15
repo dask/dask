@@ -144,6 +144,33 @@ def intersect_blockdims(old_blockdims=None,
     return cross
 
 
+def blockdims_dict_to_tuple(old, new):
+    """
+
+    >>> blockdims_dict_to_tuple((4, 5, 6), {1: 10})
+    (4, 10, 6)
+    """
+    newlist = list(old)
+    for k, v in new.items():
+        newlist[k] = v
+    return tuple(newlist)
+
+
+def blockshape_dict_to_tuple(old_blockdims, d):
+    """
+
+    >>> blockshape_dict_to_tuple(((4, 4), (5, 5)), {1: 3})
+    ((4, 4), (3, 3, 3, 1))
+    """
+    shape = tuple(map(sum, old_blockdims))
+    new_blockdims = list(old_blockdims)
+    for k, v in d.items():
+        div = shape[k] // v
+        mod = shape[k] % v
+        new_blockdims[k] = (v,) * div + ((mod,) if mod else ())
+    return tuple(new_blockdims)
+
+
 def reblock(x, blockdims=None, blockshape=None):
     """
     Convert blocks in dask array x for new blockdims.
@@ -160,7 +187,12 @@ def reblock(x, blockdims=None, blockshape=None):
     >>> y.blockdims
     ((2, 4, 1), (4, 2, 1), (4, 3), (7,))
 
-    Parameters:
+    blockdims/blockshape also accept dict arguments mapping axis to blockshape
+
+    >>> y = reblock(x, blockshape={1: 2})  # reblock axis 1 with blockshape 2
+
+    Parameters
+    ----------
 
     x:   dask array
     blockdims:  the new block dimensions to create
@@ -168,8 +200,11 @@ def reblock(x, blockdims=None, blockshape=None):
 
     Provide one of blockdims or blockshape.
     """
-
-    if not blockdims:
+    if isinstance(blockdims, dict):
+        blockdims = blockdims_dict_to_tuple(x.blockdims, blockdims)
+    elif isinstance(blockshape, dict):
+        blockdims = blockshape_dict_to_tuple(x.blockdims, blockshape)
+    elif not blockdims:
         blockdims = blockdims_from_blockshape(x.shape, blockshape)
 
     crossed = intersect_blockdims(x.blockdims, blockdims)

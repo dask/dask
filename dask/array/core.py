@@ -11,11 +11,11 @@ from collections import Iterator
 from functools import partial, wraps
 from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
         frequencies, join, first, memoize, map, groupby, valmap, accumulate,
-        merge, curry, compose, reduce)
+        merge, curry, compose, reduce, interleave, sliding_window)
 import numpy as np
 from . import chunk
 from .slicing import slice_array, insert_many
-from ..utils import deepmap, ignoring
+from ..utils import deepmap, ignoring, repr_long_list
 from ..async import inline_functions
 from ..optimize import cull, inline
 from .optimization import optimize
@@ -352,6 +352,8 @@ def rec_concatenate(arrays, axis=0):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
+    if not arrays:
+        return np.array([])
     if isinstance(arrays, Iterator):
         arrays = list(arrays)
     if isinstance(arrays[0], Iterator):
@@ -415,8 +417,29 @@ def map_blocks(x, func, blockshape=None, blockdims=None, dtype=None):
     return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=dtype)
 
 
+@wraps(np.squeeze)
+def squeeze(a, axis=None):
+    if axis is None:
+        axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
+    b = a.map_blocks(partial(np.squeeze, axis=axis), dtype=a.dtype)
+    blockdims = tuple(bd for bd in b.blockdims if bd != (1,))
+    old_keys = list(product([b.name], *[range(len(bd)) for bd in b.blockdims]))
+    new_keys = list(product([b.name], *[range(len(bd)) for bd in blockdims]))
+
+    dsk = b.dask.copy()
+    for o, n in zip(old_keys, new_keys):
+        dsk[n] = dsk[o]
+        del dsk[o]
+
+    return Array(dsk, b.name, blockdims=blockdims, dtype=a.dtype)
+
+
 def compute(*args, **kwargs):
     """ Evaluate several dask arrays at once
+
+    The result of this function is always a tuple of numpy arrays. To evaluate
+    a single dask array into a numpy array, use ``myarray.compute()`` or simply
+    ``np.array(myarray)``.
 
     Example
     -------
@@ -427,17 +450,13 @@ def compute(*args, **kwargs):
     >>> b = d + 2
     >>> A, B = da.compute(a, b)  # Compute both simultaneously
     """
-
     dsk = merge(*[arg.dask for arg in args])
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    results2 = [rec_concatenate(x) if arg.shape else unpack_singleton(x)
-                for x, arg in zip(results, args)]
-    if len(results2) == 1:
-        return results2[0]
-    else:
-        return results2
+    results2 = tuple(rec_concatenate(x) if arg.shape else unpack_singleton(x)
+                     for x, arg in zip(results, args))
+    return results2
 
 
 def store(sources, targets, **kwargs):
@@ -549,6 +568,13 @@ class Array(object):
     def __len__(self):
         return sum(self.blockdims[0])
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
     @property
     @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].blockdims))
     def dtype(self):
@@ -560,8 +586,9 @@ class Array(object):
             return self.compute().dtype
 
     def __repr__(self):
-        return ("dask.array<%s, shape=%s, blockdims=%s>" %
-                (self.name, self.shape, self.blockdims))
+        blockdims = '(' + ', '.join(map(repr_long_list, self.blockdims)) + ')'
+        return ("dask.array<%s, shape=%s, blockdims=%s, dtype=%s>" %
+                (self.name, self.shape, blockdims, self._dtype))
 
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
@@ -569,6 +596,16 @@ class Array(object):
     @property
     def ndim(self):
         return len(self.shape)
+
+    @property
+    def size(self):
+        """ Number of elements in array """
+        return np.prod(self.shape)
+
+    @property
+    def nbytes(self):
+        """ Number of bytes in array """
+        return self.size * self.dtype.itemsize
 
     def _keys(self, *args):
         if self.ndim == 0:
@@ -595,7 +632,8 @@ class Array(object):
 
     @wraps(compute)
     def compute(self, **kwargs):
-        return compute(self, **kwargs)
+        result, = compute(self, **kwargs)
+        return result
 
     def __int__(self):
         return int(self.compute())
@@ -776,6 +814,9 @@ class Array(object):
         return map_blocks(self, func, blockshape=blockshape,
                           blockdims=blockdims, dtype=dtype)
 
+    @wraps(squeeze)
+    def squeeze(self):
+        return squeeze(self)
 
     def reblock(self, blockdims=None, blockshape=None):
         from .reblock import reblock
@@ -840,9 +881,14 @@ def unpack_singleton(x):
 
     >>> unpack_singleton([[[[1]]]])
     1
+    >>> unpack_singleton(np.array(np.datetime64('2000-01-01')))
+    array(datetime.date(2000, 1, 1), dtype='datetime64[D]')
     """
-    while isinstance(x, Iterable):
-        x = x[0]
+    while True:
+        try:
+            x = x[0]
+        except (IndexError, TypeError, KeyError):
+            break
     return x
 
 
@@ -994,6 +1040,15 @@ def concatenate(seq, axis=0):
     return Array(dsk2, name, shape, blockdims=blockdims, dtype=dt)
 
 
+@wraps(np.take)
+def take(a, indices, axis):
+    if not -a.ndim <= axis < a.ndim:
+        raise ValueError('axis=(%s) out of bounds' % axis)
+    if axis < 0:
+        axis += a.ndim
+    return a[(slice(None),) * axis + (indices,)]
+
+
 @wraps(np.transpose)
 def transpose(a, axes=None):
     axes = axes or tuple(range(a.ndim))[::-1]
@@ -1142,38 +1197,83 @@ def wrap_elemwise(func, **kwargs):
     return f
 
 
-arccos = wrap_elemwise(np.arccos)
-arcsin = wrap_elemwise(np.arcsin)
-arctan = wrap_elemwise(np.arctan)
-arctanh = wrap_elemwise(np.arctanh)
-arccosh = wrap_elemwise(np.arccosh)
-arcsinh = wrap_elemwise(np.arcsinh)
-arctan2 = wrap_elemwise(np.arctan2)
+# ufuncs, copied from this page:
+# http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
-ceil = wrap_elemwise(np.ceil)
-copysign = wrap_elemwise(np.copysign)
-cos = wrap_elemwise(np.cos)
-cosh = wrap_elemwise(np.cosh)
-degrees = wrap_elemwise(np.degrees)
+# math operations
+logaddexp = wrap_elemwise(np.logaddexp)
+logaddexp2 = wrap_elemwise(np.logaddexp2)
+conj = wrap_elemwise(np.conj)
 exp = wrap_elemwise(np.exp)
-expm1 = wrap_elemwise(np.expm1)
-fabs = wrap_elemwise(np.fabs)
-floor = wrap_elemwise(np.floor)
-fmod = wrap_elemwise(np.fmod)
-hypot = wrap_elemwise(np.hypot)
-isinf = wrap_elemwise(np.isinf, dtype='bool')
-isnan = wrap_elemwise(np.isnan, dtype='bool')
-ldexp = wrap_elemwise(np.ldexp)
 log = wrap_elemwise(np.log)
+log2 = wrap_elemwise(np.log2)
 log10 = wrap_elemwise(np.log10)
 log1p = wrap_elemwise(np.log1p)
-radians = wrap_elemwise(np.radians)
-sin = wrap_elemwise(np.sin)
-sinh = wrap_elemwise(np.sinh)
+expm1 = wrap_elemwise(np.expm1)
 sqrt = wrap_elemwise(np.sqrt)
+square = wrap_elemwise(np.square)
+
+# trigonometric functions
+sin = wrap_elemwise(np.sin)
+cos = wrap_elemwise(np.cos)
 tan = wrap_elemwise(np.tan)
+arcsin = wrap_elemwise(np.arcsin)
+arccos = wrap_elemwise(np.arccos)
+arctan = wrap_elemwise(np.arctan)
+arctan2 = wrap_elemwise(np.arctan2)
+hypot = wrap_elemwise(np.hypot)
+sinh = wrap_elemwise(np.sinh)
+cosh = wrap_elemwise(np.cosh)
 tanh = wrap_elemwise(np.tanh)
+arcsinh = wrap_elemwise(np.arcsinh)
+arccosh = wrap_elemwise(np.arccosh)
+arctanh = wrap_elemwise(np.arctanh)
+deg2rad = wrap_elemwise(np.deg2rad)
+rad2deg = wrap_elemwise(np.rad2deg)
+
+# comparison functions
+logical_and = wrap_elemwise(np.logical_and, dtype='bool')
+logical_or = wrap_elemwise(np.logical_or, dtype='bool')
+logical_xor = wrap_elemwise(np.logical_xor, dtype='bool')
+logical_not = wrap_elemwise(np.logical_not, dtype='bool')
+maximum = wrap_elemwise(np.maximum)
+minimum = wrap_elemwise(np.minimum)
+fmax = wrap_elemwise(np.fmax)
+fmin = wrap_elemwise(np.fmin)
+
+# floating functions
+isreal = wrap_elemwise(np.isreal, dtype='bool')
+iscomplex = wrap_elemwise(np.iscomplex, dtype='bool')
+isfinite = wrap_elemwise(np.isfinite, dtype='bool')
+isinf = wrap_elemwise(np.isinf, dtype='bool')
+isnan = wrap_elemwise(np.isnan, dtype='bool')
+signbit = wrap_elemwise(np.signbit, dtype='bool')
+copysign = wrap_elemwise(np.copysign)
+nextafter = wrap_elemwise(np.nextafter)
+# modf: see below
+ldexp = wrap_elemwise(np.ldexp)
+# frexp: see below
+fmod = wrap_elemwise(np.fmod)
+floor = wrap_elemwise(np.floor)
+ceil = wrap_elemwise(np.ceil)
 trunc = wrap_elemwise(np.trunc)
+
+# more math routines, from this page:
+# http://docs.scipy.org/doc/numpy/reference/routines.math.html
+degrees = wrap_elemwise(np.degrees)
+radians = wrap_elemwise(np.radians)
+
+rint = wrap_elemwise(np.rint)
+fix = wrap_elemwise(np.fix)
+
+angle = wrap_elemwise(np.angle)
+real = wrap_elemwise(np.real)
+imag = wrap_elemwise(np.imag)
+
+clip = wrap_elemwise(np.clip)
+fabs = wrap_elemwise(np.fabs)
+sign = wrap_elemwise(np.fabs)
+
 
 def frexp(x):
     tmp = elemwise(np.frexp, x)
@@ -1291,6 +1391,69 @@ def coarsen(reduction, x, axes):
     return Array(merge(x.dask, dsk), name, blockdims=blockdims, dtype=dt)
 
 
+def split_at_breaks(array, breaks, axis=0):
+    """ Split an array into a list of arrays (using slices) at the given breaks
+
+    >>> split_at_breaks(np.arange(6), [3, 5])
+    [array([0, 1, 2]), array([3, 4]), array([5])]
+    """
+    padded_breaks = concat([[None], breaks, [None]])
+    slices = [slice(i, j) for i, j in sliding_window(2, padded_breaks)]
+    preslice = (slice(None),) * axis
+    split_array = [array[preslice + (s,)] for s in slices]
+    return split_array
+
+
+@wraps(np.insert)
+def insert(arr, obj, values, axis):
+    # axis is a required argument here to avoid needing to deal with the numpy
+    # default case (which reshapes the array to make it flat)
+    if not -arr.ndim <= axis < arr.ndim:
+        raise IndexError('axis %r is out of bounds for an array of dimension '
+                         '%s' % (axis, arr.ndim))
+    if axis < 0:
+        axis += arr.ndim
+
+    if isinstance(obj, slice):
+        obj = np.arange(*obj.indices(arr.shape[axis]))
+    obj = np.asarray(obj)
+    scalar_obj = obj.ndim == 0
+    if scalar_obj:
+        obj = np.atleast_1d(obj)
+
+    obj = np.where(obj < 0, obj + arr.shape[axis], obj)
+    if (np.diff(obj) < 0).any():
+        raise NotImplementedError(
+            'da.insert only implemented for monotonic ``obj`` argument')
+
+    split_arr = split_at_breaks(arr, np.unique(obj), axis)
+
+    if getattr(values, 'ndim', 0) == 0:
+        # we need to turn values into a dask array
+        name = next(names)
+        dtype = getattr(values, 'dtype', type(values))
+        values = Array({(name,): values}, name, blockdims=(), dtype=dtype)
+
+        values_shape = tuple(len(obj) if axis == n else s
+                             for n, s in enumerate(arr.shape))
+        values = broadcast_to(values, values_shape)
+    elif scalar_obj:
+        values = values[(slice(None),) * axis + (None,)]
+
+    values_blockdims = tuple(values_bd if axis == n else arr_bd
+                             for n, (arr_bd, values_bd)
+                             in enumerate(zip(arr.blockdims,
+                                              values.blockdims)))
+    values = values.reblock(values_blockdims)
+
+    counts = np.bincount(obj)[:-1]
+    values_breaks = np.cumsum(counts[counts > 0])
+    split_values = split_at_breaks(values, values_breaks, axis)
+
+    interleaved = interleave([split_arr, split_values])
+    return concatenate(list(interleaved), axis=axis)
+
+
 @wraps(chunk.broadcast_to)
 def broadcast_to(x, shape):
     shape = tuple(shape)
@@ -1312,31 +1475,6 @@ def broadcast_to(x, shape):
                  tuple(bd[i] for i, bd in zip(key[1:], blockdims[ndim_new:]))))
                for key in core.flatten(x._keys()))
     return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=x.dtype)
-
-
-constant_names = ('constant-%d' % i for i in count(1))
-
-
-def constant(value, shape=None, blockshape=None, blockdims=None, dtype=None):
-    """ An array with a constant value
-
-    >>> x = constant(5, shape=(4, 4), blockshape=(2, 2))
-    >>> np.array(x)
-    array([[5, 5, 5, 5],
-           [5, 5, 5, 5],
-           [5, 5, 5, 5],
-           [5, 5, 5, 5]])
-    """
-    name = next(constant_names)
-    if shape and blockshape and not blockdims:
-        blockdims = blockdims_from_blockshape(shape, blockshape)
-
-    keys = product([name], *[range(len(bd)) for bd in blockdims])
-    shapes = product(*blockdims)
-    vals = [(chunk.constant, value, shape) for shape in shapes]
-    dsk = dict(zip(keys, vals))
-
-    return Array(dsk, name, blockdims=blockdims)
 
 
 def offset_func(func, offset, *args):

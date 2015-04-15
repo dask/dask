@@ -273,6 +273,15 @@ def test_concatenate():
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
+def test_take():
+    x = np.arange(400).reshape((20, 20))
+    a = from_array(x, blockshape=(5, 5))
+
+    assert eq(np.take(x, 3, axis=0), take(a, 3, axis=0))
+    assert eq(np.take(x, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
+    assert raises(ValueError, lambda: take(a, 3, axis=2))
+
+
 def test_binops():
     a = Array(dict((('a', i), '') for i in range(3)),
               'a', blockdims=((10, 10, 10),))
@@ -432,6 +441,31 @@ def test_coarsen():
                     coarsen(da.sum, d, {0: 2, 1: 4}))
 
 
+def test_insert():
+    x = np.random.randint(10, size=(10, 10))
+    a = from_array(x, blockshape=(5, 5))
+    y = np.random.randint(10, size=(5, 10))
+    b = from_array(y, blockshape=(4, 4))
+
+    assert eq(np.insert(x, 0, -1, axis=0), insert(a, 0, -1, axis=0))
+    assert eq(np.insert(x, 3, -1, axis=-1), insert(a, 3, -1, axis=-1))
+    assert eq(np.insert(x, 5, -1, axis=1), insert(a, 5, -1, axis=1))
+    assert eq(np.insert(x, -1, -1, axis=-2), insert(a, -1, -1, axis=-2))
+    assert eq(np.insert(x, [2, 3, 3], -1, axis=1),
+                 insert(a, [2, 3, 3], -1, axis=1))
+    assert eq(np.insert(x, [2, 3, 8, 8, -2, -2], -1, axis=0),
+                 insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0))
+    assert eq(np.insert(x, slice(1, 4), -1, axis=1),
+                 insert(a, slice(1, 4), -1, axis=1))
+    assert eq(np.insert(x, [2] * 3 + [5] * 2, y, axis=0),
+                 insert(a, [2] * 3 + [5] * 2, b, axis=0))
+    assert eq(np.insert(x, 0, y[0], axis=1),
+                 insert(a, 0, b[0], axis=1))
+    assert raises(NotImplementedError, lambda: insert(a, [4, 2], -1, axis=0))
+    assert raises(IndexError, lambda: insert(a, [3], -1, axis=2))
+    assert raises(IndexError, lambda: insert(a, [3], -1, axis=-3))
+
+
 def test_broadcast_to():
     x = np.random.randint(10, size=(5, 1, 6))
     a = from_array(x, blockshape=(3, 1, 3))
@@ -444,10 +478,10 @@ def test_broadcast_to():
     assert raises(ValueError, lambda: broadcast_to(a, (3,)))
 
 
-def test_constant():
-    d = da.constant(2, blockdims=((2, 2), (3, 3)))
-    assert d.blockdims == ((2, 2), (3, 3))
-    assert (np.array(d)[:] == 2).all()
+def test_full():
+    d = da.full((3, 4), 2, blockdims=((2, 1), (2, 2)))
+    assert d.blockdims == ((2, 1), (2, 2))
+    assert eq(d, np.full((3, 4), 2))
 
 
 def test_map_blocks():
@@ -504,6 +538,9 @@ def test_repr():
     assert d.name in repr(d)
     assert str(d.shape) in repr(d)
     assert str(d.blockdims) in repr(d)
+    assert str(d._dtype) in repr(d)
+    d = da.ones((4000, 4), blockshape=(4, 2))
+    assert len(str(d)) < 1000
 
 
 def test_slicing_with_ellipsis():
@@ -541,6 +578,9 @@ def test_compute():
     A, B = compute(a, b)
     assert eq(A, d + 1)
     assert eq(B, d + 2)
+
+    A, = compute(a)
+    assert eq(A, d + 1)
 
 
 def test_coerce():
@@ -692,37 +732,70 @@ def test_arithmetic():
     assert eq(~(a == b), ~(x == y))
     assert eq(~(a == b), ~(x == y))
 
-    assert eq(da.arcsin(b/10), np.arcsin(y/10))
-    assert eq(da.arccos(b/10), np.arccos(y/10))
-    assert eq(da.arctan(b/10), np.arctan(y/10))
-    assert eq(da.arctanh(b/10), np.arctanh(y/10))
-    assert eq(da.arccosh(b*10), np.arccosh(y*10))
-    assert eq(da.arcsinh(b*10), np.arcsinh(y*10))
-    assert eq(da.arctan2(b*10, a), np.arctan2(y*10, x))
-    assert eq(da.ceil(a), np.ceil(x))
-    assert eq(da.copysign(a - 3, b), np.copysign(x - 3, y))
-    assert eq(da.cos(b), np.cos(y))
-    assert eq(da.cosh(b), np.cosh(y))
-    assert eq(da.degrees(b), np.degrees(y))
+    assert eq(da.logaddexp(a, b), np.logaddexp(x, y))
+    assert eq(da.logaddexp2(a, b), np.logaddexp2(x, y))
+    assert eq(da.conj(a + 1j * b), np.conj(x + 1j * y))
     assert eq(da.exp(b), np.exp(y))
-    assert eq(da.expm1(b), np.expm1(y))
-    assert eq(da.fabs(b), np.fabs(y))
-    assert eq(da.floor(a * 0.5), np.floor(x * 0.5))
-    assert eq(da.fmod(a * 12, b), np.fmod(x * 12, y))
-    assert eq(da.hypot(a, b), np.hypot(x, y))
-    assert eq(da.isinf(a), np.isinf(x))
-    assert eq(da.isnan(a), np.isnan(x))
-    assert eq(da.ldexp(a, b), np.ldexp(x, y))
     assert eq(da.log(a), np.log(x))
     assert eq(da.log10(a), np.log10(x))
     assert eq(da.log1p(a), np.log1p(x))
-    assert eq(da.radians(a), np.radians(x))
-    assert eq(da.sin(a), np.sin(x))
-    assert eq(da.sinh(a), np.sinh(x))
+    assert eq(da.expm1(b), np.expm1(y))
     assert eq(da.sqrt(a), np.sqrt(x))
+    assert eq(da.square(a), np.square(x))
+
+    assert eq(da.sin(a), np.sin(x))
+    assert eq(da.cos(b), np.cos(y))
     assert eq(da.tan(a), np.tan(x))
+    assert eq(da.arcsin(b/10), np.arcsin(y/10))
+    assert eq(da.arccos(b/10), np.arccos(y/10))
+    assert eq(da.arctan(b/10), np.arctan(y/10))
+    assert eq(da.arctan2(b*10, a), np.arctan2(y*10, x))
+    assert eq(da.hypot(b, a), np.hypot(y, x))
+    assert eq(da.sinh(a), np.sinh(x))
+    assert eq(da.cosh(b), np.cosh(y))
     assert eq(da.tanh(a), np.tanh(x))
+    assert eq(da.arcsinh(b*10), np.arcsinh(y*10))
+    assert eq(da.arccosh(b*10), np.arccosh(y*10))
+    assert eq(da.arctanh(b/10), np.arctanh(y/10))
+    assert eq(da.deg2rad(a), np.deg2rad(x))
+    assert eq(da.rad2deg(a), np.rad2deg(x))
+
+    assert eq(da.logical_and(a < 1, b < 4), np.logical_and(x < 1, y < 4))
+    assert eq(da.logical_or(a < 1, b < 4), np.logical_or(x < 1, y < 4))
+    assert eq(da.logical_xor(a < 1, b < 4), np.logical_xor(x < 1, y < 4))
+    assert eq(da.logical_not(a < 1), np.logical_not(x < 1))
+    assert eq(da.maximum(a, 5 - a), np.maximum(a, 5 - a))
+    assert eq(da.minimum(a, 5 - a), np.minimum(a, 5 - a))
+    assert eq(da.fmax(a, 5 - a), np.fmax(a, 5 - a))
+    assert eq(da.fmin(a, 5 - a), np.fmin(a, 5 - a))
+
+    assert eq(da.isreal(a + 1j * b), np.isreal(x + 1j * y))
+    assert eq(da.iscomplex(a + 1j * b), np.iscomplex(x + 1j * y))
+    assert eq(da.isfinite(a), np.isfinite(x))
+    assert eq(da.isinf(a), np.isinf(x))
+    assert eq(da.isnan(a), np.isnan(x))
+    assert eq(da.signbit(a - 3), np.signbit(x - 3))
+    assert eq(da.copysign(a - 3, b), np.copysign(x - 3, y))
+    assert eq(da.nextafter(a - 3, b), np.nextafter(x - 3, y))
+    assert eq(da.ldexp(a, b), np.ldexp(x, y))
+    assert eq(da.fmod(a * 12, b), np.fmod(x * 12, y))
+    assert eq(da.floor(a * 0.5), np.floor(x * 0.5))
+    assert eq(da.ceil(a), np.ceil(x))
     assert eq(da.trunc(a / 2), np.trunc(x / 2))
+
+    assert eq(da.degrees(b), np.degrees(y))
+    assert eq(da.radians(a), np.radians(x))
+
+    assert eq(da.rint(a + 0.3), np.rint(x + 0.3))
+    assert eq(da.fix(a - 2.5), np.fix(x - 2.5))
+
+    assert eq(da.angle(a + 1j), np.angle(x + 1j))
+    assert eq(da.real(a + 1j), np.real(x + 1j))
+    assert eq(da.imag(a + 1j), np.imag(x + 1j))
+
+    assert eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
+    assert eq(da.fabs(b), np.fabs(y))
+    assert eq(da.sign(b - 2), np.fabs(y - 2))
 
     l1, l2 = da.frexp(a)
     r1, r2 = np.frexp(x)
@@ -764,3 +837,21 @@ def test_optimize():
     result = optimize(expr.dask, expr._keys())
     assert isinstance(result, dict)
     assert all(key in result for key in expr._keys())
+
+
+def test_squeeze():
+    x = da.ones((10, 1), blockshape=(3, 1))
+
+    assert eq(x.squeeze(), x.compute().squeeze())
+
+    assert x.squeeze().blockdims == ((3, 3, 3, 1),)
+
+
+def test_size():
+    x = da.ones((10, 2), blockshape=(3, 1))
+    assert x.size == np.array(x).size
+
+
+def test_nbytes():
+    x = da.ones((10, 2), blockshape=(3, 1))
+    assert x.nbytes == np.array(x).nbytes
