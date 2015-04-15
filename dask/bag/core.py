@@ -336,14 +336,15 @@ class Bag(object):
 
         # Partition data on disk
         name = next(names)
-        dsk1 = {(name, i): (partition, grouper, (self.name, i), npartitions, path)
-                 for i, path in enumerate(paths)}
+        dsk1 = dict(((name, i),
+                     (partition, grouper, (self.name, i), npartitions, path))
+                     for i, path in enumerate(paths))
 
         # Collect groups
         name = next(names)
-        dsk2 = {(name, i): (collect, grouper, npartitions, i,
-                                     sorted(dsk1.keys()))
-                for i in range(npartitions)}
+        dsk2 = dict(((name, i),
+                     (collect, grouper, npartitions, i, sorted(dsk1.keys())))
+                    for i in range(npartitions))
 
         return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
 
