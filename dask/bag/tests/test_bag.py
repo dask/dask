@@ -8,6 +8,7 @@ from pbag import PBag
 import dask.bag as db
 import gzip
 import bz2
+from dask.utils import raises
 
 from collections import Iterator
 
@@ -73,6 +74,12 @@ def test_pluck():
     assert set(b.pluck(0)) == set([1, 2, 3, 4])
     assert set(b.pluck(1)) == set([10, 20, 30, 40])
     assert set(b.pluck([1, 0])) == set([(10, 1), (20, 2), (30, 3), (40, 4)])
+
+
+def test_pluck_with_default():
+    b = db.from_sequence(['Hello', '', 'World'])
+    assert raises(IndexError, lambda: list(b.pluck(0)))
+    assert list(b.pluck(0, None)) == ['H', None, 'W']
 
 
 def test_fold_computation():

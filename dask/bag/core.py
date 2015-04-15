@@ -30,6 +30,8 @@ from ..context import _globals
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
 
+no_default = '__no__default__'
+
 
 def lazify_task(task, start=True):
     """
@@ -135,12 +137,16 @@ class Bag(object):
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
-    def pluck(self, key):
+    def pluck(self, key, default=no_default):
         name = next(names)
         if isinstance(key, list):
             key = (list2, key)
-        dsk = dict(((name, i), (list, (pluck, key, (self.name, i))))
-                   for i in range(self.npartitions))
+        if default == no_default:
+            dsk = dict(((name, i), (list, (pluck, key, (self.name, i))))
+                       for i in range(self.npartitions))
+        else:
+            dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
+                       for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
     def fold(self, binop, combine=None, initial=None):
