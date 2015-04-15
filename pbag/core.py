@@ -11,6 +11,7 @@ from cytoolz import groupby, take, concat, curry
 import os
 import shutil
 from collections import Iterator, Iterable
+import dill
 
 
 class PBag(object):
@@ -123,6 +124,12 @@ class PBag(object):
 
     def drop(self):
         shutil.rmtree(self.path)
+
+    def __getstate__(self):
+        return dill.dumps(self.__dict__)
+
+    def __setstate__(self, state):
+        self.__dict__.update(dill.loads(state))
 
 
 def partition_all(n, seq):
