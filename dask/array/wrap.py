@@ -75,7 +75,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     else:
         shape = kwargs.pop('shape')
 
-    dtype = kwargs.get('dtype', None)
+    dtype = kwargs.pop('dtype', None)
 
     if not isinstance(shape, (tuple, list)):
         shape = (shape,)
@@ -87,12 +87,14 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     if not blockdims and blockshape:
         blockdims = blockdims_from_blockshape(shape, blockshape)
 
+    if dtype is None:
+        dtype = func(shape, *args, **kwargs).dtype
+
     name = name or next(names)
 
     keys = product([name], *[range(len(bd)) for bd in blockdims])
     shapes = product(*blockdims)
-    if not kwargs:
-        func = curry(func, **kwargs)
+    func = curry(func, dtype=dtype, **kwargs)
     vals = ((func,) + (s,) + args for s in shapes)
 
     dsk = dict(zip(keys, vals))
@@ -120,3 +122,4 @@ w = wrap(wrap_func_shape_as_first_arg)
 ones = w(np.ones, dtype='f8')
 zeros = w(np.zeros, dtype='f8')
 empty = w(np.empty, dtype='f8')
+full = w(np.full)

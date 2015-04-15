@@ -372,6 +372,15 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 **kwargs):
     """ Asynchronous get function
 
+    This is a general version of various asynchronous schedulers for dask.  It
+    takes a an apply_async function as found on Pool objects to form a more
+    specific ``get`` method that walks through the dask array with parallel
+    workers, avoiding repeat computation and minimizing memory use.
+
+    This function evaluates the entire graph, regardless of the given output
+    keys.  You may want to cull your graph ahead of time with
+    ``dask.optimize.cull``.
+
     Parameters
     ----------
 

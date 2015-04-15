@@ -16,7 +16,7 @@ from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
 import numpy as np
 from . import chunk
 from .slicing import slice_array, insert_many
-from ..utils import deepmap, ignoring
+from ..utils import deepmap, ignoring, repr_long_list
 from ..async import inline_functions
 from ..optimize import cull, inline
 from ..compatibility import unicode
@@ -431,8 +431,29 @@ def map_blocks(x, func, blockshape=None, blockdims=None, dtype=None):
     return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=dtype)
 
 
+@wraps(np.squeeze)
+def squeeze(a, axis=None):
+    if axis is None:
+        axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
+    b = a.map_blocks(partial(np.squeeze, axis=axis), dtype=a.dtype)
+    blockdims = tuple(bd for bd in b.blockdims if bd != (1,))
+    old_keys = list(product([b.name], *[range(len(bd)) for bd in b.blockdims]))
+    new_keys = list(product([b.name], *[range(len(bd)) for bd in blockdims]))
+
+    dsk = b.dask.copy()
+    for o, n in zip(old_keys, new_keys):
+        dsk[n] = dsk[o]
+        del dsk[o]
+
+    return Array(dsk, b.name, blockdims=blockdims, dtype=a.dtype)
+
+
 def compute(*args, **kwargs):
     """ Evaluate several dask arrays at once
+
+    The result of this function is always a tuple of numpy arrays. To evaluate
+    a single dask array into a numpy array, use ``myarray.compute()`` or simply
+    ``np.array(myarray)``.
 
     Example
     -------
@@ -443,17 +464,13 @@ def compute(*args, **kwargs):
     >>> b = d + 2
     >>> A, B = da.compute(a, b)  # Compute both simultaneously
     """
-
     dsk = merge(*[arg.dask for arg in args])
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    results2 = [rec_concatenate(x) if arg.shape else unpack_singleton(x)
-                for x, arg in zip(results, args)]
-    if len(results2) == 1:
-        return results2[0]
-    else:
-        return results2
+    results2 = tuple(rec_concatenate(x) if arg.shape else unpack_singleton(x)
+                     for x, arg in zip(results, args))
+    return results2
 
 
 def store(sources, targets, **kwargs):
@@ -583,8 +600,9 @@ class Array(object):
             return self.compute().dtype
 
     def __repr__(self):
+        blockdims = '(' + ', '.join(map(repr_long_list, self.blockdims)) + ')'
         return ("dask.array<%s, shape=%s, blockdims=%s, dtype=%s>" %
-                (self.name, self.shape, self.blockdims, self._dtype))
+                (self.name, self.shape, blockdims, self._dtype))
 
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
@@ -592,6 +610,16 @@ class Array(object):
     @property
     def ndim(self):
         return len(self.shape)
+
+    @property
+    def size(self):
+        """ Number of elements in array """
+        return np.prod(self.shape)
+
+    @property
+    def nbytes(self):
+        """ Number of bytes in array """
+        return self.size * self.dtype.itemsize
 
     def _keys(self, *args):
         if self.ndim == 0:
@@ -618,7 +646,8 @@ class Array(object):
 
     @wraps(compute)
     def compute(self, **kwargs):
-        return compute(self, **kwargs)
+        result, = compute(self, **kwargs)
+        return result
 
     def __int__(self):
         return int(self.compute())
@@ -799,6 +828,9 @@ class Array(object):
         return map_blocks(self, func, blockshape=blockshape,
                           blockdims=blockdims, dtype=dtype)
 
+    @wraps(squeeze)
+    def squeeze(self):
+        return squeeze(self)
 
     def reblock(self, blockdims=None, blockshape=None):
         from .reblock import reblock
@@ -1457,31 +1489,6 @@ def broadcast_to(x, shape):
                  tuple(bd[i] for i, bd in zip(key[1:], blockdims[ndim_new:]))))
                for key in core.flatten(x._keys()))
     return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=x.dtype)
-
-
-constant_names = ('constant-%d' % i for i in count(1))
-
-
-def constant(value, shape=None, blockshape=None, blockdims=None, dtype=None):
-    """ An array with a constant value
-
-    >>> x = constant(5, shape=(4, 4), blockshape=(2, 2))
-    >>> np.array(x)
-    array([[5, 5, 5, 5],
-           [5, 5, 5, 5],
-           [5, 5, 5, 5],
-           [5, 5, 5, 5]])
-    """
-    name = next(constant_names)
-    if shape and blockshape and not blockdims:
-        blockdims = blockdims_from_blockshape(shape, blockshape)
-
-    keys = product([name], *[range(len(bd)) for bd in blockdims])
-    shapes = product(*blockdims)
-    vals = [(chunk.constant, value, shape) for shape in shapes]
-    dsk = dict(zip(keys, vals))
-
-    return Array(dsk, name, blockdims=blockdims)
 
 
 def offset_func(func, offset, *args):

@@ -478,10 +478,10 @@ def test_broadcast_to():
     assert raises(ValueError, lambda: broadcast_to(a, (3,)))
 
 
-def test_constant():
-    d = da.constant(2, blockdims=((2, 2), (3, 3)))
-    assert d.blockdims == ((2, 2), (3, 3))
-    assert (np.array(d)[:] == 2).all()
+def test_full():
+    d = da.full((3, 4), 2, blockdims=((2, 1), (2, 2)))
+    assert d.blockdims == ((2, 1), (2, 2))
+    assert eq(d, np.full((3, 4), 2))
 
 
 def test_map_blocks():
@@ -539,6 +539,8 @@ def test_repr():
     assert str(d.shape) in repr(d)
     assert str(d.blockdims) in repr(d)
     assert str(d._dtype) in repr(d)
+    d = da.ones((4000, 4), blockshape=(4, 2))
+    assert len(str(d)) < 1000
 
 
 def test_slicing_with_ellipsis():
@@ -576,6 +578,9 @@ def test_compute():
     A, B = compute(a, b)
     assert eq(A, d + 1)
     assert eq(B, d + 2)
+
+    A, = compute(a)
+    assert eq(A, d + 1)
 
 
 def test_coerce():
@@ -864,3 +869,21 @@ def test_slicing_with_non_ndarrays():
 
 def test_getarray():
     assert type(getarray(np.matrix([[1]]), 0)) == np.ndarray
+
+
+def test_squeeze():
+    x = da.ones((10, 1), blockshape=(3, 1))
+
+    assert eq(x.squeeze(), x.compute().squeeze())
+
+    assert x.squeeze().blockdims == ((3, 3, 3, 1),)
+
+
+def test_size():
+    x = da.ones((10, 2), blockshape=(3, 1))
+    assert x.size == np.array(x).size
+
+
+def test_nbytes():
+    x = da.ones((10, 2), blockshape=(3, 1))
+    assert x.nbytes == np.array(x).nbytes
