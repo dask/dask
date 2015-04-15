@@ -1,4 +1,3 @@
-from pandas import msgpack
 import msgpack
 import struct
 try:

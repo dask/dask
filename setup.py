@@ -32,3 +32,18 @@ setup(name='pframe',
                         else ''),
       install_requires=(list(open('pframe.requirements.txt').read().strip().split('\n'))),
       zip_safe=False)
+
+
+setup(name='pbag',
+      version='0.1.0',
+      description='Partitioned on-disk storage of Python objects',
+      url='http://github.com/ContinuumIO/dask/',
+      maintainer='Matthew Rocklin',
+      maintainer_email='mrocklin@gmail.com',
+      license='BSD',
+      keywords='partitioning out-of-core',
+      packages=['pbag'],
+      long_description=(open('README.rst').read() if exists('README.rst')
+                        else ''),
+      install_requires=(list(open('pbag.requirements.txt').read().strip().split('\n'))),
+      zip_safe=False)
