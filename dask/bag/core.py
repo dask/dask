@@ -9,6 +9,9 @@ import inspect
 from pbag import PBag
 from collections import Iterable, Iterator, defaultdict
 import toolz
+import gzip
+import bz2
+import os
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map, partition_all,
         filter, pluck, identity, groupby)
@@ -345,6 +348,9 @@ def collect(grouper, npartitions, group, pbags):
     return list(result.items())
 
 
+opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
+
+
 def from_filenames(filenames):
     """ Create dask by loading in lines from many files
 
@@ -362,7 +368,15 @@ def from_filenames(filenames):
     if isinstance(filenames, str):
         filenames = sorted(glob(filenames))
 
-    d = dict((('load', i), (list, (open, fn)))
+    if not filenames:
+        raise ValueError("No filenames found")
+
+    extension = os.path.splitext(filenames[0])[1].strip('.')
+
+    myopen = opens.get(extension, open)
+
+
+    d = dict((('load', i), (list, (myopen, fn)))
              for i, fn in enumerate(filenames))
     return Bag(d, 'load', len(d))
 

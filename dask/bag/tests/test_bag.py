@@ -6,6 +6,8 @@ from dask.bag.core import Bag, lazify, lazify_task, fuse, map, collect
 from into.utils import filetexts
 from pbag import PBag
 import dask.bag as db
+import gzip
+import bz2
 
 from collections import Iterator
 
@@ -168,6 +170,20 @@ def test_from_filenames():
                 set('ABCD')
         assert set(line.strip() for line in db.from_filenames('a*.log')) == \
                 set('ABCD')
+
+
+def test_from_filenames_gzip():
+    b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
+
+    assert set(b.dask.values()) == set([(list, (gzip.open, 'foo.json.gz')),
+                                        (list, (gzip.open, 'bar.json.gz'))])
+
+
+def test_from_filenames_bz2():
+    b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
+
+    assert set(b.dask.values()) == set([(list, (bz2.BZ2File, 'foo.json.bz2')),
+                                        (list, (bz2.BZ2File, 'bar.json.bz2'))])
 
 
 def test_from_sequence():
