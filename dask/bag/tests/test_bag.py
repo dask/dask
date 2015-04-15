@@ -5,6 +5,7 @@ import numpy as np
 from dask.bag.core import Bag, lazify, lazify_task, fuse, map, collect
 from into.utils import filetexts
 from pbag import PBag
+import dask.bag as db
 
 from collections import Iterator
 
@@ -46,7 +47,7 @@ def test_map():
 
 
 def test_map_function_with_multiple_arguments():
-    b = Bag.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
+    b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
     assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
 
 
@@ -163,21 +164,21 @@ def test_can_use_dict_to_make_concrete():
 
 def test_from_filenames():
     with filetexts({'a1.log': 'A\nB', 'a2.log': 'C\nD'}) as fns:
-        assert set(line.strip() for line in Bag.from_filenames(fns)) == \
+        assert set(line.strip() for line in db.from_filenames(fns)) == \
                 set('ABCD')
-        assert set(line.strip() for line in Bag.from_filenames('a*.log')) == \
+        assert set(line.strip() for line in db.from_filenames('a*.log')) == \
                 set('ABCD')
 
 
 def test_from_sequence():
-    b = Bag.from_sequence([1, 2, 3, 4, 5], npartitions=3)
+    b = db.from_sequence([1, 2, 3, 4, 5], npartitions=3)
     assert len(b.dask) == 3
     assert set(b) == set([1, 2, 3, 4, 5])
 
 
 def test_from_long_sequence():
     L = list(range(1001))
-    b = Bag.from_sequence(L)
+    b = db.from_sequence(L)
     assert set(b) == set(L)
 
 
@@ -186,8 +187,8 @@ def test_product():
     assert b2.npartitions == b.npartitions**2
     assert set(b2) == set([(i, j) for i in L for j in L])
 
-    x = Bag.from_sequence([1, 2, 3, 4])
-    y = Bag.from_sequence([10, 20, 30])
+    x = db.from_sequence([1, 2, 3, 4])
+    y = db.from_sequence([10, 20, 30])
     z = x.product(y)
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
 
@@ -221,7 +222,7 @@ def test_groupby():
 
 
 def test_groupby_with_indexer():
-    b = Bag.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
+    b = db.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
     result = dict(b.groupby(0))
     assert result == {1: [[1, 2, 3], [1, 4, 9]],
                       2: [[2, 3, 4]]}

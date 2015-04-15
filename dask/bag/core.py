@@ -113,71 +113,6 @@ class Bag(object):
         self.get = get
         self._resources = list()
 
-    @classmethod
-    def from_filenames(cls, filenames):
-        """ Create dask by loading in lines from many files
-
-        Provide list of filenames
-
-        >>> b = Bag.from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
-
-        Or a globstring
-
-        >>> b = Bag.from_filenames('myfiles.*.txt')  # doctest: +SKIP
-
-        See also:
-            from_sequence: A more generic bag creation function
-        """
-        if isinstance(filenames, str):
-            filenames = sorted(glob(filenames))
-
-        d = dict((('load', i), (list, (open, fn)))
-                 for i, fn in enumerate(filenames))
-        return Bag(d, 'load', len(d))
-
-    @classmethod
-    def from_sequence(cls, seq, partition_size=None, npartitions=None):
-        """ Create dask from Python sequence
-
-        This sequence should be relatively small in memory.  Dask Bag works
-        best when it handles loading your data itself.  Commonly we load a
-        sequence of filenames into a Bag and then use ``.map`` to open them.
-
-        Parameters
-        ----------
-
-        seq: Iterable
-            A sequence of elements to put into the dask
-        partition_size: int (optional)
-            The length of each partition
-        npartitions: int (optional)
-            The number of desired partitions
-
-        It is best to provide either ``partition_size`` or ``npartitions``
-        (though not both.)
-
-        Example
-        -------
-
-        >>> b = Bag.from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
-
-        See also:
-            from_sequence: Specialized bag creation function for textfiles
-        """
-        seq = list(seq)
-        if npartitions and not partition_size:
-            partition_size = int(math.ceil(len(seq) / npartitions))
-        if npartitions is None and partition_size is None:
-            if len(seq) < 100:
-                partition_size = 1
-            else:
-                partition_size = int(len(seq) / 100)
-
-        parts = list(partition_all(partition_size, seq))
-        name = next(load_names)
-        d = dict(((name, i), part) for i, part in enumerate(parts))
-        return Bag(d, name, len(d))
-
     def map(self, func):
         name = next(names)
         if takes_multiple_arguments(func):
@@ -408,6 +343,70 @@ def collect(grouper, npartitions, group, pbags):
         for k, v in groups.items():
             result[k].extend(pluck(1, v))
     return list(result.items())
+
+
+def from_filenames(filenames):
+    """ Create dask by loading in lines from many files
+
+    Provide list of filenames
+
+    >>> b = from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
+
+    Or a globstring
+
+    >>> b = from_filenames('myfiles.*.txt')  # doctest: +SKIP
+
+    See also:
+        from_sequence: A more generic bag creation function
+    """
+    if isinstance(filenames, str):
+        filenames = sorted(glob(filenames))
+
+    d = dict((('load', i), (list, (open, fn)))
+             for i, fn in enumerate(filenames))
+    return Bag(d, 'load', len(d))
+
+def from_sequence(seq, partition_size=None, npartitions=None):
+    """ Create dask from Python sequence
+
+    This sequence should be relatively small in memory.  Dask Bag works
+    best when it handles loading your data itself.  Commonly we load a
+    sequence of filenames into a Bag and then use ``.map`` to open them.
+
+    Parameters
+    ----------
+
+    seq: Iterable
+        A sequence of elements to put into the dask
+    partition_size: int (optional)
+        The length of each partition
+    npartitions: int (optional)
+        The number of desired partitions
+
+    It is best to provide either ``partition_size`` or ``npartitions``
+    (though not both.)
+
+    Example
+    -------
+
+    >>> b = from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
+
+    See also:
+        from_filenames: Specialized bag creation function for textfiles
+    """
+    seq = list(seq)
+    if npartitions and not partition_size:
+        partition_size = int(math.ceil(len(seq) / npartitions))
+    if npartitions is None and partition_size is None:
+        if len(seq) < 100:
+            partition_size = 1
+        else:
+            partition_size = int(len(seq) / 100)
+
+    parts = list(partition_all(partition_size, seq))
+    name = next(load_names)
+    d = dict(((name, i), part) for i, part in enumerate(parts))
+    return Bag(d, name, len(d))
 
 
 def dictitems(d):
