@@ -31,7 +31,7 @@ def getarray(a, b):
     """ Mimics getitem but includes call to np.asarray
 
     >>> getarray([1, 2, 3, 4, 5], slice(1, 4))
-    array([1, 2, 3])
+    array([2, 3, 4])
     """
     c = a[b]
     if type(c) != np.ndarray:
