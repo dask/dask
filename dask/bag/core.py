@@ -301,10 +301,14 @@ class Bag(object):
                                 list(dsk.keys())))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
-    def take(self, k):
+    def take(self, k, compute=True):
         name = next(names)
-        return Bag(merge(self.dask, {(name, 0): (list, (take, k, (self.name,
-            0)))}), name, 1)
+        dsk = {(name, 0): (list, (take, k, (self.name, 0)))}
+        b = Bag(merge(self.dask, dsk), name, 1)
+        if compute:
+            return tuple(b.compute())
+        else:
+            return b
 
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]

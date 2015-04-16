@@ -167,6 +167,7 @@ def test_lazify():
 
 def test_take():
     assert list(b.take(2)) == [0, 1]
+    assert b.take(2) == (0, 1)
 
 
 def test_map_is_lazy():
