@@ -10,8 +10,12 @@ import tempfile
 from cytoolz import groupby, take, concat, curry
 import os
 import shutil
+import psutil
+import random
 from collections import Iterator, Iterable
 import dill
+
+global_chunksize = [100]
 
 
 class PBag(object):
@@ -96,11 +100,32 @@ class PBag(object):
             if group:
                 self.dump(group, self.files[k])
 
-    def extend(self, seq, chunksize=200000):
+    def extend(self, seq):
         if isinstance(seq, Iterator):
-            chunks = partition_all(chunksize, seq)
-            for chunk in chunks:
+
+            start_available_memory = psutil.avail_phymem()
+            # Two bounds to avoid hysteresis
+            target_low = 0.4 * start_available_memory
+            target_high = 0.6 * start_available_memory
+            # Pull chunksize from last run
+            chunksize = global_chunksize[0]
+            empty = False
+
+            while not empty:
+                chunk = tuple(take(chunksize, seq))
                 self.extend_chunk(chunk)
+
+                # tweak chunksize if necessary
+                available_memory = psutil.avail_phymem()
+                if len(chunk) == chunksize:
+                    if available_memory > target_high:
+                        chunksize = int(chunksize * 1.6)
+                    elif available_memory < target_low:
+                        chunksize = int(chunksize / 1.6)
+
+                empty, seq = isempty(seq)
+
+            global_chunksize[0] = chunksize
         else:
             self.extend_chunk(seq)
 
