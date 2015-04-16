@@ -1,8 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join, reduceby, pipe, filter, identity, merge_with
+from toolz import merge, join, pipe, filter, identity, merge_with
 import numpy as np
-from dask.bag.core import Bag, lazify, lazify_task, fuse, map, collect
+from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
+        reduceby)
 from into.utils import filetexts
 from pbag import PBag
 import dask.bag as db
@@ -125,7 +126,8 @@ def test_join():
             list(join(isodd, [1, 2, 3], isodd, list(b)))
 
 def test_foldby():
-    c = b.foldby(iseven, lambda acc, x: acc + x, 0, lambda a, b: a + b, 0)
+    c = b.foldby(iseven, add, 0, add, 0)
+    assert (reduceby, iseven, add, (b.name, 0), 0) in list(c.dask.values())
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
 
     c = b.foldby(iseven, lambda acc, x: acc + x)

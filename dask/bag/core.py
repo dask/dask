@@ -273,13 +273,13 @@ class Bag(object):
                    for i in range(n) for j in range(m))
         return Bag(merge(self.dask, other.dask, dsk), name, n*m)
 
-    def foldby(self, key, binop, initial=None, combine=None,
-               combine_initial=None):
+    def foldby(self, key, binop, initial=no_default, combine=None,
+               combine_initial=no_default):
         a = next(names)
         b = next(names)
         if combine is None:
             combine = binop
-        if initial:
+        if initial is not no_default:
             dsk = dict(((a, i),
                         (reduceby, key, binop, (self.name, i), initial))
                         for i in range(self.npartitions))
@@ -288,7 +288,7 @@ class Bag(object):
                         (reduceby, key, binop, (self.name, i)))
                         for i in range(self.npartitions))
         combine2 = lambda acc, x: combine(acc, x[1])
-        if combine_initial:
+        if combine_initial is not no_default:
             dsk2 = {(b, 0): (dictitems,
                               (reduceby,
                                 0, combine2,
