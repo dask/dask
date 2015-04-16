@@ -256,7 +256,15 @@ def test_groupby_with_indexer():
     assert result == {1: [[1, 2, 3], [1, 4, 9]],
                       2: [[2, 3, 4]]}
 
+def test_groupby_with_npartitions_changed():
+    result = b.groupby(lambda x: x, npartitions=1)
+    assert dict(result) == {0: [0, 0 ,0],
+                            1: [1, 1, 1],
+                            2: [2, 2, 2],
+                            3: [3, 3, 3],
+                            4: [4, 4, 4]}
 
+    assert result.npartitions == 1
 
 def test_concat():
     b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])

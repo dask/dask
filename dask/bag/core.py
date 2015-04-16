@@ -343,8 +343,9 @@ class Bag(object):
         # Partition data on disk
         name = next(names)
         dsk1 = dict(((name, i),
-                     (partition, grouper, (self.name, i), npartitions, path))
-                     for i, path in enumerate(paths))
+                     (partition, grouper, (self.name, i), npartitions,
+                                 paths[i % len(paths)]))
+                     for i in range(self.npartitions))
 
         # Collect groups
         name = next(names)
@@ -367,6 +368,7 @@ def partition(grouper, sequence, npartitions, path):
 def collect(grouper, npartitions, group, pbags):
     """ Collect partitions from disk and yield k,v group pairs """
     from pbag import PBag
+    pbags = list(take(npartitions, pbags))
     result = defaultdict(list)
     for pb in pbags:
         part = pb.get_partition(group)
