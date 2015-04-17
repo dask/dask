@@ -507,7 +507,7 @@ def test_map_blocks():
     assert eq(e, x[::2, ::2])
 
 
-def test_map_blocks():
+def test_map_blocks2():
     x = np.arange(10)
     d = from_array(x, blockshape=(2,))
 
@@ -518,6 +518,16 @@ def test_map_blocks():
     expected = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
 
     assert eq(d, expected)
+
+
+def test_map_blocks_with_multiple_outputs():
+    x = np.arange(10)
+    d = from_array(x, blockshape=(5,))
+    def func(blk):
+        return (blk + 1, blk - 1)
+    a, b = map_blocks_multiple_outputs(d, func, blockshapes=[(5,), (5,)])
+    assert eq(a, x + 1)
+    assert eq(b, x - 1)
 
 
 def test_fromfunction():
