@@ -92,7 +92,7 @@ def test_slice_1d():
     #x[:0]
     expected = {}
     result = _slice_1d(100, [20, 20, 20, 20, 20], slice(0))
-    assert expected == result
+    assert result
 
     #x=range(99)
     expected = {0: slice(-3, -21, -3),
@@ -422,3 +422,10 @@ def test_slicing_with_negative_step_flops_keys():
                                             (slice(-1, -6, -1),))
     assert y.dask[(y.name, 1)] == (getitem, (x.name, 0),
                                             (slice(-1, -4, -1),))
+
+
+def test_empty_slice():
+    x = da.ones((5, 5), blockshape=(2, 2), dtype='i4')
+    y = x[:0]
+
+    assert eq(y, np.ones((5, 5), dtype='i4')[:0])

@@ -353,6 +353,9 @@ def _slice_1d(dim_shape, lengths, index):
         if v == slice(0, lengths[k], 1):
             d[k] = slice(None, None, None)
 
+    if not d:  # special case x[:0]
+        d[0] = slice(0, 0, 1)
+
     return d
 
 
