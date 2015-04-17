@@ -6,16 +6,15 @@ See async.py
 from __future__ import absolute_import, division, print_function
 
 from multiprocessing.pool import ThreadPool
-import psutil
 from .async import get_async, inc, add
 from .compatibility import Queue
 from .context import _globals
 
 
-NUM_CPUS = psutil.cpu_count()
+default_pool = ThreadPool()
 
 
-def get(dsk, result, nthreads=NUM_CPUS, cache=None, debug_counts=None, **kwargs):
+def get(dsk, result, cache=None, debug_counts=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
     Parameters
@@ -44,19 +43,11 @@ def get(dsk, result, nthreads=NUM_CPUS, cache=None, debug_counts=None, **kwargs)
     pool = _globals['pool']
 
     if pool is None:
-        pool = ThreadPool(nthreads)
-        cleanup = True
-    else:
-        cleanup = False
+        pool = default_pool
 
     queue = Queue()
-    try:
-        results = get_async(pool.apply_async, nthreads, dsk, result,
-                            cache=cache, debug_counts=debug_counts,
-                            queue=queue, **kwargs)
-    finally:
-        if cleanup:
-            pool.close()
-            pool.join()
+    results = get_async(pool.apply_async, pool._processes, dsk, result,
+                        cache=cache, debug_counts=debug_counts,
+                        queue=queue, **kwargs)
 
     return results
