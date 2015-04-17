@@ -190,6 +190,8 @@ def functions_of(task):
         args = set.union(*map(functions_of, task[1:])) if task[1:] else set()
         return set([unwrap_partial(task[0])]) | args
     if isinstance(task, (list, tuple)):
+        if not task:
+            return set()
         return set.union(*map(functions_of, task))
     return set()
 
