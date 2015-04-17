@@ -19,6 +19,7 @@ Contents
    spec.rst
    array.rst
    frame.rst
+   bag.rst
    pframe.rst
    scheduling.rst
    faq.rst
