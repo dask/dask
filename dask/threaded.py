@@ -46,7 +46,7 @@ def get(dsk, result, cache=None, debug_counts=None, **kwargs):
         pool = default_pool
 
     queue = Queue()
-    results = get_async(pool.apply_async, pool._processes, dsk, result,
+    results = get_async(pool.apply_async, len(pool._pool), dsk, result,
                         cache=cache, debug_counts=debug_counts,
                         queue=queue, **kwargs)
 
