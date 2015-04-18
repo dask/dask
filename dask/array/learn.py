@@ -25,7 +25,7 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     x: dask Array
         Two dimensional array, likely tall and skinny
     y: dask Array
-        One dimensional array with same blockdims as x's rows
+        One dimensional array with same chunks as x's rows
     kwargs:
         options to pass to partial_fit
 
@@ -33,8 +33,8 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     -------
 
     >>> import dask.array as da
-    >>> X = da.random.random((10, 3), blockshape=(5, 3))
-    >>> y = da.random.random(10, blockshape=(5,))
+    >>> X = da.random.random((10, 3), chunks=(5, 3))
+    >>> y = da.random.random(10, chunks=(5,))
 
     >>> from sklearn.linear_model import SGDClassifier
     >>> sgd = SGDClassifier()
@@ -55,18 +55,18 @@ def fit(model, x, y, get=threaded.get, **kwargs):
 
     Or predict on a larger dataset
 
-    >>> z = da.random.random((400, 3), blockshape=(100, 3))
+    >>> z = da.random.random((400, 3), chunks=(100, 3))
     >>> da.learn.predict(sgd, z)  # doctest: +SKIP
-    dask.array<x_11, shape=(400,), blockdims=((100, 100, 100, 100),), dtype=int64>
+    dask.array<x_11, shape=(400,), chunks=((100, 100, 100, 100),), dtype=int64>
     """
     assert x.ndim == 2
     assert y.ndim == 1
-    assert x.blockdims[0] == y.blockdims[0]
+    assert x.chunks[0] == y.chunks[0]
     assert hasattr(model, 'partial_fit')
-    if len(x.blockdims[1]) > 1:
-        x = x.reblock(blockdims=(x.blockdims[0], sum(x.blockdims[1])))
+    if len(x.chunks[1]) > 1:
+        x = x.reblock(chunks=(x.chunks[0], sum(x.chunks[1])))
 
-    nblocks = len(x.blockdims[0])
+    nblocks = len(x.chunks[0])
 
     name = next(names)
     dsk = {(name, -1): model}
@@ -95,7 +95,7 @@ def predict(model, x):
     See docstring for ``da.learn.fit``
     """
     assert x.ndim == 2
-    if len(x.blockdims[1]) > 1:
-        x = x.reblock(blockdims=(x.blockdims[0], sum(x.blockdims[1])))
+    if len(x.chunks[1]) > 1:
+        x = x.reblock(chunks=(x.chunks[0], sum(x.chunks[1])))
     func = partial(_predict, model)
-    return x.map_blocks(func, blockdims=(x.blockdims[0], (1,))).squeeze()
+    return x.map_blocks(func, chunks=(x.chunks[0], (1,))).squeeze()

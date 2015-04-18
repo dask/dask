@@ -20,9 +20,9 @@ z = np.array([[1, -1],
               [10, -10],
               [-10, 10]])
 
-X = da.from_array(x, blockshape=(3, 2))
-Y = da.from_array(y, blockshape=(3,))
-Z = da.from_array(z, blockshape=(2, 2))
+X = da.from_array(x, chunks=(3, 2))
+Y = da.from_array(y, chunks=(3,))
+Z = da.from_array(z, chunks=(2, 2))
 
 def test_fit():
     sgd = SGDClassifier()
@@ -33,6 +33,6 @@ def test_fit():
     assert result.tolist() == [1, -1, 1, -1]
 
     result = da.learn.predict(sgd, Z)
-    assert result.blockdims == ((2, 2),)
+    assert result.chunks == ((2, 2),)
     assert result.compute(get=dask.get).tolist() == [1, -1, 1, -1]
 

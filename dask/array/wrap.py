@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from itertools import count, product
 from toolz import curry
-from .core import Array
+from .core import Array, normalize_chunks
 import numpy as np
 
 
@@ -21,18 +21,6 @@ def dims_from_size(size, blocksize):
     return result
 
 
-def blockdims_from_blockshape(shape, blockshape):
-    """
-    Convert blockshape to dimensions along each axis
-
-    >>> blockdims_from_blockshape((30, 30), (10, 10))
-    ((10, 10, 10), (10, 10, 10))
-    >>> blockdims_from_blockshape((30, 30), (12, 12))
-    ((12, 12, 6), (12, 12, 6))
-    """
-    return tuple(map(tuple, map(dims_from_size, shape, blockshape)))
-
-
 def wrap_func_size_as_kwarg(func, *args, **kwargs):
     """
     Transform np.random function into blocked version
@@ -47,23 +35,26 @@ def wrap_func_size_as_kwarg(func, *args, **kwargs):
     if not isinstance(size, (tuple, list)):
         size = (size,)
 
-    blockshape = kwargs.pop('blockshape', None)
-    blockdims = kwargs.pop('blockdims', None)
+    chunks = kwargs.pop('chunks', None)
+    chunks = normalize_chunks(chunks, size)
     name = kwargs.pop('name', None)
-    if not blockdims and blockshape:
-        blockdims = blockdims_from_blockshape(size, blockshape)
+
+    dtype = kwargs.pop('dtype', None)
+    if dtype is None:
+        kw = kwargs.copy(); kw['size'] = size
+        dtype = func(*args, **kw).dtype
 
     name = name or next(names)
 
-    keys = product([name], *[range(len(bd)) for bd in blockdims])
-    sizes = product(*blockdims)
+    keys = product([name], *[range(len(bd)) for bd in chunks])
+    sizes = product(*chunks)
     if not kwargs:
         vals = ((func,) + args + (size,) for size in sizes)
     else:
         vals = ((curry(func, *args, size=size, **kwargs),) for size in sizes)
 
     dsk = dict(zip(keys, vals))
-    return Array(dsk, name, shape=size, blockdims=blockdims)
+    return Array(dsk, name, chunks, dtype=dtype)
 
 
 def wrap_func_shape_as_first_arg(func, *args, **kwargs):
@@ -75,30 +66,26 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     else:
         shape = kwargs.pop('shape')
 
-    dtype = kwargs.pop('dtype', None)
-
     if not isinstance(shape, (tuple, list)):
         shape = (shape,)
 
-    blockshape = kwargs.pop('blockshape', None)
-    blockdims = kwargs.pop('blockdims', None)
-
+    chunks = kwargs.pop('chunks', None)
+    chunks = normalize_chunks(chunks, shape)
     name = kwargs.pop('name', None)
-    if not blockdims and blockshape:
-        blockdims = blockdims_from_blockshape(shape, blockshape)
 
+    dtype = kwargs.pop('dtype', None)
     if dtype is None:
         dtype = func(shape, *args, **kwargs).dtype
 
     name = name or next(names)
 
-    keys = product([name], *[range(len(bd)) for bd in blockdims])
-    shapes = product(*blockdims)
+    keys = product([name], *[range(len(bd)) for bd in chunks])
+    shapes = product(*chunks)
     func = curry(func, dtype=dtype, **kwargs)
     vals = ((func,) + (s,) + args for s in shapes)
 
     dsk = dict(zip(keys, vals))
-    return Array(dsk, name, shape=shape, blockdims=blockdims, dtype=dtype)
+    return Array(dsk, name, chunks, dtype=dtype)
 
 
 @curry
@@ -108,7 +95,7 @@ def wrap(wrap_func, func, **kwargs):
     Blocked variant of %(name)s
 
     Follows the signature of %(name)s exactly except that it also requires a
-    keyword argument blockshape=(...) or blockdims=(...).
+    keyword argument chunks=(...)
 
     Original signature follows below.
     """ % {'name': func.__name__} + func.__doc__

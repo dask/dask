@@ -37,8 +37,8 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
         for k in flatten(result._keys()):
             k2 = (k[0],) + insert_many(k[1:], axis, 0)
             dsk[k2] = dsk.pop(k)
-        blockdims = insert_many(result.blockdims, axis, [1])
-        return Array(dsk, result.name, blockdims=blockdims, dtype=dtype)
+        chunks = insert_many(result.chunks, axis, [1])
+        return Array(dsk, result.name, chunks=chunks, dtype=dtype)
     else:
         return result
 
@@ -295,6 +295,6 @@ def arg_reduction(a, func, argfunc, axis=0, dtype=None):
 
     a2 = elemwise(argreduce, a)
 
-    return atop(partial(arg_aggregate, func, argfunc, a.blockdims[axis]),
+    return atop(partial(arg_aggregate, func, argfunc, a.chunks[axis]),
                 next(names), [i for i in range(a.ndim) if i != axis],
                 a2, list(range(a.ndim)), dtype=dtype)

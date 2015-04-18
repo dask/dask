@@ -46,7 +46,7 @@ def tsqr(data, name=None, compute_svd=False):
 
 
     if not (data.ndim == 2 and                    # Is a matrix
-            len(data.blockdims[1]) == 1):         # Only one column block
+            len(data.chunks[1]) == 1):         # Only one column block
         raise ValueError(
             "Input must have the following properites:\n"
             "  1. Have two dimensions\n"
@@ -56,7 +56,7 @@ def tsqr(data, name=None, compute_svd=False):
     prefix += '_'
 
     m, n = data.shape
-    numblocks = (len(data.blockdims[0]), 1)
+    numblocks = (len(data.chunks[0]), 1)
 
     name_qr_st1 = prefix + 'QR_st1'
     dsk_qr_st1 = top(np.linalg.qr, name_qr_st1, 'ij', data.name, 'ij',
@@ -85,7 +85,7 @@ def tsqr(data, name=None, compute_svd=False):
     name_q_st2_aux = prefix + 'Q_st2_aux'
     dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
                                               (name_qr_st2, 0, 0), 0)}
-    q2_block_sizes = [min(e, n) for e in data.blockdims[0]]
+    q2_block_sizes = [min(e, n) for e in data.chunks[0]]
     block_slices = [(slice(e[0], e[1]), slice(0, n))
                     for e in _cumsum_blocks(q2_block_sizes)]
     name_q_st2 = prefix + 'Q_st2'
@@ -120,8 +120,8 @@ def tsqr(data, name=None, compute_svd=False):
     dsk_r.update(dsk_r_st2)
 
     if not compute_svd:
-        q = Array(dsk_q, name_q_st3, shape=data.shape, blockdims=data.blockdims)
-        r = Array(dsk_r, name_r_st2, shape=(n, n), blockshape=(n, n))
+        q = Array(dsk_q, name_q_st3, shape=data.shape, chunks=data.chunks)
+        r = Array(dsk_r, name_r_st2, shape=(n, n), chunks=(n, n))
         return q, r
     else:
         # In-core SVD computation
@@ -161,9 +161,9 @@ def tsqr(data, name=None, compute_svd=False):
         dsk_v.update(dsk_svd_st2)
         dsk_v.update(dsk_v_st2)
 
-        u = Array(dsk_u, name_u_st4, shape=data.shape, blockdims=data.blockdims)
-        s = Array(dsk_s, name_s_st2, shape=(n,), blockshape=(n, n))
-        v = Array(dsk_v, name_v_st2, shape=(n, n), blockshape=(n, n))
+        u = Array(dsk_u, name_u_st4, shape=data.shape, chunks=data.chunks)
+        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=(n, n))
+        v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=(n, n))
         return u, s, v
 
 

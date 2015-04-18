@@ -1,24 +1,23 @@
 from __future__ import absolute_import, division, print_function
 """
 The reblock module defines:
-    intersect_blockdims: a function for
-        converting blockdims to new dimensions
+    intersect_chunks: a function for
+        converting chunks to new dimensions
     reblock: a function to convert the blocks
-        of an existing dask array to new blockdims or blockshape
+        of an existing dask array to new chunks or blockshape
 """
 
 from itertools import count, product, chain
 from operator import getitem, add
 import numpy as np
 from toolz import merge, accumulate
-from dask.array.core import rec_concatenate, Array
-from dask.array.core import blockdims_from_blockshape
+from dask.array.core import rec_concatenate, Array, normalize_chunks
 
 
 reblock_names  = ('reblock-%d' % i for i in count(1))
 
 
-def cumdims_label(blockdims, const):
+def cumdims_label(chunks, const):
     """ Interal utility for cumulative sum with label.
 
     >>> cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')  # doctest: +NORMALIZE_WHITESPACE
@@ -27,7 +26,7 @@ def cumdims_label(blockdims, const):
     """
     return [tuple(zip((const,) * (1 + len(bds)),
                       list(accumulate(add, (0,) + bds))))
-              for bds in blockdims ]
+              for bds in chunks ]
 
 
 def _breakpoints(cumold, cumnew):
@@ -46,7 +45,7 @@ def _breakpoints(cumold, cumnew):
 
 def _intersect_1d(breaks):
     """
-    Internal utility to intersect blockdims for 1d after preprocessing.
+    Internal utility to intersect chunks for 1d after preprocessing.
 
     >>> new = cumdims_label(((2, 3), (2, 2, 1)), 'n')
     >>> old = cumdims_label(((2, 2, 1), (5,)), 'o')
@@ -95,16 +94,14 @@ def _intersect_1d(breaks):
     return tuple(map(tuple, filter(None, ret)))
 
 
-def intersect_blockdims(old_blockdims=None,
-                        new_blockdims=None,
-                        shape=None,
-                        old_blockshape=None,
-                        new_blockshape=None):
+def intersect_chunks(old_chunks=None,
+                     new_chunks=None,
+                     shape=None):
     """
-    Make dask.array slices as intersection of old and new blockdims.
+    Make dask.array slices as intersection of old and new chunks.
 
-    >>> intersect_blockdims(((4, 4), (2,)),
-    ...                     ((8,), (1, 1)))  # doctest: +NORMALIZE_WHITESPACE
+    >>> intersect_chunks(((4, 4), (2,)),
+    ...                  ((8,), (1, 1)))  # doctest: +NORMALIZE_WHITESPACE
     ((((0, slice(0, 4, None)), (0, slice(0, 1, None))),
       ((1, slice(0, 4, None)), (0, slice(0, 1, None)))),
      (((0, slice(0, 4, None)), (0, slice(1, 2, None))),
@@ -113,12 +110,12 @@ def intersect_blockdims(old_blockdims=None,
     Parameters
     ----------
 
-    old_blockdims : iterable of tuples
-        block sizes along each dimension (convert from old_blockdims)
-    new_blockdims: iterable of tuples
-        block sizes along each dimension (converts to new_blockdims)
+    old_chunks : iterable of tuples
+        block sizes along each dimension (convert from old_chunks)
+    new_chunks: iterable of tuples
+        block sizes along each dimension (converts to new_chunks)
     shape : tuple of ints
-        Shape of the entire array (not needed if using blockdims)
+        Shape of the entire array (not needed if using chunks)
     old_blockshape: size of each old block as tuple
         (converts from this old_blockshape)
     new_blockshape: size of each new block as tuple
@@ -126,18 +123,16 @@ def intersect_blockdims(old_blockdims=None,
 
     Note: shape is only required when using old_blockshape or new_blockshape.
     """
+    old_chunks = normalize_chunks(old_chunks, shape)
+    new_chunks = normalize_chunks(new_chunks, shape)
 
-    if not old_blockdims:
-        old_blockdims = blockdims_from_blockshape(shape, old_blockshape)
-    if not new_blockdims:
-        new_blockdims = blockdims_from_blockshape(shape, new_blockshape)
-    cmo = cumdims_label(old_blockdims,'o')
-    cmn = cumdims_label(new_blockdims,'n')
-    sums = [sum(o) for o in old_blockdims]
-    sums2 = [sum(n) for n in old_blockdims]
+    cmo = cumdims_label(old_chunks,'o')
+    cmn = cumdims_label(new_chunks,'n')
+    sums = [sum(o) for o in old_chunks]
+    sums2 = [sum(n) for n in old_chunks]
     if not sums == sums2:
         raise ValueError('Cannot change dimensions from to %r' % sums2)
-    zipped = zip(old_blockdims,new_blockdims)
+    zipped = zip(old_chunks,new_chunks)
     old_to_new =  tuple(_intersect_1d(_breakpoints(cm[0],cm[1])) for cm in zip(cmo, cmn))
     cross1 = tuple(product(*old_to_new))
     cross = tuple(chain(tuple(product(*cr)) for cr in cross1))
@@ -156,61 +151,56 @@ def blockdims_dict_to_tuple(old, new):
     return tuple(newlist)
 
 
-def blockshape_dict_to_tuple(old_blockdims, d):
+def blockshape_dict_to_tuple(old_chunks, d):
     """
 
     >>> blockshape_dict_to_tuple(((4, 4), (5, 5)), {1: 3})
     ((4, 4), (3, 3, 3, 1))
     """
-    shape = tuple(map(sum, old_blockdims))
-    new_blockdims = list(old_blockdims)
+    shape = tuple(map(sum, old_chunks))
+    new_chunks = list(old_chunks)
     for k, v in d.items():
         div = shape[k] // v
         mod = shape[k] % v
-        new_blockdims[k] = (v,) * div + ((mod,) if mod else ())
-    return tuple(new_blockdims)
+        new_chunks[k] = (v,) * div + ((mod,) if mod else ())
+    return tuple(new_chunks)
 
 
-def reblock(x, blockdims=None, blockshape=None):
+def reblock(x, chunks):
     """
-    Convert blocks in dask array x for new blockdims.
-
-    reblock(x, blockdims=None, blockshape=None )
+    Convert blocks in dask array x for new chunks.
 
     >>> import dask.array as da
     >>> a = np.random.uniform(0, 1, 7**4).reshape((7,) * 4)
-    >>> x = da.from_array(a, blockdims=((2, 3, 2),)*4)
-    >>> x.blockdims
+    >>> x = da.from_array(a, chunks=((2, 3, 2),)*4)
+    >>> x.chunks
     ((2, 3, 2), (2, 3, 2), (2, 3, 2), (2, 3, 2))
 
-    >>> y = reblock(x, blockdims=((2, 4, 1), (4, 2, 1), (4, 3), (7,)))
-    >>> y.blockdims
+    >>> y = reblock(x, chunks=((2, 4, 1), (4, 2, 1), (4, 3), (7,)))
+    >>> y.chunks
     ((2, 4, 1), (4, 2, 1), (4, 3), (7,))
 
-    blockdims/blockshape also accept dict arguments mapping axis to blockshape
+    chunks also accept dict arguments mapping axis to blockshape
 
-    >>> y = reblock(x, blockshape={1: 2})  # reblock axis 1 with blockshape 2
+    >>> y = reblock(x, chunks={1: 2})  # reblock axis 1 with blockshape 2
 
     Parameters
     ----------
 
     x:   dask array
-    blockdims:  the new block dimensions to create
-    blockshape: the new blockshape to create
-
-    Provide one of blockdims or blockshape.
+    chunks:  the new block dimensions to create
     """
-    if isinstance(blockdims, dict):
-        blockdims = blockdims_dict_to_tuple(x.blockdims, blockdims)
-    elif isinstance(blockshape, dict):
-        blockdims = blockshape_dict_to_tuple(x.blockdims, blockshape)
-    elif not blockdims:
-        blockdims = blockdims_from_blockshape(x.shape, blockshape)
+    if isinstance(chunks, dict):
+        if isinstance(next(iter(chunks.values())), int):
+            chunks = blockshape_dict_to_tuple(x.chunks, chunks)
+        else:
+            chunks = blockdims_dict_to_tuple(x.chunks, chunks)
+    chunks = normalize_chunks(chunks, x.shape)
 
-    crossed = intersect_blockdims(x.blockdims, blockdims)
+    crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
     temp_name = next(reblock_names)
-    new_index = tuple(product(*(tuple(range(len(n))) for n in blockdims)))
+    new_index = tuple(product(*(tuple(range(len(n))) for n in chunks)))
     for flat_idx, cross1 in enumerate(crossed):
         new_idx = new_index[flat_idx]
         key = (temp_name,) + new_idx
@@ -232,4 +222,4 @@ def reblock(x, blockdims=None, blockshape=None):
                 temp[ind_in_blk[-1]] = (getitem, (x.name,) + ind, slc)
         x2[key] = (rec_concatenate, rec_cat_arg)
     x2 = merge(x.dask, x2)
-    return Array(x2, temp_name, blockdims = blockdims, dtype=x.dtype)
+    return Array(x2, temp_name, chunks, dtype=x.dtype)

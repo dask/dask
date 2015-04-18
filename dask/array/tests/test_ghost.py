@@ -29,11 +29,11 @@ def test_fractional_slice():
 
 def test_ghost_internal():
     x = np.arange(64).reshape((8, 8))
-    d = da.from_array(x, blockshape=(4, 4))
+    d = da.from_array(x, chunks=(4, 4))
 
     g = ghost_internal(d, {0: 2, 1: 1})
     result = g.compute(get=get)
-    assert g.blockdims == ((6, 6), (5, 5))
+    assert g.chunks == ((6, 6), (5, 5))
 
     expected = np.array([
         [ 0,  1,  2,  3,  4,    3,  4,  5,  6,  7],
@@ -54,15 +54,15 @@ def test_ghost_internal():
 
 
 def test_trim_internal():
-    d = da.ones((40, 60), blockshape=(10, 10))
+    d = da.ones((40, 60), chunks=(10, 10))
     e = trim_internal(d, axes={0: 1, 1: 2})
 
-    assert e.blockdims == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
+    assert e.chunks == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
 
 def test_periodic():
     x = np.arange(64).reshape((8, 8))
-    d = da.from_array(x, blockshape=(4, 4))
+    d = da.from_array(x, chunks=(4, 4))
 
     e = periodic(d, axis=0, depth=2)
     assert e.shape[0] == d.shape[0] + 4
@@ -74,7 +74,7 @@ def test_periodic():
 
 def test_reflect():
     x = np.arange(10)
-    d = da.from_array(x, blockshape=(5, 5))
+    d = da.from_array(x, chunks=(5, 5))
 
     e = reflect(d, axis=0, depth=2)
     expected = np.array([1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 8])
@@ -87,7 +87,7 @@ def test_reflect():
 
 def test_constant():
     x = np.arange(64).reshape((8, 8))
-    d = da.from_array(x, blockshape=(4, 4))
+    d = da.from_array(x, chunks=(4, 4))
 
     e = constant(d, axis=0, depth=2, value=10)
     assert e.shape[0] == d.shape[0] + 4
@@ -99,7 +99,7 @@ def test_constant():
 
 def test_boundaries():
     x = np.arange(64).reshape((8, 8))
-    d = da.from_array(x, blockshape=(4, 4))
+    d = da.from_array(x, chunks=(4, 4))
 
     e = boundaries(d, {0: 2, 1: 1}, {0: 0, 1: 'periodic'})
 
@@ -121,9 +121,9 @@ def test_boundaries():
 
 def test_ghost():
     x = np.arange(64).reshape((8, 8))
-    d = da.from_array(x, blockshape=(4, 4))
+    d = da.from_array(x, chunks=(4, 4))
     g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'reflect'})
-    assert g.blockdims == ((8, 8), (6, 6))
+    assert g.chunks == ((8, 8), (6, 6))
     expected = np.array(
       [[100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
@@ -144,4 +144,4 @@ def test_ghost():
     assert eq(g, expected)
 
     g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
-    assert g.blockdims == ((8, 8), (5, 5))
+    assert g.chunks == ((8, 8), (5, 5))

@@ -4,7 +4,7 @@ from itertools import count
 import numpy as np
 from toolz import curry
 
-from .core import Array
+from .core import Array, normalize_chunks
 
 linspace_names = ('linspace-%d' % i for i in count(1))
 arange_names = ('arange-%d' % i for i in count(1))
@@ -19,7 +19,7 @@ def _get_blocksizes(num, blocksize):
     return blocksizes
 
 
-def linspace(start, stop, num=50, blocksize=None, dtype=None):
+def linspace(start, stop, num=50, chunks=None, dtype=None):
     """
     Return `num` evenly spaced values over the closed interval [`start`,
     `stop`].
@@ -32,7 +32,7 @@ def linspace(start, stop, num=50, blocksize=None, dtype=None):
         The starting value of the sequence.
     stop : scalar
         The last value of the sequence.
-    blocksize :  int
+    chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if `num % blocksize != 0`
     num : int, optional
@@ -46,10 +46,10 @@ def linspace(start, stop, num=50, blocksize=None, dtype=None):
     """
     num = int(num)
 
-    if blocksize is None:
-        raise ValueError("Must supply a blocksize= keyword argument")
+    if chunks is None:
+        raise ValueError("Must supply a chunks= keyword argument")
 
-    blocksizes = _get_blocksizes(num, blocksize)
+    chunks = normalize_chunks(chunks, (num,))
 
     range_ = stop - start
 
@@ -60,13 +60,13 @@ def linspace(start, stop, num=50, blocksize=None, dtype=None):
     dsk = {}
     blockstart = start
 
-    for i, bs in enumerate(blocksizes):
+    for i, bs in enumerate(chunks[0]):
         blockstop = blockstart + ((bs - 1) * space)
         task = (curry(np.linspace, dtype=dtype), blockstart, blockstop, bs)
         blockstart = blockstart + (space * bs)
         dsk[(name, i)] = task
 
-    return Array(dsk, name, blockdims=(blocksizes,), dtype=dtype)
+    return Array(dsk, name, chunks, dtype=dtype)
 
 
 def arange(*args, **kwargs):
@@ -89,9 +89,9 @@ def arange(*args, **kwargs):
     step : int, optional
         The spacing between the values. The default is 1 when not specified.
         The last value of the sequence.
-    blocksize :  int
+    chunks :  int
         The number of samples on each block. Note that the last block will have
-        fewer samples if `num % blocksize != 0`.
+        fewer samples if `num % chunks != 0`.
     num : int, optional
         Number of samples to in the returned dask array, including the
         endpoints.
@@ -116,9 +116,9 @@ def arange(*args, **kwargs):
         arange takes 3 positional arguments: arange([start], stop, [step])
         ''')
 
-    if 'blocksize' not in kwargs:
-        raise ValueError("Must supply a blocksize= keyword argument")
-    blocksize = kwargs['blocksize']
+    if 'chunks' not in kwargs:
+        raise ValueError("Must supply a chunks= keyword argument")
+    chunks = kwargs['chunks']
 
     dtype = kwargs.get('dtype', None)
 
@@ -127,18 +127,17 @@ def arange(*args, **kwargs):
     if (range_ % step) != 0:
         num += 1
 
-    # compute blocksizes
-    blocksizes = _get_blocksizes(num, blocksize)
+    chunks = normalize_chunks(chunks, (num,))
 
     name = next(arange_names)
     dsk = {}
     elem_count = 0
 
-    for i, bs in enumerate(blocksizes):
+    for i, bs in enumerate(chunks[0]):
         blockstart = start + (elem_count * step)
         blockstop = start + ((elem_count + bs) * step)
         task = (np.arange, blockstart, blockstop, step, dtype)
         dsk[(name, i)] = task
         elem_count += bs
 
-    return Array(dsk, name, blockdims=(blocksizes,), dtype=dtype)
+    return Array(dsk, name, chunks, dtype=dtype)

@@ -147,7 +147,7 @@ def test_slice_array_1d():
                 ('y', 1): (getitem, ('x', 1), (slice(1, 25, 2),)),
                 ('y', 2): (getitem, ('x', 2), (slice(0, 25, 2),)),
                 ('y', 3): (getitem, ('x', 3), (slice(1, 25, 2),))}
-    result, blockdims = slice_array('y', 'x', [[25]*4], [slice(24,None,2)])
+    result, chunks = slice_array('y', 'x', [[25]*4], [slice(24,None,2)])
 
     assert expected == result
 
@@ -156,7 +156,7 @@ def test_slice_array_1d():
                 ('y', 1): (getitem, ('x', 2), (slice(0, 25, 2),)),
                 ('y', 2): (getitem, ('x', 3), (slice(1, 25, 2),))}
 
-    result, blockdims = slice_array('y', 'x', [[25]*4], [slice(26,None,2)])
+    result, chunks = slice_array('y', 'x', [[25]*4], [slice(26,None,2)])
     assert expected == result
 
     #x[24::2]
@@ -164,7 +164,7 @@ def test_slice_array_1d():
                 ('y', 1): (getitem, ('x', 1), (slice(1, 25, 2),)),
                 ('y', 2): (getitem, ('x', 2), (slice(0, 25, 2),)),
                 ('y', 3): (getitem, ('x', 3), (slice(1, 25, 2),))}
-    result, blockdims = slice_array('y', 'x', [(25,)*4], (slice(24,None,2),))
+    result, chunks = slice_array('y', 'x', [(25,)*4], (slice(24,None,2),))
 
     assert expected == result
 
@@ -173,7 +173,7 @@ def test_slice_array_1d():
                 ('y', 1): (getitem, ('x', 2), (slice(0, 25, 2),)),
                 ('y', 2): (getitem, ('x', 3), (slice(1, 25, 2),))}
 
-    result, blockdims = slice_array('y', 'x', [(25,)*4], (slice(26,None,2),))
+    result, chunks = slice_array('y', 'x', [(25,)*4], (slice(26,None,2),))
     assert expected == result
 
 
@@ -189,7 +189,7 @@ def test_slice_array_2d():
                                ('x', 0, 2),
                                (slice(13, 20, 2), slice(None, None, None)))}
 
-    result, blockdims = slice_array('y', 'x', [[20], [20, 20, 5]],
+    result, chunks = slice_array('y', 'x', [[20], [20, 20, 5]],
                         [slice(13,None,2), slice(10, None, 1)])
 
     assert expected == result
@@ -205,7 +205,7 @@ def test_slice_array_2d():
                                ('x', 0, 2),
                                (5, slice(None, None, None)))}
 
-    result, blockdims = slice_array('y', 'x', ([20], [20, 20, 5]),
+    result, chunks = slice_array('y', 'x', ([20], [20, 20, 5]),
                         [5, slice(10, None, 1)])
 
     assert expected == result
@@ -214,19 +214,19 @@ def test_slice_array_2d():
 def test_slice_optimizations():
     #bar[:]
     expected = {'foo':'bar'}
-    result, blockdims = slice_array('foo', 'bar', [[100]], (slice(None,None,None),))
+    result, chunks = slice_array('foo', 'bar', [[100]], (slice(None,None,None),))
     assert expected == result
 
     #bar[:,:,:]
     expected = {'foo':'bar'}
-    result, blockdims = slice_array('foo', 'bar', [(100,1000,10000)],
+    result, chunks = slice_array('foo', 'bar', [(100,1000,10000)],
                         (slice(None,None,None),slice(None,None,None),
                          slice(None,None,None)))
     assert expected == result
 
 
 def test_slicing_with_singleton_indices():
-    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+    result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
                                     (slice(0, 5), 8))
 
     expected = {('y', 0): (getitem, ('x', 0, 1), (slice(None, None, None), 3))}
@@ -235,7 +235,7 @@ def test_slicing_with_singleton_indices():
 
 
 def test_slicing_with_newaxis():
-    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+    result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
                             (slice(0, 3), None, slice(None, None, None)))
 
     expected = {
@@ -248,11 +248,11 @@ def test_slicing_with_newaxis():
       }
 
     assert expected == result
-    assert blockdims == ((3,), (1,), (5, 5))
+    assert chunks == ((3,), (1,), (5, 5))
 
 
 def test_take():
-    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
     expected = {('y', 0):
             (getitem,
               (np.concatenate, (list,
@@ -261,9 +261,9 @@ def test_take():
                0),
              ([2, 0, 3, 1],))}
     assert dsk == expected
-    assert blockdims == ((4,),)
+    assert chunks == ((4,),)
 
-    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
+    chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
     expected = dict((('y', 0, j),
             (getitem,
               (np.concatenate, (list,
@@ -273,10 +273,10 @@ def test_take():
               ([2, 0, 3, 1], slice(None, None, None))))
             for j in range(2))
     assert dsk == expected
-    assert blockdims == ((4,), (20, 20))
+    assert chunks == ((4,), (20, 20))
 
 
-    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
+    chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [5, 1, 37, 3], axis=1)
     expected = dict((('y', i, 0),
             (getitem,
               (np.concatenate, (list,
@@ -286,17 +286,17 @@ def test_take():
              (slice(None, None, None), [2, 0, 3, 1])))
            for i in range(4))
     assert dsk == expected
-    assert blockdims == ((20, 20, 20, 20), (4,))
+    assert chunks == ((20, 20, 20, 20), (4,))
 
 
 def test_take_sorted():
-    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
     expected = {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
                 ('y', 1): (getitem, ('x', 2), ([7],))}
     assert dsk == expected
-    assert blockdims == ((3, 1),)
+    assert chunks == ((3, 1),)
 
-    blockdims, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], axis=1)
+    chunks, dsk = take('y', 'x', [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], axis=1)
     expected = merge(
             dict((('y', i, 0),
                   (getitem, ('x', i, 0), (slice(None, None, None), [1, 3, 5])))
@@ -305,11 +305,11 @@ def test_take_sorted():
                   (getitem, ('x', i, 1), (slice(None, None, None), [17])))
                   for i in range(4)))
     assert dsk == expected
-    assert blockdims == ((20, 20, 20, 20), (3, 1))
+    assert chunks == ((20, 20, 20, 20), (3, 1))
 
 
 def test_slice_lists():
-    y, blockdims = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
+    y, chunks = slice_array('y', 'x', ((3, 3, 3, 1), (3, 3, 3, 1)),
                                 ([2, 1, 9], slice(None, None, None)))
     assert y == \
         dict((('y', 0, i), (getitem,
@@ -326,21 +326,21 @@ def test_slice_lists():
                        ([1, 0, 2], slice(None, None, None))))
                 for i in range(4))
 
-    assert blockdims == ((3,), (3, 3, 3, 1))
+    assert chunks == ((3,), (3, 3, 3, 1))
 
 
-def test_slicing_blockdims():
-    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+def test_slicing_chunks():
+    result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
                                     (1, [2, 0, 3]))
-    assert blockdims == ((3,),)
+    assert chunks == ((3,),)
 
-    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+    result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
                                     (slice(0, 7), [2, 0, 3]))
-    assert blockdims == ((5, 2), (3,))
+    assert chunks == ((5, 2), (3,))
 
-    result, blockdims = slice_array('y', 'x', ([5, 5], [5, 5]),
+    result, chunks = slice_array('y', 'x', ([5, 5], [5, 5]),
                                     (slice(0, 7), 1))
-    assert blockdims == ((5, 2),)
+    assert chunks == ((5, 2),)
 
 
 def test_slicing_with_numpy_arrays():
@@ -360,21 +360,21 @@ def test_slicing_with_numpy_arrays():
     assert a == c
 
 
-def test_slicing_and_blockdims():
-    o = da.ones((24, 16), blockdims=((4, 8, 8, 4), (2, 6, 6, 2)))
+def test_slicing_and_chunks():
+    o = da.ones((24, 16), chunks=((4, 8, 8, 4), (2, 6, 6, 2)))
     t = o[4:-4, 2:-2]
-    assert t.blockdims == ((8, 8), (6, 6))
+    assert t.chunks == ((8, 8), (6, 6))
 
 
 def test_slice_stop_0():
     # from gh-125
-    a = da.ones(10, blockshape=(10,))[:0].compute()
+    a = da.ones(10, chunks=(10,))[:0].compute()
     b = np.ones(10)[:0]
     assert eq(a, b)
 
 
 def test_slice_list_then_None():
-    x = da.zeros(shape=(5, 5), blockshape=(3, 3))
+    x = da.zeros(shape=(5, 5), chunks=(3, 3))
     y = x[[2, 1]][None]
 
     assert eq(y, np.zeros((1, 2, 5)))

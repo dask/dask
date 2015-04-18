@@ -52,7 +52,6 @@ def remove_full_slices(dsk):
     Example
     -------
 
-
     >>> dsk = {'a': (range, 5),
     ...        'b': (getitem, 'a', (slice(None, None, None),)),
     ...        'c': (getitem, 'b', (slice(None, None, None),)),

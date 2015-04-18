@@ -16,16 +16,16 @@ def eq(a, b):
 
 
 def test_percentile():
-    d = da.ones((16,), blockshape=(4,))
+    d = da.ones((16,), chunks=(4,))
     assert eq(da.percentile(d, [0, 50, 100]), [1, 1, 1])
 
     x = np.array([0, 0, 5, 5, 5, 5, 20, 20])
-    d = da.from_array(x, blockshape=(3,))
+    d = da.from_array(x, chunks=(3,))
 
     assert eq(da.percentile(d, [0, 50, 100]), [0, 5, 20])
 
     x = np.array(['a', 'a', 'd', 'd', 'd', 'e'])
-    d = da.from_array(x, blockshape=(3,))
+    d = da.from_array(x, chunks=(3,))
     assert eq(da.percentile(d, [0, 50, 100]), ['a', 'd', 'e'])
 
 
@@ -39,7 +39,7 @@ def test_percentile_with_categoricals():
 
     dsk = {('x', 0): x0, ('x', 1): x1}
 
-    x = da.Array(dsk, 'x', blockdims=((6, 6),))
+    x = da.Array(dsk, 'x', chunks=((6, 6),))
 
     p = da.percentile(x, [50])
     assert (p.compute().categories == x0.categories).all()
@@ -47,5 +47,5 @@ def test_percentile_with_categoricals():
 
 
 def test_percentiles_with_empty_arrays():
-    x = da.ones(10, blockdims=((5, 0, 5),))
+    x = da.ones(10, chunks=((5, 0, 5),))
     assert da.percentile(x, [10, 50, 90]).compute().tolist() == [1, 1, 1]

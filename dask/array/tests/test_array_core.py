@@ -12,7 +12,7 @@ inc = lambda x: x + 1
 
 
 def test_getem():
-    assert getem('X', blockshape=(2, 3), shape=(4, 6)) == \
+    assert getem('X', (2, 3), shape=(4, 6)) == \
     {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
      ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
      ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
@@ -100,8 +100,8 @@ def test_chunked_dot_product():
 
     d = {'x': x, 'o': o}
 
-    getx = getem('x', blockshape=(5, 5), shape=(20, 20))
-    geto = getem('o', blockshape=(5, 5), shape=(20, 20))
+    getx = getem('x', (5, 5), shape=(20, 20))
+    geto = getem('o', (5, 5), shape=(20, 20))
 
     result = top(dotmany, 'out', 'ik', 'x', 'ij', 'o', 'jk',
                  numblocks={'x': (4, 4), 'o': (4, 4)})
@@ -117,7 +117,7 @@ def test_chunked_transpose_plus_one():
 
     d = {'x': x}
 
-    getx = getem('x', blockshape=(5, 5), shape=(20, 20))
+    getx = getem('x', (5, 5), shape=(20, 20))
 
     f = lambda x: x.T + 1
     comp = top(f, 'out', 'ij', 'x', 'ji', numblocks={'x': (4, 4)})
@@ -130,7 +130,7 @@ def test_chunked_transpose_plus_one():
 
 def test_transpose():
     x = np.arange(240).reshape((4, 6, 10))
-    d = da.from_array(x, blockshape=(2, 3, 4))
+    d = da.from_array(x, (2, 3, 4))
 
     assert eq(d.transpose((2, 0, 1)),
               x.transpose((2, 0, 1)))
@@ -150,41 +150,41 @@ def test_broadcast_dimensions():
 
 def test_Array():
     shape = (1000, 1000)
-    blockshape = (100, 100)
+    chunks = (100, 100)
     name = 'x'
-    dsk = merge({name: 'some-array'}, getem(name, shape=shape, blockshape=blockshape))
-    a = Array(dsk, name, shape, blockshape)
+    dsk = merge({name: 'some-array'}, getem(name, chunks, shape=shape))
+    a = Array(dsk, name, chunks, shape)
 
     assert a.numblocks == (10, 10)
 
     assert a._keys() == [[('x', i, j) for j in range(10)]
                                      for i in range(10)]
 
-    assert a.blockdims == ((100,) * 10, (100,) * 10)
+    assert a.chunks == ((100,) * 10, (100,) * 10)
 
     assert a.shape == shape
 
     assert len(a) == shape[0]
 
 
-def test_uneven_blockdims():
-    a = Array({}, 'x', shape=(10, 10), blockshape=(3, 3))
-    assert a.blockdims == ((3, 3, 3, 1), (3, 3, 3, 1))
+def test_uneven_chunks():
+    a = Array({}, 'x', chunks=(3, 3), shape=(10, 10))
+    assert a.chunks == ((3, 3, 3, 1), (3, 3, 3, 1))
 
 
 def test_numblocks_suppoorts_singleton_block_dims():
     shape = (100, 10)
-    blockshape = (10, 10)
+    chunks = (10, 10)
     name = 'x'
-    dsk = merge({name: 'some-array'}, getem(name, shape=shape, blockshape=blockshape))
-    a = Array(dsk, name, shape, blockshape)
+    dsk = merge({name: 'some-array'}, getem(name, shape=shape, chunks=chunks))
+    a = Array(dsk, name, chunks, shape)
 
     assert set(concat(a._keys())) == set([('x', i, 0) for i in range(100//10)])
 
 
 def test_keys():
     dsk = dict((('x', i, j), ()) for i in range(5) for j in range(6))
-    dx = Array(dsk, 'x', (50, 60), blockshape=(10, 10))
+    dx = Array(dsk, 'x', chunks=(10, 10), shape=(50, 60))
     assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
                                           for i in range(5)]
     d = Array({}, 'x', (), ())
@@ -192,15 +192,15 @@ def test_keys():
 
 
 def test_Array_computation():
-    a = Array({('x', 0, 0): np.eye(3)}, 'x', shape=(3, 3), blockshape=(3, 3))
+    a = Array({('x', 0, 0): np.eye(3)}, 'x', shape=(3, 3), chunks=(3, 3))
     assert eq(np.array(a), np.eye(3))
     assert isinstance(a.compute(), np.ndarray)
     assert float(a[0, 0]) == 1
 
 
 def test_stack():
-    a, b, c = [Array(getem(name, blockshape=(2, 3), shape=(4, 6)),
-                     name, shape=(4, 6), blockshape=(2, 3))
+    a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
+                     name, shape=(4, 6), chunks=(2, 3))
                 for name in 'ABC']
 
     s = stack([a, b, c], axis=0)
@@ -208,7 +208,7 @@ def test_stack():
     colon = slice(None, None, None)
 
     assert s.shape == (3, 4, 6)
-    assert s.blockdims == ((1, 1, 1), (2, 2), (3, 3))
+    assert s.chunks == ((1, 1, 1), (2, 2), (3, 3))
     assert s.dask[(s.name, 0, 1, 0)] == (getarray, ('A', 1, 0),
                                           (None, colon, colon))
     assert s.dask[(s.name, 2, 1, 0)] == (getarray, ('C', 1, 0),
@@ -216,7 +216,7 @@ def test_stack():
 
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
-    assert s2.blockdims == ((2, 2), (1, 1, 1), (3, 3))
+    assert s2.chunks == ((2, 2), (1, 1, 1), (3, 3))
     assert s2.dask[(s2.name, 0, 1, 0)] == (getarray, ('B', 0, 0),
                                             (colon, None, colon))
     assert s2.dask[(s2.name, 1, 1, 0)] == (getarray, ('B', 1, 0),
@@ -224,7 +224,7 @@ def test_stack():
 
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
-    assert s2.blockdims == ((2, 2), (3, 3), (1, 1, 1))
+    assert s2.chunks == ((2, 2), (3, 3), (1, 1, 1))
     assert s2.dask[(s2.name, 0, 1, 0)] == (getarray, ('A', 0, 1),
                                             (colon, colon, None))
     assert s2.dask[(s2.name, 1, 1, 2)] == (getarray, ('C', 1, 1),
@@ -234,48 +234,48 @@ def test_stack():
 
     assert set(b.dask.keys()).issubset(s2.dask.keys())
 
-    assert stack([a, b, c], axis=-1).blockdims == \
-            stack([a, b, c], axis=2).blockdims
+    assert stack([a, b, c], axis=-1).chunks == \
+            stack([a, b, c], axis=2).chunks
 
 
 def test_short_stack():
     x = np.array([1])
-    d = da.from_array(x, blockshape=(1,))
+    d = da.from_array(x, chunks=(1,))
     s = da.stack([d])
     assert s.shape == (1, 1)
     assert get(s.dask, s._keys())[0][0].shape == (1, 1)
 
 
 def test_concatenate():
-    a, b, c = [Array(getem(name, blockshape=(2, 3), shape=(4, 6)),
-                     name, shape=(4, 6), blockshape=(2, 3))
+    a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
+                     name, shape=(4, 6), chunks=(2, 3))
                 for name in 'ABC']
 
     x = concatenate([a, b, c], axis=0)
 
     assert x.shape == (12, 6)
-    assert x.blockdims == ((2, 2, 2, 2, 2, 2), (3, 3))
+    assert x.chunks == ((2, 2, 2, 2, 2, 2), (3, 3))
     assert x.dask[(x.name, 0, 1)] == ('A', 0, 1)
     assert x.dask[(x.name, 5, 0)] == ('C', 1, 0)
 
     y = concatenate([a, b, c], axis=1)
 
     assert y.shape == (4, 18)
-    assert y.blockdims == ((2, 2), (3, 3, 3, 3, 3, 3))
+    assert y.chunks == ((2, 2), (3, 3, 3, 3, 3, 3))
     assert y.dask[(y.name, 1, 0)] == ('A', 1, 0)
     assert y.dask[(y.name, 1, 5)] == ('C', 1, 1)
 
     assert set(b.dask.keys()).issubset(y.dask.keys())
 
-    assert concatenate([a, b, c], axis=-1).blockdims == \
-            concatenate([a, b, c], axis=1).blockdims
+    assert concatenate([a, b, c], axis=-1).chunks == \
+            concatenate([a, b, c], axis=1).chunks
 
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
 def test_take():
     x = np.arange(400).reshape((20, 20))
-    a = from_array(x, blockshape=(5, 5))
+    a = from_array(x, chunks=(5, 5))
 
     assert eq(np.take(x, 3, axis=0), take(a, 3, axis=0))
     assert eq(np.take(x, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
@@ -284,9 +284,9 @@ def test_take():
 
 def test_binops():
     a = Array(dict((('a', i), '') for i in range(3)),
-              'a', blockdims=((10, 10, 10),))
+              'a', chunks=((10, 10, 10),))
     b = Array(dict((('b', i), '') for i in range(3)),
-              'b', blockdims=((10, 10, 10),))
+              'b', chunks=((10, 10, 10),))
 
     result = elemwise(add, a, b, name='c')
     assert result.dask == merge(a.dask, b.dask,
@@ -301,7 +301,7 @@ def test_binops():
 
 def test_isnull():
     x = np.array([1, np.nan])
-    a = from_array(x, blockshape=(2,))
+    a = from_array(x, chunks=(2,))
     assert eq(isnull(a), np.isnan(x))
     assert eq(notnull(a), ~np.isnan(x))
 
@@ -309,20 +309,20 @@ def test_isnull():
 def test_isclose():
     x = np.array([0, np.nan, 1, 1.5])
     y = np.array([1e-9, np.nan, 1, 2])
-    a = from_array(x, blockshape=(2,))
-    b = from_array(y, blockshape=(2,))
+    a = from_array(x, chunks=(2,))
+    b = from_array(y, chunks=(2,))
     assert eq(da.isclose(a, b, equal_nan=True),
               np.isclose(x, y, equal_nan=True))
 
 
 def test_elemwise_on_scalars():
     x = np.arange(10)
-    a = from_array(x, blockshape=(5,))
+    a = from_array(x, chunks=(5,))
     assert len(a._keys()) == 2
     assert eq(a.sum()**2, x.sum()**2)
 
     x = np.arange(11)
-    a = from_array(x, blockshape=(5,))
+    a = from_array(x, chunks=(5,))
     assert len(a._keys()) == 3
     assert eq(a, x)
 
@@ -330,8 +330,8 @@ def test_elemwise_on_scalars():
 def test_operators():
     x = np.arange(10)
     y = np.arange(10).reshape((10, 1))
-    a = from_array(x, blockshape=(5,))
-    b = from_array(y, blockshape=(5, 1))
+    a = from_array(x, chunks=(5,))
+    b = from_array(y, chunks=(5, 1))
 
     c = a + 1
     assert eq(c, x + 1)
@@ -351,14 +351,14 @@ def test_operators():
 
 def test_field_access():
     x = np.array([(1, 1.0), (2, 2.0)], dtype=[('a', 'i4'), ('b', 'f4')])
-    y = from_array(x, blockshape=(1,))
+    y = from_array(x, chunks=(1,))
     assert eq(y['a'], x['a'])
     assert eq(y[['b', 'a']], x[['b', 'a']])
 
 
 def test_reductions():
     x = np.arange(400).reshape((20, 20))
-    a = from_array(x, blockshape=(7, 7))
+    a = from_array(x, chunks=(7, 7))
 
     assert eq(a.sum(), x.sum())
     assert eq(a.sum(axis=1), x.sum(axis=1))
@@ -374,38 +374,38 @@ def test_reductions():
 
 def test_tensordot():
     x = np.arange(400).reshape((20, 20))
-    a = from_array(x, blockshape=(5, 5))
+    a = from_array(x, chunks=(5, 5))
     y = np.arange(200).reshape((20, 10))
-    b = from_array(y, blockshape=(5, 5))
+    b = from_array(y, chunks=(5, 5))
 
     assert eq(tensordot(a, b, axes=1), np.tensordot(x, y, axes=1))
     assert eq(tensordot(a, b, axes=(1, 0)), np.tensordot(x, y, axes=(1, 0)))
 
-    # assert (tensordot(a, a).blockdims
-    #      == tensordot(a, a, axes=((1, 0), (0, 1))).blockdims)
+    # assert (tensordot(a, a).chunks
+    #      == tensordot(a, a, axes=((1, 0), (0, 1))).chunks)
 
     # assert eq(tensordot(a, a), np.tensordot(x, x))
 
 
 def test_dot_method():
     x = np.arange(400).reshape((20, 20))
-    a = from_array(x, blockshape=(5, 5))
+    a = from_array(x, chunks=(5, 5))
     y = np.arange(200).reshape((20, 10))
-    b = from_array(y, blockshape=(5, 5))
+    b = from_array(y, chunks=(5, 5))
 
     assert eq(a.dot(b), x.dot(y))
 
 
 def test_T():
     x = np.arange(400).reshape((20, 20))
-    a = from_array(x, blockshape=(5, 5))
+    a = from_array(x, chunks=(5, 5))
 
     assert eq(x.T, a.T)
 
 
 def test_norm():
     a = np.arange(200, dtype='f8').reshape((20, 10))
-    b = from_array(a, blockshape=(5, 5))
+    b = from_array(a, chunks=(5, 5))
 
     assert eq(b.vnorm(), np.linalg.norm(a))
     assert eq(b.vnorm(ord=1), np.linalg.norm(a.flatten(), ord=1))
@@ -415,7 +415,7 @@ def test_norm():
 
 def test_choose():
     x = np.random.randint(10, size=(15, 16))
-    d = from_array(x, blockshape=(4, 5))
+    d = from_array(x, chunks=(4, 5))
 
     assert eq(choose(d > 5, [0, d]), np.choose(x > 5, [0, x]))
     assert eq(choose(d > 5, [-d, d]), np.choose(x > 5, [-x, x]))
@@ -423,9 +423,9 @@ def test_choose():
 
 def test_where():
     x = np.random.randint(10, size=(15, 16))
-    d = from_array(x, blockshape=(4, 5))
+    d = from_array(x, chunks=(4, 5))
     y = np.random.randint(10, size=15)
-    e = from_array(y, blockshape=(4,))
+    e = from_array(y, chunks=(4,))
 
     assert eq(where(d > 5, d, 0), np.where(x > 5, x, 0))
     assert eq(where(d > 5, d, -e[:, None]), np.where(x > 5, x, -y[:, None]))
@@ -433,7 +433,7 @@ def test_where():
 
 def test_coarsen():
     x = np.random.randint(10, size=(24, 24))
-    d = from_array(x, blockshape=(4, 8))
+    d = from_array(x, chunks=(4, 8))
 
     assert eq(chunk.coarsen(np.sum, x, {0: 2, 1: 4}),
                     coarsen(np.sum, d, {0: 2, 1: 4}))
@@ -443,9 +443,9 @@ def test_coarsen():
 
 def test_insert():
     x = np.random.randint(10, size=(10, 10))
-    a = from_array(x, blockshape=(5, 5))
+    a = from_array(x, chunks=(5, 5))
     y = np.random.randint(10, size=(5, 10))
-    b = from_array(y, blockshape=(4, 4))
+    b = from_array(y, chunks=(4, 4))
 
     assert eq(np.insert(x, 0, -1, axis=0), insert(a, 0, -1, axis=0))
     assert eq(np.insert(x, 3, -1, axis=-1), insert(a, 3, -1, axis=-1))
@@ -468,7 +468,7 @@ def test_insert():
 
 def test_broadcast_to():
     x = np.random.randint(10, size=(5, 1, 6))
-    a = from_array(x, blockshape=(3, 1, 3))
+    a = from_array(x, chunks=(3, 1, 3))
 
     for shape in [(5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         assert eq(chunk.broadcast_to(x, shape),
@@ -479,8 +479,8 @@ def test_broadcast_to():
 
 
 def test_full():
-    d = da.full((3, 4), 2, blockdims=((2, 1), (2, 2)))
-    assert d.blockdims == ((2, 1), (2, 2))
+    d = da.full((3, 4), 2, chunks=((2, 1), (2, 2)))
+    assert d.chunks == ((2, 1), (2, 2))
     assert eq(d, np.full((3, 4), 2))
 
 
@@ -488,28 +488,28 @@ def test_map_blocks():
     inc = lambda x: x + 1
 
     x = np.arange(400).reshape((20, 20))
-    d = from_array(x, blockshape=(7, 7))
+    d = from_array(x, chunks=(7, 7))
 
     e = d.map_blocks(inc)
 
-    assert d.blockdims == e.blockdims
+    assert d.chunks == e.chunks
     assert eq(e, x + 1)
 
-    d = from_array(x, blockshape=(10, 10))
-    e = d.map_blocks(lambda x: x[::2, ::2], blockshape=(5, 5))
+    d = from_array(x, chunks=(10, 10))
+    e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5))
 
-    assert e.blockdims == ((5, 5), (5, 5))
+    assert e.chunks == ((5, 5), (5, 5))
     assert eq(e, x[::2, ::2])
 
-    d = from_array(x, blockshape=(8, 8))
-    e = d.map_blocks(lambda x: x[::2, ::2], blockdims=((4, 4, 2), (4, 4, 2)))
+    d = from_array(x, chunks=(8, 8))
+    e = d.map_blocks(lambda x: x[::2, ::2], chunks=((4, 4, 2), (4, 4, 2)))
 
     assert eq(e, x[::2, ::2])
 
 
 def test_map_blocks():
     x = np.arange(10)
-    d = from_array(x, blockshape=(2,))
+    d = from_array(x, chunks=(2,))
 
     def func(block, block_id=None):
         return np.ones_like(block) * sum(block_id)
@@ -523,7 +523,7 @@ def test_map_blocks():
 def test_fromfunction():
     def f(x, y):
         return x + y
-    d = fromfunction(f, shape=(5, 5), blockshape=(2, 2), dtype='f8')
+    d = fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
 
     assert eq(d, np.fromfunction(f, shape=(5, 5)))
 
@@ -534,18 +534,18 @@ def test_from_function_requires_block_args():
 
 
 def test_repr():
-    d = da.ones((4, 4), blockshape=(2, 2))
+    d = da.ones((4, 4), chunks=(2, 2))
     assert d.name in repr(d)
     assert str(d.shape) in repr(d)
-    assert str(d.blockdims) in repr(d)
+    assert str(d.chunks) in repr(d)
     assert str(d._dtype) in repr(d)
-    d = da.ones((4000, 4), blockshape=(4, 2))
+    d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
 
 
 def test_slicing_with_ellipsis():
     x = np.arange(256).reshape((4, 4, 4, 4))
-    d = da.from_array(x, blockshape=((2, 2, 2, 2)))
+    d = da.from_array(x, chunks=((2, 2, 2, 2)))
 
     assert eq(d[..., 1], x[..., 1])
     assert eq(d[0, ..., 1], x[0, ..., 1])
@@ -553,14 +553,14 @@ def test_slicing_with_ellipsis():
 
 def test_slicing_with_ndarray():
     x = np.arange(64).reshape((8, 8))
-    d = da.from_array(x, blockshape=((4, 4)))
+    d = da.from_array(x, chunks=((4, 4)))
 
     assert eq(d[np.arange(8)], x)
     assert eq(d[np.ones(8, dtype=bool)], x)
 
 
 def test_dtype():
-    d = da.ones((4, 4), blockshape=(2, 2))
+    d = da.ones((4, 4), chunks=(2, 2))
 
     assert d.dtype == d.compute().dtype
     assert (d * 1.0).dtype == (d + 1.0).compute().dtype
@@ -573,7 +573,7 @@ def test_blockdims_from_blockshape():
 
 
 def test_compute():
-    d = da.ones((4, 4), blockshape=(2, 2))
+    d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
     A, B = compute(a, b)
     assert eq(A, d + 1)
@@ -584,7 +584,7 @@ def test_compute():
 
 
 def test_coerce():
-    d = da.from_array(np.array([1]), blockshape=(1,))
+    d = da.from_array(np.array([1]), chunks=(1,))
     with dask.set_options(get=dask.get):
         assert bool(d)
         assert int(d)
@@ -593,7 +593,7 @@ def test_coerce():
 
 
 def test_store():
-    d = da.ones((4, 4), blockshape=(2, 2))
+    d = da.ones((4, 4), chunks=(2, 2))
     a, b = d + 1, d + 2
 
     at = np.empty(shape=(4, 4))
@@ -607,13 +607,13 @@ def test_store():
 
 
 def test_np_array_with_zero_dimensions():
-    d = da.ones((4, 4), blockshape=(2, 2))
+    d = da.ones((4, 4), chunks=(2, 2))
     assert eq(np.array(d.sum()), np.array(d.compute().sum()))
 
 
 def test_unique():
     x = np.array([1, 2, 4, 4, 5, 2])
-    d = da.from_array(x, blockshape=(3,))
+    d = da.from_array(x, chunks=(3,))
     assert eq(da.unique(d), np.unique(x))
 
 
@@ -622,9 +622,9 @@ def test_dtype_complex():
     y = np.arange(24).reshape((4, 6)).astype('i8')
     z = np.arange(24).reshape((4, 6)).astype('i2')
 
-    a = da.from_array(x, blockshape=(2, 3))
-    b = da.from_array(y, blockshape=(2, 3))
-    c = da.from_array(z, blockshape=(2, 3))
+    a = da.from_array(x, chunks=(2, 3))
+    b = da.from_array(y, chunks=(2, 3))
+    c = da.from_array(z, chunks=(2, 3))
 
     def eq(a, b):
         return (isinstance(a, np.dtype) and
@@ -657,7 +657,7 @@ def test_dtype_complex():
     assert da.notnull(b)._dtype == 'bool'
 
     x = np.array([('a', 1)], dtype=[('text', 'S1'), ('numbers', 'i4')])
-    d = da.from_array(x, blockshape=(1,))
+    d = da.from_array(x, chunks=(1,))
 
     assert eq(d['text']._dtype, x['text'].dtype)
     assert eq(d[['numbers', 'text']]._dtype, x[['numbers', 'text']].dtype)
@@ -665,7 +665,7 @@ def test_dtype_complex():
 
 def test_astype():
     x = np.ones(5, dtype='f4')
-    d = da.from_array(x, blockshape=(2,))
+    d = da.from_array(x, chunks=(2,))
 
     assert d.astype('i8')._dtype == 'i8'
     assert eq(d.astype('i8'), x.astype('i8'))
@@ -674,8 +674,8 @@ def test_astype():
 def test_arithmetic():
     x = np.arange(5).astype('f4') + 2
     y = np.arange(5).astype('i8') + 2
-    a = da.from_array(x, blockshape=(2,))
-    b = da.from_array(y, blockshape=(2,))
+    a = da.from_array(x, chunks=(2,))
+    b = da.from_array(y, chunks=(2,))
     assert eq(a + b, x + y)
     assert eq(a * b, x * y)
     assert eq(a - b, x - y)
@@ -812,7 +812,7 @@ def test_arithmetic():
 
 def test_reductions():
     x = np.arange(5).astype('f4')
-    a = da.from_array(x, blockshape=(2,))
+    a = da.from_array(x, chunks=(2,))
 
     assert eq(da.all(a), np.all(x))
     assert eq(da.any(a), np.any(x))
@@ -832,7 +832,7 @@ def test_reductions():
 
 def test_optimize():
     x = np.arange(5).astype('f4')
-    a = da.from_array(x, blockshape=(2,))
+    a = da.from_array(x, chunks=(2,))
     expr = a[1:4] + 1
     result = optimize(expr.dask, expr._keys())
     assert isinstance(result, dict)
@@ -862,7 +862,7 @@ def test_slicing_with_non_ndarrays():
             return ARangeSlice(key[0].start, key[0].stop)
 
 
-    x = da.from_array(ARangeSlicable(10), blockshape=(4,))
+    x = da.from_array(ARangeSlicable(10), chunks=(4,))
 
     assert eq((x + 1).sum(), (np.arange(10) + 1).sum())
 
@@ -872,18 +872,18 @@ def test_getarray():
 
 
 def test_squeeze():
-    x = da.ones((10, 1), blockshape=(3, 1))
+    x = da.ones((10, 1), chunks=(3, 1))
 
     assert eq(x.squeeze(), x.compute().squeeze())
 
-    assert x.squeeze().blockdims == ((3, 3, 3, 1),)
+    assert x.squeeze().chunks == ((3, 3, 3, 1),)
 
 
 def test_size():
-    x = da.ones((10, 2), blockshape=(3, 1))
+    x = da.ones((10, 2), chunks=(3, 1))
     assert x.size == np.array(x).size
 
 
 def test_nbytes():
-    x = da.ones((10, 2), blockshape=(3, 1))
+    x = da.ones((10, 2), chunks=(3, 1))
     assert x.nbytes == np.array(x).nbytes
