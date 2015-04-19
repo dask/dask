@@ -185,6 +185,11 @@ def fuse_slice(a, b):
     # If given two tuples walk through both, being mindful of uneven sizes
     # and newaxes
     if isinstance(a, tuple) and isinstance(b, tuple):
+
+        if (any(isinstance(item, list) for item in a) and
+            any(isinstance(item, list) for item in b)):
+            raise NotImplementedError("Can't handle multiple list indexing")
+
         j = 0
         result = list()
         for i in range(len(a)):

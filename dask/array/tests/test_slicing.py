@@ -1,4 +1,5 @@
 import dask
+from dask.compatibility import skip
 import dask.array as da
 from dask.array import Array
 from dask.array.slicing import slice_array, _slice_1d, take
@@ -92,7 +93,7 @@ def test_slice_1d():
     #x[:0]
     expected = {}
     result = _slice_1d(100, [20, 20, 20, 20, 20], slice(0))
-    assert expected == result
+    assert result
 
     #x=range(99)
     expected = {0: slice(-3, -21, -3),
@@ -378,3 +379,61 @@ def test_slice_list_then_None():
     y = x[[2, 1]][None]
 
     assert eq(y, np.zeros((1, 2, 5)))
+
+
+class ReturnItem(object):
+    def __getitem__(self, key):
+        return key
+
+
+@skip
+def test_slicing_exhaustively():
+    x = np.random.rand(6, 7, 8)
+    a = da.from_array(x, chunks=(3, 3, 3))
+    I = ReturnItem()
+
+    # independent indexing along different axes
+    indexers = [0, -2, I[:], I[:5], [0, 1], [0, 1, 2], [4, 2], I[::-1], None, I[:0], []]
+    for i in indexers:
+        assert eq(x[i], a[i]), i
+        for j in indexers:
+            assert eq(x[i][:, j], a[i][:, j]), (i, j)
+            assert eq(x[:, i][j], a[:, i][j]), (i, j)
+            for k in indexers:
+                assert eq(x[..., i][:, j][k], a[..., i][:, j][k]), (i, j, k)
+
+    # repeated indexing along the first axis
+    first_indexers = [I[:], I[:5], np.arange(5), [3, 1, 4, 5, 0], np.arange(6) < 6]
+    second_indexers = [0, -1, 3, I[:], I[:3], I[2:-1], [2, 4], [], I[:0]]
+    for i in first_indexers:
+        for j in second_indexers:
+            assert eq(x[i][j], a[i][j]), (i, j)
+
+
+def test_slicing_with_negative_step_flops_keys():
+    x = da.arange(10, chunks=5)
+    y = x[:1:-1]
+    assert (x.name, 1) in y.dask[(y.name, 0)]
+    assert (x.name, 0) in y.dask[(y.name, 1)]
+
+    assert eq(y, np.arange(10)[:1:-1])
+
+    assert y.chunks == ((5, 3),)
+
+    assert y.dask[(y.name, 0)] == (getitem, (x.name, 1),
+                                            (slice(-1, -6, -1),))
+    assert y.dask[(y.name, 1)] == (getitem, (x.name, 0),
+                                            (slice(-1, -4, -1),))
+
+
+def test_empty_slice():
+    x = da.ones((5, 5), chunks=(2, 2), dtype='i4')
+    y = x[:0]
+
+    assert eq(y, np.ones((5, 5), dtype='i4')[:0])
+
+
+def test_multiple_list_slicing():
+    x = np.random.rand(6, 7, 8)
+    a = da.from_array(x, chunks=(3, 3, 3))
+    assert eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])

@@ -217,13 +217,13 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     block_slices = list(map(_slice_1d, shape, blockdims, index))
 
     # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
-    in_names = product([in_name], *[i.keys() for i in block_slices])
+    in_names = list(product([in_name], *[i.keys() for i in block_slices]))
 
     # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
-    out_names = product([out_name],
-                        *[range(len(d))
-                            for d, i in zip(block_slices, index)
-                            if not isinstance(i, (int, long))])
+    out_names = list(product([out_name],
+                             *[range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
+                                 for d, i in zip(block_slices, index)
+                                 if not isinstance(i, (int, long))]))
 
     all_slices = list(product(*[i.values() for i in block_slices]))
 
@@ -352,6 +352,9 @@ def _slice_1d(dim_shape, lengths, index):
     for k, v in d.items():
         if v == slice(0, lengths[k], 1):
             d[k] = slice(None, None, None)
+
+    if not d:  # special case x[:0]
+        d[0] = slice(0, 0, 1)
 
     return d
 
@@ -549,6 +552,9 @@ def new_blockdim(dim_shape, lengths, index):
 
     >>> new_blockdim(100, [20, 10, 20, 10, 40], [5, 1, 30, 22])
     [4]
+
+    >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(90, 10, -2))
+    [15, 5, 10, 5, 4]
     """
     if isinstance(index, list):
         return [len(index)]
@@ -556,6 +562,8 @@ def new_blockdim(dim_shape, lengths, index):
     pairs = sorted(_slice_1d(dim_shape, lengths, index).items(), key=first)
     slices = [slice(0, lengths[i], 1) if slc == slice(None, None, None) else slc
                 for i, slc in pairs]
+    if isinstance(index, slice) and index.step and index.step < 0:
+        slices = slices[::-1]
     return [(slc.stop - slc.start) // slc.step for slc in slices]
 
 

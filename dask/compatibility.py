@@ -21,3 +21,7 @@ else:
     unicode = unicode
     long = long
     apply = apply
+
+
+def skip(func):
+    return
