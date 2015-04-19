@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from operator import add, getitem
 import operator
 import inspect
+from numbers import Number
 from collections import Iterable
 from bisect import bisect
 import operator
@@ -843,16 +844,16 @@ def normalize_chunks(chunks, shape=None):
     >>> normalize_chunks([[2, 2], [3, 3]])  # Cleans up lists to tuples
     ((2, 2), (3, 3))
 
-    >>> normalize_chunks(2, shape=(6,))  # respects singleton dimensions
-    ((2, 2, 2),)
+    >>> normalize_chunks(10, shape=(30, 5))  # Supports integer inputs
+    ((10, 10, 10), (5,))
 
     >>> normalize_chunks((), shape=(0, 0))  #  respects null dimensions
     ((), ())
     """
     if isinstance(chunks, list):
         chunks = tuple(chunks)
-    if not isinstance(chunks, tuple):
-        chunks = (chunks,)
+    if isinstance(chunks, Number):
+        chunks = (chunks,) * len(shape)
     if not chunks:
         if shape is None:
             chunks = ()
