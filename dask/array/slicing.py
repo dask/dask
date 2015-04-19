@@ -554,7 +554,7 @@ def new_blockdim(dim_shape, lengths, index):
     [4]
 
     >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(90, 10, -2))
-    [15, 5, 10, 5, 5]
+    [15, 5, 10, 5, 4]
     """
     if isinstance(index, list):
         return [len(index)]
