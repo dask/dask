@@ -389,7 +389,7 @@ class ReturnItem(object):
 @skip
 def test_slicing_exhaustively():
     x = np.random.rand(6, 7, 8)
-    a = da.from_array(x, blockshape=(3, 3, 3))
+    a = da.from_array(x, chunks=(3, 3, 3))
     I = ReturnItem()
 
     # independent indexing along different axes
@@ -411,14 +411,14 @@ def test_slicing_exhaustively():
 
 
 def test_slicing_with_negative_step_flops_keys():
-    x = da.arange(10, blocksize=5)
+    x = da.arange(10, chunks=5)
     y = x[:1:-1]
     assert (x.name, 1) in y.dask[(y.name, 0)]
     assert (x.name, 0) in y.dask[(y.name, 1)]
 
     assert eq(y, np.arange(10)[:1:-1])
 
-    assert y.blockdims == ((5, 3),)
+    assert y.chunks == ((5, 3),)
 
     assert y.dask[(y.name, 0)] == (getitem, (x.name, 1),
                                             (slice(-1, -6, -1),))
@@ -427,7 +427,7 @@ def test_slicing_with_negative_step_flops_keys():
 
 
 def test_empty_slice():
-    x = da.ones((5, 5), blockshape=(2, 2), dtype='i4')
+    x = da.ones((5, 5), chunks=(2, 2), dtype='i4')
     y = x[:0]
 
     assert eq(y, np.ones((5, 5), dtype='i4')[:0])
@@ -435,5 +435,5 @@ def test_empty_slice():
 
 def test_multiple_list_slicing():
     x = np.random.rand(6, 7, 8)
-    a = da.from_array(x, blockshape=(3, 3, 3))
+    a = da.from_array(x, chunks=(3, 3, 3))
     assert eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
