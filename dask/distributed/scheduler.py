@@ -1,4 +1,5 @@
-from ..async import start_state_from_dask, nested_get, finish_task
+from ..async import start_state_from_dask as dag_state_from_dask
+from ..async import nested_get, finish_task
 from ..core import flatten
 from ..compatibility import Queue
 from multiprocessing.pool import ThreadPool
@@ -48,11 +49,11 @@ def get_distributed(workers, cache, dsk, result, **kwargs):
     pool = ThreadPool(len(sockets))
 
     # TODO: don't shove in seed data if already in cache
-    state = start_state_from_dask(dsk, cache=cache)
+    dag_state = dag_state_from_dask(dsk, cache=cache)
 
     tick = [0]
 
-    if state['waiting'] and not state['ready']:
+    if dag_state['waiting'] and not dag_state['ready']:
         raise ValueError("Found no accessible jobs in dask")
 
     available_workers = workers[:]
@@ -68,30 +69,30 @@ def get_distributed(workers, cache, dsk, result, **kwargs):
         # Update heartbeat
         tick[0] += 1
         # Choose a good task to compute
-        key = state['ready'].pop()
-        state['ready-set'].remove(key)
-        state['running'].add(key)
+        key = dag_state['ready'].pop()
+        dag_state['ready-set'].remove(key)
+        dag_state['running'].add(key)
 
         # Submit
         socket = sockets[worker]
         pool.apply_async(interact, args=[socket, ('compute', key, dsk[key])])
 
     # Seed initial tasks into the thread pool
-    while state['ready'] and len(state['running']) < len(workers):
+    while dag_state['ready'] and len(dag_state['running']) < len(workers):
         fire_task(available_workers.pop())
 
     # Main loop, wait on tasks to finish, insert new ones
-    while state['waiting'] or state['ready'] or state['running']:
+    while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
         message = queue.get()
         if isinstance(message['status'], Exception):
             raise Exception("Exception in remote process\n\n" +
                             message['status'])
-        finish_task(dsk, message['key'], state, results, delete=True)
-        while state['ready'] and len(state['running']) < len(workers):
+        finish_task(dsk, message['key'], dag_state, results, delete=True)
+        while dag_state['ready'] and len(dag_state['running']) < len(workers):
             fire_task(available_workers.pop())
 
     # Final reporting
-    while state['running'] or not queue.empty():
+    while dag_state['running'] or not queue.empty():
         message = queue.get()
 
-    return nested_get(result, state['cache'])
+    return nested_get(result, dag_state['cache'])
