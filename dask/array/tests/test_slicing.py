@@ -431,3 +431,9 @@ def test_empty_slice():
     y = x[:0]
 
     assert eq(y, np.ones((5, 5), dtype='i4')[:0])
+
+
+def test_multiple_list_slicing():
+    x = np.random.rand(6, 7, 8)
+    a = da.from_array(x, blockshape=(3, 3, 3))
+    assert eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
