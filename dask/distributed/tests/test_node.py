@@ -116,3 +116,21 @@ def test_collect():
                 result = c.loads(socket.recv())
 
                 assert c.data == dict(a=1, c=5, x=10, y=20)
+
+
+def test_compute():
+    with worker(data={'x': 10, 'y': 20}) as a:
+        with worker(data={'a': 1, 'b': 2}) as b:
+            socket = context.socket(zmq.REQ)
+            socket.connect(b.address)
+
+            payload = dict(function='compute',
+                           args=('c', (add, 'a', 'x'), {'x': [a.address]}))
+            socket.send(b.dumps(payload))
+
+            result = b.loads(socket.recv())
+            assert b.data['c'] == 11
+            assert 0 < result['result']['duration'] < 1.0
+            assert result['result']['key'] == 'c'
+            assert result['address'] == b.address
+            assert result['status'] == 'OK'

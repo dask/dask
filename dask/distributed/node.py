@@ -51,6 +51,7 @@ class Worker(object):
 
         self.functions = {'status': status,
                           'collect': self.collect,
+                          'compute': self.compute,
                           'getitem': self.data.__getitem__,
                           'setitem': self.data.__setitem__,
                           'delitem': self.data.__delitem__}
@@ -67,8 +68,15 @@ class Worker(object):
         of the result figure out what data this corresponds to.
         """
         try:
-            result = func(*args, **kwargs)
+            function = self.functions[func]
+            result = function(*args, **kwargs)
             status = 'OK'
+        except KeyError as e:
+            result = e
+            if func not in self.functions:
+                status = 'Function %s not found' % func
+            else:
+                status = 'Error'
         except Exception as e:
             result = e
             status = 'Error'
@@ -78,7 +86,7 @@ class Worker(object):
                               'status': status})
         log('Computed and returning result:', address, payload)
         with self.lock:
-            self.router.send_multipart([address, '', payload])  # TODO, send job id
+            self.router.send_multipart([address, '', payload])
 
     def listen(self):
         """
@@ -124,8 +132,6 @@ class Worker(object):
             payload2 = self.loads(payload)
             log("Received payload: ", self.address, payload2)
             func = payload2['function']
-            assert func in self.functions
-            func = self.functions[func]
             jobid = payload2.get('jobid', None)
             args = payload2.get('args', ())
             if not isinstance(args, tuple):
@@ -153,6 +159,8 @@ class Worker(object):
         log('Collecting data from peers:', self.address, locations)
         # Send out requests for data
         for key, locs in locations.items():
+            if key in self.data:
+                continue
             sock = context.socket(zmq.REQ)
             sock.connect(locs[0])
             payload = {'function': 'getitem',
@@ -166,6 +174,38 @@ class Worker(object):
             payload = self.loads(sock.recv())
             log('Received data:', self.address, payload)
             self.data[payload['jobid']] = payload['result']
+
+    def compute(self, key, task, locations):
+        """ Compute dask task
+
+        Given a key, task, and locations of data
+
+            key -- 'z'
+            task -- (add, 'x', 'y')
+            locations -- {'x': ['tcp://alice:5000']}
+
+        Collect necessary data from locations, merge into self.data (see
+        ``collect``), then compute task and store into ``self.data``.
+        """
+        self.collect(locations)
+
+        start = time()
+        status = "OK"
+        log("Start computation:", self.address, key, task)
+        try:
+            result = dask.core.get(self.data, task)
+            end = time()
+        except Exception as e:
+            status = e
+            end = time()
+        else:
+            self.data[key] = result
+        log("End computation:", self.address, key, task, status)
+
+        return {'key': key,
+                'duration': end - start,
+                'status': status,
+                'worker': self.address}
 
     def close(self):
         if self.pool._state == multiprocessing.pool.RUN:
