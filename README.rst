@@ -1,7 +1,7 @@
 Dask
 ====
 
-|Build Status| |Doc Status|
+|Build Status| |Coverage| |Doc Status|
 
 A minimal task scheduling abstraction and parallel arrays.
 
@@ -167,3 +167,6 @@ includes the following projects:
 .. |Doc Status| image:: https://readthedocs.org/projects/dask/badge/?version=latest
    :target: https://readthedocs.org/projects/dask/?badge=latest
    :alt: Documentation Status
+.. |Coverage| image:: https://coveralls.io/repos/mrocklin/dask/badge.svg
+   :target: https://coveralls.io/r/mrocklin/dask
+   :alt: Coverage status
