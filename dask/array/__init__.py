@@ -21,7 +21,7 @@ with ignoring(ImportError):
     from .reductions import nanprod
 from . import random, linalg, ghost, learn
 from .wrap import ones, zeros, empty, full
-from .reblock import reblock
+from .rechunk import rechunk
 from ..context import set_options
 from .optimization import optimize
 from .creation import arange, linspace

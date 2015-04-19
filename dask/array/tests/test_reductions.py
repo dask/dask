@@ -26,7 +26,7 @@ def test_arg_reduction():
 
 def test_reductions():
     x = np.random.random((20, 20))
-    a = da.from_array(x, blockshape=(7, 7))
+    a = da.from_array(x, chunks=(7, 7))
 
     assert eq(a.argmin(axis=1), x.argmin(axis=1))
     assert eq(a.argmax(axis=0), x.argmax(axis=0))
@@ -37,7 +37,7 @@ def test_nan():
     x = np.array([[1, np.nan, 3, 4],
                   [5, 6, 7, np.nan],
                   [9, 10, 11, 12]])
-    d = da.from_array(x, blockshape=(2, 2))
+    d = da.from_array(x, chunks=(2, 2))
 
     assert eq(np.nansum(x), da.nansum(d))
     assert eq(np.nansum(x, axis=0), da.nansum(d, axis=0))

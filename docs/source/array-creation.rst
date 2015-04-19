@@ -39,7 +39,7 @@ For this common case ``dask.array`` presents the convenience function
 .. code-block:: Python
 
    >>> import dask.array as da
-   >>> x = da.from_array(d, blockshape=(1000, 1000))
+   >>> x = da.from_array(d, chunks=(1000, 1000))
 
 
 Concatenation and Stacking
@@ -66,17 +66,34 @@ arrays
           ('x', 1), (f, ...),
           ('x', 2): (f, ...)}
 
-And a blockdims tuple that defines the shapes of your blocks along each
+And a chunks tuple that defines the shapes of your blocks along each
 dimension
 
 .. code-block:: Python
 
-   blockdims = [(1000, 1000, 1000)]
+   chunks = [(1000, 1000, 1000)]
 
 For the tasks ``(f, ...)`` your choice of function ``f`` and arguments ``...``
 is up to you.  You have the full freedom of the Python language here as long as
 your function, when run with those arguments, produces the appropriate NumPy
 array.
+
+
+Chunks
+------
+
+We always specify a ``chunks`` argument to tell dask.array how to break up the
+underlying array into chunks.  This strongly impacts performance.  We can
+specify ``chunks`` in one of three ways
+
+*  a blocksize like ``1000``
+*  a blockshape like ``(1000, 1000)``
+*  explicit sizes of all blocks along all dimensions,
+   like ``((1000, 1000, 500), (400, 400))``
+
+Your chunks input will be normalized and stored in the third and most explicit
+form.
+
 
 Example
 ```````
@@ -98,9 +115,9 @@ by 1000 NumPy arrays
           ('x', 1, 1): (load, 'block-1-1.pkl'),
           ('x', 1, 2): (load, 'block-1-2.pkl')}
 
-    blockdims = ((1000, 1000), (1000, 1000, 1000))
+    chunks = ((1000, 1000), (1000, 1000, 1000))
 
-    x = da.Array(dsk, 'x', blockdims=blockdims)
+    x = da.Array(dsk, 'x', chunks)
 
 .. _`concatenation and stacking`: stack.html
 .. _`array design`: array-design.html

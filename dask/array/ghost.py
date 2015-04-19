@@ -107,7 +107,7 @@ def ghost_internal(x, axes):
     The axes dict informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
-    dims = list(map(len, x.blockdims))
+    dims = list(map(len, x.chunks))
     expand_key2 = partial(expand_key, dims=dims)
     interior_keys = pipe(x._keys(), flatten,
                                     map(expand_key2), map(flatten),
@@ -121,13 +121,13 @@ def ghost_internal(x, axes):
                          (rec_concatenate, (concrete, expand_key2(k))))
                         for k in interior_keys)
 
-    blockdims = [  [bds[0] + axes.get(i, 0)]
-                 + [bd + axes.get(i, 0) * 2 for bd in bds[1:-1]]
-                 + [bds[-1] + axes.get(i, 0)]
-                 for i, bds in enumerate(x.blockdims)]
+    chunks = [  [bds[0] + axes.get(i, 0)]
+              + [bd + axes.get(i, 0) * 2 for bd in bds[1:-1]]
+              + [bds[-1] + axes.get(i, 0)]
+              for i, bds in enumerate(x.chunks)]
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),
-                 name, blockdims=blockdims)
+                 name, chunks)
 
 
 def trim_internal(x, axes=None):
@@ -140,9 +140,9 @@ def trim_internal(x, axes=None):
         chunk.trim
         map_blocks
     """
-    blockdims = tuple([tuple([d - axes.get(i, 0)*2 for d in bd])
-                       for i, bd in enumerate(x.blockdims)])
-    return map_blocks(x, partial(chunk.trim, axes=axes), blockdims=blockdims)
+    chunks = tuple([tuple([d - axes.get(i, 0)*2 for d in bd])
+                       for i, bd in enumerate(x.chunks)])
+    return map_blocks(x, partial(chunk.trim, axes=axes), chunks=chunks)
 
 
 def periodic(x, axis, depth):
@@ -186,11 +186,11 @@ def reflect(x, axis, depth):
 
 def constant(x, axis, depth, value):
     """ Add constant slice to either side of array """
-    blockdims = list(x.blockdims)
-    blockdims[axis] = (depth,)
+    chunks = list(x.chunks)
+    chunks[axis] = (depth,)
 
-    c = wrap.full(tuple(map(sum, blockdims)), value,
-                  blockdims=tuple(blockdims), dtype=x._dtype)
+    c = wrap.full(tuple(map(sum, chunks)), value,
+                  chunks=tuple(chunks), dtype=x._dtype)
 
     return concatenate([c, x, c], axis=axis)
 
@@ -242,13 +242,13 @@ def ghost(x, depth, boundary):
     >>> import dask.array as da
 
     >>> x = np.arange(64).reshape((8, 8))
-    >>> d = da.from_array(x, blockshape=(4, 4))
-    >>> d.blockdims
+    >>> d = da.from_array(x, chunks=(4, 4))
+    >>> d.chunks
     ((4, 4), (4, 4))
 
     >>> g = da.ghost.ghost(d, depth={0: 2, 1: 1},
     ...                       boundary={0: 100, 1: 'reflect'})
-    >>> g.blockdims
+    >>> g.chunks
     ((8, 8), (6, 6))
 
     >>> np.array(g)

@@ -706,7 +706,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
             if (np.issubdtype(x.dtype[name], np.string_) or
                 np.issubdtype(x.dtype[name], np.unicode_) or
                 np.issubdtype(x.dtype[name], np.object_)):
-                a = da.from_array(x[name], blockshape=(chunksize*len(x.names),))
+                a = da.from_array(x[name], chunks=(chunksize*len(x.names),))
                 categories[name] = da.unique(a)
 
     columns = tuple(x.dtype.names)
@@ -723,7 +723,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
 
     if index:
         assert index in x.names
-        a = da.from_array(x[index], blockshape=(chunksize*len(x.names),))
+        a = da.from_array(x[index], chunks=(chunksize*len(x.names),))
         q = np.linspace(1, 100, len(x) / chunksize + 2)[1:-1]
         blockdivs = da.percentile(a, q).compute()
         return set_partition(result, index, blockdivs, **kwargs)
@@ -970,7 +970,7 @@ def quantiles(f, q, **kwargs):
                                                 sorted(len_dsk))}
 
     dsk = merge(f.dask, val_dsk, len_dsk, merge_dsk)
-    return da.Array(dsk, name3, blockdims=((len(q),),))
+    return da.Array(dsk, name3, chunks=((len(q),),))
 
 
 #################

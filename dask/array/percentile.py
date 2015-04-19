@@ -42,10 +42,10 @@ def percentile(a, q, interpolation='linear'):
             for i, key in enumerate(a._keys()))
 
     name2 = next(names)
-    dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.blockdims[0]),
-                         sorted(dsk), a.blockdims[0], interpolation)}
+    dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.chunks[0]),
+                         sorted(dsk), a.chunks[0], interpolation)}
 
-    return Array(merge(a.dask, dsk, dsk2), name2, blockdims=((len(q),),))
+    return Array(merge(a.dask, dsk, dsk2), name2, chunks=((len(q),),))
 
 
 def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):

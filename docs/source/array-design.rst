@@ -38,7 +38,7 @@ tuples such that the length of the outer tuple is equal to the dimension and
 the lengths of the inner tuples are equal to the number of blocks along each
 dimension.  In the example illustrated above this value is as follows::
 
-    blockdims = ((5, 5, 5, 5), (8, 8, 8))
+    chunks = ((5, 5, 5, 5), (8, 8, 8))
 
 Note that these numbers do not necessarily need to be regular.  We often create
 regularly sized grids but blocks change shape after complex slicing.  Beware
@@ -58,15 +58,15 @@ a name specifying to which keys this array refers ::
 
     name = 'x'
 
-and a blockdims tuple::
+and a chunks tuple::
 
-    blockdims = ((5, 5, 5, 5), (8, 8, 8))
+    chunks = ((5, 5, 5, 5), (8, 8, 8))
 
 Then one can construct an array::
 
-    x = da.Array(dsk, name, blockdims=blockdims)
+    x = da.Array(dsk, name, chunks)
 
-So ``dask.array`` operations update dask dictionaries and track blockdims
+So ``dask.array`` operations update dask dictionaries and track chunks
 shapes.
 
 
@@ -81,8 +81,8 @@ identity matrix
    names = ('eye-%d' % i for i in itertools.count(1))  # sequence of names
 
    def eye(n, blocksize):
-       blockdims = ((blocksize,) * n // blocksize,
-                    (blocksize,) * n // blocksize)
+       chunks = ((blocksize,) * n // blocksize,
+                 (blocksize,) * n // blocksize)
 
        name = next(names)
 
@@ -92,4 +92,4 @@ identity matrix
                 for i in range(n // blocksize)
                 for j in range(n // blocksize)}
 
-       return da.Array(dsk, name, blockdims=blockdims)
+       return da.Array(dsk, name, chunks)

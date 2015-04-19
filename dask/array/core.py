@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from operator import add, getitem
 import operator
 import inspect
+from numbers import Number
 from collections import Iterable
 from bisect import bisect
 import operator
@@ -41,28 +42,27 @@ def getarray(a, b):
 
 from .optimization import optimize
 
-def getem(arr, blockdims=None, blockshape=None, shape=None):
+def getem(arr, chunks, shape=None):
     """ Dask getting various chunks from an array-like
 
-    >>> getem('X', blockshape=(2, 3), shape=(4, 6))  # doctest: +SKIP
+    >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
     {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
      ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
      ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
 
-    >>> getem('X', blockdims=((2, 2), (3, 3)))  # doctest: +SKIP
+    >>> getem('X', chunks=((2, 2), (3, 3)))  # doctest: +SKIP
     {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
      ('X', 1, 0): (getarray, 'X', (slice(2, 4), slice(0, 3))),
      ('X', 1, 1): (getarray, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getarray, 'X', (slice(0, 2), slice(3, 6)))}
     """
-    if not blockdims:
-        blockdims = blockdims_from_blockshape(shape, blockshape)
+    chunks = normalize_chunks(chunks, shape)
 
-    cumdims = [list(accumulate(add, (0,) + bds[:-1])) for bds in blockdims]
-    keys = list(product([arr], *[range(len(bds)) for bds in blockdims]))
+    cumdims = [list(accumulate(add, (0,) + bds[:-1])) for bds in chunks]
+    keys = list(product([arr], *[range(len(bds)) for bds in chunks]))
 
-    shapes = product(*blockdims)
+    shapes = product(*chunks)
     starts = product(*cumdims)
 
     values = ((getarray, arr) + (tuple(slice(s, s+dim)
@@ -382,26 +382,26 @@ def rec_concatenate(arrays, axis=0):
         return np.concatenate(arrays, axis=axis)
 
 
-def map_blocks(x, func, blockshape=None, blockdims=None, dtype=None):
+def map_blocks(x, func, chunks=None, dtype=None):
     """ Map a function across all blocks of a dask array
 
-    You must also specify the blockdims/blockshape of the resulting array.  If
-    you don't then we assume that the resulting array has the same block
-    structure as the input.
+    You must also specify the chunks of the resulting array.  If you don't then
+    we assume that the resulting array has the same block structure as the
+    input.
 
     >>> import dask.array as da
-    >>> x = da.ones((8,), blockshape=(4,))
+    >>> x = da.ones((8,), chunks=(4,))
 
     >>> np.array(x.map_blocks(lambda x: x + 1))
     array([ 2.,  2.,  2.,  2.,  2.,  2.,  2.,  2.])
 
-    If function changes shape of the blocks provide a blockshape
+    If function changes shape of the blocks provide a chunks
 
-    >>> y = x.map_blocks(lambda x: x[::2], blockshape=(2,))
+    >>> y = x.map_blocks(lambda x: x[::2], chunks=(2,))
 
-    Or, if the result is ragged, provide a blockdims
+    Or, if the result is ragged, provide a chunks
 
-    >>> y = x.map_blocks(lambda x: x[::2], blockdims=((2, 2),))
+    >>> y = x.map_blocks(lambda x: x[::2], chunks=((2, 2),))
 
     Your block function can learn where in the array it is if it supports a
     block_id keyword argument.  This will receive entries like (2, 0, 1), the
@@ -410,11 +410,11 @@ def map_blocks(x, func, blockshape=None, blockdims=None, dtype=None):
     >>> def func(block, block_id=None):
     ...     pass
     """
-    if blockshape is not None:
-        blockdims = tuple([nb * (bs,)
-                            for nb, bs in zip(x.numblocks, blockshape)])
-    if blockdims is None:
-        blockdims = x.blockdims
+    if not chunks:
+        chunks = x.chunks
+    elif not isinstance(chunks[0], tuple):
+        chunks = tuple([nb * (bs,)
+                            for nb, bs in zip(x.numblocks, chunks)])
 
     name = next(names)
 
@@ -428,7 +428,7 @@ def map_blocks(x, func, blockshape=None, blockdims=None, dtype=None):
     else:
         dsk = dict(((name,) + k[1:], (func, k)) for k in core.flatten(x._keys()))
 
-    return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=dtype)
+    return Array(merge(dsk, x.dask), name, chunks, dtype=dtype)
 
 
 @wraps(np.squeeze)
@@ -436,16 +436,16 @@ def squeeze(a, axis=None):
     if axis is None:
         axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
     b = a.map_blocks(partial(np.squeeze, axis=axis), dtype=a.dtype)
-    blockdims = tuple(bd for bd in b.blockdims if bd != (1,))
-    old_keys = list(product([b.name], *[range(len(bd)) for bd in b.blockdims]))
-    new_keys = list(product([b.name], *[range(len(bd)) for bd in blockdims]))
+    chunks = tuple(bd for bd in b.chunks if bd != (1,))
+    old_keys = list(product([b.name], *[range(len(bd)) for bd in b.chunks]))
+    new_keys = list(product([b.name], *[range(len(bd)) for bd in chunks]))
 
     dsk = b.dask.copy()
     for o, n in zip(old_keys, new_keys):
         dsk[n] = dsk[o]
         del dsk[o]
 
-    return Array(dsk, b.name, blockdims=blockdims, dtype=a.dtype)
+    return Array(dsk, b.name, chunks, dtype=a.dtype)
 
 
 def compute(*args, **kwargs):
@@ -459,7 +459,7 @@ def compute(*args, **kwargs):
     -------
 
     >>> import dask.array as da
-    >>> d = da.ones((4, 4), blockshape=(2, 2))
+    >>> d = da.ones((4, 4), chunks=(2, 2))
     >>> a = d + 1  # two different dask arrays
     >>> b = d + 2
     >>> A, B = da.compute(a, b)  # Compute both simultaneously
@@ -499,7 +499,7 @@ def store(sources, targets, **kwargs):
     >>> import h5py  # doctest: +SKIP
     >>> f = h5py.File('myfile.hdf5')  # doctest: +SKIP
     >>> dset = f.create_dataset('/data', shape=x.shape,
-    ...                                  chunks=x.blockshape,
+    ...                                  chunks=x.chunks,
     ...                                  dtype='f8')  # doctest: +SKIP
 
     >>> store(x, dset)  # doctest: +SKIP
@@ -536,7 +536,9 @@ def blockdims_from_blockshape(shape, blockshape):
     ((4, 4, 2), (3, 3, 3, 1))
     """
     if blockshape is None:
-        raise ValueError("Must supply a blockshape= keyword argument")
+        raise TypeError("Must supply chunks= keyword argument")
+    if shape is None:
+        raise TypeError("Must supply shape= keyword argument")
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
                               for d, bd in zip(shape, blockshape))
 
@@ -552,35 +554,30 @@ class Array(object):
         Name of array in dask
     shape : tuple of ints
         Shape of the entire array
-    blockdims : iterable of tuples
+    chunks: iterable of tuples
         block sizes along each dimension
     """
 
-    __slots__ = 'dask', 'name', 'blockdims', '_dtype'
+    __slots__ = 'dask', 'name', 'chunks', '_dtype'
 
-    def __init__(self, dask, name, shape=None, blockshape=None, blockdims=None,
-            dtype=None):
+    def __init__(self, dask, name, chunks, shape=None, dtype=None):
         self.dask = dask
         self.name = name
-        if blockdims is None:
-            blockdims = blockdims_from_blockshape(shape, blockshape)
-        if blockdims is None:
-            raise ValueError("Either give shape and blockshape or blockdims")
-        self.blockdims = tuple(map(tuple, blockdims))
+        self.chunks = normalize_chunks(chunks, shape)
         if isinstance(dtype, (str, list)):
             dtype = np.dtype(dtype)
         self._dtype = dtype
 
     @property
     def numblocks(self):
-        return tuple(map(len, self.blockdims))
+        return tuple(map(len, self.chunks))
 
     @property
     def shape(self):
-        return tuple(map(sum, self.blockdims))
+        return tuple(map(sum, self.chunks))
 
     def __len__(self):
-        return sum(self.blockdims[0])
+        return sum(self.chunks[0])
 
     def _visualize(self, optimize_graph=False):
         from dask.dot import dot_graph
@@ -590,7 +587,7 @@ class Array(object):
             dot_graph(self.dask)
 
     @property
-    @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].blockdims))
+    @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].chunks))
     def dtype(self):
         if self._dtype is not None:
             return self._dtype
@@ -600,9 +597,9 @@ class Array(object):
             return self.compute().dtype
 
     def __repr__(self):
-        blockdims = '(' + ', '.join(map(repr_long_list, self.blockdims)) + ')'
-        return ("dask.array<%s, shape=%s, blockdims=%s, dtype=%s>" %
-                (self.name, self.shape, blockdims, self._dtype))
+        chunks = '(' + ', '.join(map(repr_long_list, self.chunks)) + ')'
+        return ("dask.array<%s, shape=%s, chunks=%s, dtype=%s>" %
+                (self.name, self.shape, chunks, self._dtype))
 
     def _get_block(self, *args):
         return core.get(self.dask, (self.name,) + args)
@@ -680,10 +677,9 @@ class Array(object):
         if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
-        dsk, blockdims = slice_array(out, self.name, self.blockdims, index)
+        dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
-        return Array(merge(self.dask, dsk), out, blockdims=blockdims,
-                     dtype=self._dtype)
+        return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
 
     @wraps(np.dot)
     def dot(self, other):
@@ -824,35 +820,76 @@ class Array(object):
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
 
     @wraps(map_blocks)
-    def map_blocks(self, func, blockshape=None, blockdims=None, dtype=None):
-        return map_blocks(self, func, blockshape=blockshape,
-                          blockdims=blockdims, dtype=dtype)
+    def map_blocks(self, func, chunks=None, dtype=None):
+        return map_blocks(self, func, chunks, dtype=dtype)
 
     @wraps(squeeze)
     def squeeze(self):
         return squeeze(self)
 
-    def reblock(self, blockdims=None, blockshape=None):
-        from .reblock import reblock
-        return reblock(self, blockdims=blockdims, blockshape=blockshape)
+    def rechunk(self, chunks):
+        from .rechunk import rechunk
+        return rechunk(self, chunks)
 
 
-def from_array(x, blockdims=None, blockshape=None, name=None, **kwargs):
+def normalize_chunks(chunks, shape=None):
+    """ Normalize chunks to tuple of tuples
+
+    >>> normalize_chunks((2, 2), shape=(5, 6))
+    ((2, 2, 1), (2, 2, 2))
+
+    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(4, 6))  # Idempotent
+    ((2, 2, 1), (2, 2, 2))
+
+    >>> normalize_chunks([[2, 2], [3, 3]])  # Cleans up lists to tuples
+    ((2, 2), (3, 3))
+
+    >>> normalize_chunks(10, shape=(30, 5))  # Supports integer inputs
+    ((10, 10, 10), (5,))
+
+    >>> normalize_chunks((), shape=(0, 0))  #  respects null dimensions
+    ((), ())
+    """
+    if isinstance(chunks, list):
+        chunks = tuple(chunks)
+    if isinstance(chunks, Number):
+        chunks = (chunks,) * len(shape)
+    if not chunks:
+        if shape is None:
+            chunks = ()
+        else:
+            chunks = ((),) * len(shape)
+
+    if chunks and not isinstance(chunks[0], (tuple, list)):
+        chunks = blockdims_from_blockshape(shape, chunks)
+
+    chunks = tuple(map(tuple, chunks))
+
+    return chunks
+
+
+def from_array(x, chunks, name=None, **kwargs):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
+
+    The ``chunks`` argument must be one of the following forms:
+
+    -   a blocksize like 1000
+    -   a blockshape like (1000, 1000)
+    -   explicit sizes of all blocks along all dimensions
+        like ((1000, 1000, 500), (400, 400)).
 
     Example
     -------
 
     >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
-    >>> a = da.from_array(x, blockshape=(1000, 1000))  # doctest: +SKIP
+    >>> a = da.from_array(x, chunks=(1000, 1000))  # doctest: +SKIP
     """
-    if blockdims is None:
-        blockdims = blockdims_from_blockshape(x.shape, blockshape)
+    chunks = normalize_chunks(chunks, x.shape)
     name = name or next(names)
-    dask = merge({name: x}, getem(name, blockdims=blockdims))
-    return Array(dask, name, blockdims=blockdims, dtype=x.dtype)
+    dask = merge({name: x}, getem(name, chunks))
+    return Array(dask, name, chunks, dtype=x.dtype)
 
 
 def atop(func, out, out_ind, *args, **kwargs):
@@ -870,13 +907,12 @@ def atop(func, out, out_ind, *args, **kwargs):
     dims = broadcast_dimensions(nameinds, shapes)
     shape = tuple(dims[i] for i in out_ind)
 
-    blockdim_dict = dict((a.name, a.blockdims) for a, _ in arginds)
-    blockdimss = broadcast_dimensions(nameinds, blockdim_dict)
-    blockdims = tuple(blockdimss[i] for i in out_ind)
+    blockdim_dict = dict((a.name, a.chunks) for a, _ in arginds)
+    chunkss = broadcast_dimensions(nameinds, blockdim_dict)
+    chunks = tuple(chunkss[i] for i in out_ind)
 
     dsks = [a.dask for a, _ in arginds]
-    return Array(merge(dsk, *dsks), out, shape, blockdims=blockdims,
-                dtype=dtype)
+    return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)
 
 
 def get(dsk, keys, get=None, **kwargs):
@@ -924,7 +960,7 @@ def stack(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [from_array(np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [from_array(np.ones((4, 4)), chunks=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.stack(data, axis=0)
@@ -950,14 +986,14 @@ def stack(seq, axis=0):
         raise ValueError("Axis must not be greater than number of dimensions"
                 "\nData has %d dimensions, but got axis=%d" % (ndim, axis))
 
-    assert len(set(a.blockdims for a in seq)) == 1  # same blockshape
+    assert len(set(a.chunks for a in seq)) == 1  # same chunks
     shape = seq[0].shape[:axis] + (len(seq),) + seq[0].shape[axis:]
-    blockdims = (  seq[0].blockdims[:axis]
-                + ((1,) * n,)
-                + seq[0].blockdims[axis:])
+    chunks = (  seq[0].chunks[:axis]
+              + ((1,) * n,)
+              + seq[0].chunks[axis:])
 
     name = next(stacked_names)
-    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
+    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
     names = [a.name for a in seq]
     inputs = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
@@ -975,7 +1011,7 @@ def stack(seq, axis=0):
     else:
         dt = None
 
-    return Array(dsk2, name, shape, blockdims=blockdims, dtype=dt)
+    return Array(dsk2, name, chunks, dtype=dt)
 
 
 concatenate_names = ('concatenate-%d' % i for i in count(1))
@@ -996,7 +1032,7 @@ def concatenate(seq, axis=0):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [from_array(np.ones((4, 4)), blockshape=(2, 2))
+    >>> data = [from_array(np.ones((4, 4)), chunks=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.concatenate(data, axis=0)
@@ -1019,7 +1055,7 @@ def concatenate(seq, axis=0):
         raise ValueError("Axis must be less than than number of dimensions"
                 "\nData has %d dimensions, but got axis=%d" % (ndim, axis))
 
-    bds = [a.blockdims for a in seq]
+    bds = [a.chunks for a in seq]
 
     if not all(len(set(bds[i][j] for i in range(n))) == 1
             for j in range(len(bds[0])) if j != axis):
@@ -1028,14 +1064,14 @@ def concatenate(seq, axis=0):
     shape = (seq[0].shape[:axis]
             + (sum(a.shape[axis] for a in seq),)
             + seq[0].shape[axis + 1:])
-    blockdims = (  seq[0].blockdims[:axis]
-                + (sum([bd[axis] for bd in bds], ()),)
-                + seq[0].blockdims[axis + 1:])
+    chunks = (  seq[0].chunks[:axis]
+              + (sum([bd[axis] for bd in bds], ()),)
+              + seq[0].chunks[axis + 1:])
 
     name = next(concatenate_names)
-    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
+    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
-    cum_dims = [0] + list(accumulate(add, [len(a.blockdims[axis]) for a in seq]))
+    cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
     names = [a.name for a in seq]
     values = [(names[bisect(cum_dims, key[axis + 1]) - 1],)
                 + key[1:axis + 1]
@@ -1051,7 +1087,7 @@ def concatenate(seq, axis=0):
     else:
         dt = None
 
-    return Array(dsk2, name, shape, blockdims=blockdims, dtype=dt)
+    return Array(dsk2, name, chunks, dtype=dt)
 
 
 @wraps(np.take)
@@ -1132,7 +1168,7 @@ def insert_to_ooc(out, arr):
     from threading import Lock
     lock = Lock()
 
-    locs = [[0] + list(accumulate(add, bl)) for bl in arr.blockdims]
+    locs = [[0] + list(accumulate(add, bl)) for bl in arr.chunks]
 
     def store(x, *args):
         with lock:
@@ -1307,10 +1343,10 @@ def frexp(x):
         ldt = None
         rdt = None
 
-    L = Array(merge(tmp.dask, ldsk), left, blockdims=tmp.blockdims,
+    L = Array(merge(tmp.dask, ldsk), left, chunks=tmp.chunks,
                 dtype=ldt)
 
-    R = Array(merge(tmp.dask, rdsk), right, blockdims=tmp.blockdims,
+    R = Array(merge(tmp.dask, rdsk), right, chunks=tmp.chunks,
                 dtype=rdt)
 
     return L, R
@@ -1336,10 +1372,10 @@ def modf(x):
         ldt = None
         rdt = None
 
-    L = Array(merge(tmp.dask, ldsk), left, blockdims=tmp.blockdims,
+    L = Array(merge(tmp.dask, ldsk), left, chunks=tmp.chunks,
                 dtype=ldt)
 
-    R = Array(merge(tmp.dask, rdsk), right, blockdims=tmp.blockdims,
+    R = Array(merge(tmp.dask, rdsk), right, chunks=tmp.chunks,
                 dtype=rdt)
 
     return L, R
@@ -1385,7 +1421,7 @@ def where(condition, x, y):
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes):
     if not all(bd % div == 0 for i, div in axes.items()
-                             for bd in x.blockdims[i]):
+                             for bd in x.chunks[i]):
         raise ValueError(
             "Coarsening factor does not align with block dimensions")
 
@@ -1395,14 +1431,14 @@ def coarsen(reduction, x, axes):
     name = next(names)
     dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes))
                 for key in core.flatten(x._keys()))
-    blockdims = tuple(tuple(int(bd / axes.get(i, 1)) for bd in bds)
-                      for i, bds in enumerate(x.blockdims))
+    chunks = tuple(tuple(int(bd / axes.get(i, 1)) for bd in bds)
+                      for i, bds in enumerate(x.chunks))
 
     if x._dtype is not None:
         dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
     else:
         dt = None
-    return Array(merge(x.dask, dsk), name, blockdims=blockdims, dtype=dt)
+    return Array(merge(x.dask, dsk), name, chunks, dtype=dt)
 
 
 def split_at_breaks(array, breaks, axis=0):
@@ -1446,7 +1482,7 @@ def insert(arr, obj, values, axis):
         # we need to turn values into a dask array
         name = next(names)
         dtype = getattr(values, 'dtype', type(values))
-        values = Array({(name,): values}, name, blockdims=(), dtype=dtype)
+        values = Array({(name,): values}, name, chunks=(), dtype=dtype)
 
         values_shape = tuple(len(obj) if axis == n else s
                              for n, s in enumerate(arr.shape))
@@ -1454,11 +1490,11 @@ def insert(arr, obj, values, axis):
     elif scalar_obj:
         values = values[(slice(None),) * axis + (None,)]
 
-    values_blockdims = tuple(values_bd if axis == n else arr_bd
-                             for n, (arr_bd, values_bd)
-                             in enumerate(zip(arr.blockdims,
-                                              values.blockdims)))
-    values = values.reblock(values_blockdims)
+    values_chunks = tuple(values_bd if axis == n else arr_bd
+                          for n, (arr_bd, values_bd)
+                          in enumerate(zip(arr.chunks,
+                                           values.chunks)))
+    values = values.rechunk(values_chunks)
 
     counts = np.bincount(obj)[:-1]
     values_breaks = np.cumsum(counts[counts > 0])
@@ -1479,16 +1515,16 @@ def broadcast_to(x, shape):
                          % (x.shape, shape))
 
     name = next(names)
-    blockdims = (tuple((s,) for s in shape[:ndim_new])
-                 + tuple(bd if old > 1 else (new,)
-                         for bd, old, new in zip(x.blockdims, x.shape,
-                                                 shape[ndim_new:])))
+    chunks = (tuple((s,) for s in shape[:ndim_new])
+               + tuple(bd if old > 1 else (new,)
+                       for bd, old, new in zip(x.chunks, x.shape,
+                                               shape[ndim_new:])))
     dsk = dict(((name,) + (0,) * ndim_new + key[1:],
                 (chunk.broadcast_to, key,
                  shape[:ndim_new] +
-                 tuple(bd[i] for i, bd in zip(key[1:], blockdims[ndim_new:]))))
+                 tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:]))))
                for key in core.flatten(x._keys()))
-    return Array(merge(dsk, x.dask), name, blockdims=blockdims, dtype=x.dtype)
+    return Array(merge(dsk, x.dask), name, chunks, dtype=x.dtype)
 
 
 def offset_func(func, offset, *args):
@@ -1514,22 +1550,22 @@ def offset_func(func, offset, *args):
 fromfunction_names = ('fromfunction-%d' % i for i in count(1))
 
 @wraps(np.fromfunction)
-def fromfunction(func, shape=None, blockshape=None, blockdims=None, dtype=None):
+def fromfunction(func, chunks=None, shape=None, dtype=None):
     name = next(fromfunction_names)
-    if shape and blockshape and not blockdims:
-        blockdims = blockdims_from_blockshape(shape, blockshape)
+    if chunks:
+        chunks = normalize_chunks(chunks, shape)
 
-    keys = list(product([name], *[range(len(bd)) for bd in blockdims]))
-    aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in blockdims]
+    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
+    aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
     offsets = list(product(*aggdims))
-    shapes = list(product(*blockdims))
+    shapes = list(product(*chunks))
 
     values = [(np.fromfunction, offset_func(func, offset), shape)
                 for offset, shape in zip(offsets, shapes)]
 
     dsk = dict(zip(keys, values))
 
-    return Array(dsk, name, blockdims=blockdims, dtype=dtype)
+    return Array(dsk, name, chunks, dtype=dtype)
 
 
 @wraps(np.unique)
