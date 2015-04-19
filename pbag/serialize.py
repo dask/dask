@@ -1,4 +1,7 @@
-import msgpack
+try:
+    from pandas import msgpack
+except ImportError:
+    import msgpack
 import struct
 try:
     from StringIO import StringIO
