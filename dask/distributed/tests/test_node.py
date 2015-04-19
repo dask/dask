@@ -12,8 +12,13 @@ def add(x, y):
     return x + y
 
 
+global_port = [5000]
+
 @contextmanager
-def worker(port=5000, data=None):
+def worker(port=None, data=None):
+    if port is None:
+        global_port[0] += 1
+        port = global_port[0]
     if data is None:
         data = dict()
     a = Worker('127.0.0.1:%d'%port, data)
@@ -94,3 +99,20 @@ def test_close():
         w.close()
         assert w.pool._state == multiprocessing.pool.CLOSE
         w.close()  # idempotent
+
+
+def test_collect():
+    with worker(data={'x': 10, 'y': 20}) as a:
+        with worker(data={'a': 1, 'b': 2}) as b:
+            with worker(data={'c': 5}) as c:
+                socket = context.socket(zmq.REQ)
+                socket.connect(c.address)
+
+                payload = dict(function='collect', args=({'x': [a.address],
+                                                          'a': [b.address],
+                                                          'y': [a.address]},))
+                socket.send(c.dumps(payload))
+
+                result = c.loads(socket.recv())
+
+                assert c.data == dict(a=1, c=5, x=10, y=20)
