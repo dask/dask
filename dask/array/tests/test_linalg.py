@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+
 import numpy as np
 from dask.array import from_array
 from dask.array.linalg import tsqr
@@ -7,7 +8,7 @@ from dask.array.linalg import tsqr
 def test_tsqr_regular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, blockshape=(10, n), name='A')
+    data = from_array(mat, chunks=(10, n), name='A')
 
     q, r = tsqr(data)
     q = np.array(q)
@@ -21,7 +22,7 @@ def test_tsqr_regular_blocks():
 def test_tsqr_irregular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, blockshape=(3, n), name='A')[1:]
+    data = from_array(mat, chunks=(3, n), name='A')[1:]
     mat2 = mat[1:, :]
 
     q, r = tsqr(data)
@@ -36,7 +37,7 @@ def test_tsqr_irregular_blocks():
 def test_tsqr_svd_regular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, blockshape=(10, n), name='A')
+    data = from_array(mat, chunks=(10, n), name='A')
 
     u, s, v = tsqr(data, compute_svd=True)
     u = np.array(u)
@@ -53,7 +54,7 @@ def test_tsqr_svd_regular_blocks():
 def test_tsqr_svd_irregular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, blockshape=(3, n), name='A')[1:]
+    data = from_array(mat, chunks=(3, n), name='A')[1:]
     mat2 = mat[1:, :]
 
     u, s, v = tsqr(data, compute_svd=True)
