@@ -3,6 +3,7 @@ from __future__ import print_function
 from zmqompute import ComputeNode
 from threading import Thread, Lock
 from multiprocessing.pool import ThreadPool
+import random
 import multiprocessing
 import zmq
 import dask
@@ -20,7 +21,8 @@ DEBUG = True
 context = zmq.Context()
 
 def log(*args):
-    pass
+    return
+    print(*args, file=sys.stderr)
 
 
 class Worker(object):
@@ -35,7 +37,7 @@ class Worker(object):
                  dumps=partial(dumps, protocol=HIGHEST_PROTOCOL),
                  loads=loads):
         self.data = data
-        self.pool = ThreadPool(100)
+        self.pool = ThreadPool(nthreads)
         self.dumps = dumps
         self.loads = loads
 
@@ -80,11 +82,12 @@ class Worker(object):
         except Exception as e:
             result = e
             status = 'Error'
-        payload = self.dumps({'result': result,
-                              'address': self.address,
-                              'jobid': jobid,
-                              'status': status})
-        log('Computed and returning result:', address, payload)
+        payload = {'result': result,
+                   'address': self.address,
+                   'jobid': jobid,
+                   'status': status}
+        log('Finished computation.  Return result:', address, payload)
+        payload = self.dumps(payload)
         with self.lock:
             self.router.send_multipart([address, '', payload])
 
@@ -98,7 +101,7 @@ class Worker(object):
             -empty-
             Payload
 
-        The payload should deserialize into a dict of the following form:
+        Payload should deserialize into a dict of the following form:
 
             {'function': name of function to call, see self.functions,
              'jobid': job identifier, defaults to None,
@@ -109,6 +112,7 @@ class Worker(object):
 
         >>> sock = context.socket(zmq.REQ)  # doctest: +SKIP
         >>> sock.connect('tcp://my-address')  # doctest: +SKIP
+
         >>> sock.send(dumps({'function': 'status'}))  # doctest: +SKIP
 
         Or a more complex packet might be as follows:
@@ -117,9 +121,13 @@ class Worker(object):
         ...                  'args': ('x', 10),
         ...                  'jobid': 123}))  # doctest: +SKIP
 
-        The function strings check against ``self.functions``.  They are run
-        asynchronously using a thread from ``self.pool``.  Their results are
-        sent back to the sender (see ``execute_and_reply``.)
+        We match the function string against ``self.functions`` to pull out the
+        actual function.  We then execute this function with the provided
+        arguments in another thread from ``self.pool`` using
+        ``self.execute_and_reply``.  This sends results back to the sender.
+
+        See Also:
+            execute_and_reply
         """
         while True:
             # Wait on request
@@ -138,7 +146,7 @@ class Worker(object):
                 args = (args,)
             kwargs = payload2.get('kwargs', dict())
 
-            # Execute job in thread
+            # Execute job in separate thread
             future = self.pool.apply_async(self.execute_and_reply,
                                   args=(address, jobid, func, args, kwargs))
 
@@ -156,13 +164,13 @@ class Worker(object):
         """
         socks = []
 
-        log('Collecting data from peers:', self.address, locations)
+        log('Collect data from peers:', self.address, locations)
         # Send out requests for data
         for key, locs in locations.items():
-            if key in self.data:
+            if key in self.data:  # already have this locally
                 continue
             sock = context.socket(zmq.REQ)
-            sock.connect(locs[0])
+            sock.connect(random.choice(locs))  # randomly select one peer
             payload = {'function': 'getitem',
                        'args': (key,),
                        'jobid': key}
@@ -172,7 +180,8 @@ class Worker(object):
         # Wait on replies.  Store results in self.data.
         for sock in socks:
             payload = self.loads(sock.recv())
-            log('Received data:', self.address, payload)
+            log('Received data:', self.address, payload['address'],
+                                                payload['jobid'])
             self.data[payload['jobid']] = payload['result']
 
     def compute(self, key, task, locations):
@@ -209,7 +218,7 @@ class Worker(object):
 
     def close(self):
         if self.pool._state == multiprocessing.pool.RUN:
-            log('Closing', self.address)
+            log('Close:', self.address)
             req = context.socket(zmq.REQ)
             req.connect(self.address)
             req.send(b'close')
