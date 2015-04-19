@@ -535,9 +535,9 @@ def blockdims_from_blockshape(shape, blockshape):
     ((4, 4, 2), (3, 3, 3, 1))
     """
     if blockshape is None:
-        raise ValueError("Must supply chunks= keyword argument")
+        raise TypeError("Must supply chunks= keyword argument")
     if shape is None:
-        raise ValueError("Must supply shape= keyword argument")
+        raise TypeError("Must supply shape= keyword argument")
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
                               for d, bd in zip(shape, blockshape))
 
@@ -1485,7 +1485,7 @@ def insert(arr, obj, values, axis):
     values_chunks = tuple(values_bd if axis == n else arr_bd
                           for n, (arr_bd, values_bd)
                           in enumerate(zip(arr.chunks,
-                                              values.chunks)))
+                                           values.chunks)))
     values = values.reblock(values_chunks)
 
     counts = np.bincount(obj)[:-1]
