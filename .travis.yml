@@ -29,7 +29,7 @@ script:
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run $(which py.test) dask pframe pbag --doctest-modules --verbose; coverage report --show-missing; else py.test dask pframe pbag --verbose; fi
 
 after_success:
-    - coveralls
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pip install coveralls ; coveralls ; fi
 
 notifications:
   email: false
