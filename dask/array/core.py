@@ -873,6 +873,13 @@ def from_array(x, chunks, name=None, **kwargs):
 
     Input must have a ``.shape`` and support numpy-style slicing.
 
+    The ``chunks`` argument must be one of the following forms:
+
+    -   a blocksize like 1000
+    -   a blockshape like (1000, 1000)
+    -   explicit sizes of all blocks along all dimensions
+        like ((1000, 1000, 500), (400, 400)).
+
     Example
     -------
 

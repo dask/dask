@@ -78,6 +78,23 @@ is up to you.  You have the full freedom of the Python language here as long as
 your function, when run with those arguments, produces the appropriate NumPy
 array.
 
+
+Chunks
+------
+
+We always specify a ``chunks`` argument to tell dask.array how to break up the
+underlying array into chunks.  This strongly impacts performance.  We can
+specify ``chunks`` in one of three ways
+
+*  a blocksize like ``1000``
+*  a blockshape like ``(1000, 1000)``
+*  explicit sizes of all blocks along all dimensions,
+   like ``((1000, 1000, 500), (400, 400))``
+
+Your chunks input will be normalized and stored in the third and most explicit
+form.
+
+
 Example
 ```````
 
