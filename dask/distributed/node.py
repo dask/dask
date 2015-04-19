@@ -61,7 +61,7 @@ class Worker(object):
         self._listen_thread = Thread(target=self.listen)
         self._listen_thread.start()
 
-    def execute_and_reply(self, address, jobid, func, args, kwargs):
+    def execute_and_reply(self, address, jobid, func, args, kwargs, reply):
         """ Execute function, return result
 
         This is intended to be run asynchronously in a separate thread
@@ -87,9 +87,10 @@ class Worker(object):
                    'jobid': jobid,
                    'status': status}
         log('Finished computation.  Return result:', address, payload)
-        payload = self.dumps(payload)
-        with self.lock:
-            self.router.send_multipart([address, '', payload])
+        if reply:
+            payload = self.dumps(payload)
+            with self.lock:
+                self.router.send_multipart([address, '', payload])
 
     def listen(self):
         """
@@ -106,7 +107,8 @@ class Worker(object):
             {'function': name of function to call, see self.functions,
              'jobid': job identifier, defaults to None,
              'args': arguments to pass to function, defaults to (),
-             'kwargs': keyword argument dict, defauls to {}}
+             'kwargs': keyword argument dict, defauls to {},
+             'reply': whether or not a reply is desired}
 
         So the minimal request would be as follows:
 
@@ -145,10 +147,11 @@ class Worker(object):
             if not isinstance(args, tuple):
                 args = (args,)
             kwargs = payload2.get('kwargs', dict())
+            reply = payload2.get('reply', True)
 
             # Execute job in separate thread
             future = self.pool.apply_async(self.execute_and_reply,
-                                  args=(address, jobid, func, args, kwargs))
+                              args=(address, jobid, func, args, kwargs, reply))
 
     def collect(self, locations):
         """ Collect data from peers
@@ -213,8 +216,7 @@ class Worker(object):
 
         return {'key': key,
                 'duration': end - start,
-                'status': status,
-                'worker': self.address}
+                'status': status}
 
     def close(self):
         if self.pool._state == multiprocessing.pool.RUN:
