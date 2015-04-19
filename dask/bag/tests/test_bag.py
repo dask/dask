@@ -1,10 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join, reduceby, pipe, filter
+from toolz import merge, join, pipe, filter, identity, merge_with
 import numpy as np
-import dask.bag as db
-from dask.bag.core import Bag, lazify, lazify_task, fuse, map
+from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
+        reduceby)
 from into.utils import filetexts
+from pbag import PBag
+import dask.bag as db
+import gzip
+import bz2
+from dask.utils import raises
 
 from collections import Iterator
 
@@ -72,6 +77,12 @@ def test_pluck():
     assert set(b.pluck([1, 0])) == set([(10, 1), (20, 2), (30, 3), (40, 4)])
 
 
+def test_pluck_with_default():
+    b = db.from_sequence(['Hello', '', 'World'])
+    assert raises(IndexError, lambda: list(b.pluck(0)))
+    assert list(b.pluck(0, None)) == ['H', None, 'W']
+
+
 def test_fold_computation():
     assert int(b.fold(add)) == sum(L)
 
@@ -115,7 +126,8 @@ def test_join():
             list(join(isodd, [1, 2, 3], isodd, list(b)))
 
 def test_foldby():
-    c = b.foldby(iseven, lambda acc, x: acc + x, 0, lambda a, b: a + b, 0)
+    c = b.foldby(iseven, add, 0, add, 0)
+    assert (reduceby, iseven, add, (b.name, 0), 0) in list(c.dask.values())
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
 
     c = b.foldby(iseven, lambda acc, x: acc + x)
@@ -155,6 +167,7 @@ def test_lazify():
 
 def test_take():
     assert list(b.take(2)) == [0, 1]
+    assert b.take(2) == (0, 1)
 
 
 def test_map_is_lazy():
@@ -171,6 +184,20 @@ def test_from_filenames():
                 set('ABCD')
         assert set(line.strip() for line in db.from_filenames('a*.log')) == \
                 set('ABCD')
+
+
+def test_from_filenames_gzip():
+    b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
+
+    assert set(b.dask.values()) == set([(list, (gzip.open, 'foo.json.gz')),
+                                        (list, (gzip.open, 'bar.json.gz'))])
+
+
+def test_from_filenames_bz2():
+    b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
+
+    assert set(b.dask.values()) == set([(list, (bz2.BZ2File, 'foo.json.bz2')),
+                                        (list, (bz2.BZ2File, 'bar.json.bz2'))])
 
 
 def test_from_sequence():
@@ -195,6 +222,50 @@ def test_product():
     z = x.product(y)
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
 
+
+def test_collect():
+    a = PBag(identity, 2)
+    with a:
+        a.extend([0, 1, 2, 3])
+
+    b = PBag(identity, 2)
+    with b:
+        b.extend([0, 1, 2, 3])
+
+    result = merge(dict(collect(identity, 2, 0, [a, b])),
+                   dict(collect(identity, 2, 1, [a, b])))
+
+    assert result == {0: [0, 0],
+                      1: [1, 1],
+                      2: [2, 2],
+                      3: [3, 3]}
+
+
+def test_groupby():
+    result = dict(b.groupby(lambda x: x))
+    assert result == {0: [0, 0 ,0],
+                      1: [1, 1, 1],
+                      2: [2, 2, 2],
+                      3: [3, 3, 3],
+                      4: [4, 4, 4]}
+    assert b.groupby(lambda x: x).npartitions == b.npartitions
+
+
+def test_groupby_with_indexer():
+    b = db.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
+    result = dict(b.groupby(0))
+    assert result == {1: [[1, 2, 3], [1, 4, 9]],
+                      2: [[2, 3, 4]]}
+
+def test_groupby_with_npartitions_changed():
+    result = b.groupby(lambda x: x, npartitions=1)
+    assert dict(result) == {0: [0, 0 ,0],
+                            1: [1, 1, 1],
+                            2: [2, 2, 2],
+                            3: [3, 3, 3],
+                            4: [4, 4, 4]}
+
+    assert result.npartitions == 1
 
 def test_concat():
     b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])

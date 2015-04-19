@@ -2,16 +2,22 @@ from __future__ import absolute_import, division, print_function
 
 import itertools
 import math
+import tempfile
 from glob import glob
 import heapq
 import inspect
-from collections import Iterable, Iterator
+from pbag import PBag
+from collections import Iterable, Iterator, defaultdict
+import toolz
+import gzip
+import bz2
+import os
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
         join, reduceby, compose, second, valmap, count, map, partition_all,
-        filter, pluck)
+        filter, pluck, identity, groupby)
 try:
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
-            compose, second, count, pluck)
+            compose, second, count, pluck, groupby)
 except ImportError:
     pass
 
@@ -23,6 +29,8 @@ from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
+
+no_default = '__no__default__'
 
 
 def lazify_task(task, start=True):
@@ -56,14 +64,20 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-def get(dsk, keys, get=None, **kwargs):
-    get = get or _globals['get'] or mpget
-
+def optimize(dsk, keys):
+    """ Optimize a dask from a dask.bag """
     dsk2 = cull(dsk, keys)
     dsk3 = fuse(dsk2)
     dsk4 = lazify(dsk3)
+    return dsk4
 
-    return get(dsk, keys, **kwargs)
+def get(dsk, keys, get=None, **kwargs):
+    """ Get function for dask.bag """
+    get = get or _globals['get'] or mpget
+
+    dsk2 = optimize(dsk, keys)
+
+    return get(dsk2, keys, **kwargs)
 
 
 def list2(seq):
@@ -88,6 +102,22 @@ class Bag(object):
 
     Computed in paritions with dask
 
+    Example
+    -------
+
+    Create Bag from sequence
+
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(range(5))
+    >>> list(b.filter(lambda x: x % 2 == 0).map(lambda x: x * 10))  # doctest: +SKIP
+    [0, 20, 40]
+
+    Create Bag from filename or globstring of filenames
+
+    >>> b = db.from_filenames('/path/to/mydata.*.json.gz').map(json.loads)  # doctest: +SKIP
+
+    Create manually (expert use)
+
     >>> dsk = {('x', 0): (range, 5),
     ...        ('x', 1): (range, 5),
     ...        ('x', 2): (range, 5)}
@@ -106,6 +136,13 @@ class Bag(object):
         self.get = get
 
     def map(self, func):
+        """ Map a function across all elements in collection
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(5))
+        >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
+        [0, 10, 20, 30, 40]
+        """
         name = next(names)
         if takes_multiple_arguments(func):
             func = curry(apply, func)
@@ -114,26 +151,71 @@ class Bag(object):
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
     def filter(self, predicate):
+        """ Filter elements in collection by a predicate function
+
+        >>> def iseven(x):
+        ...     return x % 2 == 0
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(5))
+        >>> list(b.filter(iseven))  # doctest: +SKIP
+        [0, 2, 4]
+        """
         name = next(names)
         dsk = dict(((name, i), (list, (filter, predicate, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
     def map_partitions(self, func):
+        """ Apply function to every partition within collection
+
+        Note that this requires you to understand how dask.bag partitions your
+        data and so is somewhat internal.
+
+        >>> b.map_partitions(myfunc)  # doctest: +SKIP
+        """
         name = next(names)
         dsk = dict(((name, i), (func, (self.name, i)))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
-    def pluck(self, key):
+    def pluck(self, key, default=no_default):
+        """ Select item from all tuples/dicts in collection
+
+        >>> b = from_sequence([{'name': 'Alice', 'credits': [1, 2, 3]},
+        ...                    {'name': 'Bob',   'credits': [10, 20]}])
+        >>> list(b.pluck('name'))  # doctest: +SKIP
+        ['Alice', 'Bob']
+        >>> list(b.pluck('credits').pluck(0))  # doctest: +SKIP
+        [1, 10]
+        """
         name = next(names)
         if isinstance(key, list):
             key = (list2, key)
-        dsk = dict(((name, i), (list, (pluck, key, (self.name, i))))
-                   for i in range(self.npartitions))
+        if default == no_default:
+            dsk = dict(((name, i), (list, (pluck, key, (self.name, i))))
+                       for i in range(self.npartitions))
+        else:
+            dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
+                       for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
     def fold(self, binop, combine=None, initial=None):
+        """ Splittable reduction
+
+        Apply binary operator on each partition to perform reduce.  Follow by a
+        second binary operator to combine results
+
+        >>> b = from_sequence(range(5))
+        >>> b.fold(lambda x, y: x + y).compute()  # doctest: +SKIP
+        10
+
+        Optionally provide default arguments and special combine binary
+        operator
+
+        >>> b.fold(lambda x, y: x + y, lambda x, y: x + y, 0).compute()  # doctest: +SKIP
+        10
+        """
         a = next(names)
         b = next(names)
         if initial:
@@ -146,6 +228,12 @@ class Bag(object):
         return Item(merge(self.dask, dsk, dsk2), b)
 
     def frequencies(self):
+        """ Count number of occurrences of each distinct element
+
+        >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
+        >>> dict(b.frequencies())  # doctest: +SKIP
+        {'Alice': 2, 'Bob', 1}
+        """
         a = next(names)
         b = next(names)
         dsk = dict(((a, i), (frequencies, (self.name, i)))
@@ -156,6 +244,17 @@ class Bag(object):
 
 
     def topk(self, k, key=None):
+        """ K largest elements in collection
+
+        Optionally ordered by some key function
+
+        >>> b = from_sequence([10, 3, 5, 7, 11, 4])
+        >>> list(b.topk(2))  # doctest: +SKIP
+        [11, 10]
+
+        >>> list(b.topk(2, lambda x: -x))  # doctest: +SKIP
+        [3, 4]
+        """
         a = next(names)
         b = next(names)
         if key:
@@ -171,15 +270,36 @@ class Bag(object):
         """ Distinct elements of collection
 
         Unordered without repeats.
+
+        >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
+        >>> sorted(b.distinct())
+        ['Alice', 'Bob']
         """
         a = next(names)
         dsk = dict(((a, i), (set, key)) for i, key in enumerate(self._keys()))
         b = next(names)
-        dsk2 = {(b, 0): (apply, set.union, (list, list(dsk.keys())))}
+        dsk2 = {(b, 0): (apply, set.union, (list2, list(dsk.keys())))}
 
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
-    def _reduction(self, perpartition, aggregate):
+    def reduction(self, perpartition, aggregate):
+        """ Reduce collection with reduction operators
+
+        Parameters
+        ----------
+
+        perpartition: function
+            reduction to apply to each partition
+        aggregate: function
+            reduction to apply to the results of all partitions
+
+        Example
+        -------
+
+        >>> b = from_sequence(range(10))
+        >>> b.reduction(sum, sum).compute()
+        45
+        """
         a = next(names)
         b = next(names)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
@@ -188,22 +308,22 @@ class Bag(object):
         return Item(merge(self.dask, dsk, dsk2), b)
 
     def sum(self):
-        return self._reduction(sum, sum)
+        return self.reduction(sum, sum)
 
     def max(self):
-        return self._reduction(max, max)
+        return self.reduction(max, max)
 
     def min(self):
-        return self._reduction(min, min)
+        return self.reduction(min, min)
 
     def any(self):
-        return self._reduction(any, any)
+        return self.reduction(any, any)
 
     def all(self):
-        return self._reduction(all, all)
+        return self.reduction(all, all)
 
     def count(self):
-        return self._reduction(count, sum)
+        return self.reduction(count, sum)
 
     def mean(self):
         def chunk(seq):
@@ -215,7 +335,7 @@ class Bag(object):
         def agg(x):
             totals, counts = list(zip(*x))
             return 1.0 * sum(totals) / sum(counts)
-        return self._reduction(chunk, agg)
+        return self.reduction(chunk, agg)
 
     def var(self, ddof=0):
         def chunk(seq):
@@ -230,19 +350,28 @@ class Bag(object):
             x2, x, n = float(sum(squares)), float(sum(totals)), sum(counts)
             result = (x2 / n) - (x / n)**2
             return result * n / (n - ddof)
-        return self._reduction(chunk, agg)
+        return self.reduction(chunk, agg)
 
     def std(self, ddof=0):
         return math.sqrt(self.var(ddof=ddof))
 
     def join(self, other, on_self, on_other=None):
+        """ Join collection with another collection
+
+        Other collection must be an Iterable, and not a Bag.
+
+        >>> people = from_sequence(['Alice', 'Bob', 'Charlie'])
+        >>> fruit = ['Apple', 'Apricot', 'Banana']
+        >>> list(people.join(fruit, lambda x: x[0]))  # doctest: +SKIP
+        [('Apple', 'Alice'), ('Apricot', 'Alice'), ('Banana', 'Bob')]
+        """
         assert isinstance(other, Iterable)
         assert not isinstance(other, Bag)
         if on_other is None:
             on_other = on_self
         name = next(names)
         dsk = dict(((name, i), (list, (join, on_other, other,
-                                             on_self, (self.name, i))))
+                                       on_self, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
@@ -257,13 +386,43 @@ class Bag(object):
                    for i in range(n) for j in range(m))
         return Bag(merge(self.dask, other.dask, dsk), name, n*m)
 
-    def foldby(self, key, binop, initial=None, combine=None,
-               combine_initial=None):
+    def foldby(self, key, binop, initial=no_default, combine=None,
+               combine_initial=no_default):
+        """ Combined reduction and groupby
+
+        Foldby provides a combined groupby and reduce for efficient parallel
+        split-apply-combine tasks.
+
+        The computation
+
+        >>> b.reduceby(key, binop, init)                        # doctest: +SKIP
+
+        is equivalent to the following:
+
+        >>> def reduction(group):                               # doctest: +SKIP
+        ...     return reduce(binop, group, init)               # doctest: +SKIP
+
+        >>> b.groupby(key).map(lambda (k, v): (k, reduction(v)))# doctest: +SKIP
+
+        But uses minimal communication and so is *much* faster.
+
+        >>> b = from_sequence(range(10))
+        >>> iseven = lambda x: x % 2 == 0
+        >>> add = lambda x, y: x + y
+        >>> dict(b.foldby(iseven, add))                         # doctest: +SKIP
+        {True: 20, False: 25}
+
+        See also
+        --------
+
+        toolz.reduceby
+        pyspark.combineByKey
+        """
         a = next(names)
         b = next(names)
         if combine is None:
             combine = binop
-        if initial:
+        if initial is not no_default:
             dsk = dict(((a, i),
                         (reduceby, key, binop, (self.name, i), initial))
                         for i in range(self.npartitions))
@@ -272,7 +431,7 @@ class Bag(object):
                         (reduceby, key, binop, (self.name, i)))
                         for i in range(self.npartitions))
         combine2 = lambda acc, x: combine(acc, x[1])
-        if combine_initial:
+        if combine_initial is not no_default:
             dsk2 = {(b, 0): (dictitems,
                               (reduceby,
                                 0, combine2,
@@ -285,10 +444,23 @@ class Bag(object):
                                 list(dsk.keys())))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
-    def take(self, k):
+    def take(self, k, compute=True):
+        """ Take the first k elements
+
+        Evaluates by default, use ``compute=False`` to avoid computation.
+        Only takes from the first partition
+
+        >>> b = from_sequence(range(10))
+        >>> b.take(3)  # doctest: +SKIP
+        (0, 1, 2)
+        """
         name = next(names)
-        return Bag(merge(self.dask, {(name, 0): (list, (take, k, (self.name,
-            0)))}), name, 1)
+        dsk = {(name, 0): (list, (take, k, (self.name, 0)))}
+        b = Bag(merge(self.dask, dsk), name, 1)
+        if compute:
+            return tuple(b.compute())
+        else:
+            return b
 
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
@@ -318,40 +490,95 @@ class Bag(object):
 
     __iter__ = compute
 
+    def groupby(self, grouper, npartitions=None):
+        """ Group collection by key function
 
-def dictitems(d):
-    """ A pickleable version of dict.items """
-    return list(d.items())
+        Note that this requires full dataset read, serialization and shuffle.
+        This is expensive.  If possible you should use ``foldby``.
+
+        >>> b = from_sequence(range(10))
+        >>> dict(b.groupby(lambda x: x % 2 == 0))  # doctest: +SKIP
+        {True: [0, 2, 4, 6, 8], False: [1, 3, 5, 7, 9]}
+
+        See Also
+        --------
+
+        Bag.foldby
+        pbag
+        """
+        if npartitions is None:
+            npartitions = self.npartitions
+
+        paths = [tempfile.mkdtemp('%d.pbag' % i) for i in range(npartitions)]
+
+        # Partition data on disk
+        name = next(names)
+        dsk1 = dict(((name, i),
+                     (partition, grouper, (self.name, i), npartitions,
+                                 paths[i % len(paths)]))
+                     for i in range(self.npartitions))
+
+        # Collect groups
+        name = next(names)
+        dsk2 = dict(((name, i),
+                     (collect, grouper, npartitions, i, sorted(dsk1.keys())))
+                    for i in range(npartitions))
+
+        return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
 
 
-def takes_multiple_arguments(func):
+def partition(grouper, sequence, npartitions, path):
+    """ Partition a bag along a grouper, store partitions on disk """
+
+    with PBag(grouper, npartitions, path) as pb:
+        pb.extend(sequence)
+
+    return pb
+
+
+def collect(grouper, npartitions, group, pbags):
+    """ Collect partitions from disk and yield k,v group pairs """
+    from pbag import PBag
+    pbags = list(take(npartitions, pbags))
+    result = defaultdict(list)
+    for pb in pbags:
+        part = pb.get_partition(group)
+        groups = groupby(grouper, part)
+        for k, v in groups.items():
+            result[k].extend(v)
+    return list(result.items())
+
+
+opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
+
+
+def from_filenames(filenames):
+    """ Create dask by loading in lines from many files
+
+    Provide list of filenames
+
+    >>> b = from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
+
+    Or a globstring
+
+    >>> b = from_filenames('myfiles.*.txt')  # doctest: +SKIP
+
+    See also:
+        from_sequence: A more generic bag creation function
     """
+    if isinstance(filenames, str):
+        filenames = sorted(glob(filenames))
 
-    >>> def f(x, y): pass
-    >>> takes_multiple_arguments(f)
-    True
+    if not filenames:
+        raise ValueError("No filenames found")
 
-    >>> def f(x): pass
-    >>> takes_multiple_arguments(f)
-    False
+    extension = os.path.splitext(filenames[0])[1].strip('.')
+    myopen = opens.get(extension, open)
 
-    >>> def f(x, y=None): pass
-    >>> takes_multiple_arguments(f)
-    False
+    d = dict((('load', i), (list, (myopen, fn)))
+             for i, fn in enumerate(filenames))
+    return Bag(d, 'load', len(d))
 
-    >>> def f(*args): pass
-    >>> takes_multiple_arguments(f)
-    True
-    """
-    try:
-        spec = inspect.getargspec(func)
-    except:
-        return False
-    if spec.varargs:
-        return True
-    if spec.defaults is None:
-        return len(spec.args) != 1
-    return len(spec.args) - len(spec.defaults) > 1
 
 def from_sequence(seq, partition_size=None, npartitions=None):
     """ Create dask from Python sequence
@@ -396,24 +623,36 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     return Bag(d, name, len(d))
 
 
-def from_filenames(filenames):
-    """ Create dask by loading in lines from many files
+def dictitems(d):
+    """ A pickleable version of dict.items """
+    return list(d.items())
 
-    Provide list of filenames
 
-    >>> b = from_filenames(['myfile.1.txt', 'myfile.2.txt'])  # doctest: +SKIP
-
-    Or a globstring
-
-    >>> b = from_filenames('myfiles.*.txt')  # doctest: +SKIP
-
-    See also:
-        from_sequence: A more generic bag creation function
+def takes_multiple_arguments(func):
     """
-    if isinstance(filenames, str):
-        filenames = sorted(glob(filenames))
 
-    d = dict((('load', i), (list, (open, fn)))
-             for i, fn in enumerate(filenames))
-    return Bag(d, 'load', len(d))
+    >>> def f(x, y): pass
+    >>> takes_multiple_arguments(f)
+    True
 
+    >>> def f(x): pass
+    >>> takes_multiple_arguments(f)
+    False
+
+    >>> def f(x, y=None): pass
+    >>> takes_multiple_arguments(f)
+    False
+
+    >>> def f(*args): pass
+    >>> takes_multiple_arguments(f)
+    True
+    """
+    try:
+        spec = inspect.getargspec(func)
+    except:
+        return False
+    if spec.varargs:
+        return True
+    if spec.defaults is None:
+        return len(spec.args) != 1
+    return len(spec.args) - len(spec.defaults) > 1

@@ -18,9 +18,9 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest numpy into pip coverage toolz pandas cython scikit-learn
+  - conda install pytest numpy into pip coverage toolz pandas cython scikit-learn cytoolz
   - conda install -c blaze blaze
-  - pip install coveralls dill --use-mirrors
+  - pip install coveralls dill msgpack-python
   - pip install git+https://github.com/ContinuumIO/chest
   - pip install git+https://github.com/blosc/bcolz --upgrade
 

@@ -6,7 +6,6 @@ import toolz
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
-from chest import Chest
 from pframe import pframe
 
 from .. import threaded
