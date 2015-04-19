@@ -1,13 +1,13 @@
 from itertools import product
 import numpy as np
-from dask.array.reblock import intersect_chunks, reblock, normalize_chunks
-from dask.array.reblock import cumdims_label, _breakpoints, _intersect_1d
+from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
+from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d
 import dask.array as da
 
 
-def test_reblock_internals_1():
+def test_rechunk_internals_1():
     """ Test the cumdims_label and _breakpoints and
-    _intersect_1d internal funcs to reblock."""
+    _intersect_1d internal funcs to rechunk."""
     new = cumdims_label(((1,1,2),(1,5,1)),'n')
     old = cumdims_label(((4, ),(1,) * 5),'o')
     breaks = tuple(_breakpoints(o, n) for o, n in zip(old, new))
@@ -66,91 +66,91 @@ def test_intersect_2():
     assert answer == cross
 
 
-def test_reblock_1d():
-    """Try reblocking a random 1d matrix"""
+def test_rechunk_1d():
+    """Try rechunking a random 1d matrix"""
     a = np.random.uniform(0,1,300)
     x = da.from_array(a, chunks = ((100,)*3,))
     new = ((50,)*6,)
-    x2 =reblock(x, chunks=new)
+    x2 =rechunk(x, chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
 
 
-def test_reblock_2d():
-    """Try reblocking a random 2d matrix"""
+def test_rechunk_2d():
+    """Try rechunking a random 2d matrix"""
     a = np.random.uniform(0,1,300).reshape((10,30))
     x = da.from_array(a, chunks = ((1,2,3,4),(5,)*6))
     new = ((5,5), (15,)*2)
-    x2 =reblock(x, chunks=new)
+    x2 =rechunk(x, chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
 
 
-def test_reblock_4d():
-    """Try reblocking a random 4d matrix"""
+def test_rechunk_4d():
+    """Try rechunking a random 4d matrix"""
     old = ((5,5),)*4
     a = np.random.uniform(0,1,10000).reshape((10,) * 4)
     x = da.from_array(a, chunks = old)
     new = ((10,),)* 4
-    x2 =reblock(x, chunks = new)
+    x2 =rechunk(x, chunks = new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
 
 
-def test_reblock_expand():
+def test_rechunk_expand():
     a = np.random.uniform(0,1,100).reshape((10, 10))
     x = da.from_array(a, chunks=(5, 5))
-    y = x.reblock(chunks=((3, 3, 3, 1), (3, 3, 3, 1)))
+    y = x.rechunk(chunks=((3, 3, 3, 1), (3, 3, 3, 1)))
     assert np.all(y.compute() == a)
 
 
-def test_reblock_expand2():
+def test_rechunk_expand2():
     (a, b) = (3, 2)
     orig = np.random.uniform(0, 1, a ** b).reshape((a,) * b)
     for off, off2 in product(range(1, a - 1), range(1, a - 1)):
         old = ((a - off, off) ,)* b
         x = da.from_array(orig, chunks=old)
         new = ((a - off2, off2) ,)* b
-        assert np.all(x.reblock(chunks=new).compute() == orig)
+        assert np.all(x.rechunk(chunks=new).compute() == orig)
         if a - off - off2 > 0:
             new = ((off, a - off2 - off, off2) ,)* b
-            y = x.reblock(chunks=new).compute()
+            y = x.rechunk(chunks=new).compute()
             assert np.all(y == orig)
 
 
-def test_reblock_method():
-    """ Test reblocking can be done as a method of dask array."""
+def test_rechunk_method():
+    """ Test rechunking can be done as a method of dask array."""
     old = ((9,3),)*3
     new = ((3,6,3),)*3
     a = np.random.uniform(0,1,10000).reshape((10,) * 4)
     x = da.from_array(a, chunks=old)
-    x2 = x.reblock(chunks=new)
+    x2 = x.rechunk(chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
 
 
-def test_reblock_blockshape():
+def test_rechunk_blockshape():
     """ Test that blockshape can be used."""
     new_shape, new_chunks = (10, 10), (4, 3)
     new_blockdims = normalize_chunks(new_chunks, new_shape)
     old_chunks = ((4, 4, 2), (3, 3, 3, 1))
     a = np.random.uniform(0,1,100).reshape((10, 10))
     x = da.from_array(a, chunks=old_chunks)
-    check1 = reblock(x, chunks=new_chunks)
+    check1 = rechunk(x, chunks=new_chunks)
     assert check1.chunks == new_blockdims
     assert np.all(check1.compute() == a)
 
 
 def test_dtype():
     x = da.ones(5, chunks=(2,))
-    assert x.reblock(chunks=(1,))._dtype == x._dtype
+    assert x.rechunk(chunks=(1,))._dtype == x._dtype
 
 
-def test_reblock_with_dict():
+def test_rechunk_with_dict():
     x = da.ones((24, 24), chunks=(4, 8))
-    y = x.reblock(chunks={0: 12})
+    y = x.rechunk(chunks={0: 12})
     assert y.chunks == ((12, 12), (8, 8, 8))
 
     x = da.ones((24, 24), chunks=(4, 8))
-    y = x.reblock(chunks={0: (12, 12)})
+    y = x.rechunk(chunks={0: (12, 12)})
     assert y.chunks == ((12, 12), (8, 8, 8))

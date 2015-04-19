@@ -826,9 +826,9 @@ class Array(object):
     def squeeze(self):
         return squeeze(self)
 
-    def reblock(self, chunks):
-        from .reblock import reblock
-        return reblock(self, chunks)
+    def rechunk(self, chunks):
+        from .rechunk import rechunk
+        return rechunk(self, chunks)
 
 
 def normalize_chunks(chunks, shape=None):
@@ -1486,7 +1486,7 @@ def insert(arr, obj, values, axis):
                           for n, (arr_bd, values_bd)
                           in enumerate(zip(arr.chunks,
                                            values.chunks)))
-    values = values.reblock(values_chunks)
+    values = values.rechunk(values_chunks)
 
     counts = np.bincount(obj)[:-1]
     values_breaks = np.cumsum(counts[counts > 0])

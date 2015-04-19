@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 """
-The reblock module defines:
+The rechunk module defines:
     intersect_chunks: a function for
         converting chunks to new dimensions
-    reblock: a function to convert the blocks
+    rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
 
@@ -14,7 +14,7 @@ from toolz import merge, accumulate
 from dask.array.core import rec_concatenate, Array, normalize_chunks
 
 
-reblock_names  = ('reblock-%d' % i for i in count(1))
+rechunk_names  = ('rechunk-%d' % i for i in count(1))
 
 
 def cumdims_label(chunks, const):
@@ -166,7 +166,7 @@ def blockshape_dict_to_tuple(old_chunks, d):
     return tuple(new_chunks)
 
 
-def reblock(x, chunks):
+def rechunk(x, chunks):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -176,13 +176,13 @@ def reblock(x, chunks):
     >>> x.chunks
     ((2, 3, 2), (2, 3, 2), (2, 3, 2), (2, 3, 2))
 
-    >>> y = reblock(x, chunks=((2, 4, 1), (4, 2, 1), (4, 3), (7,)))
+    >>> y = rechunk(x, chunks=((2, 4, 1), (4, 2, 1), (4, 3), (7,)))
     >>> y.chunks
     ((2, 4, 1), (4, 2, 1), (4, 3), (7,))
 
     chunks also accept dict arguments mapping axis to blockshape
 
-    >>> y = reblock(x, chunks={1: 2})  # reblock axis 1 with blockshape 2
+    >>> y = rechunk(x, chunks={1: 2})  # rechunk axis 1 with blockshape 2
 
     Parameters
     ----------
@@ -199,7 +199,7 @@ def reblock(x, chunks):
 
     crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
-    temp_name = next(reblock_names)
+    temp_name = next(rechunk_names)
     new_index = tuple(product(*(tuple(range(len(n))) for n in chunks)))
     for flat_idx, cross1 in enumerate(crossed):
         new_idx = new_index[flat_idx]
