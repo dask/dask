@@ -26,9 +26,7 @@ install:
   - python setup.py install
 
 script:
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run --source=dask $(which py.test) dask --doctest-modules --verbose; else coverage run --source dask $(which py.test) dask --verbose; fi
-    - py.test pframe pbag --doctest-modules --verbose
-    - coverage report --show-missing
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run $(which py.test) dask pframe pbag --doctest-modules --verbose; coverage report --show-missing; else py.test dask pframe pbag --verbose; fi
 
 after_success:
     - coveralls

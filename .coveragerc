@@ -1,0 +1,8 @@
+[run]
+omit =
+    */test_*.py
+    dask/compatibility.py
+source = 
+    dask
+    pframe
+    pbag
