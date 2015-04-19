@@ -4,7 +4,7 @@ from toolz import merge, join, pipe, filter, identity, merge_with
 import numpy as np
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby)
-from into.utils import filetexts
+from dask.utils import filetexts
 from pbag import PBag
 import dask.bag as db
 import gzip
