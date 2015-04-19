@@ -1,4 +1,0 @@
-pandas
-numpy
-cython
-bcolz
