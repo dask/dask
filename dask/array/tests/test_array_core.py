@@ -894,3 +894,8 @@ def test_size():
 def test_nbytes():
     x = da.ones((10, 2), chunks=(3, 1))
     assert x.nbytes == np.array(x).nbytes
+
+
+def test_Array_normalizes_dtype():
+    x = da.ones((3,), chunks=(1,), dtype=int)
+    assert isinstance(x.dtype, np.dtype)

@@ -560,7 +560,7 @@ class Array(object):
         self.dask = dask
         self.name = name
         self.chunks = normalize_chunks(chunks, shape)
-        if isinstance(dtype, (str, list)):
+        if dtype is not None:
             dtype = np.dtype(dtype)
         self._dtype = dtype
 
