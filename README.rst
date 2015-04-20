@@ -12,12 +12,9 @@ large data in a small amount of space.
 
 
 *  ``dask`` is a specification to describe task dependency graphs.
-*  ``dask.array`` is a drop-in NumPy replacement (for a subset of NumPy) that
-    encodes blocked algorithms in ``dask`` dependency graphs.
-*  ``dask.bag`` encodes blocked algorithms on Python lists of arbitrary Python
-    objects.
-*  ``dask.async`` is a shared-memory asynchronous scheduler efficiently
-    execute ``dask`` dependency graphs on multiple cores.
+*  ``dask.array`` is a drop-in NumPy replacement (for a subset of NumPy) that encodes blocked algorithms in ``dask`` dependency graphs.
+*  ``dask.bag`` encodes blocked algorithms on Python lists of arbitrary Python objects.
+*  ``dask.async`` is a shared-memory asynchronous scheduler efficiently execute ``dask`` dependency graphs on multiple cores.
 
 Dask does not currently have a distributed memory scheduler.
 
