@@ -1,3 +1,6 @@
+
+
+"""
 try:
     from pandas import msgpack
 except ImportError:
@@ -24,3 +27,15 @@ def load(file):
     payload = file.read(size)                       # Read payload
     text = payload                                  # No compression
     return msgpack.unpackb(text)                    # Deserialize
+
+"""
+# Punting on fancy dump load for the moment
+# Going with slower but more robust pickle solution
+
+from toolz import curry
+try:
+    from cPickle import dump, load, HIGHEST_PROTOCOL
+    dump = curry(dump, protocol=HIGHEST_PROTOCOL)
+except ImportError:
+    from pickle import dump, load, HIGHEST_PROTOCOL
+    dump = curry(dump, protocol=HIGHEST_PROTOCOL)
