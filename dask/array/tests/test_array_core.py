@@ -467,6 +467,13 @@ def test_insert():
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=-3))
 
 
+def test_multi_insert():
+    z = np.random.randint(10, size=(1, 2))
+    c = from_array(z, chunks=(1, 2))
+    assert eq(np.insert(np.insert(z, [0, 1], -1, axis=0), [1], -1, axis=1),
+              insert(insert(c, [0, 1], -1, axis=0), [1], -1, axis=1))
+
+
 def test_broadcast_to():
     x = np.random.randint(10, size=(5, 1, 6))
     a = from_array(x, chunks=(3, 1, 3))
@@ -892,3 +899,8 @@ def test_size():
 def test_nbytes():
     x = da.ones((10, 2), chunks=(3, 1))
     assert x.nbytes == np.array(x).nbytes
+
+
+def test_Array_normalizes_dtype():
+    x = da.ones((3,), chunks=(1,), dtype=int)
+    assert isinstance(x.dtype, np.dtype)
