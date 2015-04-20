@@ -56,3 +56,7 @@ def test_unique_names():
 def test_docs():
     assert 'exponential' in exponential.__doc__
     assert 'exponential' in exponential.__name__
+
+
+def test_can_make_really_big_random_array():
+    x = normal(10, 1, (1000000, 1000000), chunks=(100000, 100000))

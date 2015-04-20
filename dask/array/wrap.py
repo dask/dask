@@ -41,7 +41,7 @@ def wrap_func_size_as_kwarg(func, *args, **kwargs):
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:
-        kw = kwargs.copy(); kw['size'] = size
+        kw = kwargs.copy(); kw['size'] = (0,)
         dtype = func(*args, **kw).dtype
 
     name = name or next(names)
