@@ -491,25 +491,26 @@ def test_map_blocks():
     x = np.arange(400).reshape((20, 20))
     d = from_array(x, chunks=(7, 7))
 
-    e = d.map_blocks(inc)
+    e = d.map_blocks(inc, dtype=d.dtype)
 
     assert d.chunks == e.chunks
     assert eq(e, x + 1)
 
     d = from_array(x, chunks=(10, 10))
-    e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5))
+    e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5), dtype=d.dtype)
 
     assert e.chunks == ((5, 5), (5, 5))
     assert eq(e, x[::2, ::2])
 
     d = from_array(x, chunks=(8, 8))
-    e = d.map_blocks(lambda x: x[::2, ::2], chunks=((4, 4, 2), (4, 4, 2)))
+    e = d.map_blocks(lambda x: x[::2, ::2], chunks=((4, 4, 2), (4, 4, 2)),
+            dtype=d.dtype)
 
     assert eq(e, x[::2, ::2])
 
 
-def test_map_blocks():
-    x = np.arange(10)
+def test_map_blocks2():
+    x = np.arange(10, dtype='i8')
     d = from_array(x, chunks=(2,))
 
     def func(block, block_id=None):
@@ -868,7 +869,7 @@ def test_slicing_with_non_ndarrays():
 
     x = da.from_array(ARangeSlicable(10), chunks=(4,))
 
-    assert eq((x + 1).sum(), (np.arange(10) + 1).sum())
+    assert eq((x + 1).sum(), (np.arange(10, dtype=x.dtype) + 1).sum())
 
 
 def test_getarray():
