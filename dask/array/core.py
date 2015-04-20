@@ -1496,8 +1496,9 @@ def insert(arr, obj, values, axis):
     values_breaks = np.cumsum(counts[counts > 0])
     split_values = split_at_breaks(values, values_breaks, axis)
 
-    interleaved = interleave([split_arr, split_values])
-    return concatenate(list(interleaved), axis=axis)
+    interleaved = list(interleave([split_arr, split_values]))
+    interleaved = [i for i in interleaved if i.nbytes]
+    return concatenate(interleaved, axis=axis)
 
 
 @wraps(chunk.broadcast_to)
