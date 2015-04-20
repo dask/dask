@@ -3,11 +3,19 @@ Dask
 
 |Build Status| |Coverage| |Doc Status|
 
-A minimal task scheduling abstraction and parallel arrays.
+Task scheduling and out-of-core execution for parallel, larger-than-memory
+arrays and parallel Python lists.  Dask translates traditional operations into
+dask dependency graphs that implement your desired operation by operating on
+a collection in-memory blocks.  It can use multiple cores to execute tasks
+in a small amount of space.
+
 
 *  ``dask`` is a specification to describe task dependency graphs.
 *  ``dask.array`` is a drop-in NumPy replacement (for a subset of NumPy) that encodes blocked algorithms in ``dask`` dependency graphs.
+*  ``dask.bag`` mimics Python lists, PyToolz, and PySpark, operating on arbitrary python objects using multiple processes.
 *  ``dask.async`` is a shared-memory asynchronous scheduler that efficiently executes ``dask`` dependency graphs on multiple cores.
+
+Dask does not currently have a distributed memory scheduler.
 
 See full dask documentation at http://dask.readthedocs.org
 
@@ -15,9 +23,17 @@ See full dask documentation at http://dask.readthedocs.org
 Install
 -------
 
-::
+Dask is easily installble through your favorite package manager::
 
-    python setup.py install
+    conda install dask
+
+    or
+
+    pip install dask[array]
+    or
+    pip install dask[bag]
+    or
+    pip install dask[complete]
 
 
 Dask Graphs
