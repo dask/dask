@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import dask
 import dask.array as da
 from dask.array.core import *
-from dask.utils import raises
+from dask.utils import raises, ignoring
 from toolz import merge
 from operator import getitem, add, mul
 
@@ -302,8 +302,9 @@ def test_binops():
 def test_isnull():
     x = np.array([1, np.nan])
     a = from_array(x, chunks=(2,))
-    assert eq(isnull(a), np.isnan(x))
-    assert eq(notnull(a), ~np.isnan(x))
+    with ignoring(ImportError):
+        assert eq(isnull(a), np.isnan(x))
+        assert eq(notnull(a), ~np.isnan(x))
 
 
 def test_isclose():
@@ -655,8 +656,9 @@ def test_dtype_complex():
     assert eq(da.exp(b)._dtype, np.exp(y).dtype)
     assert eq(da.floor(a)._dtype, np.floor(x).dtype)
     assert eq(da.isnan(b)._dtype, np.isnan(y).dtype)
-    assert da.isnull(b)._dtype == 'bool'
-    assert da.notnull(b)._dtype == 'bool'
+    with ignoring(ImportError):
+        assert da.isnull(b)._dtype == 'bool'
+        assert da.notnull(b)._dtype == 'bool'
 
     x = np.array([('a', 1)], dtype=[('text', 'S1'), ('numbers', 'i4')])
     d = da.from_array(x, chunks=(1,))

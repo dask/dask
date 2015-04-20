@@ -7,7 +7,10 @@ except ImportError:
 
 from . import serialize
 import tempfile
-from cytoolz import groupby, take, concat, curry
+try:
+    from cytoolz import groupby, take, concat, curry
+except ImportError:
+    from toolz import groupby, take, concat, curry
 import os
 import shutil
 import psutil
