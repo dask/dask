@@ -87,18 +87,18 @@ class Worker(object):
         self._listen_workers_thread.start()
 
     def execute_and_reply(self, func, args, kwargs, jobid, send=None):
-        """ Execute function, return header and result
+        """ Execute function. Reply with header and result.
 
-        This is intended to be run asynchronously in a separate thread
-        Returns the result of calling func(*args, **kwargs) to the given
-        address along with the given jobid.  The jobid is to help the recipient
-        of the result figure out what data this corresponds to.
+        Computes func(*args, **kwargs) then sends the result along the given
+        send function.
 
-        Returns
-        -------
+        This is intended to be run asynchronously in a separate thread.
 
-        Header: dict
-        Payload: Result of execution
+        See also:
+            send_to_scheduler
+            send_to_worker
+            listen_to_scheduler
+            listen_to_workers
         """
         try:
             function = self.functions[func]
@@ -302,10 +302,3 @@ class Worker(object):
 
 def status():
     return 'OK'
-
-def ishashable(x):
-    try:
-        hash(x)
-        return True
-    except TypeError:
-        return False
