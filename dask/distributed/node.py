@@ -46,16 +46,16 @@ class Worker(object):
     --------
 
     """
-    def __init__(self, scheduler, data, nthreads=100,
+    def __init__(self, scheduler, data=None, nthreads=100,
                  dumps=partial(dumps, protocol=HIGHEST_PROTOCOL),
                  loads=loads, address=None, port=None):
-        self.data = data
+        self.data = data if data is not None else dict()
         self.pool = ThreadPool(nthreads)
         self.dumps = dumps
         self.loads = loads
-        self.address = address
         self.scheduler = scheduler
         self.status = 'run'
+
         if address is None:
             if port is None:
                 port = 6464
@@ -65,26 +65,50 @@ class Worker(object):
         self.dealer = context.socket(zmq.DEALER)
         self.dealer.setsockopt(zmq.IDENTITY, address)
         self.dealer.connect(scheduler)
-        self.dealer.send_multipart(['', b'Register'])
+        self.send_to_scheduler({'function': 'register'}, {})
 
         self.router = context.socket(zmq.ROUTER)
         self.router.bind(self.address)
 
-        log(self.address, 'Start up', self.scheduler)
-
         self.lock = Lock()
 
-        self.functions = {'status': status,
-                          'collect': self.collect,
-                          'compute': self.compute,
-                          'getitem': self.data.__getitem__,
-                          'setitem': self.data.__setitem__,
-                          'delitem': self.data.__delitem__}
+        self.scheduler_functions = {'status': self.status_scheduler,
+                                    'compute': self.compute,
+                                    'getitem': self.get_scheduler,
+                                    'delitem': self.delitem,
+                                    'setitem': self.setitem}
+
+        self.worker_functions = {'getitem': self.get_worker}
+
+        log(self.address, 'Start up', self.scheduler)
 
         self._listen_scheduler_thread = Thread(target=self.listen_to_scheduler)
         self._listen_scheduler_thread.start()
         self._listen_workers_thread = Thread(target=self.listen_to_workers)
         self._listen_workers_thread.start()
+
+    def get_worker(self, header, payload):
+        payload = self.loads(payload)
+        result = self.data[payload['key']]
+        header2 = {'jobid': header['jobid']}
+        self.send_to_worker(header['address'], header2, result)
+
+    def get_scheduler(self, header, payload):
+        payload = self.loads(payload)
+        result = self.data[payload['key']]
+        header2 = {'jobid': header['jobid']}
+        self.send_to_scheduler(header['address'], header2, result)
+
+    def setitem(self, header, payload):
+        payload = self.loads(payload)
+        key = payload['key']
+        value = payload['value']
+        self.data[key] = value
+
+    def delitem(self, header, payload):
+        payload = self.loads(payload)
+        key = payload['key']
+        del self.data[key]
 
     def execute_and_reply(self, func, args, kwargs, jobid, send=None):
         """ Execute function. Reply with header and result.
@@ -234,8 +258,8 @@ class Worker(object):
         """
         socks = []
 
-        log(self.address, 'Collect data from peers', locations)
         # Send out requests for data
+        log(self.address, 'Collect data from peers', locations)
         for key, locs in locations.items():
             if key in self.data:  # already have this locally
                 continue
@@ -248,8 +272,8 @@ class Worker(object):
                                  self.dumps(payload)])
             socks.append(sock)
 
-        log(self.address, 'Waiting on data replies')
         # Wait on replies.  Store results in self.data.
+        log(self.address, 'Waiting on data replies')
         for sock in socks:
             header, payload = sock.recv_multipart()
             header = self.loads(header)
@@ -258,7 +282,7 @@ class Worker(object):
                                               header['jobid'])
             self.data[header['jobid']] = payload
 
-    def compute(self, key, task, locations):
+    def compute(self, header, payload): key, task, locations):
         """ Compute dask task
 
         Given a key, task, and locations of data
@@ -270,8 +294,16 @@ class Worker(object):
         Collect necessary data from locations, merge into self.data (see
         ``collect``), then compute task and store into ``self.data``.
         """
+        # Unpack payload
+        payload = self.loads(payload)
+        locations = payload['locations']
+        key = payload['key']
+        task = payload['task']
+
+        # Grab data from peers
         self.collect(locations)
 
+        # Do actual work
         start = time()
         status = "OK"
         log(self.address, "Start computation", key, task)
@@ -285,9 +317,12 @@ class Worker(object):
             self.data[key] = result
         log(self.address, "End computation", key, task, status)
 
-        return {'key': key,
-                'duration': end - start,
-                'status': status}
+        # Send result to scheduler
+        result = {'key': key,
+                  'duration': end - start,
+                  'status': status}
+        header2 = {'jobid': header.get('jobid')}
+        self.send_to_scheduler(header2, result)
 
     def close(self):
         if self.pool._state == multiprocessing.pool.RUN:
