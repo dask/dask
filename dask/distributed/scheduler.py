@@ -40,29 +40,20 @@ def get_distributed(workers, cache, dsk, result, **kwargs):
 
     queue = Queue()
 
-    sockets = dict()
-    for worker in workers:
-        socket = context.socket(zmq.REQ)
-        socket.connect(worker)
-        sockets[worker] = socket
-
-    pool = ThreadPool(len(sockets))
+    dealer = context.socket(zmq.DEALER)
 
     # TODO: don't shove in seed data if already in cache
     dag_state = dag_state_from_dask(dsk, cache=cache)
 
+    worker_state = {'whereis': defaultdict(set),
+                    'has': defaultdict(set)}
+
     tick = [0]
 
     if dag_state['waiting'] and not dag_state['ready']:
-        raise ValueError("Found no accessible jobs in dask")
+        raise ValueError("Found no accessible jobs in dask graph")
 
     available_workers = workers[:]
-
-    def interact(socket, message):
-        socket.send(dumps(message))
-        receipt = loads(socket.recv())
-        queue.put(receipt)
-        available_workers.append(message['worker'])
 
     def fire_task(worker):
         """ Fire off a task to the thread pool """
@@ -73,9 +64,16 @@ def get_distributed(workers, cache, dsk, result, **kwargs):
         dag_state['ready-set'].remove(key)
         dag_state['running'].add(key)
 
+        task = dsk[key]
+        deps = get_dependencies(dsk, key)
+        data_locations = {worker_state['whereis'][dep] for dep in deps}
+
         # Submit
-        socket = sockets[worker]
-        pool.apply_async(interact, args=[socket, ('compute', key, dsk[key])])
+        payload = dict(function='compute',
+                       args=(key, dsk[key], data_locations),
+                       jobid=('compute', key))
+
+        dealer.send_multipart([worker, '', dumps(payload)])
 
     # Seed initial tasks into the thread pool
     while dag_state['ready'] and len(dag_state['running']) < len(workers):
@@ -83,16 +81,50 @@ def get_distributed(workers, cache, dsk, result, **kwargs):
 
     # Main loop, wait on tasks to finish, insert new ones
     while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
-        message = queue.get()
-        if isinstance(message['status'], Exception):
-            raise Exception("Exception in remote process\n\n" +
-                            message['status'])
-        finish_task(dsk, message['key'], dag_state, results, delete=True)
+        address, empty, payload = dealer.recv_multipart()
+        payload2 = loads(payload)
+
+        if isinstance(payload['status'], Exception):
+            raise payload['status']
+        if payload['status'] != 'OK':
+            raise Exception("Bad status in remote worker:\n\t"
+                            + payload['status'])
+
+        if payload['jobid'][0] == 'compute':
+            key = payload['result']['key']
+            dag_finish_task(dsk, key, dag_state, results, delete=False)
+            # TODO: issue delitem calls to workers when freeing data
+            worker_finish_task(dsk, address, key, worker_state)
+            available_workers.append(address)
+
         while dag_state['ready'] and len(dag_state['running']) < len(workers):
             fire_task(available_workers.pop())
 
-    # Final reporting
-    while dag_state['running'] or not queue.empty():
-        message = queue.get()
-
     return nested_get(result, dag_state['cache'])
+
+
+def gather(dealer, workers, keys):
+    dealer = context.socket(zmq.DEALER)
+
+
+
+
+def worker_finish_task(dask, worker, key, worker_state):
+    """
+    Manage worker state when task is complete
+
+    >>> worker_state = {'whereis': {'a': {'tcp://alice'}, 'b': {'tcp://bob'}},
+    ...                 'has': {'tcp://alice': {'a'}, 'tcp://bob': {'b'}}}
+    >>> dsk = {'a': 1, 'b': 2, 'c': (add, 'a', 'b')}
+
+    >>> worker_finish_task(dsk, 'tcp://alice', 'c', worker_state)
+    >>> worker_state
+    {'whereis': {'a': {'tcp://alice'}, 'b': {'tcp://bob', 'tcp://alice'},
+                 'c': {'tcp://alice'}},
+     'has': {'tcp://alice': {'a', 'b', 'c'}, 'tcp://bob': {'b'}}}
+    """
+    deps = get_dependencies(dask, key)
+
+    for k in [key] + list(deps):
+        worker_state['whereis'][k].add(worker)
+        worker_state['has'][worker].add(k)
