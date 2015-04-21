@@ -3,11 +3,13 @@ from __future__ import print_function
 from zmqompute import ComputeNode
 from threading import Thread, Lock
 from multiprocessing.pool import ThreadPool
+from contextlib import contextmanager
+import uuid
 import random
 import multiprocessing
 import zmq
 import dask
-from toolz import partial, get
+from toolz import partial, get, curry
 from time import time
 import sys
 try:
@@ -20,10 +22,21 @@ DEBUG = True
 
 context = zmq.Context()
 
-def log(*args):
-    return
-    print(*args, file=sys.stderr)
+with open('log', 'w') as f:  # delete file
+    pass
 
+def log(*args):
+    with open('log', 'a') as f:
+        print(*args, file=f)
+
+
+@contextmanager
+def logerrors():
+    try:
+        yield
+    except Exception as e:
+        log('Error!', str(e))
+        raise
 
 class Worker(object):
     """ Asynchronous worker in a distributed dask computation pool
@@ -33,21 +46,31 @@ class Worker(object):
     --------
 
     """
-    def __init__(self, address, data, nthreads=100,
+    def __init__(self, scheduler, data, nthreads=100,
                  dumps=partial(dumps, protocol=HIGHEST_PROTOCOL),
-                 loads=loads):
+                 loads=loads, address=None, port=None):
         self.data = data
         self.pool = ThreadPool(nthreads)
         self.dumps = dumps
         self.loads = loads
-
-        if '://' not in address:
-            address = 'tcp://' + address
+        self.address = address
+        self.scheduler = scheduler
+        self.status = 'run'
+        if address is None:
+            if port is None:
+                port = 6464
+            address = 'tcp://%s:%d' % (socket.gethostname(), port)
         self.address = address
 
+        self.dealer = context.socket(zmq.DEALER)
+        self.dealer.setsockopt(zmq.IDENTITY, address)
+        self.dealer.connect(scheduler)
+        self.dealer.send_multipart(['', b'Register'])
+
         self.router = context.socket(zmq.ROUTER)
-        self.router.setsockopt(zmq.IDENTITY, address)
-        self.router.bind(address)
+        self.router.bind(self.address)
+
+        log(self.address, 'Start up', self.scheduler)
 
         self.lock = Lock()
 
@@ -58,16 +81,24 @@ class Worker(object):
                           'setitem': self.data.__setitem__,
                           'delitem': self.data.__delitem__}
 
-        self._listen_thread = Thread(target=self.listen)
-        self._listen_thread.start()
+        self._listen_scheduler_thread = Thread(target=self.listen_to_scheduler)
+        self._listen_scheduler_thread.start()
+        self._listen_workers_thread = Thread(target=self.listen_to_workers)
+        self._listen_workers_thread.start()
 
-    def execute_and_reply(self, address, jobid, func, args, kwargs, reply):
-        """ Execute function, return result
+    def execute_and_reply(self, func, args, kwargs, jobid, send=None):
+        """ Execute function, return header and result
 
         This is intended to be run asynchronously in a separate thread
         Returns the result of calling func(*args, **kwargs) to the given
         address along with the given jobid.  The jobid is to help the recipient
         of the result figure out what data this corresponds to.
+
+        Returns
+        -------
+
+        Header: dict
+        Payload: Result of execution
         """
         try:
             function = self.functions[func]
@@ -82,25 +113,53 @@ class Worker(object):
         except Exception as e:
             result = e
             status = 'Error'
-        payload = {'result': result,
-                   'address': self.address,
-                   'jobid': jobid,
-                   'status': status}
-        log('Finished computation.  Return result:', address, payload)
-        if reply:
-            payload = self.dumps(payload)
-            with self.lock:
-                self.router.send_multipart([address, '', payload])
 
-    def listen(self):
+        header = {'jobid': jobid,
+                  'status': status}
+
+        log(self.address, 'Finish computation', header, send)
+
+        with logerrors():
+            if send is not None:
+                send(header, result)
+
+    def send_to_scheduler(self, header, payload):
+        log(self.address, 'Send to scheduler', header)
+        header['address'] = self.address
+        with self.lock:
+            self.dealer.send_multipart([self.dumps(header),
+                                        self.dumps(payload)])
+
+    @curry
+    def send_to_worker(self, address, header, result):
+        log(self.address, 'Send to worker', address, header)
+        header['address'] = self.address
+        with self.lock:
+            self.router.send_multipart([address,
+                                        self.dumps(header),
+                                        self.dumps(result)])
+
+    def unpack_function(self, header, payload):
+        """ Deserialize and unpack payload with sane defaults """
+        payload = self.loads(payload)
+        header = self.loads(header)
+
+        log(self.address, "Receive payload", payload)
+
+        jobid = header.get('jobid', None)
+        reply = header.get('reply', True)
+
+        func = payload['function']
+        args = payload.get('args', ())
+        if not isinstance(args, tuple):
+            args = (args,)
+        kwargs = payload.get('kwargs', dict())
+
+        return func, args, kwargs, jobid, reply
+
+    def listen_to_scheduler(self):
         """
-        Main event loop - listen for requests and dispatch to worker functions
-
-        We expect requests like what a REQ sends out
-
-            Address
-            -empty-
-            Payload
+        Event loop listening to commands from scheduler
 
         Payload should deserialize into a dict of the following form:
 
@@ -112,8 +171,8 @@ class Worker(object):
 
         So the minimal request would be as follows:
 
-        >>> sock = context.socket(zmq.REQ)  # doctest: +SKIP
-        >>> sock.connect('tcp://my-address')  # doctest: +SKIP
+        >>> sock = context.socket(zmq.DEALER)  # doctest: +SKIP
+        >>> sock.connect('tcp://my-address')   # doctest: +SKIP
 
         >>> sock.send(dumps({'function': 'status'}))  # doctest: +SKIP
 
@@ -129,29 +188,37 @@ class Worker(object):
         ``self.execute_and_reply``.  This sends results back to the sender.
 
         See Also:
+            listen_to_workers
             execute_and_reply
         """
-        while True:
+        while self.status != 'closed':
             # Wait on request
-            address, empty, payload = self.router.recv_multipart()
+            if not self.dealer.poll(100):
+                continue
+            header, payload = self.dealer.recv_multipart()
 
-            if payload == b'close':
-                break
-
-            # Unpack payload
-            payload2 = self.loads(payload)
-            log("Received payload: ", self.address, payload2)
-            func = payload2['function']
-            jobid = payload2.get('jobid', None)
-            args = payload2.get('args', ())
-            if not isinstance(args, tuple):
-                args = (args,)
-            kwargs = payload2.get('kwargs', dict())
-            reply = payload2.get('reply', True)
+            func, args, kwargs, jobid, reply = self.unpack_function(header, payload)
+            log(self.address, 'Receive job from scheduler', jobid, func)
 
             # Execute job in separate thread
             future = self.pool.apply_async(self.execute_and_reply,
-                              args=(address, jobid, func, args, kwargs, reply))
+                          args=(func, args, kwargs, jobid,
+                                self.send_to_scheduler if reply else None))
+
+    def listen_to_workers(self):
+        while self.status != 'closed':
+            # Wait on request
+            if not self.router.poll(100):
+                continue
+            address, header, payload = self.router.recv_multipart()
+
+            func, args, kwargs, jobid, reply = self.unpack_function(header, payload)
+            header = self.loads(header)
+            log(self.address, 'Receive job from worker', header['address'], jobid, func)
+
+            self.pool.apply_async(self.execute_and_reply,
+                    args=(func, args, kwargs, jobid,
+                          self.send_to_worker(address) if reply else None))
 
     def collect(self, locations):
         """ Collect data from peers
@@ -167,25 +234,29 @@ class Worker(object):
         """
         socks = []
 
-        log('Collect data from peers:', self.address, locations)
+        log(self.address, 'Collect data from peers', locations)
         # Send out requests for data
         for key, locs in locations.items():
             if key in self.data:  # already have this locally
                 continue
-            sock = context.socket(zmq.REQ)
+            sock = context.socket(zmq.DEALER)
             sock.connect(random.choice(locs))  # randomly select one peer
+            header = {'address': self.address, 'jobid': key}
             payload = {'function': 'getitem',
-                       'args': (key,),
-                       'jobid': key}
-            sock.send(self.dumps(payload))
+                       'args': (key,)}
+            sock.send_multipart([self.dumps(header),
+                                 self.dumps(payload)])
             socks.append(sock)
 
+        log(self.address, 'Waiting on data replies')
         # Wait on replies.  Store results in self.data.
         for sock in socks:
-            payload = self.loads(sock.recv())
-            log('Received data:', self.address, payload['address'],
-                                                payload['jobid'])
-            self.data[payload['jobid']] = payload['result']
+            header, payload = sock.recv_multipart()
+            header = self.loads(header)
+            payload = self.loads(payload)
+            log(self.address, 'Receive data', header['address'],
+                                              header['jobid'])
+            self.data[header['jobid']] = payload
 
     def compute(self, key, task, locations):
         """ Compute dask task
@@ -203,7 +274,7 @@ class Worker(object):
 
         start = time()
         status = "OK"
-        log("Start computation:", self.address, key, task)
+        log(self.address, "Start computation", key, task)
         try:
             result = dask.core.get(self.data, task)
             end = time()
@@ -212,7 +283,7 @@ class Worker(object):
             end = time()
         else:
             self.data[key] = result
-        log("End computation:", self.address, key, task, status)
+        log(self.address, "End computation", key, task, status)
 
         return {'key': key,
                 'duration': end - start,
@@ -220,10 +291,8 @@ class Worker(object):
 
     def close(self):
         if self.pool._state == multiprocessing.pool.RUN:
-            log('Close:', self.address)
-            req = context.socket(zmq.REQ)
-            req.connect(self.address)
-            req.send(b'close')
+            log(self.address, 'Close')
+            self.status = 'closed'
             self.pool.close()
             self.pool.join()
 

@@ -1,6 +1,7 @@
 from dask.distributed.node import Worker
 from contextlib import contextmanager
 import multiprocessing
+import itertools
 import zmq
 
 context = zmq.Context()
@@ -14,14 +15,18 @@ def add(x, y):
 
 global_port = [5000]
 
+worker_names = ('ipc://node-%d' % i for i in itertools.count())
+
 @contextmanager
-def worker(port=None, data=None):
+def worker(port=None, data=None, address=None):
     if port is None:
         global_port[0] += 1
         port = global_port[0]
     if data is None:
         data = dict()
-    a = Worker('127.0.0.1:%d'%port, data)
+    if address is None:
+        address = next(worker_names)
+    a = Worker('ipc://server', data, address=address)
 
     try:
         yield a
@@ -29,72 +34,70 @@ def worker(port=None, data=None):
         a.close()
 
 
-def test_status():
-    with worker(data={'x': 10, 'y': 20}) as w:
-        socket = context.socket(zmq.REQ)
-        socket.connect(w.address)
+@contextmanager
+def worker_and_router(*args, **kwargs):
+    with worker(*args, **kwargs) as w:
+        router = context.socket(zmq.ROUTER)
+        router.bind(w.scheduler)
+        handshake = router.recv_multipart()  # burn initial handshake
 
+        yield w, router
+
+
+
+def test_status():
+    with worker_and_router(data={'x': 10, 'y': 20}, address='ipc://alice') as (w, r):
         payload = dict(function='status', jobid=3)
-        socket.send(w.dumps(payload))
-        result = socket.recv()
-        result2 = w.loads(result)
-        assert result2 == {'address': w.address,
-                           'jobid': 3,
-                           'result': 'OK',
-                           'status': 'OK'}
+        header = {'jobid': 3}
+        r.send_multipart(['ipc://alice', w.dumps(header), w.dumps(payload)])
+        address, header, result = r.recv_multipart()
+        assert address == w.address
+        result = w.loads(result)
+        header = w.loads(header)
+        assert result == 'OK'
+        assert header['address'] == w.address
+        assert header['jobid'] == 3
 
 
 def test_getitem():
-    with worker(data={'x': 10, 'y': 20}) as w:
-        socket = context.socket(zmq.REQ)
-        socket.connect(w.address)
-
+    with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         payload = dict(function='getitem', args=('x',), jobid=4)
-        socket.send(w.dumps(payload))
-        result = w.loads(socket.recv())
-        assert result == {'address': w.address,
-                          'jobid': 4,
-                          'result': 10,
-                          'status': 'OK'}
+        r.send_multipart([w.address, w.dumps({}), w.dumps(payload)])
+        address, header, result = r.recv_multipart()
+        result = w.loads(result)
+        header = w.loads(header)
+        assert result == 10
 
 
 def test_setitem():
-    with worker(data={'x': 10, 'y': 20}) as w:
-        socket = context.socket(zmq.REQ)
-        socket.connect(w.address)
-
+    with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         payload = dict(function='setitem', args=('z', 30), jobid=4)
-        socket.send(w.dumps(payload))
-        result = w.loads(socket.recv())
+        r.send_multipart([w.address, w.dumps({}), w.dumps(payload)])
+        address, header, result = r.recv_multipart()
         assert w.data['z'] == 30
 
 
 def test_delitem():
-    with worker(data={'x': 10, 'y': 20}) as w:
-        socket = context.socket(zmq.REQ)
-        socket.connect(w.address)
-
-        assert 'y' in w.data
+    with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         payload = dict(function='delitem', args=('y',))
-        socket.send(w.dumps(payload))
-        result = w.loads(socket.recv())
+        r.send_multipart([w.address, w.dumps({}), w.dumps(payload)])
+        address, header, result = r.recv_multipart()
         assert 'y' not in w.data
 
 
-def test_Error():
-    with worker(data={'x': 10, 'y': 20}) as w:
-        socket = context.socket(zmq.REQ)
-        socket.connect(w.address)
-
+def test_error():
+    with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         payload = dict(function='getitem', args=('does-not-exist',))
-        socket.send(w.dumps(payload))
-        result = w.loads(socket.recv())
-        assert isinstance(result['result'], KeyError)
-        assert result['status'] != 'OK'
+        r.send_multipart([w.address, w.dumps({}), w.dumps(payload)])
+        address, header, result = r.recv_multipart()
+        result = w.loads(result)
+        header = w.loads(header)
+        assert isinstance(result, KeyError)
+        assert header['status'] != 'OK'
 
 
 def test_close():
-    with worker(data={'x': 10, 'y': 20}) as w:
+    with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         assert w.pool._state == multiprocessing.pool.RUN
         w.close()
         assert w.pool._state == multiprocessing.pool.CLOSE
@@ -105,32 +108,39 @@ def test_collect():
     with worker(data={'x': 10, 'y': 20}) as a:
         with worker(data={'a': 1, 'b': 2}) as b:
             with worker(data={'c': 5}) as c:
-                socket = context.socket(zmq.REQ)
-                socket.connect(c.address)
+                router = context.socket(zmq.ROUTER)
+                router.bind(c.scheduler)
+                handshake = router.recv_multipart()  # burn initial handshake
+                handshake = router.recv_multipart()  # burn initial handshake
+                handshake = router.recv_multipart()  # burn initial handshake
 
+                header = {}
                 payload = dict(function='collect', args=({'x': [a.address],
                                                           'a': [b.address],
                                                           'y': [a.address]},))
-                socket.send(c.dumps(payload))
+                router.send_multipart([c.address,
+                                       c.dumps(header),
+                                       c.dumps(payload)])
 
-                result = c.loads(socket.recv())
+                address, header, result = router.recv_multipart()
+                result = c.loads(result)
 
                 assert c.data == dict(a=1, c=5, x=10, y=20)
 
 
 def test_compute():
     with worker(data={'x': 10, 'y': 20}) as a:
-        with worker(data={'a': 1, 'b': 2}) as b:
-            socket = context.socket(zmq.REQ)
-            socket.connect(b.address)
-
+        with worker_and_router(data={'a': 1, 'b': 2}) as (b, r):
             payload = dict(function='compute',
                            args=('c', (add, 'a', 'x'), {'x': [a.address]}))
-            socket.send(b.dumps(payload))
+            r.recv_multipart()  # burn handshake
+            r.send_multipart([b.address, b.dumps({}), b.dumps(payload)])
 
-            result = b.loads(socket.recv())
+            address, header, result = r.recv_multipart()
+            result = b.loads(result)
+            header = b.loads(header)
+            assert header['address'] == b.address
             assert b.data['c'] == 11
-            assert 0 < result['result']['duration'] < 1.0
-            assert result['result']['key'] == 'c'
-            assert result['address'] == b.address
+            assert 0 < result['duration'] < 1.0
+            assert result['key'] == 'c'
             assert result['status'] == 'OK'
