@@ -11,8 +11,6 @@ except ImportError:
     from pickle import loads, dumps, HIGHEST_PROTOCOL
 dumps = partial(dumps, protocol=HIGHEST_PROTOCOL)
 
-context = zmq.Context()
-
 
 with open('log.scheduler', 'w') as f:  # delete file
     pass
@@ -48,11 +46,13 @@ class Scheduler(object):
     def __init__(self, address_to_workers=None, address_to_clients=None):
         assert (address_to_workers is None) == (address_to_clients is None)
         if address_to_workers is None:
-            address_to_workers = 'tcp://%s:%d' % (socket.gethostname, 6465)
-            address_to_clients = 'tcp://%s:%d' % (socket.gethostname, 6466)
+            address_to_workers = 'tcp://%s:%d' % (socket.gethostname(), 6465)
+            address_to_clients = 'tcp://%s:%d' % (socket.gethostname(), 6466)
+        # Socket bind to random port
 
         self.address_to_workers = address_to_workers
         self.address_to_clients = address_to_clients
+        self.context = zmq.Context()
 
         self.workers = dict()
         self.whohas = defaultdict(set)
@@ -65,11 +65,9 @@ class Scheduler(object):
         self.lock = Lock()
 
         self.to_workers = context.socket(zmq.ROUTER)
-        self.to_workers.setsockopt(zmq.IDENTITY, self.address_to_workers)
         self.to_workers.bind(self.address_to_workers)
 
         self.to_clients = context.socket(zmq.ROUTER)
-        self.to_clients.setsockopt(zmq.IDENTITY, self.address_to_clients)
         self.to_clients.bind(self.address_to_clients)
 
         self.status = 'run'
@@ -162,3 +160,4 @@ class Scheduler(object):
 
     def close(self):
         self.status = 'closed'
+        self.context.destroy(linger=3)
