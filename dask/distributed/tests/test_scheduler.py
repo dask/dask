@@ -4,6 +4,7 @@ import itertools
 from contextlib import contextmanager
 from toolz import take
 from time import sleep
+import re
 
 import zmq
 
@@ -11,6 +12,7 @@ context = zmq.Context()
 
 server_names = ('ipc://server-%d' % i for i in itertools.count())
 worker_names = ('ipc://worker-%d' % i for i in itertools.count())
+
 
 @contextmanager
 def scheduler():
@@ -125,12 +127,15 @@ def test_send_release_data():
 
 def test_get():
     with scheduler_and_workers(n=2) as (s, (a, b)):
-        dsk = {'x': (add, 1, 2), 'y': (inc, 'x')}
+        dsk = {'x': (add, 1, 2), 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
+
         result = get_distributed(s, dsk, ['y'])
         assert result == [4]
 
-        assert 'y' in s.whohas
-        assert a.data.get('y') == 4 or b.data.get('y') == 4
+        result = get_distributed(s, dsk, [['z'], 'y'])
+        assert result == [[7], 4]
+
+        # No worker still has the unnecessary intermediate variable
         assert not s.whohas['x']
         assert 'x' not in a.data and 'x' not in b.data
 
@@ -143,3 +148,15 @@ def test_gather():
         sleep(0.05)
         result = s.gather(['x', 'y'])
         assert result == [1, 2]
+
+
+def test_random_names():
+    s = Scheduler()
+
+    try:
+        assert s.address_to_workers
+        assert s.address_to_clients
+        assert s.address_to_clients != s.address_to_workers
+        assert re.match('\w+://\w+:\d+', s.address_to_workers)
+    finally:
+        s.close()

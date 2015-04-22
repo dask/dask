@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import zmq
+import socket
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 import random
@@ -56,37 +57,41 @@ class Scheduler(object):
         ZMQ address of our connection to clients
     """
     def __init__(self, address_to_workers=None, address_to_clients=None):
-        assert (address_to_workers is None) == (address_to_clients is None)
-        if address_to_workers is None:
-            address_to_workers = 'tcp://%s:%d' % (socket.gethostname(), 6465)
-            address_to_clients = 'tcp://%s:%d' % (socket.gethostname(), 6466)
-        # Socket bind to random port
-
-        self.address_to_workers = address_to_workers
-        self.address_to_clients = address_to_clients
         self.context = zmq.Context()
+        hostname = socket.gethostname()
 
+        # Bind routers to addresses (and create addresses if necessary)
+        self.to_workers = self.context.socket(zmq.ROUTER)
+        if address_to_workers is None:
+            port = self.to_workers.bind_to_random_port('tcp://*')
+            self.address_to_workers = 'tcp://%s:%d' % (hostname, port)
+        else:
+            self.address_to_workers = address_to_workers
+            self.to_workers.bind(self.address_to_workers)
+
+        self.to_clients = self.context.socket(zmq.ROUTER)
+        if address_to_clients is None:
+            port = self.to_clients.bind_to_random_port('tcp://*')
+            self.address_to_clients = 'tcp://%s:%d' % (hostname, port)
+        else:
+            self.address_to_clients = address_to_clients
+            self.to_clients.bind(self.address_to_clients)
+
+        # State about my workers and computed data
         self.workers = dict()
         self.whohas = defaultdict(set)
         self.ihave = defaultdict(set)
         self.available_workers = Queue()
-
         self.data = defaultdict(dict)
 
         self.pool = ThreadPool(100)
         self.lock = Lock()
-
-        self.to_workers = self.context.socket(zmq.ROUTER)
-        self.to_workers.bind(self.address_to_workers)
-
-        self.to_clients = self.context.socket(zmq.ROUTER)
-        self.to_clients.bind(self.address_to_clients)
-
         self.status = 'run'
 
         self.loads = loads
         self.dumps = dumps
 
+        # RPC functions that workers and clients can trigger
         self.worker_functions = {'register': self.worker_registration,
                                  'status': self.status_to_worker,
                                  'finished-task': self.worker_finished_task,
@@ -94,6 +99,7 @@ class Scheduler(object):
                                  'getitem-ack': self.getitem_ack}
         self.client_functions = {'status': self.status_to_client}
 
+        # Away we go!
         log(self.address_to_workers, 'Start')
         self._listen_to_workers_thread = Thread(target=self.listen_to_workers)
         self._listen_to_workers_thread.start()
