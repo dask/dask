@@ -110,13 +110,18 @@ class Worker(object):
 
     def get_scheduler(self, header, payload):
         payload = self.loads(payload)
-        header2 = {'jobid': header['jobid']}
+        log(self.address, 'Get from scheduler', payload)
+        key = payload['key']
+        header2 = {'jobid': header.get('jobid')}
         try:
-            result = self.data[payload['key']]
+            result = self.data[key]
+            header2['status'] = 'OK'
         except KeyError as e:
             result = e
             header2['status'] = 'Bad key'
-        self.send_to_scheduler(header2, result)
+        header2['function'] = 'getitem-ack'
+        payload = {'key': key, 'value': result}
+        self.send_to_scheduler(header2, payload)
 
     def setitem(self, header, payload):
         payload = self.loads(payload)

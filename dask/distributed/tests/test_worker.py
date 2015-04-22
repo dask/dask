@@ -69,7 +69,7 @@ def test_getitem():
         address, header, result = r.recv_multipart()
         result = w.loads(result)
         header = w.loads(header)
-        assert result == 10
+        assert result['value'] == 10
 
 
 def test_setitem():
@@ -102,7 +102,7 @@ def test_error():
         address, header, result = r.recv_multipart()
         result = w.loads(result)
         header = w.loads(header)
-        assert isinstance(result, KeyError)
+        assert isinstance(result['value'], KeyError)
         assert header['status'] != 'OK'
 
 

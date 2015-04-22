@@ -126,10 +126,20 @@ def test_send_release_data():
 def test_get():
     with scheduler_and_workers(n=2) as (s, (a, b)):
         dsk = {'x': (add, 1, 2), 'y': (inc, 'x')}
-        get_distributed(s, dsk, ['y'])
+        result = get_distributed(s, dsk, ['y'])
+        assert result == [4]
 
-        sleep(0.05)
         assert 'y' in s.whohas
         assert a.data.get('y') == 4 or b.data.get('y') == 4
         assert not s.whohas['x']
         assert 'x' not in a.data and 'x' not in b.data
+
+
+def test_gather():
+    with scheduler_and_workers(n=2) as (s, (a, b)):
+        s.send_data('x', 1, a.address)
+        s.send_data('y', 2, b.address)
+
+        sleep(0.05)
+        result = s.gather(['x', 'y'])
+        assert result == [1, 2]

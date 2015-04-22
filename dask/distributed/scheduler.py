@@ -3,6 +3,7 @@ from __future__ import print_function
 import zmq
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
+import random
 from threading import Thread, Lock
 from contextlib import contextmanager
 from toolz import curry, partial
@@ -14,6 +15,7 @@ except ImportError:
 dumps = partial(dumps, protocol=HIGHEST_PROTOCOL)
 
 from ..core import get_dependencies
+from .. import core
 
 with open('log.scheduler', 'w') as f:  # delete file
     pass
@@ -88,7 +90,8 @@ class Scheduler(object):
         self.worker_functions = {'register': self.worker_registration,
                                  'status': self.status_to_worker,
                                  'finished-task': self.worker_finished_task,
-                                 'setitem-ack': self.setitem_ack}
+                                 'setitem-ack': self.setitem_ack,
+                                 'getitem-ack': self.getitem_ack}
         self.client_functions = {'status': self.status_to_client}
 
         log(self.address_to_workers, 'Start')
@@ -98,12 +101,14 @@ class Scheduler(object):
         self._listen_to_clients_thread.start()
 
         self.finished_task_listeners = []
+        self.active_tasks = set()
 
     def listen_to_workers(self):
         while self.status != 'closed':
             if not self.to_workers.poll(100):
                 continue
             address, header, payload = self.to_workers.recv_multipart()
+
             header = self.loads(header)
             if 'address' not in header:
                 header['address'] = address
@@ -150,6 +155,7 @@ class Scheduler(object):
             dependencies = payload['dependencies']
 
             log(self.address_to_workers, 'Finish task', payload)
+            self.active_tasks.remove(key)
 
             self.data[key]['duration'] = duration
             self.whohas[key].add(address)
@@ -195,6 +201,7 @@ class Scheduler(object):
         header = {'function': 'compute', 'jobid': key}
         payload = {'key': key, 'task': dsk[key], 'locations': locations}
         self.send_to_worker(worker, header, payload)
+        self.active_tasks.add(key)
 
     def release_key(self, key):
         """ Release data from all workers """
@@ -218,6 +225,39 @@ class Scheduler(object):
         header = {'function': 'setitem', 'jobid': key}
         payload = {'key': key, 'value': value, 'reply': reply}
         self.send_to_worker(address, header, payload)
+
+    def gather(self, keys):
+        self._gather_queue = Queue()
+
+        # Send of requests
+        self._gather_send(keys)
+
+        # Wait for replies
+        cache = dict()
+        for i in flatten(keys):
+            k, v = self._gather_queue.get()
+            cache[k] = v
+
+        # Reshape to keys
+        return core.get(cache, keys)
+
+    def _gather_send(self, key):
+        if isinstance(key, list):
+            for k in key:
+                self._gather_send(k)
+        else:
+            header = {'function': 'getitem', 'jobid': key}
+            payload = {'key': key}
+            seq = list(self.whohas[key])
+            worker = random.choice(seq)
+            self.send_to_worker(worker, header, payload)
+
+    def getitem_ack(self, header, payload):
+        payload = self.loads(payload)
+        log(self.address_to_workers, 'Getitem ack', payload)
+        with logerrors():
+            assert header['status'] == 'OK'
+            self._gather_queue.put((payload['key'], payload['value']))
 
     def setitem_ack(self, header, payload):
         address = header['address']
@@ -277,6 +317,8 @@ def get_distributed(scheduler, dsk, result, **kwargs):
 
         while dag_state['ready'] and scheduler.available_workers.qsize() > 0:
             fire_task()
+
+    return scheduler.gather(result)
 
 
 def finish_task(scheduler, dsk, key, state, results, delete=True):
