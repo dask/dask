@@ -126,7 +126,10 @@ class Worker(object):
 
         reply = payload.get('reply', False)
         if reply:
-            self.send_to_scheduler({'jobid': header.get('jobid')}, 'OK')
+            header2 = {'jobid': header.get('jobid'),
+                       'function': 'setitem-ack'}
+            payload2 = {'key': key}
+            self.send_to_scheduler(header2, payload2)
 
     def delitem(self, header, payload):
         payload = self.loads(payload)

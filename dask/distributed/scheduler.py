@@ -87,7 +87,8 @@ class Scheduler(object):
 
         self.worker_functions = {'register': self.worker_registration,
                                  'status': self.status_to_worker,
-                                 'finished-task': self.worker_finished_task}
+                                 'finished-task': self.worker_finished_task,
+                                 'setitem-ack': self.setitem_ack}
         self.client_functions = {'status': self.status_to_client}
 
         log(self.address_to_workers, 'Start')
@@ -189,6 +190,36 @@ class Scheduler(object):
         header = {'function': 'compute', 'jobid': key}
         payload = {'key': key, 'task': dsk[key], 'locations': locations}
         self.send_to_worker(worker, header, payload)
+
+    def release_key(self, key):
+        """ Release data from all workers """
+        with logerrors():
+            workers = list(self.whohas[key])
+            log(self.address_to_workers, 'Release data', key, workers)
+            header = {'function': 'delitem', 'jobid': key}
+            payload = {'key': key}
+            for worker in workers:
+                self.send_to_worker(worker, header, payload)
+                self.whohas[key].remove(worker)
+                self.ihave[worker].remove(key)
+
+    def send_data(self, key, value, address=None, reply=True):
+        """ Send data up to some worker
+
+        If no address is given we select one worker randomly
+        """
+        if address is None:
+            address = random.choice(list(self.workers))
+        header = {'function': 'setitem', 'jobid': key}
+        payload = {'key': key, 'value': value, 'reply': reply}
+        self.send_to_worker(address, header, payload)
+
+    def setitem_ack(self, header, payload):
+        address = header['address']
+        payload = self.loads(payload)
+        key = payload['key']
+        self.whohas[key].add(address)
+        self.ihave[address].add(key)
 
     def close(self):
         self.status = 'closed'

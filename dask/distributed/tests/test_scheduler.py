@@ -106,3 +106,17 @@ def test_compute_cycle():
         assert 'b' in a.data or 'b' in b.data
         assert a.data.get('b') == 4 or b.data.get('b') == 4
         assert s.available_workers.qsize() == 2
+
+def test_send_release_data():
+    with scheduler_and_workers(n=2) as (s, (a, b)):
+        s.send_data('x', 1, a.address)
+        sleep(0.05)
+        assert a.data['x'] == 1
+        assert a.address in s.whohas['x']
+        assert 'x' in s.ihave[a.address]
+
+        s.release_key('x')
+        sleep(0.05)
+        assert 'x' not in a.data
+        assert a.address not in s.whohas['x']
+        assert 'x' not in s.ihave[a.address]
