@@ -1,4 +1,4 @@
-from dask.distributed.scheduler import Scheduler
+from dask.distributed.scheduler import Scheduler, get_distributed
 from dask.distributed.worker import Worker
 import itertools
 from contextlib import contextmanager
@@ -107,6 +107,7 @@ def test_compute_cycle():
         assert a.data.get('b') == 4 or b.data.get('b') == 4
         assert s.available_workers.qsize() == 2
 
+
 def test_send_release_data():
     with scheduler_and_workers(n=2) as (s, (a, b)):
         s.send_data('x', 1, a.address)
@@ -120,3 +121,15 @@ def test_send_release_data():
         assert 'x' not in a.data
         assert a.address not in s.whohas['x']
         assert 'x' not in s.ihave[a.address]
+
+
+def test_get():
+    with scheduler_and_workers(n=2) as (s, (a, b)):
+        dsk = {'x': (add, 1, 2), 'y': (inc, 'x')}
+        get_distributed(s, dsk, ['y'])
+
+        sleep(0.05)
+        assert 'y' in s.whohas
+        assert a.data.get('y') == 4 or b.data.get('y') == 4
+        assert not s.whohas['x']
+        assert 'x' not in a.data and 'x' not in b.data

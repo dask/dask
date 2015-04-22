@@ -97,6 +97,8 @@ class Scheduler(object):
         self._listen_to_clients_thread = Thread(target=self.listen_to_clients)
         self._listen_to_clients_thread.start()
 
+        self.finished_task_listeners = []
+
     def listen_to_workers(self):
         while self.status != 'closed':
             if not self.to_workers.poll(100):
@@ -156,6 +158,9 @@ class Scheduler(object):
                 self.whohas[dep].add(address)
                 self.ihave[address].add(dep)
             self.available_workers.put(address)
+
+            for listener in self.finished_task_listeners:
+                listener.put(payload)
 
     def status_to_client(self, header, payload):
         out_header = {'jobid': header.get('jobid')}
@@ -223,3 +228,100 @@ class Scheduler(object):
 
     def close(self):
         self.status = 'closed'
+
+
+from ..async import start_state_from_dask as dag_state_from_dask
+from ..core import flatten
+
+def get_distributed(scheduler, dsk, result, **kwargs):
+    if isinstance(result, list):
+        result_flat = set(flatten(result))
+    else:
+        result_flat = set([result])
+    results = set(result_flat)
+
+    cache = dict()
+    dag_state = dag_state_from_dask(dsk, cache=cache)
+
+    tick = [0]
+
+    if dag_state['waiting'] and not dag_state['ready']:
+        raise ValueError("Found no accessible jobs in dask graph")
+
+    event_queue = Queue()
+    scheduler.finished_task_listeners.append(event_queue)
+
+    def fire_task():
+        tick[0] += 1  # Update heartbeat
+
+        # Choose a good task to compute
+        key = dag_state['ready'].pop()
+        dag_state['ready-set'].remove(key)
+        dag_state['running'].add(key)
+
+        scheduler.trigger_task(dsk, key)  # Fire
+
+    # Seed initial tasks
+    while dag_state['ready'] and scheduler.available_workers.qsize() > 0:
+        fire_task()
+
+    # Main loop, wait on tasks to finish, insert new ones
+    while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
+        payload = event_queue.get()
+
+        if isinstance(payload['status'], Exception):
+            raise payload['status']
+
+        key = payload['key']
+        finish_task(scheduler, dsk, key, dag_state, results)
+
+        while dag_state['ready'] and scheduler.available_workers.qsize() > 0:
+            fire_task()
+
+
+def finish_task(scheduler, dsk, key, state, results, delete=True):
+    """
+    Update executation state after a task finishes
+
+    Mutates.  This should run atomically (with a lock).
+    """
+    if key in state['ready-set']:
+        state['ready-set'].remove(key)
+
+    for dep in sorted(state['dependents'][key]):
+        s = state['waiting'][dep]
+        s.remove(key)
+        if not s:
+            del state['waiting'][dep]
+            state['ready-set'].add(dep)
+            state['ready'].append(dep)
+
+    for dep in state['dependencies'][key]:
+        if dep in state['waiting_data']:
+            s = state['waiting_data'][dep]
+            s.remove(key)
+            if not s and dep not in results:
+                release_data(scheduler, dep, state, delete=delete)
+        elif delete and dep not in results:
+            release_data(scheduler, dep, state, delete=delete)
+
+    state['finished'].add(key)
+    state['running'].remove(key)
+
+    return state
+
+
+def release_data(scheduler, key, state, delete=True):
+    """ Remove data from temporary storage
+
+    See Also
+        finish_task
+    """
+    if key in state['waiting_data']:
+        assert not state['waiting_data'][key]
+        del state['waiting_data'][key]
+
+    state['released'].add(key)
+
+    if delete:
+        scheduler.release_key(key)

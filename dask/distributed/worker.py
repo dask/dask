@@ -120,6 +120,7 @@ class Worker(object):
 
     def setitem(self, header, payload):
         payload = self.loads(payload)
+        log(self.address, 'Setitem', payload)
         key = payload['key']
         value = payload['value']
         self.data[key] = value
@@ -133,11 +134,11 @@ class Worker(object):
 
     def delitem(self, header, payload):
         payload = self.loads(payload)
+        log(self.address, 'Delitem', payload)
         key = payload['key']
         del self.data[key]
 
-        reply = payload.get('reply', False)
-        if reply:
+        if payload.get('reply', False):
             self.send_to_scheduler({'jobid': header.get('jobid')}, 'OK')
 
 
