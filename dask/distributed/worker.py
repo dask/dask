@@ -1,97 +1,318 @@
+from __future__ import print_function
+
 from zmqompute import ComputeNode
+from threading import Thread, Lock
+from multiprocessing.pool import ThreadPool
+from contextlib import contextmanager
+import uuid
+import random
+import multiprocessing
 import zmq
 import dask
+from toolz import partial, get, curry
 from time import time
+import sys
+try:
+    from cPickle import dumps, loads, HIGHEST_PROTOCOL
+except ImportError:
+    from pickle import dumps, loads, HIGHEST_PROTOCOL
 
 
 DEBUG = True
 
 context = zmq.Context()
 
+with open('log', 'w') as f:  # delete file
+    pass
+
+def log(*args):
+    with open('log', 'a') as f:
+        print(*args, file=f)
+
+
+@contextmanager
+def logerrors():
+    try:
+        yield
+    except Exception as e:
+        log('Error!', str(e))
+        raise
+
 class Worker(object):
-    """ A worker in a distributed dask computation pool
+    """ Asynchronous worker in a distributed dask computation pool
 
-    A worker consists of the following:
-
-    1.  data: A MutableMappiing to collect and store results.
-        This may be distributed, like a ``pallet.Warehouse``
-    2.  server: A local ``zmqompute.ComputeNode`` server to respond to queries
-        to execute dask tasks
-
-    The compute server hosts one function, ``compute``, which takes a key/task
-    pair like the following:
-
-        key: 'a',  task: (add, (inc, 'x'), 'y')
-
-    We grab the necessary data (e.g. x, y) from the data store (if a Warehouse
-    this may trigger communication), evaluate the task, and store the result
-    back in the data store under the given key.  We then return a message
-    holding metadata about the computation
-
-        key: key-name
-        duration: time in seconds
-        status: 'OK' or the text from an Exception
 
     See Also
     --------
 
-    pallet.Warehouse
-    zmqompute.ComputeNode
     """
-    def __init__(self, host, port, data):
-        self.server = ComputeNode(host=host, port=port,
-                                  functions={'compute': self.compute})
-        self.data = data
+    def __init__(self, scheduler, data=None, nthreads=100,
+                 dumps=partial(dumps, protocol=HIGHEST_PROTOCOL),
+                 loads=loads, address=None, port=None):
+        self.data = data if data is not None else dict()
+        self.pool = ThreadPool(nthreads)
+        self.dumps = dumps
+        self.loads = loads
+        self.scheduler = scheduler
+        self.status = 'run'
 
-    def get(self, task):
-        if isinstance(task, list):
-            return (self.get(item) for item in task)
+        if address is None:
+            if port is None:
+                port = 6464
+            address = 'tcp://%s:%d' % (socket.gethostname(), port)
+        self.address = address
 
-        if ishashable(task) and task in self.data:
-            return self.data[task]
+        self.lock = Lock()
 
-        if not dask.istask(task):
-            raise ValueError("Received a non-task " + str(task))
+        self.dealer = context.socket(zmq.DEALER)
+        self.dealer.setsockopt(zmq.IDENTITY, address)
+        self.dealer.connect(scheduler)
+        self.send_to_scheduler({'function': 'register'}, {})
 
-        func, args = task[0], task[1:]
-        args2 = [self.get(arg) for arg in args]
-        result = func(*args2)
+        self.router = context.socket(zmq.ROUTER)
+        self.router.bind(self.address)
 
-        return result
+        self.scheduler_functions = {'status': self.status_to_scheduler,
+                                    'compute': self.compute,
+                                    'getitem': self.get_scheduler,
+                                    'delitem': self.delitem,
+                                    'setitem': self.setitem}
 
-    def compute(self, key, task):
-        start = time()
+        self.worker_functions = {'getitem': self.get_worker,
+                                 'status': self.status_to_worker}
 
-        status = "OK"
-        if DEBUG:
-            print("Start Worker: %s\tTime: %s\nKey: %s\tTask: %s" %
-                    (self.server.url, start, str(key), str(task)))
+        log(self.address, 'Start up', self.scheduler)
+
+        self._listen_scheduler_thread = Thread(target=self.listen_to_scheduler)
+        self._listen_scheduler_thread.start()
+        self._listen_workers_thread = Thread(target=self.listen_to_workers)
+        self._listen_workers_thread.start()
+
+    def status_to_scheduler(self, header, payload):
+        log('hello', header, payload)
+        out_header = {'jobid': header.get('jobid')}
+        log(self.address, 'Status check', header['address'])
+        self.send_to_scheduler(out_header, 'OK')
+
+    def status_to_worker(self, header, payload):
+        log('hello', header, payload)
+        out_header = {'jobid': header.get('jobid')}
+        log(self.address, 'Status check', header['address'])
+        self.send_to_worker(header['address'], out_header, 'OK')
+
+    def get_worker(self, header, payload):
+        payload = self.loads(payload)
+        header2 = {'jobid': header['jobid']}
         try:
-            result = self.get(task)
+            result = self.data[payload['key']]
+        except KeyError as e:
+            result = e
+            header2['status'] = 'Bad key'
+        self.send_to_worker(header['address'], header2, result)
+
+    def get_scheduler(self, header, payload):
+        payload = self.loads(payload)
+        header2 = {'jobid': header['jobid']}
+        try:
+            result = self.data[payload['key']]
+        except KeyError as e:
+            result = e
+            header2['status'] = 'Bad key'
+        self.send_to_scheduler(header2, result)
+
+    def setitem(self, header, payload):
+        payload = self.loads(payload)
+        key = payload['key']
+        value = payload['value']
+        self.data[key] = value
+
+        reply = payload.get('reply', False)
+        if reply:
+            self.send_to_scheduler({'jobid': header.get('jobid')}, 'OK')
+
+    def delitem(self, header, payload):
+        payload = self.loads(payload)
+        key = payload['key']
+        del self.data[key]
+
+        reply = payload.get('reply', False)
+        if reply:
+            self.send_to_scheduler({'jobid': header.get('jobid')}, 'OK')
+
+
+    def send_to_scheduler(self, header, payload):
+        log(self.address, 'Send to scheduler', header)
+        header['address'] = self.address
+        with self.lock:
+            self.dealer.send_multipart([self.dumps(header),
+                                        self.dumps(payload)])
+
+    def send_to_worker(self, address, header, result):
+        log(self.address, 'Send to worker', address, header)
+        header['address'] = self.address
+        with self.lock:
+            self.router.send_multipart([address,
+                                        self.dumps(header),
+                                        self.dumps(result)])
+
+    def listen_to_scheduler(self):
+        """
+        Event loop listening to commands from scheduler
+
+        Payload should deserialize into a dict of the following form:
+
+            {'function': name of function to call, see self.functions,
+             'jobid': job identifier, defaults to None,
+             'args': arguments to pass to function, defaults to (),
+             'kwargs': keyword argument dict, defauls to {},
+             'reply': whether or not a reply is desired}
+
+        So the minimal request would be as follows:
+
+        >>> sock = context.socket(zmq.DEALER)  # doctest: +SKIP
+        >>> sock.connect('tcp://my-address')   # doctest: +SKIP
+
+        >>> sock.send(dumps({'function': 'status'}))  # doctest: +SKIP
+
+        Or a more complex packet might be as follows:
+
+        >>> sock.send(dumps({'function': 'setitem',
+        ...                  'args': ('x', 10),
+        ...                  'jobid': 123}))  # doctest: +SKIP
+
+        We match the function string against ``self.functions`` to pull out the
+        actual function.  We then execute this function with the provided
+        arguments in another thread from ``self.pool`` using
+        ``self.execute_and_reply``.  This sends results back to the sender.
+
+        See Also:
+            listen_to_workers
+            execute_and_reply
+        """
+        while self.status != 'closed':
+            # Wait on request
+            if not self.dealer.poll(100):
+                continue
+            header, payload = self.dealer.recv_multipart()
+            header = self.loads(header)
+            log(self.address, 'Receive job from scheduler', header)
+            try:
+                function = self.scheduler_functions[header['function']]
+            except KeyError:
+                log(self.address, 'Unknown function', header)
+            else:
+                future = self.pool.apply_async(function, args=(header, payload))
+
+    def listen_to_workers(self):
+        while self.status != 'closed':
+            # Wait on request
+            if not self.router.poll(100):
+                continue
+
+            address, header, payload = self.router.recv_multipart()
+            header = self.loads(header)
+            if 'address' not in header:
+                header['address'] = address
+            log(self.address, 'Receive job from worker', address, header)
+
+            try:
+                function = self.worker_functions[header['function']]
+            except KeyError:
+                log(self.address, 'Unknown function', header)
+            else:
+                future = self.pool.apply_async(function, args=(header, payload))
+
+    def collect(self, locations):
+        """ Collect data from peers
+
+        Given a dictionary of desired data and who holds that data
+
+        >>> locations = {'x': ['tcp://alice:5000', 'tcp://bob:5000'],
+        ...              'y': ['tcp://bob:5000']}
+
+        This fires off getitem reqeusts to one of the hosts for each piece of
+        data then blocks on all of the responses, then inserts this data into
+        ``self.data``.
+        """
+        socks = []
+
+        # Send out requests for data
+        log(self.address, 'Collect data from peers', locations)
+        for key, locs in locations.items():
+            if key in self.data:  # already have this locally
+                continue
+            sock = context.socket(zmq.DEALER)
+            sock.connect(random.choice(locs))  # randomly select one peer
+            header = {'jobid': key,
+                      'function': 'getitem'}
+            payload = {'function': 'getitem',
+                       'key': key}
+            sock.send_multipart([self.dumps(header),
+                                 self.dumps(payload)])
+            socks.append(sock)
+
+        # Wait on replies.  Store results in self.data.
+        log(self.address, 'Waiting on data replies')
+        for sock in socks:
+            header, payload = sock.recv_multipart()
+            header = self.loads(header)
+            payload = self.loads(payload)
+            log(self.address, 'Receive data', header['address'],
+                                              header['jobid'])
+            self.data[header['jobid']] = payload
+
+    def compute(self, header, payload):
+        """ Compute dask task
+
+        Given a key, task, and locations of data
+
+            key -- 'z'
+            task -- (add, 'x', 'y')
+            locations -- {'x': ['tcp://alice:5000']}
+
+        Collect necessary data from locations, merge into self.data (see
+        ``collect``), then compute task and store into ``self.data``.
+        """
+        # Unpack payload
+        payload = self.loads(payload)
+        locations = payload['locations']
+        key = payload['key']
+        task = payload['task']
+
+        # Grab data from peers
+        self.collect(locations)
+
+        # Do actual work
+        start = time()
+        status = "OK"
+        log(self.address, "Start computation", key, task)
+        try:
+            result = dask.core.get(self.data, task)
             end = time()
         except Exception as e:
-            status = str(e)
+            status = e
             end = time()
         else:
             self.data[key] = result
-        if DEBUG:
-            print("End Worker: %s\tTime: %s\nKey: %s\tTask: %s" %
-                    (self.server.url, end, str(key), str(task)))
-            print("Status: %s" % status)
+        log(self.address, "End computation", key, task, status)
 
-        message = {'key': key,
-                   'duration': end - start,
-                   'status': status,
-                   'worker': self.server.url}
-        return message
+        # Send result to scheduler
+        result = {'key': key,
+                  'duration': end - start,
+                  'status': status}
+        header2 = {'jobid': header.get('jobid')}
+        self.send_to_scheduler(header2, result)
+
+    def close(self):
+        if self.pool._state == multiprocessing.pool.RUN:
+            log(self.address, 'Close')
+            self.status = 'closed'
+            self.pool.close()
+            self.pool.join()
 
     def __del__(self):
-        self.server.stop()
+        self.close()
 
 
-def ishashable(x):
-    try:
-        hash(x)
-        return True
-    except TypeError:
-        return False
+def status():
+    return 'OK'

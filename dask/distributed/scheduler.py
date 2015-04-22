@@ -1,130 +1,166 @@
-from ..async import start_state_from_dask as dag_state_from_dask
-from ..async import nested_get, finish_task
-from ..core import flatten
-from ..compatibility import Queue
+from __future__ import print_function
+
+import zmq
+from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 from threading import Thread, Lock
-import zmq
-from zmqompute.core import loads, dumps
+from toolz import curry, partial
+try:
+    from cPickle import loads, dumps, HIGHEST_PROTOCOL
+except ImportError:
+    from pickle import loads, dumps, HIGHEST_PROTOCOL
+dumps = partial(dumps, protocol=HIGHEST_PROTOCOL)
 
-context = zmq.Context()
+
+with open('log.scheduler', 'w') as f:  # delete file
+    pass
+
+def log(*args):
+    with open('log.scheduler', 'a') as f:
+        print(*args, file=f)
 
 
-def get_distributed(workers, cache, dsk, result, **kwargs):
-    """ Distributed get function
+class Scheduler(object):
+    """ Disitributed scheduler for dask computations
 
-    Parameters
-    ----------
+    State
+    -----
 
-    workers: list
-        List of zmq uris like tcp://hostname:port
-    cache: dict-like
-        Temporary storage of results, possibly a pallet.Warehouse
-    dsk: dict
-        A dask dictionary specifying a workflow
-    result: key or list of keys
-        Keys corresponding to desired data
-    debug_counts: integer or None
-        This integer tells how often the scheduler should dump debugging info
-
-    See Also
-    --------
-
-    threaded.get
+    workers - dict
+        Maps worker identities to information about that worker
+    whohas - dict
+        Maps data keys to sets of workers that own that data
+    ihave - dict
+        Maps workers to data that they own
+    data - dict
+        Maps data keys to metadata about the computation that produced it
+    to_workers - zmq.Socket (ROUTER)
+        Socket to communicate to workers
+    to_clients - zmq.Socket (ROUTER)
+        Socket to communicate with users
+    address_to_workers - string
+        ZMQ address of our connection to workers
+    address_to_clients - string
+        ZMQ address of our connection to clients
     """
-    if isinstance(result, list):
-        result_flat = set(flatten(result))
-    else:
-        result_flat = set([result])
-    results = set(result_flat)
+    def __init__(self, address_to_workers=None, address_to_clients=None):
+        assert (address_to_workers is None) == (address_to_clients is None)
+        if address_to_workers is None:
+            address_to_workers = 'tcp://%s:%d' % (socket.gethostname(), 6465)
+            address_to_clients = 'tcp://%s:%d' % (socket.gethostname(), 6466)
+        # Socket bind to random port
 
-    queue = Queue()
+        self.address_to_workers = address_to_workers
+        self.address_to_clients = address_to_clients
+        self.context = zmq.Context()
 
-    dealer = context.socket(zmq.DEALER)
+        self.workers = dict()
+        self.whohas = defaultdict(set)
+        self.ihave = defaultdict(set)
+        self.available_workers = list()
 
-    # TODO: don't shove in seed data if already in cache
-    dag_state = dag_state_from_dask(dsk, cache=cache)
+        self.data = dict()
 
-    worker_state = {'whereis': defaultdict(set),
-                    'has': defaultdict(set)}
+        self.pool = ThreadPool(100)
+        self.lock = Lock()
 
-    tick = [0]
+        self.to_workers = self.context.socket(zmq.ROUTER)
+        self.to_workers.bind(self.address_to_workers)
 
-    if dag_state['waiting'] and not dag_state['ready']:
-        raise ValueError("Found no accessible jobs in dask graph")
+        self.to_clients = self.context.socket(zmq.ROUTER)
+        self.to_clients.bind(self.address_to_clients)
 
-    available_workers = workers[:]
+        self.status = 'run'
 
-    def fire_task(worker):
-        """ Fire off a task to the thread pool """
-        # Update heartbeat
-        tick[0] += 1
-        # Choose a good task to compute
-        key = dag_state['ready'].pop()
-        dag_state['ready-set'].remove(key)
-        dag_state['running'].add(key)
+        self.loads = loads
+        self.dumps = dumps
 
-        task = dsk[key]
-        deps = get_dependencies(dsk, key)
-        data_locations = {worker_state['whereis'][dep] for dep in deps}
+        self.worker_functions = {'register': self.worker_registration,
+                                 'status': self.status_to_worker,
+                                 'finished': self.worker_finished_task}
+        self.client_functions = {'status': self.status_to_client}
 
-        # Submit
-        payload = dict(function='compute',
-                       args=(key, dsk[key], data_locations),
-                       jobid=('compute', key))
+        log(self.address_to_workers, 'Start')
+        self._listen_to_workers_thread = Thread(target=self.listen_to_workers)
+        self._listen_to_workers_thread.start()
+        self._listen_to_clients_thread = Thread(target=self.listen_to_clients)
+        self._listen_to_clients_thread.start()
 
-        dealer.send_multipart([worker, '', dumps(payload)])
+    def listen_to_workers(self):
+        while self.status != 'closed':
+            if not self.to_workers.poll(100):
+                continue
+            address, header, payload = self.to_workers.recv_multipart()
+            header = self.loads(header)
+            if 'address' not in header:
+                header['address'] = address
+            log(self.address_to_workers, 'Receive job from worker', header)
 
-    # Seed initial tasks into the thread pool
-    while dag_state['ready'] and len(dag_state['running']) < len(workers):
-        fire_task(available_workers.pop())
+            try:
+                function = self.worker_functions[header['function']]
+            except KeyError:
+                log(self.address_to_workers, 'Unknown function', header)
+            else:
+                future = self.pool.apply_async(function, args=(header, payload))
 
-    # Main loop, wait on tasks to finish, insert new ones
-    while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
-        address, empty, payload = dealer.recv_multipart()
-        payload2 = loads(payload)
+    def listen_to_clients(self):
+        while self.status != 'closed':
+            if not self.to_clients.poll(100):
+                continue
+            address, header, payload = self.to_clients.recv_multipart()
+            header = self.loads(header)
+            if 'address' not in header:
+                header['address'] = address
+            log(self.address_to_clients, 'Receive job from client', header)
 
-        if isinstance(payload['status'], Exception):
-            raise payload['status']
-        if payload['status'] != 'OK':
-            raise Exception("Bad status in remote worker:\n\t"
-                            + payload['status'])
+            try:
+                function = self.client_functions[header['function']]
+            except KeyError:
+                log(self.address_to_clients, 'Unknown function', header)
+            else:
+                self.pool.apply_async(function, args=(header, payload))
 
-        if payload['jobid'][0] == 'compute':
-            key = payload['result']['key']
-            dag_finish_task(dsk, key, dag_state, results, delete=False)
-            # TODO: issue delitem calls to workers when freeing data
-            worker_finish_task(dsk, address, key, worker_state)
-            available_workers.append(address)
+    def worker_registration(self, header, payload):
+        payload = self.loads(payload)
+        address = header['address']
+        self.workers[address] = payload
+        self.available_workers.append(address)
 
-        while dag_state['ready'] and len(dag_state['running']) < len(workers):
-            fire_task(available_workers.pop())
+    def worker_finished_task(self, header, payload):
+        payload = self.loads(payload)
+        key = payload['key']
+        duration = payload['duration']
+        address = header['address']
 
-    return nested_get(result, dag_state['cache'])
+        self.data[key]['duration'] = duration
+        self.whohas[key].add(address)
+        self.ihave[address].add(key)
+        self.available_workers.append(address)
 
+    def status_to_client(self, header, payload):
+        out_header = {'jobid': header.get('jobid')}
+        self.send_to_client(header['address'], out_header, 'OK')
 
-def gather(dealer, workers, keys):
-    dealer = context.socket(zmq.DEALER)
+    def status_to_worker(self, header, payload):
+        out_header = {'jobid': header.get('jobid')}
+        log(self.address_to_workers, 'Status sending')
+        self.send_to_worker(header['address'], out_header, 'OK')
 
+    def send_to_worker(self, address, header, payload):
+        log(self.address_to_workers, 'Send to worker', address, header)
+        header['address'] = self.address_to_workers
+        with self.lock:
+            self.to_workers.send_multipart([address,
+                                            self.dumps(header),
+                                            self.dumps(payload)])
 
+    def send_to_client(self, address, header, result):
+        log(self.address_to_clients, 'Send to client', address, header)
+        header['address'] = self.address_to_clients
+        with self.lock:
+            self.to_clients.send_multipart([address,
+                                            self.dumps(header),
+                                            self.dumps(result)])
 
-
-def worker_finish_task(dask, worker, key, worker_state):
-    """
-    Manage worker state when task is complete
-
-    >>> worker_state = {'whereis': {'a': {'tcp://alice'}, 'b': {'tcp://bob'}},
-    ...                 'has': {'tcp://alice': {'a'}, 'tcp://bob': {'b'}}}
-    >>> dsk = {'a': 1, 'b': 2, 'c': (add, 'a', 'b')}
-
-    >>> worker_finish_task(dsk, 'tcp://alice', 'c', worker_state)
-    >>> worker_state
-    {'whereis': {'a': {'tcp://alice'}, 'b': {'tcp://bob', 'tcp://alice'},
-                 'c': {'tcp://alice'}},
-     'has': {'tcp://alice': {'a', 'b', 'c'}, 'tcp://bob': {'b'}}}
-    """
-    deps = get_dependencies(dask, key)
-
-    for k in [key] + list(deps):
-        worker_state['whereis'][k].add(worker)
-        worker_state['has'][worker].add(k)
+    def close(self):
+        self.status = 'closed'
