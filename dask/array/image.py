@@ -2,6 +2,8 @@
 A thin wrapper for scipy.ndimage.filters
 """
 
+from . import ghost
+
 def _make_ghost_arr(filt, arr, filter_kwargs):
 
     def boundary(filter_kwargs):
@@ -37,7 +39,16 @@ def _make_ghost_arr(filt, arr, filter_kwargs):
         create the value for the `depth` kwarg. This should be
         len(ciel(shape[axis_length]/2.)) for each axis.
         """
-        pass
+        """
+        TODO work for functions other than gaussian
+        """
+        # gaussian depth
+        sigma = filter_kwargs['sigma']
+        truncate = filter_kwargs.get('truncate', 4.0)
+        depth = int(truncate * float(sigma) + 0.5) + 1
+        return {i : depth for i in range(arr.ndim)}
+
+    return {'depth' : depth(filt, filter_kwargs), 'boundary' : boundary(filter_kwargs)}
 
 
 # filt is a ndimage filter (note filter is a python name)
@@ -71,5 +82,9 @@ def filter_(filt, arr, **filter_kwargs):
 
     def wrapped_func(block):
         return filt(block, **filter_kwargs)
+    ghost_kws = _make_ghost_arr(filt, arr, filter_kwargs)
+    print(ghost_kws)
 
-    return arr.map_blocks(wrapped_func)
+    ghosted = ghost.ghost(arr, **ghost_kws)
+    mapped = ghosted.map_blocks(wrapped_func)
+    return ghost.trim_internal(mapped, ghost_kws['depth'])
