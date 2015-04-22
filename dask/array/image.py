@@ -4,7 +4,7 @@ A thin wrapper for scipy.ndimage.filters
 
 from . import ghost
 
-def _make_ghost_arr(filt, arr, filter_kwargs):
+def _make_ghost_kws(filt, arr, filter_kwargs):
 
     def boundary(filter_kwargs):
         """
@@ -26,10 +26,10 @@ def _make_ghost_arr(filt, arr, filter_kwargs):
         # theirs = ['nearest', 'wrap', 'reflect', 'constant']
         # translate to our kwargs
         if mode == 'reflect':
-            return dict(i : 'reflect' for i in range(arr.ndim))
+            return dict((i, 'reflect') for i in range(arr.ndim))
         elif mode == 'constant':
             cval = filter_kwargs.get('cval', 0.0)
-            return dict(i : cval for i in range(arr.ndim))
+            return dict((i, cval) for i in range(arr.ndim))
         else:
             raise ValueError("mode argument % not supported, only 'reflect'"
                              " and 'constant' supported.")
@@ -43,10 +43,15 @@ def _make_ghost_arr(filt, arr, filter_kwargs):
         TODO work for functions other than gaussian
         """
         # gaussian depth
-        sigma = filter_kwargs['sigma']
-        truncate = filter_kwargs.get('truncate', 4.0)
-        depth = int(truncate * float(sigma) + 0.5) + 1
-        return  dict(i : depth for i in range(arr.ndim))
+        def gauss_depth(filt, filter_kwargs):
+            sigma = filter_kwargs['sigma']
+            truncate = filter_kwargs.get('truncate', 4.0)
+            return int(truncate * float(sigma) + 0.5) + 1
+
+        depths = {'gaussian_filter' : gauss_depth,
+                  'gaussian_filter1d': gauss_depth,}
+        depth = depths[filt.__name__](filt, filter_kwargs)
+        return  dict((i, depth) for i in range(arr.ndim))
 
     return {'depth' : depth(filt, filter_kwargs),
             'boundary' : boundary(filter_kwargs)}
@@ -83,7 +88,7 @@ def filter_(filt, arr, **filter_kwargs):
 
     def wrapped_func(block):
         return filt(block, **filter_kwargs)
-    ghost_kws = _make_ghost_arr(filt, arr, filter_kwargs)
+    ghost_kws = _make_ghost_kws(filt, arr, filter_kwargs)
     print(ghost_kws)
 
     ghosted = ghost.ghost(arr, **ghost_kws)
