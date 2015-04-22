@@ -3,6 +3,7 @@ from dask.distributed.node import Worker
 import itertools
 from contextlib import contextmanager
 from toolz import take
+from time import sleep
 
 import zmq
 
@@ -69,6 +70,7 @@ def scheduler_and_workers(n=2):
 
 def test_cluster():
     with scheduler_and_workers() as (s, (a, b)):
+        sleep(0.1)
         assert a.address in s.workers
         assert b.address in s.workers
         assert a.scheduler == s.address_to_workers

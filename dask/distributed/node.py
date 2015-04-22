@@ -89,26 +89,36 @@ class Worker(object):
         self._listen_workers_thread.start()
 
     def status_to_scheduler(self, header, payload):
+        log('hello', header, payload)
         out_header = {'jobid': header.get('jobid')}
-        log(self.address_to_scheduler, 'Status check', header['address'])
-        self.send_to_scheduler(header['address'], out_header, 'OK')
+        log(self.address, 'Status check', header['address'])
+        self.send_to_scheduler(out_header, 'OK')
 
     def status_to_worker(self, header, payload):
+        log('hello', header, payload)
         out_header = {'jobid': header.get('jobid')}
-        log(self.address_to_workers, 'Status check', header['address'])
+        log(self.address, 'Status check', header['address'])
         self.send_to_worker(header['address'], out_header, 'OK')
 
     def get_worker(self, header, payload):
         payload = self.loads(payload)
-        result = self.data[payload['key']]
         header2 = {'jobid': header['jobid']}
+        try:
+            result = self.data[payload['key']]
+        except KeyError as e:
+            result = e
+            header2['status'] = 'Bad key'
         self.send_to_worker(header['address'], header2, result)
 
     def get_scheduler(self, header, payload):
         payload = self.loads(payload)
-        result = self.data[payload['key']]
         header2 = {'jobid': header['jobid']}
-        self.send_to_scheduler(header['address'], header2, result)
+        try:
+            result = self.data[payload['key']]
+        except KeyError as e:
+            result = e
+            header2['status'] = 'Bad key'
+        self.send_to_scheduler(header2, result)
 
     def setitem(self, header, payload):
         payload = self.loads(payload)
@@ -116,47 +126,19 @@ class Worker(object):
         value = payload['value']
         self.data[key] = value
 
+        reply = payload.get('reply', False)
+        if reply:
+            self.send_to_scheduler({'jobid': header.get('jobid')}, 'OK')
+
     def delitem(self, header, payload):
         payload = self.loads(payload)
         key = payload['key']
         del self.data[key]
 
-    def execute_and_reply(self, func, args, kwargs, jobid, send=None):
-        """ Execute function. Reply with header and result.
+        reply = payload.get('reply', False)
+        if reply:
+            self.send_to_scheduler({'jobid': header.get('jobid')}, 'OK')
 
-        Computes func(*args, **kwargs) then sends the result along the given
-        send function.
-
-        This is intended to be run asynchronously in a separate thread.
-
-        See also:
-            send_to_scheduler
-            send_to_worker
-            listen_to_scheduler
-            listen_to_workers
-        """
-        try:
-            function = self.functions[func]
-            result = function(*args, **kwargs)
-            status = 'OK'
-        except KeyError as e:
-            result = e
-            if func not in self.functions:
-                status = 'Function %s not found' % func
-            else:
-                status = 'Error'
-        except Exception as e:
-            result = e
-            status = 'Error'
-
-        header = {'jobid': jobid,
-                  'status': status}
-
-        log(self.address, 'Finish computation', header, send)
-
-        with logerrors():
-            if send is not None:
-                send(header, result)
 
     def send_to_scheduler(self, header, payload):
         log(self.address, 'Send to scheduler', header)
@@ -165,7 +147,6 @@ class Worker(object):
             self.dealer.send_multipart([self.dumps(header),
                                         self.dumps(payload)])
 
-    @curry
     def send_to_worker(self, address, header, result):
         log(self.address, 'Send to worker', address, header)
         header['address'] = self.address
@@ -173,24 +154,6 @@ class Worker(object):
             self.router.send_multipart([address,
                                         self.dumps(header),
                                         self.dumps(result)])
-
-    def unpack_function(self, header, payload):
-        """ Deserialize and unpack payload with sane defaults """
-        payload = self.loads(payload)
-        header = self.loads(header)
-
-        log(self.address, "Receive payload", payload)
-
-        jobid = header.get('jobid', None)
-        reply = header.get('reply', True)
-
-        func = payload['function']
-        args = payload.get('args', ())
-        if not isinstance(args, tuple):
-            args = (args,)
-        kwargs = payload.get('kwargs', dict())
-
-        return func, args, kwargs, jobid, reply
 
     def listen_to_scheduler(self):
         """
@@ -231,29 +194,33 @@ class Worker(object):
             if not self.dealer.poll(100):
                 continue
             header, payload = self.dealer.recv_multipart()
-
-            func, args, kwargs, jobid, reply = self.unpack_function(header, payload)
-            log(self.address, 'Receive job from scheduler', jobid, func)
-
-            # Execute job in separate thread
-            future = self.pool.apply_async(self.execute_and_reply,
-                          args=(func, args, kwargs, jobid,
-                                self.send_to_scheduler if reply else None))
+            header = self.loads(header)
+            log(self.address, 'Receive job from scheduler', header)
+            try:
+                function = self.scheduler_functions[header['function']]
+            except KeyError:
+                log(self.address, 'Unknown function', header)
+            else:
+                future = self.pool.apply_async(function, args=(header, payload))
 
     def listen_to_workers(self):
         while self.status != 'closed':
             # Wait on request
             if not self.router.poll(100):
                 continue
+
             address, header, payload = self.router.recv_multipart()
-
-            func, args, kwargs, jobid, reply = self.unpack_function(header, payload)
             header = self.loads(header)
-            log(self.address, 'Receive job from worker', header['address'], jobid, func)
+            if 'address' not in header:
+                header['address'] = address
+            log(self.address, 'Receive job from worker', address, header)
 
-            self.pool.apply_async(self.execute_and_reply,
-                    args=(func, args, kwargs, jobid,
-                          self.send_to_worker(address) if reply else None))
+            try:
+                function = self.worker_functions[header['function']]
+            except KeyError:
+                log(self.address, 'Unknown function', header)
+            else:
+                future = self.pool.apply_async(function, args=(header, payload))
 
     def collect(self, locations):
         """ Collect data from peers
@@ -276,9 +243,10 @@ class Worker(object):
                 continue
             sock = context.socket(zmq.DEALER)
             sock.connect(random.choice(locs))  # randomly select one peer
-            header = {'address': self.address, 'jobid': key}
+            header = {'jobid': key,
+                      'function': 'getitem'}
             payload = {'function': 'getitem',
-                       'args': (key,)}
+                       'key': key}
             sock.send_multipart([self.dumps(header),
                                  self.dumps(payload)])
             socks.append(sock)

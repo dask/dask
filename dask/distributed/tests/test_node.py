@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import multiprocessing
 import itertools
 import zmq
+from time import sleep
 
 context = zmq.Context()
 
@@ -44,12 +45,12 @@ def worker_and_router(*args, **kwargs):
         yield w, router
 
 
-
 def test_status():
     with worker_and_router(data={'x': 10, 'y': 20}, address='ipc://alice') as (w, r):
-        payload = dict(function='status', jobid=3)
-        header = {'jobid': 3}
+        header = {'jobid': 3, 'function': 'status', 'address': 'ipc://server'}
+        payload = {'function': 'status'}
         r.send_multipart(['ipc://alice', w.dumps(header), w.dumps(payload)])
+
         address, header, result = r.recv_multipart()
         assert address == w.address
         result = w.loads(result)
@@ -61,8 +62,10 @@ def test_status():
 
 def test_getitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
-        payload = dict(function='getitem', args=('x',), jobid=4)
-        r.send_multipart([w.address, w.dumps({}), w.dumps(payload)])
+        header = {'jobid': 4, 'function': 'getitem', 'address': 'ipc://server'}
+        payload = {'function': 'getitem', 'key': 'x'}
+        r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
+
         address, header, result = r.recv_multipart()
         result = w.loads(result)
         header = w.loads(header)
@@ -71,24 +74,31 @@ def test_getitem():
 
 def test_setitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
-        payload = dict(function='setitem', args=('z', 30), jobid=4)
-        r.send_multipart([w.address, w.dumps({}), w.dumps(payload)])
-        address, header, result = r.recv_multipart()
+        header = {'jobid': 5, 'function': 'setitem', 'address': 'ipc://server'}
+        payload = {'function': 'setitem', 'key': 'z', 'value': 30,
+                   'reply': True}
+        r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
+
+        r.recv_multipart()
         assert w.data['z'] == 30
 
 
 def test_delitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
-        payload = dict(function='delitem', args=('y',))
-        r.send_multipart([w.address, w.dumps({}), w.dumps(payload)])
+        header = {'jobid': 5, 'function': 'delitem', 'address': 'ipc://server'}
+        payload = {'function': 'delitem', 'key': 'y', 'reply': True}
+        r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
+
         address, header, result = r.recv_multipart()
         assert 'y' not in w.data
 
 
 def test_error():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
-        payload = dict(function='getitem', args=('does-not-exist',))
-        r.send_multipart([w.address, w.dumps({}), w.dumps(payload)])
+        header = {'jobid': 5, 'function': 'getitem', 'address': 'ipc://server'}
+        payload = {'function': 'getitem', 'key': 'does-not-exist'}
+        r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
+
         address, header, result = r.recv_multipart()
         result = w.loads(result)
         header = w.loads(header)
@@ -114,16 +124,9 @@ def test_collect():
                 handshake = router.recv_multipart()  # burn initial handshake
                 handshake = router.recv_multipart()  # burn initial handshake
 
-                header = {}
-                payload = dict(function='collect', args=({'x': [a.address],
-                                                          'a': [b.address],
-                                                          'y': [a.address]},))
-                router.send_multipart([c.address,
-                                       c.dumps(header),
-                                       c.dumps(payload)])
-
-                address, header, result = router.recv_multipart()
-                result = c.loads(result)
+                c.collect({'x': [a.address],
+                           'a': [b.address],
+                           'y': [a.address]})
 
                 assert c.data == dict(a=1, c=5, x=10, y=20)
 
@@ -131,10 +134,14 @@ def test_collect():
 def test_compute():
     with worker(data={'x': 10, 'y': 20}) as a:
         with worker_and_router(data={'a': 1, 'b': 2}) as (b, r):
-            payload = dict(function='compute',
-                           args=('c', (add, 'a', 'x'), {'x': [a.address]}))
             r.recv_multipart()  # burn handshake
-            r.send_multipart([b.address, b.dumps({}), b.dumps(payload)])
+
+            header = {'function': 'compute'}
+            payload = {'function': 'compute',
+                       'key': 'c',
+                       'task': (add, 'a', 'x'),
+                       'locations': {'x': [a.address]}}
+            r.send_multipart([b.address, b.dumps(header), b.dumps(payload)])
 
             address, header, result = r.recv_multipart()
             result = b.loads(result)

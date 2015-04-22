@@ -92,6 +92,8 @@ class Scheduler(object):
                 continue
             address, header, payload = self.to_workers.recv_multipart()
             header = self.loads(header)
+            if 'address' not in header:
+                header['address'] = address
             log(self.address_to_workers, 'Receive job from worker', header)
 
             try:
@@ -107,6 +109,8 @@ class Scheduler(object):
                 continue
             address, header, payload = self.to_clients.recv_multipart()
             header = self.loads(header)
+            if 'address' not in header:
+                header['address'] = address
             log(self.address_to_clients, 'Receive job from client', header)
 
             try:
