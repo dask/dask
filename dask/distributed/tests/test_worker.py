@@ -1,4 +1,4 @@
-from dask.distributed.node import Worker
+from dask.distributed.worker import Worker
 from contextlib import contextmanager
 import multiprocessing
 import itertools

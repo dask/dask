@@ -22,11 +22,11 @@ DEBUG = True
 
 context = zmq.Context()
 
-with open('log', 'w') as f:  # delete file
+with open('log.workers', 'w') as f:  # delete file
     pass
 
 def log(*args):
-    with open('log', 'a') as f:
+    with open('log.workers', 'a') as f:
         print(*args, file=f)
 
 
@@ -89,13 +89,11 @@ class Worker(object):
         self._listen_workers_thread.start()
 
     def status_to_scheduler(self, header, payload):
-        log('hello', header, payload)
         out_header = {'jobid': header.get('jobid')}
         log(self.address, 'Status check', header['address'])
         self.send_to_scheduler(out_header, 'OK')
 
     def status_to_worker(self, header, payload):
-        log('hello', header, payload)
         out_header = {'jobid': header.get('jobid')}
         log(self.address, 'Status check', header['address'])
         self.send_to_worker(header['address'], out_header, 'OK')
@@ -159,35 +157,41 @@ class Worker(object):
         """
         Event loop listening to commands from scheduler
 
-        Payload should deserialize into a dict of the following form:
+        Header and Payload should deserialize into dicts of the following form:
 
+            Header
             {'function': name of function to call, see self.functions,
              'jobid': job identifier, defaults to None,
-             'args': arguments to pass to function, defaults to (),
-             'kwargs': keyword argument dict, defauls to {},
-             'reply': whether or not a reply is desired}
+             'address': name of sender, defaults to zmq identity}
+
+            Payload
+            --Function specific, for setitem might include the following--
+            {'key': 'x',
+             'value': 10}
 
         So the minimal request would be as follows:
 
         >>> sock = context.socket(zmq.DEALER)  # doctest: +SKIP
         >>> sock.connect('tcp://my-address')   # doctest: +SKIP
 
-        >>> sock.send(dumps({'function': 'status'}))  # doctest: +SKIP
+        >>> header = {'function': 'status'}
+        >>> payload = {}
+        >>> sock.send_multipart(dumps(header), dumps(status))  # doctest: +SKIP
 
         Or a more complex packet might be as follows:
 
-        >>> sock.send(dumps({'function': 'setitem',
-        ...                  'args': ('x', 10),
-        ...                  'jobid': 123}))  # doctest: +SKIP
+        >>> header = {'function': 'setitem', 'jobid': 1}
+        >>> payload = {'key': 'x', 'value': 10}
+        >>> sock.send_multipart(dumps(header), dumps(status))  # doctest: +SKIP
 
-        We match the function string against ``self.functions`` to pull out the
-        actual function.  We then execute this function with the provided
-        arguments in another thread from ``self.pool`` using
-        ``self.execute_and_reply``.  This sends results back to the sender.
+        We match the function string against ``self.scheduler_functions`` to
+        pull out the actual function.  We then execute this function with the
+        provided arguments in another thread from ``self.pool``.  That function
+        may then choose to send results back to the sender.
 
         See Also:
             listen_to_workers
-            execute_and_reply
+            send_to_scheduler
         """
         while self.status != 'closed':
             # Wait on request
@@ -204,6 +208,10 @@ class Worker(object):
                 future = self.pool.apply_async(function, args=(header, payload))
 
     def listen_to_workers(self):
+        """ Listen to communications from workers
+
+        See ``listen_to_scheduler`` for more in depth docstring
+        """
         while self.status != 'closed':
             # Wait on request
             if not self.router.poll(100):

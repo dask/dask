@@ -1,5 +1,5 @@
-from dask.distributed.scheduler2 import Scheduler
-from dask.distributed.node import Worker
+from dask.distributed.scheduler import Scheduler
+from dask.distributed.worker import Worker
 import itertools
 from contextlib import contextmanager
 from toolz import take
