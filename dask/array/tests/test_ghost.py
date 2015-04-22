@@ -145,3 +145,20 @@ def test_ghost():
 
     g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
     assert g.chunks == ((8, 8), (5, 5))
+
+def test_small_chunk_large_depth():
+    x = np.arange(64).reshape((8, 8))
+    d = da.from_array(x, chunks=(3, 3))  # chunks=((3, 3, 2), (3, 3, 2))
+    # fails with:
+    # ValueError: Block shapes do not align
+    # also it should say chunks instead of block shapes
+    g = ghost(d, depth={0: 2, 1: 2}, boundary={0:'reflect', 1:'reflect'})
+
+def test_small_chunk_large_depth2():
+    x = np.arange(100).reshape((10, 10))
+    d = da.from_array(x, chunks=(2, 5))
+    g = ghost(d, depth={0: 5, 1: 5}, boundary={0:'reflect', 1:'reflect'})
+    result = da.ghost.trim_internal(g, {0: 5, 1:5})
+    # the result does not get trimmed to the original shape. But note that it
+    # has the correct shape before the trim is actually applied.
+    assert np.array(result).shape == x.shape
