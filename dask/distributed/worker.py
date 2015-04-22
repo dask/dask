@@ -304,11 +304,12 @@ class Worker(object):
             self.data[key] = result
         log(self.address, "End computation", key, task, status)
 
-        # Send result to scheduler
+        # Report finished to scheduler
+        header2 = {'function': 'finished-task'}
         result = {'key': key,
                   'duration': end - start,
-                  'status': status}
-        header2 = {'jobid': header.get('jobid')}
+                  'status': status,
+                  'dependencies': list(locations)}
         self.send_to_scheduler(header2, result)
 
     def close(self):

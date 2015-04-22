@@ -4,13 +4,16 @@ import zmq
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 from threading import Thread, Lock
+from contextlib import contextmanager
 from toolz import curry, partial
+from ..compatibility import Queue
 try:
     from cPickle import loads, dumps, HIGHEST_PROTOCOL
 except ImportError:
     from pickle import loads, dumps, HIGHEST_PROTOCOL
 dumps = partial(dumps, protocol=HIGHEST_PROTOCOL)
 
+from ..core import get_dependencies
 
 with open('log.scheduler', 'w') as f:  # delete file
     pass
@@ -19,6 +22,13 @@ def log(*args):
     with open('log.scheduler', 'a') as f:
         print(*args, file=f)
 
+@contextmanager
+def logerrors():
+    try:
+        yield
+    except Exception as e:
+        log('Error!', str(e))
+        raise
 
 class Scheduler(object):
     """ Disitributed scheduler for dask computations
@@ -57,9 +67,9 @@ class Scheduler(object):
         self.workers = dict()
         self.whohas = defaultdict(set)
         self.ihave = defaultdict(set)
-        self.available_workers = list()
+        self.available_workers = Queue()
 
-        self.data = dict()
+        self.data = defaultdict(dict)
 
         self.pool = ThreadPool(100)
         self.lock = Lock()
@@ -77,7 +87,7 @@ class Scheduler(object):
 
         self.worker_functions = {'register': self.worker_registration,
                                  'status': self.status_to_worker,
-                                 'finished': self.worker_finished_task}
+                                 'finished-task': self.worker_finished_task}
         self.client_functions = {'status': self.status_to_client}
 
         log(self.address_to_workers, 'Start')
@@ -124,18 +134,27 @@ class Scheduler(object):
         payload = self.loads(payload)
         address = header['address']
         self.workers[address] = payload
-        self.available_workers.append(address)
+        self.available_workers.put(address)
 
     def worker_finished_task(self, header, payload):
-        payload = self.loads(payload)
-        key = payload['key']
-        duration = payload['duration']
-        address = header['address']
+        log('Hello')
+        with logerrors():
+            address = header['address']
 
-        self.data[key]['duration'] = duration
-        self.whohas[key].add(address)
-        self.ihave[address].add(key)
-        self.available_workers.append(address)
+            payload = self.loads(payload)
+            key = payload['key']
+            duration = payload['duration']
+            dependencies = payload['dependencies']
+
+            log(self.address_to_workers, 'Finish task', payload)
+
+            self.data[key]['duration'] = duration
+            self.whohas[key].add(address)
+            self.ihave[address].add(key)
+            for dep in dependencies:
+                self.whohas[dep].add(address)
+                self.ihave[address].add(dep)
+            self.available_workers.put(address)
 
     def status_to_client(self, header, payload):
         out_header = {'jobid': header.get('jobid')}
@@ -161,6 +180,15 @@ class Scheduler(object):
             self.to_clients.send_multipart([address,
                                             self.dumps(header),
                                             self.dumps(result)])
+
+    def trigger_task(self, dsk, key):
+        deps = get_dependencies(dsk, key)
+        worker = self.available_workers.get()
+        locations = {dep: self.whohas[dep] for dep in deps}
+
+        header = {'function': 'compute', 'jobid': key}
+        payload = {'key': key, 'task': dsk[key], 'locations': locations}
+        self.send_to_worker(worker, header, payload)
 
     def close(self):
         self.status = 'closed'

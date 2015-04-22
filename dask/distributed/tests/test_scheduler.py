@@ -75,3 +75,26 @@ def test_cluster():
         assert b.address in s.workers
         assert a.scheduler == s.address_to_workers
         assert b.scheduler == s.address_to_workers
+
+
+def inc(x):
+    return x + 1
+
+def add(x, y):
+    return x + y
+
+
+def test_compute_cycle():
+    with scheduler_and_workers(n=2) as (s, (a, b)):
+        sleep(0.1)
+        assert s.available_workers.qsize() == 2
+
+        dsk = {'a': (add, 1, 2)}
+        s.trigger_task(dsk, 'a')
+
+        sleep(0.1)
+        assert 'a' in s.whohas
+        assert 'a' in a.data or 'a' in b.data
+        assert a.data.get('a') == 3 or b.data.get('a') == 3
+        assert a.address in s.ihave or b.address in s.ihave
+        assert s.available_workers.qsize() == 2
