@@ -26,10 +26,10 @@ def _make_ghost_arr(filt, arr, filter_kwargs):
         # theirs = ['nearest', 'wrap', 'reflect', 'constant']
         # translate to our kwargs
         if mode == 'reflect':
-            return {i : 'reflect' for i in range(arr.ndim)}
+            return dict(i : 'reflect' for i in range(arr.ndim))
         elif mode == 'constant':
             cval = filter_kwargs.get('cval', 0.0)
-            return {i : cval for i in range(arr.ndim)}
+            return dict(i : cval for i in range(arr.ndim))
         else:
             raise ValueError("mode argument % not supported, only 'reflect'"
                              " and 'constant' supported.")
@@ -46,9 +46,10 @@ def _make_ghost_arr(filt, arr, filter_kwargs):
         sigma = filter_kwargs['sigma']
         truncate = filter_kwargs.get('truncate', 4.0)
         depth = int(truncate * float(sigma) + 0.5) + 1
-        return {i : depth for i in range(arr.ndim)}
+        return  dict(i : depth for i in range(arr.ndim))
 
-    return {'depth' : depth(filt, filter_kwargs), 'boundary' : boundary(filter_kwargs)}
+    return {'depth' : depth(filt, filter_kwargs),
+            'boundary' : boundary(filter_kwargs)}
 
 
 # filt is a ndimage filter (note filter is a python name)
