@@ -89,12 +89,20 @@ def test_compute_cycle():
         sleep(0.1)
         assert s.available_workers.qsize() == 2
 
-        dsk = {'a': (add, 1, 2)}
+        dsk = {'a': (add, 1, 2), 'b': (inc, 'a')}
         s.trigger_task(dsk, 'a')
-
         sleep(0.1)
+
         assert 'a' in s.whohas
         assert 'a' in a.data or 'a' in b.data
         assert a.data.get('a') == 3 or b.data.get('a') == 3
         assert a.address in s.ihave or b.address in s.ihave
+        assert s.available_workers.qsize() == 2
+
+        s.trigger_task(dsk, 'b')
+        sleep(0.1)
+
+        assert 'b' in s.whohas
+        assert 'b' in a.data or 'b' in b.data
+        assert a.data.get('b') == 4 or b.data.get('b') == 4
         assert s.available_workers.qsize() == 2

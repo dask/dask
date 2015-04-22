@@ -250,7 +250,7 @@ class Worker(object):
             if key in self.data:  # already have this locally
                 continue
             sock = context.socket(zmq.DEALER)
-            sock.connect(random.choice(locs))  # randomly select one peer
+            sock.connect(random.choice(tuple(locs)))  # randomly select one peer
             header = {'jobid': key,
                       'function': 'getitem'}
             payload = {'function': 'getitem',
