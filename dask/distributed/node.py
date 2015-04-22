@@ -62,6 +62,8 @@ class Worker(object):
             address = 'tcp://%s:%d' % (socket.gethostname(), port)
         self.address = address
 
+        self.lock = Lock()
+
         self.dealer = context.socket(zmq.DEALER)
         self.dealer.setsockopt(zmq.IDENTITY, address)
         self.dealer.connect(scheduler)
@@ -70,15 +72,14 @@ class Worker(object):
         self.router = context.socket(zmq.ROUTER)
         self.router.bind(self.address)
 
-        self.lock = Lock()
-
-        self.scheduler_functions = {'status': self.status_scheduler,
+        self.scheduler_functions = {'status': self.status_to_scheduler,
                                     'compute': self.compute,
                                     'getitem': self.get_scheduler,
                                     'delitem': self.delitem,
                                     'setitem': self.setitem}
 
-        self.worker_functions = {'getitem': self.get_worker}
+        self.worker_functions = {'getitem': self.get_worker,
+                                 'status': self.status_to_worker}
 
         log(self.address, 'Start up', self.scheduler)
 
@@ -86,6 +87,16 @@ class Worker(object):
         self._listen_scheduler_thread.start()
         self._listen_workers_thread = Thread(target=self.listen_to_workers)
         self._listen_workers_thread.start()
+
+    def status_to_scheduler(self, header, payload):
+        out_header = {'jobid': header.get('jobid')}
+        log(self.address_to_scheduler, 'Status check', header['address'])
+        self.send_to_scheduler(header['address'], out_header, 'OK')
+
+    def status_to_worker(self, header, payload):
+        out_header = {'jobid': header.get('jobid')}
+        log(self.address_to_workers, 'Status check', header['address'])
+        self.send_to_worker(header['address'], out_header, 'OK')
 
     def get_worker(self, header, payload):
         payload = self.loads(payload)
@@ -282,7 +293,7 @@ class Worker(object):
                                               header['jobid'])
             self.data[header['jobid']] = payload
 
-    def compute(self, header, payload): key, task, locations):
+    def compute(self, header, payload):
         """ Compute dask task
 
         Given a key, task, and locations of data

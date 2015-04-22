@@ -64,10 +64,10 @@ class Scheduler(object):
         self.pool = ThreadPool(100)
         self.lock = Lock()
 
-        self.to_workers = context.socket(zmq.ROUTER)
+        self.to_workers = self.context.socket(zmq.ROUTER)
         self.to_workers.bind(self.address_to_workers)
 
-        self.to_clients = context.socket(zmq.ROUTER)
+        self.to_clients = self.context.socket(zmq.ROUTER)
         self.to_clients.bind(self.address_to_clients)
 
         self.status = 'run'
@@ -160,4 +160,3 @@ class Scheduler(object):
 
     def close(self):
         self.status = 'closed'
-        self.context.destroy(linger=3)

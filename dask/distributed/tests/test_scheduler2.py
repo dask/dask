@@ -1,10 +1,12 @@
-from dask.distributed.scheduler2 import context, Scheduler
+from dask.distributed.scheduler2 import Scheduler
 from dask.distributed.node import Worker
 import itertools
 from contextlib import contextmanager
 from toolz import take
 
 import zmq
+
+context = zmq.Context()
 
 server_names = ('ipc://server-%d' % i for i in itertools.count())
 worker_names = ('ipc://worker-%d' % i for i in itertools.count())
@@ -19,18 +21,6 @@ def scheduler():
         yield s
     finally:
         s.close()
-
-
-@contextmanager
-def scheduler_and_workers(n=2):
-    with scheduler() as s:
-        workers = [Worker(s.address_to_workers, address=name)
-                    for name in take(n, worker_names)]
-        try:
-            yield s, workers
-        finally:
-            for w in workers:
-                w.close()
 
 
 def test_status_worker():
@@ -65,6 +55,21 @@ def test_status_client():
         assert s.loads(payload2) == 'OK'
 
 
+@contextmanager
+def scheduler_and_workers(n=2):
+    with scheduler() as s:
+        workers = [Worker(s.address_to_workers, address=name)
+                    for name in take(n, worker_names)]
+        try:
+            yield s, workers
+        finally:
+            for w in workers:
+                w.close()
+
+
 def test_cluster():
     with scheduler_and_workers() as (s, (a, b)):
-        pass
+        assert a.address in s.workers
+        assert b.address in s.workers
+        assert a.scheduler == s.address_to_workers
+        assert b.scheduler == s.address_to_workers
