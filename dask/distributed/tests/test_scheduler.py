@@ -10,16 +10,10 @@ import zmq
 
 context = zmq.Context()
 
-server_names = ('ipc://server-%d' % i for i in itertools.count())
-worker_names = ('ipc://worker-%d' % i for i in itertools.count())
-
 
 @contextmanager
 def scheduler():
-    address = next(server_names)
-    address_to_workers = address + '-workers'
-    address_to_clients = address + '-clients'
-    s = Scheduler(address_to_workers, address_to_clients)
+    s = Scheduler()
     try:
         yield s
     finally:
@@ -61,8 +55,7 @@ def test_status_client():
 @contextmanager
 def scheduler_and_workers(n=2):
     with scheduler() as s:
-        workers = [Worker(s.address_to_workers, address=name)
-                    for name in take(n, worker_names)]
+        workers = [Worker(s.address_to_workers) for i in range(n)]
         try:
             yield s, workers
         finally:

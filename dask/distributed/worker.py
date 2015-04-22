@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 from zmqompute import ComputeNode
+import socket
 from threading import Thread, Lock
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
@@ -56,10 +57,16 @@ class Worker(object):
         self.scheduler = scheduler
         self.status = 'run'
 
+        self.router = context.socket(zmq.ROUTER)
         if address is None:
-            if port is None:
-                port = 6464
-            address = 'tcp://%s:%d' % (socket.gethostname(), port)
+            hostname = socket.gethostname()
+            if port:
+                self.router.bind('tcp://%s:%d' % (hostname, port))
+            else:
+                port = self.router.bind_to_random_port('tcp://*')
+            address = 'tcp://%s:%s' % (hostname, port)
+        else:
+            self.router.bind(address)
         self.address = address
 
         self.lock = Lock()
@@ -68,9 +75,6 @@ class Worker(object):
         self.dealer.setsockopt(zmq.IDENTITY, address)
         self.dealer.connect(scheduler)
         self.send_to_scheduler({'function': 'register'}, {})
-
-        self.router = context.socket(zmq.ROUTER)
-        self.router.bind(self.address)
 
         self.scheduler_functions = {'status': self.status_to_scheduler,
                                     'compute': self.compute,
