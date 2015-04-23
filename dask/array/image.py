@@ -12,7 +12,7 @@ def _make_ghost_kws(filt, arr, filter_kwargs):
         arguments to the ndimage filter.
         """
 
-        # every (3) ndimage filte I looked at had reflect as the
+        # every (3) ndimage filters I looked at had reflect as the
         # default mode. So they all are hopefully like that.
 
         # ndimage ignores the `cval` when it is set but `mode` not set or
@@ -40,17 +40,34 @@ def _make_ghost_kws(filt, arr, filter_kwargs):
         len(ciel(shape[axis_length]/2.)) for each axis.
         """
         """
-        TODO work for functions other than gaussian
+        TODO work for all filters
+
+        we could optimize this by not applying the filter on ghost cells
+
+        generalize ghosting for 1d filters
         """
         # gaussian depth
         def gauss_depth(filt, filter_kwargs):
+            """
+            The needed depth depends on the `sigma` and `truncate` kwargs.
+            """
             sigma = filter_kwargs['sigma']
             truncate = filter_kwargs.get('truncate', 4.0)
             return int(truncate * float(sigma) + 0.5) + 1
 
+        # correlate1d
+        def correlate1d_depth(filt, filter_kwargs):
+            weights = filter_kwargs['weights']
+            return (len(weights) // 2) + 1
+
+        # choose a deth function from the ndimage filter name
         depths = {'gaussian_filter' : gauss_depth,
-                  'gaussian_filter1d': gauss_depth,}
+                  'gaussian_filter1d': gauss_depth,
+                  'correlate1d': correlate1d_depth,
+                  'convolve1d' : correlate1d_depth,}
+
         depth = depths[filt.__name__](filt, filter_kwargs)
+
         return  dict((i, depth) for i in range(arr.ndim))
 
     return {'depth' : depth(filt, filter_kwargs),
@@ -64,10 +81,16 @@ def filter_(filt, arr, **filter_kwargs):
     Parameters
     ----------
     filter : scipy.ndimage.filters filter
-    darr : das Array
+    darr : dask Array
         Two dimensional array
-    kwargs :
-        Options to pass to the filter
+    filter_kwargs:
+        keyword arguments to pass to the filter.
+
+    consider taking two seperate dictionaries of arguments for the filter and
+    for ghosting.
+
+    How sohuld the positional arguments to the ndimage filters be handeled?
+    Currently they are just given their obvious name in the filter_kwargs.
     
     Example
     -------
