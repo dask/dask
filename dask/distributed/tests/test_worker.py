@@ -151,11 +151,3 @@ def test_compute():
             assert 0 < result['duration'] < 1.0
             assert result['key'] == 'c'
             assert result['status'] == 'OK'
-
-
-def test_random_port():
-    w = Worker('ipc://my-scheduler')
-    try:
-        assert w.address
-    finally:
-        w.close()
