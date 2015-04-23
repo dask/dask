@@ -167,7 +167,10 @@ def reflect(x, axis, depth):
 
     This is the converse of ``periodic``
     """
-    if depth == 1:
+    if depth == 0:
+        return x
+
+    elif depth == 1:
         left =  ((slice(None, None, None),) * axis
                + (slice(0, 1),)
                + (slice(None, None, None),) * (x.ndim - axis - 1))
