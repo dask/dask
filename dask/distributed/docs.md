@@ -1,3 +1,6 @@
+Distributed Scheduling Details
+==============================
+
 Worker-Scheduler and Worker-Worker interactions can be complex and deserve
 prose documentation.  Because this code lives in two separate files we
 consolidate documentation here.  We organize this by communication behavior.
@@ -49,6 +52,9 @@ in which case Alice goes through a similar sequence to what Bob just did.
 Getitem Scheduler -> [Workers]
 ------------------------------
 
+    worker: 'getitem'
+    scheduler: 'getitem-ack'
+
 While that example is fresh in our minds, lets look at that pattern.
 
 Schedulers often need to grab lots of data from many workers, give up control,
@@ -60,16 +66,17 @@ creating a queue on the scheduler for each batch of received messages.
 Alice now sends off a bunch of messages to many workers
 
     header: {'function': 'getitem', 'address': 'ipc://alice'}
-    payload: {'key': 'x', 'queue': 'unique-identifier'}
+    payload1: {'key': 'x', 'queue': 'unique-identifier'}
+    payload2: {'key': 'y', 'queue': 'unique-identifier'}
 
 Bob and Charlie and company handle many of these, returning payloads like the
 following:
 
     payload1: {'key': 'x', 'value': 10, 'queue': 'unique-identifier'}
-    payload1: {'key': 'y', 'value': 20, 'queue': 'unique-identifier'}
+    payload2: {'key': 'y', 'value': 20, 'queue': 'unique-identifier'}
 
 Alice watches the queue, and when the right number of results have come in does
-what she wanted to do in the first place.
+whatever she wanted to do in the first place.
 
 
 Collect Worker -> [Worker]
@@ -87,10 +94,11 @@ Compute Scheduler -> Worker
     scheduler: 'finished-task'
 
 During active scheduling the Scheduler maintains what tasks should be run next
-and maintains a queue of available workers.  General flow is as follows.
+and maintains a queue of available workers.  General flow is as follows:
 
-Scheduler selects task, selects worker and sends to the worker the following
-information under the function name, `'compute'`
+Scheduler selects task `{'x': (inc, 'y')}`, selects worker `'tcp://bob'`, and
+sends to the worker the following information under the function name,
+`'compute'`
 
     key: identifier of the task in the dask graph
          e.g. 'x' in {'x': (inc, 'y')}
@@ -99,17 +107,26 @@ information under the function name, `'compute'`
     locations: locations of where data might live in the network of dependencies
          e.g. {'y': ['tcp://charlie', 'tcp://dennis']}
 
+    {'key': 'x',
+     'task': (inc, 'y'),
+     'locations': {'y': ['tcp://charlie', 'tcp://dennis']}
+
 The worker receives this and goes through a collect phase as described above,
 gathering the necessary dependencies to its local data store.
 
 The worker then does actual computation.
 
-The worker resports back to the scheduler under the function `'finished-task'`
+The worker reports back to the scheduler under the function `'finished-task'`
 
     key: identifier of the dask in the dask graph
     duration: the time in seconds that it took to complete the task
     status: Hopefully the text 'OK'
     dependencies: The keys of the data that it had to collect `list(locations)`
+
+    {'key': 'x',
+     'duration': 0.0001,
+     'status': 'OK',
+     'dependencies': ['y']}
 
 Notably, the worker *does not* send back the result.  The scheduler merely
 notes that the worker has the result and will send other workers there if
