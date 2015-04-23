@@ -217,7 +217,7 @@ class Scheduler(object):
     def trigger_task(self, dsk, key):
         deps = get_dependencies(dsk, key)
         worker = self.available_workers.get()
-        locations = {dep: self.who_has[dep] for dep in deps}
+        locations = dict((dep, self.who_has[dep]) for dep in deps)
 
         header = {'function': 'compute', 'jobid': key}
         payload = {'key': key, 'task': dsk[key], 'locations': locations}
