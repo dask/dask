@@ -378,7 +378,8 @@ class Worker(object):
         result = {'key': key,
                   'duration': end - start,
                   'status': status,
-                  'dependencies': list(locations)}
+                  'dependencies': list(locations),
+                  'queue': payload['queue']}
         self.send_to_scheduler(header2, result)
 
     def close(self):

@@ -140,7 +140,8 @@ def test_compute():
             payload = {'function': 'compute',
                        'key': 'c',
                        'task': (add, 'a', 'x'),
-                       'locations': {'x': [a.address]}}
+                       'locations': {'x': [a.address]},
+                       'queue': 'q-key'}
             r.send_multipart([b.address, b.dumps(header), b.dumps(payload)])
 
             address, header, result = r.recv_multipart()
@@ -151,3 +152,4 @@ def test_compute():
             assert 0 < result['duration'] < 1.0
             assert result['key'] == 'c'
             assert result['status'] == 'OK'
+            assert result['queue'] == payload['queue']

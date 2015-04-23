@@ -90,7 +90,7 @@ def test_compute_cycle():
         assert s.available_workers.qsize() == 2
 
         dsk = {'a': (add, 1, 2), 'b': (inc, 'a')}
-        s.trigger_task(dsk, 'a')
+        s.trigger_task(dsk, 'a', 'queue-key')
         sleep(0.1)
 
         assert 'a' in s.who_has
@@ -99,7 +99,7 @@ def test_compute_cycle():
         assert a.address in s.worker_has or b.address in s.worker_has
         assert s.available_workers.qsize() == 2
 
-        s.trigger_task(dsk, 'b')
+        s.trigger_task(dsk, 'b', 'queue-key')
         sleep(0.1)
 
         assert 'b' in s.who_has

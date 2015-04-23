@@ -116,7 +116,6 @@ class Scheduler(object):
         self._listen_to_clients_thread = Thread(target=self.listen_to_clients)
         self._listen_to_clients_thread.start()
 
-        self.finished_task_listeners = []
         self.active_tasks = set()
 
     def listen_to_workers(self):
@@ -181,8 +180,7 @@ class Scheduler(object):
                 self.worker_has[address].add(dep)
             self.available_workers.put(address)
 
-            for listener in self.finished_task_listeners:
-                listener.put(payload)
+            self.queues[payload['queue']].put(payload)
 
     def status_to_client(self, header, payload):
         with logerrors():
@@ -367,7 +365,8 @@ class Scheduler(object):
             raise ValueError("Found no accessible jobs in dask graph")
 
         event_queue = Queue()
-        self.finished_task_listeners.append(event_queue)
+        qkey = str(uuid.uuid1())
+        self.queues[qkey] = event_queue
 
         def fire_task():
             tick[0] += 1  # Update heartbeat
@@ -377,7 +376,7 @@ class Scheduler(object):
             dag_state['ready-set'].remove(key)
             dag_state['running'].add(key)
 
-            self.trigger_task(dsk, key)  # Fire
+            self.trigger_task(dsk, key, qkey)  # Fire
 
         # Seed initial tasks
         while dag_state['ready'] and self.available_workers.qsize() > 0:
@@ -392,7 +391,7 @@ class Scheduler(object):
 
             key = payload['key']
             finish_task(dsk, key, dag_state, results,
-                        release_data=self.release_data)
+                        release_data=self._release_data)
 
             while dag_state['ready'] and self.available_workers.qsize() > 0:
                 fire_task()
@@ -423,11 +422,12 @@ class Scheduler(object):
         payload2 = {'keys': keys, 'result': result}
         self.send_to_client(address, header2, payload2)
 
-    def release_data(self, key, state, delete=True):
-        """ Remove data from temporary storage
+    def _release_data(self, key, state, delete=True):
+        """ Remove data from temporary storage during scheduling run
 
         See Also
-            finish_task
+            Scheduler.schedule
+            dask.async.finish_task
         """
         if key in state['waiting_data']:
             assert not state['waiting_data'][key]
