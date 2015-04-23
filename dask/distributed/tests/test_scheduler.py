@@ -157,6 +157,6 @@ def test_random_names():
         assert s.address_to_workers
         assert s.address_to_clients
         assert s.address_to_clients != s.address_to_workers
-        assert re.match('\w+://\w+:\d+', s.address_to_workers.decode('utf-8'))
+        assert re.match('\w+://[\w-]+:\d+', s.address_to_workers.decode('utf-8'))
     finally:
         s.close()
