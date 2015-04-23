@@ -77,11 +77,9 @@ def test_getitem():
 def test_setitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         header = {'jobid': 5, 'function': 'setitem', 'address': 'ipc://server'}
-        payload = {'function': 'setitem', 'key': 'z', 'value': 30,
-                   'reply': True}
+        payload = {'function': 'setitem', 'key': 'z', 'value': 30}
         r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
-
-        r.recv_multipart()
+        sleep(0.05)
         assert w.data['z'] == 30
 
 

@@ -106,7 +106,6 @@ def test_compute_cycle():
 def test_send_release_data():
     with scheduler_and_workers(n=2) as (s, (a, b)):
         s.send_data('x', 1, a.address)
-        sleep(0.05)
         assert a.data['x'] == 1
         assert a.address in s.who_has['x']
         assert 'x' in s.worker_has[a.address]
@@ -117,6 +116,13 @@ def test_send_release_data():
         assert a.address not in s.who_has['x']
         assert 'x' not in s.worker_has[a.address]
 
+def test_scatter():
+    with scheduler_and_workers(n=2) as (s, (a, b)):
+        data = {'x': 1, 'y': 2, 'z': 3}
+        s.scatter(data)
+
+        assert all(k in a.data or k in b.data for k in data)
+        assert set([len(a.data), len(b.data)]) == set([1, 2])  # fair
 
 def test_get():
     with scheduler_and_workers(n=2) as (s, (a, b)):

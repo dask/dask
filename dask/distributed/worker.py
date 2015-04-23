@@ -171,11 +171,13 @@ class Worker(object):
         value = payload['value']
         self.data[key] = value
 
-        reply = payload.get('reply', False)
-        if reply:
+        queue = payload.get('queue', False)
+        if queue:
             header2 = {'jobid': header.get('jobid'),
                        'function': 'setitem-ack'}
-            payload2 = {'key': key}
+            payload2 = {'key': key, 'queue': queue}
+            log(self.address, 'Setitem send ack to scheduler',
+                header2, payload2)
             self.send_to_scheduler(header2, payload2)
 
     def delitem(self, header, payload):
@@ -309,23 +311,24 @@ class Worker(object):
         # Send out requests for data
         log(self.address, 'Collect data from peers', locations)
         counter = 0
-        for key, locs in locations.items():
-            if key in self.data:  # already have this locally
-                continue
-            worker = random.choice(tuple(locs))  # randomly select one peer
-            header = {'jobid': key,
-                      'function': 'getitem'}
-            payload = {'function': 'getitem',
-                       'key': key,
-                       'queue': qkey}
-            self.send_to_worker(worker, header, payload)
-            counter += 1
+        with logerrors():
+            for key, locs in locations.items():
+                if key in self.data:  # already have this locally
+                    continue
+                worker = random.choice(tuple(locs))  # randomly select one peer
+                header = {'jobid': key,
+                          'function': 'getitem'}
+                payload = {'function': 'getitem',
+                           'key': key,
+                           'queue': qkey}
+                self.send_to_worker(worker, header, payload)
+                counter += 1
 
-        for i in range(counter):
-            queue.get()
+            for i in range(counter):
+                queue.get()
 
-        del self.queues[qkey]
-        log(self.address, 'Collect finishes')
+            del self.queues[qkey]
+            log(self.address, 'Collect finishes')
 
     def compute(self, header, payload):
         """ Compute dask task

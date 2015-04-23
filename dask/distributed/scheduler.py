@@ -4,6 +4,7 @@ import zmq
 import socket
 import uuid
 from collections import defaultdict
+import itertools
 from multiprocessing.pool import ThreadPool
 import random
 from threading import Thread, Lock
@@ -178,8 +179,10 @@ class Scheduler(object):
                 listener.put(payload)
 
     def status_to_client(self, header, payload):
-        out_header = {'jobid': header.get('jobid')}
-        self.send_to_client(header['address'], out_header, 'OK')
+        with logerrors():
+            out_header = {'jobid': header.get('jobid')}
+            log(self.address_to_clients, 'Status')
+            self.send_to_client(header['address'], out_header, 'OK')
 
     def status_to_worker(self, header, payload):
         out_header = {'jobid': header.get('jobid')}
@@ -196,11 +199,12 @@ class Scheduler(object):
 
     def send_to_client(self, address, header, result):
         log(self.address_to_clients, 'Send to client', address, header)
-        header['address'] = self.address_to_clients
-        with self.lock:
-            self.to_clients.send_multipart([address,
-                                            self.dumps(header),
-                                            self.dumps(result)])
+        with logerrors():
+            header['address'] = self.address_to_clients
+            with self.lock:
+                self.to_clients.send_multipart([address,
+                                                self.dumps(header),
+                                                self.dumps(result)])
 
     def trigger_task(self, dsk, key):
         deps = get_dependencies(dsk, key)
@@ -229,11 +233,58 @@ class Scheduler(object):
 
         If no address is given we select one worker randomly
         """
+        if reply:
+            queue = Queue()
+            qkey = str(uuid.uuid1())
+            self.queues[qkey] = queue
+        else:
+            qkey = None
         if address is None:
             address = random.choice(list(self.workers))
         header = {'function': 'setitem', 'jobid': key}
-        payload = {'key': key, 'value': value, 'reply': reply}
+        payload = {'key': key, 'value': value, 'queue': qkey}
         self.send_to_worker(address, header, payload)
+
+        if reply:
+            queue.get()
+            del self.queues[qkey]
+
+    def scatter(self, key_value_pairs, block=True):
+        """ Scatter data to workers
+
+        Parameters
+        ----------
+
+        key_value_pairs: Iterator or dict
+            Data to send
+        block: bool
+            Block on completion or return immediately (defaults to True)
+
+        Example
+        -------
+
+        >>> scheduler.scatter({'x': 1, 'y': 2})  # doctest: +SKIP
+        """
+        if isinstance(key_value_pairs, dict):
+            key_value_pairs = key_value_pairs.items()
+        queue = Queue()
+        qkey = str(uuid.uuid1())
+        self.queues[qkey] = queue
+        counter = 0
+        workers = itertools.cycle(list(self.workers))
+        for (k, v), w in zip(key_value_pairs, workers):
+            header = {'function': 'setitem', 'jobid': k}
+            payload = {'key': k, 'value': v}
+            if block:
+                payload['queue'] = qkey
+            self.send_to_worker(w, header, payload)
+            counter += 1
+
+        if block:
+            for i in range(counter):
+                queue.get()
+
+            del self.queues[qkey]
 
     def gather(self, keys):
         qkey = str(uuid.uuid1())
@@ -278,10 +329,12 @@ class Scheduler(object):
         key = payload['key']
         self.who_has[key].add(address)
         self.worker_has[address].add(key)
+        queue = payload.get('queue')
+        if queue:
+            self.queues[queue].put(key)
 
     def close(self):
         self.status = 'closed'
-
 
     def schedule(self, dsk, result, **kwargs):
         if isinstance(result, list):
@@ -292,6 +345,7 @@ class Scheduler(object):
 
         cache = dict()
         dag_state = dag_state_from_dask(dsk, cache=cache)
+        self.scatter(cache.items())  # send data in dask up to workers
 
         tick = [0]
 
