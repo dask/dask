@@ -3,26 +3,29 @@ from __future__ import absolute_import, division, print_function
 import itertools
 import math
 import tempfile
-from glob import glob
 import heapq
 import inspect
-from pbag import PBag
-from collections import Iterable, Iterator, defaultdict
-import toolz
 import gzip
 import bz2
 import os
+
+from glob import glob
+from collections import Iterable, Iterator, defaultdict
+
+
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
-        join, reduceby, compose, second, valmap, count, map, partition_all,
-        filter, pluck, identity, groupby)
+                   join, reduceby, valmap, count, map, partition_all, filter,
+                   pluck, groupby)
 try:
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
-            compose, second, count, pluck, groupby)
+                         count, pluck, groupby)
 except ImportError:
     pass
 
+from pbag import PBag
+
 from ..multiprocessing import get as mpget
-from ..core import istask, get_dependencies, reverse_dict
+from ..core import istask
 from ..optimize import fuse, cull
 from ..compatibility import apply
 from ..context import _globals
@@ -202,14 +205,13 @@ class Bag(object):
 
     @classmethod
     def from_sequence(cls, *args, **kwargs):
-        raise DeprecationWarning("db.Bag.from_sequence deprecated.\n"
-        "Use db.from_sequence instead.")
+        raise AttributeError("db.Bag.from_sequence is deprecated.\n"
+                             "Use db.from_sequence instead.")
 
     @classmethod
     def from_filenames(cls, *args, **kwargs):
-        raise DeprecationWarning(
-            "db.Bag.from_filenames deprecated.\n"
-            "Use db.from_filenames instead.")
+        raise AttributeError("db.Bag.from_filenames is deprecated.\n"
+                             "Use db.from_filenames instead.")
 
     def fold(self, binop, combine=None, initial=None):
         """ Splittable reduction

@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('sklearn')
+
 from sklearn.linear_model import SGDClassifier
 import dask.array as da
 import numpy as np

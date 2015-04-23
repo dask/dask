@@ -5,12 +5,11 @@ from math import log, ceil
 from collections import Iterator
 import os
 import numpy as np
-import shutil
 from threading import Lock
 
 from .cframe import cframe
 from .categories import (strip_categories, categorical_metadata,
-        reapply_categories)
+                         reapply_categories)
 
 
 class pframe(object):
@@ -163,6 +162,7 @@ class pframe(object):
                 pass
 
     def drop(self):
+        import shutil
         with self.lock:
             shutil.rmtree(self.path)
 
