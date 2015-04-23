@@ -3,8 +3,8 @@ Distributed Scheduling Details
 
 Client-Scheduler, Scheduler-Worker and Worker-Worker interactions can be
 complex and deserve prose documentation.  Because this code lives in three
-separate files we consolidate documentation here.  We organize this by
-communication behavior.
+separate files we consolidate some documentation here.
+
 
 Protocol
 --------
@@ -24,9 +24,9 @@ A **Header** is a pickled Python dict with the following keys:
      'jobid': 123,
      'timestamp', datetime.utcnow()}
 
-The **Payload** can be anything, but is generally also a pickled dict.  This
-depends on the operation.  For the `setitem` function it consists of a pickled
-dict with a key and value.
+The **Payload** can be anything, but is generally also a pickled dict with
+arguments for the remote function.  This depends on the operation.  For the
+`setitem` function it consists of a pickled dict with a key and value.
 
     {'key': 'x', 'value': 100}
 
@@ -154,4 +154,47 @@ bookkeeping data structures showing what data lives where, and puts the worker
 back on the `available_workers` queue.
 
 
+Queues and Callbacks
+--------------------
 
+Machines coordinate by calling function on each other.  Consider two machines
+Alice and Bob.  When Alice needs Bob to send her a result she fires off a
+request to Bob, has to wait around for it to return, and then needs to wake up
+right when it gets back.  Furthermore, the centralized message listener needs
+to know to direct the message to Alice.  We do this through queues.
+
+1.  Alice sets up a new local queue with q unique ID
+
+    qkey = str(uuid.uuid1())
+    Alice.queues[qkey] = Queue()
+
+2.  The calling function on Alice sends off her request to Bob with the queue
+    key, and then waits on that queue.
+
+    header = {..., 'function': 'f'}
+    payload = {..., 'queue': qkey}
+
+3.  Bob does his work and then sends back the result, passing the queue key
+    through
+
+    header = {..., 'function': 'f-ack'}
+    payload = {..., 'queue': qkey}
+
+4.  Alice's central listening thread gets this message and passes it to the
+    `f_ack` function, which knows to look for the `'queue'` data and passes the
+    result into the right queue
+
+    Alice.queues[payload['queue']].put(...)
+
+5.  The calling function on Alice wakes up and continues execution
+6.  The calling function cleans up the queue
+
+This approach is effective but does require coordination between three
+different functions.
+
+1.  The calling function on Alice
+2.  The called function on Bob, `f`
+3.  The acknowledgement function on Alice, `f_ack`
+
+In practice I've found this to be relatively straightforward, but welcome
+better solutions.
