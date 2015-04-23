@@ -119,6 +119,7 @@ def test_send_release_data():
 def test_scatter():
     with scheduler_and_workers(n=2) as (s, (a, b)):
         data = {'x': 1, 'y': 2, 'z': 3}
+        sleep(0.05)  # make sure all workers come in before scatter
         s.scatter(data)
 
         assert all(k in a.data or k in b.data for k in data)

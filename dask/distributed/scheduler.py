@@ -273,13 +273,16 @@ class Scheduler(object):
 
         >>> scheduler.scatter({'x': 1, 'y': 2})  # doctest: +SKIP
         """
+        workers = list(self.workers)
+        log(self.address_to_workers, 'Scatter', workers, key_value_pairs)
+        workers = itertools.cycle(workers)
+
         if isinstance(key_value_pairs, dict):
             key_value_pairs = key_value_pairs.items()
         queue = Queue()
         qkey = str(uuid.uuid1())
         self.queues[qkey] = queue
         counter = 0
-        workers = itertools.cycle(list(self.workers))
         for (k, v), w in zip(key_value_pairs, workers):
             header = {'function': 'setitem', 'jobid': k}
             payload = {'key': k, 'value': v}
