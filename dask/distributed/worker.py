@@ -332,12 +332,13 @@ class Worker(object):
 
         Given a key, task, and locations of data
 
-            key -- 'z'
-            task -- (add, 'x', 'y')
-            locations -- {'x': ['tcp://alice:5000']}
+        >>> payload = {'key': 'z',
+        ...            'task': (add, 'x', 'y'),
+        ...            'locations': {'x': ['tcp://alice:5000']}
 
-        Collect necessary data from locations, merge into self.data (see
-        ``collect``), then compute task and store into ``self.data``.
+        Collect necessary data from locations (see ``collect``),
+        then compute task and store result into ``self.data``.  Finally report
+        back to the scheduler that we're free.
         """
         # Unpack payload
         payload = self.loads(payload)
