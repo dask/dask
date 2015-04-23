@@ -18,7 +18,7 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest numpy pip coverage toolz pandas cython scikit-learn cytoolz dill networkx zmq
+  - conda install pytest numpy pip coverage toolz pandas cython scikit-learn cytoolz dill networkx pyzmq
   - pip install chest
   - pip install git+https://github.com/blosc/bcolz --upgrade
 
