@@ -124,7 +124,7 @@ def test_scatter():
         assert all(k in a.data or k in b.data for k in data)
         assert set([len(a.data), len(b.data)]) == set([1, 2])  # fair
 
-def test_get():
+def test_schedule():
     with scheduler_and_workers(n=2) as (s, (a, b)):
         dsk = {'x': (add, 1, 2), 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
 

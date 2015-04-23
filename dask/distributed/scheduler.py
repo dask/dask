@@ -101,7 +101,8 @@ class Scheduler(object):
                                  'finished-task': self.worker_finished_task,
                                  'setitem-ack': self.setitem_ack,
                                  'getitem-ack': self.getitem_ack}
-        self.client_functions = {'status': self.status_to_client}
+        self.client_functions = {'status': self.status_to_client,
+                                 'schedule': self.schedule_from_client}
 
         # Away we go!
         log(self.address_to_workers, 'Start')
@@ -384,6 +385,30 @@ class Scheduler(object):
                 fire_task()
 
         return self.gather(result)
+
+    def schedule_from_client(self, header, payload):
+        """
+
+        Input Payload: keys, dask
+        Output Payload: keys, result
+        Sent to client on 'schedule-ack'
+        """
+        payload = self.loads(payload)
+        address = header['address']
+        dsk = payload['dask']
+        keys = payload['keys']
+
+        header2 = {'jobid': header.get('jobid'),
+                   'function': 'schedule-ack'}
+        try:
+            result = self.schedule(dsk, keys)
+            header2['status'] = 'OK'
+        except Exception as e:
+            result = e
+            header2['status'] = 'Error'
+
+        payload2 = {'keys': keys, 'result': result}
+        self.send_to_client(address, header2, payload2)
 
     def release_data(self, key, state, delete=True):
         """ Remove data from temporary storage
