@@ -22,13 +22,13 @@ try:
 except ImportError:
     pass
 
+from pbag import PBag
+
 from ..multiprocessing import get as mpget
 from ..core import istask
 from ..optimize import fuse, cull
 from ..compatibility import apply
 from ..context import _globals
-
-from pbag import PBag
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
@@ -202,6 +202,16 @@ class Bag(object):
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
                        for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
+
+    @classmethod
+    def from_sequence(cls, *args, **kwargs):
+        raise AttributeError("db.Bag.from_sequence is deprecated.\n"
+                             "Use db.from_sequence instead.")
+
+    @classmethod
+    def from_filenames(cls, *args, **kwargs):
+        raise AttributeError("db.Bag.from_filenames is deprecated.\n"
+                             "Use db.from_filenames instead.")
 
     def fold(self, binop, combine=None, initial=None):
         """ Splittable reduction
