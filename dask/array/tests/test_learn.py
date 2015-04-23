@@ -1,7 +1,11 @@
-from sklearn.linear_model import SGDClassifier
-import dask.array as da
 import numpy as np
+
+import pytest
+sklearn = pytest.importorskip('sklearn')
+from sklearn.linear_model import SGDClassifier
+
 import dask
+import dask.array as da
 
 
 x = np.array([[1, 0],
