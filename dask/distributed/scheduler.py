@@ -10,7 +10,7 @@ import random
 from threading import Thread, Lock
 from contextlib import contextmanager
 from toolz import curry, partial
-from ..compatibility import Queue
+from ..compatibility import Queue, unicode
 try:
     from cPickle import loads, dumps, HIGHEST_PROTOCOL
 except ImportError:
@@ -67,16 +67,20 @@ class Scheduler(object):
         self.to_workers = self.context.socket(zmq.ROUTER)
         if address_to_workers is None:
             port = self.to_workers.bind_to_random_port('tcp://*')
-            self.address_to_workers = 'tcp://%s:%d' % (hostname, port)
+            self.address_to_workers = ('tcp://%s:%d' % (hostname, port)).encode()
         else:
+            if isinstance(address_to_workers, unicode):
+                address_to_workers = address_to_workers.encode()
             self.address_to_workers = address_to_workers
             self.to_workers.bind(self.address_to_workers)
 
         self.to_clients = self.context.socket(zmq.ROUTER)
         if address_to_clients is None:
             port = self.to_clients.bind_to_random_port('tcp://*')
-            self.address_to_clients = 'tcp://%s:%d' % (hostname, port)
+            self.address_to_clients = ('tcp://%s:%d' % (hostname, port)).encode()
         else:
+            if isinstance(address_to_clients, unicode):
+                address_to_clients = address_to_clients.encode()
             self.address_to_clients = address_to_clients
             self.to_clients.bind(self.address_to_clients)
 
@@ -193,6 +197,8 @@ class Scheduler(object):
     def send_to_worker(self, address, header, payload):
         log(self.address_to_workers, 'Send to worker', address, header)
         header['address'] = self.address_to_workers
+        if isinstance(address, unicode):
+            address = address.encode()
         with self.lock:
             self.to_workers.send_multipart([address,
                                             self.dumps(header),
@@ -200,12 +206,13 @@ class Scheduler(object):
 
     def send_to_client(self, address, header, result):
         log(self.address_to_clients, 'Send to client', address, header)
-        with logerrors():
-            header['address'] = self.address_to_clients
-            with self.lock:
-                self.to_clients.send_multipart([address,
-                                                self.dumps(header),
-                                                self.dumps(result)])
+        header['address'] = self.address_to_clients
+        if isinstance(address, unicode):
+            address = address.encode()
+        with self.lock:
+            self.to_clients.send_multipart([address,
+                                            self.dumps(header),
+                                            self.dumps(result)])
 
     def trigger_task(self, dsk, key):
         deps = get_dependencies(dsk, key)

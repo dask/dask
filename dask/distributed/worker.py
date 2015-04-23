@@ -11,7 +11,7 @@ import zmq
 from toolz import partial
 from time import time
 import sys
-from ..compatibility import Queue
+from ..compatibility import Queue, unicode
 from .. import core
 try:
     from cPickle import dumps, loads, HIGHEST_PROTOCOL
@@ -66,6 +66,8 @@ class Worker(object):
     def __init__(self, scheduler, data=None, nthreads=100,
                  dumps=partial(dumps, protocol=HIGHEST_PROTOCOL),
                  loads=loads, address=None, port=None):
+        if isinstance(scheduler, unicode):
+            scheduler = scheduler.encode()
         self.data = data if data is not None else dict()
         self.pool = ThreadPool(nthreads)
         self.dumps = dumps
@@ -80,8 +82,10 @@ class Worker(object):
                 self.to_workers.bind('tcp://%s:%d' % (hostname, port))
             else:
                 port = self.to_workers.bind_to_random_port('tcp://*')
-            address = 'tcp://%s:%s' % (hostname, port)
+            address = ('tcp://%s:%s' % (hostname, port)).encode()
         else:
+            if isinstance(address, unicode):
+                address = address.encode()
             self.to_workers.bind(address)
         self.address = address
         self.dealers = dict()
@@ -91,6 +95,7 @@ class Worker(object):
         self.queues = dict()
 
         self.to_scheduler = context.socket(zmq.DEALER)
+
         self.to_scheduler.setsockopt(zmq.IDENTITY, address)
         self.to_scheduler.connect(scheduler)
         self.send_to_scheduler({'function': 'register'}, {})
@@ -193,7 +198,7 @@ class Worker(object):
         header['address'] = self.address
         with self.lock:
             self.to_scheduler.send_multipart([self.dumps(header),
-                                        self.dumps(payload)])
+                                              self.dumps(payload)])
 
     def send_to_worker(self, address, header, payload):
         if address not in self.dealers:

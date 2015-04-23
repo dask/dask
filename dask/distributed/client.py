@@ -4,6 +4,7 @@ import zmq
 import itertools
 import uuid
 from .scheduler import loads, dumps
+from ..compatibility import unicode
 
 context = zmq.Context()
 
@@ -24,6 +25,8 @@ class Client(object):
         self.address_to_scheduler = scheduler
         if address == None:
             address = 'client-' + str(uuid.uuid1())
+        if isinstance(address, unicode):
+            address = address.encode()
         self.address = address
         self.socket = context.socket(zmq.DEALER)
         self.socket.setsockopt(zmq.IDENTITY, self.address)

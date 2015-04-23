@@ -46,10 +46,10 @@ def worker_and_router(*args, **kwargs):
 
 
 def test_status():
-    with worker_and_router(data={'x': 10, 'y': 20}, address='ipc://alice') as (w, r):
+    with worker_and_router(data={'x': 10, 'y': 20}, address=b'ipc://alice') as (w, r):
         header = {'jobid': 3, 'function': 'status', 'address': 'ipc://server'}
         payload = {'function': 'status'}
-        r.send_multipart(['ipc://alice', w.dumps(header), w.dumps(payload)])
+        r.send_multipart([b'ipc://alice', w.dumps(header), w.dumps(payload)])
 
         address, header, result = r.recv_multipart()
         assert address == w.address

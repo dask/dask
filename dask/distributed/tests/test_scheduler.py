@@ -23,10 +23,10 @@ def scheduler():
 def test_status_worker():
     with scheduler() as s:
         sock = context.socket(zmq.DEALER)
-        sock.setsockopt(zmq.IDENTITY, 'ipc://worker1')
+        sock.setsockopt(zmq.IDENTITY, b'ipc://worker1')
         sock.connect(s.address_to_workers)
 
-        header = {'address': 'ipc://worker1', 'jobid': 1, 'function': 'status'}
+        header = {'address': b'ipc://worker1', 'jobid': 1, 'function': 'status'}
         payload = {'function': 'status'}
         sock.send_multipart([s.dumps(header), s.dumps(payload)])
 
@@ -39,10 +39,10 @@ def test_status_worker():
 def test_status_client():
     with scheduler() as s:
         sock = context.socket(zmq.DEALER)
-        sock.setsockopt(zmq.IDENTITY, 'ipc://client-1')
+        sock.setsockopt(zmq.IDENTITY, b'ipc://client-1')
         sock.connect(s.address_to_clients)
 
-        header = {'address': 'ipc://client-1', 'jobid': 2, 'function': 'status'}
+        header = {'address': b'ipc://client-1', 'jobid': 2, 'function': 'status'}
         payload = {'function': 'status'}
         sock.send_multipart([s.dumps(header), s.dumps(payload)])
 
@@ -156,6 +156,6 @@ def test_random_names():
         assert s.address_to_workers
         assert s.address_to_clients
         assert s.address_to_clients != s.address_to_workers
-        assert re.match('\w+://\w+:\d+', s.address_to_workers)
+        assert re.match('\w+://\w+:\d+', s.address_to_workers.decode('utf-8'))
     finally:
         s.close()
