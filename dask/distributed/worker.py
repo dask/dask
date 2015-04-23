@@ -332,9 +332,10 @@ class Worker(object):
 
         Given a key, task, and locations of data
 
+        >>> from operator import add
         >>> payload = {'key': 'z',
         ...            'task': (add, 'x', 'y'),
-        ...            'locations': {'x': ['tcp://alice:5000']}
+        ...            'locations': {'x': ['tcp://alice:5000']}}
 
         Collect necessary data from locations (see ``collect``),
         then compute task and store result into ``self.data``.  Finally report
