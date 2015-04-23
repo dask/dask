@@ -34,7 +34,7 @@ def _make_ghost_kws(filt, arr, filter_kwargs):
             raise ValueError("mode argument % not supported, only 'reflect'"
                              " and 'constant' supported.")
 
-    def depth(filt, filter_kwargs):
+    def depth(arr, filt, filter_kwargs):
         """
         create the value for the `depth` kwarg. This should be
         len(ciel(shape[axis_length]/2.)) for each axis.
@@ -47,30 +47,38 @@ def _make_ghost_kws(filt, arr, filter_kwargs):
         generalize ghosting for 1d filters
         """
         # gaussian depth
-        def gauss_depth(filt, filter_kwargs):
+        def gauss_depth(arr, filt, filter_kwargs):
             """
             The needed depth depends on the `sigma` and `truncate` kwargs.
             """
             sigma = filter_kwargs['sigma']
             truncate = filter_kwargs.get('truncate', 4.0)
-            return int(truncate * float(sigma) + 0.5) + 1
+            depth = int(truncate * float(sigma) + 0.5) + 1
+            return dict((i, depth) for i in range(arr.ndim))
+
+        def gauss1d_depth(arr, filt, filter_kwargs):
+            sigma = filter_kwargs['sigma']
+            truncate = filter_kwargs.get('truncate', 4.0)
+            depth = int(truncate * float(sigma) + 0.5) + 1
+            keys = [0] * arr.ndim
+            keys[-1] = depth
+            return dict(zip(range(arr.ndim), keys))
 
         # correlate1d
-        def correlate1d_depth(filt, filter_kwargs):
+        def correlate1d_depth(arr, filt, filter_kwargs):
             weights = filter_kwargs['weights']
-            return (len(weights) // 2) + 1
+            depth =(len(weights) // 2) + 1
+            return dict((i, depth) for i in range(arr.ndim))
 
         # choose a deth function from the ndimage filter name
         depths = {'gaussian_filter' : gauss_depth,
-                  'gaussian_filter1d': gauss_depth,
+                  'gaussian_filter1d': gauss1d_depth,
                   'correlate1d': correlate1d_depth,
                   'convolve1d' : correlate1d_depth,}
 
-        depth = depths[filt.__name__](filt, filter_kwargs)
+        return depths[filt.__name__](arr, filt, filter_kwargs)
 
-        return  dict((i, depth) for i in range(arr.ndim))
-
-    return {'depth' : depth(filt, filter_kwargs),
+    return {'depth' : depth(arr, filt, filter_kwargs),
             'boundary' : boundary(filter_kwargs)}
 
 
