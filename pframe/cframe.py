@@ -1,10 +1,7 @@
 import bcolz
 import os
-import numpy as np
 import pandas as pd
-from .convert import from_blocks
 import tempfile
-from .utils import ignoring
 
 
 class cframe(object):
@@ -61,8 +58,10 @@ class cframe(object):
                              index=self.index[:],
                              name=columns)
         else:
-            return pd.DataFrame(dict((col, self.blocks[col][:]) for col in
-                columns), index=self.index[:], columns=columns)
+            return pd.DataFrame(dict((col, self.blocks[col][:])
+                                     for col in columns),
+                                index=self.index[:],
+                                columns=columns)
 
     @property
     def nbytes(self):
@@ -89,6 +88,7 @@ class cframe(object):
             self.drop()
 
     def drop(self):
+        import shutil
         shutil.rmtree(self.rootdir)
 
     def head(self, n=10):
