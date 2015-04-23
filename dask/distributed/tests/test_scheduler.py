@@ -1,6 +1,7 @@
 from dask.distributed.scheduler import Scheduler
 from dask.distributed.worker import Worker
 import itertools
+from datetime import datetime
 from contextlib import contextmanager
 from toolz import take
 from time import sleep
@@ -31,8 +32,10 @@ def test_status_worker():
         sock.send_multipart([s.dumps(header), s.dumps(payload)])
 
         header2, payload2 = sock.recv_multipart()
-        assert s.loads(header2) == {'address': s.address_to_workers,
-                                    'jobid': header.get('jobid')}
+        header2 = s.loads(header2)
+        assert header2['address'] == s.address_to_workers
+        assert header2['jobid'] == header.get('jobid')
+        assert isinstance(header2['timestamp'], (datetime, str))
         assert s.loads(payload2) == 'OK'
 
 
@@ -47,8 +50,10 @@ def test_status_client():
         sock.send_multipart([s.dumps(header), s.dumps(payload)])
 
         header2, payload2 = sock.recv_multipart()
-        assert s.loads(header2) == {'address': s.address_to_clients,
-                                    'jobid': header.get('jobid')}
+        header2 = s.loads(header2)
+        assert header2['address'] == s.address_to_clients
+        assert header2['jobid'] == header.get('jobid')
+        assert isinstance(header2['timestamp'], (datetime, str))
         assert s.loads(payload2) == 'OK'
 
 

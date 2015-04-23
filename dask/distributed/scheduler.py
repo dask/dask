@@ -7,6 +7,7 @@ from collections import defaultdict
 import itertools
 from multiprocessing.pool import ThreadPool
 import random
+from datetime import datetime
 from threading import Thread, Lock
 from contextlib import contextmanager
 from toolz import curry, partial
@@ -199,6 +200,7 @@ class Scheduler(object):
         header['address'] = self.address_to_workers
         if isinstance(address, unicode):
             address = address.encode()
+        header['timestamp'] = datetime.utcnow()
         with self.lock:
             self.to_workers.send_multipart([address,
                                             self.dumps(header),
@@ -209,6 +211,7 @@ class Scheduler(object):
         header['address'] = self.address_to_clients
         if isinstance(address, unicode):
             address = address.encode()
+        header['timestamp'] = datetime.utcnow()
         with self.lock:
             self.to_clients.send_multipart([address,
                                             self.dumps(header),

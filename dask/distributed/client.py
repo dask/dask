@@ -3,6 +3,7 @@ from __future__ import print_function
 import zmq
 import itertools
 import uuid
+from datetime import datetime
 from .scheduler import loads, dumps
 from ..compatibility import unicode
 
@@ -57,6 +58,7 @@ class Client(object):
         log(self.address, 'Send to scheduler', header)
         if 'address' not in header:
             header['address'] = self.address
+        header['timestamp'] = datetime.utcnow()
         self.socket.send_multipart([dumps(header), dumps(payload)])
 
     def recv_from_scheduler(self):

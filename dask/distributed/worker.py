@@ -4,6 +4,7 @@ import socket
 from threading import Thread, Lock
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
+from datetime import datetime
 import uuid
 import random
 import multiprocessing
@@ -196,6 +197,7 @@ class Worker(object):
     def send_to_scheduler(self, header, payload):
         log(self.address, 'Send to scheduler', header)
         header['address'] = self.address
+        header['timestamp'] = datetime.utcnow()
         with self.lock:
             self.to_scheduler.send_multipart([self.dumps(header),
                                               self.dumps(payload)])
@@ -210,8 +212,9 @@ class Worker(object):
             sock.connect(address)
             self.dealers[address] = sock
 
-        log(self.address, 'Send to worker', address, header)
         header['address'] = self.address
+        header['timestamp'] = datetime.utcnow()
+        log(self.address, 'Send to worker', address, header)
         with self.lock:
             self.dealers[address].send_multipart([self.dumps(header),
                                                   self.dumps(payload)])
