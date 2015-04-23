@@ -42,10 +42,26 @@ def logerrors():
 class Worker(object):
     """ Asynchronous worker in a distributed dask computation pool
 
+    State
+    -----
+
+    dumps/loads: functions
+        used for serialization, default to pickle.loads/dumps(protocol=Highest)
+    scheduler: string
+        Address of scheduler
+    status: string
+        Status of worker, either 'run' or 'closed'
+    to_workers: zmq.Socket
+        Router socket to serve requests from other workers
+    to_scheduler: zmq.Socket
+        Dealer socket to communicate with scheduler
+    address: string
+        The address of my router socket
 
     See Also
     --------
 
+        dask.distributed.scheduler.Scheduler
     """
     def __init__(self, scheduler, data=None, nthreads=100,
                  dumps=partial(dumps, protocol=HIGHEST_PROTOCOL),
@@ -57,23 +73,23 @@ class Worker(object):
         self.scheduler = scheduler
         self.status = 'run'
 
-        self.router = context.socket(zmq.ROUTER)
+        self.to_workers = context.socket(zmq.ROUTER)
         if address is None:
             hostname = socket.gethostname()
             if port:
-                self.router.bind('tcp://%s:%d' % (hostname, port))
+                self.to_workers.bind('tcp://%s:%d' % (hostname, port))
             else:
-                port = self.router.bind_to_random_port('tcp://*')
+                port = self.to_workers.bind_to_random_port('tcp://*')
             address = 'tcp://%s:%s' % (hostname, port)
         else:
-            self.router.bind(address)
+            self.to_workers.bind(address)
         self.address = address
 
         self.lock = Lock()
 
-        self.dealer = context.socket(zmq.DEALER)
-        self.dealer.setsockopt(zmq.IDENTITY, address)
-        self.dealer.connect(scheduler)
+        self.to_scheduler = context.socket(zmq.DEALER)
+        self.to_scheduler.setsockopt(zmq.IDENTITY, address)
+        self.to_scheduler.connect(scheduler)
         self.send_to_scheduler({'function': 'register'}, {})
 
         self.scheduler_functions = {'status': self.status_to_scheduler,
@@ -155,14 +171,14 @@ class Worker(object):
         log(self.address, 'Send to scheduler', header)
         header['address'] = self.address
         with self.lock:
-            self.dealer.send_multipart([self.dumps(header),
+            self.to_scheduler.send_multipart([self.dumps(header),
                                         self.dumps(payload)])
 
     def send_to_worker(self, address, header, result):
         log(self.address, 'Send to worker', address, header)
         header['address'] = self.address
         with self.lock:
-            self.router.send_multipart([address,
+            self.to_workers.send_multipart([address,
                                         self.dumps(header),
                                         self.dumps(result)])
 
@@ -208,9 +224,9 @@ class Worker(object):
         """
         while self.status != 'closed':
             # Wait on request
-            if not self.dealer.poll(100):
+            if not self.to_scheduler.poll(100):
                 continue
-            header, payload = self.dealer.recv_multipart()
+            header, payload = self.to_scheduler.recv_multipart()
             header = self.loads(header)
             log(self.address, 'Receive job from scheduler', header)
             try:
@@ -227,10 +243,10 @@ class Worker(object):
         """
         while self.status != 'closed':
             # Wait on request
-            if not self.router.poll(100):
+            if not self.to_workers.poll(100):
                 continue
 
-            address, header, payload = self.router.recv_multipart()
+            address, header, payload = self.to_workers.recv_multipart()
             header = self.loads(header)
             if 'address' not in header:
                 header['address'] = address

@@ -41,9 +41,9 @@ class Scheduler(object):
 
     workers - dict
         Maps worker identities to information about that worker
-    whohas - dict
+    who_has - dict
         Maps data keys to sets of workers that own that data
-    ihave - dict
+    worker_has - dict
         Maps workers to data that they own
     data - dict
         Maps data keys to metadata about the computation that produced it
@@ -79,8 +79,8 @@ class Scheduler(object):
 
         # State about my workers and computed data
         self.workers = dict()
-        self.whohas = defaultdict(set)
-        self.ihave = defaultdict(set)
+        self.who_has = defaultdict(set)
+        self.worker_has = defaultdict(set)
         self.available_workers = Queue()
         self.data = defaultdict(dict)
 
@@ -164,11 +164,11 @@ class Scheduler(object):
             self.active_tasks.remove(key)
 
             self.data[key]['duration'] = duration
-            self.whohas[key].add(address)
-            self.ihave[address].add(key)
+            self.who_has[key].add(address)
+            self.worker_has[address].add(key)
             for dep in dependencies:
-                self.whohas[dep].add(address)
-                self.ihave[address].add(dep)
+                self.who_has[dep].add(address)
+                self.worker_has[address].add(dep)
             self.available_workers.put(address)
 
             for listener in self.finished_task_listeners:
@@ -202,7 +202,7 @@ class Scheduler(object):
     def trigger_task(self, dsk, key):
         deps = get_dependencies(dsk, key)
         worker = self.available_workers.get()
-        locations = {dep: self.whohas[dep] for dep in deps}
+        locations = {dep: self.who_has[dep] for dep in deps}
 
         header = {'function': 'compute', 'jobid': key}
         payload = {'key': key, 'task': dsk[key], 'locations': locations}
@@ -212,14 +212,14 @@ class Scheduler(object):
     def release_key(self, key):
         """ Release data from all workers """
         with logerrors():
-            workers = list(self.whohas[key])
+            workers = list(self.who_has[key])
             log(self.address_to_workers, 'Release data', key, workers)
             header = {'function': 'delitem', 'jobid': key}
             payload = {'key': key}
             for worker in workers:
                 self.send_to_worker(worker, header, payload)
-                self.whohas[key].remove(worker)
-                self.ihave[worker].remove(key)
+                self.who_has[key].remove(worker)
+                self.worker_has[worker].remove(key)
 
     def send_data(self, key, value, address=None, reply=True):
         """ Send data up to some worker
@@ -254,7 +254,7 @@ class Scheduler(object):
         else:
             header = {'function': 'getitem', 'jobid': key}
             payload = {'key': key}
-            seq = list(self.whohas[key])
+            seq = list(self.who_has[key])
             worker = random.choice(seq)
             self.send_to_worker(worker, header, payload)
 
@@ -269,8 +269,8 @@ class Scheduler(object):
         address = header['address']
         payload = self.loads(payload)
         key = payload['key']
-        self.whohas[key].add(address)
-        self.ihave[address].add(key)
+        self.who_has[key].add(address)
+        self.worker_has[address].add(key)
 
     def close(self):
         self.status = 'closed'

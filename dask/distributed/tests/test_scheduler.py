@@ -88,16 +88,16 @@ def test_compute_cycle():
         s.trigger_task(dsk, 'a')
         sleep(0.1)
 
-        assert 'a' in s.whohas
+        assert 'a' in s.who_has
         assert 'a' in a.data or 'a' in b.data
         assert a.data.get('a') == 3 or b.data.get('a') == 3
-        assert a.address in s.ihave or b.address in s.ihave
+        assert a.address in s.worker_has or b.address in s.worker_has
         assert s.available_workers.qsize() == 2
 
         s.trigger_task(dsk, 'b')
         sleep(0.1)
 
-        assert 'b' in s.whohas
+        assert 'b' in s.who_has
         assert 'b' in a.data or 'b' in b.data
         assert a.data.get('b') == 4 or b.data.get('b') == 4
         assert s.available_workers.qsize() == 2
@@ -108,14 +108,14 @@ def test_send_release_data():
         s.send_data('x', 1, a.address)
         sleep(0.05)
         assert a.data['x'] == 1
-        assert a.address in s.whohas['x']
-        assert 'x' in s.ihave[a.address]
+        assert a.address in s.who_has['x']
+        assert 'x' in s.worker_has[a.address]
 
         s.release_key('x')
         sleep(0.05)
         assert 'x' not in a.data
-        assert a.address not in s.whohas['x']
-        assert 'x' not in s.ihave[a.address]
+        assert a.address not in s.who_has['x']
+        assert 'x' not in s.worker_has[a.address]
 
 
 def test_get():
@@ -129,7 +129,7 @@ def test_get():
         assert result == [[7], 4]
 
         # No worker still has the unnecessary intermediate variable
-        assert not s.whohas['x']
+        assert not s.who_has['x']
         assert 'x' not in a.data and 'x' not in b.data
 
 
