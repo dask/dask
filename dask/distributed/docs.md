@@ -5,7 +5,6 @@ Client-Scheduler, Scheduler-Worker and Worker-Worker interactions can be
 complex and deserve prose documentation.  Because this code lives in three
 separate files we consolidate some documentation here.
 
-
 Protocol
 --------
 
@@ -215,3 +214,23 @@ synchronous/blocking and really only has one operation, "ask scheduler to
 execute dask graph".
 
 The Client can only talk to the Scheduler, it does not talk to the workers.
+
+
+Socket connections
+------------------
+
+![](images/distributed-network.png)
+
+The scheduler maintains two routers, one for clients, and one for workers.
+
+Each worker has a dealer socket to the scheduler.  A worker connects to only
+one scheduler.  Each worker has a router socket to manage requests from other
+workers.  Each worker has dealers to connect to other workers.  It creates
+these dealer sockets on demand; it does not create all N-N connections on
+creation.  It stores these sockets for reuse later.  To avoid having too many
+open file descriptors workers clear their cache of dealer sockets after they
+reach some predefined limit (100 by default).  Workers discover each
+other through the scheduler.
+
+Each client has a dealer socket to the scheduler.  Clients do not talk to
+workers.
