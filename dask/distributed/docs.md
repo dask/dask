@@ -198,3 +198,20 @@ different functions.
 
 In practice I've found this to be relatively straightforward, but welcome
 better solutions.
+
+
+Clients and Schedulers
+----------------------
+
+The client and scheduler are different processes and can live on different
+machines.  This is mainly to support the situation where you have a scheduler
+and cluster on some remote resource, like EC2, but want to drive it from your
+local machine without suffering terrible scheduler-worker latency issues.  This
+also opens up options for registering and sharing collections between clients
+on a centralized scheduler.
+
+The `Client` is simpler than either the Worker or Scheduler.  It is fully
+synchronous/blocking and really only has one operation, "ask scheduler to
+execute dask graph".
+
+The Client can only talk to the Scheduler, it does not talk to the workers.
