@@ -119,6 +119,7 @@ class Scheduler(object):
         self.active_tasks = set()
 
     def listen_to_workers(self):
+        """ Event loop: Listen to worker router """
         while self.status != 'closed':
             if not self.to_workers.poll(100):
                 continue
@@ -137,6 +138,7 @@ class Scheduler(object):
                 future = self.pool.apply_async(function, args=(header, payload))
 
     def listen_to_clients(self):
+        """ Event loop: Listen to client router """
         while self.status != 'closed':
             if not self.to_clients.poll(100):
                 continue
@@ -154,13 +156,19 @@ class Scheduler(object):
                 self.pool.apply_async(function, args=(header, payload))
 
     def worker_registration(self, header, payload):
+        """ Worker came in, register them """
         payload = self.loads(payload)
         address = header['address']
         self.workers[address] = payload
         self.available_workers.put(address)
 
     def worker_finished_task(self, header, payload):
-        log('Hello')
+        """ Worker reports back as having finished task, ready for more
+
+        See also:
+            Scheduler.trigger_task
+            Scheduler.schedule
+        """
         with logerrors():
             address = header['address']
 
@@ -194,6 +202,7 @@ class Scheduler(object):
         self.send_to_worker(header['address'], out_header, 'OK')
 
     def send_to_worker(self, address, header, payload):
+        """ Send packet to worker """
         log(self.address_to_workers, 'Send to worker', address, header)
         header['address'] = self.address_to_workers
         if isinstance(address, unicode):
@@ -205,6 +214,7 @@ class Scheduler(object):
                                             self.dumps(payload)])
 
     def send_to_client(self, address, header, result):
+        """ Send packet to client """
         log(self.address_to_clients, 'Send to client', address, header)
         header['address'] = self.address_to_clients
         if isinstance(address, unicode):
@@ -215,18 +225,38 @@ class Scheduler(object):
                                             self.dumps(header),
                                             self.dumps(result)])
 
-    def trigger_task(self, dsk, key):
+    def trigger_task(self, dsk, key, queue):
+        """ Send a single task to the next available worker
+
+        See also:
+            Scheduler.schedule
+            Scheduler.worker_finished_task
+        """
         deps = get_dependencies(dsk, key)
         worker = self.available_workers.get()
         locations = dict((dep, self.who_has[dep]) for dep in deps)
 
         header = {'function': 'compute', 'jobid': key}
-        payload = {'key': key, 'task': dsk[key], 'locations': locations}
+        payload = {'key': key, 'task': dsk[key], 'locations': locations,
+                   'queue': queue}
         self.send_to_worker(worker, header, payload)
         self.active_tasks.add(key)
 
     def release_key(self, key):
-        """ Release data from all workers """
+        """ Release data from all workers
+
+        Example
+        -------
+
+        >>> scheduler.release_key('x')  # doctest: +SKIP
+
+        Protocol
+        --------
+
+        This sends a 'delitem' request to all workers known to have this key.
+        This operation is fire-and-forget.  Local indices will be updated
+        immediately.
+        """
         with logerrors():
             workers = list(self.who_has[key])
             log(self.address_to_workers, 'Release data', key, workers)
@@ -241,6 +271,28 @@ class Scheduler(object):
         """ Send data up to some worker
 
         If no address is given we select one worker randomly
+
+        Example
+        -------
+
+        >>> scheduler.send_data('x', 10)  # doctest: +SKIP
+        >>> scheduler.send_data('x', 10, 'tcp://bob:5000', reply=False)  # doctest: +SKIP
+
+        Protocol
+        --------
+
+        1.  Scheduler makes a queue
+        2.  Scheduler selects a worker at random (or uses prespecified worker)
+        3.  Scheduler sends 'setitem' operation to that worker
+            {'key': ..., 'value': ..., 'queue': ...}
+        4.  Worker gets data and stores locally, send 'setitem-ack'
+            {'key': ..., 'queue': ...}
+        5.  Scheduler gets from queue, send_data cleans up queue and returns
+
+        See also:
+            Scheduler.setitem_ack
+            Worker.setitem
+            Scheduler.scatter
         """
         if reply:
             queue = Queue()
@@ -273,6 +325,24 @@ class Scheduler(object):
         -------
 
         >>> scheduler.scatter({'x': 1, 'y': 2})  # doctest: +SKIP
+
+        Protocol
+        --------
+
+        1.  Scheduler starts up a uniquely identified queue.
+        2.  Scheduler sends 'setitem' requests to workers with
+            {'key': ..., 'value': ... 'queue': ...}
+        3.  Scheduler waits on queue for all responses
+        3.  Workers receive 'setitem' requests, send back on 'setitem-ack' with
+            {'key': ..., 'queue': ...}
+        4.  Scheduler's 'setitem-ack' function pushes keys into the queue
+        5.  Once the same number of replies is heard scheduler scatter function
+            returns
+        6.  Scheduler cleans up queue
+
+        See Also:
+            Scheduler.setitem_ack
+            Worker.setitem_scheduler
         """
         workers = list(self.workers)
         log(self.address_to_workers, 'Scatter', workers, key_value_pairs)
@@ -299,6 +369,38 @@ class Scheduler(object):
             del self.queues[qkey]
 
     def gather(self, keys):
+        """ Gather data from workers
+
+        Parameters
+        ----------
+
+        keys: key, list of keys, nested list of lists of keys
+            Keys to collect from workers
+
+        Example
+        -------
+
+        >>> scheduler.gather('x')  # doctest: +SKIP
+        >>> scheduler.gather([['x', 'y'], ['z']])  # doctest: +SKIP
+
+        Protocol
+        --------
+
+        1.  Scheduler starts up a uniquely identified queue.
+        2.  Scheduler sends 'getitem' requests to workers with payloads
+            {'key': ...,  'queue': ...}
+        3.  Scheduler waits on queue for all responses
+        3.  Workers receive 'getitem' requests, send data back on 'getitem-ack'
+            {'key': ..., 'value': ..., 'queue': ...}
+        4.  Scheduler's 'getitem-ack' function pushes key/value pairs onto queue
+        5.  Once the same number of replies is heard the gather function
+            collects data into form specified by keys input and returns
+        6.  Scheduler cleans up queue before returning
+
+        See Also:
+            Scheduler.getitem_ack
+            Worker.getitem_scheduler
+        """
         qkey = str(uuid.uuid1())
         queue = Queue()
         self.queues[qkey] = queue
@@ -328,6 +430,12 @@ class Scheduler(object):
             self.send_to_worker(worker, header, payload)
 
     def getitem_ack(self, header, payload):
+        """ Receive acknowledgement from worker about a getitem request
+
+        See also:
+            Scheduler.gather
+            Worker.getitem
+        """
         payload = self.loads(payload)
         log(self.address_to_workers, 'Getitem ack', payload)
         with logerrors():
@@ -336,6 +444,12 @@ class Scheduler(object):
                                                payload['value']))
 
     def setitem_ack(self, header, payload):
+        """ Receive acknowledgement from worker about a setitem request
+
+        See also:
+            Scheduler.scatter
+            Worker.setitem
+        """
         address = header['address']
         payload = self.loads(payload)
         key = payload['key']
@@ -346,9 +460,35 @@ class Scheduler(object):
             self.queues[queue].put(key)
 
     def close(self):
+        """ Close Scheduler """
         self.status = 'closed'
 
     def schedule(self, dsk, result, **kwargs):
+        """ Execute dask graph against workers
+
+        Parameters
+        ----------
+
+        dsk: dict
+            Dask graph
+        result: list
+            keys to return (possibly nested)
+
+        Example
+        -------
+
+        >>> scheduler.get({'x': 1, 'y': (add, 'x', 2)}, 'y')  # doctest: +SKIP
+        3
+
+        Protocol
+        --------
+
+        1.  Scheduler scatters precomputed data in graph to workers
+            e.g. nodes like ``{'x': 1}``.  See Scheduler.scatter
+        2.
+
+
+        """
         if isinstance(result, list):
             result_flat = set(flatten(result))
         else:

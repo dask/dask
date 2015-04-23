@@ -1,28 +1,45 @@
 Distributed Scheduling Details
 ==============================
 
-Worker-Scheduler and Worker-Worker interactions can be complex and deserve
-prose documentation.  Because this code lives in two separate files we
-consolidate documentation here.  We organize this by communication behavior.
+Client-Scheduler, Scheduler-Worker and Worker-Worker interactions can be
+complex and deserve prose documentation.  Because this code lives in three
+separate files we consolidate documentation here.  We organize this by
+communication behavior.
 
-In general communications between two nodes (worker or scheduler) have two
+Protocol
+--------
+
+In general communications between two nodes (e.g. scheduler to worker) have two
 frames, a header and a payload
 
-A Header is a pickled Python dict with the following keys
+A **Header** is a pickled Python dict with the following keys:
 
     address:  Return address of the sender
     function: The name of the operation to execute on the recipient node
     jobid: Some identifier, optional
-    -timestamp-: not yet implemented, but we should send datetimes
+    timestamp: not yet implemented, but we should send datetimes
 
-The Payload can be anything, but is generally also a pickled dict.  This
-depends on the operation.
+    {'address': 'tcp://alice:5000',
+     'function': 'setitem',
+     'jobid': 123,
+     'timestamp', datetime.utcnow()}
+
+The **Payload** can be anything, but is generally also a pickled dict.  This
+depends on the operation.  For the `setitem` function it consists of a pickled
+dict with a key and value.
+
+    {'key': 'x', 'value': 100}
 
 Both workers and schedulers maintain dictionaries of functions that they expose
 to other workers or schedulers, e.g.
 
-    Worker().worker_functions = {'getitem': self.getitem_worker, ...}
-    Worker().scheduler_funcitons = {'compute': self.compute, ...
+    Worker.scheduler_funcitons = {'setitem': self.setitem_scheduler, ...}
+    Worker.worker_functions = {'status': self.status, ...}
+
+Often operations are paired with an acknowledgement callback on the caller
+side.
+
+    Scheduler.worker_functions = {'setitem-ack': self.setitem_ack, ...}
 
 The threads that listen for events fire these functions asynchronously using a
 local threadpool.
@@ -30,7 +47,7 @@ local threadpool.
 Example
 -------
 
-Alice a scheduler sends a message to Bob, a worker
+A scheduler Alice sends a message to a worker Bob
 
     header = {'function': 'getitem', 'address': 'ipc://alice'}
     payload = {'key': 'x', 'queue': 'name-of-queue-on-alice'}
