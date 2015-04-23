@@ -66,10 +66,11 @@ def test_getitem():
         payload = {'function': 'getitem', 'key': 'x'}
         r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
 
-        address, header, result = r.recv_multipart()
-        result = w.loads(result)
+        address, header, payload = r.recv_multipart()
+        payload = w.loads(payload)
+        assert payload['value'] == 10
         header = w.loads(header)
-        assert result['value'] == 10
+        assert header['function'] == 'getitem-ack'
 
 
 def test_setitem():

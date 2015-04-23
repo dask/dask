@@ -13,6 +13,7 @@ import dask
 from toolz import partial, get, curry
 from time import time
 import sys
+from ..compatibility import Queue
 try:
     from cPickle import dumps, loads, HIGHEST_PROTOCOL
 except ImportError:
@@ -20,6 +21,7 @@ except ImportError:
 
 
 DEBUG = True
+MAX_DEALERS = 100
 
 context = zmq.Context()
 
@@ -84,8 +86,11 @@ class Worker(object):
         else:
             self.to_workers.bind(address)
         self.address = address
+        self.dealers = dict()
 
         self.lock = Lock()
+
+        self.queues = dict()
 
         self.to_scheduler = context.socket(zmq.DEALER)
         self.to_scheduler.setsockopt(zmq.IDENTITY, address)
@@ -98,7 +103,8 @@ class Worker(object):
                                     'delitem': self.delitem,
                                     'setitem': self.setitem}
 
-        self.worker_functions = {'getitem': self.get_worker,
+        self.worker_functions = {'getitem': self.getitem_worker,
+                                 'getitem-ack': self.getitem_ack,
                                  'status': self.status_to_worker}
 
         log(self.address, 'Start up', self.scheduler)
@@ -118,15 +124,30 @@ class Worker(object):
         log(self.address, 'Status check', header['address'])
         self.send_to_worker(header['address'], out_header, 'OK')
 
-    def get_worker(self, header, payload):
+    def getitem_worker(self, header, payload):
         payload = self.loads(payload)
-        header2 = {'jobid': header['jobid']}
+        log(self.address, "Getitem for worker", header, payload)
+        header2 = {'function': 'getitem-ack',
+                   'jobid': header.get('jobid')}
         try:
             result = self.data[payload['key']]
+            header2['status'] = 'OK'
         except KeyError as e:
             result = e
             header2['status'] = 'Bad key'
-        self.send_to_worker(header['address'], header2, result)
+        payload = {'key': payload['key'],
+                   'value': result,
+                   'queue': payload['queue']}
+        self.send_to_worker(header['address'], header2, payload)
+
+    def getitem_ack(self, header, payload):
+        with logerrors():
+            payload = self.loads(payload)
+            log(self.address, 'Getitem ack', payload)
+            assert header['status'] == 'OK'
+
+            self.data[payload['key']] = payload['value']
+            self.queues[payload['queue']].put(payload['key'])
 
     def get_scheduler(self, header, payload):
         payload = self.loads(payload)
@@ -174,13 +195,21 @@ class Worker(object):
             self.to_scheduler.send_multipart([self.dumps(header),
                                         self.dumps(payload)])
 
-    def send_to_worker(self, address, header, result):
+    def send_to_worker(self, address, header, payload):
+        if address not in self.dealers:
+            if len(self.dealers) > MAX_DEALERS:
+                for sock in self.dealers.values():
+                    sock.close()
+                self.dealers.clear()
+            sock = context.socket(zmq.DEALER)
+            sock.connect(address)
+            self.dealers[address] = sock
+
         log(self.address, 'Send to worker', address, header)
         header['address'] = self.address
         with self.lock:
-            self.to_workers.send_multipart([address,
-                                        self.dumps(header),
-                                        self.dumps(result)])
+            self.dealers[address].send_multipart([self.dumps(header),
+                                                  self.dumps(payload)])
 
     def listen_to_scheduler(self):
         """
@@ -273,30 +302,30 @@ class Worker(object):
         """
         socks = []
 
+        qkey = str(uuid.uuid1())
+        queue = Queue()
+        self.queues[qkey] = queue
+
         # Send out requests for data
         log(self.address, 'Collect data from peers', locations)
+        counter = 0
         for key, locs in locations.items():
             if key in self.data:  # already have this locally
                 continue
-            sock = context.socket(zmq.DEALER)
-            sock.connect(random.choice(tuple(locs)))  # randomly select one peer
+            worker = random.choice(tuple(locs))  # randomly select one peer
             header = {'jobid': key,
                       'function': 'getitem'}
             payload = {'function': 'getitem',
-                       'key': key}
-            sock.send_multipart([self.dumps(header),
-                                 self.dumps(payload)])
-            socks.append(sock)
+                       'key': key,
+                       'queue': qkey}
+            self.send_to_worker(worker, header, payload)
+            counter += 1
 
-        # Wait on replies.  Store results in self.data.
-        log(self.address, 'Waiting on data replies')
-        for sock in socks:
-            header, payload = sock.recv_multipart()
-            header = self.loads(header)
-            payload = self.loads(payload)
-            log(self.address, 'Receive data', header['address'],
-                                              header['jobid'])
-            self.data[header['jobid']] = payload
+        for i in range(counter):
+            queue.get()
+
+        del self.queues[qkey]
+        log(self.address, 'Collect finishes')
 
     def compute(self, header, payload):
         """ Compute dask task
