@@ -129,6 +129,11 @@ class Worker(object):
         self.send_to_worker(header['address'], out_header, 'OK')
 
     def getitem_worker(self, header, payload):
+        """ Get data and send to another worker
+
+        See also:
+            Worker.collect
+        """
         payload = self.loads(payload)
         log(self.address, "Getitem for worker", header, payload)
         header2 = {'function': 'getitem-ack',
@@ -145,6 +150,12 @@ class Worker(object):
         self.send_to_worker(header['address'], header2, payload)
 
     def getitem_ack(self, header, payload):
+        """ Receive data after sending a getitem request
+
+        See also:
+            Worker.getitem_worker
+            Worker.collect
+        """
         with logerrors():
             payload = self.loads(payload)
             log(self.address, 'Getitem ack', payload)
@@ -154,6 +165,12 @@ class Worker(object):
             self.queues[payload['queue']].put(payload['key'])
 
     def getitem_scheduler(self, header, payload):
+        """ Send local data to scheduler
+
+        See also:
+            Scheduler.gather
+            Scheduler.getitem_ack
+        """
         payload = self.loads(payload)
         log(self.address, 'Get from scheduler', payload)
         key = payload['key']
@@ -169,6 +186,13 @@ class Worker(object):
         self.send_to_scheduler(header2, payload2)
 
     def setitem(self, header, payload):
+        """ Assign incoming data to local dictionary
+
+        See also:
+            Scheduler.scatter
+            Scheduler.send_data
+            Scheduler.setitem_ack
+        """
         payload = self.loads(payload)
         log(self.address, 'Setitem', payload)
         key = payload['key']
@@ -185,16 +209,19 @@ class Worker(object):
             self.send_to_scheduler(header2, payload2)
 
     def delitem(self, header, payload):
+        """ Remove item from local data """
         payload = self.loads(payload)
         log(self.address, 'Delitem', payload)
         key = payload['key']
         del self.data[key]
 
+        # TODO: this should be replaced with a delitem-ack call
         if payload.get('reply', False):
             self.send_to_scheduler({'jobid': header.get('jobid')}, 'OK')
 
 
     def send_to_scheduler(self, header, payload):
+        """ Send data to scheduler """
         log(self.address, 'Send to scheduler', header)
         header['address'] = self.address
         header['timestamp'] = datetime.utcnow()
@@ -203,6 +230,14 @@ class Worker(object):
                                               self.dumps(payload)])
 
     def send_to_worker(self, address, header, payload):
+        """ Send data to workers
+
+        This is a bit tricky.  We want to have one DEALER socket per worker.
+        We cache these in ``self.dealers``.  If the number of worker peers is
+        high then we might run into having too many file descriptors open.
+        Currently we flush the cache of dealers periodically.  This has yet to
+        be tested.
+        """
         if address not in self.dealers:
             if len(self.dealers) > MAX_DEALERS:
                 for sock in self.dealers.values():
@@ -301,12 +336,38 @@ class Worker(object):
 
         Given a dictionary of desired data and who holds that data
 
-        >>> locations = {'x': ['tcp://alice:5000', 'tcp://bob:5000'],
-        ...              'y': ['tcp://bob:5000']}
-
         This fires off getitem reqeusts to one of the hosts for each piece of
         data then blocks on all of the responses, then inserts this data into
         ``self.data``.
+
+        Example
+        -------
+
+        >>> locations = {'x': ['tcp://alice:5000', 'tcp://bob:5000'],
+        ...              'y': ['tcp://bob:5000']}
+        >>> worker.collect(locations)  # doctest: +SKIP
+
+        Protocol
+        --------
+
+        1.  Worker creates unique queue
+        2.  For each data this worker chooses a worker at random that holds
+            that data and fires off a 'getitem' request
+            {'key': ..., 'queue': ...}
+        3.  Recipient worker handles the request and fires back a 'getitem-ack'
+            with the data
+            {'key': ..., 'value': ..., 'queue': ...}
+        4.  Local getitem_ack function adds the value to the local dict and
+            puts the key in the queue
+        5.  Once all keys have run through the queue the collect function wakes
+            up again, releases the queue, and returns control
+        6?  This is often called from Worker.compute; control often ends there
+
+        See also:
+            Worker.getitem
+            Worker.getitem_ack
+            Worker.compute
+            Scheduler.trigger_task
         """
         socks = []
 
@@ -344,7 +405,8 @@ class Worker(object):
         >>> from operator import add
         >>> payload = {'key': 'z',
         ...            'task': (add, 'x', 'y'),
-        ...            'locations': {'x': ['tcp://alice:5000']}}
+        ...            'locations': {'x': ['tcp://alice:5000']},
+        ...            'queue': 'unique-identifier'}
 
         Collect necessary data from locations (see ``collect``),
         then compute task and store result into ``self.data``.  Finally report
