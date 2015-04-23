@@ -1,4 +1,4 @@
-from dask.distributed.scheduler import Scheduler, get_distributed
+from dask.distributed.scheduler import Scheduler
 from dask.distributed.worker import Worker
 import itertools
 from contextlib import contextmanager
@@ -122,10 +122,10 @@ def test_get():
     with scheduler_and_workers(n=2) as (s, (a, b)):
         dsk = {'x': (add, 1, 2), 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
 
-        result = get_distributed(s, dsk, ['y'])
+        result = s.schedule(dsk, ['y'])
         assert result == [4]
 
-        result = get_distributed(s, dsk, [['z'], 'y'])
+        result = s.schedule(dsk, [['z'], 'y'])
         assert result == [[7], 4]
 
         # No worker still has the unnecessary intermediate variable

@@ -275,7 +275,24 @@ def execute_task(key, task, data, queue, raise_on_exception=False):
         queue.put((key, e, tb))
 
 
-def finish_task(dsk, key, state, results, delete=True):
+def release_data(key, state, delete=True):
+    """ Remove data from temporary storage
+
+    See Also
+        finish_task
+    """
+    if key in state['waiting_data']:
+        assert not state['waiting_data'][key]
+        del state['waiting_data'][key]
+
+    state['released'].add(key)
+
+    if delete:
+        del state['cache'][key]
+
+
+def finish_task(dsk, key, state, results, delete=True,
+                release_data=release_data):
     """
     Update executation state after a task finishes
 
@@ -301,33 +318,14 @@ def finish_task(dsk, key, state, results, delete=True):
                     from chest.core import nbytes
                     print("Key: %s\tDep: %s\t NBytes: %.2f\t Release" % (key, dep,
                         sum(map(nbytes, state['cache'].values()) / 1e6)))
-                assert dep in state['cache']
                 release_data(dep, state, delete=delete)
-                if delete:
-                    assert dep not in state['cache']
-        elif delete and dep in state['cache'] and dep not in results:
+        elif delete and dep not in results:
             release_data(dep, state, delete=delete)
 
     state['finished'].add(key)
     state['running'].remove(key)
 
     return state
-
-
-def release_data(key, state, delete=True):
-    """ Remove data from temporary storage
-
-    See Also
-        finish_task
-    """
-    if key in state['waiting_data']:
-        assert not state['waiting_data'][key]
-        del state['waiting_data'][key]
-
-    state['released'].add(key)
-
-    if delete:
-        del state['cache'][key]
 
 
 def nested_get(ind, coll, lazy=False):

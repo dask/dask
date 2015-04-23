@@ -16,8 +16,9 @@ except ImportError:
     from pickle import loads, dumps, HIGHEST_PROTOCOL
 dumps = partial(dumps, protocol=HIGHEST_PROTOCOL)
 
-from ..core import get_dependencies
+from ..core import get_dependencies, flatten
 from .. import core
+from ..async import finish_task, start_state_from_dask as dag_state_from_dask
 
 with open('log.scheduler', 'w') as f:  # delete file
     pass
@@ -282,100 +283,65 @@ class Scheduler(object):
         self.status = 'closed'
 
 
-from ..async import start_state_from_dask as dag_state_from_dask
-from ..core import flatten
+    def schedule(self, dsk, result, **kwargs):
+        if isinstance(result, list):
+            result_flat = set(flatten(result))
+        else:
+            result_flat = set([result])
+        results = set(result_flat)
 
-def get_distributed(scheduler, dsk, result, **kwargs):
-    if isinstance(result, list):
-        result_flat = set(flatten(result))
-    else:
-        result_flat = set([result])
-    results = set(result_flat)
+        cache = dict()
+        dag_state = dag_state_from_dask(dsk, cache=cache)
 
-    cache = dict()
-    dag_state = dag_state_from_dask(dsk, cache=cache)
+        tick = [0]
 
-    tick = [0]
+        if dag_state['waiting'] and not dag_state['ready']:
+            raise ValueError("Found no accessible jobs in dask graph")
 
-    if dag_state['waiting'] and not dag_state['ready']:
-        raise ValueError("Found no accessible jobs in dask graph")
+        event_queue = Queue()
+        self.finished_task_listeners.append(event_queue)
 
-    event_queue = Queue()
-    scheduler.finished_task_listeners.append(event_queue)
+        def fire_task():
+            tick[0] += 1  # Update heartbeat
 
-    def fire_task():
-        tick[0] += 1  # Update heartbeat
+            # Choose a good task to compute
+            key = dag_state['ready'].pop()
+            dag_state['ready-set'].remove(key)
+            dag_state['running'].add(key)
 
-        # Choose a good task to compute
-        key = dag_state['ready'].pop()
-        dag_state['ready-set'].remove(key)
-        dag_state['running'].add(key)
+            self.trigger_task(dsk, key)  # Fire
 
-        scheduler.trigger_task(dsk, key)  # Fire
-
-    # Seed initial tasks
-    while dag_state['ready'] and scheduler.available_workers.qsize() > 0:
-        fire_task()
-
-    # Main loop, wait on tasks to finish, insert new ones
-    while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
-        payload = event_queue.get()
-
-        if isinstance(payload['status'], Exception):
-            raise payload['status']
-
-        key = payload['key']
-        finish_task(scheduler, dsk, key, dag_state, results)
-
-        while dag_state['ready'] and scheduler.available_workers.qsize() > 0:
+        # Seed initial tasks
+        while dag_state['ready'] and self.available_workers.qsize() > 0:
             fire_task()
 
-    return scheduler.gather(result)
+        # Main loop, wait on tasks to finish, insert new ones
+        while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
+            payload = event_queue.get()
 
+            if isinstance(payload['status'], Exception):
+                raise payload['status']
 
-def finish_task(scheduler, dsk, key, state, results, delete=True):
-    """
-    Update executation state after a task finishes
+            key = payload['key']
+            finish_task(dsk, key, dag_state, results,
+                        release_data=self.release_data)
 
-    Mutates.  This should run atomically (with a lock).
-    """
-    if key in state['ready-set']:
-        state['ready-set'].remove(key)
+            while dag_state['ready'] and self.available_workers.qsize() > 0:
+                fire_task()
 
-    for dep in sorted(state['dependents'][key]):
-        s = state['waiting'][dep]
-        s.remove(key)
-        if not s:
-            del state['waiting'][dep]
-            state['ready-set'].add(dep)
-            state['ready'].append(dep)
+        return self.gather(result)
 
-    for dep in state['dependencies'][key]:
-        if dep in state['waiting_data']:
-            s = state['waiting_data'][dep]
-            s.remove(key)
-            if not s and dep not in results:
-                release_data(scheduler, dep, state, delete=delete)
-        elif delete and dep not in results:
-            release_data(scheduler, dep, state, delete=delete)
+    def release_data(self, key, state, delete=True):
+        """ Remove data from temporary storage
 
-    state['finished'].add(key)
-    state['running'].remove(key)
+        See Also
+            finish_task
+        """
+        if key in state['waiting_data']:
+            assert not state['waiting_data'][key]
+            del state['waiting_data'][key]
 
-    return state
+        state['released'].add(key)
 
-
-def release_data(scheduler, key, state, delete=True):
-    """ Remove data from temporary storage
-
-    See Also
-        finish_task
-    """
-    if key in state['waiting_data']:
-        assert not state['waiting_data'][key]
-        del state['waiting_data'][key]
-
-    state['released'].add(key)
-
-    if delete:
-        scheduler.release_key(key)
+        if delete:
+            self.release_key(key)
