@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import zmq
 import socket
+import uuid
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 import random
@@ -87,6 +88,7 @@ class Scheduler(object):
         self.pool = ThreadPool(100)
         self.lock = Lock()
         self.status = 'run'
+        self.queues = dict()
 
         self.loads = loads
         self.dumps = dumps
@@ -233,27 +235,30 @@ class Scheduler(object):
         self.send_to_worker(address, header, payload)
 
     def gather(self, keys):
-        self._gather_queue = Queue()
+        qkey = str(uuid.uuid1())
+        queue = Queue()
+        self.queues[qkey] = queue
 
         # Send of requests
-        self._gather_send(keys)
+        self._gather_send(qkey, keys)
 
         # Wait for replies
         cache = dict()
         for i in flatten(keys):
-            k, v = self._gather_queue.get()
+            k, v = queue.get()
             cache[k] = v
+        del self.queues[qkey]
 
         # Reshape to keys
         return core.get(cache, keys)
 
-    def _gather_send(self, key):
+    def _gather_send(self, qkey, key):
         if isinstance(key, list):
             for k in key:
-                self._gather_send(k)
+                self._gather_send(qkey, k)
         else:
             header = {'function': 'getitem', 'jobid': key}
-            payload = {'key': key}
+            payload = {'key': key, 'queue': qkey}
             seq = list(self.who_has[key])
             worker = random.choice(seq)
             self.send_to_worker(worker, header, payload)
@@ -263,7 +268,8 @@ class Scheduler(object):
         log(self.address_to_workers, 'Getitem ack', payload)
         with logerrors():
             assert header['status'] == 'OK'
-            self._gather_queue.put((payload['key'], payload['value']))
+            self.queues[payload['queue']].put((payload['key'],
+                                               payload['value']))
 
     def setitem_ack(self, header, payload):
         address = header['address']

@@ -99,7 +99,7 @@ class Worker(object):
 
         self.scheduler_functions = {'status': self.status_to_scheduler,
                                     'compute': self.compute,
-                                    'getitem': self.get_scheduler,
+                                    'getitem': self.getitem_scheduler,
                                     'delitem': self.delitem,
                                     'setitem': self.setitem}
 
@@ -149,7 +149,7 @@ class Worker(object):
             self.data[payload['key']] = payload['value']
             self.queues[payload['queue']].put(payload['key'])
 
-    def get_scheduler(self, header, payload):
+    def getitem_scheduler(self, header, payload):
         payload = self.loads(payload)
         log(self.address, 'Get from scheduler', payload)
         key = payload['key']
@@ -161,8 +161,8 @@ class Worker(object):
             result = e
             header2['status'] = 'Bad key'
         header2['function'] = 'getitem-ack'
-        payload = {'key': key, 'value': result}
-        self.send_to_scheduler(header2, payload)
+        payload2 = {'key': key, 'value': result, 'queue': payload['queue']}
+        self.send_to_scheduler(header2, payload2)
 
     def setitem(self, header, payload):
         payload = self.loads(payload)

@@ -63,12 +63,13 @@ def test_status():
 def test_getitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         header = {'jobid': 4, 'function': 'getitem', 'address': 'ipc://server'}
-        payload = {'function': 'getitem', 'key': 'x'}
+        payload = {'function': 'getitem', 'key': 'x', 'queue': 'some-key'}
         r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
 
         address, header, payload = r.recv_multipart()
         payload = w.loads(payload)
         assert payload['value'] == 10
+        assert payload['queue'] == 'some-key'
         header = w.loads(header)
         assert header['function'] == 'getitem-ack'
 
@@ -97,7 +98,7 @@ def test_delitem():
 def test_error():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         header = {'jobid': 5, 'function': 'getitem', 'address': 'ipc://server'}
-        payload = {'function': 'getitem', 'key': 'does-not-exist'}
+        payload = {'function': 'getitem', 'key': 'does-not-exist', 'queue': ''}
         r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
 
         address, header, result = r.recv_multipart()
