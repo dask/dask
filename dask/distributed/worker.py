@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-from zmqompute import ComputeNode
 import socket
 from threading import Thread, Lock
 from multiprocessing.pool import ThreadPool
@@ -9,18 +8,17 @@ import uuid
 import random
 import multiprocessing
 import zmq
-import dask
-from toolz import partial, get, curry
+from toolz import partial
 from time import time
 import sys
 from ..compatibility import Queue
+from .. import core
 try:
     from cPickle import dumps, loads, HIGHEST_PROTOCOL
 except ImportError:
     from pickle import dumps, loads, HIGHEST_PROTOCOL
 
 
-DEBUG = True
 MAX_DEALERS = 100
 
 context = zmq.Context()
@@ -358,7 +356,7 @@ class Worker(object):
         status = "OK"
         log(self.address, "Start computation", key, task)
         try:
-            result = dask.core.get(self.data, task)
+            result = core.get(self.data, task)
             end = time()
         except Exception as e:
             status = e
