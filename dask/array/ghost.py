@@ -183,6 +183,24 @@ def reflect(x, axis, depth):
 
     return concatenate([l, x, r], axis=axis)
 
+def nearest(x, axis, depth):
+    """ Each reflect each boundary value outwards
+
+    This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
+    does.
+    """
+    left =  ((slice(None, None, None),) * axis
+           + (slice(0, 1),)
+           + (slice(None, None, None),) * (x.ndim - axis - 1))
+    right = ((slice(None, None, None),) * axis
+           + (slice(-1, -2, -1),)
+           + (slice(None, None, None),) * (x.ndim - axis - 1))
+    l = [x[left]] * depth
+    r = [x[right]] * depth
+
+    return concatenate(l + [x] + r, axis=axis)
+
+
 
 def constant(x, axis, depth, value):
     """ Add constant slice to either side of array """
@@ -214,6 +232,8 @@ def boundaries(x, depth=None, kind=None):
             x = periodic(x, i, depth[i])
         elif kind.get(i) == 'reflect':
             x = reflect(x, i, depth[i])
+        elif kind.get(i) == 'nearest':
+            x = nearest(x, i, depth[i])
         elif i in kind:
             x = constant(x, i, depth[i], kind[i])
 
