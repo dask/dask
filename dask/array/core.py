@@ -819,6 +819,44 @@ class Array(object):
     def map_blocks(self, func, chunks=None, dtype=None):
         return map_blocks(self, func, chunks, dtype=dtype)
 
+    def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
+        """ Map a function over blocks of the array with some overlap
+
+        We share neighboring zones between blocks of the array, then map a
+        function, then trim away the neighboring strips.
+
+        Parameters
+        ----------
+
+        func: function
+            The function to apply to each extended block
+        depth: int, tuple, or dict
+            The number of cells that each block should share with its neighbors
+            If a tuple or dict this can be different per axis
+        boundary: str
+            how to handle the boundaries.  Values include 'reflect', 'periodic'
+            or any constant value like 0 or np.nan
+        trim: bool
+            Whether or not to trim the excess after the map function.  Set this
+            to false if your mapping function does this for you.
+        **kwargs:
+            Other keyword arguments valid in ``map_blocks``
+
+        Example
+        -------
+
+        >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
+        >>> x = from_array(x, chunks=5)
+        >>> def derivative(x):
+        ...     return x - np.roll(x, 1)
+
+        >>> y = x.map_overlap(derivative, depth=1, boundary=0)
+        >>> y.compute()
+        array([ 1,  0,  1,  1,  0,  0, -1, -1,  0])
+        """
+        from .ghost import map_overlap
+        return map_overlap(self, func, depth, boundary, trim, **kwargs)
+
     @wraps(squeeze)
     def squeeze(self):
         return squeeze(self)
