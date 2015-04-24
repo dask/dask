@@ -22,6 +22,7 @@ Contents
    bag.rst
    pframe.rst
    scheduling.rst
+   distributed.rst
    distributed-design.rst
    faq.rst
 
