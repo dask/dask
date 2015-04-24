@@ -140,8 +140,15 @@ def trim_internal(x, axes=None):
         chunk.trim
         map_blocks
     """
-    chunks = tuple([tuple([d - axes.get(i, 0)*2 for d in bd])
-                       for i, bd in enumerate(x.chunks)])
+    olist = []
+    for i, bd in enumerate(x.chunks):
+        ilist = []
+        for d in bd:
+            ilist.append(d - axes.get(i, 0) * 2)
+        olist.append(tuple(ilist))
+
+    chunks = tuple(olist)
+
     return map_blocks(x, partial(chunk.trim, axes=axes), chunks=chunks)
 
 
