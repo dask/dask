@@ -26,8 +26,19 @@ def test_get():
 
         assert c.get(dsk, keys) == [2, 3]
 
+
 def test_status():
     with scheduler_and_workers() as (s, (a, b)):
         c = Client(s.address_to_clients)
 
         assert c.scheduler_status() == 'OK'
+
+
+def test_get_with_dill():
+    with scheduler_and_workers() as (s, (a, b)):
+        c = Client(s.address_to_clients)
+
+        dsk = {'x': 1, 'y': (lambda x: x + 1, 'x')}
+        keys = 'y'
+
+        assert c.get(dsk, keys) == 2

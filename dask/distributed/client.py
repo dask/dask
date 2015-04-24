@@ -4,7 +4,8 @@ import zmq
 import itertools
 import uuid
 from datetime import datetime
-from .scheduler import loads, dumps
+import dill
+from .scheduler import pickle
 from ..compatibility import unicode
 
 context = zmq.Context()
@@ -59,10 +60,12 @@ class Client(object):
         if 'address' not in header:
             header['address'] = self.address
         header['timestamp'] = datetime.utcnow()
-        self.socket.send_multipart([dumps(header), dumps(payload)])
+        self.socket.send_multipart([dill.dumps(header), dill.dumps(payload)])
 
     def recv_from_scheduler(self):
         header, payload = self.socket.recv_multipart()
-        header, payload = loads(header), loads(payload)
+        header = pickle.loads(header)
+        serializer = header.get('serializer', pickle)
+        payload = serializer.loads(payload)
         log(self.address, 'Received from scheduler', header)
         return header, payload

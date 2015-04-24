@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import zmq
 import socket
+import dill
 import uuid
 from collections import defaultdict
 import itertools
@@ -13,10 +14,9 @@ from contextlib import contextmanager
 from toolz import curry, partial
 from ..compatibility import Queue, unicode
 try:
-    from cPickle import loads, dumps, HIGHEST_PROTOCOL
+    import cPickle as pickle
 except ImportError:
-    from pickle import loads, dumps, HIGHEST_PROTOCOL
-dumps = partial(dumps, protocol=HIGHEST_PROTOCOL)
+    import pickle
 
 from ..core import get_dependencies, flatten
 from .. import core
@@ -97,9 +97,6 @@ class Scheduler(object):
         self.status = 'run'
         self.queues = dict()
 
-        self.loads = loads
-        self.dumps = dumps
-
         # RPC functions that workers and clients can trigger
         self.worker_functions = {'register': self.worker_registration,
                                  'status': self.status_to_worker,
@@ -125,7 +122,7 @@ class Scheduler(object):
                 continue
             address, header, payload = self.to_workers.recv_multipart()
 
-            header = self.loads(header)
+            header = pickle.loads(header)
             if 'address' not in header:
                 header['address'] = address
             log(self.address_to_workers, 'Receive job from worker', header)
@@ -143,7 +140,7 @@ class Scheduler(object):
             if not self.to_clients.poll(100):
                 continue
             address, header, payload = self.to_clients.recv_multipart()
-            header = self.loads(header)
+            header = pickle.loads(header)
             if 'address' not in header:
                 header['address'] = address
             log(self.address_to_clients, 'Receive job from client', header)
@@ -157,7 +154,7 @@ class Scheduler(object):
 
     def worker_registration(self, header, payload):
         """ Worker came in, register them """
-        payload = self.loads(payload)
+        payload = pickle.loads(payload)
         address = header['address']
         self.workers[address] = payload
         self.available_workers.put(address)
@@ -172,7 +169,7 @@ class Scheduler(object):
         with logerrors():
             address = header['address']
 
-            payload = self.loads(payload)
+            payload = pickle.loads(payload)
             key = payload['key']
             duration = payload['duration']
             dependencies = payload['dependencies']
@@ -205,25 +202,27 @@ class Scheduler(object):
         """ Send packet to worker """
         log(self.address_to_workers, 'Send to worker', address, header)
         header['address'] = self.address_to_workers
+        serializer = header.get('serializer', pickle)
         if isinstance(address, unicode):
             address = address.encode()
         header['timestamp'] = datetime.utcnow()
         with self.lock:
             self.to_workers.send_multipart([address,
-                                            self.dumps(header),
-                                            self.dumps(payload)])
+                                            dill.dumps(header),
+                                            serializer.dumps(payload)])
 
     def send_to_client(self, address, header, result):
         """ Send packet to client """
         log(self.address_to_clients, 'Send to client', address, header)
         header['address'] = self.address_to_clients
+        serializer = header.get('serializer', pickle)
         if isinstance(address, unicode):
             address = address.encode()
         header['timestamp'] = datetime.utcnow()
         with self.lock:
             self.to_clients.send_multipart([address,
-                                            self.dumps(header),
-                                            self.dumps(result)])
+                                            dill.dumps(header),
+                                            serializer.dumps(result)])
 
     def trigger_task(self, dsk, key, queue):
         """ Send a single task to the next available worker
@@ -236,7 +235,7 @@ class Scheduler(object):
         worker = self.available_workers.get()
         locations = dict((dep, self.who_has[dep]) for dep in deps)
 
-        header = {'function': 'compute', 'jobid': key}
+        header = {'function': 'compute', 'jobid': key, 'serializer': dill}
         payload = {'key': key, 'task': dsk[key], 'locations': locations,
                    'queue': queue}
         self.send_to_worker(worker, header, payload)
@@ -436,7 +435,7 @@ class Scheduler(object):
             Scheduler.gather
             Worker.getitem
         """
-        payload = self.loads(payload)
+        payload = pickle.loads(payload)
         log(self.address_to_workers, 'Getitem ack', payload)
         with logerrors():
             assert header['status'] == 'OK'
@@ -451,7 +450,7 @@ class Scheduler(object):
             Worker.setitem
         """
         address = header['address']
-        payload = self.loads(payload)
+        payload = pickle.loads(payload)
         key = payload['key']
         self.who_has[key].add(address)
         self.worker_has[address].add(key)
@@ -545,7 +544,7 @@ class Scheduler(object):
         Output Payload: keys, result
         Sent to client on 'schedule-ack'
         """
-        payload = self.loads(payload)
+        payload = dill.loads(payload)
         address = header['address']
         dsk = payload['dask']
         keys = payload['keys']

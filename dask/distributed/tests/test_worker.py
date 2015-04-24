@@ -4,6 +4,7 @@ import multiprocessing
 import itertools
 import zmq
 from time import sleep
+import pickle
 
 context = zmq.Context()
 
@@ -49,12 +50,12 @@ def test_status():
     with worker_and_router(data={'x': 10, 'y': 20}, address=b'ipc://alice') as (w, r):
         header = {'jobid': 3, 'function': 'status', 'address': 'ipc://server'}
         payload = {'function': 'status'}
-        r.send_multipart([b'ipc://alice', w.dumps(header), w.dumps(payload)])
+        r.send_multipart([b'ipc://alice', pickle.dumps(header), pickle.dumps(payload)])
 
         address, header, result = r.recv_multipart()
         assert address == w.address
-        result = w.loads(result)
-        header = w.loads(header)
+        result = pickle.loads(result)
+        header = pickle.loads(header)
         assert result == 'OK'
         assert header['address'] == w.address
         assert header['jobid'] == 3
@@ -64,13 +65,13 @@ def test_getitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         header = {'jobid': 4, 'function': 'getitem', 'address': 'ipc://server'}
         payload = {'function': 'getitem', 'key': 'x', 'queue': 'some-key'}
-        r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
+        r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
 
         address, header, payload = r.recv_multipart()
-        payload = w.loads(payload)
+        payload = pickle.loads(payload)
         assert payload['value'] == 10
         assert payload['queue'] == 'some-key'
-        header = w.loads(header)
+        header = pickle.loads(header)
         assert header['function'] == 'getitem-ack'
 
 
@@ -78,7 +79,7 @@ def test_setitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         header = {'jobid': 5, 'function': 'setitem', 'address': 'ipc://server'}
         payload = {'function': 'setitem', 'key': 'z', 'value': 30}
-        r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
+        r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
         sleep(0.05)
         assert w.data['z'] == 30
 
@@ -87,7 +88,7 @@ def test_delitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         header = {'jobid': 5, 'function': 'delitem', 'address': 'ipc://server'}
         payload = {'function': 'delitem', 'key': 'y', 'reply': True}
-        r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
+        r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
 
         address, header, result = r.recv_multipart()
         assert 'y' not in w.data
@@ -97,11 +98,11 @@ def test_error():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         header = {'jobid': 5, 'function': 'getitem', 'address': 'ipc://server'}
         payload = {'function': 'getitem', 'key': 'does-not-exist', 'queue': ''}
-        r.send_multipart([w.address, w.dumps(header), w.dumps(payload)])
+        r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
 
         address, header, result = r.recv_multipart()
-        result = w.loads(result)
-        header = w.loads(header)
+        result = pickle.loads(result)
+        header = pickle.loads(header)
         assert isinstance(result['value'], KeyError)
         assert header['status'] != 'OK'
 
@@ -142,11 +143,11 @@ def test_compute():
                        'task': (add, 'a', 'x'),
                        'locations': {'x': [a.address]},
                        'queue': 'q-key'}
-            r.send_multipart([b.address, b.dumps(header), b.dumps(payload)])
+            r.send_multipart([b.address, pickle.dumps(header), pickle.dumps(payload)])
 
             address, header, result = r.recv_multipart()
-            result = b.loads(result)
-            header = b.loads(header)
+            header = pickle.loads(header)
+            result = header.get('serializer', pickle).loads(result)
             assert header['address'] == b.address
             assert b.data['c'] == 11
             assert 0 < result['duration'] < 1.0

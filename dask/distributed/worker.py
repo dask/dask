@@ -15,9 +15,10 @@ import sys
 from ..compatibility import Queue, unicode
 from .. import core
 try:
-    from cPickle import dumps, loads, HIGHEST_PROTOCOL
+    import cPickle as pickle
 except ImportError:
-    from pickle import dumps, loads, HIGHEST_PROTOCOL
+    import pickle
+import dill
 
 
 MAX_DEALERS = 100
@@ -46,8 +47,6 @@ class Worker(object):
     State
     -----
 
-    dumps/loads: functions
-        used for serialization, default to pickle.loads/dumps(protocol=Highest)
     scheduler: string
         Address of scheduler
     status: string
@@ -65,14 +64,11 @@ class Worker(object):
         dask.distributed.scheduler.Scheduler
     """
     def __init__(self, scheduler, data=None, nthreads=100,
-                 dumps=partial(dumps, protocol=HIGHEST_PROTOCOL),
-                 loads=loads, address=None, port=None):
+                 address=None, port=None):
         if isinstance(scheduler, unicode):
             scheduler = scheduler.encode()
         self.data = data if data is not None else dict()
         self.pool = ThreadPool(nthreads)
-        self.dumps = dumps
-        self.loads = loads
         self.scheduler = scheduler
         self.status = 'run'
 
@@ -134,7 +130,8 @@ class Worker(object):
         See also:
             Worker.collect
         """
-        payload = self.loads(payload)
+        serializer = header.get('serializer', pickle)
+        payload = serializer.loads(payload)
         log(self.address, "Getitem for worker", header, payload)
         header2 = {'function': 'getitem-ack',
                    'jobid': header.get('jobid')}
@@ -157,7 +154,8 @@ class Worker(object):
             Worker.collect
         """
         with logerrors():
-            payload = self.loads(payload)
+            serializer = header.get('serializer', pickle)
+            payload = serializer.loads(payload)
             log(self.address, 'Getitem ack', payload)
             assert header['status'] == 'OK'
 
@@ -171,7 +169,8 @@ class Worker(object):
             Scheduler.gather
             Scheduler.getitem_ack
         """
-        payload = self.loads(payload)
+        serializer = header.get('serializer', pickle)
+        payload = serializer.loads(payload)
         log(self.address, 'Get from scheduler', payload)
         key = payload['key']
         header2 = {'jobid': header.get('jobid')}
@@ -193,7 +192,8 @@ class Worker(object):
             Scheduler.send_data
             Scheduler.setitem_ack
         """
-        payload = self.loads(payload)
+        serializer = header.get('serializer', pickle)
+        payload = serializer.loads(payload)
         log(self.address, 'Setitem', payload)
         key = payload['key']
         value = payload['value']
@@ -210,7 +210,8 @@ class Worker(object):
 
     def delitem(self, header, payload):
         """ Remove item from local data """
-        payload = self.loads(payload)
+        serializer = header.get('serializer', pickle)
+        payload = serializer.loads(payload)
         log(self.address, 'Delitem', payload)
         key = payload['key']
         del self.data[key]
@@ -225,9 +226,10 @@ class Worker(object):
         log(self.address, 'Send to scheduler', header)
         header['address'] = self.address
         header['timestamp'] = datetime.utcnow()
+        serializer = header.get('serializer', pickle)
         with self.lock:
-            self.to_scheduler.send_multipart([self.dumps(header),
-                                              self.dumps(payload)])
+            self.to_scheduler.send_multipart([dill.dumps(header),
+                                              serializer.dumps(payload)])
 
     def send_to_worker(self, address, header, payload):
         """ Send data to workers
@@ -250,9 +252,10 @@ class Worker(object):
         header['address'] = self.address
         header['timestamp'] = datetime.utcnow()
         log(self.address, 'Send to worker', address, header)
+        serializer = header.get('serializer', pickle)
         with self.lock:
-            self.dealers[address].send_multipart([self.dumps(header),
-                                                  self.dumps(payload)])
+            self.dealers[address].send_multipart([dill.dumps(header),
+                                                  serializer.dumps(payload)])
 
     def listen_to_scheduler(self):
         """
@@ -299,7 +302,7 @@ class Worker(object):
             if not self.to_scheduler.poll(100):
                 continue
             header, payload = self.to_scheduler.recv_multipart()
-            header = self.loads(header)
+            header = pickle.loads(header)
             log(self.address, 'Receive job from scheduler', header)
             try:
                 function = self.scheduler_functions[header['function']]
@@ -319,7 +322,7 @@ class Worker(object):
                 continue
 
             address, header, payload = self.to_workers.recv_multipart()
-            header = self.loads(header)
+            header = pickle.loads(header)
             if 'address' not in header:
                 header['address'] = address
             log(self.address, 'Receive job from worker', address, header)
@@ -413,7 +416,8 @@ class Worker(object):
         back to the scheduler that we're free.
         """
         # Unpack payload
-        payload = self.loads(payload)
+        serializer = header.get('serializer', pickle)
+        payload = serializer.loads(payload)
         locations = payload['locations']
         key = payload['key']
         task = payload['task']
