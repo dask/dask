@@ -202,27 +202,29 @@ class Scheduler(object):
         """ Send packet to worker """
         log(self.address_to_workers, 'Send to worker', address, header)
         header['address'] = self.address_to_workers
-        serializer = header.get('serializer', pickle)
+        loads = header.get('loads', pickle.loads)
+        dumps = header.get('dumps', pickle.dumps)
         if isinstance(address, unicode):
             address = address.encode()
         header['timestamp'] = datetime.utcnow()
         with self.lock:
             self.to_workers.send_multipart([address,
-                                            dill.dumps(header),
-                                            serializer.dumps(payload)])
+                                            pickle.dumps(header),
+                                            dumps(payload)])
 
     def send_to_client(self, address, header, result):
         """ Send packet to client """
         log(self.address_to_clients, 'Send to client', address, header)
         header['address'] = self.address_to_clients
-        serializer = header.get('serializer', pickle)
+        loads = header.get('loads', pickle.loads)
+        dumps = header.get('dumps', pickle.dumps)
         if isinstance(address, unicode):
             address = address.encode()
         header['timestamp'] = datetime.utcnow()
         with self.lock:
             self.to_clients.send_multipart([address,
-                                            dill.dumps(header),
-                                            serializer.dumps(result)])
+                                            pickle.dumps(header),
+                                            dumps(result)])
 
     def trigger_task(self, dsk, key, queue):
         """ Send a single task to the next available worker
@@ -235,7 +237,8 @@ class Scheduler(object):
         worker = self.available_workers.get()
         locations = dict((dep, self.who_has[dep]) for dep in deps)
 
-        header = {'function': 'compute', 'jobid': key, 'serializer': dill}
+        header = {'function': 'compute', 'jobid': key,
+                  'dumps': dill.dumps, 'loads': dill.loads}
         payload = {'key': key, 'task': dsk[key], 'locations': locations,
                    'queue': queue}
         self.send_to_worker(worker, header, payload)
@@ -544,7 +547,8 @@ class Scheduler(object):
         Output Payload: keys, result
         Sent to client on 'schedule-ack'
         """
-        payload = dill.loads(payload)
+        loads = header.get('loads', dill.loads)
+        payload = loads(payload)
         address = header['address']
         dsk = payload['dask']
         keys = payload['keys']

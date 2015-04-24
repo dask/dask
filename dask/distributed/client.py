@@ -60,7 +60,8 @@ class Client(object):
         if 'address' not in header:
             header['address'] = self.address
         header['timestamp'] = datetime.utcnow()
-        self.socket.send_multipart([dill.dumps(header), dill.dumps(payload)])
+        header['loads'] = dill.loads
+        self.socket.send_multipart([pickle.dumps(header), dill.dumps(payload)])
 
     def recv_from_scheduler(self):
         header, payload = self.socket.recv_multipart()

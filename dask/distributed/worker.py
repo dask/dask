@@ -20,6 +20,8 @@ except ImportError:
     import pickle
 import dill
 
+def pickle_dumps(obj):
+    return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
 
 MAX_DEALERS = 100
 
@@ -130,8 +132,8 @@ class Worker(object):
         See also:
             Worker.collect
         """
-        serializer = header.get('serializer', pickle)
-        payload = serializer.loads(payload)
+        loads = header.get('loads', pickle.loads)
+        payload = loads(payload)
         log(self.address, "Getitem for worker", header, payload)
         header2 = {'function': 'getitem-ack',
                    'jobid': header.get('jobid')}
@@ -154,8 +156,8 @@ class Worker(object):
             Worker.collect
         """
         with logerrors():
-            serializer = header.get('serializer', pickle)
-            payload = serializer.loads(payload)
+            loads = header.get('loads', pickle.loads)
+            payload = loads(payload)
             log(self.address, 'Getitem ack', payload)
             assert header['status'] == 'OK'
 
@@ -169,8 +171,8 @@ class Worker(object):
             Scheduler.gather
             Scheduler.getitem_ack
         """
-        serializer = header.get('serializer', pickle)
-        payload = serializer.loads(payload)
+        loads = header.get('loads', pickle.loads)
+        payload = loads(payload)
         log(self.address, 'Get from scheduler', payload)
         key = payload['key']
         header2 = {'jobid': header.get('jobid')}
@@ -192,8 +194,8 @@ class Worker(object):
             Scheduler.send_data
             Scheduler.setitem_ack
         """
-        serializer = header.get('serializer', pickle)
-        payload = serializer.loads(payload)
+        loads = header.get('loads', pickle.loads)
+        payload = loads(payload)
         log(self.address, 'Setitem', payload)
         key = payload['key']
         value = payload['value']
@@ -210,8 +212,8 @@ class Worker(object):
 
     def delitem(self, header, payload):
         """ Remove item from local data """
-        serializer = header.get('serializer', pickle)
-        payload = serializer.loads(payload)
+        loads = header.get('loads', pickle.loads)
+        payload = loads(payload)
         log(self.address, 'Delitem', payload)
         key = payload['key']
         del self.data[key]
@@ -226,10 +228,10 @@ class Worker(object):
         log(self.address, 'Send to scheduler', header)
         header['address'] = self.address
         header['timestamp'] = datetime.utcnow()
-        serializer = header.get('serializer', pickle)
+        dumps = header.get('dumps', pickle_dumps)
         with self.lock:
-            self.to_scheduler.send_multipart([dill.dumps(header),
-                                              serializer.dumps(payload)])
+            self.to_scheduler.send_multipart([pickle_dumps(header),
+                                              dumps(payload)])
 
     def send_to_worker(self, address, header, payload):
         """ Send data to workers
@@ -252,10 +254,10 @@ class Worker(object):
         header['address'] = self.address
         header['timestamp'] = datetime.utcnow()
         log(self.address, 'Send to worker', address, header)
-        serializer = header.get('serializer', pickle)
+        dumps = header.get('dumps', pickle_dumps)
         with self.lock:
-            self.dealers[address].send_multipart([dill.dumps(header),
-                                                  serializer.dumps(payload)])
+            self.dealers[address].send_multipart([pickle_dumps(header),
+                                                  dumps(payload)])
 
     def listen_to_scheduler(self):
         """
@@ -416,8 +418,8 @@ class Worker(object):
         back to the scheduler that we're free.
         """
         # Unpack payload
-        serializer = header.get('serializer', pickle)
-        payload = serializer.loads(payload)
+        loads = header.get('loads', pickle.loads)
+        payload = loads(payload)
         locations = payload['locations']
         key = payload['key']
         task = payload['task']

@@ -31,10 +31,10 @@ def test_status_worker():
 
         header = {'address': b'ipc://worker1', 'jobid': 1, 'function': 'status'}
         payload = {'function': 'status'}
-        sock.send_multipart([dill.dumps(header), pickle.dumps(payload)])
+        sock.send_multipart([pickle.dumps(header), pickle.dumps(payload)])
 
         header2, payload2 = sock.recv_multipart()
-        header2 = dill.loads(header2)
+        header2 = pickle.loads(header2)
         assert header2['address'] == s.address_to_workers
         assert header2['jobid'] == header.get('jobid')
         assert isinstance(header2['timestamp'], (datetime, str))
@@ -49,10 +49,10 @@ def test_status_client():
 
         header = {'address': b'ipc://client-1', 'jobid': 2, 'function': 'status'}
         payload = {'function': 'status'}
-        sock.send_multipart([dill.dumps(header), pickle.dumps(payload)])
+        sock.send_multipart([pickle.dumps(header), pickle.dumps(payload)])
 
         header2, payload2 = sock.recv_multipart()
-        header2 = dill.loads(header2)
+        header2 = pickle.loads(header2)
         assert header2['address'] == s.address_to_clients
         assert header2['jobid'] == header.get('jobid')
         assert isinstance(header2['timestamp'], (datetime, str))
