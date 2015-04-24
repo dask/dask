@@ -160,3 +160,10 @@ def test_ghost():
 
     g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
     assert g.chunks == ((8, 8), (5, 5))
+
+
+def test_map_overlap():
+    x = da.arange(10, chunks=5)
+
+    y = x.map_overlap(lambda x: x + len(x), depth=2)
+    assert eq(y, np.arange(10) + 5 + 2 + 2)

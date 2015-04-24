@@ -130,7 +130,7 @@ def ghost_internal(x, axes):
                  name, chunks)
 
 
-def trim_internal(x, axes=None):
+def trim_internal(x, axes):
     """ Trim sides from each block
 
     This couples well with the ghost operation, which may leave excess data on
@@ -302,3 +302,23 @@ def ghost(x, depth, boundary):
                 for k, v in depth.items())
     x4 = chunk.trim(x3, trim)
     return x4
+
+
+def map_overlap(x, func, depth, boundary='reflect', trim=True, **kwargs):
+    if isinstance(depth, int):
+        depth = (depth,) * x.ndim
+    if isinstance(depth, tuple):
+        depth = dict(zip(range(x.ndim), depth))
+
+    if not isinstance(boundary, (tuple, dict)):
+        boundary = (boundary,) * x.ndim
+    if isinstance(boundary, tuple):
+        boundary = dict(zip(range(x.ndim), boundary))
+    if boundary is None:
+        boundary = {}
+    g = ghost(x, depth=depth, boundary=boundary)
+    g2 = g.map_blocks(func, **kwargs)
+    if trim:
+        return trim_internal(g2, axes=depth)
+    else:
+        return g2
