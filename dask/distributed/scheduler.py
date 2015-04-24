@@ -97,6 +97,8 @@ class Scheduler(object):
         self.status = 'run'
         self.queues = dict()
 
+        self._schedule_lock = Lock()
+
         # RPC functions that workers and clients can trigger
         self.worker_functions = {'register': self.worker_registration,
                                  'status': self.status_to_worker,
@@ -491,54 +493,56 @@ class Scheduler(object):
 
 
         """
-        if isinstance(result, list):
-            result_flat = set(flatten(result))
-        else:
-            result_flat = set([result])
-        results = set(result_flat)
+        with self._schedule_lock:
+            if isinstance(result, list):
+                result_flat = set(flatten(result))
+            else:
+                result_flat = set([result])
+            results = set(result_flat)
 
-        cache = dict()
-        dag_state = dag_state_from_dask(dsk, cache=cache)
-        self.scatter(cache.items())  # send data in dask up to workers
+            cache = dict()
+            dag_state = dag_state_from_dask(dsk, cache=cache)
+            self.scatter(cache.items())  # send data in dask up to workers
 
-        tick = [0]
+            tick = [0]
 
-        if dag_state['waiting'] and not dag_state['ready']:
-            raise ValueError("Found no accessible jobs in dask graph")
+            if dag_state['waiting'] and not dag_state['ready']:
+                raise ValueError("Found no accessible jobs in dask graph")
 
-        event_queue = Queue()
-        qkey = str(uuid.uuid1())
-        self.queues[qkey] = event_queue
+            event_queue = Queue()
+            qkey = str(uuid.uuid1())
+            self.queues[qkey] = event_queue
 
-        def fire_task():
-            tick[0] += 1  # Update heartbeat
+            def fire_task():
+                tick[0] += 1  # Update heartbeat
 
-            # Choose a good task to compute
-            key = dag_state['ready'].pop()
-            dag_state['ready-set'].remove(key)
-            dag_state['running'].add(key)
+                # Choose a good task to compute
+                key = dag_state['ready'].pop()
+                dag_state['ready-set'].remove(key)
+                dag_state['running'].add(key)
 
-            self.trigger_task(dsk, key, qkey)  # Fire
+                self.trigger_task(dsk, key, qkey)  # Fire
 
-        # Seed initial tasks
-        while dag_state['ready'] and self.available_workers.qsize() > 0:
-            fire_task()
-
-        # Main loop, wait on tasks to finish, insert new ones
-        while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
-            payload = event_queue.get()
-
-            if isinstance(payload['status'], Exception):
-                raise payload['status']
-
-            key = payload['key']
-            finish_task(dsk, key, dag_state, results,
-                        release_data=self._release_data)
-
+            # Seed initial tasks
             while dag_state['ready'] and self.available_workers.qsize() > 0:
                 fire_task()
 
-        return self.gather(result)
+            # Main loop, wait on tasks to finish, insert new ones
+            while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
+                payload = event_queue.get()
+
+                if isinstance(payload['status'], Exception):
+                    raise payload['status']
+
+                key = payload['key']
+                finish_task(dsk, key, dag_state, results,
+                            release_data=self._release_data)
+
+                while dag_state['ready'] and self.available_workers.qsize() > 0:
+                    fire_task()
+
+            result2 = self.gather(result)
+        return result2
 
     def schedule_from_client(self, header, payload):
         """
