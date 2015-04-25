@@ -147,7 +147,7 @@ def test_compute():
 
             address, header, result = r.recv_multipart()
             header = pickle.loads(header)
-            result = header.get('serializer', pickle).loads(result)
+            result = header.get('loads', pickle.loads)(result)
             assert header['address'] == b.address
             assert b.data['c'] == 11
             assert 0 < result['duration'] < 1.0

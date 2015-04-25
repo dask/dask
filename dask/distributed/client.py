@@ -66,7 +66,7 @@ class Client(object):
     def recv_from_scheduler(self):
         header, payload = self.socket.recv_multipart()
         header = pickle.loads(header)
-        serializer = header.get('serializer', pickle)
-        payload = serializer.loads(payload)
+        loads = header.get('loads', pickle.loads)
+        payload = loads(payload)
         log(self.address, 'Received from scheduler', header)
         return header, payload
