@@ -66,7 +66,7 @@ class Worker(object):
         dask.distributed.scheduler.Scheduler
     """
     def __init__(self, scheduler, data=None, nthreads=100,
-                 address=None, port=None):
+                 address=None, port=None, block=False):
         if isinstance(scheduler, unicode):
             scheduler = scheduler.encode()
         self.data = data if data is not None else dict()
@@ -115,6 +115,9 @@ class Worker(object):
         self._listen_scheduler_thread.start()
         self._listen_workers_thread = Thread(target=self.listen_to_workers)
         self._listen_workers_thread.start()
+
+        if block:
+            self.block()
 
     def status_to_scheduler(self, header, payload):
         out_header = {'jobid': header.get('jobid')}
@@ -335,6 +338,15 @@ class Worker(object):
                 log(self.address, 'Unknown function', header)
             else:
                 future = self.pool.apply_async(function, args=(header, payload))
+
+    def block(self):
+        """ Block until listener threads close
+
+        Warning: If some other thread doesn't call `.close()` then, in the
+        common case you can not easily escape from this.
+        """
+        self._listen_workers_thread.join()
+        self._listen_scheduler_thread.join()
 
     def collect(self, locations):
         """ Collect data from peers

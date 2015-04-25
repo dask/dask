@@ -60,7 +60,8 @@ class Scheduler(object):
     address_to_clients - string
         ZMQ address of our connection to clients
     """
-    def __init__(self, address_to_workers=None, address_to_clients=None):
+    def __init__(self, address_to_workers=None, address_to_clients=None,
+                 block=False):
         self.context = zmq.Context()
         hostname = socket.gethostname()
 
@@ -117,6 +118,9 @@ class Scheduler(object):
 
         self.active_tasks = set()
 
+        if block:
+            self.block()
+
     def listen_to_workers(self):
         """ Event loop: Listen to worker router """
         while self.status != 'closed':
@@ -153,6 +157,15 @@ class Scheduler(object):
                 log(self.address_to_clients, 'Unknown function', header)
             else:
                 self.pool.apply_async(function, args=(header, payload))
+
+    def block(self):
+        """ Block until listener threads close
+
+        Warning: If some other thread doesn't call `.close()` then, in the
+        common case you can not easily escape from this.
+        """
+        self._listen_to_workers_thread.join()
+        self._listen_to_clients_thread.join()
 
     def worker_registration(self, header, payload):
         """ Worker came in, register them """
