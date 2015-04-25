@@ -116,8 +116,6 @@ class Scheduler(object):
         self._listen_to_clients_thread = Thread(target=self.listen_to_clients)
         self._listen_to_clients_thread.start()
 
-        self.active_tasks = set()
-
         if block:
             self.block()
 
@@ -190,7 +188,6 @@ class Scheduler(object):
             dependencies = payload['dependencies']
 
             log(self.address_to_workers, 'Finish task', payload)
-            self.active_tasks.remove(key)
 
             self.data[key]['duration'] = duration
             self.who_has[key].add(address)
@@ -257,7 +254,6 @@ class Scheduler(object):
         payload = {'key': key, 'task': dsk[key], 'locations': locations,
                    'queue': queue}
         self.send_to_worker(worker, header, payload)
-        self.active_tasks.add(key)
 
     def release_key(self, key):
         """ Release data from all workers
