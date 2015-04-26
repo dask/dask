@@ -46,19 +46,26 @@ def logerrors():
 class Worker(object):
     """ Asynchronous worker in a distributed dask computation pool
 
-    State
-    -----
+
+    Parameters
+    ----------
 
     scheduler: string
         Address of scheduler
+    hostname: string
+        A visible hostname/IP of this worker to the network
+    port_to_workers: int
+        Port on which to listen to worker connections
+
+    State
+    -----
+
     status: string
         Status of worker, either 'run' or 'closed'
     to_workers: zmq.Socket
         Router socket to serve requests from other workers
     to_scheduler: zmq.Socket
         Dealer socket to communicate with scheduler
-    address: string
-        The address of my router socket
 
     See Also
     --------
@@ -66,7 +73,7 @@ class Worker(object):
         dask.distributed.scheduler.Scheduler
     """
     def __init__(self, scheduler, data=None, nthreads=100,
-                 address=None, port=None, block=False):
+                 hostname=None, port_to_workers=None, block=False):
         if isinstance(scheduler, unicode):
             scheduler = scheduler.encode()
         self.data = data if data is not None else dict()
@@ -74,19 +81,15 @@ class Worker(object):
         self.scheduler = scheduler
         self.status = 'run'
 
+        self.hostname = hostname or socket.gethostname()
+
         self.to_workers = context.socket(zmq.ROUTER)
-        if address is None:
-            hostname = socket.gethostname()
-            if port:
-                self.to_workers.bind('tcp://%s:%d' % (hostname, port))
-            else:
-                port = self.to_workers.bind_to_random_port('tcp://*')
-            address = ('tcp://%s:%s' % (hostname, port)).encode()
+        if port_to_workers is None:
+            port_to_workers = self.to_workers.bind_to_random_port('tcp://*')
         else:
-            if isinstance(address, unicode):
-                address = address.encode()
-            self.to_workers.bind(address)
-        self.address = address
+            self.to_workers.bind('tcp://*:%d' % port)
+        self.address = ('tcp://%s:%s' % (self.hostname, port_to_workers)).encode()
+
         self.dealers = dict()
 
         self.lock = Lock()
@@ -95,7 +98,7 @@ class Worker(object):
 
         self.to_scheduler = context.socket(zmq.DEALER)
 
-        self.to_scheduler.setsockopt(zmq.IDENTITY, address)
+        self.to_scheduler.setsockopt(zmq.IDENTITY, self.address)
         self.to_scheduler.connect(scheduler)
         self.send_to_scheduler({'function': 'register'}, {})
 

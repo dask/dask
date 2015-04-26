@@ -44,8 +44,9 @@ workers and one for the clients.
 .. code-block:: python
 
    from dask.distributed import Scheduler
-   s = Scheduler(address_to_workers='tcp://scheduler-hostname:4444',
-                 address_to_clients='tcp://scheduler-hostname:5555')
+   s = Scheduler(hostname='scheduler-hostname',
+                 port_to_workers=4444,
+                 port_to_clients=5555)
 
 Alternatively ZeroMQ can choose these for you:
 
@@ -74,8 +75,8 @@ optionally select an address for the worker:
 .. code-block:: python
 
    from dask.distributed import Worker
-   w = Worker(address='tcp://worker-hostname:1234',
-              scheduler='tcp://scheduler-hostname:4444',
+   w = Worker(scheduler='tcp://scheduler-hostname:4444',
+              hostname='worker-hostname', port_to_workers=1234,
               data={})
 
 Alternatively we can create a dict and address for you:

@@ -40,6 +40,18 @@ def logerrors():
 class Scheduler(object):
     """ Disitributed scheduler for dask computations
 
+    Parameters
+    ----------
+
+    hostname: string
+        hostname or IP address of this machine visible to outside world
+    port_to_workers: int
+        Port on which to listen to connections from workers
+    port_to_clients: int
+        Port on which to listen to connections from clients
+    block: bool
+        Whether or not to block the process on creation
+
     State
     -----
 
@@ -55,36 +67,26 @@ class Scheduler(object):
         Socket to communicate to workers
     to_clients - zmq.Socket (ROUTER)
         Socket to communicate with users
-    address_to_workers - string
-        ZMQ address of our connection to workers
-    address_to_clients - string
-        ZMQ address of our connection to clients
     """
-    def __init__(self, address_to_workers=None, address_to_clients=None,
-                 block=False):
+    def __init__(self, port_to_workers=None, port_to_clients=None,
+                 hostname=None, block=False):
         self.context = zmq.Context()
-        hostname = socket.gethostname()
+        hostname = hostname or socket.gethostname()
 
         # Bind routers to addresses (and create addresses if necessary)
         self.to_workers = self.context.socket(zmq.ROUTER)
-        if address_to_workers is None:
-            port = self.to_workers.bind_to_random_port('tcp://*')
-            self.address_to_workers = ('tcp://%s:%d' % (hostname, port)).encode()
+        if port_to_workers is None:
+            port_to_workers = self.to_workers.bind_to_random_port('tcp://*')
         else:
-            if isinstance(address_to_workers, unicode):
-                address_to_workers = address_to_workers.encode()
-            self.address_to_workers = address_to_workers
-            self.to_workers.bind(self.address_to_workers)
+            self.to_workers.bind('tcp://*:%d' % port_to_workers)
+        self.address_to_workers = ('tcp://%s:%d' % (hostname, port_to_workers)).encode()
 
         self.to_clients = self.context.socket(zmq.ROUTER)
-        if address_to_clients is None:
-            port = self.to_clients.bind_to_random_port('tcp://*')
-            self.address_to_clients = ('tcp://%s:%d' % (hostname, port)).encode()
+        if port_to_clients is None:
+            port_to_clients = self.to_clients.bind_to_random_port('tcp://*')
         else:
-            if isinstance(address_to_clients, unicode):
-                address_to_clients = address_to_clients.encode()
-            self.address_to_clients = address_to_clients
-            self.to_clients.bind(self.address_to_clients)
+            self.to_clients.bind('tcp://*:%d' % port_to_clients)
+        self.address_to_clients = ('tcp://%s:%d' % (hostname, port_to_clients)).encode()
 
         # State about my workers and computed data
         self.workers = dict()

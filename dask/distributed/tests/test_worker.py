@@ -15,20 +15,12 @@ def add(x, y):
     return x + y
 
 
-global_port = [5000]
-
-worker_names = ('ipc://node-%d' % i for i in itertools.count())
-
 @contextmanager
-def worker(port=None, data=None, address=None):
-    if port is None:
-        global_port[0] += 1
-        port = global_port[0]
+def worker(data=None, scheduler='tcp://localhost:5555'):
     if data is None:
         data = dict()
-    if address is None:
-        address = next(worker_names)
-    a = Worker('ipc://server', data, address=address)
+
+    a = Worker(scheduler, data)
 
     try:
         yield a
@@ -38,19 +30,24 @@ def worker(port=None, data=None, address=None):
 
 @contextmanager
 def worker_and_router(*args, **kwargs):
+    router = context.socket(zmq.ROUTER)
+    port = kwargs.get('port')
+    if port:
+        router.bind('tcp://*:%d' % port)
+    else:
+        port = port or router.bind_to_random_port('tcp://*')
+    kwargs['scheduler'] = 'tcp://localhost:%d' % port
     with worker(*args, **kwargs) as w:
-        router = context.socket(zmq.ROUTER)
-        router.bind(w.scheduler)
         handshake = router.recv_multipart()  # burn initial handshake
-
         yield w, router
 
 
 def test_status():
-    with worker_and_router(data={'x': 10, 'y': 20}, address=b'ipc://alice') as (w, r):
-        header = {'jobid': 3, 'function': 'status', 'address': 'ipc://server'}
-        payload = {'function': 'status'}
-        r.send_multipart([b'ipc://alice', pickle.dumps(header), pickle.dumps(payload)])
+    with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
+        header = {'jobid': 3, 'function':  'status',
+                  'address': w.scheduler}
+        payload = {}
+        r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
 
         address, header, result = r.recv_multipart()
         assert address == w.address
@@ -63,8 +60,9 @@ def test_status():
 
 def test_getitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
-        header = {'jobid': 4, 'function': 'getitem', 'address': 'ipc://server'}
-        payload = {'function': 'getitem', 'key': 'x', 'queue': 'some-key'}
+        header = {'jobid': 4, 'function': 'getitem',
+                  'address': w.scheduler}
+        payload = {'key': 'x', 'queue': 'some-key'}
         r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
 
         address, header, payload = r.recv_multipart()
@@ -77,7 +75,7 @@ def test_getitem():
 
 def test_setitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
-        header = {'jobid': 5, 'function': 'setitem', 'address': 'ipc://server'}
+        header = {'jobid': 5, 'function': 'setitem', 'address': w.scheduler}
         payload = {'function': 'setitem', 'key': 'z', 'value': 30}
         r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
         sleep(0.05)
@@ -86,7 +84,7 @@ def test_setitem():
 
 def test_delitem():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
-        header = {'jobid': 5, 'function': 'delitem', 'address': 'ipc://server'}
+        header = {'jobid': 5, 'function': 'delitem', 'address': w.scheduler}
         payload = {'function': 'delitem', 'key': 'y', 'reply': True}
         r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
 
@@ -96,7 +94,7 @@ def test_delitem():
 
 def test_error():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
-        header = {'jobid': 5, 'function': 'getitem', 'address': 'ipc://server'}
+        header = {'jobid': 5, 'function': 'getitem', 'address': w.scheduler}
         payload = {'function': 'getitem', 'key': 'does-not-exist', 'queue': ''}
         r.send_multipart([w.address, pickle.dumps(header), pickle.dumps(payload)])
 
@@ -116,12 +114,9 @@ def test_close():
 
 
 def test_collect():
-    with worker(data={'x': 10, 'y': 20}) as a:
-        with worker(data={'a': 1, 'b': 2}) as b:
-            with worker(data={'c': 5}) as c:
-                router = context.socket(zmq.ROUTER)
-                router.bind(c.scheduler)
-                handshake = router.recv_multipart()  # burn initial handshake
+    with worker_and_router(data={'x': 10, 'y': 20}) as (a, router):
+        with worker(data={'a': 1, 'b': 2}, scheduler=a.scheduler) as b:
+            with worker(data={'c': 5}, scheduler=a.scheduler) as c:
                 handshake = router.recv_multipart()  # burn initial handshake
                 handshake = router.recv_multipart()  # burn initial handshake
 
@@ -133,13 +128,12 @@ def test_collect():
 
 
 def test_compute():
-    with worker(data={'x': 10, 'y': 20}) as a:
-        with worker_and_router(data={'a': 1, 'b': 2}) as (b, r):
+    with worker_and_router(data={'a': 1, 'b': 2}) as (b, r):
+        with worker(data={'x': 10, 'y': 20}, scheduler=b.scheduler) as a:
             r.recv_multipart()  # burn handshake
 
             header = {'function': 'compute'}
-            payload = {'function': 'compute',
-                       'key': 'c',
+            payload = {'key': 'c',
                        'task': (add, 'a', 'x'),
                        'locations': {'x': [a.address]},
                        'queue': 'q-key'}
