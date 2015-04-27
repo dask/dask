@@ -1,7 +1,9 @@
 import dask.array as da
 import numpy as np
 import dask
-from dask.array.ghost import *
+from dask.array.ghost import (Array, fractional_slice, getitem, trim_internal,
+                              ghost_internal, nearest, constant, boundaries,
+                              reflect, periodic, ghost)
 from dask.core import get
 
 
@@ -81,6 +83,19 @@ def test_reflect():
     assert eq(e, expected)
 
     e = reflect(d, axis=0, depth=1)
+    expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
+    assert eq(e, expected)
+
+
+def test_nearest():
+    x = np.arange(10)
+    d = da.from_array(x, chunks=(5, 5))
+
+    e = nearest(d, axis=0, depth=2)
+    expected = np.array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9])
+    assert eq(e, expected)
+
+    e = nearest(d, axis=0, depth=1)
     expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
     assert eq(e, expected)
 
