@@ -1,7 +1,9 @@
 import dask.array as da
 import numpy as np
 import dask
-from dask.array.ghost import *
+from dask.array.ghost import (Array, fractional_slice, getitem, trim_internal,
+                              ghost_internal, nearest, constant, boundaries,
+                              reflect, periodic, ghost)
 from dask.core import get
 
 
