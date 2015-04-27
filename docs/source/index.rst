@@ -17,6 +17,7 @@ Contents
 
    overview.rst
    spec.rst
+   install.rst
    array.rst
    frame.rst
    bag.rst
