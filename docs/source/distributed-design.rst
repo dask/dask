@@ -190,21 +190,25 @@ machines Alice and Bob. When Alice needs Bob to send her a result she
 fires off a request to Bob, has to wait around for it to return, and
 then needs to wake up right when it gets back. Furthermore, the
 centralized message listener needs to know to direct the message to
-Alice. We do this through queues.
+the right thread on Alice waiting for the results. We accomplish this with
+queues.
 
-1. Alice sets up a new local queue with q unique ID::
+1. Alice sets up a new local queue with a unique ID::
 
-       qkey = str(uuid.uuid1()) Alice.queues[qkey] = Queue()
+       qkey = str(uuid.uuid1())
+       Alice.queues[qkey] = Queue()
 
 2. The calling function on Alice sends off her request to Bob with the
    queue key, and then waits on that queue.::
 
-       header = {..., 'function': 'f'} payload = {..., 'queue': qkey}
+       header = {..., 'function': 'f'}
+       payload = {..., 'queue': qkey}
 
 3. Bob does his work and then sends back the result, passing the queue
    key through::
 
-       header = {..., 'function': 'f-ack'} payload = {..., 'queue': qkey}
+       header = {..., 'function': 'f-ack'}
+       payload = {..., 'queue': qkey}
 
 4. Alice's central listening thread gets this message and passes it to
    the ``f_ack`` function, which knows to look for the ``'queue'`` data
@@ -236,9 +240,9 @@ scheduler-worker latency issues. This also opens up options for
 registering and sharing collections between clients on a centralized
 scheduler.
 
-The ``Client`` is simpler than either the Worker or Scheduler. It is
-fully synchronous/blocking and really only has one operation, "ask
-scheduler to execute dask graph".
+The ``Client`` is simpler than either the ``Worker`` or ``Scheduler``. The
+client is fully synchronous/blocking and really only has one main operation,
+"ask scheduler to execute dask graph".
 
 The Client can only talk to the Scheduler, it does not talk to the
 workers.
@@ -260,7 +264,8 @@ It creates these dealer sockets on demand; it does not create all N-N
 connections on creation. It stores these sockets for reuse later. To
 avoid having too many open file descriptors workers clear their cache of
 dealer sockets after they reach some predefined limit (100 by default).
-Workers discover each other through the scheduler.
+Workers discover each other only when told to do so by the scheduler (see
+``collect/compute`` patterns above).
 
 Each client has a dealer socket to the scheduler. Clients do not talk to
-workers.
+workers or to each other.
