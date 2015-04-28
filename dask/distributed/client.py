@@ -70,3 +70,45 @@ class Client(object):
         payload = loads(payload)
         log(self.address, 'Received from scheduler', header)
         return header, payload
+
+    def set_collection(self, name, collection):
+        """ Store collection in scheduler
+
+        See docstring for get_collection
+        """
+        header = {'function': 'set-collection',
+                  'loads': dill.loads}
+        payload = {'type': type(collection),
+                   'args': collection._args,
+                   'name': name}
+        self.send_to_scheduler(header, payload)
+        header2, payload2 = self.recv_from_scheduler()
+
+        assert header2['status'] == 'OK'
+
+    def get_collection(self, name):
+        """ Get stored collection from scheduler
+
+        Clients may share collections with other clients by registering them
+        with the centralized scheduler.
+
+        >>> import dask.bag as db  # doctest: +SKIP
+        >>> b = db.from_sequence(...).map(...).filter(...) # doctest: +SKIP
+
+        >>> from dask.distributed import Client  # doctest: +SKIP
+        >>> client = Client('tcp://scheduler-hostname:5555')  # doctest: +SKIP
+        >>> client.set_collection('mybag', b)  # doctest: +SKIP
+
+        Other clients can connect to the same scheduler to collect that
+        collection.
+
+        >>> client2 = Client('tcp://scheduler-hostname:5555')  # doctest: +SKIP
+        >>> b2 = client2.get_collection('mybag')  # doctest: +SKIP
+        """
+        header = {'function': 'get-collection'}
+        payload = {'name': name}
+
+        self.send_to_scheduler(header, payload)
+        header2, payload2 = self.recv_from_scheduler()
+
+        return payload2['type'](*payload2['args'])

@@ -65,3 +65,24 @@ def test_multiple_clients():
                                    args=({'a': 1, 'b': (sleep_inc, 'a')}, 'b'))
 
         assert future1.get() == future2.get()
+
+
+def test_register_collections():
+    try:
+        import dask.bag as db
+    except ImportError:
+        return
+    with scheduler_and_workers() as (s, (a, b)):
+        c = Client(s.address_to_clients)
+
+        b = db.from_sequence(range(5), npartitions=2).map(lambda x: x + 1)
+        assert not s.collections
+        c.set_collection('mybag', b)
+        assert 'mybag' in s.collections
+
+        d = Client(s.address_to_clients)
+        b2 = d.get_collection('mybag')
+
+        assert (type(b) == type(b2) and
+                b.npartitions == b2.npartitions)
+        assert list(b) == list(b2)

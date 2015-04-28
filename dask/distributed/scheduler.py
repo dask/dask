@@ -67,6 +67,8 @@ class Scheduler(object):
         Socket to communicate to workers
     to_clients - zmq.Socket (ROUTER)
         Socket to communicate with users
+    collections - dict
+        Dict holding shared collections like bags and arrays
     """
     def __init__(self, port_to_workers=None, port_to_clients=None,
                  hostname=None, block=False):
@@ -94,6 +96,7 @@ class Scheduler(object):
         self.worker_has = defaultdict(set)
         self.available_workers = Queue()
         self.data = defaultdict(dict)
+        self.collections = dict()
 
         self.pool = ThreadPool(100)
         self.lock = Lock()
@@ -109,7 +112,9 @@ class Scheduler(object):
                                  'setitem-ack': self.setitem_ack,
                                  'getitem-ack': self.getitem_ack}
         self.client_functions = {'status': self.status_to_client,
-                                 'schedule': self.schedule_from_client}
+                                 'schedule': self.schedule_from_client,
+                                 'set-collection': self.set_collection,
+                                 'get-collection': self.get_collection}
 
         # Away we go!
         log(self.address_to_workers, 'Start')
@@ -595,3 +600,23 @@ class Scheduler(object):
 
         if delete:
             self.release_key(key)
+
+    def set_collection(self, header, payload):
+        with logerrors():
+            log(self.address_to_clients, "Set collection", header)
+            payload = header.get('loads', dill.loads)(payload)
+            self.collections[payload['name']] = payload
+
+            self.send_to_client(header['address'], {'status': 'OK'}, {})
+
+    def get_collection(self, header, payload):
+        with logerrors():
+            log(self.address_to_clients, "Get collection", header)
+            payload = header.get('loads', pickle.loads)(payload)
+            payload2 = self.collections[payload['name']]
+
+            header2 = {'status': 'OK',
+                       'loads': dill.loads,
+                       'dumps': dill.dumps}
+
+            self.send_to_client(header['address'], header2, payload2)
