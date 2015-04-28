@@ -72,6 +72,10 @@ class Scalar(object):
         self._name = _name
         self.blockdivs = []
 
+    @property
+    def _args(self):
+        return (self.dask, self._name)
+
     def _keys(self):
         return [(self._name, 0)]
 
@@ -214,11 +218,16 @@ class Series(_Frame):
     dask.dataframe.DataFrame
     """
     _partition_type = pd.Series
+
     def __init__(self, dsk, _name, name, blockdivs):
         self.dask = dsk
         self._name = _name
         self.name = name
         self.blockdivs = blockdivs
+
+    @property
+    def _args(self):
+        return (self.dask, self._name, self.name, self.blockdivs)
 
     @property
     def dtype(self):
@@ -397,6 +406,10 @@ class DataFrame(_Frame):
         self._name = name
         self.columns = tuple(columns)
         self.blockdivs = tuple(blockdivs)
+
+    @property
+    def _args(self):
+        return (self.dask, self._name, self.columns, self.blockdivs)
 
     def __getitem__(self, key):
         if isinstance(key, (str, unicode)):

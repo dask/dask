@@ -484,3 +484,10 @@ def test_concat():
                 pd.DataFrame(columns=['a', 'b'])])
     assert list(x.columns) == ['a', 'b']
     assert len(x) == 0
+
+def test_args():
+    e = d.assign(c=d.a + 1)
+    f = type(e)(*e._args)
+    assert eq(e, f)
+    assert eq(d.a, type(d.a)(*d.a._args))
+    assert eq(d.a.sum(), type(d.a.sum())(*d.a.sum()._args))
