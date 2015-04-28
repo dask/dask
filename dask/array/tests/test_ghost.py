@@ -1,5 +1,5 @@
 import numpy as np
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 import dask
 import dask.array as da
@@ -179,3 +179,13 @@ def test_nearest_ghost():
                  boundary={0: 'nearest', 1: 'nearest'})
     tarr = trim_internal(garr, {0: 5, 1: 5})
     assert_array_almost_equal(np.array(tarr), a)
+
+def test_0_depth():
+    a = np.arange(100).reshape(10, 10)
+    darr = da.from_array(a, chunks=(5, 5))
+    garr = ghost(darr, depth=0, boundary='reflect')
+
+    assert_array_equal(np.array(garr), np.array(darr))
+
+    tarr = trim_internal(garr, {0:0, 1:0})
+    assert_array_equal(np.array(tarr), np.array(darr))
