@@ -121,3 +121,30 @@ Clients provide a ``get`` method to request the computation of a dask graph
 Multiple clients can connect to the same scheduler.
 
 .. _chest:: https://github.com/ContinuumIO/chest
+
+
+Store Collections
+-----------------
+
+A Client can store a dask graph on the Scheduler for future use by others.
+
+.. code-block:: python
+
+   import dask.bag as db
+   b = db.from_sequence(range(5)).map(lambda x: x + 1)
+
+   from dask.distributed import Client
+   c = Client('tcp://scheduler-hostname:5555')
+
+   c.set_collection('mybag', b)
+
+Other clients on different machines can retrieve this collection:
+
+.. code-block:: python
+
+   from dask.distributed import Client
+   c = Client('tcp://scheduler-hostname:5555')
+   b = c.get_collection('mybag')
+
+This only stores the dask graph and not any underlying data that this graph
+might open.  Usually these graphs are small and easy to pass around.
