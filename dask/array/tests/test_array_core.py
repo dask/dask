@@ -153,7 +153,7 @@ def test_Array():
     chunks = (100, 100)
     name = 'x'
     dsk = merge({name: 'some-array'}, getem(name, chunks, shape=shape))
-    a = Array(dsk, name, chunks, shape)
+    a = Array(dsk, name, chunks, shape=shape)
 
     assert a.numblocks == (10, 10)
 
@@ -177,7 +177,7 @@ def test_numblocks_suppoorts_singleton_block_dims():
     chunks = (10, 10)
     name = 'x'
     dsk = merge({name: 'some-array'}, getem(name, shape=shape, chunks=chunks))
-    a = Array(dsk, name, chunks, shape)
+    a = Array(dsk, name, chunks, shape=shape)
 
     assert set(concat(a._keys())) == set([('x', i, 0) for i in range(100//10)])
 
@@ -187,7 +187,7 @@ def test_keys():
     dx = Array(dsk, 'x', chunks=(10, 10), shape=(50, 60))
     assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
                                           for i in range(5)]
-    d = Array({}, 'x', (), ())
+    d = Array({}, 'x', (), shape=())
     assert d._keys() == [('x',)]
 
 
@@ -904,3 +904,9 @@ def test_nbytes():
 def test_Array_normalizes_dtype():
     x = da.ones((3,), chunks=(1,), dtype=int)
     assert isinstance(x.dtype, np.dtype)
+
+
+def test_args():
+    x = da.ones((10, 2), chunks=(3, 1), dtype='i4') + 1
+    y = Array(*x._args)
+    assert eq(x, y)
