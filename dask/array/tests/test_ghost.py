@@ -1,6 +1,8 @@
-import dask.array as da
 import numpy as np
+from numpy.testing import assert_array_almost_equal
+
 import dask
+import dask.array as da
 from dask.array.ghost import (Array, fractional_slice, getitem, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
@@ -167,3 +169,13 @@ def test_map_overlap():
 
     y = x.map_overlap(lambda x: x + len(x), depth=2)
     assert eq(y, np.arange(10) + 5 + 2 + 2)
+
+
+def test_nearest_ghost():
+    a = np.arange(144).reshape(12, 12).astype(float)
+
+    darr = da.from_array(a, chunks=(6, 6))
+    garr = ghost(darr, depth={0: 5, 1: 5},
+                 boundary={0: 'nearest', 1: 'nearest'})
+    tarr = trim_internal(garr, {0: 5, 1: 5})
+    assert_array_almost_equal(np.array(tarr), a)
