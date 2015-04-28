@@ -112,19 +112,24 @@ def ghost_internal(x, axes):
     interior_keys = pipe(x._keys(), flatten,
                                     map(expand_key2), map(flatten),
                                     concat, list)
-    interior_slices = dict((k, fractional_slice(k, axes))
-                            for k in interior_keys)
 
-    shape = (3,) * x.ndim
     name = next(ghost_names)
-    ghost_blocks = dict(((name,) + k[1:],
-                         (rec_concatenate, (concrete, expand_key2(k))))
-                        for k in interior_keys)
+    interior_slices = {}
+    ghost_blocks = {}
+    for k in interior_keys:
+        interior_slices[k] = fractional_slice(k, axes)
 
-    chunks = [  [bds[0] + axes.get(i, 0)]
-              + [bd + axes.get(i, 0) * 2 for bd in bds[1:-1]]
-              + [bds[-1] + axes.get(i, 0)]
-              for i, bds in enumerate(x.chunks)]
+        ghost_blocks[(name,) + k[1:]] = (rec_concatenate,
+                                          (concrete, expand_key2(k)))
+
+    chunks = []
+    for i, bds in enumerate(x.chunks):
+        left = [bds[0] + axes.get(i, 0)]
+        right = [bds[-1] + axes.get(i, 0)]
+        mid = []
+        for bd in bds[1:-1]:
+            mid.append(bd + axes.get(i, 0) * 2)
+        chunks.append(left + mid + right)
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),
                  name, chunks)
