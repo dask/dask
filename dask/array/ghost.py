@@ -311,16 +311,6 @@ def ghost(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
-    x2 = boundaries(x, depth, boundary)
-    x3 = ghost_internal(x2, depth)
-    trim = dict((k, v*2 if boundary.get(k, None) is not None else 0)
-                for k, v in depth.items())
-    x4 = chunk.trim(x3, trim)
-    return x4
-
-
-def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
-
     if isinstance(depth, int):
         depth = (depth,) * x.ndim
     if isinstance(depth, tuple):
@@ -332,6 +322,16 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
         boundary = (boundary,) * x.ndim
     if isinstance(boundary, tuple):
         boundary = dict(zip(range(x.ndim), boundary))
+
+    x2 = boundaries(x, depth, boundary)
+    x3 = ghost_internal(x2, depth)
+    trim = dict((k, v*2 if boundary.get(k, None) is not None else 0)
+                for k, v in depth.items())
+    x4 = chunk.trim(x3, trim)
+    return x4
+
+
+def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
 
     g = ghost(x, depth=depth, boundary=boundary)
     g2 = g.map_blocks(func, **kwargs)
