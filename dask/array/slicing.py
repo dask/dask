@@ -88,7 +88,7 @@ def slice_array(out_name, in_name, blockdims, index):
     through a sequence of functions.
 
     slice_with_newaxis - handle None/newaxis case
-    slice_with_lists - handle fancy indexing with lists
+    slice_wrap_lists - handle fancy indexing with lists
     slice_slices_and_integers - handle everything else
     """
     index = replace_ellipsis(len(blockdims), index)
