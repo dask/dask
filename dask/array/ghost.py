@@ -56,9 +56,14 @@ def expand_key(k, dims):
             rv.append(ind + 0.9)
         return rv
 
-    shape = [1 + (1 if ind > 0 else 0)
-               + (1 if ind < dims[i] - 1 else 0)
-               for i, ind in enumerate(k[1:])]
+    shape = []
+    for i, ind in enumerate(k[1:]):
+        num = 1
+        if ind > 0:
+            num += 1
+        if ind < dims[i] - 1:
+            num += 1
+        shape.append(num)
 
     seq = list(product([k[0]], *[inds(i, ind)
                                     for i, ind in enumerate(k[1:])]))
