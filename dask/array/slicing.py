@@ -338,7 +338,7 @@ def _slice_1d(dim_shape, lengths, index):
         pos_step = abs(step) # 11%3==2, 11%-3==-1. Need positive step for %
 
         offset = 0
-        for i, length in zip(range(len(lengths)-1, -1, -1), reversed(lengths)):
+        for i, length in reversed(list(enumerate(lengths))):
             if start + length >= tail_index[i] and stop < 0:
                 d[i] = slice(start - tail_index[i],
                              max(stop, -length - 1), step)
