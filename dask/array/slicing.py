@@ -101,10 +101,10 @@ def slice_array(out_name, in_name, blockdims, index):
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
     missing = len(blockdims) - (len(index) - index.count(None))
-    index2 = index + (slice(None, None, None),) * missing
+    index += (slice(None, None, None),) * missing
 
     # Pass down to next function
-    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index2)
+    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index)
 
     bd_out = tuple(map(tuple, bd_out))
     return dsk_out, bd_out
