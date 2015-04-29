@@ -125,7 +125,7 @@ def ghost_internal(x, axes):
         interior_slices[k] = fractional_slice(k, axes)
 
         ghost_blocks[(name,) + k[1:]] = (rec_concatenate,
-                                          (concrete, expand_key2(k)))
+                                         (concrete, expand_key2(k)))
 
     chunks = []
     for i, bds in enumerate(x.chunks):
