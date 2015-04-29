@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
@@ -180,12 +181,30 @@ def test_nearest_ghost():
     tarr = trim_internal(garr, {0: 5, 1: 5})
     assert_array_almost_equal(np.array(tarr), a)
 
+
+@pytest.mark.xfail
 def test_0_depth():
     a = np.arange(100).reshape(10, 10)
-    darr = da.from_array(a, chunks=(5, 5))
+    darr = da.from_array(a, chunks=(5, 2))
     garr = ghost(darr, depth=0, boundary='reflect')
+    expected = np.array(garr)
 
-    assert_array_equal(np.array(garr), np.array(darr))
+    assert_array_equal(expected, np.array(darr))
 
     tarr = trim_internal(garr, {0:0, 1:0})
+    expected = np.array(tarr)
+    assert_array_equal(np.array(tarr), np.array(darr))
+
+
+@pytest.mark.xfail
+def test_depth_equals_boundary_length():
+    a = np.arange(100).reshape(10, 10)
+    darr = da.from_array(a, chunks=(5, 5))
+    garr = ghost(darr, depth=5, boundary='reflect')
+    expected = np.array(garr)
+
+    assert_array_equal(expected, np.array(darr))
+
+    tarr = trim_internal(garr, {0:5, 1:5})
+    expected = np.array(tarr)
     assert_array_equal(np.array(tarr), np.array(darr))
