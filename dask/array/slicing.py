@@ -100,7 +100,7 @@ def slice_array(out_name, in_name, blockdims, index):
         return {out_name: in_name}, blockdims
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
-    missing = len(blockdims) - len([ind for ind in index if ind is not None])
+    missing = len(blockdims) - (len(index) - index.count(None))
     index2 = index + (slice(None, None, None),) * missing
 
     # Pass down to next function
