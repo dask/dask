@@ -342,6 +342,17 @@ def ghost(x, depth, boundary):
 
 
 def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
+    if isinstance(depth, int):
+        depth = (depth,) * x.ndim
+    if isinstance(depth, tuple):
+        depth = dict(zip(range(x.ndim), depth))
+
+    if boundary is None:
+        boundary = 'reflect'
+    if not isinstance(boundary, (tuple, dict)):
+        boundary = (boundary,) * x.ndim
+    if isinstance(boundary, tuple):
+        boundary = dict(zip(range(x.ndim), boundary))
 
     g = ghost(x, depth=depth, boundary=boundary)
     g2 = g.map_blocks(func, **kwargs)
