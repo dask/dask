@@ -940,3 +940,11 @@ def test_from_array_with_lock():
 
     assert isinstance(tasks[0][3], thread.LockType)
     assert len(set(task[3] for task in tasks)) == 1
+
+    assert eq(d, x)
+
+    lock = Lock()
+    e = da.from_array(x, chunks=5, lock=lock)
+    f = da.from_array(x, chunks=5, lock=lock)
+
+    assert eq(e + f, x + x)
