@@ -121,3 +121,39 @@ def filetexts(d, open=open):
     for filename in d:
         if os.path.exists(filename):
             os.remove(filename)
+
+def textblock(file, start, stop):
+    """ Pull out a block of text from a file given start and stop bytes
+
+    This gets data starting/ending from the next newline delimiter
+
+    Example
+    -------
+
+    >>> with open('myfile.txt', 'w') as f:
+    ...     f.write('123\n456\n789\nabc')
+
+    >>> f = open('myfile.txt')
+    >>> textblock(f, 1, 10)  # Note that 1 and 10 don't line up with endlines
+    '456\n789\n'
+    """
+    file.seek(start)
+    if start:
+        char = file.read(1)
+        while char and char != '\n':
+            char = file.read(1)
+            start += 1
+        start += 1
+
+    if stop is None:
+        file.seek(start)
+        return file.read()
+
+    file.seek(stop)
+    char = file.read(1)
+    while char and char != '\n':
+        char = file.read(1)
+        stop += 1
+
+    file.seek(start)
+    return file.read(stop - start + 1)
