@@ -318,6 +318,7 @@ def _slice_1d(dim_shape, lengths, index):
         start = dim_shape - 1 if start >= dim_shape else start
         stop = -(dim_shape + 1) if index.stop is None else index.stop
 
+    # posify start and stop
     if start < 0:
         start += dim_shape
     if stop < 0:
@@ -333,20 +334,25 @@ def _slice_1d(dim_shape, lengths, index):
                 start = start - length
             stop -= length
     else:
-        stop -= dim_shape
-        tail_index = list(accumulate(add, lengths))
-        pos_step = abs(step) # 11%3==2, 11%-3==-1. Need positive step for %
+        rstart = start  # running start
+        chunk_boundaries = list(accumulate(add, lengths))
+        for i, chunk_stop in reversed(list(enumerate(chunk_boundaries))):
+            # create a chunk start and stop
+            if i == 0:
+                chunk_start = 0
+            else:
+                chunk_start = chunk_boundaries[i - 1]
 
-        offset = 0
-        for i, length in reversed(list(enumerate(lengths))):
-            if start + length >= tail_index[i] and stop < 0:
-                d[i] = slice(start - tail_index[i],
-                             max(stop, -length - 1), step)
-                # The offset accumulates over time from the start point
-                offset = (offset + pos_step - (length % pos_step)) % pos_step
-                start = tail_index[i] - 1 - length - offset
+            # if our slice is in this chunk
+            if (chunk_start <= rstart < chunk_stop) and (rstart > stop):
+                d[i] = slice(rstart - chunk_stop,
+                             max(chunk_start - chunk_stop - 1,
+                                 stop - chunk_stop),
+                             step)
 
-            stop += length
+                # compute the next running start point,
+                offset = (rstart - (chunk_start -1))  % step
+                rstart = chunk_start + offset - 1
 
     # replace 0:20:1 with : if appropriate
     for k, v in d.items():
