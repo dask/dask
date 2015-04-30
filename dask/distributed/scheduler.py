@@ -106,27 +106,27 @@ class Scheduler(object):
         self._schedule_lock = Lock()
 
         # RPC functions that workers and clients can trigger
-        self.worker_functions = {'register': self.worker_registration,
-                                 'status': self.status_to_worker,
-                                 'finished-task': self.worker_finished_task,
-                                 'setitem-ack': self.setitem_ack,
-                                 'getitem-ack': self.getitem_ack}
-        self.client_functions = {'status': self.status_to_client,
-                                 'schedule': self.schedule_from_client,
-                                 'set-collection': self.set_collection,
-                                 'get-collection': self.get_collection}
+        self.worker_functions = {'register': self._worker_registration,
+                                 'status': self._status_to_worker,
+                                 'finished-task': self._worker_finished_task,
+                                 'setitem-ack': self._setitem_ack,
+                                 'getitem-ack': self._getitem_ack}
+        self.client_functions = {'status': self._status_to_client,
+                                 'schedule': self._schedule_from_client,
+                                 'set-collection': self._set_collection,
+                                 'get-collection': self._get_collection}
 
         # Away we go!
         log(self.address_to_workers, 'Start')
-        self._listen_to_workers_thread = Thread(target=self.listen_to_workers)
+        self._listen_to_workers_thread = Thread(target=self._listen_to_workers)
         self._listen_to_workers_thread.start()
-        self._listen_to_clients_thread = Thread(target=self.listen_to_clients)
+        self._listen_to_clients_thread = Thread(target=self._listen_to_clients)
         self._listen_to_clients_thread.start()
 
         if block:
             self.block()
 
-    def listen_to_workers(self):
+    def _listen_to_workers(self):
         """ Event loop: Listen to worker router """
         while self.status != 'closed':
             if not self.to_workers.poll(100):
@@ -145,7 +145,7 @@ class Scheduler(object):
             else:
                 future = self.pool.apply_async(function, args=(header, payload))
 
-    def listen_to_clients(self):
+    def _listen_to_clients(self):
         """ Event loop: Listen to client router """
         while self.status != 'closed':
             if not self.to_clients.poll(100):
@@ -172,14 +172,14 @@ class Scheduler(object):
         self._listen_to_workers_thread.join()
         self._listen_to_clients_thread.join()
 
-    def worker_registration(self, header, payload):
+    def _worker_registration(self, header, payload):
         """ Worker came in, register them """
         payload = pickle.loads(payload)
         address = header['address']
         self.workers[address] = payload
         self.available_workers.put(address)
 
-    def worker_finished_task(self, header, payload):
+    def _worker_finished_task(self, header, payload):
         """ Worker reports back as having finished task, ready for more
 
         See also:
@@ -210,13 +210,13 @@ class Scheduler(object):
 
                 self.queues[payload['queue']].put(payload)
 
-    def status_to_client(self, header, payload):
+    def _status_to_client(self, header, payload):
         with logerrors():
             out_header = {'jobid': header.get('jobid')}
             log(self.address_to_clients, 'Status')
             self.send_to_client(header['address'], out_header, 'OK')
 
-    def status_to_worker(self, header, payload):
+    def _status_to_worker(self, header, payload):
         out_header = {'jobid': header.get('jobid')}
         log(self.address_to_workers, 'Status sending')
         self.send_to_worker(header['address'], out_header, 'OK')
@@ -453,7 +453,7 @@ class Scheduler(object):
             worker = random.choice(seq)
             self.send_to_worker(worker, header, payload)
 
-    def getitem_ack(self, header, payload):
+    def _getitem_ack(self, header, payload):
         """ Receive acknowledgement from worker about a getitem request
 
         See also:
@@ -467,7 +467,7 @@ class Scheduler(object):
             self.queues[payload['queue']].put((payload['key'],
                                                payload['value']))
 
-    def setitem_ack(self, header, payload):
+    def _setitem_ack(self, header, payload):
         """ Receive acknowledgement from worker about a setitem request
 
         See also:
@@ -564,7 +564,7 @@ class Scheduler(object):
             result2 = self.gather(result)
         return result2
 
-    def schedule_from_client(self, header, payload):
+    def _schedule_from_client(self, header, payload):
         """
 
         Input Payload: keys, dask
@@ -605,7 +605,7 @@ class Scheduler(object):
         if delete:
             self.release_key(key)
 
-    def set_collection(self, header, payload):
+    def _set_collection(self, header, payload):
         with logerrors():
             log(self.address_to_clients, "Set collection", header)
             payload = header.get('loads', dill.loads)(payload)
@@ -613,7 +613,7 @@ class Scheduler(object):
 
             self.send_to_client(header['address'], {'status': 'OK'}, {})
 
-    def get_collection(self, header, payload):
+    def _get_collection(self, header, payload):
         with logerrors():
             log(self.address_to_clients, "Get collection", header)
             payload = header.get('loads', pickle.loads)(payload)
