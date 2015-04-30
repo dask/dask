@@ -15,6 +15,7 @@ from toolz.curried import (pipe, partition, concat, unique, pluck, join, first,
                            curry, reduce, interleave, sliding_window)
 import numpy as np
 
+from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
@@ -27,15 +28,21 @@ from ..context import _globals
 names = ('x_%d' % i for i in count(1))
 
 
-def getarray(a, b):
+def getarray(a, b, lock=None):
     """ Mimics getitem but includes call to np.asarray
 
     >>> getarray([1, 2, 3, 4, 5], slice(1, 4))
     array([2, 3, 4])
     """
-    c = a[b]
-    if type(c) != np.ndarray:
-        c = np.asarray(c)
+    if lock:
+        lock.acquire()
+    try:
+        c = a[b]
+        if type(c) != np.ndarray:
+            c = np.asarray(c)
+    finally:
+        if lock:
+            lock.release()
     return c
 
 
@@ -60,7 +67,7 @@ def slices_from_chunks(chunks):
                 for start, shape in zip(starts, shapes)]
 
 
-def getem(arr, chunks, shape=None):
+def getem(arr, chunks, shape=None, lock=None):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
@@ -77,9 +84,13 @@ def getem(arr, chunks, shape=None):
     """
     chunks = normalize_chunks(chunks, shape)
 
+    if lock is True:
+        lock = Lock()
+
     keys = list(product([arr], *[range(len(bds)) for bds in chunks]))
 
-    values = [(getarray, arr) + (x,) for x in slices_from_chunks(chunks)]
+    values = [(getarray, arr) + (x, lock) if lock else (x,)
+              for x in slices_from_chunks(chunks)]
 
     return dict(zip(keys, values))
 
@@ -945,7 +956,7 @@ def normalize_chunks(chunks, shape=None):
     return chunks
 
 
-def from_array(x, chunks, name=None, **kwargs):
+def from_array(x, chunks, name=None, lock=False, **kwargs):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -962,10 +973,16 @@ def from_array(x, chunks, name=None, **kwargs):
 
     >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
     >>> a = da.from_array(x, chunks=(1000, 1000))  # doctest: +SKIP
+
+    If your underlying datastore does not support concurrent reads then include
+    the ``lock=True`` keyword argument or ``lock=mylock`` if you want multiple
+    arrays to coordinate around the same lock.
+
+    >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
     name = name or next(names)
-    dask = merge({name: x}, getem(name, chunks))
+    dask = merge({name: x}, getem(name, chunks, lock=lock))
     return Array(dask, name, chunks, dtype=x.dtype)
 
 
@@ -1242,7 +1259,6 @@ def tensordot(lhs, rhs, axes=2):
 
 
 def insert_to_ooc(out, arr):
-    from threading import Lock
     lock = Lock()
 
     def store(x, index):
