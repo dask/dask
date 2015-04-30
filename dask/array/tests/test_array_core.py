@@ -932,13 +932,12 @@ def test_args():
 
 
 def test_from_array_with_lock():
-    import thread
     x = np.arange(10)
     d = da.from_array(x, chunks=5, lock=True)
 
     tasks = [v for k, v in d.dask.items() if k[0] == d.name]
 
-    assert isinstance(tasks[0][3], thread.LockType)
+    assert isinstance(tasks[0][3], type(Lock()))
     assert len(set(task[3] for task in tasks)) == 1
 
     assert eq(d, x)
