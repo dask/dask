@@ -1,4 +1,5 @@
 from dask.distributed import Worker, Scheduler, Client
+from dask.utils import raises
 from contextlib import contextmanager
 from operator import add
 from time import sleep
@@ -44,6 +45,15 @@ def test_get_with_dill():
         keys = 'y'
 
         assert c.get(dsk, keys) == 2
+
+
+def test_error():
+    with scheduler_and_workers() as (s, (a, b)):
+        c = Client(s.address_to_clients)
+
+        assert raises(TypeError,
+                lambda: c.get({'x': 1, 'y': (lambda x: x + x, 'x', 'x')}, 'y'))
+        assert 'y' not in s.data
 
 
 def test_multiple_clients():

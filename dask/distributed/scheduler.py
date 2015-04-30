@@ -196,15 +196,19 @@ class Scheduler(object):
 
             log(self.address_to_workers, 'Finish task', payload)
 
-            self.data[key]['duration'] = duration
-            self.who_has[key].add(address)
-            self.worker_has[address].add(key)
             for dep in dependencies:
                 self.who_has[dep].add(address)
                 self.worker_has[address].add(dep)
             self.available_workers.put(address)
 
-            self.queues[payload['queue']].put(payload)
+            if isinstance(payload['status'], Exception):
+                self.queues[payload['queue']].put(payload)
+            else:
+                self.data[key]['duration'] = duration
+                self.who_has[key].add(address)
+                self.worker_has[address].add(key)
+
+                self.queues[payload['queue']].put(payload)
 
     def status_to_client(self, header, payload):
         with logerrors():
