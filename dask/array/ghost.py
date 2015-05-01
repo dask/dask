@@ -176,6 +176,8 @@ def periodic(x, axis, depth):
     l = x[left]
     r = x[right]
 
+    l, r = _remove_ghost_boundaries(l, r, axis, depth)
+
     return concatenate([r, x, l], axis=axis)
 
 
@@ -201,6 +203,8 @@ def reflect(x, axis, depth):
     l = x[left]
     r = x[right]
 
+    l, r = _remove_ghost_boundaries(l, r, axis, depth)
+
     return concatenate([l, x, r], axis=axis)
 
 def nearest(x, axis, depth):
@@ -219,18 +223,9 @@ def nearest(x, axis, depth):
     l = concatenate([x[left]] * depth, axis=axis)
     r = concatenate([x[right]] * depth, axis=axis)
 
-    # each slice in l & r is its own chunk, we want to rechunk them
-    # to have the same chunking as the array
-    lchunks = list(l.chunks)
-    lchunks[axis] = (depth,)
-    rchunks = list(r.chunks)
-    rchunks[axis] = (depth,)
+    l, r = _remove_ghost_boundaries(l, r, axis, depth)
 
-    l = l.rechunk(tuple(lchunks))
-    r = r.rechunk(tuple(rchunks))
-
-    ret = concatenate([l, x, r], axis=axis)
-    return ret
+    return concatenate([l, x, r], axis=axis)
 
 
 
@@ -243,6 +238,17 @@ def constant(x, axis, depth, value):
                   chunks=tuple(chunks), dtype=x._dtype)
 
     return concatenate([c, x, c], axis=axis)
+
+
+def _remove_ghost_boundaries(l, r, axis, depth):
+    lchunks = list(l.chunks)
+    lchunks[axis] = (depth,)
+    rchunks = list(r.chunks)
+    rchunks[axis] = (depth,)
+
+    l = l.rechunk(tuple(lchunks))
+    r = r.rechunk(tuple(rchunks))
+    return l, r
 
 
 def boundaries(x, depth=None, kind=None):
