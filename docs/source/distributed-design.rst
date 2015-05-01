@@ -269,3 +269,16 @@ Workers discover each other only when told to do so by the scheduler (see
 
 Each client has a dealer socket to the scheduler. Clients do not talk to
 workers or to each other.
+
+
+What dask.distributed doesn't do
+--------------------------------
+
+Currently ``dask.distributed`` doesn't do any of the following:
+
+1.  Launch worker and scheduler processes on your cluster.  See Yarn/Mesos
+2.  Ensure a uniform software environment among workers.  See ``conda env``,
+    ``conda cluster``.
+3.  Handle failed Workers (though this is doable in the future)
+4.  Handle a failed Scheduler (this is unlikely in moderate term)
+5.  Interact intelligently with data-local file-systems like HDFS
