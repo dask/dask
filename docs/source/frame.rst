@@ -30,13 +30,13 @@ Dask ``Frame`` objects contain the following data:
 *  name - string like ``'f'`` that is the prefix to all keys to define this frame
    like ``('f', 0)``
 *  columns - list of column names to improve usability and error checking
-*  blockdivs - tuple of index values on which to partition our blocks
+*  divisions - tuple of index values on which to partition our blocks
 
-The ``blockdivs`` attribute, analagous to ``blockdims`` in ``dask.array`` is
-particularly important.  The values in blockdivs determine a partitioning of
+The ``divisions`` attribute, analagous to ``blockdims`` in ``dask.array`` is
+particularly important.  The values in divisions determine a partitioning of
 left-inclusive / right-exclusive ranges on the index::
 
-    blockdivs -- (10, 20, 40)
+    divisions -- (10, 20, 40)
     ranges    -- (-oo, 10), [10, 20), [20, 40), [40, oo)
 
 
@@ -74,7 +74,7 @@ Notice a few things
     this dataset has many Alices we have a block just for her.
 3.  The blocks don't need to be sorted internally
 
-Our blockdivs in this case are ``['Bob', 'Edith']``
+Our divisions in this case are ``['Bob', 'Edith']``
 
 
 Shuffle

@@ -29,31 +29,31 @@ def set_index(f, index, npartitions=None, **kwargs):
     else:
         index2 = index
 
-    blockdivs = (index2
+    divisions = (index2
                   .quantiles(np.linspace(0, 100, npartitions+1)[1:-1])
                   .compute())
-    return f.set_partition(index, blockdivs, **kwargs)
+    return f.set_partition(index, divisions, **kwargs)
 
 
 partition_names = ('set_partition-%d' % i for i in count(1))
 
-def set_partition(f, index, blockdivs, get=threaded.get, **kwargs):
-    """ Set new partitioning along index given blockdivs """
-    blockdivs = unique(blockdivs)
+def set_partition(f, index, divisions, get=threaded.get, **kwargs):
+    """ Set new partitioning along index given divisions """
+    divisions = unique(divisions)
     name = next(names)
     if isinstance(index, Series):
-        assert index.blockdivs == f.blockdivs
+        assert index.divisions == f.divisions
         dsk = dict(((name, i), (f._partition_type.set_index, block, ind))
                 for i, (block, ind) in enumerate(zip(f._keys(), index._keys())))
         f2 = type(f)(merge(f.dask, index.dask, dsk), name,
-                       f.column_info, f.blockdivs)
+                       f.column_info, f.divisions)
     else:
         dsk = dict(((name, i), (f._partition_type.set_index, block, index))
                 for i, block in enumerate(f._keys()))
-        f2 = type(f)(merge(f.dask, dsk), name, f.column_info, f.blockdivs)
+        f2 = type(f)(merge(f.dask, dsk), name, f.column_info, f.divisions)
 
     head = f2.head()
-    pf = pframe(like=head, blockdivs=blockdivs, **kwargs)
+    pf = pframe(like=head, divisions=divisions, **kwargs)
 
     def append(block):
         pf.append(block)
@@ -71,10 +71,10 @@ def from_pframe(pf):
     dsk = dict(((name, i), (pframe.get_partition, pf, i))
                 for i in range(pf.npartitions))
 
-    return DataFrame(dsk, name, pf.columns, pf.blockdivs)
+    return DataFrame(dsk, name, pf.columns, pf.divisions)
 
 
-def unique(blockdivs):
+def unique(divisions):
     """ Polymorphic unique function
 
     >>> list(unique([1, 2, 3, 1, 2, 3]))
@@ -87,11 +87,11 @@ def unique(blockdivs):
     [Alice, Bob]
     Categories (2, object): [Alice, Bob]
     """
-    if isinstance(blockdivs, np.ndarray):
-        return np.unique(blockdivs)
-    if isinstance(blockdivs, pd.Categorical):
-        return pd.Categorical.from_codes(np.unique(blockdivs.codes),
-                blockdivs.categories, blockdivs.ordered)
-    if isinstance(blockdivs, (tuple, list, Iterator)):
-        return tuple(toolz.unique(blockdivs))
+    if isinstance(divisions, np.ndarray):
+        return np.unique(divisions)
+    if isinstance(divisions, pd.Categorical):
+        return pd.Categorical.from_codes(np.unique(divisions.codes),
+                divisions.categories, divisions.ordered)
+    if isinstance(divisions, (tuple, list, Iterator)):
+        return tuple(toolz.unique(divisions))
     raise NotImplementedError()

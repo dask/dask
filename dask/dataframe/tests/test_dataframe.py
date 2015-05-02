@@ -199,7 +199,7 @@ def test_from_array():
     d = dd.from_array(x, chunksize=4)
 
     assert list(d.columns) == ['a', 'b']
-    assert d.blockdivs == (4, 8)
+    assert d.divisions == (4, 8)
 
     assert (d.compute().to_records(index=False) == x).all()
 
@@ -324,7 +324,7 @@ def test_groupby_on_index():
 
 def test_set_partition():
     d2 = d.set_partition('b', [2])
-    assert d2.blockdivs == (2,)
+    assert d2.divisions == (2,)
     expected = full.set_index('b').sort(ascending=True)
     assert eq(d2.compute().sort(ascending=True), expected)
 
@@ -420,7 +420,7 @@ def test_iloc_raises():
 
 
 dfs = list(dsk.values())
-pf = pframe(like=dfs[0], blockdivs=[5])
+pf = pframe(like=dfs[0], divisions=[5])
 for df in dfs:
     pf.append(df)
 
@@ -428,7 +428,7 @@ for df in dfs:
 def test_from_pframe():
     d = dd.from_pframe(pf)
     assert list(d.columns) == list(dfs[0].columns)
-    assert list(d.blockdivs) == list(pf.blockdivs)
+    assert list(d.divisions) == list(pf.divisions)
 
 
 def test_column_optimizations_with_pframe_and_rewrite():
