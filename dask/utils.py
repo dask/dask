@@ -5,6 +5,8 @@ from contextlib import contextmanager
 import os
 import tempfile
 
+from .compatibility import unicode
+
 def raises(err, lamda):
     try:
         lamda()
@@ -137,6 +139,10 @@ def textblock(file, start, stop):
     >>> textblock(f, 1, 10)  # Note that 1 and 10 don't line up with endlines
     '456\n789\n'
     """
+    if isinstance(file, (str, unicode)):
+        with open(file) as f:
+            result = textblock(f, start, stop)
+        return result
     file.seek(start)
     if start:
         char = file.read(1)

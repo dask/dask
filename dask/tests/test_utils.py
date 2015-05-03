@@ -7,3 +7,5 @@ def test_textblock():
         text = textblock(f, 1, 10)
         assert text == '456\n789\n'
         assert set(map(len, text.split())) == set([3])
+
+        assert textblock(f, 1, 10) == textblock(fn, 1, 10)
