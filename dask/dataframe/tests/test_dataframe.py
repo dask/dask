@@ -485,9 +485,22 @@ def test_concat():
     assert list(x.columns) == ['a', 'b']
     assert len(x) == 0
 
+
 def test_args():
     e = d.assign(c=d.a + 1)
     f = type(e)(*e._args)
     assert eq(e, f)
     assert eq(d.a, type(d.a)(*d.a._args))
     assert eq(d.a.sum(), type(d.a.sum())(*d.a.sum()._args))
+
+
+def test_known_divisions():
+    assert d.known_divisions
+
+    df = dd.DataFrame({('x', 0): 'foo', ('x', 1): 'bar'}, 'x',
+                      ['a', 'b'], divisions=[None])
+    assert not df.known_divisions
+
+    df = dd.DataFrame({('x', 0): 'foo'}, 'x',
+                      ['a', 'b'], divisions=[])
+    assert d.known_divisions

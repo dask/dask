@@ -109,6 +109,10 @@ class _Frame(object):
                    for i, key in enumerate(self._keys()))
         return Index(merge(dsk, self.dask), name, None, self.divisions)
 
+    @property
+    def known_divisions(self):
+        return len(self.divisions) > 0 and self.divisions[0] is not None
+
     def cache(self, cache=Chest):
         """ Evaluate Dataframe and store in local cache
 
