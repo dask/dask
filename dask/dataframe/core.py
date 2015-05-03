@@ -174,6 +174,9 @@ class _Frame(object):
 
     def _loc(self, ind):
         """ Helper function for the .loc accessor """
+        if not self.known_divisions:
+            raise ValueError(
+                "Can not use loc on DataFrame without known divisions")
         name = next(names)
         if not isinstance(ind, slice):
             part = self._partition_of_index_value(ind)

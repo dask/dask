@@ -504,3 +504,15 @@ def test_known_divisions():
     df = dd.DataFrame({('x', 0): 'foo'}, 'x',
                       ['a', 'b'], divisions=[])
     assert d.known_divisions
+
+def test_unkonwn_divisions():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    full = d.compute(get=dask.get)
+
+    assert eq(d.a.sum(), full.a.sum())
+    assert eq(d.a + d.b + 1, full.a + full.b + 1)
+
+    assert raises(ValueError, lambda: d.loc[3])
