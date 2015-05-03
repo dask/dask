@@ -543,6 +543,48 @@ class Bag(object):
 
         return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
 
+    def to_dataframe(self, columns=None):
+        """ Convert Bag to dask.dataframe
+
+        Bag should contain tuple or dict records.
+
+        Provide ``columns=`` keyword arg to specify column names.
+
+        Index will not be particularly meaningful.  Use ``reindex`` afterwards
+        if necessary.
+
+        Example
+        -------
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence([{'name': 'Alice',   'balance': 100},
+        ...                       {'name': 'Bob',     'balance': 200},
+        ...                       {'name': 'Charlie', 'balance': 300}],
+        ...                      npartitions=2)
+        >>> df = b.to_dataframe()
+        >>> df.compute()
+           balance     name
+        0      100    Alice
+        1      200      Bob
+        0      300  Charlie
+        """
+        import pandas as pd
+        import dask.dataframe as dd
+        if columns is None:
+            head = self.take(1)[0]
+            if isinstance(head, dict):
+                columns = sorted(head)
+            elif isinstance(head, (tuple, list)):
+                columns = list(range(len(head)))
+        name = next(names)
+        DataFrame = curry(pd.DataFrame, columns=columns)
+        dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
+                   for i in range(self.npartitions))
+
+        divisions = [None] * (self.npartitions - 1)
+
+        return dd.DataFrame(merge(self.dask, dsk), name, columns, divisions)
+
 
 def partition(grouper, sequence, npartitions, path):
     """ Partition a bag along a grouper, store partitions on disk """
