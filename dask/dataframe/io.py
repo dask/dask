@@ -17,7 +17,7 @@ def file_size(fn, compression=None):
     If compressed then return the uncompressed file size
     """
     if compression == 'gzip':
-        with open(fn) as f:
+        with open(fn, 'rb') as f:
             f.seek(-4, 2)
             result = struct.unpack('I', f.read(4))[0]
     else:

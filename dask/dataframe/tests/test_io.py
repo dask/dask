@@ -28,8 +28,8 @@ def test_read_csv():
         assert (result.values == pd.read_csv(fn).sort('name').values).all()
 
 
-def test_filetext():
+def test_file_size():
     with filetext(text) as fn:
         assert file_size(fn) == len(text)
-    with filetext(text, open=gzip.open) as fn:
+    with filetext(text.encode(), open=gzip.open) as fn:
         assert file_size(fn, 'gzip') == len(text)
