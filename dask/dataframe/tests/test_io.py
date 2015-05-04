@@ -28,6 +28,15 @@ def test_read_csv():
         assert (result.values == pd.read_csv(fn).sort('name').values).all()
 
 
+def test_read_gzip_csv():
+    with filetext(bytes(text), open=gzip.open) as fn:
+        f = read_csv(fn, header=0, chunkbytes=30, compression='gzip')
+        assert list(f.columns) == ['name', 'amount']
+        assert f.npartitions > 1
+        result = f.compute(get=dask.get).sort('name')
+        assert (result.values == pd.read_csv(fn, compression='gzip').sort('name').values).all()
+
+
 def test_file_size():
     with filetext(text) as fn:
         assert file_size(fn) == len(text)
