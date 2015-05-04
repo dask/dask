@@ -183,16 +183,36 @@ def test_nearest_ghost():
 
 
 def test_0_depth():
-    a = np.arange(100).reshape(10, 10)
+    expected = np.arange(100).reshape(10, 10)
+    darr = da.from_array(expected, chunks=(5, 2))
+
+    depth = {0: 0, 1: 0}
+
+    reflected = ghost(darr, depth=depth, boundary='reflect')
+    constant = ghost(darr, depth=depth, boundary=42)
+
+    result = trim_internal(reflected, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(constant, depth)
+    assert_array_equal(result, expected)
+
+
+@pytest.mark.xfail
+def test_0_depth_failes():
+    expected = np.arange(100).reshape(10, 10)
     darr = da.from_array(a, chunks=(5, 2))
-    garr = ghost(darr, depth=0, boundary='reflect')
-    expected = np.array(garr)
 
-    assert_array_equal(expected, np.array(darr))
+    depth = {0: 0, 1: 0}
 
-    tarr = trim_internal(garr, {0:0, 1:0})
-    expected = np.array(tarr)
-    assert_array_equal(np.array(tarr), np.array(darr))
+    nearest = ghost(darr, depth=depth, boundary='nearest')
+    periodic = ghost(darr, depth=depth, boundary='periodic')
+
+    result = trim_internal(nearest, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(periodic, depth)
+    assert_array_equal(result, expected)
 
 
 def test_depth_equals_boundary_length():
