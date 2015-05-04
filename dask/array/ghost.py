@@ -29,12 +29,12 @@ def fractional_slice(task, axes):
     index = []
     for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
         depth = axes.get(i, 0)
-        if depth == 0:
-            index.append(slice(0, 0))
-        elif t == r:
+        if t == r:
             index.append(slice(None, None, None))
         elif t < r:
             index.append(slice(0, depth))
+        elif t > r and depth == 0:
+            index.append(slice(0, 0))
         else:
             index.append(slice(-depth, None))
 
