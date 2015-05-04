@@ -88,7 +88,7 @@ def slice_array(out_name, in_name, blockdims, index):
     through a sequence of functions.
 
     slice_with_newaxis - handle None/newaxis case
-    slice_with_lists - handle fancy indexing with lists
+    slice_wrap_lists - handle fancy indexing with lists
     slice_slices_and_integers - handle everything else
     """
     index = replace_ellipsis(len(blockdims), index)
@@ -100,11 +100,11 @@ def slice_array(out_name, in_name, blockdims, index):
         return {out_name: in_name}, blockdims
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
-    missing = len(blockdims) - len([ind for ind in index if ind is not None])
-    index2 = index + (slice(None, None, None),) * missing
+    missing = len(blockdims) - (len(index) - index.count(None))
+    index += (slice(None, None, None),) * missing
 
     # Pass down to next function
-    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index2)
+    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index)
 
     bd_out = tuple(map(tuple, bd_out))
     return dsk_out, bd_out
@@ -318,6 +318,7 @@ def _slice_1d(dim_shape, lengths, index):
         start = dim_shape - 1 if start >= dim_shape else start
         stop = -(dim_shape + 1) if index.stop is None else index.stop
 
+    # posify start and stop
     if start < 0:
         start += dim_shape
     if stop < 0:
@@ -333,20 +334,25 @@ def _slice_1d(dim_shape, lengths, index):
                 start = start - length
             stop -= length
     else:
-        stop -= dim_shape
-        tail_index = list(accumulate(add, lengths))
-        pos_step = abs(step) # 11%3==2, 11%-3==-1. Need positive step for %
+        rstart = start  # running start
+        chunk_boundaries = list(accumulate(add, lengths))
+        for i, chunk_stop in reversed(list(enumerate(chunk_boundaries))):
+            # create a chunk start and stop
+            if i == 0:
+                chunk_start = 0
+            else:
+                chunk_start = chunk_boundaries[i - 1]
 
-        offset = 0
-        for i, length in zip(range(len(lengths)-1, -1, -1), reversed(lengths)):
-            if start + length >= tail_index[i] and stop < 0:
-                d[i] = slice(start - tail_index[i],
-                             max(stop, -length - 1), step)
-                # The offset accumulates over time from the start point
-                offset = (offset + pos_step - (length % pos_step)) % pos_step
-                start = tail_index[i] - 1 - length - offset
+            # if our slice is in this chunk
+            if (chunk_start <= rstart < chunk_stop) and (rstart > stop):
+                d[i] = slice(rstart - chunk_stop,
+                             max(chunk_start - chunk_stop - 1,
+                                 stop - chunk_stop),
+                             step)
 
-            stop += length
+                # compute the next running start point,
+                offset = (rstart - (chunk_start - 1)) % step
+                rstart = chunk_start + offset - 1
 
     # replace 0:20:1 with : if appropriate
     for k, v in d.items():

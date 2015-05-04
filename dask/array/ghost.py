@@ -16,23 +16,34 @@ def fractional_slice(task, axes):
     """
 
     >>> fractional_slice(('x', 5.1), {0: 2})  # doctest: +SKIP
-    (getitem, (slice(0, 2),), ('x', 6))
+    (getitem, ('x', 6), (slice(0, 2),))
 
     >>> fractional_slice(('x', 3, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
-    (getitem, (slice(None, None, None), slice(-3, None)), ('x', 3, 5))
+    (getitem, ('x', 3, 5), (slice(None, None, None), slice(-3, None)))
 
     >>> fractional_slice(('x', 2.9, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
-    (getitem, (slice(0, 2), slice(-3, None)), ('x', 3, 5))
+    (getitem, ('x', 3, 5), (slice(0, 2), slice(-3, None)))
     """
-    base = (task[0],) + tuple(map(round, task[1:]))
-    index = tuple([slice(None, None, None) if ind == bas else
-                   slice(0, axes.get(i, 0)) if ind < bas else
-                   slice(-axes.get(i, 0), None)
-                   for i, (ind, bas) in enumerate(zip(task[1:], base[1:]))])
+    rounded = (task[0],) + tuple(map(round, task[1:]))
+
+    index = []
+    for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
+        depth = axes.get(i, 0)
+        if t == r:
+            index.append(slice(None, None, None))
+        elif t < r:
+            index.append(slice(0, depth))
+        elif t > r and depth == 0:
+            index.append(slice(0, 0))
+        else:
+            index.append(slice(-depth, None))
+
+    index = tuple(index)
+
     if all(ind == slice(None, None, None) for ind in index):
         return task
     else:
-        return (getitem, base, index)
+        return (getitem, rounded, index)
 
 
 def expand_key(k, dims):
@@ -56,12 +67,17 @@ def expand_key(k, dims):
             rv.append(ind + 0.9)
         return rv
 
-    shape = [1 + (1 if ind > 0 else 0)
-               + (1 if ind < dims[i] - 1 else 0)
-               for i, ind in enumerate(k[1:])]
+    shape = []
+    for i, ind in enumerate(k[1:]):
+        num = 1
+        if ind > 0:
+            num += 1
+        if ind < dims[i] - 1:
+            num += 1
+        shape.append(num)
 
     seq = list(product([k[0]], *[inds(i, ind)
-                                    for i, ind in enumerate(k[1:])]))
+                                 for i, ind in enumerate(k[1:])]))
     return reshape(shape, seq)
 
 
@@ -109,28 +125,32 @@ def ghost_internal(x, axes):
     """
     dims = list(map(len, x.chunks))
     expand_key2 = partial(expand_key, dims=dims)
-    interior_keys = pipe(x._keys(), flatten,
-                                    map(expand_key2), map(flatten),
-                                    concat, list)
-    interior_slices = dict((k, fractional_slice(k, axes))
-                            for k in interior_keys)
+    interior_keys = pipe(x._keys(), flatten, map(expand_key2), map(flatten),
+                         concat, list)
 
-    shape = (3,) * x.ndim
     name = next(ghost_names)
-    ghost_blocks = dict(((name,) + k[1:],
-                         (rec_concatenate, (concrete, expand_key2(k))))
-                        for k in interior_keys)
+    interior_slices = {}
+    ghost_blocks = {}
+    for k in interior_keys:
+        interior_slices[k] = fractional_slice(k, axes)
 
-    chunks = [  [bds[0] + axes.get(i, 0)]
-              + [bd + axes.get(i, 0) * 2 for bd in bds[1:-1]]
-              + [bds[-1] + axes.get(i, 0)]
-              for i, bds in enumerate(x.chunks)]
+        ghost_blocks[(name,) + k[1:]] = (rec_concatenate,
+                                         (concrete, expand_key2(k)))
+
+    chunks = []
+    for i, bds in enumerate(x.chunks):
+        left = [bds[0] + axes.get(i, 0)]
+        right = [bds[-1] + axes.get(i, 0)]
+        mid = []
+        for bd in bds[1:-1]:
+            mid.append(bd + axes.get(i, 0) * 2)
+        chunks.append(left + mid + right)
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),
                  name, chunks)
 
 
-def trim_internal(x, axes=None):
+def trim_internal(x, axes):
     """ Trim sides from each block
 
     This couples well with the ghost operation, which may leave excess data on
@@ -157,14 +177,19 @@ def periodic(x, axis, depth):
 
     Useful to create periodic boundary conditions for ghost
     """
-    left =  ((slice(None, None, None),) * axis
-           + (slice(0, depth),)
-           + (slice(None, None, None),) * (x.ndim - axis - 1))
-    right = ((slice(None, None, None),) * axis
-           + (slice(-depth, None),)
-           + (slice(None, None, None),) * (x.ndim - axis - 1))
+    if depth == 0:
+        return x
+
+    left = ((slice(None, None, None),) * axis +
+            (slice(0, depth),) +
+            (slice(None, None, None),) * (x.ndim - axis - 1))
+    right = ((slice(None, None, None),) * axis +
+             (slice(-depth, None),) +
+             (slice(None, None, None),) * (x.ndim - axis - 1))
     l = x[left]
     r = x[right]
+
+    l, r = _remove_ghost_boundaries(l, r, axis, depth)
 
     return concatenate([r, x, l], axis=axis)
 
@@ -174,21 +199,27 @@ def reflect(x, axis, depth):
 
     This is the converse of ``periodic``
     """
-    if depth == 1:
-        left =  ((slice(None, None, None),) * axis
-               + (slice(0, 1),)
-               + (slice(None, None, None),) * (x.ndim - axis - 1))
+    if depth == 0:
+        return x
+
+    elif depth == 1:
+        left = ((slice(None, None, None),) * axis +
+                (slice(0, 1),) +
+                (slice(None, None, None),) * (x.ndim - axis - 1))
     else:
-        left =  ((slice(None, None, None),) * axis
-               + (slice(depth - 1, None, -1),)
-               + (slice(None, None, None),) * (x.ndim - axis - 1))
-    right = ((slice(None, None, None),) * axis
-           + (slice(-1, -depth-1, -1),)
-           + (slice(None, None, None),) * (x.ndim - axis - 1))
+        left = ((slice(None, None, None),) * axis +
+                (slice(depth - 1, None, -1),) +
+                (slice(None, None, None),) * (x.ndim - axis - 1))
+    right = ((slice(None, None, None),) * axis +
+             (slice(-1, -depth-1, -1),) +
+             (slice(None, None, None),) * (x.ndim - axis - 1))
     l = x[left]
     r = x[right]
 
+    l, r = _remove_ghost_boundaries(l, r, axis, depth)
+
     return concatenate([l, x, r], axis=axis)
+
 
 def nearest(x, axis, depth):
     """ Each reflect each boundary value outwards
@@ -196,16 +227,22 @@ def nearest(x, axis, depth):
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
     does.
     """
-    left =  ((slice(None, None, None),) * axis
-           + (slice(0, 1),)
-           + (slice(None, None, None),) * (x.ndim - axis - 1))
-    right = ((slice(None, None, None),) * axis
-           + (slice(-1, -2, -1),)
-           + (slice(None, None, None),) * (x.ndim - axis - 1))
-    l = [x[left]] * depth
-    r = [x[right]] * depth
+    if depth == 0:
+        return x
 
-    return concatenate(l + [x] + r, axis=axis)
+    left = ((slice(None, None, None),) * axis +
+            (slice(0, 1),) +
+            (slice(None, None, None),) * (x.ndim - axis - 1))
+    right = ((slice(None, None, None),) * axis +
+             (slice(-1, -2, -1),) +
+             (slice(None, None, None),) * (x.ndim - axis - 1))
+
+    l = concatenate([x[left]] * depth, axis=axis)
+    r = concatenate([x[right]] * depth, axis=axis)
+
+    l, r = _remove_ghost_boundaries(l, r, axis, depth)
+
+    return concatenate([l, x, r], axis=axis)
 
 
 
@@ -218,6 +255,17 @@ def constant(x, axis, depth, value):
                   chunks=tuple(chunks), dtype=x._dtype)
 
     return concatenate([c, x, c], axis=axis)
+
+
+def _remove_ghost_boundaries(l, r, axis, depth):
+    lchunks = list(l.chunks)
+    lchunks[axis] = (depth,)
+    rchunks = list(r.chunks)
+    rchunks[axis] = (depth,)
+
+    l = l.rechunk(tuple(lchunks))
+    r = r.rechunk(tuple(rchunks))
+    return l, r
 
 
 def boundaries(x, depth=None, kind=None):
@@ -296,9 +344,50 @@ def ghost(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
+    if isinstance(depth, int):
+        depth = (depth,) * x.ndim
+    if isinstance(depth, tuple):
+        depth = dict(zip(range(x.ndim), depth))
+
+    if boundary is None:
+        boundary = 'reflect'
+    if not isinstance(boundary, (tuple, dict)):
+        boundary = (boundary,) * x.ndim
+    if isinstance(boundary, tuple):
+        boundary = dict(zip(range(x.ndim), boundary))
+
+    # is depth larger than chunk size?
+    for d, c in zip(depth.values(), x.chunks):
+        if d > min(c):
+            raise ValueError("The overlapping depth %d is larger than your\n"
+                             "smallest chunk size %d. Rechunk your array\n"
+                             "with a larger chunk size or a chunk size that\n"
+                             "more evenly divides the shape of your array." %
+                             (d, min(c)))
     x2 = boundaries(x, depth, boundary)
     x3 = ghost_internal(x2, depth)
     trim = dict((k, v*2 if boundary.get(k, None) is not None else 0)
                 for k, v in depth.items())
     x4 = chunk.trim(x3, trim)
     return x4
+
+
+def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
+    if isinstance(depth, int):
+        depth = (depth,) * x.ndim
+    if isinstance(depth, tuple):
+        depth = dict(zip(range(x.ndim), depth))
+
+    if boundary is None:
+        boundary = 'reflect'
+    if not isinstance(boundary, (tuple, dict)):
+        boundary = (boundary,) * x.ndim
+    if isinstance(boundary, tuple):
+        boundary = dict(zip(range(x.ndim), boundary))
+
+    g = ghost(x, depth=depth, boundary=boundary)
+    g2 = g.map_blocks(func, **kwargs)
+    if trim:
+        return trim_internal(g2, depth)
+    else:
+        return g2

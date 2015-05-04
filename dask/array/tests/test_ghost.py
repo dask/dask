@@ -1,6 +1,9 @@
-import dask.array as da
+import pytest
 import numpy as np
+from numpy.testing import assert_array_almost_equal, assert_array_equal
+
 import dask
+import dask.array as da
 from dask.array.ghost import (Array, fractional_slice, getitem, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
@@ -160,3 +163,125 @@ def test_ghost():
 
     g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
     assert g.chunks == ((8, 8), (5, 5))
+
+
+def test_map_overlap():
+    x = da.arange(10, chunks=5)
+
+    y = x.map_overlap(lambda x: x + len(x), depth=2)
+    assert eq(y, np.arange(10) + 5 + 2 + 2)
+
+
+def test_nearest_ghost():
+    a = np.arange(144).reshape(12, 12).astype(float)
+
+    darr = da.from_array(a, chunks=(6, 6))
+    garr = ghost(darr, depth={0: 5, 1: 5},
+                 boundary={0: 'nearest', 1: 'nearest'})
+    tarr = trim_internal(garr, {0: 5, 1: 5})
+    assert_array_almost_equal(tarr, a)
+
+
+def test_0_depth():
+    expected = np.arange(100).reshape(10, 10)
+    darr = da.from_array(expected, chunks=(5, 2))
+
+    depth = {0: 0, 1: 0}
+
+    reflected = ghost(darr, depth=depth, boundary='reflect')
+    nearest = ghost(darr, depth=depth, boundary='nearest')
+    periodic = ghost(darr, depth=depth, boundary='periodic')
+    constant = ghost(darr, depth=depth, boundary=42)
+
+    result = trim_internal(reflected, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(nearest, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(periodic, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(constant, depth)
+    assert_array_equal(result, expected)
+
+def test_some_0_depth():
+    expected = np.arange(100).reshape(10, 10)
+    darr = da.from_array(expected, chunks=(5, 5))
+
+    depth = {0: 4, 1: 0}
+
+    reflected = ghost(darr, depth=depth, boundary='reflect')
+    nearest = ghost(darr, depth=depth, boundary='nearest')
+    periodic = ghost(darr, depth=depth, boundary='periodic')
+    constant = ghost(darr, depth=depth, boundary=42)
+
+    result = trim_internal(reflected, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(nearest, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(periodic, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(constant, depth)
+    assert_array_equal(result, expected)
+
+
+def test_depth_equals_boundary_length():
+    expected = np.arange(100).reshape(10, 10)
+    darr = da.from_array(expected, chunks=(5, 5))
+
+    depth = {0: 5, 1: 5}
+
+    reflected = ghost(darr, depth=depth, boundary='reflect')
+    nearest = ghost(darr, depth=depth, boundary='nearest')
+    periodic = ghost(darr, depth=depth, boundary='periodic')
+    constant = ghost(darr, depth=depth, boundary=42)
+
+    result = trim_internal(reflected, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(nearest, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(periodic, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(constant, depth)
+    assert_array_equal(result, expected)
+
+
+@pytest.mark.xfail
+def test_depth_greater_than_boundary_length():
+    expected = np.arange(100).reshape(10, 10)
+    darr = da.from_array(expected, chunks=(5, 5))
+
+    depth = {0: 8, 1: 7}
+
+    reflected = ghost(darr, depth=depth, boundary='reflect')
+    nearest = ghost(darr, depth=depth, boundary='nearest')
+    periodic = ghost(darr, depth=depth, boundary='periodic')
+    constant = ghost(darr, depth=depth, boundary=42)
+
+    result = trim_internal(reflected, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(nearest, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(periodic, depth)
+    assert_array_equal(result, expected)
+
+    result = trim_internal(constant, depth)
+    assert_array_equal(result, expected)
+
+
+def test_bad_depth_raises():
+    expected = np.arange(144).reshape(12, 12)
+    darr = da.from_array(expected, chunks=(5, 5))
+
+    depth = {0: 4, 1: 2}
+
+    pytest.raises(ValueError, ghost, darr, depth=depth, boundary=1)
