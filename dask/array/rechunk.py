@@ -11,7 +11,8 @@ from itertools import count, product, chain
 from operator import getitem, add
 import numpy as np
 from toolz import merge, accumulate
-from dask.array.core import rec_concatenate, Array, normalize_chunks
+
+from .core import rec_concatenate, Array, normalize_chunks
 
 
 rechunk_names  = ('rechunk-%d' % i for i in count(1))
@@ -191,11 +192,13 @@ def rechunk(x, chunks):
     chunks:  the new block dimensions to create
     """
     if isinstance(chunks, dict):
-        if isinstance(next(iter(chunks.values())), int):
+        if not chunks or isinstance(next(iter(chunks.values())), int):
             chunks = blockshape_dict_to_tuple(x.chunks, chunks)
         else:
             chunks = blockdims_dict_to_tuple(x.chunks, chunks)
     chunks = normalize_chunks(chunks, x.shape)
+    if not len(chunks) == x.ndim or tuple(map(sum, chunks)) != x.shape:
+        raise ValueError("Provided chunks are not consistent with shape")
 
     crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
