@@ -29,7 +29,7 @@ def test_read_csv():
 
 
 def test_read_gzip_csv():
-    with filetext(bytes(text), open=gzip.open) as fn:
+    with filetext(text.encode(), open=gzip.open) as fn:
         f = read_csv(fn, header=0, chunkbytes=30, compression='gzip')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1

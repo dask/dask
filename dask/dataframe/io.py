@@ -12,6 +12,12 @@ from ..utils import textblock
 from .core import names, DataFrame, compute
 
 
+def _StringIO(data):
+    if isinstance(data, bytes):
+        data = data.decode()
+    return StringIO(data)
+
+
 def file_size(fn, compression=None):
     """ Size of a file on disk
 
@@ -30,7 +36,7 @@ def file_size(fn, compression=None):
 def read_csv(fn, *args, **kwargs):
     assert not kwargs.pop('categorize', None)
     assert not kwargs.pop('index', None)
-    compression = kwargs.get('compression', None)
+    compression = kwargs.pop('compression', None)
     header = kwargs.pop('header', 'infer')
 
     # Chunk sizes and numbers
@@ -40,7 +46,8 @@ def read_csv(fn, *args, **kwargs):
     divisions = [None] * (nchunks - 1)
 
     # Let pandas infer on the first 100 rows
-    head = pd.read_csv(fn, *args, nrows=100, header=header, **kwargs)
+    head = pd.read_csv(fn, *args, nrows=100, header=header,
+                       compression=compression, **kwargs)
     first_read_csv = curry(pd.read_csv, *args, names=head.columns,
                            header=header, **kwargs)
     rest_read_csv = curry(pd.read_csv, *args, names=head.columns,
@@ -48,11 +55,13 @@ def read_csv(fn, *args, **kwargs):
 
     # Create dask graph
     name = next(names)
-    dsk = dict(((name, i), (rest_read_csv, (StringIO,
-                               (textblock, fn, i*chunkbytes, (i+1) * chunkbytes))))
+    dsk = dict(((name, i), (rest_read_csv, (_StringIO,
+                               (textblock, fn,
+                                   i*chunkbytes, (i+1) * chunkbytes,
+                                   compression))))
                for i in range(1, nchunks))
-    dsk[(name, 0)] = (first_read_csv, (StringIO,
-                       (textblock, fn, 0, chunkbytes)))
+    dsk[(name, 0)] = (first_read_csv, (_StringIO,
+                       (textblock, fn, 0, chunkbytes, compression)))
 
     return DataFrame(dsk, name, head.columns, divisions)
 
@@ -101,12 +110,13 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None):
                                          parse_dates=None)))
     categories = [d[c].drop_duplicates() for c in category_columns]
 
+    import dask
     if index:
         quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
-        result = compute(quantiles, *categories)
+        result = compute(quantiles, *categories, get=dask.get)
         quantiles, categories = result[0], result[1:]
     else:
-        categories = compute(*categories)
+        categories = compute(*categories, get=dask.get)
         quantiles = None
 
     categories = dict(zip(category_columns, categories))

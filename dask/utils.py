@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from collections import Iterator
 from contextlib import contextmanager
 import os
+import gzip
 import tempfile
 
 from .compatibility import unicode
@@ -124,7 +125,11 @@ def filetexts(d, open=open):
         if os.path.exists(filename):
             os.remove(filename)
 
-def textblock(file, start, stop):
+
+opens = {'gzip': gzip.open}
+
+
+def textblock(file, start, stop, compression=None):
     """ Pull out a block of text from a file given start and stop bytes
 
     This gets data starting/ending from the next newline delimiter
@@ -140,8 +145,12 @@ def textblock(file, start, stop):
     '456\n789\n'
     """
     if isinstance(file, (str, unicode)):
-        with open(file) as f:
+        myopen = opens.get(compression, open)
+        f = myopen(file)
+        try:
             result = textblock(f, start, stop)
+        finally:
+            f.close()
         return result
     file.seek(start)
     if start:
