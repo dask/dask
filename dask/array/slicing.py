@@ -351,7 +351,7 @@ def _slice_1d(dim_shape, lengths, index):
                              step)
 
                 # compute the next running start point,
-                offset = (rstart - (chunk_start -1))  % step
+                offset = (rstart - (chunk_start - 1)) % step
                 rstart = chunk_start + offset - 1
 
     # replace 0:20:1 with : if appropriate

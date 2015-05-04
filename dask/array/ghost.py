@@ -77,7 +77,7 @@ def expand_key(k, dims):
         shape.append(num)
 
     seq = list(product([k[0]], *[inds(i, ind)
-                                    for i, ind in enumerate(k[1:])]))
+                                 for i, ind in enumerate(k[1:])]))
     return reshape(shape, seq)
 
 
@@ -125,9 +125,8 @@ def ghost_internal(x, axes):
     """
     dims = list(map(len, x.chunks))
     expand_key2 = partial(expand_key, dims=dims)
-    interior_keys = pipe(x._keys(), flatten,
-                                    map(expand_key2), map(flatten),
-                                    concat, list)
+    interior_keys = pipe(x._keys(), flatten, map(expand_key2), map(flatten),
+                         concat, list)
 
     name = next(ghost_names)
     interior_slices = {}
@@ -181,12 +180,12 @@ def periodic(x, axis, depth):
     if depth == 0:
         return x
 
-    left =  ((slice(None, None, None),) * axis
-           + (slice(0, depth),)
-           + (slice(None, None, None),) * (x.ndim - axis - 1))
-    right = ((slice(None, None, None),) * axis
-           + (slice(-depth, None),)
-           + (slice(None, None, None),) * (x.ndim - axis - 1))
+    left = ((slice(None, None, None),) * axis +
+            (slice(0, depth),) +
+            (slice(None, None, None),) * (x.ndim - axis - 1))
+    right = ((slice(None, None, None),) * axis +
+             (slice(-depth, None),) +
+             (slice(None, None, None),) * (x.ndim - axis - 1))
     l = x[left]
     r = x[right]
 
@@ -204,22 +203,23 @@ def reflect(x, axis, depth):
         return x
 
     elif depth == 1:
-        left =  ((slice(None, None, None),) * axis
-               + (slice(0, 1),)
-               + (slice(None, None, None),) * (x.ndim - axis - 1))
+        left = ((slice(None, None, None),) * axis +
+                (slice(0, 1),) +
+                (slice(None, None, None),) * (x.ndim - axis - 1))
     else:
-        left =  ((slice(None, None, None),) * axis
-               + (slice(depth - 1, None, -1),)
-               + (slice(None, None, None),) * (x.ndim - axis - 1))
-    right = ((slice(None, None, None),) * axis
-           + (slice(-1, -depth-1, -1),)
-           + (slice(None, None, None),) * (x.ndim - axis - 1))
+        left = ((slice(None, None, None),) * axis +
+                (slice(depth - 1, None, -1),) +
+                (slice(None, None, None),) * (x.ndim - axis - 1))
+    right = ((slice(None, None, None),) * axis +
+             (slice(-1, -depth-1, -1),) +
+             (slice(None, None, None),) * (x.ndim - axis - 1))
     l = x[left]
     r = x[right]
 
     l, r = _remove_ghost_boundaries(l, r, axis, depth)
 
     return concatenate([l, x, r], axis=axis)
+
 
 def nearest(x, axis, depth):
     """ Each reflect each boundary value outwards
