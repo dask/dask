@@ -378,6 +378,10 @@ def rec_concatenate(arrays, axis=0):
         arrays = [a[None, ...] for a in arrays]
     if len(arrays) == 1:
         return arrays[0]
+    for a in arrays:
+        if hasattr(a, 'shape'):
+            if all(i == 0 for i in a.shape):
+                arrays.remove(a)
     else:
         return np.concatenate(arrays, axis=axis)
 
