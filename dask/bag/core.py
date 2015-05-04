@@ -562,6 +562,7 @@ class Bag(object):
         ...                       {'name': 'Charlie', 'balance': 300}],
         ...                      npartitions=2)
         >>> df = b.to_dataframe()
+
         >>> df.compute()
            balance     name
         0      100    Alice

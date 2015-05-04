@@ -12,6 +12,10 @@ from .core import names, DataFrame
 
 
 def file_size(fn, compression=None):
+    """ Size of a file on disk
+
+    If compressed then return the uncompressed file size
+    """
     if compression == 'gzip':
         with open(fn) as f:
             f.seek(-4, 2)
