@@ -179,7 +179,7 @@ def test_nearest_ghost():
     garr = ghost(darr, depth={0: 5, 1: 5},
                  boundary={0: 'nearest', 1: 'nearest'})
     tarr = trim_internal(garr, {0: 5, 1: 5})
-    assert_array_almost_equal(np.array(tarr), a)
+    assert_array_almost_equal(tarr, a)
 
 
 def test_0_depth():
