@@ -145,6 +145,8 @@ def test_schedule():
         # No worker still has the unnecessary intermediate variable
         assert not s.who_has['x']
         assert 'x' not in a.data and 'x' not in b.data
+        sleep(0.05)
+        assert 'y' not in a.data and 'y' not in b.data
 
 
 def test_gather():

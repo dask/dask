@@ -562,6 +562,8 @@ class Scheduler(object):
                     fire_task()
 
             result2 = self.gather(result)
+            for key in flatten(result):  # release result data from workers
+                self.release_key(key)
         return result2
 
     def _schedule_from_client(self, header, payload):
