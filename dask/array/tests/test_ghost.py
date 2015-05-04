@@ -229,8 +229,6 @@ def test_some_0_depth():
     assert_array_equal(result, expected)
 
 
-
-
 def test_depth_equals_boundary_length():
     expected = np.arange(100).reshape(10, 10)
     darr = da.from_array(expected, chunks=(5, 5))
@@ -278,3 +276,12 @@ def test_depth_greater_than_boundary_length():
 
     result = trim_internal(constant, depth)
     assert_array_equal(result, expected)
+
+
+def test_bad_depth_raises():
+    expected = np.arange(144).reshape(12, 12)
+    darr = da.from_array(expected, chunks=(5, 5))
+
+    depth = {0: 4, 1: 2}
+
+    pytest.raises(ValueError, ghost, darr, depth=depth, boundary=1)
