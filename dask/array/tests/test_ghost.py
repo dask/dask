@@ -206,11 +206,10 @@ def test_0_depth():
     assert_array_equal(result, expected)
 
 def test_some_0_depth():
-    set_trace()
     expected = np.arange(100).reshape(10, 10)
-    darr = da.from_array(expected, chunks=(5, 2))
+    darr = da.from_array(expected, chunks=(5, 5))
 
-    depth = {0: 3, 1: 0}
+    depth = {0: 4, 1: 0}
 
     reflected = ghost(darr, depth=depth, boundary='reflect')
     nearest = ghost(darr, depth=depth, boundary='nearest')
@@ -218,7 +217,7 @@ def test_some_0_depth():
     constant = ghost(darr, depth=depth, boundary=42)
 
     result = trim_internal(reflected, depth)
-    assert eq(result, expected)
+    assert_array_equal(result, expected)
 
     result = trim_internal(nearest, depth)
     assert_array_equal(result, expected)
