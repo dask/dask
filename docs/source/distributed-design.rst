@@ -8,8 +8,10 @@ three separate files we consolidate some documentation here.
 Protocol
 --------
 
-In general communications between two nodes (e.g. scheduler to worker)
-have two frames, a header and a payload
+Most communications between two nodes (e.g. scheduler to worker) are a form of
+asynchronous RPC.  Node A tells node B to take some action; that action
+may in turn send an action back to node A or to some other node.
+Messages between two nodes have two frames, a *header* and a *payload*.
 
 A **Header** is a pickled Python dict with the following keys:
 
@@ -17,7 +19,7 @@ A **Header** is a pickled Python dict with the following keys:
 
     address:  Return address of the sender
     function: The name of the operation to execute on the recipient node
-    jobid: Some identifier, optional
+    jobid: Some identifier (optional)
     timestamp: not yet implemented, but we should send datetimes
 
     {'address': 'tcp://alice:5000',
@@ -27,8 +29,8 @@ A **Header** is a pickled Python dict with the following keys:
 
 The **Payload** can be anything, but is generally also a pickled dict
 with arguments for the remote function. This depends on the operation.
-For the ``setitem`` function it consists of a pickled dict with a key
-and value.
+For example the ``setitem`` function's payload consists of a pickled dict with
+a key and value.
 
 ::
 
@@ -55,7 +57,8 @@ using a local threadpool.
 Example
 -------
 
-A scheduler Alice sends a message to a worker Bob
+A scheduler Alice sends a message to a worker Bob to get the value of key
+``'x'`` stored on Bob.
 
 ::
 
@@ -70,7 +73,8 @@ his dictionary of functions
     >>> Bob.scheduler_functions['getitem']
     Bob.getitem_scheduler
 
-So Bob calls this function in a separate thread
+So Bob calls this function in a separate thread with the header an payload as
+arguments.
 
 ::
 
@@ -79,6 +83,7 @@ So Bob calls this function in a separate thread
 That function might go ahead and trigger computation or future
 communication, in which case Alice goes through a similar sequence to
 what Bob just did.
+
 
 Getitem Scheduler -> [Workers]
 ------------------------------
@@ -185,7 +190,7 @@ the worker back on the ``available_workers`` queue.
 Queues and Callbacks
 --------------------
 
-Machines coordinate by calling function on each other. Consider two
+Machines coordinate by calling functions on each other. Consider two
 machines Alice and Bob. When Alice needs Bob to send her a result she
 fires off a request to Bob, has to wait around for it to return, and
 then needs to wake up right when it gets back. Furthermore, the
@@ -229,8 +234,13 @@ different functions.
 In practice I've found this to be relatively straightforward, but
 welcome better solutions.
 
+
 Clients and Schedulers
 ----------------------
+
+.. figure:: images/distributed-layout.png
+   :alt:
+   :align: right
 
 The client and scheduler are different processes and can live on
 different machines. This is mainly to support the situation where you
@@ -247,12 +257,12 @@ client is fully synchronous/blocking and really only has one main operation,
 The Client can only talk to the Scheduler, it does not talk to the
 workers.
 
-.. figure:: images/distributed-network.png
-   :alt:
-
-
 Socket connections
 ------------------
+
+.. figure:: images/distributed-network.png
+   :alt:
+   :align: right
 
 The scheduler maintains two routers, one for clients, and one for
 workers.
