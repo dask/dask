@@ -182,7 +182,6 @@ def test_nearest_ghost():
     assert_array_almost_equal(np.array(tarr), a)
 
 
-@pytest.mark.xfail
 def test_0_depth():
     a = np.arange(100).reshape(10, 10)
     darr = da.from_array(a, chunks=(5, 2))
