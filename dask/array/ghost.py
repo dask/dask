@@ -359,7 +359,8 @@ def ghost(x, depth, boundary):
     # is depth larger than chunk size?
     for d, c in zip(depth.values(), x.chunks):
         if d > min(c):
-            raise ValueError("Depth %d larger than chunk size %d" %
+            raise ValueError("Depth %d larger than chunk size %d"
+                             " to avoid this try to `rechunk` your array" %
                              (d, min(c)))
     x2 = boundaries(x, depth, boundary)
     x3 = ghost_internal(x2, depth)
