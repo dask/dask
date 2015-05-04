@@ -198,10 +198,9 @@ def test_0_depth():
     assert_array_equal(result, expected)
 
 
-@pytest.mark.xfail
-def test_0_depth_failes():
+def test_0_depth_fails():
     expected = np.arange(100).reshape(10, 10)
-    darr = da.from_array(a, chunks=(5, 2))
+    darr = da.from_array(expected, chunks=(5, 2))
 
     depth = {0: 0, 1: 0}
 
