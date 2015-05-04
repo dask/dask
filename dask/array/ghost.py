@@ -178,6 +178,9 @@ def periodic(x, axis, depth):
 
     Useful to create periodic boundary conditions for ghost
     """
+    if depth == 0:
+        return x
+
     left =  ((slice(None, None, None),) * axis
            + (slice(0, depth),)
            + (slice(None, None, None),) * (x.ndim - axis - 1))
@@ -224,6 +227,9 @@ def nearest(x, axis, depth):
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
     does.
     """
+    if depth == 0:
+        return x
+
     left = ((slice(None, None, None),) * axis +
             (slice(0, 1),) +
             (slice(None, None, None),) * (x.ndim - axis - 1))
