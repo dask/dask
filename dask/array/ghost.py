@@ -356,6 +356,11 @@ def ghost(x, depth, boundary):
     if isinstance(boundary, tuple):
         boundary = dict(zip(range(x.ndim), boundary))
 
+    # is depth larger than chunk size?
+    for d, c in zip(depth.values(), x.chunks):
+        if d > min(c):
+            raise ValueError("Depth %d larger than chunk size %d" %
+                             (d, min(c)))
     x2 = boundaries(x, depth, boundary)
     x3 = ghost_internal(x2, depth)
     trim = dict((k, v*2 if boundary.get(k, None) is not None else 0)
