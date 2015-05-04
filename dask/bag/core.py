@@ -153,6 +153,10 @@ class Bag(object):
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
+    @property
+    def _args(self):
+        return (self.dask, self.name, self.npartitions)
+
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
 

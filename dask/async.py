@@ -163,16 +163,18 @@ def start_state_from_dask(dsk, cache=None):
     """
     if cache is None:
         cache = dict()
+    data_keys = set()
     for k, v in dsk.items():
         if not istask(v) and (not ishashable(v) or v not in dsk):
             cache[k] = v
+            data_keys.add(k)
 
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     waiting = dict((k, v.copy()) for k, v in dependencies.items()
-                                 if k not in cache)
+                                 if k not in data_keys)
 
     dependents = reverse_dict(dependencies)
-    for a in cache:
+    for a in data_keys:
         for b in dependents[a]:
             waiting[b].remove(a)
     waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
@@ -273,13 +275,29 @@ def execute_task(key, task, data, queue, raise_on_exception=False):
         queue.put((key, e, tb))
 
 
-def finish_task(dsk, key, result, state, results):
+def release_data(key, state, delete=True):
+    """ Remove data from temporary storage
+
+    See Also
+        finish_task
+    """
+    if key in state['waiting_data']:
+        assert not state['waiting_data'][key]
+        del state['waiting_data'][key]
+
+    state['released'].add(key)
+
+    if delete:
+        del state['cache'][key]
+
+
+def finish_task(dsk, key, state, results, delete=True,
+                release_data=release_data):
     """
     Update executation state after a task finishes
 
     Mutates.  This should run atomically (with a lock).
     """
-    state['cache'][key] = result
     if key in state['ready-set']:
         state['ready-set'].remove(key)
 
@@ -300,31 +318,14 @@ def finish_task(dsk, key, result, state, results):
                     from chest.core import nbytes
                     print("Key: %s\tDep: %s\t NBytes: %.2f\t Release" % (key, dep,
                         sum(map(nbytes, state['cache'].values()) / 1e6)))
-                assert dep in state['cache']
-                release_data(dep, state)
-                assert dep not in state['cache']
-        elif dep in state['cache'] and dep not in results:
-            release_data(dep, state)
+                release_data(dep, state, delete=delete)
+        elif delete and dep not in results:
+            release_data(dep, state, delete=delete)
 
     state['finished'].add(key)
     state['running'].remove(key)
 
     return state
-
-
-def release_data(key, state):
-    """ Remove data from temporary storage
-
-    See Also
-        finish_task
-    """
-    if key in state['waiting_data']:
-        assert not state['waiting_data'][key]
-        del state['waiting_data'][key]
-
-    state['released'].add(key)
-
-    del state['cache'][key]
 
 
 def nested_get(ind, coll, lazy=False):
@@ -446,7 +447,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         if isinstance(res, Exception):
             raise type(res)(" Exception in remote process\n\n"
                 + str(res) + "\n\nTraceback:\n" + tb)
-        finish_task(dsk, key, res, state, results)
+        state['cache'][key] = res
+        finish_task(dsk, key, state, results)
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
 
@@ -458,6 +460,25 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         visualize(dsk, state, filename='dask_end')
 
     return nested_get(result, state['cache'])
+
+
+""" Synchronous concrete version of get_async
+
+Usually we supply a multi-core apply_async function.  Here we provide a
+sequential one.  This is useful for debugging and for code dominated by the
+GIL
+"""
+
+def apply_sync(func, args=(), kwds={}):
+    """ A naive synchronous version of apply_async """
+    return func(*args, **kwds)
+
+
+def get_sync(dsk, keys, **kwargs):
+    from .compatibility import Queue
+    queue = Queue()
+    return get_async(apply_sync, 1, dsk, keys, queue=queue,
+            raise_on_exception=True, **kwargs)
 
 
 '''
@@ -510,15 +531,3 @@ def state_to_networkx(dsk, state):
     from .dot import to_networkx
     data, func = color_nodes(dsk, state)
     return to_networkx(dsk, data_attributes=data, function_attributes=func)
-
-
-def apply_sync(func, args=(), kwds={}):
-    """ A naive synchronous version of apply_async """
-    return func(*args, **kwds)
-
-
-def get_sync(dsk, keys, **kwargs):
-    from .compatibility import Queue
-    queue = Queue()
-    return get_async(apply_sync, 1, dsk, keys, queue=queue,
-            raise_on_exception=True, **kwargs)

@@ -270,3 +270,11 @@ def test_groupby_with_npartitions_changed():
 def test_concat():
     b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
     assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])
+
+
+def test_args():
+    c = b.map(lambda x: x + 1)
+    d = Bag(*c._args)
+
+    assert list(c) == list(d)
+    assert c.npartitions == d.npartitions

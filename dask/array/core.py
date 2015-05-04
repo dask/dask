@@ -556,13 +556,17 @@ class Array(object):
 
     __slots__ = 'dask', 'name', 'chunks', '_dtype'
 
-    def __init__(self, dask, name, chunks, shape=None, dtype=None):
+    def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
         self.name = name
         self.chunks = normalize_chunks(chunks, shape)
         if dtype is not None:
             dtype = np.dtype(dtype)
         self._dtype = dtype
+
+    @property
+    def _args(self):
+        return (self.dask, self.name, self.chunks, self.dtype)
 
     @property
     def numblocks(self):
