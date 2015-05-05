@@ -229,6 +229,13 @@ def test_some_0_depth():
     assert_array_equal(result, expected)
 
 
+def test_one_chunk_along_axis():
+    a = np.arange(2 * 9).reshape(2, 9)
+    darr = da.from_array(a, chunks=((2,), (2, 2, 2, 3)))
+    g = ghost(darr, depth=0, boundary=0)
+    assert a.shape == g.shape
+
+
 def test_depth_equals_boundary_length():
     expected = np.arange(100).reshape(10, 10)
     darr = da.from_array(expected, chunks=(5, 5))

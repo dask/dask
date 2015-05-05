@@ -141,12 +141,15 @@ def ghost_internal(x, axes):
 
     chunks = []
     for i, bds in enumerate(x.chunks):
-        left = [bds[0] + axes.get(i, 0)]
-        right = [bds[-1] + axes.get(i, 0)]
-        mid = []
-        for bd in bds[1:-1]:
-            mid.append(bd + axes.get(i, 0) * 2)
-        chunks.append(left + mid + right)
+        if len(bds) == 1:
+            chunks.append(bds)
+        else:
+            left = [bds[0] + axes.get(i, 0)]
+            right = [bds[-1] + axes.get(i, 0)]
+            mid = []
+            for bd in bds[1:-1]:
+                mid.append(bd + axes.get(i, 0) * 2)
+            chunks.append(left + mid + right)
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),
                  name, chunks)
