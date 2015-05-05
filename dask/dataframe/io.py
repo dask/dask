@@ -3,13 +3,14 @@ import numpy as np
 from functools import wraps
 import struct
 import os
+from glob import glob
 from math import ceil
 from toolz import curry, merge
 
 from ..compatibility import StringIO
 from ..utils import textblock
 
-from .core import names, DataFrame, compute
+from .core import names, DataFrame, compute, concat
 
 
 def _StringIO(data):
@@ -34,6 +35,8 @@ def file_size(fn, compression=None):
 
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
+    if '*' in fn:
+        return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
     assert not kwargs.pop('categorize', None)
     assert not kwargs.pop('index', None)
     compression = kwargs.pop('compression', None)

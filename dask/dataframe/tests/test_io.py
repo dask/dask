@@ -1,6 +1,7 @@
 import gzip
 import pandas as pd
 import pandas.util.testing as tm
+import os
 import dask
 
 import dask.dataframe as dd
@@ -56,3 +57,18 @@ def test_cateogories_and_quantiles():
 
         assert len(quant) == 2
         assert (-600 < quant).all() and (600 > quant).all()
+
+
+def test_read_multiple_csv():
+    try:
+        with open('_foo.1.csv', 'w') as f:
+            f.write(text)
+        with open('_foo.2.csv', 'w') as f:
+            f.write(text)
+        df = read_csv('_foo.*.csv')
+
+        assert (len(read_csv('_foo.*.csv').compute()) ==
+                len(read_csv('_foo.1.csv').compute()) * 2)
+    finally:
+        os.remove('_foo.1.csv')
+        os.remove('_foo.2.csv')
