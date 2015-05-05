@@ -7,6 +7,7 @@ from time import sleep
 import psutil
 
 ncpus = psutil.cpu_count()
+pool = Pool()
 
 def get(dsk, keys, nworkers=ncpus):
     """ Single node get function using ZeroMQ distributed scheduler
@@ -18,7 +19,6 @@ def get(dsk, keys, nworkers=ncpus):
         dask.multiprocessing
         dask.threaded
     """
-    pool = Pool()
     s = Scheduler(hostname='localhost')
     futures = [pool.apply_async(Worker, (s.address_to_workers,), {'block': True})
                for p in pool._pool]
