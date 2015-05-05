@@ -182,8 +182,6 @@ def periodic(x, axis, depth):
 
     Useful to create periodic boundary conditions for ghost
     """
-    if depth == 0:
-        return x
 
     left = ((slice(None, None, None),) * axis +
             (slice(0, depth),) +
@@ -204,10 +202,7 @@ def reflect(x, axis, depth):
 
     This is the converse of ``periodic``
     """
-    if depth == 0:
-        return x
-
-    elif depth == 1:
+    if depth == 1:
         left = ((slice(None, None, None),) * axis +
                 (slice(0, 1),) +
                 (slice(None, None, None),) * (x.ndim - axis - 1))
@@ -232,9 +227,6 @@ def nearest(x, axis, depth):
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
     does.
     """
-    if depth == 0:
-        return x
-
     left = ((slice(None, None, None),) * axis +
             (slice(0, 1),) +
             (slice(None, None, None),) * (x.ndim - axis - 1))
@@ -252,9 +244,6 @@ def nearest(x, axis, depth):
 
 def constant(x, axis, depth, value):
     """ Add constant slice to either side of array """
-    if depth == 0:
-        return x
-
     chunks = list(x.chunks)
     chunks[axis] = (depth,)
 
@@ -290,14 +279,18 @@ def boundaries(x, depth=None, kind=None):
         depth = dict((i, depth) for i in range(x.ndim))
 
     for i in range(x.ndim):
+        d = depth.get(i, 0)
+        if d == 0:
+            continue
+
         if kind.get(i) == 'periodic':
-            x = periodic(x, i, depth[i])
+            x = periodic(x, i, d)
         elif kind.get(i) == 'reflect':
-            x = reflect(x, i, depth[i])
+            x = reflect(x, i, d)
         elif kind.get(i) == 'nearest':
-            x = nearest(x, i, depth[i])
+            x = nearest(x, i, d)
         elif i in kind:
-            x = constant(x, i, depth[i], kind[i])
+            x = constant(x, i, d, kind[i])
 
     return x
 
