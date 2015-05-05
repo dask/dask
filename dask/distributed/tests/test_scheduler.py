@@ -169,3 +169,14 @@ def test_random_names():
         assert re.match('\w+://[\w-]+:\d+', s.address_to_workers.decode('utf-8'))
     finally:
         s.close()
+
+
+def test_close_workers():
+    with scheduler_and_workers(n=2) as (s, (a, b)):
+        sleep(0.05)
+        assert a.status != 'closed'
+
+        s.close_workers()
+        sleep(0.05)
+        assert a.status == 'closed'
+        assert b.status == 'closed'
