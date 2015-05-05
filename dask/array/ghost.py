@@ -132,7 +132,9 @@ def ghost_internal(x, axes):
     interior_slices = {}
     ghost_blocks = {}
     for k in interior_keys:
-        interior_slices[k] = fractional_slice(k, axes)
+        frac_slice = fractional_slice(k, axes)
+        if k != frac_slice:
+            interior_slices[k] = frac_slice
 
         ghost_blocks[(name,) + k[1:]] = (rec_concatenate,
                                          (concrete, expand_key2(k)))
