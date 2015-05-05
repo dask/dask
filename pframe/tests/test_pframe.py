@@ -4,6 +4,7 @@ import pandas as pd
 import shutil
 from pandas.util import testing as tm
 from pframe.utils import raises
+import pickle
 
 df1 = pd.DataFrame({'a': [1, 2, 3],
                     'b': [4, 5, 6],
@@ -94,3 +95,7 @@ def test_shard_df_on_index():
     tm.assert_frame_equal(result[0], f.iloc[0:1])
     tm.assert_frame_equal(result[1], f.iloc[1:3])
     tm.assert_frame_equal(result[2], f.iloc[3:])
+
+
+def test_pickle():
+    pf2 = pickle.loads(pickle.dumps(pf))

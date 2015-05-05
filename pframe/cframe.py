@@ -40,10 +40,23 @@ class cframe(object):
                                    dtype=df.dtypes[col], safe=False,
                                    chunklen=chunklen, **kwargs))
                         for col in df.columns)
-        self.columns = df.columns
-        self.index = bcolz.zeros(shape=(0,), dtype=df.index.values.dtype,
+        self.columns = list(df.columns)
+        self.index = bcolz.zeros(rootdir=os.path.join(rootdir, 'index.bcolz'),
+                                 shape=(0,), dtype=df.index.values.dtype,
                                  safe=False, chunklen=chunklen, **kwargs)
         self.rootdir = rootdir
+
+    def __getstate__(self):
+        return {'rootdir': self.rootdir,
+                'columns': self.columns}
+
+    def __setstate__(self, d):
+        self.rootdir = d['rootdir']
+        self.columns = d['columns']
+        self.blocks = dict((col, bcolz.carray(rootdir=os.path.join(self.rootdir, '%s.bcolz' % col)))
+                for col in self.columns)
+        self.index = bcolz.carray(rootdir=os.path.join(self.rootdir, 'index.bcolz'))
+        self._explicitly_given_path = True
 
     def append(self, df):
         for block in df._data.blocks:

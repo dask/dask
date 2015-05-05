@@ -166,6 +166,16 @@ class pframe(object):
         with self.lock:
             shutil.rmtree(self.path)
 
+    def __getstate__(self):
+        return dict((k, self.__dict__[k])
+                     for k in ['path', 'divisions', 'columns', 'dtypes',
+                               'index_name', 'categories', 'partitions'])
+
+    def __setstate__(self, dict):
+        self.__dict__.update(dict)
+        self.lock = Lock()
+        self._explicitly_given_path = True
+
 
 def shard_df_on_index(df, divisions):
     """ Shard a DataFrame by ranges on its index
