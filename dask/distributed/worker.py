@@ -433,38 +433,40 @@ class Worker(object):
         then compute task and store result into ``self.data``.  Finally report
         back to the scheduler that we're free.
         """
-        # Unpack payload
-        loads = header.get('loads', pickle.loads)
-        payload = loads(payload)
-        locations = payload['locations']
-        key = payload['key']
-        task = payload['task']
+        with logerrors():
+            # Unpack payload
+            loads = header.get('loads', pickle.loads)
+            payload = loads(payload)
+            locations = payload['locations']
+            key = payload['key']
+            task = payload['task']
 
-        # Grab data from peers
-        self.collect(locations)
+            # Grab data from peers
+            if locations:
+                self.collect(locations)
 
-        # Do actual work
-        start = time()
-        status = "OK"
-        log(self.address, "Start computation", key, task)
-        try:
-            result = core.get(self.data, task)
-            end = time()
-        except Exception as e:
-            status = e
-            end = time()
-        else:
-            self.data[key] = result
-        log(self.address, "End computation", key, task, status)
+            # Do actual work
+            start = time()
+            status = "OK"
+            log(self.address, "Start computation", key, task)
+            try:
+                result = core.get(self.data, task)
+                end = time()
+            except Exception as e:
+                status = e
+                end = time()
+            else:
+                self.data[key] = result
+            log(self.address, "End computation", key, task, status)
 
-        # Report finished to scheduler
-        header2 = {'function': 'finished-task'}
-        result = {'key': key,
-                  'duration': end - start,
-                  'status': status,
-                  'dependencies': list(locations),
-                  'queue': payload['queue']}
-        self.send_to_scheduler(header2, result)
+            # Report finished to scheduler
+            header2 = {'function': 'finished-task'}
+            result = {'key': key,
+                      'duration': end - start,
+                      'status': status,
+                      'dependencies': list(locations),
+                      'queue': payload['queue']}
+            self.send_to_scheduler(header2, result)
 
     def close_from_scheduler(self, header, payload):
         log(self.address, 'Close signal from scheduler')
