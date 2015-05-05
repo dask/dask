@@ -482,6 +482,11 @@ class Scheduler(object):
         if queue:
             self.queues[queue].put(key)
 
+    def close_workers(self):
+        header = {'function': 'close'}
+        for w in self.workers:
+            self.send_to_worker(w, header, {})
+
     def close(self):
         """ Close Scheduler """
         self.status = 'closed'

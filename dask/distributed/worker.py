@@ -105,7 +105,8 @@ class Worker(object):
                                     'compute': self.compute,
                                     'getitem': self.getitem_scheduler,
                                     'delitem': self.delitem,
-                                    'setitem': self.setitem}
+                                    'setitem': self.setitem,
+                                    'close': self.close_from_scheduler}
 
         self.worker_functions = {'getitem': self.getitem_worker,
                                  'getitem-ack': self.getitem_ack,
@@ -349,6 +350,7 @@ class Worker(object):
         """
         self._listen_workers_thread.join()
         self._listen_scheduler_thread.join()
+        log('Unblocked')
 
     def collect(self, locations):
         """ Collect data from peers
@@ -463,6 +465,10 @@ class Worker(object):
                   'dependencies': list(locations),
                   'queue': payload['queue']}
         self.send_to_scheduler(header2, result)
+
+    def close_from_scheduler(self, header, payload):
+        log(self.address, 'Close signal from scheduler')
+        self.close()
 
     def close(self):
         if self.pool._state == multiprocessing.pool.RUN:
