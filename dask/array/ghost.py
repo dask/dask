@@ -250,9 +250,11 @@ def nearest(x, axis, depth):
     return concatenate([l, x, r], axis=axis)
 
 
-
 def constant(x, axis, depth, value):
     """ Add constant slice to either side of array """
+    if depth == 0:
+        return x
+
     chunks = list(x.chunks)
     chunks[axis] = (depth,)
 
