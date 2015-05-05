@@ -213,6 +213,12 @@ class _Frame(object):
     def iloc(self):
         raise AttributeError("Dask Dataframe does not support iloc")
 
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, dict):
+        self.__dict__ = dict
+
 
 class Series(_Frame):
     """ Out-of-core Series object

@@ -533,3 +533,13 @@ def test_concat():
     assert c.npartitions == a.npartitions + b.npartitions
 
     assert eq(pd.concat([a.compute(), b.compute()]), c)
+
+
+def test_dataframe_series_are_dillable():
+    try:
+        import dill
+    except ImportError:
+        return
+    e = d.groupby(d.a).b.sum()
+    f = dill.loads(dill.dumps(e))
+    assert eq(e, f)
