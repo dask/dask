@@ -357,7 +357,8 @@ def ghost(x, depth, boundary):
         boundary = dict(zip(range(x.ndim), boundary))
 
     # is depth larger than chunk size?
-    for d, c in zip(depth.values(), x.chunks):
+    depth_values = [depth.get(i, 0) for i in range(x.ndim)]
+    for d, c in zip(depth_values, x.chunks):
         if d > min(c):
             raise ValueError("The overlapping depth %d is larger than your\n"
                              "smallest chunk size %d. Rechunk your array\n"
