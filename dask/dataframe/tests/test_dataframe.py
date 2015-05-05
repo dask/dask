@@ -516,3 +516,20 @@ def test_unkonwn_divisions():
     assert eq(d.a + d.b + 1, full.a + full.b + 1)
 
     assert raises(ValueError, lambda: d.loc[3])
+
+
+def test_concat():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
+    a = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
+           ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
+    b = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+
+    c = dd.concat([a, b])
+
+    assert c.npartitions == a.npartitions + b.npartitions
+
+    assert eq(pd.concat([a.compute(), b.compute()]), c)

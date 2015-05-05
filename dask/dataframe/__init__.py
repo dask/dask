@@ -11,5 +11,5 @@ Please report issues to https://github.com/ContinuumIO/dask/issues/new
 
 
 from .core import (DataFrame, Series, Index, _Frame, read_csv, from_array,
-        from_bcolz)
+        from_bcolz, concat)
 from .shuffle import from_pframe

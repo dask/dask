@@ -26,7 +26,7 @@ from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable
 
 
-def concat(args):
+def _concat(args):
     """ Generic concat operation """
     if not args:
         return args
@@ -56,7 +56,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    return list(map(concat, results))
+    return list(map(_concat, results))
 
 
 names = ('f-%d' % i for i in count(1))
@@ -575,6 +575,29 @@ def reduction(x, chunk, aggregate):
     dsk2 = {(b, 0): (aggregate, (tuple, [(a,i) for i in range(x.npartitions)]))}
 
     return Scalar(merge(x.dask, dsk, dsk2), b)
+
+
+def concat(dfs):
+    """ Concatenate dataframes along rows
+
+    Currently only supports unknown divisions
+    """
+    if any(df.known_divisions for df in dfs):
+        # For this to work we need to add a final division for "maximum element"
+        raise NotImplementedError("Concat can't currently handle dataframes"
+                " with known divisions")
+    name = next(names)
+    dsk = dict()
+    i = 0
+    for df in dfs:
+        for key in df._keys():
+            dsk[(name, i)] = key
+            i += 1
+
+    divisions = [None] * (i - 1)
+
+    return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
+                     dfs[0].columns, divisions)
 
 
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
