@@ -51,10 +51,25 @@ def read_csv(fn, *args, **kwargs):
     # Let pandas infer on the first 100 rows
     head = pd.read_csv(fn, *args, nrows=100, header=header,
                        compression=compression, **kwargs)
-    first_read_csv = curry(pd.read_csv, *args, names=head.columns,
-                           header=header, **kwargs)
+
+    if 'parse_dates' not in kwargs:
+        parse_dates = [col for col in head.dtypes.index
+                           if np.issubdtype(head.dtypes[col], np.datetime64)]
+    else:
+        parse_dates = kwargs.pop('parse_dates')
+    if 'dtypes' in kwargs:
+        dtypes = kwargs['dtypes']
+    else:
+        dtypes = dict(head.dtypes)
+        if parse_dates:
+            for col in parse_dates:
+                del dtypes[col]
+    first_read_csv = curry(pd.read_csv, *args,
+                           header=header, dtype=dtypes,
+                           parse_dates=parse_dates, **kwargs)
     rest_read_csv = curry(pd.read_csv, *args, names=head.columns,
-                          header=None, **kwargs)
+                          header=None, dtype=dtypes, parse_dates=parse_dates,
+                          **kwargs)
 
     # Create dask graph
     name = next(names)

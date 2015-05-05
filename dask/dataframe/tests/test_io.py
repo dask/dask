@@ -22,7 +22,7 @@ Frank,600
 
 def test_read_csv():
     with filetext(text) as fn:
-        f = read_csv(fn, header=0, chunkbytes=30)
+        f = read_csv(fn, chunkbytes=30)
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
         result = f.compute(get=dask.get).sort('name')
@@ -31,7 +31,7 @@ def test_read_csv():
 
 def test_read_gzip_csv():
     with filetext(text.encode(), open=gzip.open) as fn:
-        f = read_csv(fn, header=0, chunkbytes=30, compression='gzip')
+        f = read_csv(fn, chunkbytes=30, compression='gzip')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
         result = f.compute(get=dask.get).sort('name')
@@ -47,12 +47,12 @@ def test_file_size():
 
 def test_cateogories_and_quantiles():
     with filetext(text) as fn:
-        cats, quant = categories_and_quantiles(fn, (), {'header': 0})
+        cats, quant = categories_and_quantiles(fn, (), {})
 
         assert list(cats['name']) == ['Alice', 'Bob', 'Charlie', 'Dennis', 'Edith', 'Frank']
 
         cats, quant = categories_and_quantiles(fn, (),
-                                              {'header': 0, 'chunkbytes':30},
+                                              {'chunkbytes':30},
                                               index='amount')
 
         assert len(quant) == 2
@@ -72,3 +72,19 @@ def test_read_multiple_csv():
     finally:
         os.remove('_foo.1.csv')
         os.remove('_foo.2.csv')
+
+
+def test_consistent_dtypes():
+    text = """
+    name,amount
+    Alice,100.5
+    Bob,-200.5
+    Charlie,300
+    Dennis,400
+    Edith,-500
+    Frank,600
+    """.strip()
+
+    with filetext(text) as fn:
+        df = read_csv(fn, chunkbytes=30)
+        assert isinstance(df.amount.sum().compute(), float)
