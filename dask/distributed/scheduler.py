@@ -12,6 +12,7 @@ from datetime import datetime
 from threading import Thread, Lock
 from contextlib import contextmanager
 from toolz import curry, partial
+from time import sleep
 from ..compatibility import Queue, unicode
 try:
     import cPickle as pickle
@@ -515,10 +516,9 @@ class Scheduler(object):
         1.  Scheduler scatters precomputed data in graph to workers
             e.g. nodes like ``{'x': 1}``.  See Scheduler.scatter
         2.
-
-
         """
         with self._schedule_lock:
+            log(self.address_to_workers, "Scheduling dask")
             if isinstance(result, list):
                 result_flat = set(flatten(result))
             else:
@@ -527,7 +527,8 @@ class Scheduler(object):
 
             cache = dict()
             dag_state = dag_state_from_dask(dsk, cache=cache)
-            self.scatter(cache.items())  # send data in dask up to workers
+            if cache:
+                self.scatter(cache.items())  # send data in dask up to workers
 
             tick = [0]
 
@@ -547,6 +548,11 @@ class Scheduler(object):
                 dag_state['running'].add(key)
 
                 self.trigger_task(dsk, key, qkey)  # Fire
+
+            if self.available_workers.empty():
+                sleep(0.1)
+                if self.available_workers.empty():
+                    raise ValueError("No available workers found")
 
             # Seed initial tasks
             while dag_state['ready'] and self.available_workers.qsize() > 0:
@@ -578,23 +584,24 @@ class Scheduler(object):
         Output Payload: keys, result
         Sent to client on 'schedule-ack'
         """
-        loads = header.get('loads', dill.loads)
-        payload = loads(payload)
-        address = header['address']
-        dsk = payload['dask']
-        keys = payload['keys']
+        with logerrors():
+            loads = header.get('loads', dill.loads)
+            payload = loads(payload)
+            address = header['address']
+            dsk = payload['dask']
+            keys = payload['keys']
 
-        header2 = {'jobid': header.get('jobid'),
-                   'function': 'schedule-ack'}
-        try:
-            result = self.schedule(dsk, keys)
-            header2['status'] = 'OK'
-        except Exception as e:
-            result = e
-            header2['status'] = 'Error'
+            header2 = {'jobid': header.get('jobid'),
+                       'function': 'schedule-ack'}
+            try:
+                result = self.schedule(dsk, keys)
+                header2['status'] = 'OK'
+            except Exception as e:
+                result = e
+                header2['status'] = 'Error'
 
-        payload2 = {'keys': keys, 'result': result}
-        self.send_to_client(address, header2, payload2)
+            payload2 = {'keys': keys, 'result': result}
+            self.send_to_client(address, header2, payload2)
 
     def _release_data(self, key, state, delete=True):
         """ Remove data from temporary storage during scheduling run
