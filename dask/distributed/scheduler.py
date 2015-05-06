@@ -129,8 +129,11 @@ class Scheduler(object):
     def _listen_to_workers(self):
         """ Event loop: Listen to worker router """
         while self.status != 'closed':
-            if not self.to_workers.poll(100):
-                continue
+            try:
+                if not self.to_workers.poll(100):
+                    continue
+            except zmq.ZMQError:
+                break
             address, header, payload = self.to_workers.recv_multipart()
 
             header = pickle.loads(header)
@@ -148,8 +151,11 @@ class Scheduler(object):
     def _listen_to_clients(self):
         """ Event loop: Listen to client router """
         while self.status != 'closed':
-            if not self.to_clients.poll(100):
-                continue
+            try:
+                if not self.to_clients.poll(100):
+                    continue
+            except zmq.ZMQError:
+                break
             address, header, payload = self.to_clients.recv_multipart()
             header = pickle.loads(header)
             if 'address' not in header:

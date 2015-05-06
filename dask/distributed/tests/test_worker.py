@@ -35,7 +35,7 @@ def worker_and_router(*args, **kwargs):
     if port:
         router.bind('tcp://*:%d' % port)
     else:
-        port = port or router.bind_to_random_port('tcp://*')
+        port = router.bind_to_random_port('tcp://*')
     kwargs['scheduler'] = 'tcp://localhost:%d' % port
     with worker(*args, **kwargs) as w:
         handshake = router.recv_multipart()  # burn initial handshake
