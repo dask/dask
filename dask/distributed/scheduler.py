@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import zmq
 import socket
+import sys
 import dill
 import uuid
 from collections import defaultdict
@@ -13,12 +14,14 @@ from threading import Thread, Lock
 from contextlib import contextmanager
 from toolz import curry, partial
 from time import sleep
-from ..compatibility import Queue, unicode
+import traceback
+
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 
+from ..compatibility import Queue, unicode
 from ..core import get_dependencies, flatten
 from .. import core
 from ..async import finish_task, start_state_from_dask as dag_state_from_dask
@@ -35,7 +38,10 @@ def logerrors():
     try:
         yield
     except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
         log('Error!', str(e))
+        log('Traceback', str(tb))
         raise
 
 class Scheduler(object):

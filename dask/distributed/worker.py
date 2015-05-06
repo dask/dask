@@ -12,6 +12,7 @@ import zmq
 from toolz import partial
 from time import time
 import sys
+import traceback
 from ..compatibility import Queue, unicode
 from .. import core
 try:
@@ -25,10 +26,6 @@ def pickle_dumps(obj):
 
 MAX_DEALERS = 100
 
-context = zmq.Context()
-
-with open('log.workers', 'w') as f:  # delete file
-    pass
 
 def log(*args):
     with open('log.workers', 'a') as f:
@@ -40,8 +37,12 @@ def logerrors():
     try:
         yield
     except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
         log('Error!', str(e))
+        log('Traceback', str(tb))
         raise
+
 
 class Worker(object):
     """ Asynchronous worker in a distributed dask computation pool
@@ -80,10 +81,12 @@ class Worker(object):
         self.pool = ThreadPool(nthreads)
         self.scheduler = scheduler
         self.status = 'run'
+        self.context = zmq.Context()
+
 
         self.hostname = hostname or socket.gethostname()
 
-        self.to_workers = context.socket(zmq.ROUTER)
+        self.to_workers = self.context.socket(zmq.ROUTER)
         if port_to_workers is None:
             port_to_workers = self.to_workers.bind_to_random_port('tcp://*')
         else:
@@ -96,7 +99,7 @@ class Worker(object):
 
         self.queues = dict()
 
-        self.to_scheduler = context.socket(zmq.DEALER)
+        self.to_scheduler = self.context.socket(zmq.DEALER)
 
         self.to_scheduler.setsockopt(zmq.IDENTITY, self.address)
         self.to_scheduler.connect(scheduler)
@@ -254,7 +257,7 @@ class Worker(object):
                 for sock in self.dealers.values():
                     sock.close()
                 self.dealers.clear()
-            sock = context.socket(zmq.DEALER)
+            sock = self.context.socket(zmq.DEALER)
             sock.connect(address)
             self.dealers[address] = sock
 
