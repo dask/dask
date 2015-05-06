@@ -1,25 +1,24 @@
 from __future__ import absolute_import, division, print_function
 
-from operator import add, getitem
 import operator
+from operator import add, getitem
 import inspect
 from numbers import Number
 from collections import Iterable
 from bisect import bisect
-import operator
-import math
 from itertools import product, count
 from collections import Iterator
 from functools import partial, wraps
-from toolz.curried import (identity, pipe, partition, concat, unique, pluck,
-        frequencies, join, first, memoize, map, groupby, valmap, accumulate,
-        merge, curry, compose, reduce, interleave, sliding_window)
+
+from toolz.curried import (pipe, partition, concat, unique, pluck, join, first,
+                           memoize, map, groupby, valmap, accumulate, merge,
+                           curry, reduce, interleave, sliding_window)
 import numpy as np
+
 from . import chunk
-from .slicing import slice_array, insert_many
+from .slicing import slice_array
+from .numpy_compat import isclose
 from ..utils import deepmap, ignoring, repr_long_list
-from ..async import inline_functions
-from ..optimize import cull, inline
 from ..compatibility import unicode
 from .. import threaded, core
 from ..context import _globals
@@ -1436,9 +1435,9 @@ def notnull(values):
     return ~isnull(values)
 
 
-@wraps(np.isclose)
+@wraps(isclose)
 def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
-    func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    func = partial(isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
     return elemwise(func, arr1, arr2, dtype='bool')
 
 
