@@ -33,6 +33,7 @@ def log(*args):
     with open('log.workers', 'a') as f:
         print(*args, file=f)
 
+log('Hello from worker.py')
 
 @contextmanager
 def logerrors():
@@ -309,15 +310,16 @@ class Worker(object):
             # Wait on request
             if not self.to_scheduler.poll(100):
                 continue
-            header, payload = self.to_scheduler.recv_multipart()
-            header = pickle.loads(header)
-            log(self.address, 'Receive job from scheduler', header)
-            try:
-                function = self.scheduler_functions[header['function']]
-            except KeyError:
-                log(self.address, 'Unknown function', header)
-            else:
-                future = self.pool.apply_async(function, args=(header, payload))
+            with logerrors():
+                header, payload = self.to_scheduler.recv_multipart()
+                header = pickle.loads(header)
+                log(self.address, 'Receive job from scheduler', header)
+                try:
+                    function = self.scheduler_functions[header['function']]
+                except KeyError:
+                    log(self.address, 'Unknown function', header)
+                else:
+                    future = self.pool.apply_async(function, args=(header, payload))
 
     def listen_to_workers(self):
         """ Listen to communications from workers
@@ -329,18 +331,19 @@ class Worker(object):
             if not self.to_workers.poll(100):
                 continue
 
-            address, header, payload = self.to_workers.recv_multipart()
-            header = pickle.loads(header)
-            if 'address' not in header:
-                header['address'] = address
-            log(self.address, 'Receive job from worker', address, header)
+            with logerrors():
+                address, header, payload = self.to_workers.recv_multipart()
+                header = pickle.loads(header)
+                if 'address' not in header:
+                    header['address'] = address
+                log(self.address, 'Receive job from worker', address, header)
 
-            try:
-                function = self.worker_functions[header['function']]
-            except KeyError:
-                log(self.address, 'Unknown function', header)
-            else:
-                future = self.pool.apply_async(function, args=(header, payload))
+                try:
+                    function = self.worker_functions[header['function']]
+                except KeyError:
+                    log(self.address, 'Unknown function', header)
+                else:
+                    future = self.pool.apply_async(function, args=(header, payload))
 
     def block(self):
         """ Block until listener threads close
