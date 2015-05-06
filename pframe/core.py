@@ -87,7 +87,8 @@ class pframe(object):
         self.categories = categorical_metadata(like)
         like2 = strip_categories(like.copy()).iloc[:10]
 
-        if any(str(dt) == 'O' for dt in like.dtypes) or like.index.dtype == 'O':
+        if (any(str(dt) in ('O', 'object') for dt in like.dtypes) or
+            str(like.index.dtype) in ('O', 'object')):
             raise TypeError('Object dtypes not supported, consider categoricals')
 
         # Compression
