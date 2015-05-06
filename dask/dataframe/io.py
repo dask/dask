@@ -197,10 +197,10 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     import dask
     if index:
         quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
-        result = compute(quantiles, *categories, get=dask.get)
+        result = compute(quantiles, *categories)
         quantiles, categories = result[0], result[1:]
     else:
-        categories = compute(*categories, get=dask.get)
+        categories = compute(*categories)
         quantiles = None
 
     categories = dict(zip(category_columns, categories))
