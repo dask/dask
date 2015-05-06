@@ -1,11 +1,17 @@
 import gzip
 import pandas as pd
+import numpy as np
 import pandas.util.testing as tm
 import os
 import dask
+import bcolz
+from pframe import pframe
+from operator import getitem
+from toolz import valmap
 
 import dask.dataframe as dd
-from dask.dataframe.io import read_csv, file_size, categories_and_quantiles
+from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
+        dataframe_from_ctable, from_array, from_bcolz)
 
 from dask.utils import filetext
 
@@ -139,3 +145,67 @@ def test_read_csv_categorize_and_index():
         expected = pd.read_csv(fn).set_index('amount')
         expected['name'] = expected.name.astype('category')
         assert eq(f, expected)
+
+
+####################
+# Arrays and BColz #
+####################
+
+
+def test_from_array():
+    x = np.array([(i, i*10) for i in range(10)],
+                 dtype=[('a', 'i4'), ('b', 'i4')])
+    d = dd.from_array(x, chunksize=4)
+
+    assert list(d.columns) == ['a', 'b']
+    assert d.divisions == (4, 8)
+
+    assert (d.compute().to_records(index=False) == x).all()
+
+
+def test_from_bcolz():
+    try:
+        import bcolz
+    except ImportError:
+        pass
+    else:
+        t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
+                         names=['x', 'y', 'a'])
+        d = dd.from_bcolz(t, chunksize=2)
+        assert d.npartitions == 2
+        assert str(d.dtypes['a']) == 'category'
+        assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
+        assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
+
+        d = dd.from_bcolz(t, chunksize=2, index='x')
+        assert list(d.index.compute()) == [1, 2, 3]
+
+
+#####################
+# Play with PFrames #
+#####################
+
+
+dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
+                              index=[0, 1, 3]),
+       ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
+                              index=[5, 6, 8]),
+       ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
+                              index=[9, 9, 9])}
+dfs = list(dsk.values())
+pf = pframe(like=dfs[0], divisions=[5])
+for df in dfs:
+    pf.append(df)
+
+
+def test_from_pframe():
+    d = dd.from_pframe(pf)
+    assert list(d.columns) == list(dfs[0].columns)
+    assert list(d.divisions) == list(pf.divisions)
+
+
+def test_column_store_from_pframe():
+    d = dd.from_pframe(pf)
+    assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
+    assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
+

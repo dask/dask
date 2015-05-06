@@ -1,6 +1,5 @@
 import dask.dataframe as dd
-from dask.dataframe.core import (compute, get,
-        dataframe_from_ctable, rewrite_rules, concat)
+from dask.dataframe.core import compute, get, concat
 from toolz import valmap
 import pandas.util.testing as tm
 from operator import getitem
@@ -10,8 +9,6 @@ from dask.utils import filetext, raises, tmpfile
 import gzip
 import bz2
 import dask
-import bcolz
-from pframe import pframe
 
 def eq(a, b):
     if hasattr(a, 'dask'):
@@ -108,17 +105,6 @@ def test_set_index():
 
     d2 = d.set_index('b')
     assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
-
-
-def test_from_array():
-    x = np.array([(i, i*10) for i in range(10)],
-                 dtype=[('a', 'i4'), ('b', 'i4')])
-    d = dd.from_array(x, chunksize=4)
-
-    assert list(d.columns) == ['a', 'b']
-    assert d.divisions == (4, 8)
-
-    assert (d.compute().to_records(index=False) == x).all()
 
 
 def test_split_apply_combine_on_series():
@@ -302,24 +288,6 @@ def test_index():
     assert eq(d.index, full.index)
 
 
-def test_from_bcolz():
-    try:
-        import bcolz
-    except ImportError:
-        pass
-    else:
-        t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
-                         names=['x', 'y', 'a'])
-        d = dd.from_bcolz(t, chunksize=2)
-        assert d.npartitions == 2
-        assert str(d.dtypes['a']) == 'category'
-        assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
-        assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
-
-        d = dd.from_bcolz(t, chunksize=2, index='x')
-        assert list(d.index.compute()) == [1, 2, 3]
-
-
 def test_loc():
     assert eq(d.loc[5], full.loc[5])
     assert eq(d.loc[3:8], full.loc[3:8])
@@ -329,62 +297,6 @@ def test_loc():
 
 def test_iloc_raises():
     assert raises(AttributeError, lambda: d.iloc[:5])
-
-
-#####################
-# Play with PFrames #
-#####################
-
-
-dfs = list(dsk.values())
-pf = pframe(like=dfs[0], divisions=[5])
-for df in dfs:
-    pf.append(df)
-
-
-def test_from_pframe():
-    d = dd.from_pframe(pf)
-    assert list(d.columns) == list(dfs[0].columns)
-    assert list(d.divisions) == list(pf.divisions)
-
-
-def test_column_optimizations_with_pframe_and_rewrite():
-    dsk2 = dict((('x', i), (getitem,
-                             (pframe.get_partition, pf, i),
-                             (list, ['a', 'b'])))
-            for i in [1, 2, 3])
-
-    expected = dict((('x', i),
-                     (pframe.get_partition, pf, i, (list, ['a', 'b'])))
-            for i in [1, 2, 3])
-    result = valmap(rewrite_rules.rewrite, dsk2)
-
-    assert result == expected
-
-
-def test_column_optimizations_with_bcolz_and_rewrite():
-    bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
-    func = lambda x: x
-    for cols in [None, 'abc', ['abc']]:
-        dsk2 = dict((('x', i),
-                     (func,
-                       (getitem,
-                         (dataframe_from_ctable, bc, slice(0, 2), cols, {}),
-                         (list, ['a', 'b']))))
-                for i in [1, 2, 3])
-
-        expected = dict((('x', i), (func, (dataframe_from_ctable,
-                                     bc, slice(0, 2), (list, ['a', 'b']), {})))
-                for i in [1, 2, 3])
-        result = valmap(rewrite_rules.rewrite, dsk2)
-
-        assert result == expected
-
-
-def test_column_store_from_pframe():
-    d = dd.from_pframe(pf)
-    assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
-    assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
 
 
 def test_assign():

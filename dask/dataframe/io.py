@@ -6,12 +6,15 @@ import os
 from glob import glob
 from math import ceil
 from toolz import curry, merge, partial
+from itertools import count
+import bcolz
+from operator import getitem
 
 from ..compatibility import StringIO
 from ..utils import textblock
 
-from .core import (names, DataFrame, compute, concat, categorize_block,
-        set_partition)
+from .core import names, DataFrame, compute, concat, categorize_block
+from .shuffle import set_partition
 
 
 def _StringIO(data):
@@ -161,3 +164,141 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     categories = dict(zip(category_columns, categories))
 
     return categories, quantiles
+
+
+from_array_names = ('from-array-%d' % i for i in count(1))
+
+
+def from_array(x, chunksize=50000):
+    """ Read dask Dataframe from any slicable array with record dtype
+
+    Uses getitem syntax to pull slices out of the array.  The array need not be
+    a NumPy array but must support slicing syntax
+
+        x[50000:100000]
+
+    and have a record dtype
+
+        x.dtype == [('name', 'O'), ('balance', 'i8')]
+
+    """
+    columns = tuple(x.dtype.names)
+    divisions = tuple(range(chunksize, len(x), chunksize))
+    name = next(from_array_names)
+    dsk = dict(((name, i), (pd.DataFrame,
+                             (getitem, x,
+                             (slice(i * chunksize, (i + 1) * chunksize),))))
+            for i in range(0, int(ceil(float(len(x)) / chunksize))))
+
+    return DataFrame(dsk, name, columns, divisions)
+
+
+from pframe.categories import reapply_categories
+
+def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
+    """ Read dask Dataframe from bcolz.ctable
+
+    Parameters
+    ----------
+
+    x : bcolz.ctable
+        Input data
+    chunksize : int (optional)
+        The size of blocks to pull out from ctable.  Ideally as large as can
+        comfortably fit in memory
+    categorize : bool (defaults to True)
+        Automatically categorize all string dtypes
+    index : string (optional)
+        Column to make the index
+
+    See Also
+    --------
+
+    from_array: more generic function not optimized for bcolz
+    """
+    import dask.array as da
+    bc_chunklen = max(x[name].chunklen for name in x.names)
+    if chunksize is None and bc_chunklen > 10000:
+        chunksize = bc_chunklen
+
+    categories = dict()
+    if categorize:
+        for name in x.names:
+            if (np.issubdtype(x.dtype[name], np.string_) or
+                np.issubdtype(x.dtype[name], np.unicode_) or
+                np.issubdtype(x.dtype[name], np.object_)):
+                a = da.from_array(x[name], chunks=(chunksize*len(x.names),))
+                categories[name] = da.unique(a)
+
+    columns = tuple(x.dtype.names)
+    divisions = tuple(range(chunksize, len(x), chunksize))
+    new_name = next(from_array_names)
+    dsk = dict(((new_name, i),
+                (dataframe_from_ctable,
+                  x,
+                  (slice(i * chunksize, (i + 1) * chunksize),),
+                  None, categories))
+           for i in range(0, int(ceil(float(len(x)) / chunksize))))
+
+    result = DataFrame(dsk, new_name, columns, divisions)
+
+    if index:
+        assert index in x.names
+        a = da.from_array(x[index], chunks=(chunksize*len(x.names),))
+        q = np.linspace(1, 100, len(x) / chunksize + 2)[1:-1]
+        divisions = da.percentile(a, q).compute()
+        return set_partition(result, index, divisions, **kwargs)
+    else:
+        return result
+
+
+def dataframe_from_ctable(x, slc, columns=None, categories=None):
+    """ Get DataFrame from bcolz.ctable
+
+    Parameters
+    ----------
+
+    x: bcolz.ctable
+    slc: slice
+    columns: list of column names or None
+
+    >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
+    >>> dataframe_from_ctable(x, slice(1, 3))
+       a   b
+    0  2  20
+    1  3  30
+
+    >>> dataframe_from_ctable(x, slice(1, 3), columns=['b'])
+        b
+    0  20
+    1  30
+
+    >>> dataframe_from_ctable(x, slice(1, 3), columns='b')
+    0    20
+    1    30
+    Name: b, dtype: int64
+
+    """
+    if columns is not None:
+        if isinstance(columns, tuple):
+            columns = list(columns)
+        x = x[columns]
+
+    name = next(names)
+
+    if isinstance(x, bcolz.ctable):
+        chunks = [x[name][slc] for name in x.names]
+        if categories is not None:
+            chunks = [pd.Categorical.from_codes(np.searchsorted(categories[name],
+                                                                chunk),
+                                                categories[name], True)
+                       if name in categories else chunk
+                       for name, chunk in zip(x.names, chunks)]
+        return pd.DataFrame(dict(zip(x.names, chunks)))
+    elif isinstance(x, bcolz.carray):
+        chunk = x[slc]
+        if categories is not None and columns and columns in categories:
+            chunk = pd.Categorical.from_codes(
+                        np.searchsorted(categories[columns], chunk),
+                        categories[columns], True)
+        return pd.Series(chunk, name=columns)
