@@ -40,7 +40,7 @@ def logerrors():
     except Exception as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        log('Error!', str(e))
+        log('Error!', type(e).__name__, str(e))
         log('Traceback', str(tb))
         raise
 
@@ -491,13 +491,16 @@ class Scheduler(object):
             self.queues[queue].put(key)
 
     def close_workers(self):
+        log(self.address_to_workers, 'Closing workers', self.workers)
         header = {'function': 'close'}
         for w in self.workers:
             self.send_to_worker(w, header, {})
 
     def close(self):
         """ Close Scheduler """
+        log(self.address_to_workers, 'Close scheduler')
         self.status = 'closed'
+        self.context.destroy(linger=3)
 
     def schedule(self, dsk, result, **kwargs):
         """ Execute dask graph against workers

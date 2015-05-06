@@ -480,14 +480,12 @@ class Worker(object):
         self.close()
 
     def close(self):
+        log(self.address, 'Close', self.pool._state)
         if self.pool._state == multiprocessing.pool.RUN:
-            log(self.address, 'Close')
             self.status = 'closed'
             self.pool.close()
             self.pool.join()
-
-    def __del__(self):
-        self.close()
+            self.context.destroy(3)
 
 
 def status():
