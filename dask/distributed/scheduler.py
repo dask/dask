@@ -500,7 +500,8 @@ class Scheduler(object):
         """ Close Scheduler """
         log(self.address_to_workers, 'Close scheduler')
         self.status = 'closed'
-        self.context.destroy(linger=3)
+        with self.lock:
+            self.context.destroy(linger=3)
 
     def schedule(self, dsk, result, **kwargs):
         """ Execute dask graph against workers

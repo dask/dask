@@ -485,7 +485,8 @@ class Worker(object):
             self.status = 'closed'
             self.pool.close()
             self.pool.join()
-            self.context.destroy(3)
+            with self.lock:
+                self.context.destroy(3)
 
 
 def status():
