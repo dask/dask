@@ -5,11 +5,6 @@ from multiprocessing import Pool
 
 from time import sleep
 
-try:
-    pool = Pool()
-except AssertionError:
-    pass
-
 def get(dsk, keys):
     """ Single node get function using ZeroMQ distributed scheduler
 
@@ -20,6 +15,7 @@ def get(dsk, keys):
         dask.multiprocessing
         dask.threaded
     """
+    pool = Pool()
     s = Scheduler(hostname='localhost')
     futures = [pool.apply_async(Worker, (s.address_to_workers,), {'block': True})
                for p in pool._pool]
