@@ -11,9 +11,15 @@ from toolz import valmap
 
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
-        dataframe_from_ctable, from_array, from_bcolz)
+        dataframe_from_ctable, from_array, from_bcolz, infer_header)
 
 from dask.utils import filetext
+
+
+########
+# CSVS #
+########
+
 
 text = """
 name,amount
@@ -107,6 +113,13 @@ def test_consistent_dtypes():
         assert isinstance(df.amount.sum().compute(), float)
 
 
+def test_infer_header():
+    with filetext('name,val\nAlice,100\nNA,200') as fn:
+        assert infer_header(fn) == True
+    with filetext('Alice,100\nNA,200') as fn:
+        assert infer_header(fn) == False
+
+
 def eq(a, b):
     if hasattr(a, 'dask'):
         a = a.compute(get=dask.get)
@@ -145,6 +158,13 @@ def test_read_csv_categorize_and_index():
         expected = pd.read_csv(fn).set_index('amount')
         expected['name'] = expected.name.astype('category')
         assert eq(f, expected)
+
+
+def test_usecols():
+    with filetext(datetime_csv_file) as fn:
+        df = read_csv(fn, chunkbytes=30, usecols=['when', 'amount'])
+        expected = pd.read_csv(fn, usecols=['when', 'amount'])
+        assert (df.compute().values == expected.values).all()
 
 
 ####################

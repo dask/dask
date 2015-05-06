@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from functools import wraps
+import re
 import struct
 import os
 from glob import glob
@@ -48,7 +49,6 @@ def read_csv(fn, *args, **kwargs):
         categorize = True
 
     compression = kwargs.pop('compression', None)
-    header = kwargs.pop('header', 'infer')
 
     # Chunk sizes and numbers
     chunkbytes = kwargs.pop('chunkbytes', 2**28)  # 500 MB
@@ -57,8 +57,16 @@ def read_csv(fn, *args, **kwargs):
     divisions = [None] * (nchunks - 1)
 
     # Let pandas infer on the first 100 rows
-    head = pd.read_csv(fn, *args, nrows=100, header=header,
-                       compression=compression, **kwargs)
+    head = pd.read_csv(fn, *args, nrows=100, compression=compression, **kwargs)
+
+    if names not in kwargs:
+        kwargs['names'] = csv_names(fn, compression=compression, **kwargs)
+    if 'header' not in kwargs:
+        header = infer_header(fn, compression=compression, **kwargs)
+        if header is True:
+            header = 0
+    else:
+        header = kwargs.pop('header')
 
     if 'parse_dates' not in kwargs:
         parse_dates = [col for col in head.dtypes.index
@@ -68,17 +76,17 @@ def read_csv(fn, *args, **kwargs):
     else:
         parse_dates = kwargs.get('parse_dates')
     if 'dtypes' in kwargs:
-        dtypes = kwargs['dtypes']
+        dtype = kwargs['dtype']
     else:
-        dtypes = dict(head.dtypes)
+        dtype = dict(head.dtypes)
         if parse_dates:
             for col in parse_dates:
-                del dtypes[col]
+                del dtype[col]
 
-    first_read_csv = curry(pd.read_csv, *args,
-                           header=header, dtype=dtypes, **kwargs)
-    rest_read_csv = curry(pd.read_csv, *args, names=head.columns,
-                          header=None, dtype=dtypes, **kwargs)
+    kwargs['dtype'] = dtype
+
+    first_read_csv = curry(pd.read_csv, *args, header=header, **kwargs)
+    rest_read_csv = curry(pd.read_csv, *args, header=None, **kwargs)
 
     # Create dask graph
     name = next(names)
@@ -105,6 +113,35 @@ def read_csv(fn, *args, **kwargs):
         result = set_partition(result, index, quantiles)
 
     return result
+
+
+def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
+    """ Guess if csv file has a header or not
+
+    This uses Pandas to read a sample of the file, then looks at the column
+    names to see if they are all word-like.
+
+    Returns True or False
+    """
+    # See read_csv docs for header for reasoning
+    try:
+        df = pd.read_csv(fn, encoding=encoding, compression=compression,nrows=5)
+    except StopIteration:
+        df = pd.read_csv(fn, encoding=encoding, compression=compression)
+    return (len(df) > 0 and
+            all(re.match('^\s*\D\w*\s*$', n) for n in df.columns) and
+            not all(dt == 'O' for dt in df.dtypes))
+
+
+def csv_names(fn, encoding='utf-8', compression=None, names=None,
+                parse_dates=None, **kwargs):
+    try:
+        df = pd.read_csv(fn, encoding=encoding, compression=compression,
+                names=names, parse_dates=parse_dates, nrows=5)
+    except StopIteration:
+        df = pd.read_csv(fn, encoding=encoding, compression=compression,
+                names=names, parse_dates=parse_dates)
+    return list(df.columns)
 
 
 def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
@@ -137,6 +174,9 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     total_bytes = file_size(fn, compression)
     nchunks = int(ceil(float(total_bytes) / chunkbytes))
 
+    if infer_header(fn, **kwargs):
+        kwargs['header'] = 0
+
     one_chunk = pd.read_csv(fn, *args, nrows=100, **kwargs)
 
     if categorize is not False:
@@ -147,9 +187,11 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
         category_columns = []
     cols = category_columns + ([index] if index else [])
 
+    dtypes = dict((c, one_chunk.dtypes[c]) for c in cols)
     d = read_csv(fn, *args, **merge(kwargs,
                                     dict(usecols=cols,
-                                         parse_dates=None)))
+                                         parse_dates=None,
+                                         dtype=dtypes)))
     categories = [d[c].drop_duplicates() for c in category_columns]
 
     import dask
