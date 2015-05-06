@@ -584,7 +584,8 @@ class Bag(object):
 
         divisions = [None] * (self.npartitions - 1)
 
-        return dd.DataFrame(merge(self.dask, dsk), name, columns, divisions)
+        return dd.DataFrame(merge(optimize(self.dask), dsk),
+                            name, columns, divisions)
 
 
 def partition(grouper, sequence, npartitions, path):

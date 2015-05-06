@@ -5,12 +5,13 @@ import struct
 import os
 from glob import glob
 from math import ceil
-from toolz import curry, merge
+from toolz import curry, merge, partial
 
 from ..compatibility import StringIO
 from ..utils import textblock
 
-from .core import names, DataFrame, compute, concat
+from .core import (names, DataFrame, compute, concat, categorize_block,
+        set_partition)
 
 
 def _StringIO(data):
@@ -37,8 +38,12 @@ def file_size(fn, compression=None):
 def read_csv(fn, *args, **kwargs):
     if '*' in fn:
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
-    assert not kwargs.pop('categorize', None)
-    assert not kwargs.pop('index', None)
+
+    categorize = kwargs.pop('categorize', None)
+    index = kwargs.pop('index', None)
+    if index and categorize == None:
+        categorize = True
+
     compression = kwargs.pop('compression', None)
     header = kwargs.pop('header', 'infer')
 
@@ -55,8 +60,10 @@ def read_csv(fn, *args, **kwargs):
     if 'parse_dates' not in kwargs:
         parse_dates = [col for col in head.dtypes.index
                            if np.issubdtype(head.dtypes[col], np.datetime64)]
+        if parse_dates:
+            kwargs['parse_dates'] = parse_dates
     else:
-        parse_dates = kwargs.pop('parse_dates')
+        parse_dates = kwargs.get('parse_dates')
     if 'dtypes' in kwargs:
         dtypes = kwargs['dtypes']
     else:
@@ -64,12 +71,11 @@ def read_csv(fn, *args, **kwargs):
         if parse_dates:
             for col in parse_dates:
                 del dtypes[col]
+
     first_read_csv = curry(pd.read_csv, *args,
-                           header=header, dtype=dtypes,
-                           parse_dates=parse_dates, **kwargs)
+                           header=header, dtype=dtypes, **kwargs)
     rest_read_csv = curry(pd.read_csv, *args, names=head.columns,
-                          header=None, dtype=dtypes, parse_dates=parse_dates,
-                          **kwargs)
+                          header=None, dtype=dtypes, **kwargs)
 
     # Create dask graph
     name = next(names)
@@ -81,10 +87,25 @@ def read_csv(fn, *args, **kwargs):
     dsk[(name, 0)] = (first_read_csv, (_StringIO,
                        (textblock, fn, 0, chunkbytes, compression)))
 
-    return DataFrame(dsk, name, head.columns, divisions)
+    result = DataFrame(dsk, name, head.columns, divisions)
+
+    if categorize or index:
+        categories, quantiles = categories_and_quantiles(fn, args, kwargs,
+                                                         index, categorize,
+                                                         chunkbytes=chunkbytes)
+
+    if categorize:
+        func = partial(categorize_block, categories=categories)
+        result = result.map_blocks(func, columns=result.columns)
+
+    if index:
+        result = set_partition(result, index, quantiles)
+
+    return result
 
 
-def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None):
+def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
+        chunkbytes=2**28):
     """
     Categories of Object columns and quantiles of index column for CSV
 
@@ -109,7 +130,6 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None):
     """
     kwargs = kwargs.copy()
 
-    chunkbytes = kwargs.pop('chunkbytes', 2**28)  # 500 MB
     compression = kwargs.get('compression', None)
     total_bytes = file_size(fn, compression)
     nchunks = int(ceil(float(total_bytes) / chunkbytes))
@@ -118,7 +138,8 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None):
 
     if categorize is not False:
         category_columns = [c for c in one_chunk.dtypes.index
-                               if one_chunk.dtypes[c] == 'O']
+                               if one_chunk.dtypes[c] == 'O'
+                               and c not in kwargs.get('parse_dates', ())]
     else:
         category_columns = []
     cols = category_columns + ([index] if index else [])

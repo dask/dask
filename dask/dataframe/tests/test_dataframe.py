@@ -1,5 +1,5 @@
 import dask.dataframe as dd
-from dask.dataframe.core import (linecount, compute, get,
+from dask.dataframe.core import (compute, get,
         dataframe_from_ctable, rewrite_rules, concat)
 from toolz import valmap
 import pandas.util.testing as tm
@@ -84,89 +84,6 @@ def test_column_names():
     assert d['a'].columns == ('a',)
     assert (d['a'] + 1).columns == ('a',)
     assert (d['a'] + d['b']).columns == (None,)
-
-
-text = """
-name,amount
-Alice,100
-Bob,-200
-Charlie,300
-Dennis,400
-Edith,-500
-Frank,600
-""".strip()
-
-
-def test_linecount():
-    with filetext(text) as fn:
-        assert linecount(fn) == 7
-
-
-def test_linecount_bz2():
-    with tmpfile('bz2') as fn:
-        f = bz2.BZ2File(fn, 'wb')
-        for line in text.split('\n'):
-            f.write(line.encode('ascii'))
-            f.write(b'\n')
-        f.close()
-        assert linecount(fn) == 7
-
-
-def test_linecount_gzip():
-    with tmpfile('gz') as fn:
-        f = gzip.open(fn, 'wb')
-        for line in text.split('\n'):
-            f.write(line.encode('ascii'))
-            f.write(b'\n')
-        f.close()
-        assert linecount(fn) == 7
-
-
-def test_read_csv():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunksize=3)
-        assert list(f.columns) == ['name', 'amount']
-        assert f.npartitions == 2
-        assert eq(f, pd.read_csv(fn))
-
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunksize=4)
-        assert f.npartitions == 2
-
-        f = dd.read_csv(fn)
-
-
-def test_read_csv_categorize():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunksize=3, categorize=True)
-        assert list(f.dtypes) == ['category', 'i8']
-
-        expected = pd.read_csv(fn)
-        expected['name'] = expected.name.astype('category')
-        assert eq(f, expected)
-
-
-datetime_csv_file = """
-name,amount,when
-Alice,100,2014-01-01
-Bob,200,2014-01-01
-Charlie,300,2014-01-01
-""".strip()
-
-def test_read_csv_categorize_with_parse_dates():
-    with filetext(datetime_csv_file) as fn:
-        f = dd.read_csv(fn, chunksize=2, categorize=True, parse_dates=['when'])
-        assert list(f.dtypes) == ['category', 'i8', 'M8[ns]']
-
-
-def test_read_csv_categorize_and_index():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunksize=3, index='amount')
-        assert f.index.compute().name == 'amount'
-
-        expected = pd.read_csv(fn).set_index('amount')
-        expected['name'] = expected.name.astype('category')
-        assert eq(f, expected)
 
 
 def test_set_index():
