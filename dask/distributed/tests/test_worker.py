@@ -15,6 +15,10 @@ def add(x, y):
     return x + y
 
 
+with open('log.workers', 'w') as f:  # delete file
+    pass
+
+
 @contextmanager
 def worker(data=None, scheduler='tcp://localhost:5555'):
     if data is None:

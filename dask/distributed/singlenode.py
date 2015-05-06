@@ -4,12 +4,13 @@ from .client import Client
 from multiprocessing import Pool
 
 from time import sleep
-import psutil
 
-ncpus = psutil.cpu_count()
-pool = Pool()
+try:
+    pool = Pool()
+except AssertionError:
+    pass
 
-def get(dsk, keys, nworkers=ncpus):
+def get(dsk, keys):
     """ Single node get function using ZeroMQ distributed scheduler
 
     This creates a small cluster of workers on the local machine, uses it to
