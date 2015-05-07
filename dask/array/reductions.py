@@ -4,8 +4,8 @@ import numpy as np
 from functools import partial, wraps
 from toolz import compose, curry
 
-from .core import (_concatenate2, insert_many, Array, atop, names, sqrt,
-        elemwise)
+from .core import _concatenate2, Array, atop, names, sqrt, elemwise
+from .slicing import insert_many
 from ..core import flatten
 from . import chunk
 from ..utils import ignoring
