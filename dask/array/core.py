@@ -17,7 +17,7 @@ import numpy as np
 
 from . import chunk
 from .slicing import slice_array
-from .numpy_compat import isclose
+from . import numpy_compat
 from ..utils import deepmap, ignoring, repr_long_list
 from ..compatibility import unicode
 from .. import threaded, core
@@ -1435,9 +1435,9 @@ def notnull(values):
     return ~isnull(values)
 
 
-@wraps(isclose)
+@wraps(numpy_compat.isclose)
 def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
-    func = partial(isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    func = partial(numpy_compat.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
     return elemwise(func, arr1, arr2, dtype='bool')
 
 
