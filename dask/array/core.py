@@ -41,6 +41,25 @@ def getarray(a, b):
 
 from .optimization import optimize
 
+
+def slices_from_chunks(chunks):
+    """ Translate chunks tuple to a set of slices in product order
+
+    >>> slices_from_chunks(((2, 2), (3, 3, 3)))  # doctest: +NORMALIZE_WHITESPACE
+     [(slice(0, 2, None), slice(0, 3, None)),
+      (slice(0, 2, None), slice(3, 6, None)),
+      (slice(0, 2, None), slice(6, 9, None)),
+      (slice(2, 4, None), slice(0, 3, None)),
+      (slice(2, 4, None), slice(3, 6, None)),
+      (slice(2, 4, None), slice(6, 9, None))]
+    """
+    cumdims = [list(accumulate(add, (0,) + bds[:-1])) for bds in chunks]
+    shapes = product(*chunks)
+    starts = product(*cumdims)
+    return [tuple(slice(s, s+dim) for s, dim in zip(start, shape))
+                for start, shape in zip(starts, shapes)]
+
+
 def getem(arr, chunks, shape=None):
     """ Dask getting various chunks from an array-like
 
@@ -58,15 +77,9 @@ def getem(arr, chunks, shape=None):
     """
     chunks = normalize_chunks(chunks, shape)
 
-    cumdims = [list(accumulate(add, (0,) + bds[:-1])) for bds in chunks]
     keys = list(product([arr], *[range(len(bds)) for bds in chunks]))
 
-    shapes = product(*chunks)
-    starts = product(*cumdims)
-
-    values = ((getarray, arr) + (tuple(slice(s, s+dim)
-                                 for s, dim in zip(start, shape)),)
-                for start, shape in zip(starts, shapes))
+    values = [(getarray, arr) + (x,) for x in slices_from_chunks(chunks)]
 
     return dict(zip(keys, values))
 
@@ -1204,17 +1217,17 @@ def insert_to_ooc(out, arr):
     from threading import Lock
     lock = Lock()
 
-    locs = [[0] + list(accumulate(add, bl)) for bl in arr.chunks]
-
-    def store(x, *args):
+    def store(x, index):
         with lock:
-            ind = tuple([slice(loc[i], loc[i+1]) for i, loc in zip(args, locs)])
-            out[ind] = np.asanyarray(x)
+            out[index] = np.asanyarray(x)
         return None
 
+    slices = slices_from_chunks(arr.chunks)
+
     name = 'store-%s' % arr.name
-    return dict(((name,) + t[1:], (store, t) + t[1:])
-                for t in core.flatten(arr._keys()))
+    dsk = dict(((name,) + t[1:], (store, t, slc))
+                for t, slc in zip(core.flatten(arr._keys()), slices))
+    return dsk
 
 
 def partial_by_order(op, other):
