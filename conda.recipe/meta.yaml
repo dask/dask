@@ -1,0 +1,41 @@
+package:
+  name: dask
+  version: {{ environ.get('GIT_DESCRIBE_TAG') }}
+
+build:
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
+  {% if environ.get('GIT_DESCRIBE_NUMBER', '0') == '0' %}string: py{{ environ.get('PY_VER').replace('.', '') }}_0
+  {% else %}string: py{{ environ.get('PY_VER').replace('.', '') }}_{{ environ.get('GIT_BUILD_STR', 'GIT_STUB') }}{% endif %}
+
+source:
+  path: ../
+
+requirements:
+  build:
+    - python
+    - pip
+    - setuptools
+    - toolz
+    # bcolz is a runtime dependency but since it is installed with pip, we have
+    # to install it in the build.sh. So we install its dependencies now.
+    - cython  # to compile bcolz
+    - numpy   # bcolz dependency
+
+  run:
+    - python
+    - toolz
+    - numpy
+    - pandas
+    - pyzmq
+    - dill
+    - psutil
+    - chest
+
+test:
+  requires:
+    - pytest
+
+about:
+  home: https://github.com/ContinuumIO/dask
+  summary: Task scheduling and blocked algorithms for parallel processing.
+  license: BSD
