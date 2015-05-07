@@ -278,3 +278,25 @@ def test_args():
 
     assert list(c) == list(d)
     assert c.npartitions == d.npartitions
+
+
+def test_to_dataframe():
+    try:
+        import dask.dataframe
+    except ImportError:
+        return
+    b = db.from_sequence([(1, 2), (10, 20), (100, 200)], npartitions=2)
+    df = b.to_dataframe(columns=['a', 'b'])
+    assert df.npartitions == b.npartitions
+    assert list(df.columns) == ['a', 'b']
+
+    assert df.a.compute().values.tolist() == list(b.pluck(0))
+    assert df.b.compute().values.tolist() == list(b.pluck(1))
+
+    b = db.from_sequence([{'a':   1, 'b':   2},
+                          {'a':  10, 'b':  20},
+                          {'a': 100, 'b': 200}], npartitions=2)
+
+    df2 = b.to_dataframe()
+
+    assert (df2.compute().values == df.compute().values).all()

@@ -1,6 +1,5 @@
 import dask.dataframe as dd
-from dask.dataframe.core import (linecount, compute, get,
-        dataframe_from_ctable, rewrite_rules, concat)
+from dask.dataframe.core import compute, get, concat
 from toolz import valmap
 import pandas.util.testing as tm
 from operator import getitem
@@ -10,8 +9,6 @@ from dask.utils import filetext, raises, tmpfile
 import gzip
 import bz2
 import dask
-import bcolz
-from pframe import pframe
 
 def eq(a, b):
     if hasattr(a, 'dask'):
@@ -86,89 +83,6 @@ def test_column_names():
     assert (d['a'] + d['b']).columns == (None,)
 
 
-text = """
-name,amount
-Alice,100
-Bob,-200
-Charlie,300
-Dennis,400
-Edith,-500
-Frank,600
-""".strip()
-
-
-def test_linecount():
-    with filetext(text) as fn:
-        assert linecount(fn) == 7
-
-
-def test_linecount_bz2():
-    with tmpfile('bz2') as fn:
-        f = bz2.BZ2File(fn, 'wb')
-        for line in text.split('\n'):
-            f.write(line.encode('ascii'))
-            f.write(b'\n')
-        f.close()
-        assert linecount(fn) == 7
-
-
-def test_linecount_gzip():
-    with tmpfile('gz') as fn:
-        f = gzip.open(fn, 'wb')
-        for line in text.split('\n'):
-            f.write(line.encode('ascii'))
-            f.write(b'\n')
-        f.close()
-        assert linecount(fn) == 7
-
-
-def test_read_csv():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunksize=3)
-        assert list(f.columns) == ['name', 'amount']
-        assert f.npartitions == 2
-        assert eq(f, pd.read_csv(fn))
-
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunksize=4)
-        assert f.npartitions == 2
-
-        f = dd.read_csv(fn)
-
-
-def test_read_csv_categorize():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunksize=3, categorize=True)
-        assert list(f.dtypes) == ['category', 'i8']
-
-        expected = pd.read_csv(fn)
-        expected['name'] = expected.name.astype('category')
-        assert eq(f, expected)
-
-
-datetime_csv_file = """
-name,amount,when
-Alice,100,2014-01-01
-Bob,200,2014-01-01
-Charlie,300,2014-01-01
-""".strip()
-
-def test_read_csv_categorize_with_parse_dates():
-    with filetext(datetime_csv_file) as fn:
-        f = dd.read_csv(fn, chunksize=2, categorize=True, parse_dates=['when'])
-        assert list(f.dtypes) == ['category', 'i8', 'M8[ns]']
-
-
-def test_read_csv_categorize_and_index():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunksize=3, index='amount')
-        assert f.index.compute().name == 'amount'
-
-        expected = pd.read_csv(fn).set_index('amount')
-        expected['name'] = expected.name.astype('category')
-        assert eq(f, expected)
-
-
 def test_set_index():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 2, 6]},
                                   index=[0, 1, 3]),
@@ -191,17 +105,6 @@ def test_set_index():
 
     d2 = d.set_index('b')
     assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
-
-
-def test_from_array():
-    x = np.array([(i, i*10) for i in range(10)],
-                 dtype=[('a', 'i4'), ('b', 'i4')])
-    d = dd.from_array(x, chunksize=4)
-
-    assert list(d.columns) == ['a', 'b']
-    assert d.blockdivs == (4, 8)
-
-    assert (d.compute().to_records(index=False) == x).all()
 
 
 def test_split_apply_combine_on_series():
@@ -324,7 +227,7 @@ def test_groupby_on_index():
 
 def test_set_partition():
     d2 = d.set_partition('b', [2])
-    assert d2.blockdivs == (2,)
+    assert d2.divisions == (2,)
     expected = full.set_index('b').sort(ascending=True)
     assert eq(d2.compute().sort(ascending=True), expected)
 
@@ -385,24 +288,6 @@ def test_index():
     assert eq(d.index, full.index)
 
 
-def test_from_bcolz():
-    try:
-        import bcolz
-    except ImportError:
-        pass
-    else:
-        t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
-                         names=['x', 'y', 'a'])
-        d = dd.from_bcolz(t, chunksize=2)
-        assert d.npartitions == 2
-        assert str(d.dtypes['a']) == 'category'
-        assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
-        assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
-
-        d = dd.from_bcolz(t, chunksize=2, index='x')
-        assert list(d.index.compute()) == [1, 2, 3]
-
-
 def test_loc():
     assert eq(d.loc[5], full.loc[5])
     assert eq(d.loc[3:8], full.loc[3:8])
@@ -412,62 +297,6 @@ def test_loc():
 
 def test_iloc_raises():
     assert raises(AttributeError, lambda: d.iloc[:5])
-
-
-#####################
-# Play with PFrames #
-#####################
-
-
-dfs = list(dsk.values())
-pf = pframe(like=dfs[0], blockdivs=[5])
-for df in dfs:
-    pf.append(df)
-
-
-def test_from_pframe():
-    d = dd.from_pframe(pf)
-    assert list(d.columns) == list(dfs[0].columns)
-    assert list(d.blockdivs) == list(pf.blockdivs)
-
-
-def test_column_optimizations_with_pframe_and_rewrite():
-    dsk2 = dict((('x', i), (getitem,
-                             (pframe.get_partition, pf, i),
-                             (list, ['a', 'b'])))
-            for i in [1, 2, 3])
-
-    expected = dict((('x', i),
-                     (pframe.get_partition, pf, i, (list, ['a', 'b'])))
-            for i in [1, 2, 3])
-    result = valmap(rewrite_rules.rewrite, dsk2)
-
-    assert result == expected
-
-
-def test_column_optimizations_with_bcolz_and_rewrite():
-    bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
-    func = lambda x: x
-    for cols in [None, 'abc', ['abc']]:
-        dsk2 = dict((('x', i),
-                     (func,
-                       (getitem,
-                         (dataframe_from_ctable, bc, slice(0, 2), cols, {}),
-                         (list, ['a', 'b']))))
-                for i in [1, 2, 3])
-
-        expected = dict((('x', i), (func, (dataframe_from_ctable,
-                                     bc, slice(0, 2), (list, ['a', 'b']), {})))
-                for i in [1, 2, 3])
-        result = valmap(rewrite_rules.rewrite, dsk2)
-
-        assert result == expected
-
-
-def test_column_store_from_pframe():
-    d = dd.from_pframe(pf)
-    assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
-    assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
 
 
 def test_assign():
@@ -485,9 +314,61 @@ def test_concat():
     assert list(x.columns) == ['a', 'b']
     assert len(x) == 0
 
+
 def test_args():
     e = d.assign(c=d.a + 1)
     f = type(e)(*e._args)
     assert eq(e, f)
     assert eq(d.a, type(d.a)(*d.a._args))
     assert eq(d.a.sum(), type(d.a.sum())(*d.a.sum()._args))
+
+
+def test_known_divisions():
+    assert d.known_divisions
+
+    df = dd.DataFrame({('x', 0): 'foo', ('x', 1): 'bar'}, 'x',
+                      ['a', 'b'], divisions=[None])
+    assert not df.known_divisions
+
+    df = dd.DataFrame({('x', 0): 'foo'}, 'x',
+                      ['a', 'b'], divisions=[])
+    assert d.known_divisions
+
+def test_unkonwn_divisions():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    full = d.compute(get=dask.get)
+
+    assert eq(d.a.sum(), full.a.sum())
+    assert eq(d.a + d.b + 1, full.a + full.b + 1)
+
+    assert raises(ValueError, lambda: d.loc[3])
+
+
+def test_concat():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
+    a = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
+           ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
+    b = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+
+    c = dd.concat([a, b])
+
+    assert c.npartitions == a.npartitions + b.npartitions
+
+    assert eq(pd.concat([a.compute(), b.compute()]), c)
+
+
+def test_dataframe_series_are_dillable():
+    try:
+        import dill
+    except ImportError:
+        return
+    e = d.groupby(d.a).b.sum()
+    f = dill.loads(dill.dumps(e))
+    assert eq(e, f)

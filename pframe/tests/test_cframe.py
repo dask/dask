@@ -2,6 +2,7 @@ from pframe.cframe import cframe
 
 import pandas as pd
 import shutil
+import pickle
 from pandas.util import testing as tm
 
 
@@ -28,3 +29,4 @@ def test_convert():
 
     assert list(cf.to_dataframe()['a']) == [1, 2, 3, 1, 2, 3]
 
+    cf2 = pickle.loads(pickle.dumps(cf))

@@ -29,7 +29,7 @@ class pframe(object):
     ...                    'b': [4, 5, 6],
     ...                    'c': [1., 2., 3.]}, index=[1, 3, 5])
 
-    >>> pf = pframe(like=df, blockdivs=[4])
+    >>> pf = pframe(like=df, divisions=[4])
 
     Add new data to the partition frame using the append method.  Your Pandas
     DataFrame will be split accordingly.
@@ -66,7 +66,7 @@ class pframe(object):
     3   2   5
     2  10  40
     """
-    def __init__(self, like, blockdivs, path=None, **kwargs):
+    def __init__(self, like, divisions, path=None, **kwargs):
         # Create directory
         if path is None:
             path = tempfile.mkdtemp('.pframe')
@@ -77,7 +77,7 @@ class pframe(object):
             self._explicitly_given_path = True
         self.path = path
 
-        self.blockdivs = tuple(blockdivs)
+        self.divisions = tuple(divisions)
 
         # Store Metadata
         self.columns = like.columns
@@ -87,7 +87,8 @@ class pframe(object):
         self.categories = categorical_metadata(like)
         like2 = strip_categories(like.copy()).iloc[:10]
 
-        if any(str(dt) == 'O' for dt in like.dtypes) or like.index.dtype == 'O':
+        if (any(str(dt) in ('O', 'object') for dt in like.dtypes) or
+            str(like.index.dtype) in ('O', 'object')):
             raise TypeError('Object dtypes not supported, consider categoricals')
 
         # Compression
@@ -97,7 +98,7 @@ class pframe(object):
             kwargs['cparams'] = cp
 
         # Create partitions
-        npartitions = len(blockdivs) + 1
+        npartitions = len(divisions) + 1
         logn = int(ceil(log(npartitions, 10)))
         subpath = 'part-%0' + str(logn) + 'd'
         self.partitions = [cframe(like2, rootdir=os.path.join(path, subpath % i),
@@ -110,7 +111,7 @@ class pframe(object):
 
     def append(self, df):
         df = strip_categories(df.copy())
-        shards = shard_df_on_index(df, self.blockdivs)
+        shards = shard_df_on_index(df, self.divisions)
         with self.lock:
             for shard, cf in zip(shards, self.partitions):
                 if len(shard):
@@ -166,8 +167,18 @@ class pframe(object):
         with self.lock:
             shutil.rmtree(self.path)
 
+    def __getstate__(self):
+        return dict((k, self.__dict__[k])
+                     for k in ['path', 'divisions', 'columns', 'dtypes',
+                               'index_name', 'categories', 'partitions'])
 
-def shard_df_on_index(df, blockdivs):
+    def __setstate__(self, dict):
+        self.__dict__.update(dict)
+        self.lock = Lock()
+        self._explicitly_given_path = True
+
+
+def shard_df_on_index(df, divisions):
     """ Shard a DataFrame by ranges on its index
 
     Example
@@ -197,14 +208,14 @@ def shard_df_on_index(df, blockdivs):
         a  b
     4  40  1
     """
-    if isinstance(blockdivs, Iterator):
-        blockdivs = list(blockdivs)
-    if not len(blockdivs):
+    if isinstance(divisions, Iterator):
+        divisions = list(divisions)
+    if not len(divisions):
         yield df
     else:
-        blockdivs = np.array(blockdivs)
+        divisions = np.array(divisions)
         df = df.sort()
-        indices = df.index.searchsorted(blockdivs)
+        indices = df.index.searchsorted(divisions)
         yield df.iloc[:indices[0]]
         for i in range(len(indices) - 1):
             yield df.iloc[indices[i]: indices[i+1]]

@@ -17,7 +17,6 @@ from pframe import pframe
 import bcolz
 
 from .. import array as da
-from ..optimize import cull, fuse
 from .. import core
 from ..array.core import partial_by_order
 from ..async import get_sync
@@ -26,7 +25,7 @@ from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable
 
 
-def concat(args):
+def _concat(args):
     """ Generic concat operation """
     if not args:
         return args
@@ -56,7 +55,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    return list(map(concat, results))
+    return list(map(_concat, results))
 
 
 names = ('f-%d' % i for i in count(1))
@@ -70,7 +69,7 @@ class Scalar(object):
     def __init__(self, dsk, _name):
         self.dask = dsk
         self._name = _name
-        self.blockdivs = []
+        self.divisions = []
 
     @property
     def _args(self):
@@ -87,7 +86,7 @@ class _Frame(object):
     """ Superclass for DataFrame and Series """
     @property
     def npartitions(self):
-        return len(self.blockdivs) + 1
+        return len(self.divisions) + 1
 
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
@@ -107,7 +106,11 @@ class _Frame(object):
         name = self._name + '-index'
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
-        return Index(merge(dsk, self.dask), name, None, self.blockdivs)
+        return Index(merge(dsk, self.dask), name, None, self.divisions)
+
+    @property
+    def known_divisions(self):
+        return len(self.divisions) > 0 and self.divisions[0] is not None
 
     def cache(self, cache=Chest):
         """ Evaluate Dataframe and store in local cache
@@ -126,7 +129,7 @@ class _Frame(object):
         # Create new Frame pointing to that cache
         dsk2 = dict((key, (getitem, cache, (tuple, list(key))))
                     for key in self._keys())
-        return type(self)(dsk2, name, self.column_info, self.blockdivs)
+        return type(self)(dsk2, name, self.column_info, self.divisions)
 
     def drop_duplicates(self):
         chunk = lambda s: s.drop_duplicates()
@@ -147,7 +150,7 @@ class _Frame(object):
                     for i in range(self.npartitions))
 
         return type(self)(merge(dsk, self.dask), name,
-                          columns, self.blockdivs)
+                          columns, self.divisions)
 
     def head(self, n=10, compute=True):
         """ First n rows of the dataset
@@ -166,10 +169,13 @@ class _Frame(object):
 
     def _partition_of_index_value(self, val):
         """ In which partition does this value lie? """
-        return bisect.bisect_right(self.blockdivs, val)
+        return bisect.bisect_right(self.divisions, val)
 
     def _loc(self, ind):
         """ Helper function for the .loc accessor """
+        if not self.known_divisions:
+            raise ValueError(
+                "Can not use loc on DataFrame without known divisions")
         name = next(names)
         if not isinstance(ind, slice):
             part = self._partition_of_index_value(ind)
@@ -196,7 +202,7 @@ class _Frame(object):
                   {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
 
             return type(self)(merge(self.dask, dsk), name, self.column_info,
-                              self.blockdivs[start:stop])
+                              self.divisions[start:stop])
 
     @property
     def loc(self):
@@ -205,6 +211,12 @@ class _Frame(object):
     @property
     def iloc(self):
         raise AttributeError("Dask Dataframe does not support iloc")
+
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, dict):
+        self.__dict__ = dict
 
 
 class Series(_Frame):
@@ -219,15 +231,15 @@ class Series(_Frame):
     """
     _partition_type = pd.Series
 
-    def __init__(self, dsk, _name, name, blockdivs):
+    def __init__(self, dsk, _name, name, divisions):
         self.dask = dsk
         self._name = _name
         self.name = name
-        self.blockdivs = blockdivs
+        self.divisions = divisions
 
     @property
     def _args(self):
-        return (self.dask, self._name, self.name, self.blockdivs)
+        return (self.dask, self._name, self.name, self.divisions)
 
     @property
     def dtype(self):
@@ -242,8 +254,8 @@ class Series(_Frame):
         return (self.name,)
 
     def __repr__(self):
-        return ("dd.Series<%s, blockdivs=%s>" %
-                (self._name, repr_long_list(self.blockdivs)))
+        return ("dd.Series<%s, divisions=%s>" %
+                (self._name, repr_long_list(self.divisions)))
 
     def quantiles(self, q):
         """ Approximate quantiles of column
@@ -255,12 +267,12 @@ class Series(_Frame):
 
     def __getitem__(self, key):
         name = next(names)
-        if isinstance(key, Series) and self.blockdivs == key.blockdivs:
+        if isinstance(key, Series) and self.divisions == key.divisions:
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
             return Series(merge(self.dask, key.dask, dsk), name,
-                          self.name, self.blockdivs)
+                          self.name, self.divisions)
         raise NotImplementedError()
 
     def __abs__(self):
@@ -397,19 +409,19 @@ class DataFrame(_Frame):
         particular DataFrame
     columns: list of strings
         Column names.  This metadata aids usability
-    blockdivs: tuple of index values
+    divisions: tuple of index values
         Values along which we partition our blocks on the index
     """
     _partition_type = pd.DataFrame
-    def __init__(self, dask, name, columns, blockdivs):
+    def __init__(self, dask, name, columns, divisions):
         self.dask = dask
         self._name = name
         self.columns = tuple(columns)
-        self.blockdivs = tuple(blockdivs)
+        self.divisions = tuple(divisions)
 
     @property
     def _args(self):
-        return (self.dask, self._name, self.columns, self.blockdivs)
+        return (self.dask, self._name, self.columns, self.divisions)
 
     def __getitem__(self, key):
         if isinstance(key, (str, unicode)):
@@ -418,7 +430,7 @@ class DataFrame(_Frame):
                 dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                             for i in range(self.npartitions))
                 return Series(merge(self.dask, dsk), name,
-                              key, self.blockdivs)
+                              key, self.divisions)
         if isinstance(key, list):
             name = '%s[%s]' % (self._name, str(key))
             if all(k in self.columns for k in key):
@@ -427,14 +439,14 @@ class DataFrame(_Frame):
                                          (list, key)))
                             for i in range(self.npartitions))
                 return DataFrame(merge(self.dask, dsk), name,
-                                 key, self.blockdivs)
-        if isinstance(key, Series) and self.blockdivs == key.blockdivs:
+                                 key, self.divisions)
+        if isinstance(key, Series) and self.divisions == key.divisions:
             name = next(names)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
             return DataFrame(merge(self.dask, key.dask, dsk), name,
-                             self.columns, self.blockdivs)
+                             self.columns, self.divisions)
         raise NotImplementedError()
 
     def __getattr__(self, key):
@@ -450,8 +462,8 @@ class DataFrame(_Frame):
         return sorted(set(list(dir(type(self))) + list(self.columns)))
 
     def __repr__(self):
-        return ("dd.DataFrame<%s, blockdivs=%s>" %
-                (self._name, repr_long_list(self.blockdivs)))
+        return ("dd.DataFrame<%s, divisions=%s>" %
+                (self._name, repr_long_list(self.divisions)))
 
     @property
     def dtypes(self):
@@ -460,15 +472,15 @@ class DataFrame(_Frame):
     def set_index(self, other, **kwargs):
         return set_index(self, other, **kwargs)
 
-    def set_partition(self, column, blockdivs, **kwargs):
-        """ Set explicit blockdivs for new column index
+    def set_partition(self, column, divisions, **kwargs):
+        """ Set explicit divisions for new column index
 
-        >>> df2 = df.set_partition('new-index-column', blockdivs=[10, 20, 50])  # doctest: +SKIP
+        >>> df2 = df.set_partition('new-index-column', divisions=[10, 20, 50])  # doctest: +SKIP
 
         See also:
             set_index
         """
-        return set_partition(self, column, blockdivs, **kwargs)
+        return set_partition(self, column, divisions, **kwargs)
 
     @property
     def column_info(self):
@@ -539,7 +551,7 @@ def elemwise(op, *args, **kwargs):
     else:
         op2 = op
 
-    assert all(f.blockdivs == frames[0].blockdivs for f in frames)
+    assert all(f.divisions == frames[0].divisions for f in frames)
     assert all(f.npartitions == frames[0].npartitions for f in frames)
 
     dsk = dict(((_name, i), (op2,) + frs)
@@ -547,12 +559,12 @@ def elemwise(op, *args, **kwargs):
 
     if columns is not None:
         return DataFrame(merge(dsk, *[f.dask for f in frames]),
-                         _name, columns, frames[0].blockdivs)
+                         _name, columns, frames[0].divisions)
     else:
         column_name = name or consistent_name(n for f in frames
                                                  for n in f.columns)
         return Series(merge(dsk, *[f.dask for f in frames]),
-                      _name, column_name, frames[0].blockdivs)
+                      _name, column_name, frames[0].divisions)
 
 
 def reduction(x, chunk, aggregate):
@@ -570,230 +582,27 @@ def reduction(x, chunk, aggregate):
     return Scalar(merge(x.dask, dsk, dsk2), b)
 
 
-opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
+def concat(dfs):
+    """ Concatenate dataframes along rows
 
-def linecount(fn):
-    """ Count the number of lines in a textfile
-
-    We need this to build the graph for read_csv.  This is much faster than
-    actually parsing the file, but still costly.
+    Currently only supports unknown divisions
     """
-    extension = os.path.splitext(fn)[-1].lstrip('.')
-    myopen = opens.get(extension, open)
-    f = myopen(os.path.expanduser(fn))
-    result = toolz.count(f)
-    f.close()
-    return result
-
-
-read_csv_names = ('_readcsv-%d' % i for i in count(1))
-
-def get_chunk(x, start):
-    if isinstance(x, tuple):
-        x = x[1]
-    df = x.get_chunk()
-    df.index += start
-    return df, x
-
-
-@wraps(pd.read_csv)
-def read_csv(fn, *args, **kwargs):
-    chunksize = kwargs.pop('chunksize', 2**16)
-    categorize = kwargs.pop('categorize', None)
-    index = kwargs.pop('index', None)
-    if index and categorize == None:
-        categorize = True
-    header = kwargs.get('header', 1)
-
-    nlines = linecount(fn) - header
-    nchunks = int(ceil(1.0 * nlines / chunksize))
-
-    read = next(read_csv_names)
-
-    blockdivs = tuple(range(chunksize, nlines, chunksize))
-
-    one_chunk = pd.read_csv(fn, *args, nrows=100, **kwargs)
-
-    cols = []
-
-    if categorize or index:
-        if categorize:
-            category_columns = [c for c in one_chunk.dtypes.index
-                                   if one_chunk.dtypes[c] == 'O']
-        else:
-            category_columns = []
-        cols = category_columns + ([index] if index else [])
-        d = read_csv(fn, *args, **merge(kwargs,
-                                        dict(chunksize=chunksize,
-                                             usecols=cols,
-                                             categorize=False,
-                                             parse_dates=None)))
-        categories = [d[c].drop_duplicates() for c in category_columns]
-        if index:
-            quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
-            result = compute(quantiles, *categories)
-            quantiles, categories = result[0], result[1:]
-        else:
-            categories = compute(*categories)
-        categories = dict(zip(category_columns, categories))
-
-    kwargs['chunksize'] = chunksize
-    load = {(read, -1): (partial(pd.read_csv, *args, **kwargs), fn)}
-    load.update(dict(((read, i), (get_chunk, (read, i-1), chunksize*i))
-                     for i in range(nchunks)))
-
+    if any(df.known_divisions for df in dfs):
+        # For this to work we need to add a final division for "maximum element"
+        raise NotImplementedError("Concat can't currently handle dataframes"
+                " with known divisions")
     name = next(names)
+    dsk = dict()
+    i = 0
+    for df in dfs:
+        for key in df._keys():
+            dsk[(name, i)] = key
+            i += 1
 
-    dsk = dict(((name, i), (getitem, (read, i), 0))
-                for i in range(nchunks))
+    divisions = [None] * (i - 1)
 
-    result = DataFrame(merge(dsk, load), name, one_chunk.columns, blockdivs)
-
-    if categorize:
-        func = partial(categorize_block, categories=categories)
-        result = result.map_blocks(func, columns=result.columns)
-
-    if index:
-        result = set_partition(result, index, quantiles)
-
-    return result
-
-
-from_array_names = ('from-array-%d' % i for i in count(1))
-
-
-def from_array(x, chunksize=50000):
-    """ Read dask Dataframe from any slicable array with record dtype
-
-    Uses getitem syntax to pull slices out of the array.  The array need not be
-    a NumPy array but must support slicing syntax
-
-        x[50000:100000]
-
-    and have a record dtype
-
-        x.dtype == [('name', 'O'), ('balance', 'i8')]
-
-    """
-    columns = tuple(x.dtype.names)
-    blockdivs = tuple(range(chunksize, len(x), chunksize))
-    name = next(from_array_names)
-    dsk = dict(((name, i), (pd.DataFrame,
-                             (getitem, x,
-                             (slice(i * chunksize, (i + 1) * chunksize),))))
-            for i in range(0, int(ceil(float(len(x)) / chunksize))))
-
-    return DataFrame(dsk, name, columns, blockdivs)
-
-
-from pframe.categories import reapply_categories
-
-def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
-    """ Read dask Dataframe from bcolz.ctable
-
-    Parameters
-    ----------
-
-    x : bcolz.ctable
-        Input data
-    chunksize : int (optional)
-        The size of blocks to pull out from ctable.  Ideally as large as can
-        comfortably fit in memory
-    categorize : bool (defaults to True)
-        Automatically categorize all string dtypes
-    index : string (optional)
-        Column to make the index
-
-    See Also
-    --------
-
-    from_array: more generic function not optimized for bcolz
-    """
-    bc_chunklen = max(x[name].chunklen for name in x.names)
-    if chunksize is None and bc_chunklen > 10000:
-        chunksize = bc_chunklen
-
-    categories = dict()
-    if categorize:
-        for name in x.names:
-            if (np.issubdtype(x.dtype[name], np.string_) or
-                np.issubdtype(x.dtype[name], np.unicode_) or
-                np.issubdtype(x.dtype[name], np.object_)):
-                a = da.from_array(x[name], chunks=(chunksize*len(x.names),))
-                categories[name] = da.unique(a)
-
-    columns = tuple(x.dtype.names)
-    blockdivs = tuple(range(chunksize, len(x), chunksize))
-    new_name = next(from_array_names)
-    dsk = dict(((new_name, i),
-                (dataframe_from_ctable,
-                  x,
-                  (slice(i * chunksize, (i + 1) * chunksize),),
-                  None, categories))
-           for i in range(0, int(ceil(float(len(x)) / chunksize))))
-
-    result = DataFrame(dsk, new_name, columns, blockdivs)
-
-    if index:
-        assert index in x.names
-        a = da.from_array(x[index], chunks=(chunksize*len(x.names),))
-        q = np.linspace(1, 100, len(x) / chunksize + 2)[1:-1]
-        blockdivs = da.percentile(a, q).compute()
-        return set_partition(result, index, blockdivs, **kwargs)
-    else:
-        return result
-
-
-def dataframe_from_ctable(x, slc, columns=None, categories=None):
-    """ Get DataFrame from bcolz.ctable
-
-    Parameters
-    ----------
-
-    x: bcolz.ctable
-    slc: slice
-    columns: list of column names or None
-
-    >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
-    >>> dataframe_from_ctable(x, slice(1, 3))
-       a   b
-    0  2  20
-    1  3  30
-
-    >>> dataframe_from_ctable(x, slice(1, 3), columns=['b'])
-        b
-    0  20
-    1  30
-
-    >>> dataframe_from_ctable(x, slice(1, 3), columns='b')
-    0    20
-    1    30
-    Name: b, dtype: int64
-
-    """
-    if columns is not None:
-        if isinstance(columns, tuple):
-            columns = list(columns)
-        x = x[columns]
-
-    name = next(names)
-
-    if isinstance(x, bcolz.ctable):
-        chunks = [x[name][slc] for name in x.names]
-        if categories is not None:
-            chunks = [pd.Categorical.from_codes(np.searchsorted(categories[name],
-                                                                chunk),
-                                                categories[name], True)
-                       if name in categories else chunk
-                       for name, chunk in zip(x.names, chunks)]
-        return pd.DataFrame(dict(zip(x.names, chunks)))
-    elif isinstance(x, bcolz.carray):
-        chunk = x[slc]
-        if categories is not None and columns and columns in categories:
-            chunk = pd.Categorical.from_codes(
-                        np.searchsorted(categories[columns], chunk),
-                        categories[columns], True)
-        return pd.Series(chunk, name=columns)
+    return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
+                     dfs[0].columns, divisions)
 
 
 class GroupBy(object):
@@ -805,7 +614,7 @@ class GroupBy(object):
         if isinstance(index, list):
             assert all(i in frame.columns for i in index)
         elif isinstance(index, Series):
-            assert index.blockdivs == frame.blockdivs
+            assert index.divisions == frame.divisions
         else:
             assert index in frame.columns
 
@@ -986,37 +795,10 @@ def quantiles(f, q, **kwargs):
     return da.Array(dsk, name3, chunks=((len(q),),))
 
 
-#################
-# Optimizations #
-#################
-
-
-a, b, c, d, e = '~a', '~b', '~c', '~d', '~e'
-from dask.rewrite import RuleSet, RewriteRule
-
-rewrite_rules = RuleSet(
-        # Merge column access into pframe loading
-        RewriteRule((getitem, (pframe.get_partition, a, b), c),
-                    (pframe.get_partition, a, b, c),
-                    (a, b, c)),
-        # Merge column access into bcolz loading
-        RewriteRule((getitem, (dataframe_from_ctable, a, b, c, d), e),
-                    (dataframe_from_ctable, a, b, e, d),
-                    (a, b, c, d, e)))
-
-
-def optimize(dsk, keys, **kwargs):
-    if isinstance(keys, list):
-        dsk2 = cull(dsk, list(core.flatten(keys)))
-    else:
-        dsk2 = cull(dsk, [keys])
-    dsk3 = fuse(dsk2)
-    dsk4 = valmap(rewrite_rules.rewrite, dsk3)
-    return dsk4
-
 
 def get(dsk, keys, get=get_sync, **kwargs):
     """ Get function with optimizations specialized to dask.Dataframe """
+    from .optimize import optimize
     dsk2 = optimize(dsk, keys, **kwargs)
     return get(dsk2, keys, **kwargs)  # use synchronous scheduler for now
 

@@ -4,6 +4,7 @@ import pandas as pd
 import shutil
 from pandas.util import testing as tm
 from pframe.utils import raises
+import pickle
 
 df1 = pd.DataFrame({'a': [1, 2, 3],
                     'b': [4, 5, 6],
@@ -15,7 +16,7 @@ df2 = pd.DataFrame({'a': [10, 20, 30],
 df1.index.name = 'i'
 df2.index.name = 'i'
 
-pf = pframe(like=df1, blockdivs=[4])
+pf = pframe(like=df1, divisions=[4])
 pf.append(df1)
 pf.append(df2)
 
@@ -57,7 +58,7 @@ def test_npartitions():
 def test_categoricals():
     df = pd.DataFrame({'a': pd.Categorical(['Alice', 'Bob', 'Alice']),
                        'b': pd.Categorical([1, 2, 3])})
-    pf = pframe(like=df, blockdivs=[2])
+    pf = pframe(like=df, divisions=[2])
     pf.append(df)
     assert pf.partitions[0].blocks['a'].dtype == 'i1'
 
@@ -66,7 +67,7 @@ def test_categoricals():
 
 def test_raise_on_object_dtype():
     df = pd.DataFrame({'a': ['Alice', 'Bob', 'Alice']})
-    assert raises(Exception, lambda: pframe(like=df, blockdivs=['Bob']))
+    assert raises(Exception, lambda: pframe(like=df, divisions=['Bob']))
 
 
 def test_shard_df_on_index():
@@ -94,3 +95,7 @@ def test_shard_df_on_index():
     tm.assert_frame_equal(result[0], f.iloc[0:1])
     tm.assert_frame_equal(result[1], f.iloc[1:3])
     tm.assert_frame_equal(result[2], f.iloc[3:])
+
+
+def test_pickle():
+    pf2 = pickle.loads(pickle.dumps(pf))
