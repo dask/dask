@@ -2,7 +2,7 @@ import dask
 from dask.compatibility import skip
 import dask.array as da
 from dask.array import Array
-from dask.array.slicing import slice_array, _slice_1d, take
+from dask.array.slicing import slice_array, _slice_1d, take, new_blockdim
 from operator import getitem
 import numpy as np
 from toolz import merge
@@ -437,3 +437,11 @@ def test_multiple_list_slicing():
     x = np.random.rand(6, 7, 8)
     a = da.from_array(x, chunks=(3, 3, 3))
     assert eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
+
+
+def test_uneven_chunks():
+    assert da.ones(20, chunks=5)[::2].chunks == ((3, 2, 3, 2),)
+
+
+def test_new_blockdim():
+    assert new_blockdim(20, [5, 5, 5, 5], slice(0, None, 2)) == [3, 2, 3, 2]

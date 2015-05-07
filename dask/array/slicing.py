@@ -1,6 +1,7 @@
 from itertools import count, product
 from toolz import merge, first, accumulate
 from operator import getitem, add
+from math import ceil
 from ..compatibility import long
 import numpy as np
 
@@ -560,7 +561,7 @@ def new_blockdim(dim_shape, lengths, index):
     [4]
 
     >>> new_blockdim(100, [20, 10, 20, 10, 40], slice(90, 10, -2))
-    [15, 5, 10, 5, 4]
+    [16, 5, 10, 5, 4]
     """
     if isinstance(index, list):
         return [len(index)]
@@ -570,7 +571,7 @@ def new_blockdim(dim_shape, lengths, index):
                 for i, slc in pairs]
     if isinstance(index, slice) and index.step and index.step < 0:
         slices = slices[::-1]
-    return [(slc.stop - slc.start) // slc.step for slc in slices]
+    return [int(ceil((1. * slc.stop - slc.start) / slc.step)) for slc in slices]
 
 
 def replace_ellipsis(n, index):
