@@ -27,8 +27,9 @@ from pbag import PBag
 from ..multiprocessing import get as mpget
 from ..core import istask
 from ..optimize import fuse, cull
-from ..compatibility import apply
+from ..compatibility import apply, StringIO
 from ..context import _globals
+from ..utils import tmpfile
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
@@ -639,6 +640,55 @@ def from_filenames(filenames):
     d = dict((('load', i), (list, (myopen, fn)))
              for i, fn in enumerate(filenames))
     return Bag(d, 'load', len(d))
+
+
+def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
+    """ Create dask by loading in files from HDFS
+
+    Provide an hdfs directory and credentials
+
+    >>> b = from_hdfs('home/username/data/', host='localhost', user_name='ubuntu')  # doctest: +SKIP
+
+    Alternatively provide an instance of ``pywebhdfs.webhdfs.PyWebHdfsClient``
+
+    >>> from pywebhdfs.webhdfs import PyWebHdfsClient  # doctest: +SKIP
+    >>> hdfs = PyWebHdfsClient(host='hostname', user_name='username')  # doctest: +SKIP
+
+    >>> b = from_hdfs('home/username/data/', hdfs=hdfs)  # doctest: +SKIP
+    """
+    if hdfs is None:
+        from pywebhdfs.webhdfs import PyWebHdfsClient
+        hdfs = PyWebHdfsClient(host, port, user_name)
+
+    suffixes = [d['pathSuffix'] for d in hdfs.list_dir(path)['FileStatuses']['FileStatus']]
+    filenames = [path.rstrip('/') + '/' + s for s in suffixes]
+
+    name = next(names)
+    dsk = dict(((name, i), (hdfs.read_file, fn))
+                for i, fn in enumerate(filenames))
+    ext = filenames[0].split('.')[-1]
+    if ext in ('gz', 'bz2'):
+        dsk = dict((k, (stream_decompress, ext, v)) for k, v in dsk.items())
+
+    return Bag(dsk, name, len(dsk))
+
+
+def stream_decompress(fmt, data):
+    if fmt == 'gz':
+        return gzip.GzipFile(fileobj=StringIO(data))
+    if fmt == 'bz2':
+        return bzip_stream(data)
+    else:
+        return StringIO(data)
+
+
+def bzip_stream(data):
+    with tmpfile() as fn:
+        with open(fn, 'wb') as f:
+            f.write(data)
+        file = bz2.BZ2File(fn)
+        for line in file:
+            yield line
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
