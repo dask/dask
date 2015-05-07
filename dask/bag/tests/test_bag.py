@@ -5,6 +5,7 @@ import numpy as np
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby)
 from dask.utils import filetexts
+import dask
 from pbag import PBag
 import dask.bag as db
 import shutil
@@ -308,11 +309,12 @@ def test_to_textfiles():
     c = b.to_textfiles('_foo/*.gz')
     assert c.npartitions == b.npartitions
     try:
-        c.compute()
+        c.compute(get=dask.get)
         assert os.path.exists('_foo/1.gz')
 
         f = gzip.open('_foo/1.gz')
-        assert 'xyz' in f.read()
+        text = f.read()
+        assert b'xyz' in text
         f.close()
     finally:
         shutil.rmtree('_foo')

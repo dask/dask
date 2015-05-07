@@ -28,7 +28,7 @@ from pbag import PBag
 from ..multiprocessing import get as mpget
 from ..core import istask
 from ..optimize import fuse, cull
-from ..compatibility import apply, StringIO
+from ..compatibility import apply, StringIO, unicode
 from ..context import _globals
 from ..utils import tmpfile, ignoring
 
@@ -106,8 +106,6 @@ def to_textfiles(b, path, name_function=str):
 
     You can also provide a list of full paths.
     """
-    myopen = opens.get(os.path.splitext(path)[1][1:], open)
-
     if isinstance(path, (str, unicode)):
         if '*' in path:
             paths = [path.replace('*', name_function(i))
@@ -125,7 +123,7 @@ def to_textfiles(b, path, name_function=str):
                 "3.  A path with a * in it -- 'foo.*.json'")
 
     name = next(names)
-    dsk = dict(((name, i), (write, (b.name, i), path, myopen))
+    dsk = dict(((name, i), (write, (b.name, i), path))
             for i, path in enumerate(paths))
 
     return Bag(merge(b.dask, dsk), name, b.npartitions)
@@ -688,12 +686,20 @@ def from_filenames(filenames):
     return Bag(d, 'load', len(d))
 
 
-def write(data, filename, open):
+def write(data, filename):
     dirname = os.path.dirname(filename)
     if not os.path.exists(dirname):
         with ignoring(OSError):
             os.makedirs(dirname)
-    f = open(filename, 'w')
+
+    ext = os.path.splitext(filename)[1][1:]
+    if ext == 'gz':
+        f = gzip.open(filename, 'wb')
+        data = (line.encode() for line in data)
+    elif ext == 'bz2':
+        f = bz2.BZ2File(filename, 'wb')
+    else:
+        f = open(filename, 'w')
     try:
         for item in data:
             f.write(item)
