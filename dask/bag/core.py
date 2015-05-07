@@ -11,6 +11,7 @@ import os
 
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
+from functools import wraps
 
 
 from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
@@ -29,7 +30,7 @@ from ..core import istask
 from ..optimize import fuse, cull
 from ..compatibility import apply, StringIO
 from ..context import _globals
-from ..utils import tmpfile
+from ..utils import tmpfile, ignoring
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
@@ -87,6 +88,47 @@ def get(dsk, keys, get=None, **kwargs):
 def list2(seq):
     """ Another list function that won't be removed by lazify """
     return list(seq)
+
+
+def to_textfiles(b, path, name_function=str):
+    """ Write bag to disk, one filename per partition, one line per element
+
+    >>> b.to_textfiles('/path/to/data/*.json.gz')  # doctest: +SKIP
+
+    You can specify how filenames are created with the ``name_function=`` kwarg
+    Given an increasing integer 0, 1, 2, ... this function should produce a
+    name to insert at the location of the ``*`` in the path.  This defaults to
+    ``str`` and so we get the filenames
+
+        /path/to/data/0.json.gz
+        /path/to/data/1.json.gz
+        ...
+
+    You can also provide a list of full paths.
+    """
+    myopen = opens.get(os.path.splitext(path)[1][1:], open)
+
+    if isinstance(path, (str, unicode)):
+        if '*' in path:
+            paths = [path.replace('*', name_function(i))
+                     for i in range(b.npartitions)]
+        else:
+            paths = [os.path.join(path, '%s.part' % name_function(i))
+                     for i in range(b.npartitions)]
+    elif isinstance(path, (tuple, list, set)):
+        assert len(path) == b.npartitions
+        paths = path
+    else:
+        raise ValueError("Path should be either\n"
+                "1.  A list of paths -- ['foo.json', 'bar.json', ...]\n"
+                "2.  A directory -- 'foo/\n"
+                "3.  A path with a * in it -- 'foo.*.json'")
+
+    name = next(names)
+    dsk = dict(((name, i), (write, (b.name, i), path, myopen))
+            for i, path in enumerate(paths))
+
+    return Bag(merge(b.dask, dsk), name, b.npartitions)
 
 
 class Item(object):
@@ -217,6 +259,10 @@ class Bag(object):
     def from_filenames(cls, *args, **kwargs):
         raise AttributeError("db.Bag.from_filenames is deprecated.\n"
                              "Use db.from_filenames instead.")
+
+    @wraps(to_textfiles)
+    def to_textfiles(self, path, name_function=str):
+        return to_textfiles(self, path, name_function)
 
     def fold(self, binop, combine=None, initial=None):
         """ Splittable reduction
@@ -640,6 +686,19 @@ def from_filenames(filenames):
     d = dict((('load', i), (list, (myopen, fn)))
              for i, fn in enumerate(filenames))
     return Bag(d, 'load', len(d))
+
+
+def write(data, filename, open):
+    dirname = os.path.dirname(filename)
+    if not os.path.exists(dirname):
+        with ignoring(OSError):
+            os.makedirs(dirname)
+    f = open(filename, 'w')
+    try:
+        for item in data:
+            f.write(item)
+    finally:
+        f.close()
 
 
 def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):

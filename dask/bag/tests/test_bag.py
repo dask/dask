@@ -7,6 +7,8 @@ from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
 from dask.utils import filetexts
 from pbag import PBag
 import dask.bag as db
+import shutil
+import os
 import gzip
 import bz2
 from dask.utils import raises
@@ -300,3 +302,17 @@ def test_to_dataframe():
     df2 = b.to_dataframe()
 
     assert (df2.compute().values == df.compute().values).all()
+
+def test_to_textfiles():
+    b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
+    c = b.to_textfiles('_foo/*.gz')
+    assert c.npartitions == b.npartitions
+    try:
+        c.compute()
+        assert os.path.exists('_foo/1.gz')
+
+        f = gzip.open('_foo/1.gz')
+        assert 'xyz' in f.read()
+        f.close()
+    finally:
+        shutil.rmtree('_foo')
