@@ -1611,3 +1611,38 @@ def unique(x):
     dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
     parts = get(merge(dsk, x.dask), list(dsk.keys()))
     return np.unique(np.concatenate(parts))
+
+
+def to_hdf5(x, fn, datapath, **kwargs):
+    import h5py
+    f = h5py.File(fn)
+    if 'chunks' not in kwargs:
+        kwargs['chunks'] = tuple([c[0] for c in x.chunks])
+    d = f.require_dataset(x.shape, x.dtype, **kwargs)
+
+    f.close()
+
+    locs = [[0] + list(accumulate(add, bl)) for bl in arr.chunks]
+
+    name = next(names)
+    dsk = dict(((name,
+
+def write_hdf5_chunk(fn, datapath, index, data):
+    with h5py.File(fn) as f:
+        d = f[datapath]
+        d[index] = data
+
+
+        def insert_to_ooc(out, arr):
+
+    locs = [[0] + list(accumulate(add, bl)) for bl in arr.chunks]
+
+    def store(x, *args):
+        with lock:
+            ind = tuple([slice(loc[i], loc[i+1]) for i, loc in zip(args, locs)])
+            out[ind] = np.asanyarray(x)
+        return None
+
+    name = 'store-%s' % arr.name
+    return dict(((name,) + t[1:], (store, t) + t[1:])
+                for t in core.flatten(arr._keys()))

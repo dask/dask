@@ -620,6 +620,22 @@ def test_store():
     assert raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
+def test_to_hdf5():
+    try:
+        import h5py
+    except ImportError:
+        return
+    x = da.ones((4, 4), chunks=(2, 2))
+
+    with tmpfile('.hdf5') as fn:
+        x.to_hdf5(fn, '/x')
+        f = h5py.File(fn)
+        d = f['/x']
+
+        assert eq(d[:], x)
+        assert d.chunks == (2, 2)
+
+
 def test_np_array_with_zero_dimensions():
     d = da.ones((4, 4), chunks=(2, 2))
     assert eq(np.array(d.sum()), np.array(d.compute().sum()))
