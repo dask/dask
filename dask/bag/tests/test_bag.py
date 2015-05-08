@@ -306,15 +306,16 @@ def test_to_dataframe():
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
-    c = b.to_textfiles('_foo/*.gz')
-    assert c.npartitions == b.npartitions
-    try:
-        c.compute(get=dask.get)
-        assert os.path.exists('_foo/1.gz')
+    for ext, myopen in [('gz', gzip.open), ('bz2', bz2.BZ2File), ('', open)]:
+        c = b.to_textfiles('_foo/*.' + ext)
+        assert c.npartitions == b.npartitions
+        try:
+            c.compute(get=dask.get)
+            assert os.path.exists('_foo/1.' + ext)
 
-        f = gzip.open('_foo/1.gz')
-        text = f.read()
-        assert b'xyz' in text
-        f.close()
-    finally:
-        shutil.rmtree('_foo')
+            f = myopen('_foo/1.' + ext)
+            text = f.read()
+            assert b'xyz' in text
+            f.close()
+        finally:
+            shutil.rmtree('_foo')
