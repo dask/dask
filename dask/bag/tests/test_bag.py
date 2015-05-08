@@ -313,9 +313,11 @@ def test_to_textfiles():
             c.compute(get=dask.get)
             assert os.path.exists('_foo/1.' + ext)
 
-            f = myopen('_foo/1.' + ext)
+            f = myopen('_foo/1.' + ext, 'r')
             text = f.read()
-            assert b'xyz' in text
+            if hasattr(text, 'decode'):
+                text = text.decode()
+            assert 'xyz' in text
             f.close()
         finally:
             shutil.rmtree('_foo')

@@ -698,6 +698,7 @@ def write(data, filename):
         data = (line.encode() for line in data)
     elif ext == 'bz2':
         f = bz2.BZ2File(filename, 'wb')
+        data = (line.encode() for line in data)
     else:
         f = open(filename, 'w')
     try:
