@@ -1,10 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 from itertools import count, product
+
 from toolz import curry
-from .core import Array, normalize_chunks
 import numpy as np
 
+from .core import Array, normalize_chunks
+from .numpy_compat import full
 
 names = ('wrapped_%d' % i for i in count(1))
 
@@ -109,4 +111,4 @@ w = wrap(wrap_func_shape_as_first_arg)
 ones = w(np.ones, dtype='f8')
 zeros = w(np.zeros, dtype='f8')
 empty = w(np.empty, dtype='f8')
-full = w(np.full)
+full = w(full)

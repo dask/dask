@@ -1,11 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
+from operator import add
+
+from toolz import merge
+from toolz.curried import identity
+
 import dask
 import dask.array as da
 from dask.array.core import *
 from dask.utils import raises, ignoring
-from toolz import merge
-from operator import getitem, add, mul
 
 
 inc = lambda x: x + 1

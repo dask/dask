@@ -132,19 +132,24 @@ def ghost_internal(x, axes):
     interior_slices = {}
     ghost_blocks = {}
     for k in interior_keys:
-        interior_slices[k] = fractional_slice(k, axes)
+        frac_slice = fractional_slice(k, axes)
+        if k != frac_slice:
+            interior_slices[k] = frac_slice
 
         ghost_blocks[(name,) + k[1:]] = (rec_concatenate,
                                          (concrete, expand_key2(k)))
 
     chunks = []
     for i, bds in enumerate(x.chunks):
-        left = [bds[0] + axes.get(i, 0)]
-        right = [bds[-1] + axes.get(i, 0)]
-        mid = []
-        for bd in bds[1:-1]:
-            mid.append(bd + axes.get(i, 0) * 2)
-        chunks.append(left + mid + right)
+        if len(bds) == 1:
+            chunks.append(bds)
+        else:
+            left = [bds[0] + axes.get(i, 0)]
+            right = [bds[-1] + axes.get(i, 0)]
+            mid = []
+            for bd in bds[1:-1]:
+                mid.append(bd + axes.get(i, 0) * 2)
+            chunks.append(left + mid + right)
 
     return Array(merge(interior_slices, ghost_blocks, x.dask),
                  name, chunks)
@@ -177,8 +182,6 @@ def periodic(x, axis, depth):
 
     Useful to create periodic boundary conditions for ghost
     """
-    if depth == 0:
-        return x
 
     left = ((slice(None, None, None),) * axis +
             (slice(0, depth),) +
@@ -199,10 +202,7 @@ def reflect(x, axis, depth):
 
     This is the converse of ``periodic``
     """
-    if depth == 0:
-        return x
-
-    elif depth == 1:
+    if depth == 1:
         left = ((slice(None, None, None),) * axis +
                 (slice(0, 1),) +
                 (slice(None, None, None),) * (x.ndim - axis - 1))
@@ -227,9 +227,6 @@ def nearest(x, axis, depth):
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
     does.
     """
-    if depth == 0:
-        return x
-
     left = ((slice(None, None, None),) * axis +
             (slice(0, 1),) +
             (slice(None, None, None),) * (x.ndim - axis - 1))
@@ -243,7 +240,6 @@ def nearest(x, axis, depth):
     l, r = _remove_ghost_boundaries(l, r, axis, depth)
 
     return concatenate([l, x, r], axis=axis)
-
 
 
 def constant(x, axis, depth, value):
@@ -283,14 +279,18 @@ def boundaries(x, depth=None, kind=None):
         depth = dict((i, depth) for i in range(x.ndim))
 
     for i in range(x.ndim):
+        d = depth.get(i, 0)
+        if d == 0:
+            continue
+
         if kind.get(i) == 'periodic':
-            x = periodic(x, i, depth[i])
+            x = periodic(x, i, d)
         elif kind.get(i) == 'reflect':
-            x = reflect(x, i, depth[i])
+            x = reflect(x, i, d)
         elif kind.get(i) == 'nearest':
-            x = nearest(x, i, depth[i])
+            x = nearest(x, i, d)
         elif i in kind:
-            x = constant(x, i, depth[i], kind[i])
+            x = constant(x, i, d, kind[i])
 
     return x
 
@@ -357,7 +357,8 @@ def ghost(x, depth, boundary):
         boundary = dict(zip(range(x.ndim), boundary))
 
     # is depth larger than chunk size?
-    for d, c in zip(depth.values(), x.chunks):
+    depth_values = [depth.get(i, 0) for i in range(x.ndim)]
+    for d, c in zip(depth_values, x.chunks):
         if d > min(c):
             raise ValueError("The overlapping depth %d is larger than your\n"
                              "smallest chunk size %d. Rechunk your array\n"
