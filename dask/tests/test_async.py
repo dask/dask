@@ -1,6 +1,9 @@
-from dask.async import *
 from operator import add
 from copy import deepcopy
+
+import pytest
+
+from dask.async import *
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -74,7 +77,7 @@ def test_finish_task():
 
 
 def test_state_to_networkx():
-    import networkx as nx
+    nx = pytest.importorskip("networkx")
     dsk = {'x': 1, 'y': 1, 'a': (add, 'x', 'y'), 'b': (inc, 'x')}
     state = start_state_from_dask(dsk)
     g = state_to_networkx(dsk, state)
