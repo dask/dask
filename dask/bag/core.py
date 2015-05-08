@@ -721,19 +721,20 @@ def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
 
     >>> b = from_hdfs('home/username/data/', hdfs=hdfs)  # doctest: +SKIP
     """
-    if hdfs is None:
-        from pywebhdfs.webhdfs import PyWebHdfsClient
-        hdfs = PyWebHdfsClient(host, port, user_name)
+    from .. import hdfs_utils
+    filenames = hdfs_utils.filenames(hdfs, path)
 
-    suffixes = [d['pathSuffix'] for d in hdfs.list_dir(path)['FileStatuses']['FileStatus']]
-    filenames = [path.rstrip('/') + '/' + s for s in suffixes]
+    if not filenames:
+        raise ValueError("No files found for path %s" % path)
 
     name = next(names)
-    dsk = dict(((name, i), (hdfs.read_file, fn))
-                for i, fn in enumerate(filenames))
-    ext = filenames[0].split('.')[-1]
-    if ext in ('gz', 'bz2'):
-        dsk = dict((k, (stream_decompress, ext, v)) for k, v in dsk.items())
+    dsk = dict()
+    for i, fn in enumerate(filenames):
+        ext = fn.split('.')[-1]
+        if ext in ('gz', 'bz2'):
+            dsk[(name, i)] = (stream_decompress, ext, (hdfs.read_file, fn))
+        else:
+            dsk[(name, i)] = (hdfs.read_file, fn)
 
     return Bag(dsk, name, len(dsk))
 
