@@ -48,13 +48,14 @@ def tmpfile(extension=''):
     os.close(handle)
     os.remove(filename)
 
-    yield filename
-
-    if os.path.exists(filename):
-        if os.path.isdir(filename):
-            shutil.rmtree(filename)
-        else:
-            os.remove(filename)
+    try:
+        yield filename
+    finally:
+        if os.path.exists(filename):
+            if os.path.isdir(filename):
+                shutil.rmtree(filename)
+            else:
+                os.remove(filename)
 
 
 @contextmanager
