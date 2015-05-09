@@ -1,6 +1,10 @@
 Dask
 ====
 
+.. image:: https://badges.gitter.im/Join%20Chat.svg
+   :alt: Join the chat at https://gitter.im/ContinuumIO/dask
+   :target: https://gitter.im/ContinuumIO/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
+
 |Build Status| |Coverage| |Doc Status|
 
 Dask provides multi-core execution on larger-than-memory datasets using blocked
