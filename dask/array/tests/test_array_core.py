@@ -8,7 +8,7 @@ from toolz.curried import identity
 import dask
 import dask.array as da
 from dask.array.core import *
-from dask.utils import raises, ignoring
+from dask.utils import raises, ignoring, tmpfile
 
 
 inc = lambda x: x + 1
@@ -618,6 +618,22 @@ def test_store():
     assert raises(ValueError, lambda: store([a], [at, bt]))
     assert raises(ValueError, lambda: store(at, at))
     assert raises(ValueError, lambda: store([at, bt], [at, bt]))
+
+
+def test_to_hdf5():
+    try:
+        import h5py
+    except ImportError:
+        return
+    x = da.ones((4, 4), chunks=(2, 2))
+
+    with tmpfile('.hdf5') as fn:
+        x.to_hdf5(fn, '/x')
+        f = h5py.File(fn)
+        d = f['/x']
+
+        assert eq(d[:], x)
+        assert d.chunks == (2, 2)
 
 
 def test_np_array_with_zero_dimensions():
