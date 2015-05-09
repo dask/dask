@@ -1,7 +1,7 @@
 Dask
 ====
 
-|Build Status| |Coverage| |Doc Status|
+|Build Status| |Coverage| |Doc Status| |Gitter|
 
 Dask provides multi-core execution on larger-than-memory datasets using blocked
 algorithms and task scheduling.  It maps high-level NumPy and list operations
@@ -189,3 +189,6 @@ includes the following projects:
 .. |Coverage| image:: https://coveralls.io/repos/mrocklin/dask/badge.svg
    :target: https://coveralls.io/r/mrocklin/dask
    :alt: Coverage status
+.. |Gitter| image:: https://badges.gitter.im/Join%20Chat.svg
+   :alt: Join the chat at https://gitter.im/ContinuumIO/dask
+   :target: https://gitter.im/ContinuumIO/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
