@@ -1,7 +1,7 @@
 Frequently Asked Questions
 ==========================
 
-1.  Q: How do I debug my program when using dask?
+1.  **Q: How do I debug my program when using dask?**
 
     If you want to inspect the dask graph itself see `inspect docs`_
 
@@ -19,7 +19,7 @@ Frequently Asked Questions
     schedulers but with only one worker.  ``dask.get`` is dead-simple but does
     not cache data and so can be slow for some workloads.
 
-2.  Q: What is ``chunks``
+2.  **Q: In ``dask.array`` what is ``chunks``?**
 
     Dask.array breaks your large array into lots of little pieces, each of
     which can fit in memory.  ``chunks`` determines the size of those pieces.
@@ -34,7 +34,7 @@ Frequently Asked Questions
     However internally dask uses a different representation (a tuple of tuples)
     to handle uneven chunk sizes that inevitably occur during computation.
 
-3.  Q: How do I select a good value for ``chunks``?
+3.  **Q: How do I select a good value for ``chunks``?**
 
     Choosing good values for ``chunks`` can strongly impact performance.
     Here are some general guidelines.  The strongest guide is memory:
