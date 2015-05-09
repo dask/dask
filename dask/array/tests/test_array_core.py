@@ -929,3 +929,21 @@ def test_args():
     x = da.ones((10, 2), chunks=(3, 1), dtype='i4') + 1
     y = Array(*x._args)
     assert eq(x, y)
+
+
+def test_from_array_with_lock():
+    x = np.arange(10)
+    d = da.from_array(x, chunks=5, lock=True)
+
+    tasks = [v for k, v in d.dask.items() if k[0] == d.name]
+
+    assert isinstance(tasks[0][3], type(Lock()))
+    assert len(set(task[3] for task in tasks)) == 1
+
+    assert eq(d, x)
+
+    lock = Lock()
+    e = da.from_array(x, chunks=5, lock=lock)
+    f = da.from_array(x, chunks=5, lock=lock)
+
+    assert eq(e + f, x + x)
