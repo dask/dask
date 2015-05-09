@@ -67,7 +67,7 @@ def slices_from_chunks(chunks):
                 for start, shape in zip(starts, shapes)]
 
 
-def getem(arr, chunks, shape=None, lock=None):
+def getem(arr, chunks, shape=None):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
@@ -84,13 +84,9 @@ def getem(arr, chunks, shape=None, lock=None):
     """
     chunks = normalize_chunks(chunks, shape)
 
-    if lock is True:
-        lock = Lock()
-
     keys = list(product([arr], *[range(len(bds)) for bds in chunks]))
 
-    values = [(getarray, arr) + (x, lock) if lock else (x,)
-              for x in slices_from_chunks(chunks)]
+    values = [(getarray, arr, x) for x in slices_from_chunks(chunks)]
 
     return dict(zip(keys, values))
 
@@ -982,8 +978,12 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     """
     chunks = normalize_chunks(chunks, x.shape)
     name = name or next(names)
-    dask = merge({name: x}, getem(name, chunks, lock=lock))
-    return Array(dask, name, chunks, dtype=x.dtype)
+    dsk = getem(name, chunks)
+    if lock is True:
+        lock = Lock()
+    if lock:
+        dsk = dict((k, v + (lock,)) for k, v in dsk.items())
+    return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
 def atop(func, out, out_ind, *args, **kwargs):
