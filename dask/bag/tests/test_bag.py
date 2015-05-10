@@ -1,9 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join, pipe, filter, identity, merge_with
+from toolz import merge, join, pipe, filter, identity, merge_with, take
 import numpy as np
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby)
+        reduceby, bz2_stream)
 from dask.utils import filetexts
 import dask
 from pbag import PBag
@@ -321,3 +321,9 @@ def test_to_textfiles():
             f.close()
         finally:
             shutil.rmtree('_foo')
+
+
+def test_bz2_stream():
+    text = '\n'.join(map(str, range(10000)))
+    compressed = bz2.compress(text.encode())
+    assert list(take(100, bz2_stream(compressed))) == list(map(str, range(100)))

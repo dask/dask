@@ -744,17 +744,18 @@ def stream_decompress(fmt, data):
     if fmt == 'gz':
         return gzip.GzipFile(fileobj=StringIO(data))
     if fmt == 'bz2':
-        return bzip_stream(data)
+        return bz2_stream(data)
     else:
         return StringIO(data)
 
 
-def bzip_stream(data):
-    with tmpfile() as fn:
-        with open(fn, 'wb') as f:
-            f.write(data)
-        file = bz2.BZ2File(fn)
-        for line in file:
+def bz2_stream(compressed, chunksize=100000):
+    """ Stream lines from a chunk of compressed bz2 data """
+    decompressor = bz2.BZ2Decompressor()
+    for i in range(0, len(compressed), chunksize):
+        chunk = compressed[i: i+chunksize]
+        decompressed = decompressor.decompress(chunk).decode()
+        for line in decompressed.split('\n'):
             yield line
 
 
