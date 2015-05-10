@@ -247,3 +247,31 @@ def test_skipinitialspace():
 
         assert 'amount' in df.columns
         assert df.amount.max().compute() == 600
+
+
+def test_consistent_dtypes():
+    text1 = """
+    name,amount
+    Alice,100
+    Bob,-200
+    Charlie,300
+    """.strip()
+
+    text2 = """
+    name,amount
+    1,400
+    2,-500
+    Frank,600
+    """.strip()
+    try:
+        with open('_foo.1.csv', 'w') as f:
+            f.write(text1)
+        with open('_foo.2.csv', 'w') as f:
+            f.write(text2)
+        df = dd.read_csv('_foo.*.csv', chunkbytes=25)
+
+        assert df.amount.max().compute() == 600
+    finally:
+        pass
+        os.remove('_foo.1.csv')
+        os.remove('_foo.2.csv')
