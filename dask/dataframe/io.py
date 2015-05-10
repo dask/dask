@@ -134,13 +134,13 @@ def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
 
 
 def csv_names(fn, encoding='utf-8', compression=None, names=None,
-                parse_dates=None, **kwargs):
+                parse_dates=None, usecols=None, **kwargs):
     try:
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, parse_dates=parse_dates, nrows=5)
+                names=names, parse_dates=parse_dates, nrows=5, **kwargs)
     except StopIteration:
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, parse_dates=parse_dates)
+                names=names, parse_dates=parse_dates, **kwargs)
     return list(df.columns)
 
 

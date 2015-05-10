@@ -12,6 +12,7 @@ from toolz import valmap
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
         dataframe_from_ctable, from_array, from_bcolz, infer_header)
+from dask.compatibility import StringIO
 
 from dask.utils import filetext
 
@@ -229,3 +230,20 @@ def test_column_store_from_pframe():
     assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
     assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
 
+
+def test_skipinitialspace():
+    text = """
+    name, amount
+    Alice,100
+    Bob,-200
+    Charlie,300
+    Dennis,400
+    Edith,-500
+    Frank,600
+    """.strip()
+
+    with filetext(text) as fn:
+        df = dd.read_csv(fn, skipinitialspace=True, chunkbytes=20)
+
+        assert 'amount' in df.columns
+        assert df.amount.max().compute() == 600
