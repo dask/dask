@@ -327,3 +327,11 @@ def test_bz2_stream():
     text = '\n'.join(map(str, range(10000)))
     compressed = bz2.compress(text.encode())
     assert list(take(100, bz2_stream(compressed))) == list(map(str, range(100)))
+
+
+def test_concat():
+    a = db.from_sequence([1, 2, 3])
+    b = db.from_sequence([4, 5, 6])
+    c = db.concat([a, b])
+
+    assert list(c) == [1, 2, 3, 4, 5, 6]
