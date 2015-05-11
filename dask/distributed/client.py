@@ -112,3 +112,6 @@ class Client(object):
         header2, payload2 = self.recv_from_scheduler()
 
         return payload2['type'](*payload2['args'])
+
+    def close(self):
+        self.socket.close(1)

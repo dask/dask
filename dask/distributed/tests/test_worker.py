@@ -41,6 +41,8 @@ def worker_and_router(*args, **kwargs):
         handshake = router.recv_multipart()  # burn initial handshake
         yield w, router
 
+    router.close(1)
+
 
 def test_status():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):

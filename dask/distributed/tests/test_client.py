@@ -29,6 +29,7 @@ def test_get():
         keys = ['y', 'z']
 
         assert c.get(dsk, keys) == [2, 3]
+        c.close()
 
 
 def test_status():
@@ -36,6 +37,7 @@ def test_status():
         c = Client(s.address_to_clients)
 
         assert c.scheduler_status() == 'OK'
+        c.close()
 
 
 def test_get_with_dill():
@@ -50,6 +52,7 @@ def test_get_with_dill():
         keys = 'y'
 
         assert c.get(dsk, keys) == 2
+        c.close()
 
 
 def test_error():
@@ -59,6 +62,7 @@ def test_error():
         assert raises(TypeError,
                 lambda: c.get({'x': 1, 'y': (lambda x: x + x, 'x', 'x')}, 'y'))
         assert 'y' not in s.data
+        c.close()
 
 
 def test_multiple_clients():
@@ -80,6 +84,8 @@ def test_multiple_clients():
                                    args=({'a': 1, 'b': (sleep_inc, 'a')}, 'b'))
 
         assert future1.get() == future2.get()
+        c.close()
+        d.close()
 
 
 def test_register_collections():
@@ -101,3 +107,7 @@ def test_register_collections():
         assert (type(b) == type(b2) and
                 b.npartitions == b2.npartitions)
         assert list(b) == list(b2)
+
+        c.close()
+        d.close()
+
