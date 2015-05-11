@@ -12,6 +12,7 @@ import zmq
 from toolz import partial
 from time import time
 import sys
+import traceback
 from ..compatibility import Queue, unicode
 from .. import core
 try:
@@ -25,23 +26,24 @@ def pickle_dumps(obj):
 
 MAX_DEALERS = 100
 
-context = zmq.Context()
-
-with open('log.workers', 'w') as f:  # delete file
-    pass
 
 def log(*args):
     with open('log.workers', 'a') as f:
         print(*args, file=f)
 
+log('Hello from worker.py')
 
 @contextmanager
 def logerrors():
     try:
         yield
     except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
         log('Error!', str(e))
+        log('Traceback', str(tb))
         raise
+
 
 class Worker(object):
     """ Asynchronous worker in a distributed dask computation pool
@@ -80,10 +82,12 @@ class Worker(object):
         self.pool = ThreadPool(nthreads)
         self.scheduler = scheduler
         self.status = 'run'
+        self.context = zmq.Context()
+
 
         self.hostname = hostname or socket.gethostname()
 
-        self.to_workers = context.socket(zmq.ROUTER)
+        self.to_workers = self.context.socket(zmq.ROUTER)
         if port_to_workers is None:
             port_to_workers = self.to_workers.bind_to_random_port('tcp://*')
         else:
@@ -96,7 +100,7 @@ class Worker(object):
 
         self.queues = dict()
 
-        self.to_scheduler = context.socket(zmq.DEALER)
+        self.to_scheduler = self.context.socket(zmq.DEALER)
 
         self.to_scheduler.setsockopt(zmq.IDENTITY, self.address)
         self.to_scheduler.connect(scheduler)
@@ -106,7 +110,8 @@ class Worker(object):
                                     'compute': self.compute,
                                     'getitem': self.getitem_scheduler,
                                     'delitem': self.delitem,
-                                    'setitem': self.setitem}
+                                    'setitem': self.setitem,
+                                    'close': self.close_from_scheduler}
 
         self.worker_functions = {'getitem': self.getitem_worker,
                                  'getitem-ack': self.getitem_ack,
@@ -253,7 +258,7 @@ class Worker(object):
                 for sock in self.dealers.values():
                     sock.close()
                 self.dealers.clear()
-            sock = context.socket(zmq.DEALER)
+            sock = self.context.socket(zmq.DEALER)
             sock.connect(address)
             self.dealers[address] = sock
 
@@ -307,17 +312,21 @@ class Worker(object):
         """
         while self.status != 'closed':
             # Wait on request
-            if not self.to_scheduler.poll(100):
-                continue
-            header, payload = self.to_scheduler.recv_multipart()
-            header = pickle.loads(header)
-            log(self.address, 'Receive job from scheduler', header)
             try:
-                function = self.scheduler_functions[header['function']]
-            except KeyError:
-                log(self.address, 'Unknown function', header)
-            else:
-                future = self.pool.apply_async(function, args=(header, payload))
+                if not self.to_scheduler.poll(100):
+                    continue
+            except zmq.ZMQError:
+                break
+            with logerrors():
+                header, payload = self.to_scheduler.recv_multipart()
+                header = pickle.loads(header)
+                log(self.address, 'Receive job from scheduler', header)
+                try:
+                    function = self.scheduler_functions[header['function']]
+                except KeyError:
+                    log(self.address, 'Unknown function', header)
+                else:
+                    future = self.pool.apply_async(function, args=(header, payload))
 
     def listen_to_workers(self):
         """ Listen to communications from workers
@@ -326,21 +335,25 @@ class Worker(object):
         """
         while self.status != 'closed':
             # Wait on request
-            if not self.to_workers.poll(100):
-                continue
-
-            address, header, payload = self.to_workers.recv_multipart()
-            header = pickle.loads(header)
-            if 'address' not in header:
-                header['address'] = address
-            log(self.address, 'Receive job from worker', address, header)
-
             try:
-                function = self.worker_functions[header['function']]
-            except KeyError:
-                log(self.address, 'Unknown function', header)
-            else:
-                future = self.pool.apply_async(function, args=(header, payload))
+                if not self.to_workers.poll(100):
+                    continue
+            except zmq.ZMQError:
+                break
+
+            with logerrors():
+                address, header, payload = self.to_workers.recv_multipart()
+                header = pickle.loads(header)
+                if 'address' not in header:
+                    header['address'] = address
+                log(self.address, 'Receive job from worker', address, header)
+
+                try:
+                    function = self.worker_functions[header['function']]
+                except KeyError:
+                    log(self.address, 'Unknown function', header)
+                else:
+                    future = self.pool.apply_async(function, args=(header, payload))
 
     def block(self):
         """ Block until listener threads close
@@ -350,6 +363,7 @@ class Worker(object):
         """
         self._listen_workers_thread.join()
         self._listen_scheduler_thread.join()
+        log('Unblocked')
 
     def collect(self, locations):
         """ Collect data from peers
@@ -432,48 +446,53 @@ class Worker(object):
         then compute task and store result into ``self.data``.  Finally report
         back to the scheduler that we're free.
         """
-        # Unpack payload
-        loads = header.get('loads', pickle.loads)
-        payload = loads(payload)
-        locations = payload['locations']
-        key = payload['key']
-        task = payload['task']
+        with logerrors():
+            # Unpack payload
+            loads = header.get('loads', pickle.loads)
+            payload = loads(payload)
+            locations = payload['locations']
+            key = payload['key']
+            task = payload['task']
 
-        # Grab data from peers
-        self.collect(locations)
+            # Grab data from peers
+            if locations:
+                self.collect(locations)
 
-        # Do actual work
-        start = time()
-        status = "OK"
-        log(self.address, "Start computation", key, task)
-        try:
-            result = core.get(self.data, task)
-            end = time()
-        except Exception as e:
-            status = e
-            end = time()
-        else:
-            self.data[key] = result
-        log(self.address, "End computation", key, task, status)
+            # Do actual work
+            start = time()
+            status = "OK"
+            log(self.address, "Start computation", key, task)
+            try:
+                result = core.get(self.data, task)
+                end = time()
+            except Exception as e:
+                status = e
+                end = time()
+            else:
+                self.data[key] = result
+            log(self.address, "End computation", key, task, status)
 
-        # Report finished to scheduler
-        header2 = {'function': 'finished-task'}
-        result = {'key': key,
-                  'duration': end - start,
-                  'status': status,
-                  'dependencies': list(locations),
-                  'queue': payload['queue']}
-        self.send_to_scheduler(header2, result)
+            # Report finished to scheduler
+            header2 = {'function': 'finished-task'}
+            result = {'key': key,
+                      'duration': end - start,
+                      'status': status,
+                      'dependencies': list(locations),
+                      'queue': payload['queue']}
+            self.send_to_scheduler(header2, result)
+
+    def close_from_scheduler(self, header, payload):
+        log(self.address, 'Close signal from scheduler')
+        self.close()
 
     def close(self):
+        log(self.address, 'Close', self.pool._state)
         if self.pool._state == multiprocessing.pool.RUN:
-            log(self.address, 'Close')
             self.status = 'closed'
             self.pool.close()
             self.pool.join()
-
-    def __del__(self):
-        self.close()
+            with self.lock:
+                self.context.destroy(3)
 
 
 def status():

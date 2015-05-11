@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import zmq
 import socket
+import sys
 import dill
 import uuid
 from collections import defaultdict
@@ -12,12 +13,15 @@ from datetime import datetime
 from threading import Thread, Lock
 from contextlib import contextmanager
 from toolz import curry, partial
-from ..compatibility import Queue, unicode
+from time import sleep
+import traceback
+
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 
+from ..compatibility import Queue, unicode
 from ..core import get_dependencies, flatten
 from .. import core
 from ..async import finish_task, start_state_from_dask as dag_state_from_dask
@@ -34,7 +38,10 @@ def logerrors():
     try:
         yield
     except Exception as e:
-        log('Error!', str(e))
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
+        log('Error!', type(e).__name__, str(e))
+        log('Traceback', str(tb))
         raise
 
 class Scheduler(object):
@@ -129,8 +136,11 @@ class Scheduler(object):
     def _listen_to_workers(self):
         """ Event loop: Listen to worker router """
         while self.status != 'closed':
-            if not self.to_workers.poll(100):
-                continue
+            try:
+                if not self.to_workers.poll(100):
+                    continue
+            except zmq.ZMQError:
+                break
             address, header, payload = self.to_workers.recv_multipart()
 
             header = pickle.loads(header)
@@ -148,8 +158,11 @@ class Scheduler(object):
     def _listen_to_clients(self):
         """ Event loop: Listen to client router """
         while self.status != 'closed':
-            if not self.to_clients.poll(100):
-                continue
+            try:
+                if not self.to_clients.poll(100):
+                    continue
+            except zmq.ZMQError:
+                break
             address, header, payload = self.to_clients.recv_multipart()
             header = pickle.loads(header)
             if 'address' not in header:
@@ -483,9 +496,18 @@ class Scheduler(object):
         if queue:
             self.queues[queue].put(key)
 
+    def close_workers(self):
+        log(self.address_to_workers, 'Closing workers', self.workers)
+        header = {'function': 'close'}
+        for w in self.workers:
+            self.send_to_worker(w, header, {})
+
     def close(self):
         """ Close Scheduler """
+        log(self.address_to_workers, 'Close scheduler')
         self.status = 'closed'
+        with self.lock:
+            self.context.destroy(linger=3)
 
     def schedule(self, dsk, result, **kwargs):
         """ Execute dask graph against workers
@@ -510,10 +532,9 @@ class Scheduler(object):
         1.  Scheduler scatters precomputed data in graph to workers
             e.g. nodes like ``{'x': 1}``.  See Scheduler.scatter
         2.
-
-
         """
         with self._schedule_lock:
+            log(self.address_to_workers, "Scheduling dask")
             if isinstance(result, list):
                 result_flat = set(flatten(result))
             else:
@@ -522,7 +543,8 @@ class Scheduler(object):
 
             cache = dict()
             dag_state = dag_state_from_dask(dsk, cache=cache)
-            self.scatter(cache.items())  # send data in dask up to workers
+            if cache:
+                self.scatter(cache.items())  # send data in dask up to workers
 
             tick = [0]
 
@@ -542,6 +564,11 @@ class Scheduler(object):
                 dag_state['running'].add(key)
 
                 self.trigger_task(dsk, key, qkey)  # Fire
+
+            if self.available_workers.empty():
+                sleep(0.1)
+                if self.available_workers.empty():
+                    raise ValueError("No available workers found")
 
             # Seed initial tasks
             while dag_state['ready'] and self.available_workers.qsize() > 0:
@@ -573,23 +600,24 @@ class Scheduler(object):
         Output Payload: keys, result
         Sent to client on 'schedule-ack'
         """
-        loads = header.get('loads', dill.loads)
-        payload = loads(payload)
-        address = header['address']
-        dsk = payload['dask']
-        keys = payload['keys']
+        with logerrors():
+            loads = header.get('loads', dill.loads)
+            payload = loads(payload)
+            address = header['address']
+            dsk = payload['dask']
+            keys = payload['keys']
 
-        header2 = {'jobid': header.get('jobid'),
-                   'function': 'schedule-ack'}
-        try:
-            result = self.schedule(dsk, keys)
-            header2['status'] = 'OK'
-        except Exception as e:
-            result = e
-            header2['status'] = 'Error'
+            header2 = {'jobid': header.get('jobid'),
+                       'function': 'schedule-ack'}
+            try:
+                result = self.schedule(dsk, keys)
+                header2['status'] = 'OK'
+            except Exception as e:
+                result = e
+                header2['status'] = 'Error'
 
-        payload2 = {'keys': keys, 'result': result}
-        self.send_to_client(address, header2, payload2)
+            payload2 = {'keys': keys, 'result': result}
+            self.send_to_client(address, header2, payload2)
 
     def _release_data(self, key, state, delete=True):
         """ Remove data from temporary storage during scheduling run

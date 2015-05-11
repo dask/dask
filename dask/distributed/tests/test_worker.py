@@ -15,6 +15,10 @@ def add(x, y):
     return x + y
 
 
+with open('log.workers', 'w') as f:  # delete file
+    pass
+
+
 @contextmanager
 def worker(data=None, scheduler='tcp://localhost:5555'):
     if data is None:
@@ -35,7 +39,7 @@ def worker_and_router(*args, **kwargs):
     if port:
         router.bind('tcp://*:%d' % port)
     else:
-        port = port or router.bind_to_random_port('tcp://*')
+        port = router.bind_to_random_port('tcp://*')
     kwargs['scheduler'] = 'tcp://localhost:%d' % port
     with worker(*args, **kwargs) as w:
         handshake = router.recv_multipart()  # burn initial handshake

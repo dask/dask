@@ -10,6 +10,7 @@ import pickle
 import re
 
 import zmq
+from dask.compatibility import Queue
 
 context = zmq.Context()
 
@@ -64,6 +65,8 @@ def scheduler_and_workers(n=2):
     with scheduler() as s:
         workers = [Worker(s.address_to_workers) for i in range(n)]
         try:
+            while len(s.workers) < n:
+                sleep(0.1)
             yield s, workers
         finally:
             for w in workers:
@@ -90,6 +93,8 @@ def test_compute_cycle():
     with scheduler_and_workers(n=2) as (s, (a, b)):
         sleep(0.1)
         assert s.available_workers.qsize() == 2
+
+        s.queues['queue-key'] = Queue()
 
         dsk = {'a': (add, 1, 2), 'b': (inc, 'a')}
         s.trigger_task(dsk, 'a', 'queue-key')
@@ -169,3 +174,14 @@ def test_random_names():
         assert re.match('\w+://[\w-]+:\d+', s.address_to_workers.decode('utf-8'))
     finally:
         s.close()
+
+
+def test_close_workers():
+    with scheduler_and_workers(n=2) as (s, (a, b)):
+        sleep(0.05)
+        assert a.status != 'closed'
+
+        s.close_workers()
+        sleep(0.05)
+        assert a.status == 'closed'
+        assert b.status == 'closed'
