@@ -44,10 +44,6 @@ def test_get_with_dill():
     with scheduler_and_workers() as (s, (a, b)):
         c = Client(s.address_to_clients)
 
-        dsk = {'x': 1, 'y': (lambda x: x + 1, 'x')}
-        keys = 'y'
-
-        assert c.get(dsk, keys) == 2
         dsk = {'x': 1, 'y': (partial(add, 1), 'x')}
         keys = 'y'
 
@@ -60,7 +56,7 @@ def test_error():
         c = Client(s.address_to_clients)
 
         assert raises(TypeError,
-                lambda: c.get({'x': 1, 'y': (lambda x: x + x, 'x', 'x')}, 'y'))
+                lambda: c.get({'x': 1, 'y': (inc, 'x', 'x')}, 'y'))
         assert 'y' not in s.data
         c.close()
 
@@ -96,7 +92,7 @@ def test_register_collections():
     with scheduler_and_workers() as (s, (a, b)):
         c = Client(s.address_to_clients)
 
-        b = db.from_sequence(range(5), npartitions=2).map(lambda x: x + 1)
+        b = db.from_sequence(range(5), npartitions=2).map(inc)
         assert not s.collections
         c.set_collection('mybag', b)
         assert 'mybag' in s.collections
