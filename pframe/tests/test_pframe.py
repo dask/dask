@@ -1,5 +1,6 @@
 from pframe.core import pframe, shard_df_on_index
 
+import numpy as np
 import pandas as pd
 import shutil
 from pandas.util import testing as tm
@@ -77,8 +78,8 @@ def test_shard_df_on_index():
     result = list(shard_df_on_index(f, [2, 7]))
     tm.assert_frame_equal(result[0], f.loc[[1]])
     tm.assert_frame_equal(result[1], f.loc[[2, 3, 4]])
-    tm.assert_frame_equal(result[2], pd.DataFrame(columns=['a', 'b'],
-                                                  dtype=f.dtypes))
+    x = np.empty(shape=(0,), dtype=[(c, f.dtypes[c]) for c in f.columns])
+    tm.assert_frame_equal(result[2], pd.DataFrame(x))
 
     f = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]},
                       index=['a', 'b', 'c', 'd', 'e'])
