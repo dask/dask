@@ -11,7 +11,6 @@ import random
 from datetime import datetime
 from threading import Thread, Lock
 from contextlib import contextmanager
-from toolz import curry, partial
 from ..compatibility import Queue, unicode
 try:
     import cPickle as pickle

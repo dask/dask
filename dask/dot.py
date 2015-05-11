@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import networkx as nx
 from dask.core import istask, get_dependencies
-from toolz import first
 
 
 def make_hashable(x):
@@ -33,7 +32,7 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
 
     g = nx.DiGraph()
 
-    for k, v in sorted(d.items(), key=first):
+    for k, v in sorted(d.items(), key=lambda x: x[0]):
         g.add_node(k, shape='box', **data_attributes.get(k, dict()))
         if istask(v):
             func, args = v[0], v[1:]

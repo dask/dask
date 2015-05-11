@@ -1,7 +1,6 @@
 from itertools import count
 from math import ceil, sqrt
 from functools import wraps
-import toolz
 import bisect
 import os
 from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
