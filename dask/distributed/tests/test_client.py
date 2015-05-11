@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from operator import add
 from time import sleep
 from multiprocessing.pool import ThreadPool
+from toolz import partial
 
 def inc(x):
     return x + 1
@@ -42,6 +43,10 @@ def test_get_with_dill():
         c = Client(s.address_to_clients)
 
         dsk = {'x': 1, 'y': (lambda x: x + 1, 'x')}
+        keys = 'y'
+
+        assert c.get(dsk, keys) == 2
+        dsk = {'x': 1, 'y': (partial(add, 1), 'x')}
         keys = 'y'
 
         assert c.get(dsk, keys) == 2

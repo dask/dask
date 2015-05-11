@@ -24,8 +24,6 @@ def pickle_dumps(obj):
 
 MAX_DEALERS = 100
 
-context = zmq.Context()
-
 with open('log.workers', 'w') as f:  # delete file
     pass
 
@@ -80,10 +78,11 @@ class Worker(object):
         self.pool = ThreadPool(nthreads)
         self.scheduler = scheduler
         self.status = 'run'
+        self.context = zmq.Context()
 
         self.hostname = hostname or socket.gethostname()
 
-        self.to_workers = context.socket(zmq.ROUTER)
+        self.to_workers = self.context.socket(zmq.ROUTER)
         if port_to_workers is None:
             port_to_workers = self.to_workers.bind_to_random_port('tcp://*')
         else:
@@ -96,7 +95,7 @@ class Worker(object):
 
         self.queues = dict()
 
-        self.to_scheduler = context.socket(zmq.DEALER)
+        self.to_scheduler = self.context.socket(zmq.DEALER)
 
         self.to_scheduler.setsockopt(zmq.IDENTITY, self.address)
         self.to_scheduler.connect(scheduler)
@@ -254,7 +253,7 @@ class Worker(object):
                 for sock in self.dealers.values():
                     sock.close()
                 self.dealers.clear()
-            sock = context.socket(zmq.DEALER)
+            sock = self.context.socket(zmq.DEALER)
             sock.connect(address)
             self.dealers[address] = sock
 
@@ -481,6 +480,10 @@ class Worker(object):
             self.status = 'closed'
             self.pool.close()
             self.pool.join()
+            for sock in self.dealers.values():
+                sock.close(linger=1)
+            self.to_workers.close(linger=1)
+            self.context.destroy(linger=3)
 
     def __del__(self):
         self.close()
