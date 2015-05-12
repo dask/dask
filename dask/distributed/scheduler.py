@@ -11,6 +11,8 @@ import random
 from datetime import datetime
 from threading import Thread, Lock
 from contextlib import contextmanager
+import traceback
+import sys
 from time import sleep
 from ..compatibility import Queue, unicode
 try:
@@ -34,7 +36,10 @@ def logerrors():
     try:
         yield
     except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
         log('Error!', str(e))
+        log('Traceback', str(tb))
         raise
 
 class Scheduler(object):

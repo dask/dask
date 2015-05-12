@@ -4,6 +4,7 @@ import socket
 from threading import Thread, Lock
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
+import traceback
 from datetime import datetime
 import uuid
 import random
@@ -38,7 +39,10 @@ def logerrors():
     try:
         yield
     except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
         log('Error!', str(e))
+        log('Traceback', str(tb))
         raise
 
 class Worker(object):
