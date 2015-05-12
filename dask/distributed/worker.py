@@ -491,11 +491,12 @@ class Worker(object):
         if self.pool._state == multiprocessing.pool.RUN:
             log(self.address, 'Close')
             self.status = 'closed'
-            self.pool.close()
-            self.pool.join()
             for sock in self.dealers.values():
                 sock.close(linger=1)
             self.to_workers.close(linger=1)
+            self.block()
+            self.pool.close()
+            self.pool.join()
             self.context.destroy(linger=3)
 
     def __del__(self):
