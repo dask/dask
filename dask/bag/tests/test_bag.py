@@ -335,3 +335,17 @@ def test_concat():
     c = db.concat([a, b])
 
     assert list(c) == [1, 2, 3, 4, 5, 6]
+
+
+def test_string_namespace():
+    b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'],
+                         npartitions=2)
+
+    assert 'split' in dir(b.str)
+    assert 'match' in dir(b.str)
+
+    assert list(b.str.lower()) == ['alice smith', 'bob jones', 'charlie smith']
+    assert list(b.str.split(' ')) == [['Alice', 'Smith'],
+                                      ['Bob', 'Jones'],
+                                      ['Charlie', 'Smith']]
+    assert list(b.str.match('*Smith')) == ['Alice Smith', 'Charlie Smith']
