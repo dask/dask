@@ -4,3 +4,4 @@ docs/build
 build/
 dist/
 .idea/
+log.*  # log files created when testing dask distributed
