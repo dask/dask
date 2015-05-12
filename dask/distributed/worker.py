@@ -89,7 +89,7 @@ class Worker(object):
         if port_to_workers is None:
             port_to_workers = self.to_workers.bind_to_random_port('tcp://' + bind_to_workers)
         else:
-            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers port))
+            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers, port))
         self.address = ('tcp://%s:%s' % (self.hostname, port_to_workers)).encode()
 
         self.dealers = dict()
