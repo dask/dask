@@ -1,6 +1,8 @@
+import sys
 from os import environ, path
 
 import pytest
 
 
-pytest.main(['-vv', path.join(environ['SRC_DIR'],'dask')])
+out = pytest.main(['-vv', path.join(environ['SRC_DIR'], 'dask')])
+sys.exit(out)
