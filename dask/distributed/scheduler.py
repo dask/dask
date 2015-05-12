@@ -509,6 +509,7 @@ class Scheduler(object):
         self.status = 'closed'
         self.to_workers.close(linger=1)
         self.to_clients.close(linger=1)
+        self.block()
         self.context.destroy(linger=3)
 
     def schedule(self, dsk, result, **kwargs):
