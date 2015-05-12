@@ -150,9 +150,16 @@ def test_schedule():
 
         # No worker still has the unnecessary intermediate variable
         assert not s.who_has['x']
-        assert 'x' not in a.data and 'x' not in b.data
-        sleep(0.05)
-        assert 'y' not in a.data and 'y' not in b.data
+
+        # Neither worker has the result after computation
+        # We don't have a way to block on worker completion here
+        # Instead we poll and sleep.  This is a bit of a hack
+        for i in range(10):
+            if a.data or b.data:
+                sleep(0.1)
+            else:
+                break
+        assert not a.data and not b.data
 
 
 def test_gather():
