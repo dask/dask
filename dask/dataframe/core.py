@@ -1,7 +1,6 @@
 from itertools import count
 from math import ceil, sqrt
 from functools import wraps
-import toolz
 import bisect
 import os
 from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
@@ -10,11 +9,14 @@ from operator import getitem, setitem
 import pandas as pd
 import numpy as np
 import operator
-from chest import Chest
 import gzip
 import bz2
 from pframe import pframe
 import bcolz
+try:
+    from chest import Chest as Cache
+except ImportError:
+    Cache = dict
 
 from .. import array as da
 from .. import core
@@ -112,7 +114,7 @@ class _Frame(object):
     def known_divisions(self):
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
-    def cache(self, cache=Chest):
+    def cache(self, cache=Cache):
         """ Evaluate Dataframe and store in local cache
 
         Uses chest by default to store data on disk

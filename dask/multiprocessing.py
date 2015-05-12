@@ -3,19 +3,17 @@ from __future__ import absolute_import, division, print_function
 from toolz import curry, pipe, partial
 from .optimize import fuse, cull
 import multiprocessing
-import psutil
 import dill
 import pickle
 from .async import get_async # TODO: get better get
 from .context import _globals
 
-cpu_count = psutil.cpu_count()
 
-def get(dsk, keys, optimizations=[fuse], num_workers=cpu_count):
+def get(dsk, keys, optimizations=[fuse], num_workers=None):
     """ Multiprocessed get function appropriate for Bags """
     pool = _globals['pool']
     if pool is None:
-        pool = multiprocessing.Pool(psutil.cpu_count())
+        pool = multiprocessing.Pool(num_workers)
         cleanup = True
     else:
         cleanup = False
@@ -30,7 +28,7 @@ def get(dsk, keys, optimizations=[fuse], num_workers=cpu_count):
 
     try:
         # Run
-        result = get_async(apply_async, cpu_count, dsk2, keys,
+        result = get_async(apply_async, len(pool._pool), dsk2, keys,
                            queue=queue)
     finally:
         if cleanup:

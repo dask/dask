@@ -116,11 +116,9 @@ See the function ``inline_functions`` for more information.
 """
 from __future__ import absolute_import, division, print_function
 
-import psutil
 import sys
 import traceback
 from operator import add
-from toolz import concat, partial
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .optimize import inline_functions
 from .utils import deepmap

@@ -105,7 +105,6 @@ class PBag(object):
 
     def extend(self, seq):
         if isinstance(seq, Iterator):
-
             start_available_memory = psutil.avail_phymem()
             # Two bounds to avoid hysteresis
             target_low = 0.4 * start_available_memory

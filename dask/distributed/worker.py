@@ -9,7 +9,6 @@ import uuid
 import random
 import multiprocessing
 import zmq
-from toolz import partial
 from time import time
 import sys
 from ..compatibility import Queue, unicode

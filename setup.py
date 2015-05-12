@@ -5,10 +5,10 @@ from setuptools import setup
 import dask
 
 extras_require = {
-  'array': ['numpy'],
-  'bag': ['dill'],
-  'distributed': ['zmq'],
-  'dataframe': ['bcolz', 'numpy', 'pandas >= 0.16.0']
+  'array': ['numpy', 'toolz'],
+  'bag': ['dill', 'psutil', 'toolz'],
+  'dataframe': ['bcolz', 'numpy', 'pandas >= 0.16.0', 'toolz'],
+  'distributed': ['zmq']
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
 
@@ -24,6 +24,5 @@ setup(name='dask',
                 'dask.dataframe', 'dask.distributed', 'pframe', 'pbag'],
       long_description=(open('README.rst').read() if exists('README.rst')
                         else ''),
-      install_requires=(list(open('requirements.txt').read().strip().split('\n'))),
       extras_require=extras_require,
       zip_safe=False)
