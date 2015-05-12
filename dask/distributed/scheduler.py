@@ -571,10 +571,10 @@ class Scheduler(object):
                 self.trigger_task(dsk, key, qkey)  # Fire
 
             try:
-                worker = self.available_workers.get(timeout=10)
+                worker = self.available_workers.get(timeout=20)
                 self.available_workers.put(worker)  # put him back in
             except Empty:
-                raise ValueError("Waited 10 seconds. No workers found")
+                raise ValueError("Waited 20 seconds. No workers found")
 
             # Seed initial tasks
             while dag_state['ready'] and self.available_workers.qsize() > 0:
