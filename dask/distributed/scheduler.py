@@ -11,6 +11,9 @@ import random
 from datetime import datetime
 from threading import Thread, Lock
 from contextlib import contextmanager
+import traceback
+import sys
+from time import sleep
 from ..compatibility import Queue, unicode
 try:
     import cPickle as pickle
@@ -33,7 +36,10 @@ def logerrors():
     try:
         yield
     except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb = ''.join(traceback.format_tb(exc_traceback))
         log('Error!', str(e))
+        log('Traceback', str(tb))
         raise
 
 class Scheduler(object):
@@ -48,6 +54,10 @@ class Scheduler(object):
         Port on which to listen to connections from workers
     port_to_clients: int
         Port on which to listen to connections from clients
+    bind_to_workers: string
+        Addresses from which we accept worker connections, defaults to *
+    bind_to_clients: string
+        Addresses from which we accept client connections, defaults to *
     block: bool
         Whether or not to block the process on creation
 
@@ -70,6 +80,7 @@ class Scheduler(object):
         Dict holding shared collections like bags and arrays
     """
     def __init__(self, port_to_workers=None, port_to_clients=None,
+                 bind_to_workers='*', bind_to_clients='*',
                  hostname=None, block=False):
         self.context = zmq.Context()
         hostname = hostname or socket.gethostname()
@@ -77,16 +88,16 @@ class Scheduler(object):
         # Bind routers to addresses (and create addresses if necessary)
         self.to_workers = self.context.socket(zmq.ROUTER)
         if port_to_workers is None:
-            port_to_workers = self.to_workers.bind_to_random_port('tcp://*')
+            port_to_workers = self.to_workers.bind_to_random_port('tcp://' + bind_to_workers)
         else:
-            self.to_workers.bind('tcp://*:%d' % port_to_workers)
+            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers, port_to_workers))
         self.address_to_workers = ('tcp://%s:%d' % (hostname, port_to_workers)).encode()
 
         self.to_clients = self.context.socket(zmq.ROUTER)
         if port_to_clients is None:
-            port_to_clients = self.to_clients.bind_to_random_port('tcp://*')
+            port_to_clients = self.to_clients.bind_to_random_port('tcp://' + bind_to_clients)
         else:
-            self.to_clients.bind('tcp://*:%d' % port_to_clients)
+            self.to_clients.bind('tcp://%s:%d' % (bind_to_clients, port_to_clients))
         self.address_to_clients = ('tcp://%s:%d' % (hostname, port_to_clients)).encode()
 
         # State about my workers and computed data
@@ -128,8 +139,11 @@ class Scheduler(object):
     def _listen_to_workers(self):
         """ Event loop: Listen to worker router """
         while self.status != 'closed':
-            if not self.to_workers.poll(100):
-                continue
+            try:
+                if not self.to_workers.poll(100):
+                    continue
+            except zmq.ZMQError:
+                break
             address, header, payload = self.to_workers.recv_multipart()
 
             header = pickle.loads(header)
@@ -147,8 +161,11 @@ class Scheduler(object):
     def _listen_to_clients(self):
         """ Event loop: Listen to client router """
         while self.status != 'closed':
-            if not self.to_clients.poll(100):
-                continue
+            try:
+                if not self.to_clients.poll(100):
+                    continue
+            except zmq.ZMQError:
+                break
             address, header, payload = self.to_clients.recv_multipart()
             header = pickle.loads(header)
             if 'address' not in header:
@@ -482,9 +499,17 @@ class Scheduler(object):
         if queue:
             self.queues[queue].put(key)
 
+    def close_workers(self):
+        header = {'function': 'close'}
+        for w in self.workers:
+            self.send_to_worker(w, header, {})
+
     def close(self):
         """ Close Scheduler """
         self.status = 'closed'
+        self.to_workers.close(linger=1)
+        self.to_clients.close(linger=1)
+        self.context.destroy(linger=3)
 
     def schedule(self, dsk, result, **kwargs):
         """ Execute dask graph against workers
@@ -509,10 +534,9 @@ class Scheduler(object):
         1.  Scheduler scatters precomputed data in graph to workers
             e.g. nodes like ``{'x': 1}``.  See Scheduler.scatter
         2.
-
-
         """
         with self._schedule_lock:
+            log(self.address_to_workers, "Scheduling dask")
             if isinstance(result, list):
                 result_flat = set(flatten(result))
             else:
@@ -521,7 +545,8 @@ class Scheduler(object):
 
             cache = dict()
             dag_state = dag_state_from_dask(dsk, cache=cache)
-            self.scatter(cache.items())  # send data in dask up to workers
+            if cache:
+                self.scatter(cache.items())  # send data in dask up to workers
 
             tick = [0]
 
@@ -541,6 +566,11 @@ class Scheduler(object):
                 dag_state['running'].add(key)
 
                 self.trigger_task(dsk, key, qkey)  # Fire
+
+            if self.available_workers.empty():
+                sleep(0.1)
+                if self.available_workers.empty():
+                    raise ValueError("No available workers found")
 
             # Seed initial tasks
             while dag_state['ready'] and self.available_workers.qsize() > 0:
@@ -572,23 +602,24 @@ class Scheduler(object):
         Output Payload: keys, result
         Sent to client on 'schedule-ack'
         """
-        loads = header.get('loads', dill.loads)
-        payload = loads(payload)
-        address = header['address']
-        dsk = payload['dask']
-        keys = payload['keys']
+        with logerrors():
+            loads = header.get('loads', dill.loads)
+            payload = loads(payload)
+            address = header['address']
+            dsk = payload['dask']
+            keys = payload['keys']
 
-        header2 = {'jobid': header.get('jobid'),
-                   'function': 'schedule-ack'}
-        try:
-            result = self.schedule(dsk, keys)
-            header2['status'] = 'OK'
-        except Exception as e:
-            result = e
-            header2['status'] = 'Error'
+            header2 = {'jobid': header.get('jobid'),
+                       'function': 'schedule-ack'}
+            try:
+                result = self.schedule(dsk, keys)
+                header2['status'] = 'OK'
+            except Exception as e:
+                result = e
+                header2['status'] = 'Error'
 
-        payload2 = {'keys': keys, 'result': result}
-        self.send_to_client(address, header2, payload2)
+            payload2 = {'keys': keys, 'result': result}
+            self.send_to_client(address, header2, payload2)
 
     def _release_data(self, key, state, delete=True):
         """ Remove data from temporary storage during scheduling run

@@ -26,37 +26,43 @@ def scheduler():
 def test_status_worker():
     with scheduler() as s:
         sock = context.socket(zmq.DEALER)
-        sock.setsockopt(zmq.IDENTITY, b'ipc://worker1')
-        sock.connect(s.address_to_workers)
+        try:
+            sock.setsockopt(zmq.IDENTITY, b'ipc://worker1')
+            sock.connect(s.address_to_workers)
 
-        header = {'address': b'ipc://worker1', 'jobid': 1, 'function': 'status'}
-        payload = {'function': 'status'}
-        sock.send_multipart([pickle.dumps(header), pickle.dumps(payload)])
+            header = {'address': b'ipc://worker1', 'jobid': 1, 'function': 'status'}
+            payload = {'function': 'status'}
+            sock.send_multipart([pickle.dumps(header), pickle.dumps(payload)])
 
-        header2, payload2 = sock.recv_multipart()
-        header2 = pickle.loads(header2)
-        assert header2['address'] == s.address_to_workers
-        assert header2['jobid'] == header.get('jobid')
-        assert isinstance(header2['timestamp'], (datetime, str))
-        assert pickle.loads(payload2) == 'OK'
+            header2, payload2 = sock.recv_multipart()
+            header2 = pickle.loads(header2)
+            assert header2['address'] == s.address_to_workers
+            assert header2['jobid'] == header.get('jobid')
+            assert isinstance(header2['timestamp'], (datetime, str))
+            assert pickle.loads(payload2) == 'OK'
+        finally:
+            sock.close(1)
 
 
 def test_status_client():
     with scheduler() as s:
         sock = context.socket(zmq.DEALER)
-        sock.setsockopt(zmq.IDENTITY, b'ipc://client-1')
-        sock.connect(s.address_to_clients)
+        try:
+            sock.setsockopt(zmq.IDENTITY, b'ipc://client-1')
+            sock.connect(s.address_to_clients)
 
-        header = {'address': b'ipc://client-1', 'jobid': 2, 'function': 'status'}
-        payload = {'function': 'status'}
-        sock.send_multipart([pickle.dumps(header), pickle.dumps(payload)])
+            header = {'address': b'ipc://client-1', 'jobid': 2, 'function': 'status'}
+            payload = {'function': 'status'}
+            sock.send_multipart([pickle.dumps(header), pickle.dumps(payload)])
 
-        header2, payload2 = sock.recv_multipart()
-        header2 = pickle.loads(header2)
-        assert header2['address'] == s.address_to_clients
-        assert header2['jobid'] == header.get('jobid')
-        assert isinstance(header2['timestamp'], (datetime, str))
-        assert pickle.loads(payload2) == 'OK'
+            header2, payload2 = sock.recv_multipart()
+            header2 = pickle.loads(header2)
+            assert header2['address'] == s.address_to_clients
+            assert header2['jobid'] == header.get('jobid')
+            assert isinstance(header2['timestamp'], (datetime, str))
+            assert pickle.loads(payload2) == 'OK'
+        finally:
+            sock.close(1)
 
 
 @contextmanager
@@ -169,3 +175,14 @@ def test_random_names():
         assert re.match('\w+://.+:\d+', s.address_to_workers.decode('utf-8'))
     finally:
         s.close()
+
+
+def test_close_workers():
+    with scheduler_and_workers(n=2) as (s, (a, b)):
+        sleep(0.05)
+        assert a.status != 'closed'
+
+        s.close_workers()
+        sleep(0.05)
+        assert a.status == 'closed'
+        assert b.status == 'closed'
