@@ -14,9 +14,10 @@ from collections import Iterable, Iterator, defaultdict
 from functools import wraps
 
 
-from toolz import (merge, concat, frequencies, merge_with, take, curry, reduce,
+from toolz import (merge, frequencies, merge_with, take, curry, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
                    pluck, groupby)
+import toolz
 try:
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
                          count, pluck, groupby)
@@ -325,7 +326,7 @@ class Bag(object):
             topk = heapq.nlargest
         dsk = dict(((a, i), (list, (topk, k, (self.name, i))))
                         for i in range(self.npartitions))
-        dsk2 = {(b, 0): (list, (topk, k, (concat, list(dsk.keys()))))}
+        dsk2 = {(b, 0): (list, (topk, k, (toolz.concat, list(dsk.keys()))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
     def distinct(self):
@@ -497,7 +498,7 @@ class Bag(object):
             dsk2 = {(b, 0): (dictitems,
                               (reduceby,
                                 0, combine2,
-                                (concat, (map, dictitems, list(dsk.keys()))),
+                                (toolz.concat, (map, dictitems, list(dsk.keys()))),
                                 combine_initial))}
         else:
             dsk2 = {(b, 0): (dictitems,
@@ -530,7 +531,7 @@ class Bag(object):
     def compute(self, **kwargs):
         results = self.get(self.dask, self._keys(), **kwargs)
         if isinstance(results[0], Iterable):
-            results = concat(results)
+            results = toolz.concat(results)
         if not isinstance(results, Iterator):
             results = iter(results)
         return results
@@ -546,7 +547,7 @@ class Bag(object):
         [1, 2, 3]
         """
         name = next(names)
-        dsk = dict(((name, i), (list, (concat, (self.name, i))))
+        dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
@@ -835,3 +836,20 @@ def takes_multiple_arguments(func):
     if spec.defaults is None:
         return len(spec.args) != 1
     return len(spec.args) - len(spec.defaults) > 1
+
+
+def concat(bags):
+    """ Concatenate many bags together, unioning all elements
+
+    >>> a = db.from_sequence([1, 2, 3])
+    >>> b = db.from_sequence([4, 5, 6])
+    >>> c = db.concat([a, b])
+
+    >>> list(c)
+    [1, 2, 3, 4, 5, 6]
+    """
+    name = next(names)
+    counter = itertools.count(0)
+    dsk = dict(((name, next(counter)), key) for bag in bags
+                                            for key in sorted(bag.dask))
+    return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
