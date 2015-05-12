@@ -54,6 +54,8 @@ class Worker(object):
         A visible hostname/IP of this worker to the network
     port_to_workers: int
         Port on which to listen to worker connections
+    bind_to_workers: string
+        Addresses from which we accept worker connections, defaults to *
 
     State
     -----
@@ -71,7 +73,8 @@ class Worker(object):
         dask.distributed.scheduler.Scheduler
     """
     def __init__(self, scheduler, data=None, nthreads=100,
-                 hostname=None, port_to_workers=None, block=False):
+                 hostname=None, port_to_workers=None, bind_to_workers='*',
+                 block=False):
         if isinstance(scheduler, unicode):
             scheduler = scheduler.encode()
         self.data = data if data is not None else dict()
@@ -84,9 +87,9 @@ class Worker(object):
 
         self.to_workers = self.context.socket(zmq.ROUTER)
         if port_to_workers is None:
-            port_to_workers = self.to_workers.bind_to_random_port('tcp://*')
+            port_to_workers = self.to_workers.bind_to_random_port('tcp://' + bind_to_workers)
         else:
-            self.to_workers.bind('tcp://*:%d' % port)
+            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers port))
         self.address = ('tcp://%s:%s' % (self.hostname, port_to_workers)).encode()
 
         self.dealers = dict()

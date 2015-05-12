@@ -49,6 +49,10 @@ class Scheduler(object):
         Port on which to listen to connections from workers
     port_to_clients: int
         Port on which to listen to connections from clients
+    bind_to_workers: string
+        Addresses from which we accept worker connections, defaults to *
+    bind_to_clients: string
+        Addresses from which we accept client connections, defaults to *
     block: bool
         Whether or not to block the process on creation
 
@@ -71,6 +75,7 @@ class Scheduler(object):
         Dict holding shared collections like bags and arrays
     """
     def __init__(self, port_to_workers=None, port_to_clients=None,
+                 bind_to_workers='*', bind_to_clients='*',
                  hostname=None, block=False):
         self.context = zmq.Context()
         hostname = hostname or socket.gethostname()
@@ -78,16 +83,16 @@ class Scheduler(object):
         # Bind routers to addresses (and create addresses if necessary)
         self.to_workers = self.context.socket(zmq.ROUTER)
         if port_to_workers is None:
-            port_to_workers = self.to_workers.bind_to_random_port('tcp://*')
+            port_to_workers = self.to_workers.bind_to_random_port('tcp://' + bind_to_workers)
         else:
-            self.to_workers.bind('tcp://*:%d' % port_to_workers)
+            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers, port_to_workers))
         self.address_to_workers = ('tcp://%s:%d' % (hostname, port_to_workers)).encode()
 
         self.to_clients = self.context.socket(zmq.ROUTER)
         if port_to_clients is None:
-            port_to_clients = self.to_clients.bind_to_random_port('tcp://*')
+            port_to_clients = self.to_clients.bind_to_random_port('tcp://' + bind_to_clients)
         else:
-            self.to_clients.bind('tcp://*:%d' % port_to_clients)
+            self.to_clients.bind('tcp://%s:%d' % (bind_to_clients, port_to_clients))
         self.address_to_clients = ('tcp://%s:%d' % (hostname, port_to_clients)).encode()
 
         # State about my workers and computed data
