@@ -488,15 +488,22 @@ class Worker(object):
         self.close()
 
     def close(self):
-        if self.pool._state == multiprocessing.pool.RUN:
+        with self.lock:
+            if self.status != 'closed':
+                self.status = 'closed'
+                do_close = True
+            else:
+                do_close = False
+
+        if do_close:
             log(self.address, 'Close')
             self.status = 'closed'
             for sock in self.dealers.values():
                 sock.close(linger=1)
             self.to_workers.close(linger=1)
-            self.block()
             self.pool.close()
             self.pool.join()
+            self.block()
             self.context.destroy(linger=3)
 
     def __del__(self):
