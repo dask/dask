@@ -1,5 +1,6 @@
 from dask.distributed.scheduler import Scheduler
 from dask.distributed.worker import Worker
+import multiprocessing
 import itertools
 from datetime import datetime
 from contextlib import contextmanager
@@ -193,3 +194,12 @@ def test_close_workers():
         sleep(0.05)
         assert a.status == 'closed'
         assert b.status == 'closed'
+
+
+def test_close_scheduler():
+    s = Scheduler()
+    s.close()
+    assert s.pool._state == multiprocessing.pool.CLOSE
+    assert not s._listen_to_clients_thread.is_alive()
+    assert not s._listen_to_workers_thread.is_alive()
+    assert s.context.closed

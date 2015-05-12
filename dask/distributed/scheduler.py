@@ -509,6 +509,8 @@ class Scheduler(object):
         self.status = 'closed'
         self.to_workers.close(linger=1)
         self.to_clients.close(linger=1)
+        self.pool.close()
+        self.pool.join()
         self.block()
         self.context.destroy(linger=3)
 
