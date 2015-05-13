@@ -505,7 +505,7 @@ class Scheduler(object):
         self.close_workers()
 
     def _close(self, header, payload):
-        self._close()
+        self.close()
 
     def close_workers(self):
         header = {'function': 'close'}
