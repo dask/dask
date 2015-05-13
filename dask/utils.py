@@ -150,29 +150,26 @@ def textblock(file, start, stop, compression=None):
     """
     if isinstance(file, (str, unicode)):
         myopen = opens.get(compression, open)
-        f = myopen(file)
+        f = myopen(file, 'rb')
         try:
             result = textblock(f, start, stop)
         finally:
             f.close()
         return result
-    file.seek(start)
     if start:
-        char = file.read(1)
-        while char and char != '\n':
-            char = file.read(1)
-            start += 1
-        start += 1
+        file.seek(start - 1)
+        line = file.readline() # burn a line
+        start = file.tell()
 
     if stop is None:
         file.seek(start)
         return file.read()
 
+    stop -= 1
     file.seek(stop)
-    char = file.read(1)
-    while char and char != '\n':
-        char = file.read(1)
-        stop += 1
+    line = file.readline()
+    stop = file.tell()
 
     file.seek(start)
-    return file.read(stop - start + 1)
+
+    return file.read(stop - start)

@@ -629,11 +629,11 @@ def test_to_hdf5():
 
     with tmpfile('.hdf5') as fn:
         x.to_hdf5(fn, '/x')
-        f = h5py.File(fn)
-        d = f['/x']
+        with h5py.File(fn) as f:
+            d = f['/x']
 
-        assert eq(d[:], x)
-        assert d.chunks == (2, 2)
+            assert eq(d[:], x)
+            assert d.chunks == (2, 2)
 
 
 def test_np_array_with_zero_dimensions():
@@ -705,8 +705,10 @@ def test_astype():
 def test_arithmetic():
     x = np.arange(5).astype('f4') + 2
     y = np.arange(5).astype('i8') + 2
+    z = np.arange(5).astype('i4') + 2
     a = da.from_array(x, chunks=(2,))
     b = da.from_array(y, chunks=(2,))
+    c = da.from_array(z, chunks=(2,))
     assert eq(a + b, x + y)
     assert eq(a * b, x * y)
     assert eq(a - b, x - y)
@@ -808,7 +810,7 @@ def test_arithmetic():
     assert eq(da.signbit(a - 3), np.signbit(x - 3))
     assert eq(da.copysign(a - 3, b), np.copysign(x - 3, y))
     assert eq(da.nextafter(a - 3, b), np.nextafter(x - 3, y))
-    assert eq(da.ldexp(a, b), np.ldexp(x, y))
+    assert eq(da.ldexp(c, c), np.ldexp(z, z))
     assert eq(da.fmod(a * 12, b), np.fmod(x * 12, y))
     assert eq(da.floor(a * 0.5), np.floor(x * 0.5))
     assert eq(da.ceil(a), np.ceil(x))
