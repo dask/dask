@@ -629,11 +629,11 @@ def test_to_hdf5():
 
     with tmpfile('.hdf5') as fn:
         x.to_hdf5(fn, '/x')
-        f = h5py.File(fn)
-        d = f['/x']
+        with h5py.File(fn) as f:
+            d = f['/x']
 
-        assert eq(d[:], x)
-        assert d.chunks == (2, 2)
+            assert eq(d[:], x)
+            assert d.chunks == (2, 2)
 
 
 def test_np_array_with_zero_dimensions():
