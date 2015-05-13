@@ -1,9 +1,7 @@
-from .scheduler import Scheduler
-from .worker import Worker
 from .client import Client
 
 
-def dask_client_from_ipclient(client):
+def dask_client_from_ipclient(ipclient):
     """
     Construct a scheduler from an ipython client.
 
@@ -14,23 +12,23 @@ def dask_client_from_ipclient(client):
     3. Start a client here with the scheduler to client address.
     """
 
-    view = client[:]
     def start_scheduler():
         from dask.distributed import Scheduler
         scheduler = Scheduler()
-        return scheduler.port_to_client, scheduler.port_to_workers
+        return scheduler.to_clients, scheduler.to_workers
 
     def start_worker(scheduler_port):
         from dask.distributed import Worker
         worker = Worker(scheduler_port)
 
     # start sched
-    # TODO which view method to use apply sync or apply asyc? Depends on if I
-    # want to choose my addresses ahead of time.
+    scheduler_target = ipclient[0]
+    workers_targets = ipclient[1:]
+    to_clients, to_workers = scheduler_target.apply_sync(start_scheduler)
 
     # start workers
-    # TODO
+    workers_targets = workers_targets.apply_sync(start_worker, (to_workers,))
 
     # start client
-    dask_client = Client(scheduler.address_to_clients)
+    dask_client = Client(to_clients)
     return dask_client
