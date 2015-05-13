@@ -51,10 +51,11 @@ def test_read_gzip_csv():
 
 
 def test_file_size():
+    counts = (len(text), len(text) + text.count('\n'))
     with filetext(text) as fn:
-        assert file_size(fn) == len(text)
+        assert file_size(fn) in counts
     with filetext(text.encode(), open=gzip.open) as fn:
-        assert file_size(fn, 'gzip') == len(text)
+        assert file_size(fn, 'gzip') in counts
 
 
 def test_cateogories_and_quantiles():
