@@ -21,8 +21,8 @@ def dask_client_from_ipclient(ipclient):
         from dask.distributed import Worker
         worker = Worker(scheduler_address)
 
-    # start sched
-    scheduler_target = ipclient[0]
+    # start scheduler
+    scheduler_target = ipclient[ipclient.ids[0]]
     workers_targets = ipclient[1:]
     to_clients, to_workers = scheduler_target.apply_sync(start_scheduler)
 
