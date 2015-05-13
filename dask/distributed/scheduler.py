@@ -81,8 +81,8 @@ class Scheduler(object):
     """
     def __init__(self, port_to_workers=None, port_to_clients=None,
                  bind_to_workers='*', bind_to_clients='*',
-                 hostname=None, block=False):
-        self.context = zmq.Context()
+                 hostname=None, block=False, context=None):
+        self.context = context or zmq.Context()
         hostname = hostname or socket.gethostname()
 
         # Bind routers to addresses (and create addresses if necessary)
