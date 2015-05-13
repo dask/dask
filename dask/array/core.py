@@ -1319,7 +1319,7 @@ def elemwise(op, *args, **kwargs):
                 for a in args]
         try:
             dt = op(*vals).dtype
-        except (TypeError, AttributeError):
+        except AttributeError:
             dt = None
 
     if other:
