@@ -15,11 +15,11 @@ def dask_client_from_ipclient(ipclient):
     def start_scheduler():
         from dask.distributed import Scheduler
         scheduler = Scheduler()
-        return scheduler.to_clients, scheduler.to_workers
+        return scheduler.address_to_clients, scheduler.address_to_workers
 
-    def start_worker(scheduler_port):
+    def start_worker(scheduler_address):
         from dask.distributed import Worker
-        worker = Worker(scheduler_port)
+        worker = Worker(scheduler_address)
 
     # start sched
     scheduler_target = ipclient[0]
@@ -27,7 +27,7 @@ def dask_client_from_ipclient(ipclient):
     to_clients, to_workers = scheduler_target.apply_sync(start_scheduler)
 
     # start workers
-    workers_targets = workers_targets.apply_sync(start_worker, (to_workers,))
+    workers_targets = workers_targets.apply_sync(start_worker, to_workers)
 
     # start client
     dask_client = Client(to_clients)
