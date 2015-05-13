@@ -1,4 +1,4 @@
-from dask.distributed import dask_client_from_ipclient, Worker
+from dask.distributed import dask_client_from_ipclient
 
 def test_dask_client_from_ipclient():
     from IPython.parallel import Client
