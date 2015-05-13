@@ -124,7 +124,9 @@ class Scheduler(object):
         self.client_functions = {'status': self._status_to_client,
                                  'schedule': self._schedule_from_client,
                                  'set-collection': self._set_collection,
-                                 'get-collection': self._get_collection}
+                                 'get-collection': self._get_collection,
+                                 'close-workers': self._close_workers,
+                                 'close': self._close}
 
         # Away we go!
         log(self.address_to_workers, 'Start')
@@ -498,6 +500,12 @@ class Scheduler(object):
         queue = payload.get('queue')
         if queue:
             self.queues[queue].put(key)
+
+    def _close_workers(self, header, payload):
+        self.close_workers()
+
+    def _close(self, header, payload):
+        self._close()
 
     def close_workers(self):
         header = {'function': 'close'}
