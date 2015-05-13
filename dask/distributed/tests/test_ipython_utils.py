@@ -5,4 +5,4 @@ def test_dask_client_from_ipclient():
     c = Client()
     dc = dask_client_from_ipclient(c)
     assert 2 == dc.get({'a': 1, 'b': (lambda x: x + 1, 'a')}, 'b')
-    dc.close()
+    dc.close(close_workers=True, close_scheduler=True)
