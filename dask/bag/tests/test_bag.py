@@ -13,6 +13,7 @@ import os
 import gzip
 import bz2
 from dask.utils import raises
+from operator import add
 
 from collections import Iterator
 
@@ -33,9 +34,6 @@ def iseven(x):
 def isodd(x):
     return x % 2 == 1
 
-def add(x, y):
-    return x + y
-
 
 def test_Bag():
     assert b.name == 'x'
@@ -55,7 +53,7 @@ def test_map():
 
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
-    assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
+    assert list(b.map(add)) == [11, 22, 33]
 
 
 def test_filter():
