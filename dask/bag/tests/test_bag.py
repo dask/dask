@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join, pipe, filter, identity, merge_with, take
+from toolz import (merge, join, pipe, filter, identity, merge_with, take,
+        partial)
 import numpy as np
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream)
@@ -13,7 +14,6 @@ import os
 import gzip
 import bz2
 from dask.utils import raises
-from operator import add
 
 from collections import Iterator
 
@@ -34,6 +34,9 @@ def iseven(x):
 def isodd(x):
     return x % 2 == 1
 
+def add(x, y):
+    return x + y
+
 
 def test_Bag():
     assert b.name == 'x'
@@ -51,9 +54,17 @@ def test_map():
     assert c.dask == expected
 
 
+def test_dill():
+    import dill
+    f = dill.loads(dill.dumps(partial(add, 1)))
+    assert f(1) == 2
+    f = dill.loads(dill.dumps(lambda x: x + 1))
+    assert f(1) == 2
+
+
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
-    assert list(b.map(add)) == [11, 22, 33]
+    assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
 
 
 def test_filter():
