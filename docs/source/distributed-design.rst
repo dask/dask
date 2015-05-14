@@ -1,6 +1,8 @@
 Distributed Scheduling Details
 ==============================
 
+*Dask.distributed has not been battle tested. It is for experimental use only*
+
 Client-Scheduler, Scheduler-Worker and Worker-Worker interactions can be
 complex and deserve prose documentation. Because this code lives in
 three separate files we consolidate some documentation here.

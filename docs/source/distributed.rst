@@ -1,6 +1,8 @@
 Distributed Scheduling
 ======================
 
+*Dask.distributed has not been battle tested. It is for experimental use only*
+
 Dask includes a scheduler for distributed computation in ``dask.distributed``.
 This executes dask graphs in parallel on multiple nodes.  A centralized
 scheduler manages distributed workers communicating tasks and results over
