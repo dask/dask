@@ -54,14 +54,6 @@ def test_map():
     assert c.dask == expected
 
 
-def test_dill():
-    import dill
-    f = dill.loads(dill.dumps(partial(add, 1)))
-    assert f(1) == 2
-    f = dill.loads(dill.dumps(lambda x: x + 1))
-    assert f(1) == 2
-
-
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
     assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
