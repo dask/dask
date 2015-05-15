@@ -58,7 +58,7 @@ def test_reuse_pool():
 
 
 def test_dumps_loads():
-    with set_options(dumps=pickle.dumps, loads=pickle.loads):
+    with set_options(func_dumps=pickle.dumps, func_loads=pickle.loads):
         assert get({'x': 1, 'y': (add, 'x', 2)}, 'y') == 3
 
         # Ensure we're using pickle by triggering a known failure of pickle

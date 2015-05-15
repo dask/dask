@@ -10,7 +10,7 @@ from .context import _globals
 
 
 def get(dsk, keys, optimizations=[fuse], num_workers=None,
-        loads=None, dumps=None):
+        func_loads=None, func_dumps=None):
     """ Multiprocessed get function appropriate for Bags """
     pool = _globals['pool']
     if pool is None:
@@ -22,7 +22,8 @@ def get(dsk, keys, optimizations=[fuse], num_workers=None,
     manager = multiprocessing.Manager()
     queue = manager.Queue()
 
-    apply_async = dill_apply_async(pool.apply_async, dumps=dumps, loads=loads)
+    apply_async = dill_apply_async(pool.apply_async,
+                                   func_dumps=func_dumps, func_loads=func_loads)
 
     # Optimize Dask
     dsk2 = pipe(dsk, partial(cull, keys=keys), *optimizations)
@@ -46,10 +47,10 @@ def apply_func(sfunc, sargs, skwds, loads=None):
 
 @curry
 def dill_apply_async(apply_async, func, args=(), kwds={},
-                     loads=None, dumps=None):
-    dumps = dumps or _globals.get('dumps') or dill.dumps
+                     func_loads=None, func_dumps=None):
+    dumps = func_dumps or _globals.get('func_dumps') or dill.dumps
     sfunc = dumps(func)
     sargs = dumps(args)
     skwds = dumps(kwds)
-    return apply_async(curry(apply_func, loads=loads),
+    return apply_async(curry(apply_func, loads=func_loads),
                        args=[sfunc, sargs, skwds])
