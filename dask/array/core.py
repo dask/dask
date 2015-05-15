@@ -619,9 +619,6 @@ class Array(object):
         return ("dask.array<%s, shape=%s, chunks=%s, dtype=%s>" %
                 (self.name, self.shape, chunks, self._dtype))
 
-    def _get_block(self, *args):
-        return core.get(self.dask, (self.name,) + args)
-
     @property
     def ndim(self):
         return len(self.shape)
