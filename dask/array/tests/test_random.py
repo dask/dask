@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('numpy')
+
 import numpy as np
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal

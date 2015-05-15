@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import pytest
+pytest.importorskip('numpy')
+
 import numpy as np
 
 from dask.array.chunk import coarsen, keepdims_wrapper, trim

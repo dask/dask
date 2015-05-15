@@ -1,3 +1,7 @@
+import pytest
+pytest.importorskip('zmq')
+pytest.importorskip('dill')
+
 from dask.distributed.worker import Worker
 from contextlib import contextmanager
 import multiprocessing

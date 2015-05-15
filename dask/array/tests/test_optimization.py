@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('numpy')
+
 from dask.array.optimization import (getitem, rewrite_rules, optimize,
         remove_full_slices, fuse_slice)
 from dask.utils import raises
