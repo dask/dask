@@ -5,13 +5,14 @@ from operator import add
 from time import sleep
 from multiprocessing.pool import ThreadPool
 from toolz import partial
+import pickle
 
 def inc(x):
     return x + 1
 
 @contextmanager
-def scheduler_and_workers(n=2):
-    s = Scheduler()
+def scheduler_and_workers(n=2, **kwargs):
+    s = Scheduler(**kwargs)
     workers = [Worker(s.address_to_workers) for i in range(n)]
     try:
         yield s, workers
@@ -45,9 +46,9 @@ def test_get_with_dill():
         c = Client(s.address_to_clients)
 
         dsk = {'x': 1, 'y': (partial(add, 1), 'x')}
-        keys = 'y'
-
-        assert c.get(dsk, keys) == 2
+        assert c.get(dsk, 'y') == 2
+        dsk = {'x': 1, 'y': (lambda x: x + 1, 'x')}
+        assert c.get(dsk, 'y') == 2
         c.close()
 
 
@@ -107,3 +108,19 @@ def test_register_collections():
         c.close()
         d.close()
 
+
+def test_cloudpickle():
+    try:
+        import cloudpickle
+    except ImportError:
+        return
+    with scheduler_and_workers(loads=pickle.loads, dumps=cloudpickle.dumps) as (s, (a, b)):
+        c = Client(s.address_to_clients, loads=pickle.loads,
+                   dumps=cloudpickle.dumps)
+
+        dsk = {'x': 1, 'y': (partial(add, 1), 'x')}
+        assert c.get(dsk, 'y') == 2
+
+        dsk = {'x': 1, 'y': (lambda x: x + 1, 'x')}
+        assert c.get(dsk, 'y') == 2
+        c.close()

@@ -15,6 +15,7 @@ import traceback
 import sys
 from time import sleep
 from ..compatibility import Queue, unicode, Empty
+from ..context import _globals
 try:
     import cPickle as pickle
 except ImportError:
@@ -81,7 +82,7 @@ class Scheduler(object):
     """
     def __init__(self, port_to_workers=None, port_to_clients=None,
                  bind_to_workers='*', bind_to_clients='*',
-                 hostname=None, block=False):
+                 hostname=None, block=False, loads=None, dumps=None):
         self.context = zmq.Context()
         hostname = hostname or socket.gethostname()
 
@@ -112,6 +113,9 @@ class Scheduler(object):
         self.lock = Lock()
         self.status = 'run'
         self.queues = dict()
+
+        self.loads = loads or _globals.get('func_loads') or dill.loads
+        self.dumps = dumps or _globals.get('func_dumps') or dill.dumps
 
         self._schedule_lock = Lock()
 
@@ -277,7 +281,7 @@ class Scheduler(object):
         locations = dict((dep, self.who_has[dep]) for dep in deps)
 
         header = {'function': 'compute', 'jobid': key,
-                  'dumps': dill.dumps, 'loads': dill.loads}
+                  'dumps': self.dumps, 'loads': self.loads}
         payload = {'key': key, 'task': dsk[key], 'locations': locations,
                    'queue': queue}
         self.send_to_worker(worker, header, payload)
@@ -607,7 +611,7 @@ class Scheduler(object):
         Sent to client on 'schedule-ack'
         """
         with logerrors():
-            loads = header.get('loads', dill.loads)
+            loads = header.get('loads', self.loads)
             payload = loads(payload)
             address = header['address']
             dsk = payload['dask']
@@ -619,7 +623,10 @@ class Scheduler(object):
                 result = self.schedule(dsk, keys)
                 header2['status'] = 'OK'
             except Exception as e:
-                result = e
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                tb = ''.join(traceback.format_tb(exc_traceback))
+                e2 = type(e)(str(e) + '\n\n' + tb)
+                result = e2
                 header2['status'] = 'Error'
 
             payload2 = {'keys': keys, 'result': result}
@@ -644,7 +651,7 @@ class Scheduler(object):
     def _set_collection(self, header, payload):
         with logerrors():
             log(self.address_to_clients, "Set collection", header)
-            payload = header.get('loads', dill.loads)(payload)
+            payload = header.get('loads', self.loads)(payload)
             self.collections[payload['name']] = payload
 
             self.send_to_client(header['address'], {'status': 'OK'}, {})
@@ -656,7 +663,7 @@ class Scheduler(object):
             payload2 = self.collections[payload['name']]
 
             header2 = {'status': 'OK',
-                       'loads': dill.loads,
-                       'dumps': dill.dumps}
+                       'loads': self.loads,
+                       'dumps': self.dumps}
 
             self.send_to_client(header['address'], header2, payload2)

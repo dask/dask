@@ -7,6 +7,7 @@ from datetime import datetime
 import dill
 from .scheduler import pickle
 from ..compatibility import unicode
+from ..context import _globals
 
 context = zmq.Context()
 
@@ -23,7 +24,7 @@ def log(*args):
 
 
 class Client(object):
-    def __init__(self, scheduler, address=None):
+    def __init__(self, scheduler, address=None, loads=None, dumps=None):
         self.address_to_scheduler = scheduler
         if address == None:
             address = 'client-' + str(uuid.uuid1())
@@ -33,6 +34,8 @@ class Client(object):
         self.socket = context.socket(zmq.DEALER)
         self.socket.setsockopt(zmq.IDENTITY, self.address)
         self.socket.connect(self.address_to_scheduler)
+        self.loads = loads or _globals.get('func_loads') or dill.loads
+        self.dumps = dumps or _globals.get('func_dumps') or dill.dumps
 
     def get(self, dsk, keys):
         header = {'function': 'schedule',
@@ -60,8 +63,8 @@ class Client(object):
         if 'address' not in header:
             header['address'] = self.address
         header['timestamp'] = datetime.utcnow()
-        header['loads'] = dill.loads
-        self.socket.send_multipart([pickle.dumps(header), dill.dumps(payload)])
+        header['loads'] = self.loads
+        self.socket.send_multipart([pickle.dumps(header), self.dumps(payload)])
 
     def recv_from_scheduler(self):
         header, payload = self.socket.recv_multipart()
@@ -77,7 +80,7 @@ class Client(object):
         See docstring for get_collection
         """
         header = {'function': 'set-collection',
-                  'loads': dill.loads}
+                  'loads': self.loads}
         payload = {'type': type(collection),
                    'args': collection._args,
                    'name': name}
