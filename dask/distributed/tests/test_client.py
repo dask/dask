@@ -40,14 +40,6 @@ def test_status():
         c.close()
 
 
-def test_dill():
-    import dill
-    f = dill.loads(dill.dumps(partial(add, 1)))
-    assert f(1) == 2
-    f = dill.loads(dill.dumps(lambda x: x + 1))
-    assert f(1) == 2
-
-
 def test_get_with_dill():
     with scheduler_and_workers() as (s, (a, b)):
         c = Client(s.address_to_clients)
