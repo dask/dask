@@ -18,11 +18,10 @@ from toolz import (merge, frequencies, merge_with, take, curry, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
                    pluck, groupby)
 import toolz
-try:
+from ..utils import tmpfile, ignoring
+with ignoring(ImportError):
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
                          count, pluck, groupby)
-except ImportError:
-    pass
 
 from pbag import PBag
 
@@ -31,7 +30,6 @@ from ..core import istask
 from ..optimize import fuse, cull
 from ..compatibility import apply, StringIO, unicode
 from ..context import _globals
-from ..utils import tmpfile, ignoring
 
 names = ('bag-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
@@ -138,6 +136,11 @@ class Item(object):
 
     def compute(self, **kwargs):
         return self.get(self.dask, self.key, **kwargs)
+
+    def apply(self, func):
+        name = next(names)
+        dsk = {name: (func, self.key)}
+        return Item(merge(self.dask, dsk), name, get)
 
     __int__ = __float__ = __complex__ = __bool__ = compute
 
@@ -417,7 +420,7 @@ class Bag(object):
         return self.reduction(chunk, agg)
 
     def std(self, ddof=0):
-        return math.sqrt(self.var(ddof=ddof))
+        return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
         """ Join collection with another collection
@@ -805,7 +808,11 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 
 
 def dictitems(d):
-    """ A pickleable version of dict.items """
+    """ A pickleable version of dict.items
+
+    >>> dictitems({'x': 1})
+    [('x', 1)]
+    """
     return list(d.items())
 
 
@@ -827,6 +834,9 @@ def takes_multiple_arguments(func):
     >>> def f(*args): pass
     >>> takes_multiple_arguments(f)
     True
+
+    >>> takes_multiple_arguments(map)  # default to False
+    False
     """
     try:
         spec = inspect.getargspec(func)

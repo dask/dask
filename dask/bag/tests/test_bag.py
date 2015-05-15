@@ -7,8 +7,8 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream)
-from dask.utils import filetexts
+        reduceby, bz2_stream, stream_decompress)
+from dask.utils import filetexts, tmpfile, raises
 import dask
 from pbag import PBag
 import dask.bag as db
@@ -16,7 +16,6 @@ import shutil
 import os
 import gzip
 import bz2
-from dask.utils import raises
 
 from collections import Iterator
 
@@ -119,12 +118,15 @@ def test_reductions():
     assert int(b.all()) == False  # some zeros exist
 
 def test_mean():
+    assert b.mean().compute(get=dask.get) == 2.0
     assert float(b.mean()) == 2.0
 
 def test_std():
+    assert b.std().compute(get=dask.get) == math.sqrt(2.0)
     assert float(b.std()) == math.sqrt(2.0)
 
 def test_var():
+    assert b.var().compute(get=dask.get) == 2.0
     assert float(b.var()) == 2.0
 
 
@@ -177,6 +179,7 @@ def test_lazify():
 def test_take():
     assert list(b.take(2)) == [0, 1]
     assert b.take(2) == (0, 1)
+    assert isinstance(b.take(2, compute=False), Bag)
 
 
 def test_map_is_lazy():
@@ -193,6 +196,8 @@ def test_from_filenames():
                 set('ABCD')
         assert set(line.strip() for line in db.from_filenames('a*.log')) == \
                 set('ABCD')
+
+    assert raises(ValueError, lambda: db.from_filenames('non-existent-*-path'))
 
 
 def test_from_filenames_gzip():
@@ -292,9 +297,14 @@ def test_args():
 def test_to_dataframe():
     try:
         import dask.dataframe
+        import pandas as pd
     except ImportError:
         return
     b = db.from_sequence([(1, 2), (10, 20), (100, 200)], npartitions=2)
+
+    df = b.to_dataframe()
+    assert list(df.columns) == list(pd.DataFrame(list(b)).columns)
+
     df = b.to_dataframe(columns=['a', 'b'])
     assert df.npartitions == b.npartitions
     assert list(df.columns) == ['a', 'b']
@@ -329,6 +339,21 @@ def test_to_textfiles():
             shutil.rmtree('_foo')
 
 
+def test_to_textfiles_inputs():
+    B = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
+    with tmpfile() as a:
+        with tmpfile() as b:
+            B.to_textfiles([a, b]).compute()
+            assert os.path.exists(a)
+            assert os.path.exists(b)
+
+    with tmpfile() as dirname:
+        B.to_textfiles(dirname).compute()
+        assert os.path.exists(dirname)
+        assert os.path.exists(os.path.join(dirname, '0.part'))
+    assert raises(ValueError, lambda: B.to_textfiles(5))
+
+
 def test_bz2_stream():
     text = '\n'.join(map(str, range(10000)))
     compressed = bz2.compress(text.encode())
@@ -355,3 +380,20 @@ def test_string_namespace():
                                       ['Bob', 'Jones'],
                                       ['Charlie', 'Smith']]
     assert list(b.str.match('*Smith')) == ['Alice Smith', 'Charlie Smith']
+
+    assert raises(AttributeError, lambda: b.str.sfohsofhf)
+
+
+def test_stream_decompress():
+    data = 'abc\ndef\n123'.encode()
+    assert [s.strip() for s in stream_decompress('', data)] == \
+            ['abc', 'def', '123']
+    assert [s.strip() for s in stream_decompress('bz2', bz2.compress(data))] == \
+            ['abc', 'def', '123']
+    with tmpfile() as fn:
+        with gzip.open(fn, 'wb') as f:
+            f.write(data)
+        with open(fn, 'rb') as f:
+            compressed = f.read()
+    assert [s.strip() for s in stream_decompress('gz', compressed)] == \
+            ['abc', 'def', '123']
