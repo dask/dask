@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from toolz import merge, join, pipe, filter, identity, merge_with, take
+from toolz import (merge, join, pipe, filter, identity, merge_with, take,
+        partial)
 import numpy as np
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream)
@@ -51,6 +52,14 @@ def test_map():
     expected = merge(dsk, dict(((c.name, i), (list, (map, inc, (b.name, i))))
                                for i in range(b.npartitions)))
     assert c.dask == expected
+
+
+def test_dill():
+    import dill
+    f = dill.loads(dill.dumps(partial(add, 1)))
+    assert f(1) == 2
+    f = dill.loads(dill.dumps(lambda x: x + 1))
+    assert f(1) == 2
 
 
 def test_map_function_with_multiple_arguments():

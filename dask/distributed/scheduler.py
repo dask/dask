@@ -14,7 +14,7 @@ from contextlib import contextmanager
 import traceback
 import sys
 from time import sleep
-from ..compatibility import Queue, unicode
+from ..compatibility import Queue, unicode, Empty
 try:
     import cPickle as pickle
 except ImportError:
@@ -509,6 +509,9 @@ class Scheduler(object):
         self.status = 'closed'
         self.to_workers.close(linger=1)
         self.to_clients.close(linger=1)
+        self.pool.close()
+        self.pool.join()
+        self.block()
         self.context.destroy(linger=3)
 
     def schedule(self, dsk, result, **kwargs):
@@ -567,10 +570,11 @@ class Scheduler(object):
 
                 self.trigger_task(dsk, key, qkey)  # Fire
 
-            if self.available_workers.empty():
-                sleep(0.1)
-                if self.available_workers.empty():
-                    raise ValueError("No available workers found")
+            try:
+                worker = self.available_workers.get(timeout=20)
+                self.available_workers.put(worker)  # put him back in
+            except Empty:
+                raise ValueError("Waited 20 seconds. No workers found")
 
             # Seed initial tasks
             while dag_state['ready'] and self.available_workers.qsize() > 0:

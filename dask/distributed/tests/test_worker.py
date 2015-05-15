@@ -146,7 +146,7 @@ def test_compute():
             result = header.get('loads', pickle.loads)(result)
             assert header['address'] == b.address
             assert b.data['c'] == 11
-            assert 0 < result['duration'] < 1.0
+            assert 0 <= result['duration'] < 1.0
             assert result['key'] == 'c'
             assert result['status'] == 'OK'
             assert result['queue'] == payload['queue']

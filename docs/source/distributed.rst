@@ -1,6 +1,8 @@
 Distributed Scheduling
 ======================
 
+*Dask.distributed has not been battle tested. It is for experimental use only*
+
 Dask includes a scheduler for distributed computation in ``dask.distributed``.
 This executes dask graphs in parallel on multiple nodes.  A centralized
 scheduler manages distributed workers communicating tasks and results over
@@ -30,10 +32,9 @@ clients do not talk directly to the workers.
 Setup
 -----
 
-The scheduler and workers should be close-by, preferably on the same
-physical network, in order to minimize scheduling overhead from network
-latency.  The client is generally on the users' personal machines and does not
-need to be as close to the worker nodes.
+The scheduler and workers should be close-by in order to minimize scheduling
+overhead from network latency.  The client is generally on the users' personal
+machines and does not need to be as close to the worker nodes.
 
 Scheduler
 `````````
@@ -120,8 +121,6 @@ Clients provide a ``get`` method to request the computation of a dask graph
 
 Multiple clients can connect to the same scheduler.
 
-.. _chest:: https://github.com/ContinuumIO/chest
-
 
 Store Collections
 -----------------
@@ -148,3 +147,6 @@ Other clients on different machines can retrieve this collection:
 
 This only stores the dask graph and not any underlying data that this graph
 might open.  Usually these graphs are small and easy to pass around.
+
+
+.. _chest: https://github.com/ContinuumIO/chest

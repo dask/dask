@@ -7,7 +7,7 @@ PY2 = sys.version_info[0] == 2
 
 if PY3:
     import builtins
-    from queue import Queue
+    from queue import Queue, Empty
     from itertools import zip_longest
     from io import StringIO
     unicode = str
@@ -16,7 +16,7 @@ if PY3:
         return func(*args)
 else:
     import __builtin__ as builtins
-    from Queue import Queue
+    from Queue import Queue, Empty
     import operator
     from itertools import izip_longest as zip_longest
     from StringIO import StringIO

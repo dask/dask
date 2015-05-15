@@ -1,7 +1,11 @@
-import networkx as nx
-from functools import partial
-from dask.dot import to_networkx, dot_graph, lower
 import os
+from functools import partial
+
+import pytest
+
+nx = pytest.importorskip("networkx")
+
+from dask.dot import to_networkx, dot_graph, lower
 
 
 def add(x, y):
