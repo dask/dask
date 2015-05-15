@@ -17,6 +17,9 @@ class set_options(object):
     Valid keyword arguments currently include:
 
         get - the scheduler to use
+        pool - a thread or process pool
+        func_loads/func_dumps - loads/dumps functions for serialization of data
+            likely to contain functions.  Defaults to dill.loads/dill.dumps
 
     Example
     -------

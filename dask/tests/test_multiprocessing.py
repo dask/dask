@@ -2,6 +2,9 @@ from dask.multiprocessing import get, dill_apply_async
 from dask.context import set_options
 import multiprocessing
 import dill
+import pickle
+from operator import add
+from dask.utils import raises
 
 
 inc = lambda x: x + 1
@@ -52,3 +55,12 @@ def test_reuse_pool():
     with set_options(pool=pool):
         assert get({'x': (inc, 1)}, 'x') == 2
         assert get({'x': (inc, 1)}, 'x') == 2
+
+
+def test_dumps_loads():
+    with set_options(dumps=pickle.dumps, loads=pickle.loads):
+        assert get({'x': 1, 'y': (add, 'x', 2)}, 'y') == 3
+
+        # Ensure we're using pickle by triggering a known failure of pickle
+        dsk = {'x': 1, 'y': (lambda x, y: x + y, 'x', 2)}
+        assert raises(pickle.PicklingError, lambda: get(dsk, 'y'))
