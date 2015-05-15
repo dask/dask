@@ -880,7 +880,7 @@ class StringAccessor(object):
     def __dir__(self):
         return sorted(set(dir(type(self)) + dir(str)))
 
-    def strmap(self, func, *args, **kwargs):
+    def _strmap(self, func, *args, **kwargs):
         return self._bag.map(lambda s: func(s, *args, **kwargs))
 
     def __getattr__(self, key):
@@ -889,7 +889,7 @@ class StringAccessor(object):
         except AttributeError:
             if key in dir(str):
                 func = getattr(str, key)
-                return robust_wraps(func)(partial(self.strmap, func))
+                return robust_wraps(func)(partial(self._strmap, func))
             else:
                 raise
 
@@ -913,6 +913,7 @@ class StringAccessor(object):
 
 
 def robust_wraps(wrapper):
+    """ A weak version of wraps that only copies doc """
     def _(wrapped):
         wrapped.__doc__ = wrapper.__doc__
         return wrapped
