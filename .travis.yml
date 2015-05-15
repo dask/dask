@@ -25,6 +25,10 @@ install:
   # Install dask
   - python setup.py install
 
+  # start the ipcluster, it takes a while to start
+  - ipcluster start -n 4 &
+  - sleep 20
+
 script:
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run $(which py.test) dask pframe pbag --doctest-modules --verbose; coverage report --show-missing; else py.test dask pframe pbag --verbose; fi
 
