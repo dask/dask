@@ -1,6 +1,12 @@
-from dask.distributed import dask_client_from_ipclient
+import pytest
+
+np = pytest.importorskip('numpy')
+pytest.importorskip('IPython.parallel')
+
 import numpy as np
 from numpy.testing import assert_array_almost_equal
+
+from dask.distributed import dask_client_from_ipclient
 import dask.array as da
 
 
