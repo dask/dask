@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import pytest
+pytest.importorskip('dill')
+
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial)
 import math

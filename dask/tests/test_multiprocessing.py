@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('dill')
+
 from dask.multiprocessing import get, dill_apply_async
 from dask.context import set_options
 import multiprocessing

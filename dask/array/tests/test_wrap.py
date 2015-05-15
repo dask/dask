@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('numpy')
+
 from dask.array.wrap import ones
 import dask.array as da
 import numpy as np

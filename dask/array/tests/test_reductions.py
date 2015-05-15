@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import pytest
+pytest.importorskip('numpy')
+
 import dask.array as da
 from dask.utils import ignoring
 from dask.array.reductions import arg_aggregate

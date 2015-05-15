@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('numpy')
+
 import dask
 from dask.compatibility import skip
 import dask.array as da

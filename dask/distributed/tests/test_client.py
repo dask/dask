@@ -1,3 +1,7 @@
+import pytest
+pytest.importorskip('zmq')
+pytest.importorskip('dill')
+
 from dask.distributed import Worker, Scheduler, Client
 from dask.utils import raises
 from contextlib import contextmanager

@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('numpy')
+
 from itertools import product
 import numpy as np
 from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
