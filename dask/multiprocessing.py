@@ -11,7 +11,24 @@ from .context import _globals
 
 def get(dsk, keys, optimizations=[fuse], num_workers=None,
         func_loads=None, func_dumps=None):
-    """ Multiprocessed get function appropriate for Bags """
+    """ Multiprocessed get function appropriate for Bags
+
+    Parameters
+    ----------
+
+    dsk: dict
+        dask graph
+    keys: object or list
+        Desired results from graph
+    optimizations: list of functions
+        optimizations to perform on graph before execution
+    num_workers: int
+        Number of worker processes (defaults to number of cores)
+    func_dumps: function
+        Function to use for function serialization (defaults to dill.dumps)
+    func_loads: function
+        Function to use for function deserialization (defaults to dill.loads)
+    """
     pool = _globals['pool']
     if pool is None:
         pool = multiprocessing.Pool(num_workers)
