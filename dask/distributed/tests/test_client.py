@@ -47,8 +47,6 @@ def test_get_with_dill():
 
         dsk = {'x': 1, 'y': (partial(add, 1), 'x')}
         assert c.get(dsk, 'y') == 2
-        dsk = {'x': 1, 'y': (lambda x: x + 1, 'x')}
-        assert c.get(dsk, 'y') == 2
         c.close()
 
 
