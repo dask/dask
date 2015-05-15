@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial)
-import numpy as np
+import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream)
 from dask.utils import filetexts
@@ -116,11 +116,13 @@ def test_reductions():
     assert int(b.all()) == False  # some zeros exist
 
 def test_mean():
-    assert float(b.mean()) == np.mean(L)
+    assert float(b.mean()) == 2.0
+
 def test_std():
-    assert float(b.std()) == np.std(L)
+    assert float(b.std()) == math.sqrt(2.0)
+
 def test_var():
-    assert float(b.var()) == np.var(L)
+    assert float(b.var()) == 2.0
 
 
 def test_join():
