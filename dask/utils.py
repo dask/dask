@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from collections import Iterator
 from contextlib import contextmanager
 import os
+import shutil
 import gzip
 import tempfile
 

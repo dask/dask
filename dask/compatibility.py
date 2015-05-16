@@ -9,7 +9,7 @@ if PY3:
     import builtins
     from queue import Queue, Empty
     from itertools import zip_longest
-    from io import StringIO
+    from io import StringIO, BytesIO
     unicode = str
     long = int
     def apply(func, args):
@@ -20,6 +20,7 @@ else:
     import operator
     from itertools import izip_longest as zip_longest
     from StringIO import StringIO
+    BytesIO = StringIO
     unicode = unicode
     long = long
     apply = apply
