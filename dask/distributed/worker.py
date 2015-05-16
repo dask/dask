@@ -468,7 +468,10 @@ class Worker(object):
                 result = core.get(self.data, task)
                 end = time()
             except Exception as e:
-                status = e
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                tb = ''.join(traceback.format_tb(exc_traceback))
+                e2 = type(e)(str(e) + '\n\n' + tb)
+                status = e2
                 end = time()
             else:
                 self.data[key] = result
