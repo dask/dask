@@ -28,7 +28,7 @@ from pbag import PBag
 from ..multiprocessing import get as mpget
 from ..core import istask
 from ..optimize import fuse, cull
-from ..compatibility import apply, StringIO, unicode
+from ..compatibility import apply, BytesIO, unicode
 from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -746,12 +746,13 @@ def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
 
 
 def stream_decompress(fmt, data):
+    """ Decompress a block of compressed bytes into a stream of strings """
     if fmt == 'gz':
-        return gzip.GzipFile(fileobj=StringIO(data))
+        return gzip.GzipFile(fileobj=BytesIO(data))
     if fmt == 'bz2':
         return bz2_stream(data)
     else:
-        return StringIO(data)
+        return map(bytes.decode, BytesIO(data))
 
 
 def bz2_stream(compressed, chunksize=100000):

@@ -396,4 +396,4 @@ def test_stream_decompress():
         with open(fn, 'rb') as f:
             compressed = f.read()
     assert [s.strip() for s in stream_decompress('gz', compressed)] == \
-            ['abc', 'def', '123']
+            [b'abc', b'def', b'123']
