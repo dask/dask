@@ -391,8 +391,9 @@ def test_stream_decompress():
     assert [s.strip() for s in stream_decompress('bz2', bz2.compress(data))] == \
             ['abc', 'def', '123']
     with tmpfile() as fn:
-        with gzip.open(fn, 'wb') as f:
-            f.write(data)
+        f = gzip.open(fn, 'wb')
+        f.write(data)
+        f.close()
         with open(fn, 'rb') as f:
             compressed = f.read()
     assert [s.strip() for s in stream_decompress('gz', compressed)] == \
