@@ -663,7 +663,7 @@ class Bag(object):
 
         import partd
         p = 'partd' + next(tokens)
-        dsk1 = {p: (partd.Pickle,)}
+        dsk1 = {p: (partd.Python,)}
 
         # Partition data on disk
         name = next(names)
