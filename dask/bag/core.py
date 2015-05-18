@@ -620,7 +620,7 @@ class Bag(object):
     def __iter__(self):
         return iter(self.compute())
 
-    def groupby(self, grouper, npartitions=None):
+    def groupby(self, grouper, npartitions=None, blocksize=2**20):
         """ Group collection by key function
 
         Note that this requires full dataset read, serialization and shuffle.
@@ -646,17 +646,19 @@ class Bag(object):
         # Partition data on disk
         name = next(names)
         dsk2 = dict(((name, i),
-                     (partition, grouper, (self.name, i), npartitions, p))
+                     (partition, grouper, (self.name, i),
+                                 npartitions, p, blocksize))
                      for i in range(self.npartitions))
 
         # Barrier
-        barrier = 'barrier' + next(tokens)
-        dsk3 = {barrier: (lambda args: 0, list(dsk2))}
+        barrier_token = 'barrier' + next(tokens)
+        def barrier(args):         return 0
+        dsk3 = {barrier_token: (barrier, list(dsk2))}
 
         # Collect groups
         name = next(names)
         dsk4 = dict(((name, i),
-                     (collect, grouper, i, p, barrier))
+                     (collect, grouper, i, p, barrier_token))
                     for i in range(npartitions))
 
         return Bag(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
@@ -706,13 +708,14 @@ class Bag(object):
                             name, columns, divisions)
 
 
-def partition(grouper, sequence, npartitions, p):
+def partition(grouper, sequence, npartitions, p, nelements=2**20):
     """ Partition a bag along a grouper, store partitions on disk """
-    d = groupby(grouper, sequence)
-    d2 = defaultdict(list)
-    for k, v in d.items():
-        d2[abs(hash(k)) % npartitions].extend(v)
-    p.append(d2)
+    for block in partition_all(nelements, sequence):
+        d = groupby(grouper, block)
+        d2 = defaultdict(list)
+        for k, v in d.items():
+            d2[abs(hash(k)) % npartitions].extend(v)
+        p.append(d2)
     return p
 
 
