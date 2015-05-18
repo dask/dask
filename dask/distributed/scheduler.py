@@ -124,7 +124,8 @@ class Scheduler(object):
         self.client_functions = {'status': self._status_to_client,
                                  'schedule': self._schedule_from_client,
                                  'set-collection': self._set_collection,
-                                 'get-collection': self._get_collection}
+                                 'get-collection': self._get_collection,
+                                 'close': self._close}
 
         # Away we go!
         log(self.address_to_workers, 'Start')
@@ -504,8 +505,12 @@ class Scheduler(object):
         for w in self.workers:
             self.send_to_worker(w, header, {})
 
+    def _close(self, header, payload):
+        self.close()
+
     def close(self):
         """ Close Scheduler """
+        self.close_workers()
         self.status = 'closed'
         self.to_workers.close(linger=1)
         self.to_clients.close(linger=1)

@@ -113,5 +113,11 @@ class Client(object):
 
         return payload2['type'](*payload2['args'])
 
-    def close(self):
+    def close_scheduler(self):
+        header = {'function': 'close'}
+        self.send_to_scheduler(header, {})
+
+    def close(self, close_scheduler=False):
+        if close_scheduler:
+            self.close_scheduler()
         self.socket.close(1)
