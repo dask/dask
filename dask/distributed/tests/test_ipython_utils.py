@@ -52,17 +52,19 @@ def test_dask_client_from_ipclient():
     a = np.arange(100).reshape(10, 10)
     d = da.from_array(a, ((5, 5), (5, 5)))
 
-    # test array.mean
-    expected = a.mean(axis=0)
-    d1 = d.mean(axis=0)
-    result = d1.compute(get=dask_client.get)
-    assert_array_almost_equal(result, expected)
+    try:
+        # test array.mean
+        expected = a.mean(axis=0)
+        d1 = d.mean(axis=0)
+        result = d1.compute(get=dask_client.get)
+        assert_array_almost_equal(result, expected)
 
-    # test ghosting
-    d2 = da.ghost.ghost(d, depth=1, boundary='reflect')
-    d3 = da.ghost.trim_internal(d2, {0: 1, 1: 1})
-    result1 = d3.compute(get=dask_client.get)
-    assert_array_almost_equal(result1, a)
+        # test ghosting
+        d2 = da.ghost.ghost(d, depth=1, boundary='reflect')
+        d3 = da.ghost.trim_internal(d2, {0: 1, 1: 1})
+        result1 = d3.compute(get=dask_client.get)
+        assert_array_almost_equal(result1, a)
 
-    # close the workers
-    dask_client.close(close_workers=True, close_scheduler=True)
+    finally:
+        # close the workers
+        dask_client.close(close_scheduler=True)
