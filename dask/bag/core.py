@@ -231,6 +231,13 @@ class Bag(object):
     def _args(self):
         return (self.dask, self.name, self.npartitions)
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
 
