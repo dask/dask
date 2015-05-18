@@ -319,10 +319,8 @@ def test_partition_collect():
 
 
 def test_groupby():
-    with dask.set_options(get=dask.async.get_sync):
-        c = b.groupby(lambda x: x)
-        c._visualize()
-        result = dict(c)
+    c = b.groupby(lambda x: x)
+    result = dict(c)
     assert result == {0: [0, 0 ,0],
                       1: [1, 1, 1],
                       2: [2, 2, 2],
@@ -333,15 +331,13 @@ def test_groupby():
 
 def test_groupby_with_indexer():
     b = db.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
-    with dask.set_options(get=dask.async.get_sync):
-        result = dict(b.groupby(0))
+    result = dict(b.groupby(0))
     assert valmap(sorted, result) == {1: [[1, 2, 3], [1, 4, 9]],
                                       2: [[2, 3, 4]]}
 
 def test_groupby_with_npartitions_changed():
-    with dask.set_options(get=dask.async.get_sync):
-        result = b.groupby(lambda x: x, npartitions=1)
-        result2 = dict(result)
+    result = b.groupby(lambda x: x, npartitions=1)
+    result2 = dict(result)
     assert result2 == {0: [0, 0 ,0],
                        1: [1, 1, 1],
                        2: [2, 2, 2],
