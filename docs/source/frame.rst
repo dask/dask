@@ -32,7 +32,7 @@ Dask ``Frame`` objects contain the following data:
 *  columns - list of column names to improve usability and error checking
 *  divisions - tuple of index values on which to partition our blocks
 
-The ``divisions`` attribute, analagous to ``blockdims`` in ``dask.array`` is
+The ``divisions`` attribute, analagous to ``chunks`` in ``dask.array`` is
 particularly important.  The values in divisions determine a partitioning of
 left-inclusive / right-exclusive ranges on the index::
 
