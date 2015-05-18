@@ -27,8 +27,8 @@ with ignoring(ImportError):
 from pbag import PBag
 
 from ..multiprocessing import get as mpget
-from ..core import istask
-from ..optimize import fuse, cull
+from ..core import istask, get_dependencies, reverse_dict
+from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote)
 from ..context import _globals
@@ -71,12 +71,34 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
+def inline_singleton_lists(dsk):
+    """ Inline lists that are only used once
+
+    >>> d = {'b': (list, 'a'),
+    ...      'c': (f, 'b', 1)}
+    >>> inline_singleton_lists(d)  # doctest: +SKIP
+    {'c': (f, (list, 'a'), 1)}
+
+    Pairs nicely with lazify afterwards
+    """
+
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependents = reverse_dict(dependencies)
+
+    keys = [k for k, v in dsk.items() if istask(v) and v
+                                      and v[0] is list
+                                      and len(dependents[k]) == 1]
+    return inline(dsk, keys, inline_constants=False)
+
+
 def optimize(dsk, keys):
     """ Optimize a dask from a dask.bag """
     dsk2 = cull(dsk, keys)
     dsk3 = fuse(dsk2)
-    dsk4 = lazify(dsk3)
-    return dsk4
+    dsk4 = inline_singleton_lists(dsk3)
+    dsk5 = lazify(dsk4)
+    return dsk5
+
 
 def get(dsk, keys, get=None, **kwargs):
     """ Get function for dask.bag """

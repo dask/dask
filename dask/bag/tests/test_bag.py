@@ -8,7 +8,7 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI)
+        _parse_s3_URI, inline_singleton_lists, optimize)
 from dask.utils import filetexts, tmpfile, raises
 import dask
 from pbag import PBag
@@ -186,6 +186,24 @@ def test_lazify():
                                     (filter, iseven, 'y'))),
          'a': (f, 'x'), 'b': (f, 'x')}
     assert lazify(a) == b
+
+
+def test_inline_singleton_lists():
+    inp = {'b': (list, 'a'),
+           'c': (f, 'b', 1)}
+    out = {'c': (f, (list, 'a'), 1)}
+    assert inline_singleton_lists(inp) == out
+
+    out = {'c': (f,        'a' , 1)}
+    assert optimize(inp, ['c']) == out
+
+    inp = {'b': (list, 'a'),
+           'c': (f, 'b', 1),
+           'd': (f, 'b', 2)}
+    assert inline_singleton_lists(inp) == inp
+
+    inp = {'b': (4, 5)} # doesn't inline constants
+    assert inline_singleton_lists(inp) == inp
 
 
 def test_take():
