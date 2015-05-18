@@ -952,3 +952,13 @@ def test_from_array_with_lock():
     f = da.from_array(x, chunks=5, lock=lock)
 
     assert eq(e + f, x + x)
+
+
+def test_topk():
+    x = np.array([5, 2, 1, 6])
+    d = da.from_array(x, chunks=2)
+
+    e = da.topk(2, d)
+
+    assert e.chunks == ((2,),)
+    assert eq(e, np.sort(x)[-1:-3:-1])
