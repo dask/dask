@@ -477,8 +477,8 @@ def topk(k, x):
     >>> d.topk(2).compute()
     array([6, 5])
 
-    Runs in constant time, returns all results in a single chunk so k elements
-    must fit in memory.
+    Runs in near linear time, returns all results in a single chunk so
+    all k elements must fit in memory.
     """
     if x.ndim != 1:
         raise ValueError("Topk only works on arrays of one dimension")
