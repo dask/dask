@@ -4,11 +4,11 @@ import pytest
 pytest.importorskip('dill')
 
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
-        partial)
+        partial, valmap)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream, stream_decompress, reify, _parse_s3_URI)
-
+        reduceby, bz2_stream, stream_decompress, reify, partition,
+        _parse_s3_URI)
 from dask.utils import filetexts, tmpfile, raises
 import dask
 from pbag import PBag
@@ -17,6 +17,7 @@ import shutil
 import os
 import gzip
 import bz2
+import partd
 
 from collections import Iterator
 
@@ -305,26 +306,23 @@ def test_product():
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
 
 
-def test_collect():
-    a = PBag(identity, 2)
-    with a:
-        a.extend([0, 1, 2, 3])
 
-    b = PBag(identity, 2)
-    with b:
-        b.extend([0, 1, 2, 3])
+def test_partition_collect():
+    with partd.Pickle() as p:
+        partition(identity, range(6), 3, p)
+        assert set(p.get(0)) == set([0, 3])
+        assert set(p.get(1)) == set([1, 4])
+        assert set(p.get(2)) == set([2, 5])
 
-    result = merge(dict(collect(identity, 2, 0, [a, b])),
-                   dict(collect(identity, 2, 1, [a, b])))
-
-    assert result == {0: [0, 0],
-                      1: [1, 1],
-                      2: [2, 2],
-                      3: [3, 3]}
+        assert sorted(collect(identity, 0, p, '')) == \
+                [(0, [0]), (3, [3])]
 
 
 def test_groupby():
-    result = dict(b.groupby(lambda x: x))
+    with dask.set_options(get=dask.async.get_sync):
+        c = b.groupby(lambda x: x)
+        c._visualize()
+        result = dict(c)
     assert result == {0: [0, 0 ,0],
                       1: [1, 1, 1],
                       2: [2, 2, 2],
@@ -335,17 +333,20 @@ def test_groupby():
 
 def test_groupby_with_indexer():
     b = db.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
-    result = dict(b.groupby(0))
-    assert result == {1: [[1, 2, 3], [1, 4, 9]],
-                      2: [[2, 3, 4]]}
+    with dask.set_options(get=dask.async.get_sync):
+        result = dict(b.groupby(0))
+    assert valmap(sorted, result) == {1: [[1, 2, 3], [1, 4, 9]],
+                                      2: [[2, 3, 4]]}
 
 def test_groupby_with_npartitions_changed():
-    result = b.groupby(lambda x: x, npartitions=1)
-    assert dict(result) == {0: [0, 0 ,0],
-                            1: [1, 1, 1],
-                            2: [2, 2, 2],
-                            3: [3, 3, 3],
-                            4: [4, 4, 4]}
+    with dask.set_options(get=dask.async.get_sync):
+        result = b.groupby(lambda x: x, npartitions=1)
+        result2 = dict(result)
+    assert result2 == {0: [0, 0 ,0],
+                       1: [1, 1, 1],
+                       2: [2, 2, 2],
+                       3: [3, 3, 3],
+                       4: [4, 4, 4]}
 
     assert result.npartitions == 1
 

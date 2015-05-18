@@ -34,6 +34,7 @@ from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
 from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
+tokens = ('-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
 
 no_default = '__no__default__'
@@ -638,22 +639,27 @@ class Bag(object):
         if npartitions is None:
             npartitions = self.npartitions
 
-        paths = [tempfile.mkdtemp('%d.pbag' % i) for i in range(npartitions)]
+        import partd
+        p = 'partd' + next(tokens)
+        dsk1 = {p: (partd.Pickle,)}
 
         # Partition data on disk
         name = next(names)
-        dsk1 = dict(((name, i),
-                     (partition, grouper, (self.name, i), npartitions,
-                                 paths[i % len(paths)]))
+        dsk2 = dict(((name, i),
+                     (partition, grouper, (self.name, i), npartitions, p))
                      for i in range(self.npartitions))
+
+        # Barrier
+        barrier = 'barrier' + next(tokens)
+        dsk3 = {barrier: (lambda args: 0, list(dsk2))}
 
         # Collect groups
         name = next(names)
-        dsk2 = dict(((name, i),
-                     (collect, grouper, npartitions, i, sorted(dsk1.keys())))
+        dsk4 = dict(((name, i),
+                     (collect, grouper, i, p, barrier))
                     for i in range(npartitions))
 
-        return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
+        return Bag(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
 
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
@@ -700,26 +706,20 @@ class Bag(object):
                             name, columns, divisions)
 
 
-def partition(grouper, sequence, npartitions, path):
+def partition(grouper, sequence, npartitions, p):
     """ Partition a bag along a grouper, store partitions on disk """
+    d = groupby(grouper, sequence)
+    d2 = defaultdict(list)
+    for k, v in d.items():
+        d2[abs(hash(k)) % npartitions].extend(v)
+    p.append(d2)
+    return p
 
-    with PBag(grouper, npartitions, path) as pb:
-        pb.extend(sequence)
 
-    return pb
-
-
-def collect(grouper, npartitions, group, pbags):
+def collect(grouper, group, p, barrier_token):
     """ Collect partitions from disk and yield k,v group pairs """
-    from pbag import PBag
-    pbags = list(take(npartitions, pbags))
-    result = defaultdict(list)
-    for pb in pbags:
-        part = pb.get_partition(group)
-        groups = groupby(grouper, part)
-        for k, v in groups.items():
-            result[k].extend(v)
-    return list(result.items())
+    d = groupby(grouper, p.get(group, lock=False))
+    return list(d.items())
 
 
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
