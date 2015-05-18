@@ -438,6 +438,14 @@ def test_where():
     assert eq(where(d > 5, d, -e[:, None]), np.where(x > 5, x, -y[:, None]))
 
 
+def test_where_has_informative_error():
+    x = da.ones(5, chunks=3)
+    try:
+        result = da.where(x > 0)
+    except Exception as e:
+        assert 'dask' in str(e)
+
+
 def test_coarsen():
     x = np.random.randint(10, size=(24, 24))
     d = from_array(x, chunks=(4, 8))

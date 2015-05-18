@@ -77,3 +77,26 @@ supports numpy-style item assignment like an ``h5py.Dataset``.
    ...                                  dtype='f8')
 
    >>> y.store(dset)
+
+
+Limitations
+-----------
+
+Dask.array does not implement the entire numpy interface.  Users expecting this
+will be disappointed.  Notably dask.array has the following failings:
+
+1.  Dask does not implement all of ``np.linalg``.  This has been done by a
+    number of excellent BLAS/LAPACK implementations and is the focus of
+    numerous ongoing academic research projects.
+2.  Dask.array does not support any operation where the resulting shape
+    depends on the values of the array.  In order to form the dask graph we
+    must be able to infer the shape of the array before actually executing the
+    operation.  This precludes operations like indexing one dask array with
+    another or operations like ``np.where``.
+3.  Dask.array does not attempt operations like ``sort`` which are notoriously
+    difficult to do in parallel and are of somewhat diminished value on very
+    large data (you rarely actually need a full sort).
+    Often we include parallel-friendly alternatives like ``topk``.
+4.  Dask development is driven by immediate need, and so many lesser used
+    functions, like ``np.full_like`` have not been implemented purely out of
+    laziness.  These would make excellent community contributions.
