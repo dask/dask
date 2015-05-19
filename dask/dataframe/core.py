@@ -83,6 +83,14 @@ class Scalar(object):
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        from .optimize import optimize
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
 
 class _Frame(object):
     """ Superclass for DataFrame and Series """
