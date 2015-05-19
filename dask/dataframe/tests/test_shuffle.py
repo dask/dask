@@ -1,4 +1,5 @@
 import dask.dataframe as dd
+import pandas.util.testing as tm
 import pandas as pd
 from dask.dataframe.shuffle import shuffle
 import partd
@@ -27,3 +28,8 @@ def test_shuffle():
 
 def test_default_partitions():
     assert shuffle(d, d.b).npartitions == d.npartitions
+
+
+def test_index_with_non_series():
+    tm.assert_frame_equal(shuffle(d, d.b).compute(),
+                          shuffle(d, 'b').compute())

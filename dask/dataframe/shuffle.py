@@ -9,7 +9,7 @@ import numpy as np
 from pframe import pframe
 
 from .. import threaded
-from .core import DataFrame, Series, get, names
+from .core import DataFrame, Series, get, names, _Frame
 from ..compatibility import unicode
 from ..utils import ignoring
 
@@ -111,7 +111,8 @@ def shuffle(df, index, npartitions=None, use_server=False):
         --------
         partd
         """
-        assert df.divisions == index.divisions
+        if isinstance(index, _Frame):
+            assert df.divisions == index.divisions
         if npartitions is None:
             npartitions = df.npartitions
 
@@ -124,10 +125,16 @@ def shuffle(df, index, npartitions=None, use_server=False):
 
         # Partition data on disk
         name = next(names)
-        dsk2 = dict(((name, i),
-                     (partition, part, ind, npartitions, p))
-                     for i, (part, ind)
-                     in enumerate(zip(df._keys(), index._keys())))
+        if isinstance(index, _Frame):
+            dsk2 = dict(((name, i),
+                         (partition, part, ind, npartitions, p))
+                         for i, (part, ind)
+                         in enumerate(zip(df._keys(), index._keys())))
+        else:
+            dsk2 = dict(((name, i),
+                         (partition, part, index, npartitions, p))
+                         for i, part
+                         in enumerate(df._keys()))
 
         # Barrier
         barrier_token = 'barrier' + next(tokens)
@@ -141,13 +148,19 @@ def shuffle(df, index, npartitions=None, use_server=False):
                     for i in range(npartitions))
 
         divisions = [None] * (npartitions - 1)
-        return DataFrame(merge(df.dask, index.dask, dsk1, dsk2, dsk3, dsk4),
-                         name, df.columns, divisions)
+
+        dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
+        if isinstance(index, _Frame):
+            dsk.update(index.dask)
+
+        return DataFrame(dsk, name, df.columns, divisions)
 
 
 def partition(df, index, npartitions, p):
     """ Partition a dataframe along a grouper, store partitions to partd """
-    rng = pd.Series(np.arange(len(index)))
+    rng = pd.Series(np.arange(len(df)))
+    if not isinstance(index, pd.Series):
+        index = df[index]
 
     groups = rng.groupby(index.map(lambda x: abs(hash(x)) % npartitions).values)
     d = dict((i, df.iloc[groups.groups[i]]) for i in range(npartitions)
