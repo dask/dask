@@ -40,7 +40,7 @@ def file_size(fn, compression=None):
 
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
-    chunkbytes = kwargs.pop('chunkbytes', 2**26)  # 100 MB
+    chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
     compression = kwargs.pop('compression', None)
     categorize = kwargs.pop('categorize', None)
     index = kwargs.pop('index', None)
