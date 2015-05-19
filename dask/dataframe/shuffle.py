@@ -119,9 +119,12 @@ def shuffle(df, index, npartitions=None, use_server=False):
         import partd
         p = ('zpartd' + next(tokens),)
         if use_server:
-            dsk1 = {p: partd.PandasBlocks(partd.Shared())}
+            dsk1 = {}
+            p = partd.PandasBlocks(partd.Shared())
         else:
-            dsk1 = {p: (partd.PandasBlocks,)}
+            dsk1 = {}
+            p = partd.PandasBlocks()
+            # dsk1 = {p: (partd.PandasBlocks,)}
 
         # Partition data on disk
         name = next(names)
