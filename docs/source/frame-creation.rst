@@ -1,6 +1,12 @@
 Create Dask DataFrames
 ======================
 
+From numpy array
+----------------
+
+Not the most common way to get a dask.dataframe but it is nice that it doesn't
+need data.
+
 You can manually create DataFrames from NumPy array's with record dtype.
 
 .. code-block:: Python
@@ -16,10 +22,14 @@ You can manually create DataFrames from NumPy array's with record dtype.
 From a CSV file.
 -----------------
 
-beep
+``read_csv`` needs a docstring. Maybe we should have ``iris.csv`` somewhere in
+the project.
 
+TODO
 
 From bcolz??
 ------------
 
-boop
+Need latest version of bcolz.
+
+TODO
