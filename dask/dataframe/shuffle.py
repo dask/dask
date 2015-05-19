@@ -111,11 +111,12 @@ def shuffle(df, index, npartitions=None, use_server=False):
         --------
         partd
         """
+        assert df.divisions == index.divisions
         if npartitions is None:
-            npartitions = self.npartitions
+            npartitions = df.npartitions
 
         import partd
-        p = 'partd' + next(tokens)
+        p = ('zpartd' + next(tokens),)
         if use_server:
             dsk1 = {p: partd.PandasBlocks(partd.Shared())}
         else:

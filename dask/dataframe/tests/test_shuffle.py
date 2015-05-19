@@ -24,3 +24,6 @@ def test_shuffle():
 
     assert not (set(x.b) & set(y.b))  # disjoint
 
+
+def test_default_partitions():
+    assert shuffle(d, d.b).npartitions == d.npartitions
