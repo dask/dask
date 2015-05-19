@@ -95,3 +95,65 @@ def unique(divisions):
     if isinstance(divisions, (tuple, list, Iterator)):
         return tuple(toolz.unique(divisions))
     raise NotImplementedError()
+
+
+def shuffle(df, index, npartitions=None, use_server=False):
+        """ Group DataFrame by index
+
+        Hash grouping of elements.  After this operation all elements that have
+        the same index will be in the same partition.  Note that this requires
+        full dataset read, serialization and shuffle.  This is expensive.  If
+        possible you should avoid shuffles.
+
+        This does not preserve a meaningful index/partitioning scheme.
+
+        See Also
+        --------
+        partd
+        """
+        if npartitions is None:
+            npartitions = self.npartitions
+
+        import partd
+        p = 'partd' + next(tokens)
+        if use_server:
+            dsk1 = {p: partd.PandasBlocks(partd.Shared())}
+        else:
+            dsk1 = {p: (partd.PandasBlocks,)}
+
+        # Partition data on disk
+        name = next(names)
+        dsk2 = dict(((name, i),
+                     (partition, part, ind, npartitions, p))
+                     for i, (part, ind)
+                     in enumerate(zip(df._keys(), index._keys())))
+
+        # Barrier
+        barrier_token = 'barrier' + next(tokens)
+        def barrier(args):         return 0
+        dsk3 = {barrier_token: (barrier, list(dsk2))}
+
+        # Collect groups
+        name = next(names)
+        dsk4 = dict(((name, i),
+                     (collect, i, p, barrier_token))
+                    for i in range(npartitions))
+
+        divisions = [None] * (npartitions - 1)
+        return DataFrame(merge(df.dask, index.dask, dsk1, dsk2, dsk3, dsk4),
+                         name, df.columns, divisions)
+
+
+def partition(df, index, npartitions, p):
+    """ Partition a dataframe along a grouper, store partitions to partd """
+    rng = pd.Series(np.arange(len(index)))
+
+    groups = rng.groupby(index.map(lambda x: abs(hash(x)) % npartitions).values)
+    d = dict((i, df.iloc[groups.groups[i]]) for i in range(npartitions)
+                                            if i in groups.groups)
+    p.append(d)
+
+
+def collect(group, p, barrier_token):
+    """ Collect partitions from partd, yield dataframes """
+    return p.get(group)
