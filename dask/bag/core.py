@@ -665,10 +665,16 @@ class Bag(object):
         import partd
         p = 'partd' + next(tokens)
         if use_server:
-            dsk1 = {p: partd.Python(partd.Shared())}
-        else:
-            dsk1 = {p: (partd.Python,)}
+            try:
+                dsk1 = {p: partd.Python(partd.Snappy(partd.Shared()))}
+            except AttributeError:
+                dsk1 = {p: partd.Python(partd.Shared())}
 
+        else:
+            try:
+                dsk1 = {p: (partd.Python, (partd.Snappy,))}
+            except AttributeError:
+                dsk1 = {p: (partd.Python,)}
 
         # Partition data on disk
         name = next(names)
