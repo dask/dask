@@ -98,6 +98,7 @@ class _Frame(object):
 
     def _visualize(self, optimize_graph=False):
         from dask.dot import dot_graph
+        from .optimize import optimize
         if optimize_graph:
             dot_graph(optimize(self.dask, self._keys()))
         else:
