@@ -656,10 +656,12 @@ class GroupBy(object):
             assert index in frame.columns
 
     def apply(self, func, columns=None):
-        if isinstance(self.index, Series) and self.index._name == self.frame.index._name:
+        if (isinstance(self.index, Series) and
+            self.index._name == self.frame.index._name):
             f = self.frame
         else:
-            f = set_index(self.frame, self.index, **self.kwargs)
+            # f = set_index(self.frame, self.index, **self.kwargs)
+            f = shuffle(self.frame, self.index, **self.kwargs)
         return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
                             columns=columns)
 
@@ -864,4 +866,4 @@ def pd_split(df, p, seed=0):
     return [df.iloc[index == i] for i in range(len(p))]
 
 
-from .shuffle import set_index, set_partition
+from .shuffle import set_index, set_partition, shuffle
