@@ -3,18 +3,28 @@ Custom Graphs
 
 Sometimes you want parallel computing but your application doesn't fit neatly
 into something like dask.array or dask.bag.  In these cases you can interact
-with the dask schedulers directly which operate well as standalone modules.
+with the dask schedulers directly.  These schedulers operate well as standalone
+modules.
 
-This provides a release valve for complex situations and allows advanced
-projects with their own internal representation additional opportunities for
-parallel execution.  As dask schedulers advance to compute in a wider variety
-of contexts, code written to use any dask scheduler will advance as well.
+This separation provides a release valve for complex situations and allows
+advanced projects additional opportunities for parallel execution, even if
+those projects have an internal representation for their computations.  As dask
+schedulers improve or expand to distributed memory, code written to use dask
+schedulers will advance as well.
 
 Example
 -------
 
-As discussed in graphs_ the schedulers take a task graph (a dict of tuples
-of functions) and a list of desired keys from that graph
+.. figure:: images/pipeline.png
+   :alt: "Dask graph for data pipeline"
+   :align: right
+
+As discussed in the motivation_ and specification_ sections, the schedulers
+take a task graph (a dict of tuples of functions) and a list of desired keys
+from that graph
+
+Here is a mocked out example building a graph for a traditional clean and
+analyze pipeline.
 
 .. code-block:: python
 
@@ -34,11 +44,11 @@ of functions) and a list of desired keys from that graph
    dsk = {'load-1': (load, 'myfile.a.data'),
           'load-2': (load, 'myfile.b.data'),
           'load-3': (load, 'myfile.c.data'),
-          'preprocess-1': (clean, 'load-1'),
-          'preprocess-2': (clean, 'load-2'),
-          'preprocess-3': (clean, 'load-3'),
-          'analyze': (analyze, ['preprocess-%d' % i for i in [1, 2, 3]]),
-          'store': (dump, 'analyze')}
+          'clean-1': (clean, 'load-1'),
+          'clean-2': (clean, 'load-2'),
+          'clean-3': (clean, 'load-3'),
+          'analyze': (analyze, ['clean-%d' % i for i in [1, 2, 3]]),
+          'store': (store, 'analyze')}
 
    from dask.multiprocessing import get
    get(dsk, 'store')  # executes in parallel
@@ -71,7 +81,8 @@ Dask schedulers differ in the following ways:
 But the other projects offer different advantages and different programming
 paradigms.  One should inspect all such projects before selecting one.
 
-.. _graphs: graphs.html
+.. _motivation: graphs.html
+.. _specification: graphs.html
 .. _Joblib: https://pythonhosted.org/joblib/parallel.html
 .. _Multiprocessing: https://docs.python.org/3/library/multiprocessing.html
 .. _`IPython Parallel`: http://ipython.org/ipython-doc/dev/parallel/
