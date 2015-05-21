@@ -180,11 +180,12 @@ class Scheduler(object):
         """ Event loop: Listen to client router """
         while self.status != 'closed':
             try:
-                if not self.to_clients.poll(100):
+                if not self.to_clients.poll(100):  # is this threadsafe?
                     continue
             except zmq.ZMQError:
                 break
-            address, header, payload = self.to_clients.recv_multipart()
+            with self.lock:
+                address, header, payload = self.to_clients.recv_multipart()
             header = pickle.loads(header)
             if 'address' not in header:
                 header['address'] = address

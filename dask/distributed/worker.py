@@ -320,7 +320,8 @@ class Worker(object):
             except zmq.ZMQError:
                 break
             with logerrors():
-                header, payload = self.to_scheduler.recv_multipart()
+                with self.lock:
+                    header, payload = self.to_scheduler.recv_multipart()
                 header = pickle.loads(header)
                 log(self.address, 'Receive job from scheduler', header)
                 try:
