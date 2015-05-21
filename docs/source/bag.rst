@@ -37,6 +37,8 @@ We commonly use ``dask.bag`` to process unstructured or semi-structured data.
    >>> dict(result)                             # Evaluate Result
    {'Alice': 10000, 'Bob': 5555, 'Charlie': ...}
 
+Contents
+--------
 
 .. toctree::
    :maxdepth: 1
