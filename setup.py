@@ -8,7 +8,7 @@ extras_require = {
   'array': ['numpy', 'toolz'],
   'bag': ['dill', 'psutil', 'toolz'],
   'dataframe': ['bcolz >= 0.9.0', 'numpy', 'pandas >= 0.16.0', 'toolz'],
-  'distributed': ['zmq', 'dill']
+  'distributed': ['pyzmq', 'dill']
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
 
