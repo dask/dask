@@ -42,6 +42,7 @@ dask collections.  This section is useful for developers.
 
    graphs.rst
    spec.rst
+   custom.rst
 
 **Scheduling:**
 
