@@ -61,6 +61,7 @@ or using a distributed cluster.
    :maxdepth: 1
 
    install.rst
+   inspect.rst
    faq.rst
 
 Dask is part of the Blaze_ project supported by `Continuum Analytics`_
