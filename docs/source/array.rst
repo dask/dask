@@ -1,5 +1,5 @@
-Arrays
-======
+Array
+=====
 
 Dask Array implements a subset of the NumPy ``ndarray`` interface using blocked
 algorithms, cutting up the large array into many small arrays.  This lets us
@@ -17,4 +17,3 @@ these blocked algorithms using ``dask`` graphs.
    random.rst
    ghost.rst
    array-blaze.rst
-   inspect.rst

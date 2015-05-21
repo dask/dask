@@ -148,5 +148,7 @@ Other clients on different machines can retrieve this collection:
 This only stores the dask graph and not any underlying data that this graph
 might open.  Usually these graphs are small and easy to pass around.
 
+There are some more detailed notes on the distributed scheduler here_
 
 .. _chest: https://github.com/ContinuumIO/chest
+.. _here: distributed-details.html

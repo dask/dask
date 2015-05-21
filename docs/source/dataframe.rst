@@ -1,14 +1,14 @@
-Dask Frames
-===========
+DataFrame
+=========
 
-Dask.frame is not ready for public use.
+Dask.dataframe is not ready for public use.
 
 .. image:: images/frame.png
    :width: 30%
    :align: right
-   :alt: A dask frame
+   :alt: A dask dataframe
 
-Dask frame implements a blocked DataFrame as a sequence of in-memory Pandas
+Dask dataframe implements a blocked DataFrame as a sequence of in-memory Pandas
 DataFrames, partitioned along the index.
 
 Partitioning along the index is good because it tells us which blocks hold
@@ -24,10 +24,10 @@ expensive to compute.
 Relevant Metadata
 -----------------
 
-Dask ``Frame`` objects contain the following data:
+Dask ``DataFrame`` objects contain the following data:
 
-*  dask graph - The task dependency graph necessary to compute the frame
-*  name - string like ``'f'`` that is the prefix to all keys to define this frame
+*  dask graph - The task dependency graph necessary to compute the dataframe
+*  name - string like ``'f'`` that is the prefix to all keys to define this dataframe
    like ``('f', 0)``
 *  columns - list of column names to improve usability and error checking
 *  divisions - tuple of index values on which to partition our blocks
@@ -78,9 +78,9 @@ Our divisions in this case are ``['Bob', 'Edith']``
 
 
 Shuffle
-=======
+-------
 
-Much of the complex bits of dask.frame are about shuffling records to obtain
+Much of the complex bits of dask.dataframe are about shuffling records to obtain
 this nice arrangement of records along an index.  We do this in two stages
 
 1.  Find good values on which to partition our data
@@ -111,7 +111,7 @@ appendable on-disk data structure, pframe_.
 Supported API
 -------------
 
-Dask frame supports the following API from Pandas
+Dask dataframe supports the following API from Pandas
 
 * Trivially parallelizable (fast):
     *  Elementwise operations:  ``df.x + df.y``
@@ -129,7 +129,7 @@ Dask frame supports the following API from Pandas
 * Ingest
     *  ``pd.read_csv``  (in all its glory)
 
-Dask frame also introduces some new API
+Dask dataframe also introduces some new API
 
 * Requires full dataset read, but otherwise fast
     *  Approximate quantiles:  ``df.x.quantiles([25, 50, 75])``

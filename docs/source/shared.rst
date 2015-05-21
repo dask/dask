@@ -1,35 +1,6 @@
-Scheduling
-==========
+Shared Memory
+=============
 
-High level objects like ``Array``, ``Bag``, and ``Frame`` create task
-dependency graphs.  These encode blocked algorithms that accomplish macro-scale
-effects with many small tasks, each of which is suitable to run on a single
-worker.  Neither the high-level objects nor the task graphs that they create encode
-the order of computation nor on which workers each task will execute.
-This is handled separately by schedulers.
-
-This separation between graph creation and graph execution is key to dask's
-design and somewhat particular among similar systems.
-
-Schedulers execute a task dependency graph using whatever workers they have
-available.  Schedulers can range in complexity from a quick, 20-line
-single-threaded Python function, to large distributed systems.  At the time of
-writing the dask library holds two sechedulers
-
-1.  A tiny reference scheduler
-2.  A multi-core asynchronous scheduler suitable for multi-threading or
-    multi-processing in shared memory
-
-These schedulers are ignorant of the macro-scale operations or the fact that
-they operate on arrays, dataframes, etc..  They only know how to execute Python
-functions on data in a way that is consistent with the graph's data
-dependencies.  At this stage we have lost all top-level information.
-
-The rest of this document largely covers the asynchronous scheduler.
-
-
-Async
-=====
 
 The asynchronous scheduler requires an ``apply_async`` function and a
 ``Queue``.  These determine the kind of worker and parallelism that we exploit.

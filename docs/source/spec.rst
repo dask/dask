@@ -1,6 +1,5 @@
-
-Dask Specification
-==================
+Specification
+=============
 
 We represent a computation as a directed acyclic graph of tasks with data
 dependencies.  Dask is a specification to encode such a graph using ordinary
