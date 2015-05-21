@@ -44,4 +44,36 @@ of functions) and a list of desired keys from that graph
    get(dsk, 'store')  # executes in parallel
 
 
+Related Projects
+----------------
+
+The following excellent projects also provide parallel execution:
+
+*  Joblib_
+*  Multiprocessing_
+*  `IPython Parallel`_
+*  `Concurrent.futures`_
+*  `Luigi`_
+
+Each library lets you dictate how your tasks relate to each other with various
+levels of sophistication.  Each library executes those tasks with some internal
+logic.
+
+Dask schedulers differ in the following ways:
+
+1.  You specify the entire graph as a Python dict rather than using a
+    specialized API
+2.  You get a variety of schedulers ranging from single machine single core, to
+    threaded, to multiprocessing, to distributed
+3.  The dask single-machine schedulers have logic to execute the graph in a
+    way that minimizes memory footprint
+
+But the other projects offer different advantages and different programming
+paradigms.  One should inspect all such projects before selecting one.
+
 .. _graphs: graphs.html
+.. _Joblib: https://pythonhosted.org/joblib/parallel.html
+.. _Multiprocessing: https://docs.python.org/3/library/multiprocessing.html
+.. _`IPython Parallel`: http://ipython.org/ipython-doc/dev/parallel/
+.. _`Concurrent.futures`: https://docs.python.org/3/library/concurrent.futures.html
+.. _Luigi: http://luigi.readthedocs.org
