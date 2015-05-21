@@ -92,6 +92,8 @@ class Scheduler(object):
         else:
             self.to_workers.bind('tcp://%s:%d' % (bind_to_workers, port_to_workers))
         self.address_to_workers = ('tcp://%s:%d' % (hostname, port_to_workers)).encode()
+        self.worker_poller = zmq.Poller()
+        self.worker_poller.register(self.to_workers, zmq.POLLIN)
 
         self.to_clients = self.context.socket(zmq.ROUTER)
         if port_to_clients is None:
@@ -107,6 +109,13 @@ class Scheduler(object):
         self.available_workers = Queue()
         self.data = defaultdict(dict)
         self.collections = dict()
+
+        self.send_to_workers_queue = Queue()
+        self.send_to_workers_recv = self.context.socket(zmq.PAIR)
+        self.send_to_workers_recv.bind('ipc://to-workers-signal')
+        self.send_to_workers_send = self.context.socket(zmq.PAIR)
+        self.send_to_workers_send.connect('ipc://to-workers-signal')
+        self.worker_poller.register(self.send_to_workers_recv, zmq.POLLIN)
 
         self.pool = ThreadPool(100)
         self.lock = Lock()
@@ -141,33 +150,42 @@ class Scheduler(object):
         """ Event loop: Listen to worker router """
         while self.status != 'closed':
             try:
-                if not self.to_workers.poll(100):
+                socks = dict(self.worker_poller.poll(100))
+                if not socks:
                     continue
             except zmq.ZMQError:
                 break
-            address, header, payload = self.to_workers.recv_multipart()
+            if self.send_to_workers_recv in socks:
+                self.send_to_workers_recv.recv()
+                while not self.send_to_workers_queue.empty():
+                    msg = self.send_to_workers_queue.get()
+                    self.to_workers.send_multipart(msg)
 
-            header = pickle.loads(header)
-            if 'address' not in header:
-                header['address'] = address
-            log(self.address_to_workers, 'Receive job from worker', header)
+            if self.to_workers in socks:
+                address, header, payload = self.to_workers.recv_multipart()
 
-            try:
-                function = self.worker_functions[header['function']]
-            except KeyError:
-                log(self.address_to_workers, 'Unknown function', header)
-            else:
-                future = self.pool.apply_async(function, args=(header, payload))
+                header = pickle.loads(header)
+                if 'address' not in header:
+                    header['address'] = address
+                log(self.address_to_workers, 'Receive job from worker', header)
+
+                try:
+                    function = self.worker_functions[header['function']]
+                except KeyError:
+                    log(self.address_to_workers, 'Unknown function', header)
+                else:
+                    future = self.pool.apply_async(function, args=(header, payload))
 
     def _listen_to_clients(self):
         """ Event loop: Listen to client router """
         while self.status != 'closed':
             try:
-                if not self.to_clients.poll(100):
+                if not self.to_clients.poll(100):  # is this threadsafe?
                     continue
             except zmq.ZMQError:
                 break
-            address, header, payload = self.to_clients.recv_multipart()
+            with self.lock:
+                address, header, payload = self.to_clients.recv_multipart()
             header = pickle.loads(header)
             if 'address' not in header:
                 header['address'] = address
@@ -247,10 +265,11 @@ class Scheduler(object):
         if isinstance(address, unicode):
             address = address.encode()
         header['timestamp'] = datetime.utcnow()
-        with self.lock:
-            self.to_workers.send_multipart([address,
+
+        self.send_to_workers_queue.put([address,
                                             pickle.dumps(header),
                                             dumps(payload)])
+        self.send_to_workers_send.send(b'')
 
     def send_to_client(self, address, header, result):
         """ Send packet to client """
@@ -514,6 +533,8 @@ class Scheduler(object):
         self.status = 'closed'
         self.to_workers.close(linger=1)
         self.to_clients.close(linger=1)
+        self.send_to_workers_send.close(linger=1)
+        self.send_to_workers_recv.close(linger=1)
         self.pool.close()
         self.pool.join()
         self.block()

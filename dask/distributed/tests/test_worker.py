@@ -35,6 +35,7 @@ def worker(data=None, scheduler='tcp://localhost:5555'):
 @contextmanager
 def worker_and_router(*args, **kwargs):
     router = context.socket(zmq.ROUTER)
+    router.RCVTIMEO = 10000
     port = kwargs.get('port')
     if port:
         router.bind('tcp://*:%d' % port)
@@ -143,8 +144,10 @@ def test_compute():
                        'task': (add, 'a', 'x'),
                        'locations': {'x': [a.address]},
                        'queue': 'q-key'}
-            r.send_multipart([b.address, pickle.dumps(header), pickle.dumps(payload)])
 
+            r.ROUTER_MANDATORY = 1
+            r.send_multipart([b.address, pickle.dumps(header), pickle.dumps(payload)])
+            # Worker b does stuff, sends back ack
             address, header, result = r.recv_multipart()
             header = pickle.loads(header)
             result = header.get('loads', pickle.loads)(result)
