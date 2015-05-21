@@ -156,6 +156,7 @@ class Scheduler(object):
             except zmq.ZMQError:
                 break
             if self.send_to_workers_recv in socks:
+                self.send_to_workers_recv.recv()
                 while not self.send_to_workers_queue.empty():
                     msg = self.send_to_workers_queue.get()
                     self.to_workers.send_multipart(msg)
