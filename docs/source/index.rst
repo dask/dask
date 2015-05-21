@@ -10,9 +10,9 @@ machine and is trivial to set up::
     or
     pip install dask
 
-Technically speaking, operations on dask collections (Array, Bag, DataFrame)
-produce task graphs that encode blocked algorithms.  Dask schedulers execute
-these task graphs in parallel in a variety of contexts.
+Operations on dask collections (Array, Bag, DataFrame) produce task graphs that
+encode blocked algorithms.  Dask schedulers execute these task graphs in
+parallel in a variety of contexts.
 
 .. image:: images/collections-schedulers.png
    :alt: Dask collections and schedulers
@@ -33,7 +33,10 @@ then you should start here.
 
 **Graphs:**
 
-Dask graphs encode blocked algorithms in a
+Dask graphs encode algorithms in a simple format involving Python dicts,
+tuples, and functions.  This graph format can be used in isolation from the
+dask collections.  This section is useful for developers.
+
 .. toctree::
    :maxdepth: 1
 
@@ -42,24 +45,9 @@ Dask graphs encode blocked algorithms in a
 
 **Scheduling:**
 
-High level objects like ``Array``, ``Bag``, and ``DataFrame`` create task
-dependency graphs.  These encode blocked algorithms that accomplish macro-scale
-effects with many small tasks, each of which is suitable to run on a single
-worker.  Neither the high-level objects nor the task graphs that they create encode
-the order of computation nor on which workers each task will execute.
-This is handled separately by schedulers.
-
-This separation between graph creation and graph execution is key to dask's
-design and somewhat particular among similar systems.
-
-Schedulers execute a task dependency graph using whatever workers they have
-available.  Schedulers can range in complexity from a quick, 20-line
-single-threaded Python function, to large distributed systems.
-
-These schedulers are ignorant of the macro-scale operations or the fact that
-they operate on arrays, dataframes, etc..  They only know how to execute Python
-functions on data in a way that is consistent with the graph's data
-dependencies.
+Schedulers execute task graphs.  After a collection produces a graph we execute
+this graph in parallel, either using all of the cores on a single workstation
+or using a distributed cluster.
 
 .. toctree::
    :maxdepth: 1
