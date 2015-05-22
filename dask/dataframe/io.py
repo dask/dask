@@ -11,7 +11,7 @@ from itertools import count
 import bcolz
 from operator import getitem
 
-from ..compatibility import StringIO
+from ..compatibility import StringIO, unicode
 from ..utils import textblock
 
 from .core import names, DataFrame, compute, concat, categorize_block
@@ -265,6 +265,8 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     from_array: more generic function not optimized for bcolz
     """
     import dask.array as da
+    if isinstance(x, (str, unicode)):
+        x = bcolz.ctable(rootdir=x)
     bc_chunklen = max(x[name].chunklen for name in x.names)
     if chunksize is None and bc_chunklen > 10000:
         chunksize = bc_chunklen

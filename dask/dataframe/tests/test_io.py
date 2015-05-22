@@ -14,7 +14,7 @@ from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
         dataframe_from_ctable, from_array, from_bcolz, infer_header)
 from dask.compatibility import StringIO
 
-from dask.utils import filetext
+from dask.utils import filetext, tmpfile
 
 
 ########
@@ -189,18 +189,33 @@ def test_from_bcolz():
     try:
         import bcolz
     except ImportError:
-        pass
-    else:
-        t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
-                         names=['x', 'y', 'a'])
-        d = dd.from_bcolz(t, chunksize=2)
-        assert d.npartitions == 2
-        assert str(d.dtypes['a']) == 'category'
-        assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
-        assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
+        return
 
-        d = dd.from_bcolz(t, chunksize=2, index='x')
-        assert list(d.index.compute()) == [1, 2, 3]
+    t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
+                     names=['x', 'y', 'a'])
+    d = dd.from_bcolz(t, chunksize=2)
+    assert d.npartitions == 2
+    assert str(d.dtypes['a']) == 'category'
+    assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
+    assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
+
+    d = dd.from_bcolz(t, chunksize=2, index='x')
+    assert list(d.index.compute()) == [1, 2, 3]
+
+
+def test_from_bcolz_filename():
+    try:
+        import bcolz
+    except ImportError:
+        return
+    with tmpfile('.bcolz') as fn:
+        t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
+                         names=['x', 'y', 'a'],
+                         rootdir=fn)
+        t.flush()
+
+        d = dd.from_bcolz(fn, chunksize=2)
+        assert list(d.x.compute()) == [1, 2, 3]
 
 
 #####################
