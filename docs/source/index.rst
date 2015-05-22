@@ -64,6 +64,7 @@ or using a distributed cluster.
    install.rst
    inspect.rst
    faq.rst
+   dask.rst
 
 Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 

@@ -139,15 +139,14 @@ def textblock(file, start, stop, compression=None):
     Example
     -------
 
-    >> with open('myfile.txt', 'w') as f:
-    ..     f.write('123\n456\n789\nabc')
-
-    >> f = open('myfile.txt')
+    >>> with open('myfile.txt', 'w') as f:
+    ...     f.write('123\\n456\\n789\\nabc')
+    >>> f = open('myfile.txt')
 
     In the example below, 1 and 10 don't line up with endlines
 
-    >> textblock(f, 1, 10)
-    '456\n789\n'
+    >>> textblock(f, 1, 10)
+    '456\\n789\\n'
     """
     if isinstance(file, (str, unicode)):
         myopen = opens.get(compression, open)
