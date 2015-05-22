@@ -243,6 +243,7 @@ comes at cost.  Bags have the following known limitations
     same way that Python tends to be slower than NumPy/Pandas
 3.  ``Bag.groupby`` is slow.  You should try to use ``Bag.foldby`` if possible.
     Using ``Bag.foldby`` requires more thought.
+4.  The implementation backing ``Bag.groupby`` is under heavy churn.
 
 
 .. _shared: shared.rst
