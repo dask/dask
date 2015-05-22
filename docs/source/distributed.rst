@@ -148,6 +148,33 @@ Other clients on different machines can retrieve this collection:
 This only stores the dask graph and not any underlying data that this graph
 might open.  Usually these graphs are small and easy to pass around.
 
+
+IPython.parallel
+----------------
+
+Users familiar with ``IPython.parallel`` can use an ``IPython.parallel.Client``
+object, connected to a running ``ipcluster`` to bootstrap a dask distributed
+cluster.
+
+.. code-block:: python
+
+    # Setup your IPython cluster...
+    # Create a client.
+    from IPython.parallel import Client
+    ipclient = Client()
+
+    # Now use IPython parallel to set up dask.distributed
+    from dask.distributed import dask_client_from_ipclient
+    dclient = dask_client_from_ipclient(ipclient)
+
+    # Dask Client.get method computes dask graphs on the cluster.
+    dclient.get({'a': 41, 'b': (lambda x: x + 1, 'a')}, 'b')
+
+More info about setting up an IPython cluster can be found here_.
+
+.. _here: http://ipython.org/ipython-doc/dev/parallel/parallel_process.html
+
+
 Known Limitations
 -----------------
 
