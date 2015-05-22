@@ -586,7 +586,7 @@ def blockdims_from_blockshape(shape, blockshape):
                               for d, bd in zip(shape, blockshape))
 
 class Array(object):
-    """ Array object holding a dask
+    """ Parallel Array
 
     Parameters
     ----------

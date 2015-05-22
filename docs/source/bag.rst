@@ -9,7 +9,8 @@ semi-structured data like JSON blobs or log files.
 Name
 ----
 
-*Bag* is an abstract collection, like list and set
+*Bag* is an abstract collection, like *list* or *set*.  It is a friendly
+synonym to multiset_.
 
 * ``list``: *ordered* collection *with repeats*, ``[1, 2, 3, 2]``
 * ``set``: *unordered* collection *without repeats*,  ``{1, 2, 3}``
@@ -17,6 +18,8 @@ Name
 
 So a bag is like a list but doesn't guarantee an ordering among elements.
 There can be repeated elements but you can't ask for a particular element.
+
+.. _multiset: http://en.wikipedia.org/wiki/Bag_(mathematics)
 
 
 Example
@@ -41,7 +44,6 @@ Create Bags
 -----------
 
 There are several ways to create dask.bags around your data
-
 
 ``db.from_sequence``
 ~~~~~~~~~~~~~~~~~~~~
@@ -247,3 +249,39 @@ comes at cost.  Bags have the following known limitations
 
 
 .. _shared: shared.rst
+
+
+API
+---
+
+.. currentmodule:: dask.bag.core
+
+Create Bags
+~~~~~~~~~~~
+
+.. autosummary::
+   from_sequence
+   from_filenames
+   from_hdfs
+   concat
+
+Turn Bags into other things
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   Bag.to_textfiles
+   Bag.to_dataframe
+
+Bag Methods
+~~~~~~~~~~~
+
+.. autoclass:: Bag
+   :members:
+
+Other functions
+~~~~~~~~~~~~~~~
+
+.. autofunction:: from_sequence
+.. autofunction:: from_filenames
+.. autofunction:: from_hdfs
+.. autofunction:: concat
