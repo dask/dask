@@ -82,6 +82,7 @@ def get(dsk, keys, get=None, **kwargs):
     dsk2 = optimize(dsk, keys)
 
     return get(dsk2, keys, **kwargs)
+_get = get
 
 
 def list2(seq):
@@ -129,26 +130,23 @@ def to_textfiles(b, path, name_function=str):
 
 
 class Item(object):
-    def __init__(self, dsk, key, get=get):
+    def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
-        self.get = get
 
     def compute(self, **kwargs):
-        return self.get(self.dask, self.key, **kwargs)
+        return get(self.dask, self.key, **kwargs)
 
     def apply(self, func):
         name = next(names)
         dsk = {name: (func, self.key)}
-        return Item(merge(self.dask, dsk), name, get)
+        return Item(merge(self.dask, dsk), name)
 
     __int__ = __float__ = __complex__ = __bool__ = compute
 
 
 class Bag(object):
-    """ Unordered collection with repeats
-
-    Computed in paritions with dask
+    """ Parallel collection of Python objects
 
     Example
     -------
@@ -177,11 +175,10 @@ class Bag(object):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
-    def __init__(self, dsk, name, npartitions, get=get):
+    def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
-        self.get = get
         self.str = StringAccessor(self)
 
     def map(self, func):
@@ -533,7 +530,7 @@ class Bag(object):
         return [(self.name, i) for i in range(self.npartitions)]
 
     def compute(self, **kwargs):
-        results = self.get(self.dask, self._keys(), **kwargs)
+        results = get(self.dask, self._keys(), **kwargs)
         if isinstance(results[0], Iterable):
             results = toolz.concat(results)
         if not isinstance(results, Iterator):
