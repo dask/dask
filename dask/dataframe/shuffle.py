@@ -98,65 +98,65 @@ def unique(divisions):
 
 
 def shuffle(df, index, npartitions=None, use_server=False):
-        """ Group DataFrame by index
+    """ Group DataFrame by index
 
-        Hash grouping of elements.  After this operation all elements that have
-        the same index will be in the same partition.  Note that this requires
-        full dataset read, serialization and shuffle.  This is expensive.  If
-        possible you should avoid shuffles.
+    Hash grouping of elements.  After this operation all elements that have
+    the same index will be in the same partition.  Note that this requires
+    full dataset read, serialization and shuffle.  This is expensive.  If
+    possible you should avoid shuffles.
 
-        This does not preserve a meaningful index/partitioning scheme.
+    This does not preserve a meaningful index/partitioning scheme.
 
-        See Also
-        --------
-        partd
-        """
-        if isinstance(index, _Frame):
-            assert df.divisions == index.divisions
-        if npartitions is None:
-            npartitions = df.npartitions
+    See Also
+    --------
+    partd
+    """
+    if isinstance(index, _Frame):
+        assert df.divisions == index.divisions
+    if npartitions is None:
+        npartitions = df.npartitions
 
-        import partd
-        p = ('zpartd' + next(tokens),)
-        if use_server:
-            dsk1 = {}
-            p = partd.PandasBlocks(partd.Shared())
-        else:
-            dsk1 = {}
-            p = partd.PandasBlocks()
-            # dsk1 = {p: (partd.PandasBlocks,)}
+    import partd
+    p = ('zpartd' + next(tokens),)
+    if use_server:
+        dsk1 = {}
+        p = partd.PandasBlocks(partd.Shared())
+    else:
+        dsk1 = {}
+        p = partd.PandasBlocks()
+        # dsk1 = {p: (partd.PandasBlocks,)}
 
-        # Partition data on disk
-        name = next(names)
-        if isinstance(index, _Frame):
-            dsk2 = dict(((name, i),
-                         (partition, part, ind, npartitions, p))
-                         for i, (part, ind)
-                         in enumerate(zip(df._keys(), index._keys())))
-        else:
-            dsk2 = dict(((name, i),
-                         (partition, part, index, npartitions, p))
-                         for i, part
-                         in enumerate(df._keys()))
+    # Partition data on disk
+    name = next(names)
+    if isinstance(index, _Frame):
+        dsk2 = dict(((name, i),
+                     (partition, part, ind, npartitions, p))
+                     for i, (part, ind)
+                     in enumerate(zip(df._keys(), index._keys())))
+    else:
+        dsk2 = dict(((name, i),
+                     (partition, part, index, npartitions, p))
+                     for i, part
+                     in enumerate(df._keys()))
 
-        # Barrier
-        barrier_token = 'barrier' + next(tokens)
-        def barrier(args):         return 0
-        dsk3 = {barrier_token: (barrier, list(dsk2))}
+    # Barrier
+    barrier_token = 'barrier' + next(tokens)
+    def barrier(args):         return 0
+    dsk3 = {barrier_token: (barrier, list(dsk2))}
 
-        # Collect groups
-        name = next(names)
-        dsk4 = dict(((name, i),
-                     (collect, i, p, barrier_token))
-                    for i in range(npartitions))
+    # Collect groups
+    name = next(names)
+    dsk4 = dict(((name, i),
+                 (collect, i, p, barrier_token))
+                for i in range(npartitions))
 
-        divisions = [None] * (npartitions - 1)
+    divisions = [None] * (npartitions - 1)
 
-        dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
-        if isinstance(index, _Frame):
-            dsk.update(index.dask)
+    dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
+    if isinstance(index, _Frame):
+        dsk.update(index.dask)
 
-        return DataFrame(dsk, name, df.columns, divisions)
+    return DataFrame(dsk, name, df.columns, divisions)
 
 
 def partition(df, index, npartitions, p):
