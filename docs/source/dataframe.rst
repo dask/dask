@@ -139,5 +139,24 @@ Dask dataframe also introduces some new API
       ``from_bcolz(x, index='mycol', categorize=True)``
 
 
+Known Limitations
+-----------------
+
+Dask.dataframe is experimental and not to be used by the general public.
+Additionally it has the following constraints
+
+1.  Is uses the multiprocessing scheduler and so inherits those limitations
+    (see shared_)
+2.  The Pandas API is large and dask.dataframe does not attempt to fill it.
+    Many holes exist
+3.  Operations like groupby and join may take some time, as they are much more
+    challenging to do in parallel
+4.  Some operations like ``iloc`` cease to make sense
+
+Generally speakings users familiar with the mature and excellent functionality
+of Pandas should expect disappointment if they do not deeply understand the
+current design and limitations of dask.dataframe.
+
 .. _Chest: http://github.com/ContinuumIO/chest
 .. _pframe: pframe.html
+.. _shared: shared.html
