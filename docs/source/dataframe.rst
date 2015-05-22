@@ -1,10 +1,11 @@
 DataFrame
 =========
 
-Dask.dataframe is not ready for public use.
+Dask.dataframe is not ready for public use.  This document targets developers,
+not users.
 
 .. image:: images/frame.png
-   :width: 30%
+   :width: 50%
    :align: right
    :alt: A dask dataframe
 
@@ -77,14 +78,14 @@ Notice a few things
 Our divisions in this case are ``['Bob', 'Edith']``
 
 
-Shuffle
--------
+Quantiles and Shuffle
+---------------------
 
 Much of the complex bits of dask.dataframe are about shuffling records to obtain
 this nice arrangement of records along an index.  We do this in two stages
 
 1.  Find good values on which to partition our data
-    (e.g. find, ``['Bob', 'Edith']``
+    (e.g. find, ``['Bob', 'Edith']``)
 2.  Shuffle records from old blocks to new blocks
 
 
@@ -97,15 +98,6 @@ difficult due to the blocked nature of our storage, but has decent solutions.
 
 Currently we compute percentiles/quantiles on the new index of each block and
 then merge these together intelligently.
-
-
-Shard and Recombine
--------------------
-
-Once we know good partition values we need to shard sections out of the old
-blocks and then reconstruct those shards in new blocks.  We do this by
-leveraging in-core pandas segmentation on each block, and then using a special
-appendable on-disk data structure, pframe_.
 
 
 Supported API
@@ -137,6 +129,67 @@ Dask dataframe also introduces some new API
 * Ingest
     *  Read from bcolz (efficient on-disk column-store):
       ``from_bcolz(x, index='mycol', categorize=True)``
+
+
+Create Dask DataFrames
+----------------------
+
+From CSV files
+~~~~~~~~~~~~~~
+
+``dask.dataframe.read_csv`` uses ``pandas.read_csv`` and so inherits all of
+that functions options.  Additionally it gains two new functionalities
+
+1.  You can provide a globstring
+
+.. code-block:: python
+
+   >>> df = dd.read_csv('data.*.csv.gz', compression='gzip')
+
+2.  You can specify the size of each block of data in bytes of uncompressed
+    data.  Note that, especially for text data the size on disk may be much
+    less than the number of bytes in memory.
+
+.. code-block:: python
+
+   >>> df = dd.read_csv('data.csv', chunkbytes=10000000)  # 1MB chunks
+
+3.  You can ask to categorize your result.  This is slightly faster at read_csv
+    time because we can selectively read the object dtype columns first.  This
+    requires a full read of the dataset and may take some time
+
+.. code-block:: python
+
+   >>> df = dd.read_csv('data.csv', categorize=True)
+
+
+so needs a docstring. Maybe we should have ``iris.csv`` somewhere in
+the project.
+
+From an Array
+~~~~~~~~~~~~~
+
+You can create a DataFrame from any slicable array like object including both
+NumPy arrays and HDF5 datasets.
+
+.. code-block:: Python
+
+   >>> dd.from_array(x, chunksize=1000000)
+
+From BColz
+~~~~~~~~~~
+
+BColz_ is an on-disk, chunked, compressed, column-store.  These attributes make
+it very attractive for dask.dataframe which can operate particularly well on
+it.  There is a special ``from_bcolz`` function.
+
+.. code-block:: Python
+
+   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000)
+
+In particular column access on a dask.dataframe backed by a ``bcolz.ctable``
+will only read the necessary columns from disk.  This can provide dramatic
+performance improvements.
 
 
 Known Limitations
