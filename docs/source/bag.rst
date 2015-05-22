@@ -9,7 +9,8 @@ semi-structured data like JSON blobs or log files.
 Name
 ----
 
-*Bag* is an abstract collection, like list and set
+*Bag* is an abstract collection, like *list* or *set*.  It is a friendly
+synonym to multiset_.
 
 * ``list``: *ordered* collection *with repeats*, ``[1, 2, 3, 2]``
 * ``set``: *unordered* collection *without repeats*,  ``{1, 2, 3}``
@@ -17,6 +18,8 @@ Name
 
 So a bag is like a list but doesn't guarantee an ordering among elements.
 There can be repeated elements but you can't ask for a particular element.
+
+.. _multiset: http://en.wikipedia.org/wiki/Bag_(mathematics)
 
 
 Example
