@@ -692,7 +692,11 @@ class SeriesGroupBy(object):
         self.kwargs = kwargs
 
     def apply(func, columns=None):
-        f = set_index(self.frame, self.index, **self.kwargs)
+        # f = set_index(self.frame, self.index, **self.kwargs)
+        if self.index._name != self.frame.index._name:
+            f = shuffle(self.frame, self.index, **self.kwargs)
+        else:
+            f = self.frame
         return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
                             columns=columns)
 
