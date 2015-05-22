@@ -371,25 +371,32 @@ class Bag(object):
         dsk2 = {b: (aggregate, list(dsk.keys()))}
         return Item(merge(self.dask, dsk, dsk2), b)
 
+    @wraps(sum)
     def sum(self):
         return self.reduction(sum, sum)
 
+    @wraps(max)
     def max(self):
         return self.reduction(max, max)
 
+    @wraps(min)
     def min(self):
         return self.reduction(min, min)
 
+    @wraps(any)
     def any(self):
         return self.reduction(any, any)
 
+    @wraps(all)
     def all(self):
         return self.reduction(all, all)
 
     def count(self):
+        """ Count the number of elements """
         return self.reduction(count, sum)
 
     def mean(self):
+        """ Arithmetic mean """
         def chunk(seq):
             total, n = 0.0, 0
             for x in seq:
@@ -402,6 +409,7 @@ class Bag(object):
         return self.reduction(chunk, agg)
 
     def var(self, ddof=0):
+        """ Variance """
         def chunk(seq):
             squares, total, n = 0.0, 0.0, 0
             for x in seq:
@@ -417,6 +425,7 @@ class Bag(object):
         return self.reduction(chunk, agg)
 
     def std(self, ddof=0):
+        """ Standard deviation """
         return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
@@ -530,6 +539,7 @@ class Bag(object):
         return [(self.name, i) for i in range(self.npartitions)]
 
     def compute(self, **kwargs):
+        """ Force evaluation of bag """
         results = get(self.dask, self._keys(), **kwargs)
         if isinstance(results[0], Iterable):
             results = toolz.concat(results)
