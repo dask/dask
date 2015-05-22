@@ -156,11 +156,13 @@ Known Limitations
     system.
 3.  It assumes that workers can see each other over the network
 4.  It does not fail gracefully in case of errors
-5.  It does not think about data locality.  Linear chains of tasks are often
-    ``fused`` beforehand but tasks with multiple inputs will run on whatever
-    worker is available first, not necessarily on a worker that already has
-    local data.
+5.  It does not think about data locality.  Linear chains avoid this limitation
+    by fusing into a single task beforehand but tasks with multiple inputs will
+    run on whatever worker is available first and not necessarily on a worker
+    that already has local data.
 6.  It does not integrate natively with data-local file systems like HDFS
+7.  It is a dynamic scheduler and will likely never reach the
+    performance of hand-tuned MPI codes for HPC workloads
 
 
 Additional Notes
