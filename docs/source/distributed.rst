@@ -148,6 +148,24 @@ Other clients on different machines can retrieve this collection:
 This only stores the dask graph and not any underlying data that this graph
 might open.  Usually these graphs are small and easy to pass around.
 
+Known Limitations
+-----------------
+
+1.  The distributed scheduler is new and buggy
+2.  It is not fault tolerant.  The failure of any worker is likely to crash the
+    system.
+3.  It assumes that workers can see each other over the network
+4.  It does not fail gracefully in case of errors
+5.  It does not think about data locality.  Linear chains of tasks are often
+    ``fused`` beforehand but tasks with multiple inputs will run on whatever
+    worker is available first, not necessarily on a worker that already has
+    local data.
+6.  It does not integrate natively with data-local file systems like HDFS
+
+
+Additional Notes
+----------------
+
 There are some more detailed notes on the distributed scheduler here_
 
 .. _chest: https://github.com/ContinuumIO/chest

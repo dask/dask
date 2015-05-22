@@ -122,4 +122,23 @@ communication; they have been removed from the plot.
 
 `Script available here`_
 
+
+Known Limitations
+-----------------
+
+The shared memory scheduler has notable limitations:
+
+1.  It works on a single machine
+2.  The threaded scheduler is limited by the GIL on Python code and so, if your
+    operations are pure python functions you should not expect a multi-core
+    speedup.
+3.  The multiprocessing scheduler must serialize functions between workers;
+    this can fail
+4.  The multiprocessing scheduler must serialize data between workers and the
+    central process; this can be expensive
+5.  The multiprocessing scheduler can not transfer data directly between worker
+    processes; all data routes through the master process
+
+
+
 .. _`Script available here`: https://github.com/ContinuumIO/dask/tree/master/docs/source/scripts/scheduling.py
