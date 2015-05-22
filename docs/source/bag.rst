@@ -42,7 +42,6 @@ Create Bags
 
 There are several ways to create dask.bags around your data
 
-
 ``db.from_sequence``
 ~~~~~~~~~~~~~~~~~~~~
 
