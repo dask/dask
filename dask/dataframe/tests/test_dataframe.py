@@ -1,14 +1,14 @@
-import dask.dataframe as dd
-from dask.dataframe.core import compute, get, concat
-from toolz import valmap
-import pandas.util.testing as tm
 from operator import getitem
+
 import pandas as pd
+import pandas.util.testing as tm
 import numpy as np
-from dask.utils import filetext, raises, tmpfile
-import gzip
-import bz2
+
 import dask
+from dask.utils import raises
+import dask.dataframe as dd
+from dask.dataframe.core import get, concat
+
 
 def eq(a, b):
     if hasattr(a, 'dask'):
