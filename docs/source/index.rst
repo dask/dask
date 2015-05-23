@@ -9,24 +9,25 @@ mimicing existing libraries
 * ``dask.dataframe`` = ``pandas`` + ``multiprocessing`` (experimental)
 
 This increases the scale of comfortable data from *fits-in-memory* to
-*fits-on-disk* by intelligently streaming data from disk and leveraging all the
-cores of a modern CPU.
+*fits-on-disk* by intelligently streaming data from disk and by leveraging all
+the cores of a modern CPU.
 
-Dask *primarily* targets computations that run on a single machine.  It
+Dask primarily targets parallel computations that run on a single machine.  It
 integrates nicely with the existing PyData ecosystem and is trivial to setup
-and run::
+and use::
 
     conda install dask
     or
     pip install dask
 
 Operations on dask collections (array, bag, datadrame) produce task graphs that
-encode blocked algorithms.  Dask schedulers execute these task graphs in
+encode blocked algorithms.  Task schedulers execute these task graphs in
 parallel in a variety of contexts.
 
 .. image:: images/collections-schedulers.png
    :alt: Dask collections and schedulers
-   :width: 50%
+   :width: 80%
+   :align: center
 
 **Collections:**
 
