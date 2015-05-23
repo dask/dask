@@ -2,7 +2,7 @@ Dask - Parallel Processing Through Blocked Algorithms
 =====================================================
 
 Dask collections provide parallel computation on larger-than-memory data while
-mimicing existing libraries
+mimicking existing libraries
 
 * ``dask.array`` = ``numpy`` + ``threading``
 * ``dask.bag`` = ``map, filter, toolz`` + ``multiprocessing``
@@ -20,7 +20,7 @@ and use::
     or
     pip install dask
 
-Operations on dask collections (array, bag, datadrame) produce task graphs that
+Operations on dask collections (array, bag, dataframe) produce task graphs that
 encode blocked algorithms.  Task schedulers execute these task graphs in
 parallel in a variety of contexts.
 
