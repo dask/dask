@@ -1,16 +1,26 @@
 Dask - Parallel Processing Through Blocked Algorithms
 =====================================================
 
-Dask enables parallel processing on larger-than-memory datasets.
-Dask collections mimic NumPy, Pandas, and Toolz interfaces but operate smoothly
-from disk and use all of your cores.  Dask primarily operates on a single
-machine and is trivial to set up::
+Dask collections provide parallel computation on larger-than-memory data while
+mimicing existing libraries
+
+* ``dask.array`` = ``numpy`` + ``threading``
+* ``dask.bag`` = ``map, filter, toolz`` + ``multiprocessing``
+* ``dask.dataframe`` = ``pandas`` + ``multiprocessing`` (experimental)
+
+This increases the scale of comfortable data from *fits-in-memory* to
+*fits-on-disk* by intelligently streaming data from disk and leveraging all the
+cores of a modern CPU.
+
+Dask *primarily* targets computations that run on a single machine.  It
+integrates nicely with the existing PyData ecosystem and is trivial to setup
+and run::
 
     conda install dask
     or
     pip install dask
 
-Operations on dask collections (Array, Bag, DataFrame) produce task graphs that
+Operations on dask collections (array, bag, datadrame) produce task graphs that
 encode blocked algorithms.  Dask schedulers execute these task graphs in
 parallel in a variety of contexts.
 
@@ -35,7 +45,7 @@ then you should start here.
 
 Dask graphs encode algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  This section is useful for developers.
+dask collections.  If you are a dask *developer* then you should start here.
 
 .. toctree::
    :maxdepth: 1
