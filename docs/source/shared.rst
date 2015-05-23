@@ -48,7 +48,7 @@ Performance
 Schedulers introduce overhead.  This overhead effectively limits the
 granularity of our parallelism.  Below we measure overhead of the async
 scheduler with different apply functions (threaded, sync, multiprocessing), and
-under different kinds of load (embarassingly parallel, dense communication).
+under different kinds of load (embarrassingly parallel, dense communication).
 
 The quickest/simplest test we can do it to use IPython's ``timeit`` magic.
 

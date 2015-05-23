@@ -59,7 +59,7 @@ Currently Blaze offers the following concrete benefits:
 
 *  Smoother immediate feedback for type and shape errors
 *  dtype tracking
-*  Numba integration for elementwise operations
+*  Numba integration for element-wise operations
 *  Integration with other Blaze projects like `Blaze Server`_
 
 However this comes at a cost of indirection and potential confusion.

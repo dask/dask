@@ -33,7 +33,7 @@ Dask ``DataFrame`` objects contain the following data:
 *  columns - list of column names to improve usability and error checking
 *  divisions - tuple of index values on which to partition our blocks
 
-The ``divisions`` attribute, analagous to ``chunks`` in ``dask.array`` is
+The ``divisions`` attribute, analogous to ``chunks`` in ``dask.array`` is
 particularly important.  The values in divisions determine a partitioning of
 left-inclusive / right-exclusive ranges on the index::
 
@@ -71,7 +71,7 @@ Notice a few things
 1.  On the right Records are now organized by name; given any name it is
     obvious in which block it belongs.
 2.  Blocks are roughly the same size (though not exactly).  We prefer evenly
-    sized blocks over preditable partition values, (e.g. A, B, C).  Because
+    sized blocks over predictable partition values, (e.g. A, B, C).  Because
     this dataset has many Alices we have a block just for her.
 3.  The blocks don't need to be sorted internally
 
@@ -169,7 +169,7 @@ the project.
 From an Array
 ~~~~~~~~~~~~~
 
-You can create a DataFrame from any slicable array like object including both
+You can create a DataFrame from any sliceable array like object including both
 NumPy arrays and HDF5 datasets.
 
 .. code-block:: Python

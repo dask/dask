@@ -13,7 +13,7 @@ It does not currently support the following:
 *  Slicing one ``dask.array`` with another ``x[x > 0]``
 *  Slicing with lists in multiple axes  ``x[[1, 2, 3], [3, 2, 1]]``
 
-Both of these are straighforward to add though.  If you have a use case then
+Both of these are straightforward to add though.  If you have a use case then
 raise an issue.
 
 

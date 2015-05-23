@@ -8,7 +8,7 @@ blocks.  Example operations include the following:
 *  Sliding sum/mean/max, ...
 *  Search for image motifs like a Gaussian blob that might span the border of a
    block
-*  Evalute a partial derivative
+*  Evaluate a partial derivative
 *  Play the game of Life_
 
 Dask.array supports these operations by creating a new dask.array where each
@@ -26,7 +26,7 @@ Consider two neighboring blocks in a dask array.
    :width: 30%
    :alt: un-ghosted neighbors
 
-We extend each block by trading thin nearby slices betweeen arrays
+We extend each block by trading thin nearby slices between arrays
 
 .. image:: images/ghosted-neighbors.png
    :width: 30%
@@ -110,8 +110,8 @@ that is not stored locally in each block
 
    >>> filt = g.map_blocks(func)
 
-While we used a scipy function above this could have been any arbitrary
-function.  This is a good interaction point with Numba_.
+While in this case we used a SciPy function above this could have been any
+arbitrary function.  This is a good interaction point with Numba_.
 
 If your function does not preserve the shape of the block then you will need to
 provide either a ``blockshape`` if your block sizes are regular or

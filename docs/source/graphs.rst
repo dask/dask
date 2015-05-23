@@ -67,7 +67,7 @@ We encode this as a dictionary in the following way
         'z': (add, 'y', 10)}
 
 While less pleasant than our original code this representation can be analyzed
-and executed by other Python code, not just the cPython interpreter.  We don't
+and executed by other Python code, not just the CPython interpreter.  We don't
 recommend that users write code in this way, but rather that it is an
 appropriate target for automated systems.  Also, in non-toy examples the
 execution times are likely much larger than for ``inc`` and ``add``, warranting

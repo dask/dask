@@ -27,7 +27,7 @@ For example the HDF5 file format has the ``h5py`` project, which provides a
 
    >>> x = d[:5, :5]                # We slice to get numpy arrays
 
-It is common for Python wrappers of on-disk arrayformats to present a NumPy
+It is common for Python wrappers of on-disk array formats to present a NumPy
 slicing syntax.  The full dataset looks like a NumPy array with ``.shape`` and
 ``.dtype`` attributes even though the data hasn't yet been loaded in and still
 lives on disk.  Slicing in to this array-like object fetches the appropriate
