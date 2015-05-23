@@ -12,8 +12,8 @@ def cull(dsk, keys):
     In other words, remove unnecessary tasks from dask.
     ``keys`` may be a single key or list of keys.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
     >>> cull(d, 'out')  # doctest: +SKIP
@@ -39,8 +39,8 @@ def fuse(dsk):
 
     This may be used as an optimization step.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> fuse(d)  # doctest: +SKIP
@@ -102,8 +102,8 @@ def inline(dsk, keys=None, inline_constants=True):
 
     Inlines all constants if ``inline_constants`` keyword is True.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
     >>> inline(d)  # doctest: +SKIP
@@ -211,8 +211,8 @@ def dealias(dsk):
     Aliases are not expected by schedulers.  It's unclear that this is a legal
     state.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> dsk = {'a': (range, 5),
     ...        'b': 'a',
@@ -264,8 +264,8 @@ def equivalent(term1, term2, subs=None):
     subs : dict, optional
         Mapping of substitutions from `term2` to `term1`
 
-    Example
-    -------
+    Examples
+    --------
     >>> from operator import add
     >>> term1 = (add, 'a', 'b')
     >>> term2 = (add, 'x', 'y')
@@ -315,8 +315,8 @@ def equivalent(term1, term2, subs=None):
 def dependency_dict(dsk):
     """Create a dict matching ordered dependencies to keys.
 
-    Example
-    -------
+    Examples
+    --------
     >>> from operator import add
     >>> dsk = {'a': 1, 'b': 2, 'c': (add, 'a', 'a'), 'd': (add, 'b', 'a')}
     >>> dependency_dict(dsk)    # doctest: +SKIP
@@ -367,8 +367,8 @@ def sync_keys(dsk1, dsk2):
     ----------
     dsk1, dsk2 : dict
 
-    Example
-    -------
+    Examples
+    --------
     >>> from operator import add, mul
     >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
     >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
@@ -400,7 +400,7 @@ def merge_sync(dsk1, dsk2):
     key_map : dict
         A mapping between the keys from `dsk2` to their new names in `new_dsk`.
 
-    Example
+    Examples
     -------
     >>> from operator import add, mul
     >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
