@@ -22,13 +22,8 @@ Specialized Functions for Dask.Array
    stack
    concatenate
 
-.. currentmodule:: dask.array.rechunk
-   rechunk
-
 Array Methods
 ~~~~~~~~~~~~~
-
-.. currentmodule:: dask.array.core
 
 .. autoclass:: Array
    :members:
