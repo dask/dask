@@ -502,9 +502,8 @@ def compute(*args, **kwargs):
     a single dask array into a numpy array, use ``myarray.compute()`` or simply
     ``np.array(myarray)``.
 
-    Example
-    -------
-
+    Examples
+    --------
     >>> import dask.array as da
     >>> d = da.ones((4, 4), chunks=(2, 2))
     >>> a = d + 1  # two different dask arrays
@@ -694,9 +693,10 @@ class Array(object):
 
         >>> x.to_hdf5('myfile.hdf5', '/x', compression='lzf', shuffle=True)  # doctest: +SKIP
 
-        See also:
-            da.store
-            h5py.File.create_dataset
+        See also
+        --------
+        da.store
+        h5py.File.create_dataset
         """
         import h5py
         with h5py.File(filename) as f:
@@ -847,51 +847,63 @@ class Array(object):
     def __rxor__(self, other):
         return elemwise(operator.xor, other, self)
 
+    @wraps(np.any)
     def any(self, axis=None, keepdims=False):
         from .reductions import any
         return any(self, axis=axis, keepdims=keepdims)
 
+    @wraps(np.all)
     def all(self, axis=None, keepdims=False):
         from .reductions import all
         return all(self, axis=axis, keepdims=keepdims)
 
+    @wraps(np.min)
     def min(self, axis=None, keepdims=False):
         from .reductions import min
         return min(self, axis=axis, keepdims=keepdims)
 
+    @wraps(np.max)
     def max(self, axis=None, keepdims=False):
         from .reductions import max
         return max(self, axis=axis, keepdims=keepdims)
 
+    @wraps(np.argmin)
     def argmin(self, axis=None):
         from .reductions import argmin
         return argmin(self, axis=axis)
 
+    @wraps(np.argmax)
     def argmax(self, axis=None):
         from .reductions import argmax
         return argmax(self, axis=axis)
 
+    @wraps(np.sum)
     def sum(self, axis=None, keepdims=False):
         from .reductions import sum
         return sum(self, axis=axis, keepdims=keepdims)
 
+    @wraps(np.prod)
     def prod(self, axis=None, keepdims=False):
         from .reductions import prod
         return prod(self, axis=axis, keepdims=keepdims)
 
+    @wraps(np.mean)
     def mean(self, axis=None, keepdims=False):
         from .reductions import mean
         return mean(self, axis=axis, keepdims=keepdims)
 
+    @wraps(np.std)
     def std(self, axis=None, keepdims=False, ddof=0):
         from .reductions import std
         return std(self, axis=axis, keepdims=keepdims, ddof=ddof)
 
+    @wraps(np.var)
     def var(self, axis=None, keepdims=False, ddof=0):
         from .reductions import var
         return var(self, axis=axis, keepdims=keepdims, ddof=ddof)
 
     def vnorm(self, ord=None, axis=None, keepdims=False):
+        """ Vector norm """
         from .reductions import vnorm
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
 
@@ -922,8 +934,8 @@ class Array(object):
         **kwargs:
             Other keyword arguments valid in ``map_blocks``
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
         >>> x = from_array(x, chunks=5)
@@ -994,8 +1006,8 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     -   explicit sizes of all blocks along all dimensions
         like ((1000, 1000, 500), (400, 400)).
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> x = h5py.File('...')['/data/path']  # doctest: +SKIP
     >>> a = da.from_array(x, chunks=(1000, 1000))  # doctest: +SKIP
@@ -1076,8 +1088,8 @@ def stack(seq, axis=0):
     Given a sequence of dask Arrays form a new dask Array by stacking them
     along a new dimension (axis=0 by default)
 
-    Example
-    -------
+    Examples
+    --------
 
     Create slices
 
@@ -1099,8 +1111,9 @@ def stack(seq, axis=0):
 
     Result is a new dask Array
 
-    See Also:
-        concatenate
+    See Also
+    --------
+    concatenate
     """
     n = len(seq)
     ndim = len(seq[0].shape)
@@ -1148,8 +1161,8 @@ def concatenate(seq, axis=0):
     Given a sequence of dask Arrays form a new dask Array by stacking them
     along an existing dimension (axis=0 by default)
 
-    Example
-    -------
+    Examples
+    --------
 
     Create slices
 
@@ -1168,8 +1181,9 @@ def concatenate(seq, axis=0):
 
     Result is a new dask Array
 
-    See Also:
-        stack
+    See Also
+    --------
+    stack
     """
     n = len(seq)
     ndim = len(seq[0].shape)
@@ -1324,11 +1338,14 @@ def elemwise(op, *args, **kwargs):
 
     Respects broadcasting rules
 
+    Examples
+    --------
     >>> elemwise(add, x, y)  # doctest: +SKIP
     >>> elemwise(sin, x)  # doctest: +SKIP
 
-    See also:
-        atop
+    See also
+    --------
+    atop
     """
     name = kwargs.get('name') or next(names)
     out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
