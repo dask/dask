@@ -663,7 +663,7 @@ class Bag(object):
             npartitions = self.npartitions
 
         import partd
-        p = 'partd' + next(tokens)
+        p = ('partd' + next(tokens),)
         if use_server:
             try:
                 dsk1 = {p: partd.Python(partd.Snappy(partd.Shared()))}
