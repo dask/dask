@@ -59,7 +59,7 @@ def test_map():
 
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
-    assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
+    assert list(b.map(lambda x, y: x + y).compute(get=dask.get)) == [11, 22, 33]
 
 
 def test_filter():
@@ -108,7 +108,8 @@ def test_frequencies():
 
 def test_topk():
     assert list(b.topk(4)) == [4, 4, 4, 3]
-    assert list(b.topk(4, key=lambda x: -x)) == [0, 0, 0, 1]
+    assert list(b.topk(4, key=lambda x: -x).compute(get=dask.get)) == \
+            [0, 0, 0, 1]
 
 
 def test_topk_with_non_callable_key():
