@@ -24,8 +24,6 @@ with ignoring(ImportError):
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
-from pbag import PBag
-
 from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
@@ -657,7 +655,6 @@ class Bag(object):
         --------
 
         Bag.foldby
-        pbag
         """
         if npartitions is None:
             npartitions = self.npartitions

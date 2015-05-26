@@ -11,7 +11,6 @@ import numpy as np
 import operator
 import gzip
 import bz2
-from pframe import pframe
 import bcolz
 try:
     from chest import Chest as Cache

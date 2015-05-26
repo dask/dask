@@ -11,7 +11,6 @@ from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         _parse_s3_URI, inline_singleton_lists, optimize)
 from dask.utils import filetexts, tmpfile, raises
 import dask
-from pbag import PBag
 import dask.bag as db
 import shutil
 import os
