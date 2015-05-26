@@ -784,14 +784,20 @@ def map_blocks(func, columns, *args):
 
     Provide columns of the output if they are not the same as the input.
     """
-    assert all(arg.divisions == args[0].divisions for arg in args)
+    assert all(not isinstance(arg, _Frame) or
+               arg.divisions == args[0].divisions
+               for arg in args)
 
     name = next(names)
     dsk = dict(((name, i), (apply, func,
-                             (tuple, [(arg._name, i) for arg in args])))
+                             (tuple, [(arg._name, i)
+                                      if isinstance(arg, _Frame)
+                                      else arg
+                                      for arg in args])))
                 for i in range(args[0].npartitions))
 
-    return type(args[0])(merge(dsk, *[arg.dask for arg in args]),
+    return type(args[0])(merge(dsk, *[arg.dask for arg in args
+                                               if isinstance(arg, _Frame)]),
                       name, columns, args[0].divisions)
 
 aca = apply_concat_apply
