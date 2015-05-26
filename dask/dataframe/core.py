@@ -659,11 +659,14 @@ class GroupBy(object):
         if (isinstance(self.index, Series) and
             self.index._name == self.frame.index._name):
             f = self.frame
+            return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
+                                columns=columns)
         else:
             # f = set_index(self.frame, self.index, **self.kwargs)
             f = shuffle(self.frame, self.index, **self.kwargs)
-        return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
-                            columns=columns)
+            return map_blocks(lambda df, index: df.groupby(index).apply(func),
+                              columns or self.frame.columns,
+                              self.frame, self.index)
 
     def __getitem__(self, key):
         if key in self.frame.columns:
@@ -693,12 +696,15 @@ class SeriesGroupBy(object):
 
     def apply(func, columns=None):
         # f = set_index(self.frame, self.index, **self.kwargs)
-        if self.index._name != self.frame.index._name:
-            f = shuffle(self.frame, self.index, **self.kwargs)
-        else:
+        if self.index._name == self.frame.index._name:
             f = self.frame
-        return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
-                            columns=columns)
+            return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
+                                columns=columns)
+        else:
+            f = shuffle(self.frame, self.index, **self.kwargs)
+            return map_blocks(lambda df, index: df.groupby(index).apply(func),
+                              columns or self.frame.columns,
+                              self.frame, self.index)
 
     def sum(self):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()

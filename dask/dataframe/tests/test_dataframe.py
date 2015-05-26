@@ -228,7 +228,7 @@ def test_groupby_on_index():
         df['b'] = df.b - df.b.mean()
         return df
 
-    assert eq(d.groupby('a').apply(func),
+    assert eq(d.groupby('a').apply(func).set_index('a'),
               e.groupby(e.index).apply(func))
 
 
