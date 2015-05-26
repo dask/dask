@@ -779,6 +779,20 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
                                       if isinstance(a, _Frame)]),
             b, columns, [])
 
+def map_blocks(func, columns, *args):
+    """ Apply Python function on each DataFrame block
+
+    Provide columns of the output if they are not the same as the input.
+    """
+    assert all(arg.divisions == args[0].divisions for arg in args)
+
+    name = next(names)
+    dsk = dict(((name, i), (apply, func,
+                             (tuple, [(arg._name, i) for arg in args])))
+                for i in range(args[0].npartitions))
+
+    return type(args[0])(merge(dsk, *[arg.dask for arg in args]),
+                      name, columns, args[0].divisions)
 
 aca = apply_concat_apply
 

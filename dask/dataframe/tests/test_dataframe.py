@@ -195,8 +195,13 @@ def test_reductions():
     assert eq(d.b.mean(), full.b.mean())
 
 
+def test_map_blocks_multi_argument():
+    assert eq(dd.map_blocks(lambda a, b: a + b, 'c', d.a, d.b),
+              full.a + full.b)
+
+
 def test_map_blocks():
-    assert eq(d.map_blocks(lambda df: df), full)
+    assert eq(d.map_blocks(lambda df: df, 'a'), full)
 
 
 def test_drop_duplicates():
