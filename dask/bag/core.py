@@ -13,6 +13,7 @@ try:
 except ImportError:
     from urllib.request import urlopen
 
+from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
@@ -773,17 +774,22 @@ def write(data, filename):
 
 
 def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None, connection=None):
-    """ Create a dask by loading files from s3.
+    """ Create a dask.bag by loading files from s3.
 
     >>> b = from_s3(bucket, 'myfile1.txt')
 
-    or a pattern with '*' or '?'.
+    or a pattern with '*' or '?'. There is one partition per file.
 
     >>> b = from_s3(bucket, '*.json')
+    >>> b.npartitions
+    9
 
-    or a list of files
+    or a list of files.
 
     >>> b = from_s3(bucket, ['alice.csv', 'bob.csv'])
+    >>> b.npartitions
+    2
+
     """
     def _from_s3(bucket, matches):
         """
@@ -792,7 +798,7 @@ def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None, connec
         d = {}
         for i, m in enumerate(matches):
             get_key = (bucket.get_key, m)
-            read_key = lambda k: getattr(k, 'read')()
+            read_key = lambda k: [getattr(k, 'read')()]
             d[('load', i)] = (read_key, get_key)
         return Bag(d, 'load', len(matches))
 
@@ -806,7 +812,6 @@ def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None, connec
             return _from_s3(bucket, [paths])
 
         # handle globs
-        from fnmatch import fnmatchcase
         keys = bucket.list()
 
         matches = []
