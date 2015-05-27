@@ -791,13 +791,14 @@ def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None, connec
         """
         d = {}
         for i, m in enumerate(matches):
-            d[('load', i)] = ((getattr, (bucket.get_key, m), 'read'),)
+            get_key = (bucket.get_key, m)
+            read_key = lambda k: getattr(k, 'read')()
+            d[('load', i)] = (read_key, get_key)
         return Bag(d, 'load', len(matches))
 
     import boto
     if connection is None:
         connection = boto.connect_s3(aws_access_key, aws_secret_key)
-    connection = boto.connect_s3(aws_access_key, aws_secret_key)
     bucket = connection.get_bucket(bucket_name)
 
     if isinstance(paths, str):
