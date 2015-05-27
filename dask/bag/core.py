@@ -772,6 +772,52 @@ def write(data, filename):
         f.close()
 
 
+def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None, connection=None):
+    """ Create a dask by loading files from s3.
+
+    >>> b = from_s3(bucket, 'myfile1.txt')
+
+    or a pattern with '*' or '?'.
+
+    >>> b = from_s3(bucket, '*.json')
+
+    or a list of files
+
+    >>> b = from_s3(bucket, ['alice.csv', 'bob.csv'])
+    """
+    def _from_s3(bucket, matches):
+        """
+        takes an s3 bucket object and a list of bucket strings
+        """
+        d = {}
+        for i, m in enumerate(matches):
+            d[('load', i)] = ((getattr, (bucket.get_key, m), 'read'),)
+        return Bag(d, 'load', len(matches))
+
+    import boto
+    if connection is None:
+        connection = boto.connect_s3(aws_access_key, aws_secret_key)
+    connection = boto.connect_s3(aws_access_key, aws_secret_key)
+    bucket = connection.get_bucket(bucket_name)
+
+    if isinstance(paths, str):
+        if ('*' not in paths) and ('?' not in paths):
+            return _from_s3(bucket, [paths])
+
+        # handle globs
+        from fnmatch import fnmatchcase
+        keys = bucket.list()
+
+        matches = []
+        for k in keys:
+            k_name = k.name.encode('utf-8')
+            if fnmatchcase(k_name, paths):
+                matches.append(k_name)
+        return _from_s3(bucket, matches)
+
+    return _from_s3(bucket, paths)
+
+
 def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
     """ Create dask by loading in files from HDFS
 
