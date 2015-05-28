@@ -773,7 +773,8 @@ def write(data, filename):
         f.close()
 
 
-def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None, connection=None):
+def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None,
+            connection=None, anon=False):
     """ Create a dask.bag by loading files from s3.
 
     >>> b = from_s3(bucket, 'myfile1.txt')
@@ -803,7 +804,9 @@ def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None, connec
         return Bag(d, 'load', len(matches))
 
     import boto
-    if connection is None:
+    if anon is True:
+        connection = boto.connect_s3(anon=anon)
+    elif connection is None:
         connection = boto.connect_s3(aws_access_key, aws_secret_key)
     bucket = connection.get_bucket(bucket_name)
 
