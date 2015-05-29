@@ -970,3 +970,31 @@ def test_topk():
 
     assert e.chunks == ((2,),)
     assert eq(e, np.sort(x)[-1:-3:-1])
+
+
+def test_bincount():
+    x = np.array([2, 1, 5, 2, 1])
+    d = da.from_array(x, chunks=2)
+
+    assert eq(da.bincount(d, minlength=6), np.bincount(x, minlength=6))
+
+
+def test_bincount_with_weights():
+    x = np.array([2, 1, 5, 2, 1])
+    d = da.from_array(x, chunks=2)
+    weights = np.array([1, 2, 1, 0.5, 1])
+
+    dweights = da.from_array(weights, chunks=2)
+    assert eq(da.bincount(d, weights=dweights, minlength=6),
+              np.bincount(x, weights=dweights, minlength=6))
+
+
+def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
+    x = np.array([2, 1, 5, 2, 1])
+    d = da.from_array(x, chunks=2)
+    try:
+        da.bincount(d)
+    except Exception as e:
+        assert 'minlength' in str(e)
+    else:
+        assert False
