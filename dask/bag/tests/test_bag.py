@@ -203,15 +203,17 @@ def test_from_filenames():
 def test_from_filenames_gzip():
     b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
 
-    assert set(b.dask.values()) == set([(list, (gzip.open, 'foo.json.gz')),
-                                        (list, (gzip.open, 'bar.json.gz'))])
+    assert (set(b.dask.values()) ==
+            set([(list, (gzip.open, os.path.abspath('foo.json.gz'))),
+                 (list, (gzip.open, os.path.abspath('bar.json.gz')))]))
 
 
 def test_from_filenames_bz2():
     b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
 
-    assert set(b.dask.values()) == set([(list, (bz2.BZ2File, 'foo.json.bz2')),
-                                        (list, (bz2.BZ2File, 'bar.json.bz2'))])
+    assert (set(b.dask.values()) ==
+            set([(list, (bz2.BZ2File, os.path.abspath('foo.json.bz2'))),
+                 (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
 
 
 def test_from_sequence():

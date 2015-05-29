@@ -719,11 +719,13 @@ def from_filenames(filenames):
     if not filenames:
         raise ValueError("No filenames found")
 
+    full_filenames = [os.path.abspath(f) for f in filenames]
+
     extension = os.path.splitext(filenames[0])[1].strip('.')
     myopen = opens.get(extension, open)
 
     d = dict((('load', i), (list, (myopen, fn)))
-             for i, fn in enumerate(filenames))
+             for i, fn in enumerate(full_filenames))
     return Bag(d, 'load', len(d))
 
 
