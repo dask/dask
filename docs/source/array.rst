@@ -17,4 +17,3 @@ these blocked algorithms using ``dask`` graphs.
    random.rst
    ghost.rst
    array-blaze.rst
-   array-api.rst
