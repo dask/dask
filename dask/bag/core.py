@@ -792,27 +792,43 @@ def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None,
     2
 
     """
-    def _from_s3(bucket, matches):
+    def _connect_s3(aws_access_key, aws_secret_key, connection, anon):
+        """Connect to s3"""
+        import boto
+        if anon is True:
+            connection = boto.connect_s3(anon=anon)
+        elif connection is None:
+            connection = boto.connect_s3(aws_access_key, aws_secret_key)
+        return connection
+
+    def _from_s3(bucket_name, matches, conn_args):
         """
         takes an s3 bucket object and a list of bucket strings
         """
         d = {}
         for i, m in enumerate(matches):
-            get_key = (bucket.get_key, m)
+            # connect to s3
+            a, b, c = conn_args
+            get_connection = (_connect_s3, a, b, c)
+            # get the bucket with the connection
+            get_bucket = (lambda x: x.get_bucket(bucket_name), get_connection)
+            # get a key from the bucket
+            get_key = (lambda b, k: b.get_key(k), get_bucket, m)
+            # read the key
             read_key = lambda k: [getattr(k, 'read')()]
             d[('load', i)] = (read_key, get_key)
         return Bag(d, 'load', len(matches))
 
-    import boto
-    if anon is True:
-        connection = boto.connect_s3(anon=anon)
-    elif connection is None:
-        connection = boto.connect_s3(aws_access_key, aws_secret_key)
-    bucket = connection.get_bucket(bucket_name)
+    conn_args = (aws_access_key, aws_secret_key, connection, anon)
 
+    # get the bucket
+    conn = _connect_s3(*conn_args)
+    bucket = conn.get_bucket(bucket_name)
+
+    # sing bucket key, or pattern to expand
     if isinstance(paths, str):
         if ('*' not in paths) and ('?' not in paths):
-            return _from_s3(bucket, [paths])
+            return _from_s3(bucket_name, [paths], conn_args)
 
         # handle globs
         keys = bucket.list()
@@ -822,9 +838,10 @@ def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None,
             k_name = k.name.encode('utf-8')
             if fnmatchcase(k_name, paths):
                 matches.append(k_name)
-        return _from_s3(bucket, matches)
+        return _from_s3(bucket_name, matches, conn_args)
 
-    return _from_s3(bucket, paths)
+    # list of paths
+    return _from_s3(bucket_name, paths, conn_args)
 
 
 def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
