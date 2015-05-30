@@ -26,6 +26,7 @@ from ..context import _globals
 
 
 names = ('x_%d' % i for i in count(1))
+tokens = ('-%d' % i for i in count(1))
 
 
 def getarray(a, b, lock=None):
@@ -1742,3 +1743,37 @@ def write_hdf5_chunk(fn, datapath, index, data):
     with h5py.File(fn) as f:
         d = f[datapath]
         d[index] = data
+
+
+@wraps(np.bincount)
+def bincount(x, weights=None, minlength=None):
+    if minlength is None:
+        raise TypeError("Must specify minlength argument in da.bincount")
+    assert x.ndim == 1
+    if weights is not None:
+        assert weights.chunks == x.chunks
+
+    # Call np.bincount on each block, possibly with weights
+    name = 'bincount' + next(tokens)
+    if weights is not None:
+        dsk = dict(((name, i),
+                    (np.bincount, (x.name, i), (weights.name, i), minlength))
+                    for i, _ in enumerate(x._keys()))
+        dtype = 'f8'
+    else:
+        dsk = dict(((name, i),
+                    (np.bincount, (x.name, i), None, minlength))
+                    for i, _ in enumerate(x._keys()))
+        dtype = 'i8'
+
+    # Sum up all of the intermediate bincounts per block
+    name = 'bincount-sum' + next(tokens)
+    dsk[(name, 0)] = (np.sum, (list, list(dsk)), 0)
+
+    chunks = ((minlength,),)
+
+    dsk.update(x.dask)
+    if weights is not None:
+        dsk.update(weights.dask)
+
+    return Array(dsk, name, chunks, dtype)
