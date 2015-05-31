@@ -1,24 +1,26 @@
 from __future__ import print_function
 
+import uuid
+import random
 import socket
+import sys
+import traceback
 from threading import Thread, Lock
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
-import traceback
 from datetime import datetime
-import uuid
-import random
-import multiprocessing
-import zmq
 from time import time
-import sys
-from ..compatibility import Queue, unicode
-from .. import core
+
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
-import dill
+
+import zmq
+
+from ..compatibility import Queue, unicode
+from .. import core
+
 
 def pickle_dumps(obj):
     return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
