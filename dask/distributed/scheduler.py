@@ -27,9 +27,11 @@ from ..async import finish_task, start_state_from_dask as dag_state_from_dask
 with open('log.scheduler', 'w') as f:  # delete file
     pass
 
+
 def log(*args):
     with open('log.scheduler', 'a') as f:
-        print(*args, file=f)
+        print('\n', *args, file=f)
+
 
 @contextmanager
 def logerrors():

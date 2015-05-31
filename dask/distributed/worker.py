@@ -28,9 +28,11 @@ MAX_DEALERS = 100
 with open('log.workers', 'w') as f:  # delete file
     pass
 
+
 def log(*args):
     with open('log.workers', 'a') as f:
-        print(*args, file=f)
+        print('\n', *args, file=f)
+
 
 log('Hello from worker.py')
 
