@@ -95,7 +95,7 @@ Compute to release data
 
 When we choose a new task to execute we often have many options.  Policies at
 this stage are cheap and can significantly impact performance.  One could
-imagine policies that expose parallelism, drive towards a paticular output,
+imagine policies that expose parallelism, drive towards a particular output,
 etc..
 
 Our current policy is to run tasks that were most recently made available.
@@ -292,7 +292,7 @@ def release_data(key, state, delete=True):
 def finish_task(dsk, key, state, results, delete=True,
                 release_data=release_data):
     """
-    Update executation state after a task finishes
+    Update execution state after a task finishes
 
     Mutates.  This should run atomically (with a lock).
     """
