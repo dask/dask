@@ -234,12 +234,15 @@ def flatten(seq):
     >>> list(flatten((1, 2, [3, 4]))) # support heterogeneous
     [1, 2, 3, 4]
     """
-    for item in seq:
-        if isinstance(item, list):
-            for item2 in flatten(item):
-                yield item2
-        else:
-            yield item
+    if isinstance(seq, str):
+        yield seq
+    else:
+        for item in seq:
+            if isinstance(item, list):
+                for item2 in flatten(item):
+                    yield item2
+            else:
+                yield item
 
 
 def reverse_dict(d):
