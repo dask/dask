@@ -45,13 +45,13 @@ ghost function:
    >>> import numpy as np
 
    >>> x = np.arange(64).reshape((8, 8))
-   >>> d = da.from_array(x, blockshape=(4, 4))
-   >>> d.blockdims
+   >>> d = da.from_array(x, chunks=(4, 4))
+   >>> d.chunks
    ((4, 4), (4, 4))
 
    >>> g = da.ghost.ghost(d, depth={0: 2, 1: 1},
    ...                       boundary={0: 100, 1: 'reflect'})
-   >>> g.blockdims
+   >>> g.chunks
    ((8, 8), (6, 6))
 
    >>> np.array(g)
@@ -114,12 +114,13 @@ While in this case we used a SciPy function above this could have been any
 arbitrary function.  This is a good interaction point with Numba_.
 
 If your function does not preserve the shape of the block then you will need to
-provide either a ``blockshape`` if your block sizes are regular or
-``blockdims`` keyword argument if your block sizes are irregular
+provide a ``chunks`` keyword argument.  If your block sizes are regular  then
+this can be a blockshape, e.g. ``(1000, 1000)`` or if your blocks are irregular
+then this must be a full chunks tuple, e.g. ``((1000, 700, 1000), (200, 300))``.
 
 .. code-block:: python
 
-   >>> g.map_blocks(myfunc, blockshape=(5, 5))
+   >>> g.map_blocks(myfunc, chunks=(5, 5))
 
 If your function needs to know the location of the block on which it operates
 you can give your function a keyword argument ``block_id``
@@ -144,7 +145,7 @@ given to ``ghost``.
 
 .. code-block:: python
 
-   >>> x.blockdims
+   >>> x.chunks
    ((10, 10, 10, 10), (10, 10, 10, 10))
 
    >>> da.ghost.trim_internal(x, {0: 2, 1: 1})

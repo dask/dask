@@ -60,7 +60,11 @@ def to_networkx(d, data_attributes=None, function_attributes=None):
 
 def write_networkx_to_dot(dg, filename='mydask'):
     import os
-    p = nx.to_pydot(dg)
+    try:
+        p = nx.to_pydot(dg)
+    except AttributeError:
+        raise ImportError("Can not find pydot module. Please install.\n"
+                          "    pip install pydot")
     p.set_rankdir('BT')
     with open(filename + '.dot', 'w') as f:
         f.write(p.to_string())

@@ -31,7 +31,7 @@ portion of the output.
 .. code-block:: python
 
    >>> Trillion element array of ones, in 1000 by 1000 blocks
-   >>> x = da.ones((1000000, 1000000), blockshape=(1000, 1000))
+   >>> x = da.ones((1000000, 1000000), chunks=(1000, 1000))
 
    >>> da.exp(x)[:1500, :1500]
    ...

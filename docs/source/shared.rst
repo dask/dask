@@ -56,7 +56,7 @@ The quickest/simplest test we can do it to use IPython's ``timeit`` magic.
 
    In [1]: import dask.array as da
 
-   In [2]: x = da.ones(1000, blockshape=(2,)).sum()
+   In [2]: x = da.ones(1000, chunks=(2,)).sum()
 
    In [3]: len(x.dask)
    Out[3]: 1001
@@ -68,7 +68,7 @@ Around 500 microseconds per task.  About 100ms of this is from overhead
 
 .. code-block:: python
 
-   In [6]: x = da.ones(1000, blockshape=(1000,)).sum()
+   In [6]: x = da.ones(1000, chunks=(1000,)).sum()
    In [7]: %timeit x.compute()
    10 loops, best of 3: 103 ms per loop
 
