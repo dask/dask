@@ -929,8 +929,8 @@ class StringAccessor(object):
     def __dir__(self):
         return sorted(set(dir(type(self)) + dir(str)))
 
-    def _strmap(self, func, *args, **kwargs):
-        return self._bag.map(lambda s: func(s, *args, **kwargs))
+    def _strmap(self, key, *args, **kwargs):
+        return self._bag.map(lambda s: getattr(s, key)(*args, **kwargs))
 
     def __getattr__(self, key):
         try:
@@ -938,7 +938,7 @@ class StringAccessor(object):
         except AttributeError:
             if key in dir(str):
                 func = getattr(str, key)
-                return robust_wraps(func)(partial(self._strmap, func))
+                return robust_wraps(func)(partial(self._strmap, key))
             else:
                 raise
 
