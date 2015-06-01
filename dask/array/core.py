@@ -1777,3 +1777,63 @@ def bincount(x, weights=None, minlength=None):
         dsk.update(weights.dask)
 
     return Array(dsk, name, chunks, dtype)
+
+
+def chunks_from_arrays(arrays):
+    """ Chunks tuple from nested list of arrays
+
+    >>> x = np.array([1, 2])
+    >>> chunks_from_arrays([x, x])
+    ((2, 2),)
+
+    >>> x = np.array([[1, 2]])
+    >>> chunks_from_arrays([[x], [x]])
+    ((1, 1), (2,))
+
+    >>> x = np.array([[1, 2]])
+    >>> chunks_from_arrays([[x, x]])
+    ((1,), (2, 2))
+    """
+    result = []
+    dim = 0
+    while isinstance(arrays, list):
+        result.append(tuple(deepfirst(a).shape[dim] for a in arrays))
+        arrays = arrays[0]
+        dim += 1
+    return tuple(result)
+
+
+def deepfirst(seq):
+    """ First element in a nested list
+
+    >>> deepfirst([[[1, 2], [3, 4]], [5, 6], [7, 8]])
+    1
+    """
+    if not isinstance(seq, list):
+        return seq
+    else:
+        return deepfirst(seq[0])
+
+
+def concatenate3(arrays):
+    """ Recursive np.concatenate
+
+    >>> x = np.array([[1, 2]])
+    >>> concatenate3([[x, x, x], [x, x, x]])
+    array([[1, 2, 1, 2, 1, 2],
+           [1, 2, 1, 2, 1, 2]])
+
+    >>> concatenate3([[x, x], [x, x], [x, x]])
+    array([[1, 2, 1, 2],
+           [1, 2, 1, 2],
+           [1, 2, 1, 2]])
+    """
+    arrays = list(arrays)
+    chunks = chunks_from_arrays(arrays)
+    shape = tuple(map(sum, chunks))
+    result = np.empty(shape=shape, dtype=deepfirst(arrays).dtype)
+
+    for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
+        result[idx] = arr
+
+    return result

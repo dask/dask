@@ -66,10 +66,12 @@ def test_top_supports_broadcasting_rules():
 
 def test_rec_concatenate():
     x = np.array([1, 2])
-    assert rec_concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+    assert rec_concatenate([[x, x, x],
+                            [x, x, x]]).shape == (2, 6)
 
     x = np.array([[1, 2]])
-    assert rec_concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+    assert rec_concatenate([[x, x, x],
+                            [x, x, x]]).shape == (2, 6)
 
 
 def eq(a, b):
@@ -998,3 +1000,15 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
         assert 'minlength' in str(e)
     else:
         assert False
+
+
+def test_concatenate3():
+    x = np.array([[1, 2]])
+    assert (concatenate3([[x, x, x], [x, x, x]]) ==
+            np.array([[1, 2, 1, 2, 1, 2],
+                      [1, 2, 1, 2, 1, 2]])).all()
+
+    assert (concatenate3([[x, x], [x, x], [x, x]]) ==
+            np.array([[1, 2, 1, 2],
+                      [1, 2, 1, 2],
+                      [1, 2, 1, 2]])).all()
