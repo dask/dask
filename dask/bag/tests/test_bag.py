@@ -392,6 +392,14 @@ def test_string_namespace_with_unicode():
     assert list(b.str.lower()) == ['alice smith', 'bob jones', 'charlie smith']
 
 
+def test_str_empty_split():
+    b = db.from_sequence([u'Alice Smith', u'Bob Jones', 'Charlie Smith'],
+                         npartitions=2)
+    assert list(b.str.split()) == [['Alice', 'Smith'],
+                                   ['Bob', 'Jones'],
+                                   ['Charlie', 'Smith']]
+
+
 def test_stream_decompress():
     data = 'abc\ndef\n123'.encode()
     assert [s.strip() for s in stream_decompress('', data)] == \
