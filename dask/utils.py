@@ -186,6 +186,6 @@ def concrete(seq):
     """
     if isinstance(seq, Iterator):
         seq = list(seq)
-    if isinstance(seq, list):
+    if isinstance(seq, (tuple, list)):
         seq = list(map(concrete, seq))
     return seq

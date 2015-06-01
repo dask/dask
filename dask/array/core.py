@@ -19,7 +19,7 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..utils import deepmap, ignoring, repr_long_list
+from ..utils import deepmap, ignoring, repr_long_list, concrete
 from ..compatibility import unicode
 from .. import threaded, core
 from ..context import _globals
@@ -377,30 +377,6 @@ def _concatenate2(arrays, axes=[]):
     return np.concatenate(arrays, axis=axes[0])
 
 
-def rec_concatenate(arrays, axis=0):
-    """ Recursive np.concatenate
-
-    >>> x = np.array([1, 2])
-    >>> rec_concatenate([[x, x], [x, x], [x, x]])
-    array([[1, 2, 1, 2],
-           [1, 2, 1, 2],
-           [1, 2, 1, 2]])
-    """
-    if not arrays:
-        return np.array([])
-    if isinstance(arrays, Iterator):
-        arrays = list(arrays)
-    if isinstance(arrays[0], Iterator):
-        arrays = list(map(list, arrays))
-    if not isinstance(arrays[0], np.ndarray) and not hasattr(arrays[0], '__array__'):
-        arrays = [rec_concatenate(a, axis=axis + 1) for a in arrays]
-    if arrays[0].ndim <= axis:
-        arrays = [a[None, ...] for a in arrays]
-    if len(arrays) == 1:
-        return arrays[0]
-    return np.concatenate(arrays, axis=axis)
-
-
 def map_blocks(x, func, chunks=None, dtype=None):
     """ Map a function across all blocks of a dask array
 
@@ -515,7 +491,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    results2 = tuple(rec_concatenate(x) if arg.shape else unpack_singleton(x)
+    results2 = tuple(concatenate3(x) if arg.shape else unpack_singleton(x)
                      for x, arg in zip(results, args))
     return results2
 
@@ -1796,7 +1772,7 @@ def chunks_from_arrays(arrays):
     """
     result = []
     dim = 0
-    while isinstance(arrays, list):
+    while isinstance(arrays, (list, tuple)):
         result.append(tuple(deepfirst(a).shape[dim] for a in arrays))
         arrays = arrays[0]
         dim += 1
@@ -1809,10 +1785,17 @@ def deepfirst(seq):
     >>> deepfirst([[[1, 2], [3, 4]], [5, 6], [7, 8]])
     1
     """
-    if not isinstance(seq, list):
+    if not isinstance(seq, (list, tuple)):
         return seq
     else:
         return deepfirst(seq[0])
+
+
+def ndimlist(seq):
+    if not isinstance(seq, (list, tuple)):
+        return 0
+    else:
+        return 1 + ndimlist(seq[0])
 
 
 def concatenate3(arrays):
@@ -1828,12 +1811,17 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
-    arrays = list(arrays)
+    arrays = concrete(arrays)
+    ndim = ndimlist(arrays)
+    if not ndim:
+        return arrays
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
     result = np.empty(shape=shape, dtype=deepfirst(arrays).dtype)
 
     for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
+        while arr.ndim < ndim:
+            arr = arr[None, ...]
         result[idx] = arr
 
     return result

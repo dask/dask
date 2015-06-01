@@ -12,7 +12,7 @@ from operator import getitem, add
 import numpy as np
 from toolz import merge, accumulate
 
-from .core import rec_concatenate, Array, normalize_chunks
+from .core import concatenate3, Array, normalize_chunks
 
 
 rechunk_names  = ('rechunk-%d' % i for i in count(1))
@@ -223,6 +223,6 @@ def rechunk(x, chunks):
                 temp = getitem(temp, ind_in_blk[i])
             for ind, slc in zip(old_inds, slic):
                 temp[ind_in_blk[-1]] = (getitem, (x.name,) + ind, slc)
-        x2[key] = (rec_concatenate, rec_cat_arg)
+        x2[key] = (concatenate3, rec_cat_arg)
     x2 = merge(x.dask, x2)
     return Array(x2, temp_name, chunks, dtype=x.dtype)

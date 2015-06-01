@@ -32,7 +32,7 @@ def _concat(args):
     if not args:
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
-        return da.core.rec_concatenate(args)
+        return da.core.concatenate3(args)
     if len(args) == 1:
         return args[0]
     if isinstance(args[0], (pd.DataFrame, pd.Series)):
