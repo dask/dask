@@ -236,6 +236,33 @@ def test_from_filenames_bz2():
                  (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
 
 
+def test_from_s3():
+    # note we don't test connection modes with aws_access_key and
+    # aws_secret_key because these are not on travis-ci
+    boto = pytest.importorskip('boto')
+
+    # test with full uri and '?' pattern and auto anon boto connection
+    uri = 's3://nyqpug/tips.c?v'
+    a = db.from_s3(uri, anon=True)
+    assert a.npartitions == 1
+    # test it computes
+    list(a.compute())
+
+    # make a manual connection and reuse it so we don't have a lot of lag
+    conn = boto.connect_s3(anon=True)
+
+    # test wit specific key
+    b = db.from_s3('nyqpug', 't?ps.csv', connection=conn)
+    assert b.npartitions == 1
+
+    # test all keys in bucket
+    c = db.from_s3('nyqpug')
+    assert c.npartitions == 3
+
+    d = db.from_s3('s3://nyqpug')
+    assert d.npartitions == 3
+
+
 def test_from_sequence():
     b = db.from_sequence([1, 2, 3, 4, 5], npartitions=3)
     assert len(b.dask) == 3
