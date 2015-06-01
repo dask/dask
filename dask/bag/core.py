@@ -51,7 +51,7 @@ def lazify_task(task, start=True):
     if not istask(task):
         return task
     head, tail = task[0], task[1:]
-    if not start and head is list:
+    if not start and head in (list, reify):
         task = task[1]
         return lazify_task(*tail, start=False)
     else:
@@ -221,7 +221,7 @@ class Bag(object):
         name = next(names)
         if takes_multiple_arguments(func):
             func = curry(apply, func)
-        dsk = dict(((name, i), (list, (map, func, (self.name, i))))
+        dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
@@ -241,7 +241,7 @@ class Bag(object):
         [0, 2, 4]
         """
         name = next(names)
-        dsk = dict(((name, i), (list, (filter, predicate, (self.name, i))))
+        dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
@@ -967,3 +967,11 @@ def robust_wraps(wrapper):
         wrapped.__doc__ = wrapper.__doc__
         return wrapped
     return _
+
+
+def reify(seq):
+    if isinstance(seq, Iterator):
+        seq = list(seq)
+    if seq and isinstance(seq[0], Iterator):
+        seq = list(map(list, seq))
+    return seq
