@@ -13,6 +13,7 @@ try:
 except ImportError:
     from urllib.request import urlopen
 
+from urlparse import urlparse
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
@@ -773,7 +774,7 @@ def write(data, filename):
         f.close()
 
 
-def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None,
+def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
             connection=None, anon=False):
     """ Create a dask.bag by loading files from s3.
 
@@ -805,21 +806,34 @@ def from_s3(bucket_name, paths, aws_access_key=None, aws_secret_key=None,
         """
         takes an s3 bucket object and a list of bucket strings
         """
-        d = {}
+        dsk = {}
         for i, m in enumerate(matches):
             # connect to s3
-            a, b, c = conn_args
-            get_connection = (_connect_s3, a, b, c)
+            a, b, c, d = conn_args
+            get_connection = (_connect_s3, a, b, c, d)
             # get the bucket with the connection
             get_bucket = (lambda x: x.get_bucket(bucket_name), get_connection)
             # get a key from the bucket
             get_key = (lambda b, k: b.get_key(k), get_bucket, m)
             # read the key
             read_key = lambda k: [getattr(k, 'read')()]
-            d[('load', i)] = (read_key, get_key)
-        return Bag(d, 'load', len(matches))
+            dsk[('load', i)] = (read_key, get_key)
+        return Bag(dsk, 'load', len(matches))
 
     conn_args = (aws_access_key, aws_secret_key, connection, anon)
+
+    if bucket_name.startswith('s3://'):
+        # FIXME
+        # DIRTY HACK: so that urlparse won't think '?' in the URI path is for a
+        # query. We replace '?' with 'QUESTIONMARK' so it stays in the path
+        # then after urlpars gives us the path replace 'QUESTIONMARK' with '?'.
+        if '?' in bucket_name:
+            bucket_name = bucket_name.replace('?', 'QUESTIONMARK')
+        o = urlparse(bucket_name)
+        # if path is specified
+        if (paths == '*') and (o.path != '' and o.path != '/'):
+            paths = o.path[1:].replace('QUESTIONMARK', '?')
+        bucket_name = o.hostname
 
     # get the bucket
     conn = _connect_s3(*conn_args)
