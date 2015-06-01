@@ -190,6 +190,16 @@ def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
 
 
+def test_from_url():
+    a = db.from_url(['http://google.com', 'http://github.com'])
+    assert a.npartitions == 2
+    a.compute()
+
+    b = db.from_url('http://google.com')
+    assert b.npartitions == 1
+    b.compute()
+
+
 def test_from_filenames():
     with filetexts({'a1.log': 'A\nB', 'a2.log': 'C\nD'}) as fns:
         assert set(line.strip() for line in db.from_filenames(fns)) == \
