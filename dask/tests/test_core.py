@@ -130,7 +130,7 @@ def test_get_stack_limit():
 
 def test_flatten():
     assert list(flatten(())) == []
-    assert list(flatten('foo')) == 'foo'
+    assert list(flatten('foo')) == ['foo']
 
 
 def test_subs():
