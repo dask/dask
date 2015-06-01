@@ -9,6 +9,11 @@ import gzip
 import bz2
 import os
 
+try:
+    from urllib2 import urlopen
+except ImportError:
+    from urllib.request import urlopen
+
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
@@ -844,6 +849,27 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     name = next(load_names)
     d = dict(((name, i), part) for i, part in enumerate(parts))
     return Bag(d, name, len(d))
+
+
+def from_url(urls):
+    """Create a dask.bag from a url
+
+    >>> a = from_url('http://google.com')
+    >>> a.npartitions
+    1
+
+    >>> b = from_url(['http://github.com', 'http://google.com'])
+    >>> b.npartions
+    2
+
+    """
+    if isinstance(urls, str):
+        urls = [urls]
+    dsk ={}
+    for i, u in enumerate(urls):
+        get_url = (urlopen, u)
+        dsk[('load-url', i)] = (lambda x: x.read(), get_url)
+    return Bag(dsk, 'load-url', len(urls))
 
 
 def dictitems(d):
