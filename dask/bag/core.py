@@ -8,12 +8,17 @@ import gzip
 import bz2
 import os
 
+# py2/3 incompatibility
 try:
     from urllib2 import urlopen
 except ImportError:
     from urllib.request import urlopen
 
-from urlparse import urlparse
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
+
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
