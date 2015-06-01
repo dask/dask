@@ -27,9 +27,9 @@ Note that all dask.array operations produce new dask arrays without having to lo
 
 *  A dask graph
 *  A name
-*  A blockdims tuple like ``((8, 8, 8, 8), (5, 5, 5))`` to encode dimension, shape, and blockshape.
+*  A chunks tuple like ``((8, 8, 8, 8), (5, 5, 5))`` to encode dimension, shape, and blockshape.
 
-That ``blockdims`` is sufficient metadata to make dask.array closed under NumPy operations is key to its success.  What is the equivalent set of metadata for frames?
+That ``chunks`` is sufficient metadata to make dask.array closed under NumPy operations is key to its success.  What is the equivalent set of metadata for frames?
 
 
 DataFrame Metadata
@@ -40,10 +40,10 @@ DataFrame Metadata
    :align: right
    :alt: A dask frame
 
-*We separate blocks over the index.  Our new equivalent of ``blockdims``
+*We separate blocks over the index.  Our new equivalent of ``chunks``
 involves ranges of index values, not locations.*
 
-The ``blockdims`` tuple represents the block structure of a dask array in all dimensions.  In Frames we have only one dimension (simpler) but that dimension may be within other ordered dimensions like time or text.  Additionally there is no clear way to determine how many elements may be within two bounds from the metadata alone (e.g. how many records in the month of July).
+The ``chunks`` tuple represents the block structure of a dask array in all dimensions.  In Frames we have only one dimension (simpler) but that dimension may be within other ordered dimensions like time or text.  Additionally there is no clear way to determine how many elements may be within two bounds from the metadata alone (e.g. how many records in the month of July).
 
 We define a Frame as a sequence of blocks, where each block is a Pandas DataFrame.  This sequence is sorted along an index column so that the index of all records in block ``i`` is less than the index of all records in block ``i+1``.  We store this information in a ``divisions`` attribute.  In the example to the right we index our frame by time and separate blocks by month.  Note that blocks may be of varying size.
 

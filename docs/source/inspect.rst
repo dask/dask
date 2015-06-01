@@ -18,7 +18,7 @@ The first step is to look at the ``.dask`` attribute of an array
 .. code-block:: python
 
    >>> import dask.array as da
-   >>> x = da.ones((5, 15), blockshape=(5, 5))
+   >>> x = da.ones((5, 15), chunks=(5, 5))
    >>> x.dask
    {('wrapped_1', 0, 0): (ones, (5, 5)),
     ('wrapped_1', 0, 1): (ones, (5, 5)),
