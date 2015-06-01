@@ -1,3 +1,5 @@
+"""Tests that require a running dask.distributed cluster"""
+
 import time
 from subprocess import Popen, PIPE
 
@@ -13,6 +15,7 @@ from IPython.parallel import Client
 
 from dask.distributed import dask_client_from_ipclient
 import dask.array as da
+import dask.bag as db
 
 
 def setup_module():
@@ -68,3 +71,10 @@ def test_dask_client_from_ipclient():
     finally:
         # close the workers
         dask_client.close(close_scheduler=True)
+
+
+def test_gh_248():
+    """bag.sum() and bag.count() would hang with the distributed scheduler"""
+    a = db.from_sequence(range(50), npartitions=2)
+    a.sum().compute()
+    a.count().compute()
