@@ -203,6 +203,34 @@ class RuleSet(object):
     allows for syntactic matching of terms to patterns for many patterns at
     the same time.
 
+    Examples
+    --------
+
+    >>> def f(*args): pass
+    >>> def g(*args): pass
+    >>> def h(*args): pass
+    >>> from operator import add
+
+    >>> rs = RuleSet(                 # Make RuleSet with two Rules
+    ...         RewriteRule((add, 'x', 0), 'x', ('x',)),
+    ...         RewriteRule((f, (g, 'x'), 'y'),
+    ...                     (h, 'x', 'y'),
+    ...                     ('x', 'y')))
+
+    >>> rs.rewrite((add, 2, 0))       # Apply ruleset to single task
+    2
+
+    >>> rs.rewrite((f, (g, 'a', 3)))  # doctest: +SKIP
+    (h, 'a', 3)
+
+    >>> dsk = {'a': (add, 2, 0),      # Apply ruleset to full dask graph
+    ...        'b': (f, (g, 'a', 3))}
+
+    >>> from toolz import valmap
+    >>> valmap(rs.rewrite, dsk)  # doctest: +SKIP
+    {'a': 2,
+     'b': (<function h at 0x7f107ca82f50>, 'a', 3)}
+
     Attributes
     ----------
     rules : list
