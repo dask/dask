@@ -411,6 +411,11 @@ def map_blocks(func, *arrs, **kwargs):
     >>> def func(block, block_id=None):
     ...     pass
     """
+    if not callable(func):
+        raise TypeError("First argument must be callable function, not %s\n"
+                "Usage:   da.map_blocks(function, x)\n"
+                "   or:   da.map_blocks(function, x, y, z)" %
+                type(func).__name__)
     dtype = kwargs.get('dtype')
     chunks = kwargs.get('chunks')
     assert all(isinstance(arr, Array) for arr in arrs)
