@@ -868,8 +868,7 @@ def from_url(urls):
     name = next(load_names)
     dsk = {}
     for i, u in enumerate(urls):
-        get_url = (urlopen, u)
-        dsk[('load-url', i)] = (lambda x: x.read(), get_url)
+        dsk[(name, i)] = (list, (urlopen, u))
     return Bag(dsk, name, len(urls))
 
 
