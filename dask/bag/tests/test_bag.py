@@ -7,7 +7,8 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream, stream_decompress, reify)
+        reduceby, bz2_stream, stream_decompress, reify, _parse_s3_URI)
+
 from dask.utils import filetexts, tmpfile, raises
 import dask
 from pbag import PBag
@@ -261,6 +262,20 @@ def test_from_s3():
 
     d = db.from_s3('s3://nyqpug')
     assert d.npartitions == 3
+
+
+def test__parse_s3_URI():
+    bn, p = _parse_s3_URI('s3://mybucket/mykeys', '*')
+    assert (bn == 'mybucket') and (p == 'mykeys')
+
+    bn, p = _parse_s3_URI('s3://snow/g?obes', '*')
+    assert (bn == 'snow') and (p == 'g?obes')
+
+    bn, p = _parse_s3_URI('s3://tupper/wea*', '*')
+    assert (bn == 'tupper') and (p == 'wea*')
+
+    bn, p = _parse_s3_URI('s3://sand/', 'cast?es')
+    assert (bn == 'sand') and (p == 'cast?es')
 
 
 def test_from_sequence():
