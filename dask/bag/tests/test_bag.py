@@ -7,7 +7,7 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream, stream_decompress)
+        reduceby, bz2_stream, stream_decompress, reify)
 from dask.utils import filetexts, tmpfile, raises
 import dask
 from pbag import PBag
@@ -51,7 +51,7 @@ def test_keys():
 
 def test_map():
     c = b.map(inc)
-    expected = merge(dsk, dict(((c.name, i), (list, (map, inc, (b.name, i))))
+    expected = merge(dsk, dict(((c.name, i), (reify, (map, inc, (b.name, i))))
                                for i in range(b.npartitions)))
     assert c.dask == expected
 
@@ -64,7 +64,7 @@ def test_map_function_with_multiple_arguments():
 def test_filter():
     c = b.filter(iseven)
     expected = merge(dsk, dict(((c.name, i),
-                                (list, (filter, iseven, (b.name, i))))
+                                (reify, (filter, iseven, (b.name, i))))
                                for i in range(b.npartitions)))
     assert c.dask == expected
 
@@ -150,16 +150,16 @@ def test_map_partitions():
 
 
 def test_lazify_task():
-    task = (sum, (list, (map, inc, [1, 2, 3])))
+    task = (sum, (reify, (map, inc, [1, 2, 3])))
     assert lazify_task(task) == (sum, (map, inc, [1, 2, 3]))
 
-    task = (list, (map, inc, [1, 2, 3]))
+    task = (reify, (map, inc, [1, 2, 3]))
     assert lazify_task(task) == task
 
-    a = (list, (map, inc,
-                     (list, (filter, iseven, 'y'))))
-    b = (list, (map, inc,
-                            (filter, iseven, 'y')))
+    a = (reify, (map, inc,
+                      (reify, (filter, iseven, 'y'))))
+    b = (reify, (map, inc,
+                              (filter, iseven, 'y')))
     assert lazify_task(a) == b
 
 
@@ -167,11 +167,11 @@ f = lambda x: x
 
 
 def test_lazify():
-    a = {'x': (list, (map, inc,
-                           (list, (filter, iseven, 'y')))),
+    a = {'x': (reify, (map, inc,
+                            (reify, (filter, iseven, 'y')))),
          'a': (f, 'x'), 'b': (f, 'x')}
-    b = {'x': (list, (map, inc,
-                                  (filter, iseven, 'y'))),
+    b = {'x': (reify, (map, inc,
+                                    (filter, iseven, 'y'))),
          'a': (f, 'x'), 'b': (f, 'x')}
     assert lazify(a) == b
 
@@ -386,6 +386,20 @@ def test_string_namespace():
     assert raises(AttributeError, lambda: b.str.sfohsofhf)
 
 
+def test_string_namespace_with_unicode():
+    b = db.from_sequence([u'Alice Smith', u'Bob Jones', 'Charlie Smith'],
+                         npartitions=2)
+    assert list(b.str.lower()) == ['alice smith', 'bob jones', 'charlie smith']
+
+
+def test_str_empty_split():
+    b = db.from_sequence([u'Alice Smith', u'Bob Jones', 'Charlie Smith'],
+                         npartitions=2)
+    assert list(b.str.split()) == [['Alice', 'Smith'],
+                                   ['Bob', 'Jones'],
+                                   ['Charlie', 'Smith']]
+
+
 def test_stream_decompress():
     data = 'abc\ndef\n123'.encode()
     assert [s.strip() for s in stream_decompress('', data)] == \
@@ -400,3 +414,21 @@ def test_stream_decompress():
             compressed = f.read()
     assert [s.strip() for s in stream_decompress('gz', compressed)] == \
             [b'abc', b'def', b'123']
+
+
+def test_map_with_iterator_function():
+    b = db.from_sequence([[1, 2, 3], [4, 5, 6]], npartitions=2)
+
+    def f(L):
+        for x in L:
+            yield x + 1
+
+    c = b.map(f)
+
+    assert list(c) == [[2, 3, 4], [5, 6, 7]]
+
+
+def test_ensure_compute_output_is_concrete():
+    b = db.from_sequence([1, 2, 3])
+    result = b.map(lambda x: x + 1).compute()
+    assert not isinstance(result, Iterator)
