@@ -1801,6 +1801,10 @@ def ndimlist(seq):
 def concatenate3(arrays):
     """ Recursive np.concatenate
 
+    Input should be a nested list of numpy arrays arranged in the order they
+    should appear in the array itself.  Each array should have the same number
+    of dimensions as the desired output and the nesting of the lists.
+
     >>> x = np.array([[1, 2]])
     >>> concatenate3([[x, x, x], [x, x, x]])
     array([[1, 2, 1, 2, 1, 2],
