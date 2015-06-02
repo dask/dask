@@ -730,6 +730,9 @@ class Array(object):
         return complex(self.compute())
 
     def __getitem__(self, index):
+        if isinstance(index, Array):
+            return fancy_index_with_dask_array(self, index)
+
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if (isinstance(index, (str, unicode)) or
             (    isinstance(index, list)
@@ -1777,3 +1780,20 @@ def bincount(x, weights=None, minlength=None):
         dsk.update(weights.dask)
 
     return Array(dsk, name, chunks, dtype)
+
+
+def fancy_index_with_dask_array(x, ind, get=None):
+    assert ind.dtype == 'bool'
+    assert x.chunks == ind.chunks
+
+    name = next(names)
+    dsk = dict(((name, i), (getitem, xk, indk))
+               for i, (xk, indk) in enumerate(zip(core.flatten(x._keys()),
+                                                  core.flatten(ind._keys()))))
+
+    name = next(names)
+    dsk[name] = (np.concatenate, (list, sorted(dsk)))
+
+    get = get or _globals['get'] or threaded.get
+
+    return get(merge(x.dask, ind.dask, dsk), name)

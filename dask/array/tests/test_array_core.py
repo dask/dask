@@ -998,3 +998,18 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
         assert 'minlength' in str(e)
     else:
         assert False
+
+
+def test_fancy_indexing_with_another_dask_array():
+    x = np.array([2, 1, 5, 2, 1])
+    d = da.from_array(x, chunks=2)
+
+    assert eq(d[d > 1],
+              x[x > 1])
+
+
+    x = np.array([[2, 1], [1, 2]])
+    d = da.from_array(x, chunks=1)
+
+    assert eq(np.sort(d[d > 1]),
+              np.sort(x[x > 1]))
