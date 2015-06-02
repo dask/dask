@@ -572,8 +572,8 @@ class Bag(object):
         results = get(self.dask, self._keys(), **kwargs)
         if isinstance(results[0], Iterable):
             results = toolz.concat(results)
-        if not isinstance(results, Iterator):
-            results = iter(results)
+        if isinstance(results, Iterator):
+            results = list(results)
         return results
 
     def concat(self):
@@ -591,7 +591,8 @@ class Bag(object):
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
-    __iter__ = compute
+    def __iter__(self):
+        return iter(self.compute())
 
     def groupby(self, grouper, npartitions=None):
         """ Group collection by key function

@@ -426,3 +426,9 @@ def test_map_with_iterator_function():
     c = b.map(f)
 
     assert list(c) == [[2, 3, 4], [5, 6, 7]]
+
+
+def test_ensure_compute_output_is_concrete():
+    b = db.from_sequence([1, 2, 3])
+    result = b.map(lambda x: x + 1).compute()
+    assert not isinstance(result, Iterator)
