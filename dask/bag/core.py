@@ -791,22 +791,9 @@ def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
     return connection.get_bucket(bucket_name)
 
 
-def _from_s3(bucket_name, matches, conn_args):
-    """
-    Takes an s3 bucket name, list of bucket key, and connection info.
-    Returns a Bag.
-    """
-    name = next(load_names)
-    dsk = {}
-    for i, m in enumerate(matches):
-        aak, ask, conn, anon = conn_args
-        # get the bucket
-        get_bucket = (_get_s3_bucket, bucket_name, aak, ask, conn, anon)
-        # get a key from the bucket
-        get_key = (lambda b, k: b.get_key(k), get_bucket, m)
-        # read the key
-        dsk[(name, i)] = (list, get_key)
-    return Bag(dsk, name, len(matches))
+# we need an unmemoized function to call in the main thread. And memoized
+# functions for the dask.
+_memoized_get_bucket = toolz.memoize(_get_s3_bucket)
 
 
 def _parse_s3_URI(bucket_name, paths):
@@ -823,6 +810,24 @@ def _parse_s3_URI(bucket_name, paths):
         paths = o.path[1:].replace('QUESTIONMARK', '?')
     bucket_name = o.hostname
     return bucket_name, paths
+
+
+def _from_s3(bucket_name, keys, conn_args):
+    """
+    Takes an s3 bucket name, list of bucket key, and connection info.
+    Returns a Bag.
+    """
+    name = next(load_names)
+    dsk = {}
+    for i, k in enumerate(keys):
+        aak, ask, conn, anon = conn_args
+        # get the bucket
+        get_bucket = (_memoized_get_bucket, bucket_name, aak, ask, conn, anon)
+        # get a key from the bucket
+        get_key = (lambda b, k: b.get_key(k), get_bucket, k)
+        # read the key
+        dsk[(name, i)] = (list, get_key)
+    return Bag(dsk, name, len(keys))
 
 
 def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
@@ -849,13 +854,13 @@ def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
     if bucket_name.startswith('s3://'):
         bucket_name, paths = _parse_s3_URI(bucket_name, paths)
 
-    # get the bucket
-    bucket = _get_s3_bucket(bucket_name, *conn_args)
-
     # sing bucket key, or pattern to expand
     if isinstance(paths, str):
         if ('*' not in paths) and ('?' not in paths):
             return _from_s3(bucket_name, [paths], conn_args)
+
+        # get the bucket
+        bucket = _get_s3_bucket(bucket_name, *conn_args)
 
         # handle globs
         keys = bucket.list()
