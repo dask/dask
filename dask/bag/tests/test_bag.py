@@ -195,9 +195,9 @@ def test_from_url():
     assert a.npartitions == 2
     a.compute()
 
-    b = db.from_url('http://google.com')
+    b = db.from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
     assert b.npartitions == 1
-    b.compute()
+    assert 'Dask\n' in b.compute()
 
 
 def test_from_filenames():
