@@ -1829,3 +1829,32 @@ def concatenate3(arrays):
         result[idx] = arr
 
     return result
+
+
+def map_blocks_many(func, *arrs, **kwargs):
+    """ A variadic version of map_blocks
+
+    This accepts a function and multiple dask arrays.  It maps that function
+    across those dask arrays, respecting broadcasting rules in the event that
+    the arrays do not share the same dimension.
+
+    This does not offer some of the nice features of map_blocks like informing
+    the function of the ``block_id``
+
+    >>> import dask.array as da
+    >>> d = da.arange(5, chunks=2)
+    >>> e = da.arange(5, chunks=2)
+
+    >>> f = map_blocks_many(lambda a, b: a + b**2, d, e)
+    >>> f.compute()
+    array([ 0,  2,  6, 12, 20])
+    """
+    dtype = kwargs.get('dtype')
+    assert all(isinstance(arr, Array) for arr in arrs)
+    inds = [tuple(range(x.ndim))[::-1] for x in arrs]
+    args = list(concat(zip(arrs, inds)))
+
+    out = next(names)
+    out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
+
+    return atop(func, out, out_ind, *args, dtype=dtype)
