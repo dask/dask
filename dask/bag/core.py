@@ -865,11 +865,12 @@ def from_url(urls):
     """
     if isinstance(urls, str):
         urls = [urls]
-    dsk ={}
+    name = next(load_names)
+    dsk = {}
     for i, u in enumerate(urls):
         get_url = (urlopen, u)
         dsk[('load-url', i)] = (lambda x: x.read(), get_url)
-    return Bag(dsk, 'load-url', len(urls))
+    return Bag(dsk, name, len(urls))
 
 
 def dictitems(d):
