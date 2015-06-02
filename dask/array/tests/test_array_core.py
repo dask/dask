@@ -1050,11 +1050,11 @@ def test_map_blocks():
     d = da.from_array(x, chunks=5)
     e = da.from_array(y, chunks=5)
 
-    assert eq(da.core.map_blocks_many(lambda a, b: a+2*b, d, e, dtype=d.dtype),
+    assert eq(da.core.map_blocks(lambda a, b: a+2*b, d, e, dtype=d.dtype),
               x + 2*y)
 
     z = np.arange(100).reshape((10, 10))
     f = da.from_array(z, chunks=5)
 
-    assert eq(da.core.map_blocks_many(lambda a, b: a+2*b, d, f, dtype=d.dtype),
+    assert eq(da.core.map_blocks(lambda a, b: a+2*b, d, f, dtype=d.dtype),
               x + 2*z)
