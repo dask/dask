@@ -189,3 +189,7 @@ def concrete(seq):
     if isinstance(seq, (tuple, list)):
         seq = list(map(concrete, seq))
     return seq
+
+
+def skip(func):
+    pass

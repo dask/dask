@@ -1,6 +1,7 @@
 import pytest
 pytest.importorskip('numpy')
 
+from dask.utils import skip
 import dask.array as da
 from dask.array.percentile import _percentile
 import dask
@@ -32,6 +33,7 @@ def test_percentile():
     assert eq(da.percentile(d, [0, 50, 100]), ['a', 'd', 'e'])
 
 
+@skip
 def test_percentile_with_categoricals():
     try:
         import pandas as pd
