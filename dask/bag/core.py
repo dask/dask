@@ -854,9 +854,11 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 def from_url(urls):
     """Create a dask.bag from a url
 
-    >>> a = from_url('http://google.com')
+    >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
     >>> a.npartitions
     1
+    >>> 'Dask\n' in a.take(1)
+    True
 
     >>> b = from_url(['http://github.com', 'http://google.com'])
     >>> b.npartions
