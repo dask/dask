@@ -229,7 +229,7 @@ class RuleSet(object):
     >>> from toolz import valmap
     >>> valmap(rs.rewrite, dsk)  # doctest: +SKIP
     {'a': 2,
-     'b': (<function h at 0x7f107ca82f50>, 'a', 3)}
+     'b': (h, 'a', 3)}
 
     Attributes
     ----------
