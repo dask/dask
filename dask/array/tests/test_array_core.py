@@ -64,12 +64,14 @@ def test_top_supports_broadcasting_rules():
          ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 0))}
 
 
-def test_rec_concatenate():
+def test_concatenate3():
     x = np.array([1, 2])
-    assert rec_concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+    assert concatenate3([[x, x, x],
+                            [x, x, x]]).shape == (2, 6)
 
     x = np.array([[1, 2]])
-    assert rec_concatenate([[x, x, x], [x, x, x]]).shape == (2, 6)
+    assert concatenate3([[x, x, x],
+                            [x, x, x]]).shape == (2, 6)
 
 
 def eq(a, b):
@@ -115,7 +117,7 @@ def test_chunked_dot_product():
     dsk = merge(d, getx, geto, result)
     out = dask.get(dsk, [[('out', i, j) for j in range(4)] for i in range(4)])
 
-    assert eq(np.dot(x, o), rec_concatenate(out))
+    assert eq(np.dot(x, o), concatenate3(out))
 
 
 def test_chunked_transpose_plus_one():
@@ -131,7 +133,7 @@ def test_chunked_transpose_plus_one():
     dsk = merge(d, getx, comp)
     out = dask.get(dsk, [[('out', i, j) for j in range(4)] for i in range(4)])
 
-    assert eq(rec_concatenate(out), x.T + 1)
+    assert eq(concatenate3(out), x.T + 1)
 
 
 def test_transpose():
@@ -998,3 +1000,44 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
         assert 'minlength' in str(e)
     else:
         assert False
+
+
+def test_concatenate3():
+    x = np.array([1, 2])
+    assert eq(concatenate3([x, x, x]),
+              np.array([1, 2, 1, 2, 1, 2]))
+
+    x = np.array([[1, 2]])
+    assert (concatenate3([[x, x, x], [x, x, x]]) ==
+            np.array([[1, 2, 1, 2, 1, 2],
+                      [1, 2, 1, 2, 1, 2]])).all()
+
+    assert (concatenate3([[x, x], [x, x], [x, x]]) ==
+            np.array([[1, 2, 1, 2],
+                      [1, 2, 1, 2],
+                      [1, 2, 1, 2]])).all()
+
+    x = np.arange(12).reshape((2, 2, 3))
+    assert eq(concatenate3([[[x, x, x],
+                             [x, x, x]],
+                            [[x, x, x],
+                             [x, x, x]]]),
+              np.array([[[ 0,  1,  2,  0,  1,  2,  0,  1,  2],
+                         [ 3,  4,  5,  3,  4,  5,  3,  4,  5],
+                         [ 0,  1,  2,  0,  1,  2,  0,  1,  2],
+                         [ 3,  4,  5,  3,  4,  5,  3,  4,  5]],
+
+                        [[ 6,  7,  8,  6,  7,  8,  6,  7,  8],
+                         [ 9, 10, 11,  9, 10, 11,  9, 10, 11],
+                         [ 6,  7,  8,  6,  7,  8,  6,  7,  8],
+                         [ 9, 10, 11,  9, 10, 11,  9, 10, 11]],
+
+                        [[ 0,  1,  2,  0,  1,  2,  0,  1,  2],
+                         [ 3,  4,  5,  3,  4,  5,  3,  4,  5],
+                         [ 0,  1,  2,  0,  1,  2,  0,  1,  2],
+                         [ 3,  4,  5,  3,  4,  5,  3,  4,  5]],
+
+                        [[ 6,  7,  8,  6,  7,  8,  6,  7,  8],
+                         [ 9, 10, 11,  9, 10, 11,  9, 10, 11],
+                         [ 6,  7,  8,  6,  7,  8,  6,  7,  8],
+                         [ 9, 10, 11,  9, 10, 11,  9, 10, 11]]]))

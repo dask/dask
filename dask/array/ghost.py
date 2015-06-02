@@ -1,6 +1,8 @@
 from operator import getitem
 from ..core import flatten
-from .core import Array, rec_concatenate, map_blocks, concatenate
+from ..utils import concrete
+from .core import (Array, map_blocks, concatenate,
+        slices_from_chunks, concatenate3)
 from . import chunk, core, wrap
 import numpy as np
 from collections import Iterator, Iterable
@@ -94,21 +96,6 @@ def reshape(shape, seq):
         return [reshape(shape[1:], part) for part in partition(n, seq)]
 
 
-def concrete(seq):
-    """ Make nested iterators concrete lists
-
-    >>> data = [[1, 2], [3, 4]]
-    >>> seq = iter(map(iter, data))
-    >>> concrete(seq)
-    [[1, 2], [3, 4]]
-    """
-    if isinstance(seq, Iterator):
-        seq = list(seq)
-    if isinstance(seq, list):
-        seq = list(map(concrete, seq))
-    return seq
-
-
 def ghost_internal(x, axes):
     """ Share boundaries between neighboring blocks
 
@@ -136,8 +123,8 @@ def ghost_internal(x, axes):
         if k != frac_slice:
             interior_slices[k] = frac_slice
 
-        ghost_blocks[(name,) + k[1:]] = (rec_concatenate,
-                                         (concrete, expand_key2(k)))
+        ghost_blocks[(name,) + k[1:]] = (concatenate3,
+                                          (concrete, expand_key2(k)))
 
     chunks = []
     for i, bds in enumerate(x.chunks):
