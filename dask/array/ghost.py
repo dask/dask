@@ -161,7 +161,7 @@ def trim_internal(x, axes):
 
     chunks = tuple(olist)
 
-    return map_blocks(x, partial(chunk.trim, axes=axes), chunks=chunks)
+    return map_blocks(partial(chunk.trim, axes=axes), x, chunks=chunks)
 
 
 def periodic(x, axis, depth):

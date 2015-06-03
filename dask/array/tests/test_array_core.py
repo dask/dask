@@ -1041,3 +1041,20 @@ def test_concatenate3():
                          [ 9, 10, 11,  9, 10, 11,  9, 10, 11],
                          [ 6,  7,  8,  6,  7,  8,  6,  7,  8],
                          [ 9, 10, 11,  9, 10, 11,  9, 10, 11]]]))
+
+
+def test_map_blocks():
+    x = np.arange(10)
+    y = np.arange(10) * 2
+
+    d = da.from_array(x, chunks=5)
+    e = da.from_array(y, chunks=5)
+
+    assert eq(da.core.map_blocks(lambda a, b: a+2*b, d, e, dtype=d.dtype),
+              x + 2*y)
+
+    z = np.arange(100).reshape((10, 10))
+    f = da.from_array(z, chunks=5)
+
+    assert eq(da.core.map_blocks(lambda a, b: a+2*b, d, f, dtype=d.dtype),
+              x + 2*z)

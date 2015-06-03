@@ -377,7 +377,7 @@ def _concatenate2(arrays, axes=[]):
     return np.concatenate(arrays, axis=axes[0])
 
 
-def map_blocks(x, func, chunks=None, dtype=None):
+def map_blocks(func, *arrs, **kwargs):
     """ Map a function across all blocks of a dask array
 
     You must also specify the chunks of the resulting array.  If you don't then
@@ -385,45 +385,62 @@ def map_blocks(x, func, chunks=None, dtype=None):
     input.
 
     >>> import dask.array as da
-    >>> x = da.ones((8,), chunks=(4,))
+    >>> x = da.arange(6, chunks=3)
 
-    >>> np.array(x.map_blocks(lambda x: x + 1))
-    array([ 2.,  2.,  2.,  2.,  2.,  2.,  2.,  2.])
+    >>> x.map_blocks(lambda x: x + 1).compute()
+    array([ 0.,  2.,  4.,  6.,  8., 10.])
 
-    If function changes shape of the blocks provide a chunks
+    The ``da.map_blocks`` function can also accept multiple arrays
 
-    >>> y = x.map_blocks(lambda x: x[::2], chunks=(2,))
+    >>> d = da.arange(5, chunks=2)
+    >>> e = da.arange(5, chunks=2)
 
-    Or, if the result is ragged, provide a chunks
+    >>> f = map_blocks(lambda a, b: a + b**2, d, e)
+    >>> f.compute()
+    array([ 0,  2,  6, 12, 20])
+
+    If function changes shape of the blocks then please provide chunks
+    explicitly.
 
     >>> y = x.map_blocks(lambda x: x[::2], chunks=((2, 2),))
 
     Your block function can learn where in the array it is if it supports a
-    block_id keyword argument.  This will receive entries like (2, 0, 1), the
-    position of the block in the dask array.
+    ``block_id`` keyword argument.  This will receive entries like (2, 0, 1),
+    the position of the block in the dask array.
 
     >>> def func(block, block_id=None):
     ...     pass
     """
-    if not chunks:
-        chunks = x.chunks
-    elif not isinstance(chunks[0], tuple):
-        chunks = tuple([nb * (bs,)
-                            for nb, bs in zip(x.numblocks, chunks)])
+    if not callable(func):
+        raise TypeError("First argument must be callable function, not %s\n"
+                "Usage:   da.map_blocks(function, x)\n"
+                "   or:   da.map_blocks(function, x, y, z)" %
+                type(func).__name__)
+    dtype = kwargs.get('dtype')
+    chunks = kwargs.get('chunks')
+    assert all(isinstance(arr, Array) for arr in arrs)
+    inds = [tuple(range(x.ndim))[::-1] for x in arrs]
+    args = list(concat(zip(arrs, inds)))
 
-    name = next(names)
+    out = next(names)
+    out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
 
+    result = atop(func, out, out_ind, *args, dtype=dtype)
+
+    # If func has block_id as an argument then swap out func
+    # for func with block_id partialed in
     try:
         spec = inspect.getargspec(func)
     except:
         spec = None
     if spec and 'block_id' in spec.args:
-        dsk = dict(((name,) + k[1:], (partial(func, block_id=k[1:]), k))
-                    for k in core.flatten(x._keys()))
-    else:
-        dsk = dict(((name,) + k[1:], (func, k)) for k in core.flatten(x._keys()))
+        for k in core.flatten(result._keys()):
+            result.dask[k] = (partial(func, block_id=k[1:]),) + result.dask[k][1:]
 
-    return Array(merge(dsk, x.dask), name, chunks, dtype=dtype)
+    if chunks is not None:
+        result.chunks = chunks
+
+    return result
 
 
 @wraps(np.squeeze)
@@ -886,7 +903,7 @@ class Array(object):
 
     @wraps(map_blocks)
     def map_blocks(self, func, chunks=None, dtype=None):
-        return map_blocks(self, func, chunks, dtype=dtype)
+        return map_blocks(func, self, chunks=chunks, dtype=dtype)
 
     def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
         """ Map a function over blocks of the array with some overlap
@@ -1502,7 +1519,7 @@ modf.__doc__ = np.modf
 
 @wraps(np.around)
 def around(x, decimals=0):
-    return map_blocks(x, partial(np.around, decimals=decimals), dtype=x.dtype)
+    return map_blocks(partial(np.around, decimals=decimals), x, dtype=x.dtype)
 
 
 def isnull(values):
