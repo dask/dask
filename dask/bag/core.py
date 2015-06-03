@@ -796,6 +796,11 @@ def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
 _memoized_get_bucket = toolz.memoize(_get_s3_bucket)
 
 
+def _get_key(bucket_name, conn_args, key):
+    bucket = _memoized_get_bucket(bucket_name, *conn_args)
+    return bucket.get_key(key)
+
+
 def _parse_s3_URI(bucket_name, paths):
     # FIXME
     # DIRTY HACK: so that urlparse won't think '?' in the URI path is for a
@@ -818,15 +823,10 @@ def _from_s3(bucket_name, keys, conn_args):
     Returns a Bag.
     """
     name = next(load_names)
-    dsk = {}
-    for i, k in enumerate(keys):
-        aak, ask, conn, anon = conn_args
-        # get the bucket
-        get_bucket = (_memoized_get_bucket, bucket_name, aak, ask, conn, anon)
-        # get a key from the bucket
-        get_key = (lambda b, k: b.get_key(k), get_bucket, k)
-        # read the key
-        dsk[(name, i)] = (list, get_key)
+    aak, ask, conn, anon = conn_args
+    # get the bucket
+    get_key = partial(_get_key, bucket_name, conn_args)
+    dsk = dict(((name, i), (list, (get_key, k))) for i, k in enumerate(keys))
     return Bag(dsk, name, len(keys))
 
 
