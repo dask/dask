@@ -98,6 +98,6 @@ blaze expression to storage, leaving it to handle dataset creation.
 
    >>> into('myfile.hdf5::/data', y)
 
-.. _`Blaze Server`: http://blaze.pydata.org/docs/dev/server.html
+.. _`Blaze Server`: http://blaze.pydata.org/en/latest/server.html
 .. _Blaze: http://continuum.io/open-source/blaze/
 .. _Numba: http://numba.pydata.org/
