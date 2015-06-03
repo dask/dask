@@ -857,8 +857,15 @@ def from_url(urls):
     >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
     >>> a.npartitions
     1
-    >>> 'Dask\n' in a.take(1)
-    True
+    >>> a.take(8)
+    ('Dask\n',
+     '====\n',
+     '\n',
+     '|Build Status| |Coverage| |Doc Status| |Gitter|\n',
+     '\n',
+     'Dask provides multi-core execution on larger-than-memory datasets using blocked\n',
+     'algorithms and task scheduling.  It maps high-level NumPy and list operations\n',
+     'on large datasets on to graphs of many operations on small in-memory datasets.\n')
 
     >>> b = from_url(['http://github.com', 'http://google.com'])
     >>> b.npartions
