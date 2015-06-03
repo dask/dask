@@ -867,7 +867,7 @@ def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
 
         matches = []
         for k in keys:
-            k_name = k.name.encode('utf-8')
+            k_name = k.name
             if fnmatchcase(k_name, paths):
                 matches.append(k_name)
         return _from_s3(bucket_name, matches, conn_args)
