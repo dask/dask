@@ -5,6 +5,7 @@ import math
 import tempfile
 import inspect
 import gzip
+import zlib
 import bz2
 import os
 
@@ -779,7 +780,20 @@ def write(data, filename):
         f.close()
 
 
-# private functions for from_s3
+# functions for from_s3
+def decompress(key, name):
+    def gz(x):
+        return zlib.decompress(x, 32 + zlib.MAX_WBITS)
+
+    opens = {'gz': gz}
+    ext = name.split('.')[-1]
+    raw = list(key)
+    out = []
+    for i in raw:
+        out.append(opens.get(ext, lambda x: x)(i))
+    return out
+
+
 def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
                    anon):
     """Connect to s3 and return a bucket"""
@@ -796,9 +810,10 @@ def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
 _memoized_get_bucket = toolz.memoize(_get_s3_bucket)
 
 
-def _get_key(bucket_name, conn_args, key):
+def _get_key(bucket_name, conn_args, key_name):
     bucket = _memoized_get_bucket(bucket_name, *conn_args)
-    return bucket.get_key(key)
+    key = bucket.get_key(key_name)
+    return decompress(key, key_name)
 
 
 def _parse_s3_URI(bucket_name, paths):
@@ -854,25 +869,19 @@ def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
     if bucket_name.startswith('s3://'):
         bucket_name, paths = _parse_s3_URI(bucket_name, paths)
 
-    # sing bucket key, or pattern to expand
+    # paths is a bucket key string, or pattern to expand
     if isinstance(paths, str):
         if ('*' not in paths) and ('?' not in paths):
             return _from_s3(bucket_name, [paths], conn_args)
 
-        # get the bucket
         bucket = _get_s3_bucket(bucket_name, *conn_args)
 
-        # handle globs
-        keys = bucket.list()
+        keys = bucket.list()  # handle globs
 
-        matches = []
-        for k in keys:
-            k_name = k.name
-            if fnmatchcase(k_name, paths):
-                matches.append(k_name)
+        matches = [k.name for k in keys if fnmatchcase(k.name, paths)]
         return _from_s3(bucket_name, matches, conn_args)
 
-    # list of paths
+    # paths is a list of keys
     return _from_s3(bucket_name, paths, conn_args)
 
 
