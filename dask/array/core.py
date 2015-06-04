@@ -387,8 +387,8 @@ def map_blocks(func, *arrs, **kwargs):
     >>> import dask.array as da
     >>> x = da.arange(6, chunks=3)
 
-    >>> x.map_blocks(lambda x: x + 1).compute()
-    array([ 0.,  2.,  4.,  6.,  8., 10.])
+    >>> x.map_blocks(lambda x: x * 2).compute()
+    array([ 0,  2,  4,  6,  8, 10])
 
     The ``da.map_blocks`` function can also accept multiple arrays
 
