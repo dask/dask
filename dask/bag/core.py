@@ -8,6 +8,11 @@ import gzip
 import bz2
 import os
 
+try:
+    from urllib2 import urlopen
+except ImportError:
+    from urllib.request import urlopen
+
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
@@ -844,6 +849,36 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     name = next(load_names)
     d = dict(((name, i), part) for i, part in enumerate(parts))
     return Bag(d, name, len(d))
+
+
+def from_url(urls):
+    """Create a dask.bag from a url
+
+    >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
+    >>> a.npartitions
+    1
+    >>> a.take(8)
+    ('Dask\n',
+     '====\n',
+     '\n',
+     '|Build Status| |Coverage| |Doc Status| |Gitter|\n',
+     '\n',
+     'Dask provides multi-core execution on larger-than-memory datasets using blocked\n',
+     'algorithms and task scheduling.  It maps high-level NumPy and list operations\n',
+     'on large datasets on to graphs of many operations on small in-memory datasets.\n')
+
+    >>> b = from_url(['http://github.com', 'http://google.com'])
+    >>> b.npartions
+    2
+
+    """
+    if isinstance(urls, str):
+        urls = [urls]
+    name = next(load_names)
+    dsk = {}
+    for i, u in enumerate(urls):
+        dsk[(name, i)] = (list, (urlopen, u))
+    return Bag(dsk, name, len(urls))
 
 
 def dictitems(d):
