@@ -1022,7 +1022,67 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
 
 
 def atop(func, out_ind, *args, **kwargs):
-    """ Array object version of dask.array.top """
+    """ Tensor operation: Generalized inner and outer products
+
+    A broad class of blocked algorithms and patterns can be specified with a
+    concise multi-index notation.  The ``atop`` function applies an in-memory
+    function across multiple blocks of multiple inputs in a variety of ways.
+
+    Parameters
+    ----------
+    func: callable
+        Function to apply to individual tuples of blocks
+    out_ind: iterable
+        Block pattern of the output, something like 'ijk' or (1, 2, 3)
+    *args: sequence of Array, index pairs
+        Sequence like (x, 'ij', y, 'jk', z, 'i')
+
+    This is best explained through example.  Consider the following examples:
+
+    Examples
+    --------
+
+    2D embarassingly parallel operation from two arrays, x, and y.
+
+    >>> z = atop(operator.add, 'ij', x, 'ij', y, 'ij')  # z = x + y  # doctest: +SKIP
+
+    Outer product multiplying x by y, two 1-d vectors
+
+    >>> z = atop(operator.mul, 'ij', x, 'i', y, 'j')  # doctest: +SKIP
+
+    z = x.T
+
+    >>> z = atop(np.transpose, 'ji', x, 'ij')  # doctest: +SKIP
+
+    z = x + y.T
+
+    >>> z = atop(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji')  # doctest: +SKIP
+
+    Any index, like ``i`` missing from the output index is interpreted as a
+    contraction (note that repeated indexes do not imply contraction as in
+    einstein convention.)  In the case of a contraction the passed function
+    should expect an iterator of blocks on any array that holds that index.
+
+    Examples
+    --------
+
+    Inner product multiplying x by y, two 1-d vectors
+
+    >>> def sequence_dot(x_blocks, y_blocks):
+    ...     result = 0
+    ...     for x, y in zip(x_blocks, y_blocks):
+    ...         result += x.dot(y)
+    ...     return result
+
+    >>> z = atop(sequence_dot, '', x, 'i', y, 'i')  # doctest: +SKIP
+
+    Many dask.array operations are special cases of atop.  These tensor
+    operations cover a broad subset of NumPy and this function has been battle
+    tested, supporting tricky concepts like broadcasting.
+
+    See also:
+        top - dict formulation of this function, contains most logic
+    """
     out = kwargs.pop('name', None) or next(names)
     dtype = kwargs.get('dtype', None)
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
