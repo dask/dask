@@ -61,3 +61,10 @@ def test_nan():
     assert eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
     with ignoring(AttributeError):
         assert eq(np.nanprod(x), da.nanprod(d))
+
+
+def test_dtype():
+    x = np.array([[1, 1], [2, 2], [3, 3]], dtype='i1')
+    d = da.from_array(x, chunks=2)
+
+    assert eq(d.sum(dtype='i1', axis=1), x.sum(dtype='i1', axis=1))

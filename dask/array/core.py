@@ -876,29 +876,29 @@ class Array(object):
         return argmax(self, axis=axis)
 
     @wraps(np.sum)
-    def sum(self, axis=None, keepdims=False):
+    def sum(self, axis=None, dtype=None, keepdims=False):
         from .reductions import sum
-        return sum(self, axis=axis, keepdims=keepdims)
+        return sum(self, axis=axis, dtype=dtype, keepdims=keepdims)
 
     @wraps(np.prod)
-    def prod(self, axis=None, keepdims=False):
+    def prod(self, axis=None, dtype=None, keepdims=False):
         from .reductions import prod
-        return prod(self, axis=axis, keepdims=keepdims)
+        return prod(self, axis=axis, dtype=dtype, keepdims=keepdims)
 
     @wraps(np.mean)
-    def mean(self, axis=None, keepdims=False):
+    def mean(self, axis=None, dtype=None, keepdims=False):
         from .reductions import mean
-        return mean(self, axis=axis, keepdims=keepdims)
+        return mean(self, axis=axis, dtype=dtype, keepdims=keepdims)
 
     @wraps(np.std)
-    def std(self, axis=None, keepdims=False, ddof=0):
+    def std(self, axis=None, dtype=None, keepdims=False, ddof=0):
         from .reductions import std
-        return std(self, axis=axis, keepdims=keepdims, ddof=ddof)
+        return std(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof)
 
     @wraps(np.var)
-    def var(self, axis=None, keepdims=False, ddof=0):
+    def var(self, axis=None, dtype=None, keepdims=False, ddof=0):
         from .reductions import var
-        return var(self, axis=axis, keepdims=keepdims, ddof=ddof)
+        return var(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof)
 
     def vnorm(self, ord=None, axis=None, keepdims=False):
         """ Vector norm """
