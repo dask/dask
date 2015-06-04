@@ -4,7 +4,7 @@ import numpy as np
 from functools import partial, wraps
 from toolz import compose, curry
 
-from .core import _concatenate2, Array, atop, names, sqrt, elemwise
+from .core import _concatenate2, Array, atop, sqrt, elemwise
 from .slicing import insert_many
 from ..core import flatten
 from . import chunk
@@ -25,12 +25,12 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
     aggregate2 = partial(aggregate, axis=axis, keepdims=keepdims)
 
     inds = tuple(range(x.ndim))
-    tmp = atop(chunk2, next(names), inds, x, inds)
+    tmp = atop(chunk2, inds, x, inds)
 
     inds2 = tuple(i for i in inds if i not in axis)
 
     result = atop(compose(aggregate2, curry(_concatenate2, axes=axis)),
-                  next(names), inds2, tmp, inds, dtype=dtype)
+                  inds2, tmp, inds, dtype=dtype)
 
     if keepdims:
         dsk = result.dask.copy()
@@ -296,5 +296,5 @@ def arg_reduction(a, func, argfunc, axis=0, dtype=None):
     a2 = elemwise(argreduce, a)
 
     return atop(partial(arg_aggregate, func, argfunc, a.chunks[axis]),
-                next(names), [i for i in range(a.ndim) if i != axis],
+                [i for i in range(a.ndim) if i != axis],
                 a2, list(range(a.ndim)), dtype=dtype)

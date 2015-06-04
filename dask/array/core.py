@@ -422,10 +422,9 @@ def map_blocks(func, *arrs, **kwargs):
     inds = [tuple(range(x.ndim))[::-1] for x in arrs]
     args = list(concat(zip(arrs, inds)))
 
-    out = next(names)
     out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
 
-    result = atop(func, out, out_ind, *args, dtype=dtype)
+    result = atop(func, out_ind, *args, dtype=dtype)
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -1022,8 +1021,9 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
-def atop(func, out, out_ind, *args, **kwargs):
+def atop(func, out_ind, *args, **kwargs):
     """ Array object version of dask.array.top """
+    out = kwargs.pop('name', None) or next(names)
     dtype = kwargs.get('dtype', None)
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
@@ -1235,7 +1235,7 @@ def take(a, indices, axis):
 def transpose(a, axes=None):
     axes = axes or tuple(range(a.ndim))[::-1]
     return atop(curry(np.transpose, axes=axes),
-                next(names), axes,
+                axes,
                 a, tuple(range(a.ndim)), dtype=a._dtype)
 
 
@@ -1291,7 +1291,7 @@ def tensordot(lhs, rhs, axes=2):
     func = many(binop=np.tensordot, reduction=sum,
                 axes=(left_axes, right_axes))
     return atop(func,
-                next(names), out_index,
+                out_index,
                 lhs, tuple(left_index),
                 rhs, tuple(right_index), dtype=dt)
 
@@ -1368,9 +1368,9 @@ def elemwise(op, *args, **kwargs):
     else:
         op2 = op
 
-    return atop(op2, name, expr_inds,
+    return atop(op2, expr_inds,
                 *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                dtype=dt)
+                dtype=dt, name=name)
 
 
 def wrap_elemwise(func, **kwargs):
