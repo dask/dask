@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from functools import partial, wraps
 from toolz import compose, curry
+import inspect
 
 from .core import _concatenate2, Array, atop, names, sqrt, elemwise
 from .slicing import insert_many
@@ -20,6 +21,11 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
         axis = tuple(range(x.ndim))
     if isinstance(axis, int):
         axis = (axis,)
+
+    if dtype and 'dtype' in inspect.getargspec(chunk).args:
+        chunk = partial(chunk, dtype=dtype)
+    if dtype and 'dtype' in inspect.getargspec(aggregate).args:
+        aggregate = partial(aggregate, dtype=dtype)
 
     chunk2 = partial(chunk, axis=axis, keepdims=True)
     aggregate2 = partial(aggregate, axis=axis, keepdims=keepdims)
@@ -44,8 +50,10 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
 
 
 @wraps(chunk.sum)
-def sum(a, axis=None, keepdims=False):
-    if a._dtype is not None:
+def sum(a, axis=None, dtype=None, keepdims=False):
+    if dtype is not None:
+        dt = dtype
+    elif a._dtype is not None:
         dt = np.empty((1,), dtype=a._dtype).sum().dtype
     else:
         dt = None
@@ -54,8 +62,10 @@ def sum(a, axis=None, keepdims=False):
 
 
 @wraps(chunk.prod)
-def prod(a, axis=None, keepdims=False):
-    if a._dtype is not None:
+def prod(a, axis=None, dtype=None, keepdims=False):
+    if dtype is not None:
+        dt = dtype
+    elif a._dtype is not None:
         dt = np.empty((1,), dtype=a._dtype).prod().dtype
     else:
         dt = None
@@ -110,8 +120,10 @@ def all(a, axis=None, keepdims=False):
 
 
 @wraps(chunk.nansum)
-def nansum(a, axis=None, keepdims=False):
-    if a._dtype is not None:
+def nansum(a, axis=None, dtype=None, keepdims=False):
+    if dtype is not None:
+        dt = dtype
+    elif a._dtype is not None:
         dt = chunk.nansum(np.empty((1,), dtype=a._dtype)).dtype
     else:
         dt = None
@@ -121,8 +133,10 @@ def nansum(a, axis=None, keepdims=False):
 
 with ignoring(AttributeError):
     @wraps(chunk.nanprod)
-    def nanprod(a, axis=None, keepdims=False):
-        if a._dtype is not None:
+    def nanprod(a, axis=None, dtype=None, keepdims=False):
+        if dtype is not None:
+            dt = dtype
+        elif a._dtype is not None:
             dt = np.empty((1,), dtype=a._dtype).nanprod().dtype
         else:
             dt = None
@@ -166,8 +180,10 @@ def mean_agg(pair, **kwargs):
 
 
 @wraps(chunk.mean)
-def mean(a, axis=None, keepdims=False):
-    if a._dtype is not None:
+def mean(a, axis=None, dtype=None, keepdims=False):
+    if dtype is not None:
+        dt = dtype
+    elif a._dtype is not None:
         dt = np.mean(np.empty(shape=(1,), dtype=a._dtype)).dtype
     else:
         dt = None
@@ -175,21 +191,24 @@ def mean(a, axis=None, keepdims=False):
                      dtype=dt)
 
 
-def nanmean(a, axis=None, keepdims=False):
-    if a._dtype is not None:
+def nanmean(a, axis=None, dtype=None, keepdims=False):
+    if dtype is not None:
+        dt = dtype
+    elif a._dtype is not None:
         dt = np.mean(np.empty(shape=(1,), dtype=a._dtype)).dtype
     else:
         dt = None
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims, dtype=dt)
+
 with ignoring(AttributeError):
     nanmean = wraps(chunk.nanmean)(nanmean)
 
 
-def var_chunk(A, sum=chunk.sum, numel=numel, **kwargs):
+def var_chunk(A, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(A, **kwargs)
-    x = sum(A, dtype='f8', **kwargs)
-    x2 = sum(A**2, dtype='f8', **kwargs)
+    x = sum(A, dtype=dtype, **kwargs)
+    x2 = sum(A**2, dtype=dtype, **kwargs)
     result = np.empty(shape=n.shape, dtype=[('x', x.dtype),
                                             ('x2', x2.dtype),
                                             ('n', n.dtype)])
@@ -209,38 +228,44 @@ def var_agg(A, ddof=None, **kwargs):
 
 
 @wraps(chunk.var)
-def var(a, axis=None, keepdims=False, ddof=0):
+def var(a, axis=None, dtype=None, keepdims=False, ddof=0):
+    if dtype is not None:
+        dt = dtype
     if a._dtype is not None:
-        dt = np.var(np.empty(shape=(1,), dtype=a._dtype)).dtype
+        dt = np.var(np.ones(shape=(1,), dtype=a._dtype)).dtype
     else:
         dt = None
     return reduction(a, var_chunk, partial(var_agg, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt)
 
 
-def nanvar(a, axis=None, keepdims=False, ddof=0):
-    if a._dtype is not None:
-        dt = np.var(np.empty(shape=(1,), dtype=a._dtype)).dtype
+def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0):
+    if dtype is not None:
+        dt = dtype
+    elif a._dtype is not None:
+        dt = np.var(np.ones(shape=(1,), dtype=a._dtype)).dtype
     else:
         dt = None
     return reduction(a, partial(var_chunk, sum=chunk.nansum, numel=nannumel),
                      partial(var_agg, ddof=ddof), axis=axis, keepdims=keepdims,
                      dtype=dt)
+
 with ignoring(AttributeError):
     nanvar = wraps(chunk.nanvar)(nanvar)
 
 @wraps(chunk.std)
-def std(a, axis=None, keepdims=False, ddof=0):
-    return sqrt(a.var(axis=axis, keepdims=keepdims, ddof=ddof))
+def std(a, axis=None, dtype=None, keepdims=False, ddof=0):
+    return sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
 
 
-def nanstd(a, axis=None, keepdims=False, ddof=0):
-    return sqrt(nanvar(a, axis=axis, keepdims=keepdims, ddof=ddof))
+def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0):
+    return sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+
 with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)
 
 
-def vnorm(a, ord=None, axis=None, keepdims=False):
+def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False):
     """ Vector norm
 
     See np.linalg.norm
@@ -252,11 +277,11 @@ def vnorm(a, ord=None, axis=None, keepdims=False):
     elif ord == -np.inf:
         return min(abs(a), axis=axis, keepdims=keepdims)
     elif ord == 1:
-        return sum(abs(a), axis=axis, keepdims=keepdims)
+        return sum(abs(a), axis=axis, dtype=dtype, keepdims=keepdims)
     elif ord % 2 == 0:
-        return sum(a**ord, axis=axis, keepdims=keepdims)**(1./ord)
+        return sum(a**ord, axis=axis, dtype=dtype, keepdims=keepdims)**(1./ord)
     else:
-        return sum(abs(a)**ord, axis=axis, keepdims=keepdims)**(1./ord)
+        return sum(abs(a)**ord, axis=axis, dtype=dtype, keepdims=keepdims)**(1./ord)
 
 
 def arg_aggregate(func, argfunc, dims, pairs):
