@@ -166,11 +166,15 @@ class _Frame(object):
         if seed is not None:
             np.random.seed(seed)
         seeds = np.random.randint(0, 2**31, self.npartitions)
+        dsk_full = dict(((self._name + '-split-full', i),
+                         (pd_split, (self._name, i), p, seed))
+                       for i, seed in enumerate(seeds))
+
         dsks = [dict(((self._name + '-split-%d' % i, j),
-                      (pd_split, (self._name, j), p, i, seed))
-                      for j, seed in enumerate(seeds))
+                      (getitem, (self._name + '-split-full', j), i))
+                      for j in range(self.npartitions))
                       for i in range(len(p))]
-        return [type(self)(merge(self.dask, dsk),
+        return [type(self)(merge(self.dask, dsk_full, dsk),
                            self._name + '-split-%d' % i,
                            self.column_info,
                            self.divisions)
@@ -827,26 +831,28 @@ def get(dsk, keys, get=get_sync, **kwargs):
     return get(dsk2, keys, **kwargs)  # use synchronous scheduler for now
 
 
-def pd_split(df, p, ind, seed=0):
+def pd_split(df, p, seed=0):
     """ Split DataFrame into multiple pieces pseudorandomly
 
     >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
     ...                    'b': [2, 3, 4, 5, 6, 7]})
 
-    >>> pd_split(df, [0.5, 0.5], 0, seed=123)  # roughly 50/50 split
+    >>> a, b = pd_split(df, [0.5, 0.5], seed=123)  # roughly 50/50 split
+    >>> a
        a  b
     1  2  3
     2  3  4
     5  6  7
 
-    >>> pd_split(df, [0.5, 0.5], 1, seed=123)  # roughly 50/50 split
+    >>> b
        a  b
     0  1  2
     3  4  5
     4  5  6
     """
+    p = list(p)
     index = pseudorandom(len(df), p, seed)
-    return df.iloc[index == ind]
+    return [df.iloc[index == i] for i in range(len(p))]
 
 
 from .shuffle import set_index, set_partition
