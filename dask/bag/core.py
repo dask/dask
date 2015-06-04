@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import itertools
 import math
 import tempfile
-import heapq
 import inspect
 import gzip
 import bz2
@@ -16,12 +15,12 @@ from functools import wraps, partial
 
 from toolz import (merge, frequencies, merge_with, take, curry, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   pluck, groupby)
+                   pluck, groupby, topk)
 import toolz
 from ..utils import tmpfile, ignoring
 with ignoring(ImportError):
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
-                         count, pluck, groupby)
+                         count, pluck, groupby, topk)
 
 from pbag import PBag
 
@@ -351,12 +350,12 @@ class Bag(object):
         a = next(names)
         b = next(names)
         if key:
-            topk = curry(heapq.nlargest, key=key)
+            func = curry(topk, key=key)
         else:
-            topk = heapq.nlargest
-        dsk = dict(((a, i), (list, (topk, k, (self.name, i))))
+            func = topk
+        dsk = dict(((a, i), (list, (func, k, (self.name, i))))
                         for i in range(self.npartitions))
-        dsk2 = {(b, 0): (list, (topk, k, (toolz.concat, list(dsk.keys()))))}
+        dsk2 = {(b, 0): (list, (func, k, (toolz.concat, list(dsk.keys()))))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
     def distinct(self):
