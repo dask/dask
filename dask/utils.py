@@ -205,7 +205,8 @@ def pseudorandom(n, p, key):
     array([0, 2, 0, 3, 0, 1, 2, 1, 0, 0], dtype=int8)
     """
     import numpy as np
-    cp = np.cumsum([0] + list(p))
+    p = list(p)
+    cp = np.cumsum([0] + p)
     assert np.allclose(1, cp[-1])
     assert len(p) < 256
 
