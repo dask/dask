@@ -1054,17 +1054,22 @@ def atop(func, out_ind, *args, **kwargs):
 
     >>> z = atop(np.transpose, 'ji', x, 'ij')  # doctest: +SKIP
 
-    z = x + y.T
+    The transpose case above is illustrative because it does same transposition
+    both on each in-memory block by calling ``np.transpose`` and on the order
+    of the blocks themselves, by switching the order of the index ``ij -> ji``.
+
+    We can compose these same patterns with more variables and more complex
+    in-memory functions
+
+    z = X + Y.T
 
     >>> z = atop(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji')  # doctest: +SKIP
 
     Any index, like ``i`` missing from the output index is interpreted as a
-    contraction (note that repeated indexes do not imply contraction as in
-    einstein convention.)  In the case of a contraction the passed function
-    should expect an iterator of blocks on any array that holds that index.
-
-    Examples
-    --------
+    contraction (note that this differs from Einstein convention; repeated
+    indices do not imply contraction.)  In the case of a contraction the passed
+    function should expect an iterator of blocks on any array that holds that
+    index.
 
     Inner product multiplying x by y, two 1-d vectors
 
