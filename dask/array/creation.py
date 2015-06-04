@@ -121,6 +121,8 @@ def arange(*args, **kwargs):
     chunks = kwargs['chunks']
 
     dtype = kwargs.get('dtype', None)
+    if dtype is None:
+        dtype = np.arange(0, 1, step).dtype
 
     range_ = stop - start
     num = int(abs(range_ // step))

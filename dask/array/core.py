@@ -387,8 +387,8 @@ def map_blocks(func, *arrs, **kwargs):
     >>> import dask.array as da
     >>> x = da.arange(6, chunks=3)
 
-    >>> x.map_blocks(lambda x: x + 1).compute()
-    array([ 0.,  2.,  4.,  6.,  8., 10.])
+    >>> x.map_blocks(lambda x: x * 2).compute()
+    array([ 0,  2,  4,  6,  8, 10])
 
     The ``da.map_blocks`` function can also accept multiple arrays
 
@@ -422,10 +422,9 @@ def map_blocks(func, *arrs, **kwargs):
     inds = [tuple(range(x.ndim))[::-1] for x in arrs]
     args = list(concat(zip(arrs, inds)))
 
-    out = next(names)
     out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
 
-    result = atop(func, out, out_ind, *args, dtype=dtype)
+    result = atop(func, out_ind, *args, dtype=dtype)
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -1022,8 +1021,74 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
-def atop(func, out, out_ind, *args, **kwargs):
-    """ Array object version of dask.array.top """
+def atop(func, out_ind, *args, **kwargs):
+    """ Tensor operation: Generalized inner and outer products
+
+    A broad class of blocked algorithms and patterns can be specified with a
+    concise multi-index notation.  The ``atop`` function applies an in-memory
+    function across multiple blocks of multiple inputs in a variety of ways.
+
+    Parameters
+    ----------
+    func: callable
+        Function to apply to individual tuples of blocks
+    out_ind: iterable
+        Block pattern of the output, something like 'ijk' or (1, 2, 3)
+    *args: sequence of Array, index pairs
+        Sequence like (x, 'ij', y, 'jk', z, 'i')
+
+    This is best explained through example.  Consider the following examples:
+
+    Examples
+    --------
+
+    2D embarassingly parallel operation from two arrays, x, and y.
+
+    >>> z = atop(operator.add, 'ij', x, 'ij', y, 'ij')  # z = x + y  # doctest: +SKIP
+
+    Outer product multiplying x by y, two 1-d vectors
+
+    >>> z = atop(operator.mul, 'ij', x, 'i', y, 'j')  # doctest: +SKIP
+
+    z = x.T
+
+    >>> z = atop(np.transpose, 'ji', x, 'ij')  # doctest: +SKIP
+
+    The transpose case above is illustrative because it does same transposition
+    both on each in-memory block by calling ``np.transpose`` and on the order
+    of the blocks themselves, by switching the order of the index ``ij -> ji``.
+
+    We can compose these same patterns with more variables and more complex
+    in-memory functions
+
+    z = X + Y.T
+
+    >>> z = atop(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji')  # doctest: +SKIP
+
+    Any index, like ``i`` missing from the output index is interpreted as a
+    contraction (note that this differs from Einstein convention; repeated
+    indices do not imply contraction.)  In the case of a contraction the passed
+    function should expect an iterator of blocks on any array that holds that
+    index.
+
+    Inner product multiplying x by y, two 1-d vectors
+
+    >>> def sequence_dot(x_blocks, y_blocks):
+    ...     result = 0
+    ...     for x, y in zip(x_blocks, y_blocks):
+    ...         result += x.dot(y)
+    ...     return result
+
+    >>> z = atop(sequence_dot, '', x, 'i', y, 'i')  # doctest: +SKIP
+
+    Many dask.array operations are special cases of atop.  These tensor
+    operations cover a broad subset of NumPy and this function has been battle
+    tested, supporting tricky concepts like broadcasting.
+
+    See also:
+        top - dict formulation of this function, contains most logic
+    """
+    out = kwargs.pop('name', None) or next(names)
     dtype = kwargs.get('dtype', None)
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
@@ -1235,7 +1300,7 @@ def take(a, indices, axis):
 def transpose(a, axes=None):
     axes = axes or tuple(range(a.ndim))[::-1]
     return atop(curry(np.transpose, axes=axes),
-                next(names), axes,
+                axes,
                 a, tuple(range(a.ndim)), dtype=a._dtype)
 
 
@@ -1291,7 +1356,7 @@ def tensordot(lhs, rhs, axes=2):
     func = many(binop=np.tensordot, reduction=sum,
                 axes=(left_axes, right_axes))
     return atop(func,
-                next(names), out_index,
+                out_index,
                 lhs, tuple(left_index),
                 rhs, tuple(right_index), dtype=dt)
 
@@ -1368,9 +1433,9 @@ def elemwise(op, *args, **kwargs):
     else:
         op2 = op
 
-    return atop(op2, name, expr_inds,
+    return atop(op2, expr_inds,
                 *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                dtype=dt)
+                dtype=dt, name=name)
 
 
 def wrap_elemwise(func, **kwargs):

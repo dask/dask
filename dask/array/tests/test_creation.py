@@ -63,6 +63,10 @@ def test_arange():
     eq(darr, nparr)
 
 
+def test_arange_has_dtype():
+    assert da.arange(5, chunks=2)._dtype is not None
+
+
 def test_arange_working_float_step():
     """Sometimes floating point step arguments work, but this could be platform
     dependent.
