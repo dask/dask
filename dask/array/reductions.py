@@ -20,6 +20,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
         axis = tuple(range(x.ndim))
     if isinstance(axis, int):
         axis = (axis,)
+    axis = tuple(i if i >= 0 else x.ndim + i for i in axis)
 
     chunk2 = partial(chunk, axis=axis, keepdims=True)
     aggregate2 = partial(aggregate, axis=axis, keepdims=keepdims)
@@ -288,6 +289,9 @@ def arg_reduction(a, func, argfunc, axis=0, dtype=None):
                 "For example:\n"
                 "  Before:  x.argmin()\n"
                 "  After:   x.argmin(axis=0)\n")
+
+    if axis < 0:
+        axis = a.ndim + axis
 
     def argreduce(x):
         """ Get both min/max and argmin/argmax of each block """

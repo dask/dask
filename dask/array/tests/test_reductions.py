@@ -33,8 +33,16 @@ def test_reductions():
 
     assert eq(a.argmin(axis=1), x.argmin(axis=1))
     assert eq(a.argmax(axis=0), x.argmax(axis=0))
-    # assert eq(a.argmin(), x.argmin())
 
+
+def test_reductions_with_negative_axes():
+    x = np.random.random((4, 4, 4))
+    a = da.from_array(x, chunks=2)
+
+    assert eq(a.argmin(axis=-1), x.argmin(axis=-1))
+
+    assert eq(a.sum(axis=-1), x.sum(axis=-1))
+    assert eq(a.sum(axis=(0, -1)), x.sum(axis=(0, -1)))
 
 def test_nan():
     x = np.array([[1, np.nan, 3, 4],
