@@ -161,7 +161,7 @@ class _Frame(object):
         >>> a, b = df.random_split([0.5, 0.5])  # doctest: +SKIP
 
         80/10/10 split, consistent seed
-        >>> a, b = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
+        >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
         """
         if seed is not None:
             np.random.seed(seed)
