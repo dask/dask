@@ -417,8 +417,8 @@ def map_blocks(func, *arrs, **kwargs):
                 "   or:   da.map_blocks(function, x, y, z)" %
                 type(func).__name__)
     dtype = kwargs.get('dtype')
-    chunks = kwargs.get('chunks')
     assert all(isinstance(arr, Array) for arr in arrs)
+
     inds = [tuple(range(x.ndim))[::-1] for x in arrs]
     args = list(concat(zip(arrs, inds)))
 
@@ -436,6 +436,11 @@ def map_blocks(func, *arrs, **kwargs):
         for k in core.flatten(result._keys()):
             result.dask[k] = (partial(func, block_id=k[1:]),) + result.dask[k][1:]
 
+    # Assert user specified chunks
+    chunks = kwargs.get('chunks')
+    if chunks is not None and chunks and not isinstance(chunks[0], tuple):
+        chunks = tuple([nb * (bs,)
+                        for nb, bs in zip(result.numblocks, chunks)])
     if chunks is not None:
         result.chunks = chunks
 

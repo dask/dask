@@ -1043,7 +1043,7 @@ def test_concatenate3():
                          [ 9, 10, 11,  9, 10, 11,  9, 10, 11]]]))
 
 
-def test_map_blocks():
+def test_map_blocks3():
     x = np.arange(10)
     y = np.arange(10) * 2
 
