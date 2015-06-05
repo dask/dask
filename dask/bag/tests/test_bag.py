@@ -249,11 +249,8 @@ def test_from_s3():
     # test it computes
     list(a.compute())
 
-    # make a manual connection and reuse it so we don't have a lot of lag
-    conn = boto.connect_s3(anon=True)
-
     # test wit specific key
-    b = db.from_s3('nyqpug', 't?ps.csv', connection=conn)
+    b = db.from_s3('nyqpug', 't?ps.csv')
     assert b.npartitions == 1
 
     # test all keys in bucket
@@ -262,6 +259,9 @@ def test_from_s3():
 
     d = db.from_s3('s3://nyqpug')
     assert d.npartitions == 3
+
+    e = db.from_s3('nyqpug', 'tips.gz')
+    assert e.compute()[0][:100] == b.compute()[0][:100]
 
 
 def test__parse_s3_URI():
