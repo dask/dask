@@ -780,20 +780,6 @@ def write(data, filename):
         f.close()
 
 
-# functions for from_s3
-def decompress(key, name):
-    def gz(x):
-        return zlib.decompress(x, 32 + zlib.MAX_WBITS)
-
-    opens = {'gz': gz}
-    ext = name.split('.')[-1]
-    raw = list(key)
-    out = []
-    for i in raw:
-        out.append(opens.get(ext, lambda x: x)(i))
-    return out
-
-
 def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
                    anon):
     """Connect to s3 and return a bucket"""
@@ -813,7 +799,8 @@ _memoized_get_bucket = toolz.memoize(_get_s3_bucket)
 def _get_key(bucket_name, conn_args, key_name):
     bucket = _memoized_get_bucket(bucket_name, *conn_args)
     key = bucket.get_key(key_name)
-    return decompress(key, key_name)
+    ext = key_name.split('.')[-1]
+    return stream_decompress(ext, key.read())
 
 
 def _parse_s3_URI(bucket_name, paths):
