@@ -24,7 +24,7 @@ from ..array.core import partial_by_order
 from ..async import get_sync
 from ..threaded import get as get_threaded
 from ..compatibility import unicode, apply
-from ..utils import repr_long_list, IndexCallable
+from ..utils import repr_long_list, IndexCallable, pseudorandom
 
 
 def _concat(args):
@@ -153,6 +153,32 @@ class _Frame(object):
 
         return type(self)(merge(dsk, self.dask), name,
                           columns, self.divisions)
+
+    def random_split(self, p, seed=None):
+        """ Pseudorandomly split dataframe into different pieces row-wise
+
+        50/50 split
+        >>> a, b = df.random_split([0.5, 0.5])  # doctest: +SKIP
+
+        80/10/10 split, consistent seed
+        >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
+        """
+        if seed is not None:
+            np.random.seed(seed)
+        seeds = np.random.randint(0, 2**31, self.npartitions)
+        dsk_full = dict(((self._name + '-split-full', i),
+                         (pd_split, (self._name, i), p, seed))
+                       for i, seed in enumerate(seeds))
+
+        dsks = [dict(((self._name + '-split-%d' % i, j),
+                      (getitem, (self._name + '-split-full', j), i))
+                      for j in range(self.npartitions))
+                      for i in range(len(p))]
+        return [type(self)(merge(self.dask, dsk_full, dsk),
+                           self._name + '-split-%d' % i,
+                           self.column_info,
+                           self.divisions)
+                for i, dsk in enumerate(dsks)]
 
     def head(self, n=10, compute=True):
         """ First n rows of the dataset
@@ -454,11 +480,11 @@ class DataFrame(_Frame):
     def __getattr__(self, key):
         try:
             return object.__getattribute__(self, key)
-        except AttributeError:
+        except AttributeError as e:
             try:
                 return self[key]
             except NotImplementedError:
-                raise AttributeError()
+                raise e
 
     def __dir__(self):
         return sorted(set(list(dir(type(self))) + list(self.columns)))
@@ -803,6 +829,30 @@ def get(dsk, keys, get=get_sync, **kwargs):
     from .optimize import optimize
     dsk2 = optimize(dsk, keys, **kwargs)
     return get(dsk2, keys, **kwargs)  # use synchronous scheduler for now
+
+
+def pd_split(df, p, seed=0):
+    """ Split DataFrame into multiple pieces pseudorandomly
+
+    >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+    ...                    'b': [2, 3, 4, 5, 6, 7]})
+
+    >>> a, b = pd_split(df, [0.5, 0.5], seed=123)  # roughly 50/50 split
+    >>> a
+       a  b
+    1  2  3
+    2  3  4
+    5  6  7
+
+    >>> b
+       a  b
+    0  1  2
+    3  4  5
+    4  5  6
+    """
+    p = list(p)
+    index = pseudorandom(len(df), p, seed)
+    return [df.iloc[index == i] for i in range(len(p))]
 
 
 from .shuffle import set_index, set_partition

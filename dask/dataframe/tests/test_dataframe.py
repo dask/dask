@@ -7,7 +7,7 @@ import numpy as np
 import dask
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.core import get, concat
+from dask.dataframe.core import get, concat, pd_split
 
 
 def eq(a, b):
@@ -372,3 +372,11 @@ def test_dataframe_series_are_dillable():
     e = d.groupby(d.a).b.sum()
     f = dill.loads(dill.dumps(e))
     assert eq(e, f)
+
+
+def test_random_partitions():
+    a, b = d.random_split([0.5, 0.5])
+    assert isinstance(a, dd.DataFrame)
+    assert isinstance(b, dd.DataFrame)
+
+    assert len(a.compute()) + len(b.compute()) == len(full)
