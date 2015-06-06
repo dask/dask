@@ -54,4 +54,26 @@ Frequently Asked Questions
 
     Note that you can ``rechunk()`` an array if necessary.
 
+
+3.  **Q: My computation fills memory, how do I spill to disk?**
+
+    The schedulers endeavor not to use up all of your memory.  However for some
+    algorithms filling up memory is unavoidable.  In these cases we can swap
+    out the dictionary used to store intermediate results with a
+    dictionary-like object that spills to disk.  The Chest_ project handles
+    this nicely.
+
+        >>> cache = Chest() # Uses temporary file. Deletes on garbage collection
+        or
+        >>> cache = Chest(path='/path/to/dir', available_memory=8e9)  # Use 8GB
+
+    This chest object works just like a normal dictionary but, when available
+    memory runs out (defaults to 1GB) it starts pickling data and sending it to
+    disk, retrieving it as necessary.
+
+    You can specify your cache when calling ``compute``
+
+        >>> x.dot(x.T).compute(cache=cache)
+
 .. _`inspect docs`: inspect.html
+.. _`Chest`: https://github.com/ContinuumIO/chest
