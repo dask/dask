@@ -75,5 +75,15 @@ Frequently Asked Questions
 
         >>> x.dot(x.T).compute(cache=cache)
 
+    Alternatively you can set your cache as a global option.
+
+        >>> with dask.set_options(cache=cache):  # sets state within with block
+        ...     y = x.dot(x.T).compute()
+
+        or
+
+        >>> dask.set_options(cache=cache)  # sets global state
+        >>> y = x.dot(x.T).compute()
+
 .. _`inspect docs`: inspect.html
 .. _`Chest`: https://github.com/ContinuumIO/chest
