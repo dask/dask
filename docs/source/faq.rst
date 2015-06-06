@@ -85,5 +85,15 @@ Frequently Asked Questions
         >>> dask.set_options(cache=cache)  # sets global state
         >>> y = x.dot(x.T).compute()
 
+    However, while using an on-disk cache is a great fallback performance is
+    always best if we can keep from spilling to disk.  You could try one of the
+    following
+
+    1.  Use a smaller chunk/partition size
+    2.  If you are convinced that a smaller chunk size will not help in your
+        case you could also report your problem on our `issue tracker`_ and
+        work with the dask development team to improve our scheduling policies.
+
 .. _`inspect docs`: inspect.html
 .. _`Chest`: https://github.com/ContinuumIO/chest
+.. _`issue tracker`: https://github.com/ContinuumIO/dask/issues/new
