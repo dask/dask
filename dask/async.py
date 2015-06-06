@@ -122,6 +122,7 @@ from operator import add
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .optimize import inline_functions
 from .utils import deepmap
+from .context import _globals
 
 def inc(x):
     return x + 1
@@ -159,6 +160,8 @@ def start_state_from_dask(dsk, cache=None):
                       'y': set(['w']),
                       'z': set(['w'])}}
     """
+    if cache is None:
+        cache = _globals['cache']
     if cache is None:
         cache = dict()
     data_keys = set()

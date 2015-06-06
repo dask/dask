@@ -1,5 +1,6 @@
 from operator import add
 from copy import deepcopy
+import dask
 
 import pytest
 
@@ -93,3 +94,17 @@ def test_get():
 def test_nested_get():
     dsk = {'x': 1, 'y': 2, 'a': (add, 'x', 'y'), 'b': (sum, ['x', 'y'])}
     assert get_sync(dsk, ['a', 'b']) == (3, 3)
+
+
+def test_cache_options():
+    try:
+        from chest import Chest
+    except ImportError:
+        return
+    cache = Chest()
+    def inc2(x):
+        assert 'y' in cache
+        return x + 1
+
+    with dask.set_options(cache=cache):
+        get_sync({'x': (inc2, 'y'), 'y': 1}, 'x')
