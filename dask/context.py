@@ -18,6 +18,7 @@ class set_options(object):
 
         get - the scheduler to use
         pool - a thread or process pool
+        cache - Cache to use for intermediate results
         func_loads/func_dumps - loads/dumps functions for serialization of data
             likely to contain functions.  Defaults to dill.loads/dill.dumps
 
