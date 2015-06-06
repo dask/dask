@@ -63,14 +63,14 @@ def tsqr(data, name=None, compute_svd=False):
                      numblocks={data.name: numblocks})
     # qr[0]
     name_q_st1 = prefix + 'Q_st1'
-    dsk_q_st1 = dict(((name_q_st1, i, 0),
-                      (operator.getitem, (name_qr_st1, i, 0), 0))
-                     for i in range(numblocks[0]))
+    dsk_q_st1 = {((name_q_st1, i, 0),
+                  (operator.getitem, (name_qr_st1, i, 0), 0))
+                 for i in range(numblocks[0])}
     # qr[1]
     name_r_st1 = prefix + 'R_st1'
-    dsk_r_st1 = dict(((name_r_st1, i, 0),
-                      (operator.getitem, (name_qr_st1, i, 0), 1))
-                     for i in range(numblocks[0]))
+    dsk_r_st1 = {((name_r_st1, i, 0),
+                  (operator.getitem, (name_qr_st1, i, 0), 1))
+                 for i in range(numblocks[0])}
 
     # Stacking for in-core QR computation
     to_stack = [(name_r_st1, i, 0) for i in range(numblocks[0])]
@@ -89,9 +89,9 @@ def tsqr(data, name=None, compute_svd=False):
     block_slices = [(slice(e[0], e[1]), slice(0, n))
                     for e in _cumsum_blocks(q2_block_sizes)]
     name_q_st2 = prefix + 'Q_st2'
-    dsk_q_st2 = dict(((name_q_st2,) + (i, 0),
-                      (operator.getitem, (name_q_st2_aux, 0, 0), b))
-                     for i, b in enumerate(block_slices))
+    dsk_q_st2 = {((name_q_st2,) + (i, 0),
+                  (operator.getitem, (name_q_st2_aux, 0, 0), b))
+                 for i, b in enumerate(block_slices)}
     # qr[1]
     name_r_st2 = prefix + 'R'
     dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
