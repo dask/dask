@@ -171,6 +171,31 @@ def compression_level(n, q):
 
 
 def compression_matrix(data, q, n_power_iter=0):
+    """ Uses random sampling to identify a subspace that captures most
+    of the action of a matrix.
+
+    As presented in:
+
+        A. Benson, D. Gleich, and J. Demmel.
+        Finding structure with randomness: Probabilistic algorithms for
+        constructing approximate matrix decompositions.
+        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
+        pp. 217-288, June 2011
+        http://arxiv.org/abs/0909.4061
+
+    This compression matrix returned by this algorithm can be used to
+    compute both the QR decomposition and the Singular Value
+    Decomposition.
+
+    Parameters
+    ----------
+
+    data: Array
+    q: Size of the desired subspace (the actual size will be bigger,
+    because of oversampling)
+    n_power_iter: number of power iterations, useful when the singular
+    values of the input matrix decay very slowly.
+    """
     n = data.shape[1]
     comp_level = compression_level(n, q)
     omega = standard_normal(size=(n, comp_level), chunks=(data.chunks[1],
@@ -184,11 +209,34 @@ def compression_matrix(data, q, n_power_iter=0):
 
 
 def svd_compressed(data, q, n_power_iter=0, name=None):
+    """ Randomly compressed Singular Value Decomposition.
+
+    As presented in:
+
+        A. Benson, D. Gleich, and J. Demmel.
+        Finding structure with randomness: Probabilistic algorithms for
+        constructing approximate matrix decompositions.
+        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
+        pp. 217-288, June 2011
+        http://arxiv.org/abs/0909.4061
+
+    Parameters
+    ----------
+
+    data: Array
+    q: Size of the desired subspace (the actual size will be bigger,
+    because of oversampling)
+    n_power_iter: number of power iterations, useful when the singular
+    values of the input matrix decay very slowly.
+    """
     comp = compression_matrix(data, q, n_power_iter=n_power_iter)
     data_compressed = comp.dot(data)
     v, s, ut = tsqr(data_compressed.T, name, compute_svd=True)
     u = comp.T.dot(ut)
     vt = v.T
+    u = u[:, :q]
+    s = s[:q]
+    vt = vt[:q, :]
     return u, s, vt
 
 
