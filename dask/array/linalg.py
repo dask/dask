@@ -176,7 +176,7 @@ def compression_matrix(data, q, n_power_iter=0):
 
     As presented in:
 
-        A. Benson, D. Gleich, and J. Demmel.
+        N. Halko, P. G. Martinsson, and J. A. Tropp.
         Finding structure with randomness: Probabilistic algorithms for
         constructing approximate matrix decompositions.
         SIAM Rev., Survey and Review section, Vol. 53, num. 2,
@@ -212,7 +212,7 @@ def svd_compressed(data, q, n_power_iter=0, name=None):
 
     As presented in:
 
-        A. Benson, D. Gleich, and J. Demmel.
+        N. Halko, P. G. Martinsson, and J. A. Tropp.
         Finding structure with randomness: Probabilistic algorithms for
         constructing approximate matrix decompositions.
         SIAM Rev., Survey and Review section, Vol. 53, num. 2,
