@@ -1,11 +1,11 @@
 from __future__ import absolute_import
 
-import pytest
-pytest.importorskip('numpy')
+# import pytest
+# pytest.importorskip('numpy')
 
 import numpy as np
 from dask.array import from_array
-from dask.array.linalg import tsqr
+from dask.array.linalg import tsqr, svd_compressed
 
 
 def test_tsqr_regular_blocks():
@@ -42,16 +42,18 @@ def test_tsqr_svd_regular_blocks():
     mat = np.random.rand(m, n)
     data = from_array(mat, chunks=(10, n), name='A')
 
-    u, s, v = tsqr(data, compute_svd=True)
+    u, s, vt = tsqr(data, compute_svd=True)
     u = np.array(u)
     s = np.array(s)
-    v = np.array(v)
+    vt = np.array(vt)
+    usvt = np.dot(u, np.dot(np.diag(s), vt))
 
-    assert np.allclose(mat, np.dot(u, np.dot(np.diag(s), v)))  # accuracy check
+    s_exact = np.linalg.svd(mat2)[1]
+
+    assert np.allclose(mat, usvt)  # accuracy check
     assert np.allclose(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
-    assert np.allclose(np.eye(n, n), np.dot(v.T, v))  # v must be orthonormal
-    assert np.allclose(s, np.linalg.svd(mat)[1])  # s must contain the singular
-                                                  # values
+    assert np.allclose(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
+    assert np.allclose(s, s_exact)  # s must contain the singular values
 
 
 def test_tsqr_svd_irregular_blocks():
@@ -60,13 +62,61 @@ def test_tsqr_svd_irregular_blocks():
     data = from_array(mat, chunks=(3, n), name='A')[1:]
     mat2 = mat[1:, :]
 
-    u, s, v = tsqr(data, compute_svd=True)
+    u, s, vt = tsqr(data, compute_svd=True)
     u = np.array(u)
     s = np.array(s)
-    v = np.array(v)
+    vt = np.array(vt)
+    usvt = np.dot(u, np.dot(np.diag(s), vt))
 
-    assert np.allclose(mat2, np.dot(u, np.dot(np.diag(s), v)))  # accuracy check
+    s_exact = np.linalg.svd(mat2)[1]
+
+    assert np.allclose(mat2, usvt)  # accuracy check
     assert np.allclose(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
-    assert np.allclose(np.eye(n, n), np.dot(v.T, v))  # v must be orthonormal
-    assert np.allclose(s, np.linalg.svd(mat2)[1])  # s must contain the singular
-                                                   # values
+    assert np.allclose(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
+    assert np.allclose(s, s_exact)  # s must contain the singular values
+
+
+def test_svd_compressed():
+    m, n = 30, 25
+    r = 10
+    mat1 = np.random.randn(m, r)
+    mat2 = np.random.randn(r, n)
+    mat = mat1.dot(mat2)
+    data = from_array(mat, chunks=(10, 10), name='A')
+
+    n_iter = int(1e2)
+    usvt = None
+    for i in range(n_iter):
+        u, s, vt = svd_compressed(data, r)
+        u = u[:, :r]
+        s = s[:r]
+        vt = vt[:r, :]
+        u = np.array(u)
+        s = np.array(s)
+        vt = np.array(vt)
+        if usvt is None:
+            usvt = np.dot(u, np.dot(np.diag(s), vt))
+        else:
+            usvt += np.dot(u, np.dot(np.diag(s), vt))
+    usvt /= n_iter
+
+    tol = 1e-1
+    assert np.allclose(np.linalg.norm(mat - usvt),
+                       np.linalg.norm(mat),
+                       rtol=tol, atol=tol)  # average accuracy check
+
+    u, s, vt = svd_compressed(data, r)
+    u = np.array(u)[:, :r]
+    s = np.array(s)[:r]
+    vt = np.array(vt)[:r, :]
+
+    s_exact = np.linalg.svd(mat)[1]
+    s_exact = s_exact[:r]
+
+    assert np.allclose(np.eye(r, r), np.dot(u.T, u))  # u must be orthonormal
+    assert np.allclose(np.eye(r, r), np.dot(vt, vt.T))  # v must be orthonormal
+    assert np.allclose(s, s_exact)  # s must contain the singular values
+
+
+# if __name__ == '__main__':
+#     test_svd_compressed()
