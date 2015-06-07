@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
-# import pytest
-# pytest.importorskip('numpy')
+import pytest
+pytest.importorskip('numpy')
 
 import numpy as np
 from dask.array import from_array
@@ -115,7 +115,3 @@ def test_svd_compressed():
     assert np.allclose(np.eye(r, r), np.dot(u.T, u))  # u must be orthonormal
     assert np.allclose(np.eye(r, r), np.dot(vt, vt.T))  # v must be orthonormal
     assert np.allclose(s, s_exact)  # s must contain the singular values
-
-
-if __name__ == '__main__':
-    test_svd_compressed()
