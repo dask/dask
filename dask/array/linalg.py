@@ -166,8 +166,13 @@ def tsqr(data, name=None, compute_svd=False):
         return u, s, v
 
 
-def compression_level(n, q):
-    return min(max(20, q + 10), n)
+def compression_level(n, q, oversampling=10):
+    """ Given the size n of a space, compress that that to one of
+    size q plus oversampling.
+    q + oversampling should not be larger that n.
+    In this specific implementation, q + oversampling is at least 20.
+    """
+    return min(max(20, q + oversampling), n)
 
 
 def compression_matrix(data, q, n_power_iter=0):
