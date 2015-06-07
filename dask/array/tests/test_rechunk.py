@@ -167,6 +167,6 @@ def test_rechunk_with_empty_input():
 
 
 def test_rechunk_with_null_dimensions():
-    x = da.ones((24, 24), chunks=(4, 8))
+    x = da.from_array(np.ones((24, 24)), chunks=(4, 8))
     assert (x.rechunk(chunks=(None, 4)).chunks ==
-            da.ones((24, 24), chunks=(24, 4)).chunks)
+            da.ones((24, 24), chunks=(4, 4)).chunks)
