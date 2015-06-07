@@ -48,7 +48,7 @@ def test_tsqr_svd_regular_blocks():
     vt = np.array(vt)
     usvt = np.dot(u, np.dot(np.diag(s), vt))
 
-    s_exact = np.linalg.svd(mat2)[1]
+    s_exact = np.linalg.svd(mat)[1]
 
     assert np.allclose(mat, usvt)  # accuracy check
     assert np.allclose(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
@@ -85,7 +85,6 @@ def test_svd_compressed():
     data = from_array(mat, chunks=(10, 10), name='A')
 
     n_iter = int(1e2)
-    usvt = None
     for i in range(n_iter):
         u, s, vt = svd_compressed(data, r)
         u = u[:, :r]
@@ -94,7 +93,7 @@ def test_svd_compressed():
         u = np.array(u)
         s = np.array(s)
         vt = np.array(vt)
-        if usvt is None:
+        if i == 0:
             usvt = np.dot(u, np.dot(np.diag(s), vt))
         else:
             usvt += np.dot(u, np.dot(np.diag(s), vt))
@@ -118,5 +117,5 @@ def test_svd_compressed():
     assert np.allclose(s, s_exact)  # s must contain the singular values
 
 
-# if __name__ == '__main__':
-#     test_svd_compressed()
+if __name__ == '__main__':
+    test_svd_compressed()
