@@ -204,8 +204,7 @@ def compression_matrix(data, q, n_power_iter=0):
     for j in range(n_power_iter):
         mat_h = data.dot(data.T.dot(mat_h))
     q, _ = tsqr(mat_h)
-    comp = q.T
-    return comp
+    return q.T
 
 
 def svd_compressed(data, q, n_power_iter=0, name=None):
