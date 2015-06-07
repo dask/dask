@@ -219,6 +219,10 @@ def svd_compressed(data, q, n_power_iter=0, name=None):
         pp. 217-288, June 2011
         http://arxiv.org/abs/0909.4061
 
+    Examples
+    --------
+    >>> u, s, vt = svd_compressed(x, 20)  # doctest: +SKIP
+
     Parameters
     ----------
 
@@ -227,16 +231,23 @@ def svd_compressed(data, q, n_power_iter=0, name=None):
     because of oversampling)
     n_power_iter: number of power iterations, useful when the singular
     values of the input matrix decay very slowly.
+
+    Returns
+    -------
+
+    u:  Array, unitary / orthogonal
+    s:  Array, singular values in decreasing order (largest first)
+    vt:  Array, unitary / orthogonal
     """
     comp = compression_matrix(data, q, n_power_iter=n_power_iter)
     data_compressed = comp.dot(data)
-    v, s, ut = tsqr(data_compressed.T, name, compute_svd=True)
-    u = comp.T.dot(ut)
-    vt = v.T
+    v, s, u = tsqr(data_compressed.T, name, compute_svd=True)
+    u = comp.T.dot(u)
+    v = v.T
     u = u[:, :q]
     s = s[:q]
-    vt = vt[:q, :]
-    return u, s, vt
+    v = v[:q, :]
+    return u, s, v
 
 
 def qr(data, name=None):
