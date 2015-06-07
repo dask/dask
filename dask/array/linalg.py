@@ -2,6 +2,7 @@ from __future__ import absolute_import
 import numpy as np
 from itertools import count
 from .core import top, dotmany, Array
+from .random import standard_normal
 import operator
 
 names = ('tsqr_%d' % i for i in count(1))
@@ -42,8 +43,6 @@ def tsqr(data, name=None, compute_svd=False):
     dask.array.linalg.qr - Powered by this algorithm
     dask.array.linalg.svd - Powered by this algorithm
     """
-
-
 
     if not (data.ndim == 2 and                    # Is a matrix
             len(data.chunks[1]) == 1):         # Only one column block
@@ -89,9 +88,9 @@ def tsqr(data, name=None, compute_svd=False):
     block_slices = [(slice(e[0], e[1]), slice(0, n))
                     for e in _cumsum_blocks(q2_block_sizes)]
     name_q_st2 = prefix + 'Q_st2'
-    dsk_q_st2 = {((name_q_st2,) + (i, 0),
-                  (operator.getitem, (name_q_st2_aux, 0, 0), b))
-                 for i, b in enumerate(block_slices)}
+    dsk_q_st2 = dict(((name_q_st2, i, 0),
+                      (operator.getitem, (name_q_st2_aux, 0, 0), b))
+                     for i, b in enumerate(block_slices))
     # qr[1]
     name_r_st2 = prefix + 'R'
     dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
@@ -165,6 +164,32 @@ def tsqr(data, name=None, compute_svd=False):
         s = Array(dsk_s, name_s_st2, shape=(n,), chunks=(n, n))
         v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=(n, n))
         return u, s, v
+
+
+def compression_level(n, q):
+    return min(max(20, q + 10), n)
+
+
+def compression_matrix(data, q, n_power_iter=0):
+    n = data.shape[1]
+    comp_level = compression_level(n, q)
+    omega = standard_normal(size=(n, comp_level), chunks=(data.chunks[1],
+                                                          (comp_level,)))
+    mat_h = data.dot(omega)
+    for j in range(n_power_iter):
+        mat_h = data.dot(data.T.dot(mat_h))
+    q, _ = tsqr(mat_h)
+    comp = q.T
+    return comp
+
+
+def svd_compressed(data, q, n_power_iter=0, name=None):
+    comp = compression_matrix(data, q, n_power_iter=n_power_iter)
+    data_compressed = comp.dot(data)
+    v, s, ut = tsqr(data_compressed.T, name, compute_svd=True)
+    u = comp.T.dot(ut)
+    vt = v.T
+    return u, s, vt
 
 
 def qr(data, name=None):
