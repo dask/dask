@@ -87,9 +87,6 @@ def test_svd_compressed():
     n_iter = int(1e2)
     for i in range(n_iter):
         u, s, vt = svd_compressed(data, r)
-        u = u[:, :r]
-        s = s[:r]
-        vt = vt[:r, :]
         u = np.array(u)
         s = np.array(s)
         vt = np.array(vt)
