@@ -984,6 +984,9 @@ def normalize_chunks(chunks, shape=None):
         else:
             chunks = ((),) * len(shape)
 
+    if shape is not None:
+        chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
+
     if chunks and not isinstance(chunks[0], (tuple, list)):
         chunks = blockdims_from_blockshape(shape, chunks)
 
