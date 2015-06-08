@@ -84,7 +84,7 @@ def test_svd_compressed():
     mat = mat1.dot(mat2)
     data = from_array(mat, chunks=(10, 10), name='A')
 
-    n_iter = int(1e2)
+    n_iter = 100
     for i in range(n_iter):
         u, s, vt = svd_compressed(data, r)
         u = np.array(u)
