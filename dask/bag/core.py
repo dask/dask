@@ -20,7 +20,7 @@ from functools import wraps, partial
 
 from toolz import (merge, frequencies, merge_with, take, curry, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   pluck, groupby, topk)
+                   remove, pluck, groupby, topk)
 import toolz
 from ..utils import tmpfile, ignoring
 with ignoring(ImportError):
@@ -246,6 +246,22 @@ class Bag(object):
         """
         name = next(names)
         dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
+                        for i in range(self.npartitions))
+        return Bag(merge(self.dask, dsk), name, self.npartitions)
+
+    def remove(self, predicate):
+        """ Remove elements in collection that match predicate
+
+        >>> def iseven(x):
+        ...     return x % 2 == 0
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(5))
+        >>> list(b.remove(iseven))  # doctest: +SKIP
+        [1, 3]
+        """
+        name = next(names)
+        dsk = dict(((name, i), (reify, (remove, predicate, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
@@ -857,7 +873,8 @@ def from_url(urls):
     >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
     >>> a.npartitions
     1
-    >>> a.take(8)
+
+    >> a.take(8)  # doctest: +SKIP
     ('Dask\n',
      '====\n',
      '\n',
@@ -868,7 +885,7 @@ def from_url(urls):
      'on large datasets on to graphs of many operations on small in-memory datasets.\n')
 
     >>> b = from_url(['http://github.com', 'http://google.com'])
-    >>> b.npartions
+    >>> b.npartitions
     2
 
     """
