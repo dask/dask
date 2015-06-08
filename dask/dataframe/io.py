@@ -63,7 +63,11 @@ def read_csv(fn, *args, **kwargs):
     else:
         header = kwargs.pop('header')
 
-    head = pd.read_csv(first_fn, *args, nrows=sample_nrows, header=header, **kwargs)
+    try:
+        head = pd.read_csv(first_fn, *args, nrows=sample_nrows, header=header, **kwargs)
+    except StopIteration:
+        head = pd.read_csv(first_fn, *args, header=header, **kwargs)
+
 
     if 'parse_dates' not in kwargs:
         parse_dates = [col for col in head.dtypes.index

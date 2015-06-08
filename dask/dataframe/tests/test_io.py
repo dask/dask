@@ -308,3 +308,10 @@ def test_compression_multiple_files():
         assert len(df.compute()) == (len(text.split('\n')) - 1) * 2
     finally:
         shutil.rmtree(tdir)
+
+
+def test_empty_csv_file():
+    with filetext('a,b') as fn:
+        df = dd.read_csv(fn)
+        assert len(df.compute()) == 0
+        assert list(df.columns) == ['a', 'b']
