@@ -201,7 +201,7 @@ def compression_matrix(data, q, n_power_iter=0):
 
     data: Array
     q: Size of the desired subspace (the actual size will be bigger,
-    because of oversampling, see :func:`~linalg.compression_level`)
+    because of oversampling, see linalg.compression_level)
     n_power_iter: number of power iterations, useful when the singular
     values of the input matrix decay very slowly.
     """
