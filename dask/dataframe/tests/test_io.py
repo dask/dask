@@ -8,6 +8,8 @@ import bcolz
 from pframe import pframe
 from operator import getitem
 from toolz import valmap
+import tempfile
+import shutil
 
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
@@ -291,3 +293,18 @@ def test_consistent_dtypes():
         pass
         os.remove('_foo.1.csv')
         os.remove('_foo.2.csv')
+
+
+def test_compression_multiple_files():
+    tdir = tempfile.mkdtemp()
+    try:
+        with gzip.open(os.path.join(tdir, 'a.csv.gz'), 'w') as f:
+            f.write(text)
+        with gzip.open(os.path.join(tdir, 'b.csv.gz'), 'w') as f:
+            f.write(text)
+
+        df = dd.read_csv(os.path.join(tdir, '*.csv.gz'), compression='gzip')
+
+        assert len(df.compute()) == (len(text.split('\n')) - 1) * 2
+    finally:
+        shutil.rmtree(tdir)
