@@ -166,13 +166,17 @@ def tsqr(data, name=None, compute_svd=False):
         return u, s, v
 
 
-def compression_level(n, q, oversampling=10):
+def compression_level(n, q, oversampling=10, min_subspace_size=20):
     """ Given the size n of a space, compress that that to one of
     size q plus oversampling.
+    The oversampling allows for greater flexibility in finding an
+    appropriate subspace, a low value is often enough (10 is already
+    a very conservative choice, it can be further reduced).
     q + oversampling should not be larger that n.
-    In this specific implementation, q + oversampling is at least 20.
+    In this specific implementation, q + oversampling is at least
+    min_subspace_size.
     """
-    return min(max(20, q + oversampling), n)
+    return min(max(min_subspace_size, q + oversampling), n)
 
 
 def compression_matrix(data, q, n_power_iter=0):
@@ -197,7 +201,7 @@ def compression_matrix(data, q, n_power_iter=0):
 
     data: Array
     q: Size of the desired subspace (the actual size will be bigger,
-    because of oversampling)
+    because of oversampling, see :func:`~linalg.compression_level`)
     n_power_iter: number of power iterations, useful when the singular
     values of the input matrix decay very slowly.
     """
@@ -212,8 +216,8 @@ def compression_matrix(data, q, n_power_iter=0):
     return q.T
 
 
-def svd_compressed(data, q, n_power_iter=0, name=None):
-    """ Randomly compressed Singular Value Decomposition.
+def svd_compressed(data, k, n_power_iter=0, name=None):
+    """ Randomly compressed rank-k thin Singular Value Decomposition.
 
     As presented in:
 
@@ -232,10 +236,11 @@ def svd_compressed(data, q, n_power_iter=0, name=None):
     ----------
 
     data: Array
-    q: Size of the desired subspace (the actual size will be bigger,
-    because of oversampling)
+    k: Rank of the desired thin SVD decomposition.
     n_power_iter: number of power iterations, useful when the singular
-    values of the input matrix decay very slowly.
+    values of the input matrix decay very slowly. The error decreases
+    exponentially as n_power_iter increases. In practice, it suffices
+    to set n_power_iter <= 4.
 
     Returns
     -------
@@ -244,14 +249,14 @@ def svd_compressed(data, q, n_power_iter=0, name=None):
     s:  Array, singular values in decreasing order (largest first)
     vt:  Array, unitary / orthogonal
     """
-    comp = compression_matrix(data, q, n_power_iter=n_power_iter)
+    comp = compression_matrix(data, k, n_power_iter=n_power_iter)
     data_compressed = comp.dot(data)
     v, s, u = tsqr(data_compressed.T, name, compute_svd=True)
     u = comp.T.dot(u)
     v = v.T
-    u = u[:, :q]
-    s = s[:q]
-    v = v[:q, :]
+    u = u[:, :k]
+    s = s[:k]
+    v = v[:k, :]
     return u, s, v
 
 
