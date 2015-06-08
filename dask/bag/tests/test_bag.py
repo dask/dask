@@ -223,11 +223,10 @@ def test_can_use_dict_to_make_concrete():
 def test_from_url():
     a = db.from_url(['http://google.com', 'http://github.com'])
     assert a.npartitions == 2
-    a.compute()
 
     b = db.from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
     assert b.npartitions == 1
-    assert b'Dask\n' in b.compute()
+    assert b'Dask\n' in b.take(10)
 
 
 def test_from_filenames():
