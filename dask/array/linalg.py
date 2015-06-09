@@ -167,30 +167,25 @@ def tsqr(data, name=None, compute_svd=False):
 
 
 def compression_level(n, q, oversampling=10, min_subspace_size=20):
-    """ Given the size n of a space, compress that that to one of
-    size q plus oversampling.
-    The oversampling allows for greater flexibility in finding an
-    appropriate subspace, a low value is often enough (10 is already
-    a very conservative choice, it can be further reduced).
-    q + oversampling should not be larger that n.
-    In this specific implementation, q + oversampling is at least
-    min_subspace_size.
+    """ Compression level to use in svd_compressed
+
+    Given the size ``n`` of a space, compress that that to one of size ``q``
+    plus oversampling.
+
+    The oversampling allows for greater flexibility in finding an appropriate
+    subspace, a low value is often enough (10 is already a very conservative
+    choice, it can be further reduced).  ``q + oversampling`` should not be
+    larger than ``n``.  In this specific implementation, ``q + oversampling``
+    is at least ``min_subspace_size``.
+
+    >>> compression_level(100, 10)
+    20
     """
     return min(max(min_subspace_size, q + oversampling), n)
 
 
 def compression_matrix(data, q, n_power_iter=0):
-    """ Uses random sampling to identify a subspace that captures most
-    of the action of a matrix.
-
-    As presented in:
-
-        N. Halko, P. G. Martinsson, and J. A. Tropp.
-        Finding structure with randomness: Probabilistic algorithms for
-        constructing approximate matrix decompositions.
-        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
-        pp. 217-288, June 2011
-        http://arxiv.org/abs/0909.4061
+    """ Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
     compute both the QR decomposition and the Singular Value
@@ -200,10 +195,23 @@ def compression_matrix(data, q, n_power_iter=0):
     ----------
 
     data: Array
-    q: Size of the desired subspace (the actual size will be bigger,
-    because of oversampling, see linalg.compression_level)
-    n_power_iter: number of power iterations, useful when the singular
-    values of the input matrix decay very slowly.
+    q: int
+        Size of the desired subspace (the actual size will be bigger, because
+        of oversampling, see ``da.linalg.compression_level``)
+    n_power_iter: int
+        number of power iterations, useful when the singular values of the
+        input matrix decay very slowly.
+
+    Algorithm Citation
+    ------------------
+
+        N. Halko, P. G. Martinsson, and J. A. Tropp.
+        Finding structure with randomness: Probabilistic algorithms for
+        constructing approximate matrix decompositions.
+        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
+        pp. 217-288, June 2011
+        http://arxiv.org/abs/0909.4061
+
     """
     n = data.shape[1]
     comp_level = compression_level(n, q)
