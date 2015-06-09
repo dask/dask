@@ -10,15 +10,23 @@ import bz2
 import os
 
 # py2/3 incompatibility
+# urlopen
 try:
     from urllib2 import urlopen
 except ImportError:
     from urllib.request import urlopen
 
+# urlparse
 try:
     from urlparse import urlparse
 except ImportError:
     from urllib.parse import urlparse
+
+# quote and unquote
+try:  # 2.7
+    from urllib import quote, unquote
+except ImportError:
+    from urllib.parse import quote, unquote
 
 from fnmatch import fnmatchcase
 from glob import glob
@@ -795,6 +803,8 @@ def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
 # functions for the dask.
 _memoized_get_bucket = toolz.memoize(_get_s3_bucket)
 
+s3pattern = 's3://'  # used for parsing s3 URIs
+
 
 def _get_key(bucket_name, conn_args, key_name):
     bucket = _memoized_get_bucket(bucket_name, *conn_args)
@@ -804,18 +814,12 @@ def _get_key(bucket_name, conn_args, key_name):
 
 
 def _parse_s3_URI(bucket_name, paths):
-    # FIXME
-    # DIRTY HACK: so that urlparse won't think '?' in the URI path is for a
-    # query. We replace '?' with 'QUESTIONMARK' so it stays in the path
-    # then after urlpars gives us the path replace 'QUESTIONMARK' with '?'.
-    # So this can be made to fail if a path has 'QUESTIONMARK' in it.
-    if '?' in bucket_name:
-        bucket_name = bucket_name.replace('?', 'QUESTIONMARK')
-    o = urlparse(bucket_name)
+    assert bucket_name.startswith(s3pattern)
+    o = urlparse(s3pattern + quote(bucket_name[len(s3pattern):]))
     # if path is specified
     if (paths == '*') and (o.path != '' and o.path != '/'):
-        paths = o.path[1:].replace('QUESTIONMARK', '?')
-    bucket_name = o.hostname
+        paths = unquote(o.path[1:])
+    bucket_name = unquote(o.hostname)
     return bucket_name, paths
 
 
@@ -853,7 +857,7 @@ def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
     """
     conn_args = (aws_access_key, aws_secret_key, connection, anon)
 
-    if bucket_name.startswith('s3://'):
+    if bucket_name.startswith(s3pattern):
         bucket_name, paths = _parse_s3_URI(bucket_name, paths)
 
     # paths is a bucket key string, or pattern to expand
