@@ -8,6 +8,7 @@ from .core import Array, normalize_chunks
 
 linspace_names = ('linspace-%d' % i for i in count(1))
 arange_names = ('arange-%d' % i for i in count(1))
+diag_names = ('diag-%d' % i for i in count(1))
 
 
 def _get_blocksizes(num, blocksize):
@@ -143,3 +144,36 @@ def arange(*args, **kwargs):
         elem_count += bs
 
     return Array(dsk, name, chunks, dtype=dtype)
+
+
+def diag(v):
+    """Construct a diagonal array, with ``v`` on the diagonal.
+
+    TODO: implement diagonal extraction, and the ``k``th diagonal keyword arg.
+
+    Parameters
+    ----------
+    v : dask array
+
+    Returns
+    -------
+    out_array : dask array
+    """
+    if not isinstance(v, Array):
+        raise TypeError("v must be a dask array")
+    if v.ndim != 1:
+        raise NotImplementedError("Extracting diagonals with `diag` is not "
+                                  "implemented.")
+    chunks_1d = v.chunks[0]
+    name = next(diag_names)
+
+    blocks = v._keys()
+    dsk = v.dask.copy()
+    for i, m in enumerate(chunks_1d):
+        for j, n in enumerate(chunks_1d):
+            key = (name, i, j)
+            if i == j:
+                dsk[key] = (np.diag, blocks[i])
+            else:
+                dsk[key] = (np.zeros, (m, n))
+    return Array(dsk, name, (chunks_1d, chunks_1d), dtype=v.dtype)

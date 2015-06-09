@@ -25,4 +25,4 @@ from .wrap import ones, zeros, empty, full
 from .rechunk import rechunk
 from ..context import set_options
 from .optimization import optimize
-from .creation import arange, linspace
+from .creation import arange, linspace, diag
