@@ -167,30 +167,25 @@ def tsqr(data, name=None, compute_svd=False):
 
 
 def compression_level(n, q, oversampling=10, min_subspace_size=20):
-    """ Given the size n of a space, compress that that to one of
-    size q plus oversampling.
-    The oversampling allows for greater flexibility in finding an
-    appropriate subspace, a low value is often enough (10 is already
-    a very conservative choice, it can be further reduced).
-    q + oversampling should not be larger that n.
-    In this specific implementation, q + oversampling is at least
-    min_subspace_size.
+    """ Compression level to use in svd_compressed
+
+    Given the size ``n`` of a space, compress that that to one of size ``q``
+    plus oversampling.
+
+    The oversampling allows for greater flexibility in finding an appropriate
+    subspace, a low value is often enough (10 is already a very conservative
+    choice, it can be further reduced).  ``q + oversampling`` should not be
+    larger than ``n``.  In this specific implementation, ``q + oversampling``
+    is at least ``min_subspace_size``.
+
+    >>> compression_level(100, 10)
+    20
     """
     return min(max(min_subspace_size, q + oversampling), n)
 
 
 def compression_matrix(data, q, n_power_iter=0):
-    """ Uses random sampling to identify a subspace that captures most
-    of the action of a matrix.
-
-    As presented in:
-
-        N. Halko, P. G. Martinsson, and J. A. Tropp.
-        Finding structure with randomness: Probabilistic algorithms for
-        constructing approximate matrix decompositions.
-        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
-        pp. 217-288, June 2011
-        http://arxiv.org/abs/0909.4061
+    """ Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
     compute both the QR decomposition and the Singular Value
@@ -200,10 +195,23 @@ def compression_matrix(data, q, n_power_iter=0):
     ----------
 
     data: Array
-    q: Size of the desired subspace (the actual size will be bigger,
-    because of oversampling, see linalg.compression_level)
-    n_power_iter: number of power iterations, useful when the singular
-    values of the input matrix decay very slowly.
+    q: int
+        Size of the desired subspace (the actual size will be bigger, because
+        of oversampling, see ``da.linalg.compression_level``)
+    n_power_iter: int
+        number of power iterations, useful when the singular values of the
+        input matrix decay very slowly.
+
+    Algorithm Citation
+    ------------------
+
+        N. Halko, P. G. Martinsson, and J. A. Tropp.
+        Finding structure with randomness: Probabilistic algorithms for
+        constructing approximate matrix decompositions.
+        SIAM Rev., Survey and Review section, Vol. 53, num. 2,
+        pp. 217-288, June 2011
+        http://arxiv.org/abs/0909.4061
+
     """
     n = data.shape[1]
     comp_level = compression_level(n, q)
@@ -216,10 +224,28 @@ def compression_matrix(data, q, n_power_iter=0):
     return q.T
 
 
-def svd_compressed(data, k, n_power_iter=0, name=None):
+def svd_compressed(a, k, n_power_iter=0, name=None):
     """ Randomly compressed rank-k thin Singular Value Decomposition.
 
-    As presented in:
+    This computes the approximate singular value decomposition of a large
+    array.  This algorithm is generally faster than the normal algorithm but
+    does not provide exact results.  One can balance between performance and
+    accuracy with input parameters (see below).
+
+    Parameters
+    ----------
+
+    a: Array
+        Input array
+    k: int
+        Rank of the desired thin SVD decomposition.
+    n_power_iter: int
+        Number of power iterations, useful when the singular values decay
+        slowly. Error decreases exponentially as n_power_iter increases. In
+        practice, set n_power_iter <= 4.
+
+    Algorithm Citation
+    ------------------
 
         N. Halko, P. G. Martinsson, and J. A. Tropp.
         Finding structure with randomness: Probabilistic algorithms for
@@ -230,17 +256,8 @@ def svd_compressed(data, k, n_power_iter=0, name=None):
 
     Examples
     --------
+
     >>> u, s, vt = svd_compressed(x, 20)  # doctest: +SKIP
-
-    Parameters
-    ----------
-
-    data: Array
-    k: Rank of the desired thin SVD decomposition.
-    n_power_iter: number of power iterations, useful when the singular
-    values of the input matrix decay very slowly. The error decreases
-    exponentially as n_power_iter increases. In practice, it suffices
-    to set n_power_iter <= 4.
 
     Returns
     -------
@@ -249,9 +266,9 @@ def svd_compressed(data, k, n_power_iter=0, name=None):
     s:  Array, singular values in decreasing order (largest first)
     vt:  Array, unitary / orthogonal
     """
-    comp = compression_matrix(data, k, n_power_iter=n_power_iter)
-    data_compressed = comp.dot(data)
-    v, s, u = tsqr(data_compressed.T, name, compute_svd=True)
+    comp = compression_matrix(a, k, n_power_iter=n_power_iter)
+    a_compressed = comp.dot(a)
+    v, s, u = tsqr(a_compressed.T, name, compute_svd=True)
     u = comp.T.dot(u)
     v = v.T
     u = u[:, :k]

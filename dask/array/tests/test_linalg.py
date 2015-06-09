@@ -77,14 +77,15 @@ def test_tsqr_svd_irregular_blocks():
 
 
 def test_svd_compressed():
-    m, n = 30, 25
+    m, n = 300, 250
     r = 10
+    np.random.seed(1234)
     mat1 = np.random.randn(m, r)
     mat2 = np.random.randn(r, n)
     mat = mat1.dot(mat2)
-    data = from_array(mat, chunks=(10, 10), name='A')
+    data = from_array(mat, chunks=(50, 50))
 
-    n_iter = 100
+    n_iter = 4
     for i in range(n_iter):
         u, s, vt = svd_compressed(data, r)
         u = np.array(u)
