@@ -149,7 +149,9 @@ def arange(*args, **kwargs):
 def diag(v):
     """Construct a diagonal array, with ``v`` on the diagonal.
 
-    TODO: implement diagonal extraction, and the ``k``th diagonal keyword arg.
+    Currently only implements diagonal array creation on the zeroth diagonal.
+    Support for the ``k``th diagonal or diagonal extraction, as per the numpy
+    interface, is not yet implemented.
 
     Parameters
     ----------
@@ -158,6 +160,14 @@ def diag(v):
     Returns
     -------
     out_array : dask array
+
+    Examples
+    --------
+
+    >>> diag(arange(3, chunks=3)).compute()
+    array([[0, 0, 0],
+           [0, 1, 0],
+           [0, 0, 2]])
     """
     if not isinstance(v, Array):
         raise TypeError("v must be a dask array")
