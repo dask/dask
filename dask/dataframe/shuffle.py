@@ -120,10 +120,10 @@ def shuffle(df, index, npartitions=None, use_server=False):
     p = ('zpartd' + next(tokens),)
     if use_server:
         dsk1 = {}
-        p = partd.PandasBlocks(partd.Shared())
+        p = partd.PandasBlocks(partd.Client())
     else:
         dsk1 = {}
-        p = partd.PandasBlocks()
+        p = partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
         # dsk1 = {p: (partd.PandasBlocks,)}
 
     # Partition data on disk

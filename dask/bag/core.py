@@ -663,15 +663,15 @@ class Bag(object):
         p = ('partd' + next(tokens),)
         if use_server:
             try:
-                dsk1 = {p: partd.Python(partd.Snappy(partd.Shared()))}
+                dsk1 = {p: partd.Python(partd.Snappy(partd.Client()))}
             except AttributeError:
-                dsk1 = {p: partd.Python(partd.Shared())}
+                dsk1 = {p: partd.Python(partd.Client())}
 
         else:
             try:
-                dsk1 = {p: (partd.Python, (partd.Snappy,))}
+                dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
             except AttributeError:
-                dsk1 = {p: (partd.Python,)}
+                dsk1 = {p: (partd.Python, partd.File())}
 
         # Partition data on disk
         name = next(names)
