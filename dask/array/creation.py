@@ -186,4 +186,4 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
-    return Array(dsk, name, (chunks_1d, chunks_1d), dtype=v.dtype)
+    return Array(dsk, name, (chunks_1d, chunks_1d), dtype=v._dtype)
