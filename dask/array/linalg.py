@@ -169,14 +169,15 @@ def tsqr(data, name=None, compute_svd=False):
 def compression_level(n, q, oversampling=10, min_subspace_size=20):
     """ Compression level to use in svd_compressed
 
-    Given the size ``n`` of a space, compress that that to one of size ``q``
-    plus oversampling.
+    Given the size ``n`` of a space, compress that that to one of size
+    ``q`` plus oversampling.
 
-    The oversampling allows for greater flexibility in finding an appropriate
-    subspace, a low value is often enough (10 is already a very conservative
-    choice, it can be further reduced).  ``q + oversampling`` should not be
-    larger than ``n``.  In this specific implementation, ``q + oversampling``
-    is at least ``min_subspace_size``.
+    The oversampling allows for greater flexibility in finding an
+    appropriate subspace, a low value is often enough (10 is already a
+    very conservative choice, it can be further reduced).
+    ``q + oversampling`` should not be larger than ``n``.  In this
+    specific implementation, ``q + oversampling`` is at least
+    ``min_subspace_size``.
 
     >>> compression_level(100, 10)
     20
@@ -196,11 +197,11 @@ def compression_matrix(data, q, n_power_iter=0):
 
     data: Array
     q: int
-        Size of the desired subspace (the actual size will be bigger, because
-        of oversampling, see ``da.linalg.compression_level``)
+        Size of the desired subspace (the actual size will be bigger,
+        because of oversampling, see ``da.linalg.compression_level``)
     n_power_iter: int
-        number of power iterations, useful when the singular values of the
-        input matrix decay very slowly.
+        number of power iterations, useful when the singular values of
+        the input matrix decay very slowly.
 
     Algorithm Citation
     ------------------
@@ -228,9 +229,9 @@ def svd_compressed(a, k, n_power_iter=0, name=None):
     """ Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
-    array.  This algorithm is generally faster than the normal algorithm but
-    does not provide exact results.  One can balance between performance and
-    accuracy with input parameters (see below).
+    array.  This algorithm is generally faster than the normal algorithm
+    but does not provide exact results.  One can balance between
+    performance and accuracy with input parameters (see below).
 
     Parameters
     ----------
@@ -240,9 +241,9 @@ def svd_compressed(a, k, n_power_iter=0, name=None):
     k: int
         Rank of the desired thin SVD decomposition.
     n_power_iter: int
-        Number of power iterations, useful when the singular values decay
-        slowly. Error decreases exponentially as n_power_iter increases. In
-        practice, set n_power_iter <= 4.
+        Number of power iterations, useful when the singular values
+        decay slowly. Error decreases exponentially as n_power_iter
+        increases. In practice, set n_power_iter <= 4.
 
     Algorithm Citation
     ------------------
