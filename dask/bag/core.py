@@ -501,7 +501,7 @@ class Bag(object):
 
         The computation
 
-        >>> b.reduceby(key, binop, init)                        # doctest: +SKIP
+        >>> b.foldby(key, binop, init)                        # doctest: +SKIP
 
         is equivalent to the following:
 
