@@ -264,7 +264,7 @@ def svd_compressed(a, k, n_power_iter=0, name=None):
 
     u:  Array, unitary / orthogonal
     s:  Array, singular values in decreasing order (largest first)
-    vt:  Array, unitary / orthogonal
+    v:  Array, unitary / orthogonal
     """
     comp = compression_matrix(a, k, n_power_iter=n_power_iter)
     a_compressed = comp.dot(a)
@@ -277,7 +277,7 @@ def svd_compressed(a, k, n_power_iter=0, name=None):
     return u, s, v
 
 
-def qr(data, name=None):
+def qr(a, name=None):
     """
     Compute the qr factorization of a matrix.
 
@@ -298,10 +298,10 @@ def qr(data, name=None):
     np.linalg.qr : Equivalent NumPy Operation
     dask.array.linalg.tsqr: Actual implementation with citation
     """
-    return tsqr(data, name)
+    return tsqr(a, name)
 
 
-def svd(data, name=None):
+def svd(a, name=None):
     """
     Compute the singular value decomposition of a matrix.
 
@@ -323,4 +323,4 @@ def svd(data, name=None):
     np.linalg.svd : Equivalent NumPy Operation
     dask.array.linalg.tsqr: Actual implementation with citation
     """
-    return tsqr(data, name, compute_svd=True)
+    return tsqr(a, name, compute_svd=True)
