@@ -69,6 +69,10 @@ def test_filter():
     assert c.dask == expected
 
 
+def test_remove():
+    assert list(b.remove(lambda x: x % 2 == 0)) == [1, 3] * 3
+
+
 def test_iter():
     assert sorted(list(b)) == sorted(L)
     assert sorted(list(b.map(inc))) == sorted(list(range(1, 6)) * 3)
