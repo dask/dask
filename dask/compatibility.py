@@ -10,6 +10,9 @@ if PY3:
     from queue import Queue, Empty
     from itertools import zip_longest
     from io import StringIO, BytesIO
+    from urllib.request import urlopen
+    from urllib.parse import urlparse
+    from urllib.parse import quote, unquote
     unicode = str
     long = int
     def apply(func, args):
@@ -20,6 +23,9 @@ else:
     import operator
     from itertools import izip_longest as zip_longest
     from StringIO import StringIO
+    from urllib2 import urlopen
+    from urlparse import urlparse
+    from urllib import quote, unquote
     BytesIO = StringIO
     unicode = unicode
     long = long

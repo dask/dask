@@ -9,25 +9,6 @@ import zlib
 import bz2
 import os
 
-# py2/3 incompatibility
-# urlopen
-try:
-    from urllib2 import urlopen
-except ImportError:
-    from urllib.request import urlopen
-
-# urlparse
-try:
-    from urlparse import urlparse
-except ImportError:
-    from urllib.parse import urlparse
-
-# quote and unquote
-try:  # 2.7
-    from urllib import quote, unquote
-except ImportError:
-    from urllib.parse import quote, unquote
-
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
@@ -48,7 +29,8 @@ from pbag import PBag
 from ..multiprocessing import get as mpget
 from ..core import istask
 from ..optimize import fuse, cull
-from ..compatibility import apply, BytesIO, unicode
+from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
+        unquote)
 from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
