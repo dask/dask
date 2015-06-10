@@ -692,7 +692,7 @@ def test_dtype_complex():
     assert eq(b.std()._dtype, b.std().dtype)
     assert eq(a.argmin(axis=0)._dtype, a.argmin(axis=0).dtype)
 
-    assert eq(da.sin(z)._dtype, np.sin(c).dtype)
+    assert eq(da.sin(c)._dtype, np.sin(z).dtype)
     assert eq(da.exp(b)._dtype, np.exp(y).dtype)
     assert eq(da.floor(a)._dtype, np.floor(x).dtype)
     assert eq(da.isnan(b)._dtype, np.isnan(y).dtype)
