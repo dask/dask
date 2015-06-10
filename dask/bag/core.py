@@ -785,8 +785,6 @@ def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
 # functions for the dask.
 _memoized_get_bucket = toolz.memoize(_get_s3_bucket)
 
-s3pattern = 's3://'  # used for parsing s3 URIs
-
 
 def _get_key(bucket_name, conn_args, key_name):
     bucket = _memoized_get_bucket(bucket_name, *conn_args)
@@ -796,26 +794,13 @@ def _get_key(bucket_name, conn_args, key_name):
 
 
 def _parse_s3_URI(bucket_name, paths):
-    assert bucket_name.startswith(s3pattern)
-    o = urlparse(s3pattern + quote(bucket_name[len(s3pattern):]))
+    assert bucket_name.startswith('s3://')
+    o = urlparse('s3://' + quote(bucket_name[len('s3://'):]))
     # if path is specified
     if (paths == '*') and (o.path != '' and o.path != '/'):
         paths = unquote(o.path[1:])
     bucket_name = unquote(o.hostname)
     return bucket_name, paths
-
-
-def _from_s3(bucket_name, keys, conn_args):
-    """
-    Takes an s3 bucket name, list of bucket key, and connection info.
-    Returns a Bag.
-    """
-    name = next(load_names)
-    aak, ask, conn, anon = conn_args
-    # get the bucket
-    get_key = partial(_get_key, bucket_name, conn_args)
-    dsk = dict(((name, i), (list, (get_key, k))) for i, k in enumerate(keys))
-    return Bag(dsk, name, len(keys))
 
 
 def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
@@ -837,23 +822,31 @@ def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
     """
     conn_args = (aws_access_key, aws_secret_key, connection, anon)
 
-    if bucket_name.startswith(s3pattern):
+    bucket_name, paths = normalize_s3_names(bucket_name, paths, conn_args)
+
+    get_key = partial(_get_key, bucket_name, conn_args)
+
+    name = next(load_names)
+    dsk = dict(((name, i), (list, (get_key, k))) for i, k in enumerate(paths))
+    return Bag(dsk, name, len(paths))
+
+
+def normalize_s3_names(bucket_name, paths, conn_args):
+    """ Normalize bucket name and paths """
+    if bucket_name.startswith('s3://'):
         bucket_name, paths = _parse_s3_URI(bucket_name, paths)
 
-    # paths is a bucket key string, or pattern to expand
     if isinstance(paths, str):
         if ('*' not in paths) and ('?' not in paths):
-            return _from_s3(bucket_name, [paths], conn_args)
+            return bucket_name, [paths]
+        else:
+            bucket = _get_s3_bucket(bucket_name, *conn_args)
+            keys = bucket.list()  # handle globs
 
-        bucket = _get_s3_bucket(bucket_name, *conn_args)
-
-        keys = bucket.list()  # handle globs
-
-        matches = [k.name for k in keys if fnmatchcase(k.name, paths)]
-        return _from_s3(bucket_name, matches, conn_args)
-
-    # paths is a list of keys
-    return _from_s3(bucket_name, paths, conn_args)
+            matches = [k.name for k in keys if fnmatchcase(k.name, paths)]
+            return bucket_name, matches
+    else:
+        return bucket_name, paths
 
 
 def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):

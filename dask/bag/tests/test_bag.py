@@ -242,12 +242,13 @@ def test_from_s3():
     # aws_secret_key because these are not on travis-ci
     boto = pytest.importorskip('boto')
 
-    # test with full uri and '?' pattern and auto anon boto connection
-    uri = 's3://tip-data/tips.c?v'
-    a = db.from_s3(uri, anon=True)
-    assert a.npartitions == 1
-    # test it computes
-    list(a.compute())
+    # test compressed data
+    e = db.from_s3('tip-data', 't*.gz')
+    assert e.take(5) == (u'total_bill,tip,sex,smoker,day,time,size\n',
+                         u'16.99,1.01,Female,No,Sun,Dinner,2\n',
+                         u'10.34,1.66,Male,No,Sun,Dinner,3\n',
+                         u'21.01,3.5,Male,No,Sun,Dinner,3\n',
+                         u'23.68,3.31,Male,No,Sun,Dinner,2\n')
 
     # test wit specific key
     b = db.from_s3('tip-data', 't?ps.csv')
@@ -259,10 +260,6 @@ def test_from_s3():
 
     d = db.from_s3('s3://tip-data')
     assert d.npartitions == 4
-
-    # test compressed data
-    e = db.from_s3('tip-data', 'tips.gz')
-    assert e.take(1) == b.take(1)
 
     e = db.from_s3('tip-data', 'tips.bz2')
     assert e.take(1) == b.take(1)
