@@ -425,7 +425,8 @@ def test_to_textfiles_inputs():
 def test_bz2_stream():
     text = '\n'.join(map(str, range(10000)))
     compressed = bz2.compress(text.encode())
-    assert list(take(100, bz2_stream(compressed))) == list(map(str, range(100)))
+    assert (list(take(100, bz2_stream(compressed))) ==
+            list(map(lambda x: str(x) + '\n', range(100))))
 
 
 def test_concat():
