@@ -925,7 +925,7 @@ def bz2_stream(compressed, chunksize=100000):
         chunk = compressed[i: i+chunksize]
         decompressed = decompressor.decompress(chunk).decode()
         for line in decompressed.split('\n'):
-            yield line
+            yield line + '\n'
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
