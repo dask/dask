@@ -1416,8 +1416,15 @@ def elemwise(op, *args, **kwargs):
                    for arg in args)
     expr_inds = tuple(range(out_ndim))[::-1]
 
-    arrays = [arg for arg in args if isinstance(arg, Array)]
-    other = [(i, arg) for i, arg in enumerate(args) if not isinstance(arg, Array)]
+    arrays = []
+    other = []
+    for i, arg in enumerate(args):
+        if isinstance(arg, np.ndarray):
+            raise NotImplementedError
+        elif isinstance(arg, Array):
+            arrays.append(arg)
+        else:
+            other.append((i, arg))
 
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
