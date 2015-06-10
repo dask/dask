@@ -840,18 +840,18 @@ def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
             connection=None, anon=False):
     """ Create a dask.bag by loading files from s3.
 
-    >>> b = from_s3(bucket, 'myfile1.txt')
+    >>> b = from_s3(bucket, 'myfile1.txt')  # doctest: +SKIP
 
     or a pattern with '*' or '?'. There is one partition per file.
 
-    >>> b = from_s3(bucket, '*.json')
-    >>> b.npartitions
+    >>> b = from_s3(bucket, '*.json')  # doctest: +SKIP
+    >>> b.npartitions  # doctest: +SKIP
     9
 
     or a list of files.
 
-    >>> b = from_s3(bucket, ['alice.csv', 'bob.csv'])
-    >>> b.npartitions
+    >>> b = from_s3(bucket, ['alice.csv', 'bob.csv'])  # doctest: +SKIP
+    >>> b.npartitions  # doctest: +SKIP
     2
 
     """
