@@ -243,25 +243,29 @@ def test_from_s3():
     boto = pytest.importorskip('boto')
 
     # test with full uri and '?' pattern and auto anon boto connection
-    uri = 's3://nyqpug/tips.c?v'
+    uri = 's3://tip-data/tips.c?v'
     a = db.from_s3(uri, anon=True)
     assert a.npartitions == 1
     # test it computes
     list(a.compute())
 
     # test wit specific key
-    b = db.from_s3('nyqpug', 't?ps.csv')
+    b = db.from_s3('tip-data', 't?ps.csv')
     assert b.npartitions == 1
 
     # test all keys in bucket
-    c = db.from_s3('nyqpug')
-    assert c.npartitions == 3
+    c = db.from_s3('tip-data')
+    assert c.npartitions == 4
 
-    d = db.from_s3('s3://nyqpug')
-    assert d.npartitions == 3
+    d = db.from_s3('s3://tip-data')
+    assert d.npartitions == 4
 
-    e = db.from_s3('nyqpug', 'tips.gz')
-    assert e.compute()[0][:100] == b.compute()[0][:100]
+    # test compressed data
+    e = db.from_s3('tip-data', 'tips.gz')
+    assert e.take(1) == b.take(1)
+
+    e = db.from_s3('tip-data', 'tips.bz2')
+    assert e.take(1) == b.take(1)
 
 
 def test__parse_s3_URI():
