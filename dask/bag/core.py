@@ -820,22 +820,20 @@ def _from_s3(bucket_name, keys, conn_args):
 
 def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
             connection=None, anon=False):
-    """ Create a dask.bag by loading files from s3.
+    """ Create a Bag by loading textfiles from s3
 
-    >>> b = from_s3(bucket, 'myfile1.txt')  # doctest: +SKIP
+    Each line will be treated as one element and each file in S3 as one
+    partition.
 
-    or a pattern with '*' or '?'. There is one partition per file.
+    You may specify a full s3 bucket
 
-    >>> b = from_s3(bucket, '*.json')  # doctest: +SKIP
-    >>> b.npartitions  # doctest: +SKIP
-    9
+    >>> b = from_s3('s3://bucket-name')  # doctest: +SKIP
 
-    or a list of files.
+    Or select files, lists of files, or globstrings of files within that bucket
 
-    >>> b = from_s3(bucket, ['alice.csv', 'bob.csv'])  # doctest: +SKIP
-    >>> b.npartitions  # doctest: +SKIP
-    2
-
+    >>> b = from_s3('s3://bucket-name', 'myfile.json')  # doctest: +SKIP
+    >>> b = from_s3('s3://bucket-name', ['alice.json', 'bob.json'])  # doctest: +SKIP
+    >>> b = from_s3('s3://bucket-name', '*.json')  # doctest: +SKIP
     """
     conn_args = (aws_access_key, aws_secret_key, connection, anon)
 
