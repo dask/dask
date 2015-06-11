@@ -298,10 +298,13 @@ def test_consistent_dtypes():
 def test_compression_multiple_files():
     tdir = tempfile.mkdtemp()
     try:
-        with gzip.open(os.path.join(tdir, 'a.csv.gz'), 'wb') as f:
-            f.write(text.encode())
-        with gzip.open(os.path.join(tdir, 'b.csv.gz'), 'wb') as f:
-            f.write(text.encode())
+        f = gzip.open(os.path.join(tdir, 'a.csv.gz'), 'wb')
+        f.write(text.encode())
+        f.close()
+
+        f = gzip.open(os.path.join(tdir, 'b.csv.gz'), 'wb')
+        f.write(text.encode())
+        f.close()
 
         df = dd.read_csv(os.path.join(tdir, '*.csv.gz'), compression='gzip')
 
