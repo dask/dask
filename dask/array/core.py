@@ -906,18 +906,18 @@ class Array(object):
         Parameters
         ----------
         order : int
-            Order of the moment that is returned
+            Order of the moment that is returned, must be >= 2.
         axis : int, optional
             Axis along which the central moment is computed. The default is to
             compute the moment of the flattened array.
         dtype : data-type, optional
             Type to use in computing the moment. For arrays of integer type the
-            default is float32; for arrays of float types it is the same as the
+            default is float64; for arrays of float types it is the same as the
             array type.
         keepdims : bool, optional
             If this is set to True, the axes which are reduced are left in the
             result as dimensions with size one. With this option, the result
-            will broadcast correctly against the original arr.
+            will broadcast correctly against the original array.
         ddof : int, optional
             "Delta Degrees of Freedom": the divisor used in the calculation is
             N - ddof, where N represents the number of elements. By default

@@ -258,6 +258,8 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', **kwargs):
 
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0):
+    if not isinstance(order, int) or order < 2:
+        raise ValueError("Order must be an integer >= 2")
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
