@@ -73,7 +73,7 @@ def inline_singleton_lists(dsk):
     """ Inline lists that are only used once
 
     >>> d = {'b': (list, 'a'),
-    ...      'c': (f, 'b', 1)}
+    ...      'c': (f, 'b', 1)}     # doctest: +SKIP
     >>> inline_singleton_lists(d)  # doctest: +SKIP
     {'c': (f, (list, 'a'), 1)}
 
