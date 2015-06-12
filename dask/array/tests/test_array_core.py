@@ -1027,7 +1027,6 @@ def test_map_blocks3():
 def test_numpy_compat_is_notimplemented():
     a = np.arange(10)
     x = da.from_array(a, chunks=5)
-
     assert raises(NotImplementedError, lambda: x + a)
 
 
@@ -1043,3 +1042,13 @@ def test_cache():
     assert len(z.dask) < 6  # very short graph
     assert z.chunks == y.chunks
     assert eq(y, z)
+
+
+def test_take_dask_from_numpy():
+    x = np.arange(5).astype('f8')
+    y = da.from_array(np.array([1, 2, 3, 3, 2 ,1]), chunks=3)
+
+    z = da.take(x * 2, y)
+
+    assert z.chunks == y.chunks
+    assert eq(z, np.array([2., 4., 6., 6., 4., 2.]))
