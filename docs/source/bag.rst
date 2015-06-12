@@ -200,6 +200,10 @@ Shuffle operations are expensive and better handled by projects like
 then transform it into an array or dataframe before embarking on the more
 complex operations that require shuffle steps.
 
+Dask.bag uses partd_ to perform efficient, parallel, spill-to-disk shuffles.
+
+.. _partd: https://github.com/mrocklin/partd
+
 
 Function Serialization and Error Handling
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
