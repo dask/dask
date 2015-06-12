@@ -81,7 +81,7 @@ The ``dask.array`` module creates these graphs from NumPy-like operations
 .. code-block:: python
 
    >>> import dask.array as da
-   >>> x = da.random.random((4, 4), blockshape=(2, 2))
+   >>> x = da.random.random((4, 4), chunks=(2, 2))
    >>> x.T[0, 3].dask
    {('x', 0, 0): (np.random.random, (2, 2)),
     ('x', 0, 1): (np.random.random, (2, 2)),
