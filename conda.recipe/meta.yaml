@@ -16,16 +16,13 @@ requirements:
     - pip
     - setuptools
     - toolz
-    # bcolz is a runtime dependency but since it is installed with pip, we have
-    # to install it in the build.sh. So we install its dependencies now.
-    - cython  # to compile bcolz
-    - numpy   # bcolz dependency
 
   run:
     - python
     - toolz
     - numpy
     - pandas
+    - bcolz
     - pyzmq
     - dill
     - psutil
