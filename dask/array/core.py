@@ -24,12 +24,6 @@ from ..compatibility import unicode
 from .. import threaded, core
 from ..context import _globals
 
-try:
-    from chest import Chest as Cache
-except NotImplementedError:
-    Cache = dict
-
-
 
 names = ('x_%d' % i for i in count(1))
 tokens = ('-%d' % i for i in count(1))
@@ -765,7 +759,17 @@ class Array(object):
             self.store(store)
             return from_array(store, chunks=self.chunks)
         if store is None:
-            store = Cache()
+            try:
+                from chest import Chest
+                store = Chest()
+            except ImportError:
+                if self.nbytes <= 1e9:
+                    store = dict()
+                else:
+                    raise ValueError("No out-of-core storage found."
+                        "Either:\n"
+                        "1. Install ``chest``, an out-of-core dictionary\n"
+                        "2. Provide an on-disk array like an h5py.Dataset") # pragma: no cover
         if isinstance(store, MutableMapping):
             name = next(names)
             dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
