@@ -7,6 +7,7 @@ from operator import add
 
 from toolz import merge
 from toolz.curried import identity
+from numpy.testing import assert_raises
 
 import dask
 import dask.array as da
@@ -692,7 +693,7 @@ def test_dtype_complex():
     assert eq(b.std()._dtype, b.std().dtype)
     assert eq(a.argmin(axis=0)._dtype, a.argmin(axis=0).dtype)
 
-    assert eq(da.sin(z)._dtype, np.sin(c).dtype)
+    assert eq(da.sin(c)._dtype, np.sin(z).dtype)
     assert eq(da.exp(b)._dtype, np.exp(y).dtype)
     assert eq(da.floor(a)._dtype, np.floor(x).dtype)
     assert eq(da.isnan(b)._dtype, np.isnan(y).dtype)
@@ -1058,3 +1059,10 @@ def test_map_blocks3():
 
     assert eq(da.core.map_blocks(lambda a, b: a+2*b, d, f, dtype=d.dtype),
               x + 2*z)
+
+
+def test_numpy_compat_is_notimplemented():
+    a = np.arange(10)
+    x = da.from_array(a, chunks=5)
+
+    assert_raises(NotImplementedError, add, x, a)

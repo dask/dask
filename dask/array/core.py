@@ -1417,8 +1417,10 @@ def elemwise(op, *args, **kwargs):
     expr_inds = tuple(range(out_ndim))[::-1]
 
     arrays = [arg for arg in args if isinstance(arg, Array)]
-    other = [(i, arg) for i, arg in enumerate(args) if not isinstance(arg, Array)]
-
+    other = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
+    if any(isinstance(arg, np.ndarray) for arg in args):
+        raise NotImplementedError("Dask.array operations only work on dask "
+                                  "arrays, not numpy arrays.")
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
     elif not all(a._dtype is not None for a in arrays):
