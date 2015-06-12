@@ -719,6 +719,13 @@ class Array(object):
     def cache(self, store=None, **kwargs):
         """ Evaluate and cache array
 
+        Parameters
+        ----------
+        store: MutableMapping or ndarray-like
+            Place to put computed and cached chunks
+        kwargs:
+            Keyword arguments to pass on to ``get`` function for scheduling
+
         This triggers evaluation and store the result in either
 
         1.  An ndarray object supporting setitem (see da.store)
