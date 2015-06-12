@@ -609,6 +609,29 @@ class Bag(object):
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
+    def fragment(self, n):
+        """ Fragment partitions in bag into multiple pieces
+
+        Note that this kills streaming operations and causes expensive
+        serialization/deserialization cycles if using the default
+        multiprocessing scheduler.  This is generally an unwise operation.
+
+        Parameters
+        ----------
+        n - int
+            How many times to split each partition
+
+        >>> b = from_sequence(range(10), npartitions=2)
+        >>> b.npartitions
+        2
+        >>> b.fragment(3).npartitions
+        6
+        """
+        name = next(names)
+        dsk = dict(((name, i*n + j), (_fragment, k, j, n))
+                for i, k in enumerate(self._keys()) for j in range(n))
+        return Bag(merge(self.dask, dsk), name, self.npartitions*n)
+
     def __iter__(self):
         return iter(self.compute())
 
@@ -691,6 +714,28 @@ class Bag(object):
 
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
                             name, columns, divisions)
+
+def _fragment(seq, k, n):
+    """ Return the k of n-th evenly sized fragment of seq
+
+    >>> seq = [1, 2, 3, 4, 5, 6]
+    >>> _fragment(seq, 0, 2)
+    [1, 2, 3]
+    >>> _fragment(seq, 1, 2)
+    [4, 5, 6]
+
+    Handles uneven divisions well
+
+    >>> seq = [1, 2, 3, 4, 5, 6, 7]
+    >>> _fragment(seq, 0, 2)
+    [1, 2, 3]
+    >>> _fragment(seq, 1, 2)
+    [4, 5, 6, 7]
+    """
+    if not isinstance(seq, (tuple, list)):
+        seq = list(seq)
+    return seq[int(len(seq) * float(k) / n):
+               int(len(seq) * float(k + 1) / n)]
 
 
 def partition(grouper, sequence, npartitions, path):
