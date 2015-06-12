@@ -11,7 +11,6 @@ import numpy as np
 import operator
 import gzip
 import bz2
-from pframe import pframe
 import bcolz
 try:
     from chest import Chest as Cache
@@ -83,6 +82,14 @@ class Scalar(object):
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        from .optimize import optimize
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
 
 class _Frame(object):
     """ Superclass for DataFrame and Series """
@@ -98,6 +105,7 @@ class _Frame(object):
 
     def _visualize(self, optimize_graph=False):
         from dask.dot import dot_graph
+        from .optimize import optimize
         if optimize_graph:
             dot_graph(optimize(self.dask, self._keys()))
         else:
@@ -647,12 +655,17 @@ class GroupBy(object):
             assert index in frame.columns
 
     def apply(self, func, columns=None):
-        if isinstance(self.index, Series) and self.index._name == self.frame.index._name:
+        if (isinstance(self.index, Series) and
+            self.index._name == self.frame.index._name):
             f = self.frame
+            return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
+                                columns=columns)
         else:
-            f = set_index(self.frame, self.index, **self.kwargs)
-        return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
-                            columns=columns)
+            # f = set_index(self.frame, self.index, **self.kwargs)
+            f = shuffle(self.frame, self.index, **self.kwargs)
+            return map_blocks(lambda df, index: df.groupby(index).apply(func),
+                              columns or self.frame.columns,
+                              self.frame, self.index)
 
     def __getitem__(self, key):
         if key in self.frame.columns:
@@ -681,9 +694,16 @@ class SeriesGroupBy(object):
         self.kwargs = kwargs
 
     def apply(func, columns=None):
-        f = set_index(self.frame, self.index, **self.kwargs)
-        return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
-                            columns=columns)
+        # f = set_index(self.frame, self.index, **self.kwargs)
+        if self.index._name == self.frame.index._name:
+            f = self.frame
+            return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
+                                columns=columns)
+        else:
+            f = shuffle(self.frame, self.index, **self.kwargs)
+            return map_blocks(lambda df, index: df.groupby(index).apply(func),
+                              columns or self.frame.columns,
+                              self.frame, self.index)
 
     def sum(self):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()
@@ -764,6 +784,26 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
                                       if isinstance(a, _Frame)]),
             b, columns, [])
 
+def map_blocks(func, columns, *args):
+    """ Apply Python function on each DataFrame block
+
+    Provide columns of the output if they are not the same as the input.
+    """
+    assert all(not isinstance(arg, _Frame) or
+               arg.divisions == args[0].divisions
+               for arg in args)
+
+    name = next(names)
+    dsk = dict(((name, i), (apply, func,
+                             (tuple, [(arg._name, i)
+                                      if isinstance(arg, _Frame)
+                                      else arg
+                                      for arg in args])))
+                for i in range(args[0].npartitions))
+
+    return type(args[0])(merge(dsk, *[arg.dask for arg in args
+                                               if isinstance(arg, _Frame)]),
+                      name, columns, args[0].divisions)
 
 aca = apply_concat_apply
 
@@ -855,4 +895,4 @@ def pd_split(df, p, seed=0):
     return [df.iloc[index == i] for i in range(len(p))]
 
 
-from .shuffle import set_index, set_partition
+from .shuffle import set_index, set_partition, shuffle

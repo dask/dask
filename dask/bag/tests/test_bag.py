@@ -4,19 +4,19 @@ import pytest
 pytest.importorskip('dill')
 
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
-        partial)
+        partial, valmap)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream, stream_decompress, reify, _parse_s3_URI)
-
+        reduceby, bz2_stream, stream_decompress, reify, partition,
+        _parse_s3_URI, inline_singleton_lists, optimize)
 from dask.utils import filetexts, tmpfile, raises
 import dask
-from pbag import PBag
 import dask.bag as db
 import shutil
 import os
 import gzip
 import bz2
+import partd
 
 from collections import Iterator
 
@@ -59,7 +59,7 @@ def test_map():
 
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
-    assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
+    assert list(b.map(lambda x, y: x + y).compute(get=dask.get)) == [11, 22, 33]
 
 
 def test_filter():
@@ -108,7 +108,8 @@ def test_frequencies():
 
 def test_topk():
     assert list(b.topk(4)) == [4, 4, 4, 3]
-    assert list(b.topk(4, key=lambda x: -x)) == [0, 0, 0, 1]
+    assert list(b.topk(4, key=lambda x: -x).compute(get=dask.get)) == \
+            [0, 0, 0, 1]
 
 
 def test_topk_with_non_callable_key():
@@ -187,6 +188,24 @@ def test_lazify():
     assert lazify(a) == b
 
 
+def test_inline_singleton_lists():
+    inp = {'b': (list, 'a'),
+           'c': (f, 'b', 1)}
+    out = {'c': (f, (list, 'a'), 1)}
+    assert inline_singleton_lists(inp) == out
+
+    out = {'c': (f,        'a' , 1)}
+    assert optimize(inp, ['c']) == out
+
+    inp = {'b': (list, 'a'),
+           'c': (f, 'b', 1),
+           'd': (f, 'b', 2)}
+    assert inline_singleton_lists(inp) == inp
+
+    inp = {'b': (4, 5)} # doesn't inline constants
+    assert inline_singleton_lists(inp) == inp
+
+
 def test_take():
     assert list(b.take(2)) == [0, 1]
     assert b.take(2) == (0, 1)
@@ -204,11 +223,10 @@ def test_can_use_dict_to_make_concrete():
 def test_from_url():
     a = db.from_url(['http://google.com', 'http://github.com'])
     assert a.npartitions == 2
-    a.compute()
 
     b = db.from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
     assert b.npartitions == 1
-    assert b'Dask\n' in b.compute()
+    assert b'Dask\n' in b.take(10)
 
 
 def test_from_filenames():
@@ -305,26 +323,21 @@ def test_product():
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
 
 
-def test_collect():
-    a = PBag(identity, 2)
-    with a:
-        a.extend([0, 1, 2, 3])
 
-    b = PBag(identity, 2)
-    with b:
-        b.extend([0, 1, 2, 3])
+def test_partition_collect():
+    with partd.Pickle() as p:
+        partition(identity, range(6), 3, p)
+        assert set(p.get(0)) == set([0, 3])
+        assert set(p.get(1)) == set([1, 4])
+        assert set(p.get(2)) == set([2, 5])
 
-    result = merge(dict(collect(identity, 2, 0, [a, b])),
-                   dict(collect(identity, 2, 1, [a, b])))
-
-    assert result == {0: [0, 0],
-                      1: [1, 1],
-                      2: [2, 2],
-                      3: [3, 3]}
+        assert sorted(collect(identity, 0, p, '')) == \
+                [(0, [0]), (3, [3])]
 
 
 def test_groupby():
-    result = dict(b.groupby(lambda x: x))
+    c = b.groupby(lambda x: x)
+    result = dict(c)
     assert result == {0: [0, 0 ,0],
                       1: [1, 1, 1],
                       2: [2, 2, 2],
@@ -336,16 +349,17 @@ def test_groupby():
 def test_groupby_with_indexer():
     b = db.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
     result = dict(b.groupby(0))
-    assert result == {1: [[1, 2, 3], [1, 4, 9]],
-                      2: [[2, 3, 4]]}
+    assert valmap(sorted, result) == {1: [[1, 2, 3], [1, 4, 9]],
+                                      2: [[2, 3, 4]]}
 
 def test_groupby_with_npartitions_changed():
     result = b.groupby(lambda x: x, npartitions=1)
-    assert dict(result) == {0: [0, 0 ,0],
-                            1: [1, 1, 1],
-                            2: [2, 2, 2],
-                            3: [3, 3, 3],
-                            4: [4, 4, 4]}
+    result2 = dict(result)
+    assert result2 == {0: [0, 0 ,0],
+                       1: [1, 1, 1],
+                       2: [2, 2, 2],
+                       3: [3, 3, 3],
+                       4: [4, 4, 4]}
 
     assert result.npartitions == 1
 

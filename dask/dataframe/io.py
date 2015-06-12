@@ -40,9 +40,10 @@ def file_size(fn, compression=None):
 
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
-    chunkbytes = kwargs.pop('chunkbytes', 2**26)  # 100 MB
-    compression = kwargs.pop('compression', None)
+    chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
+    compression = kwargs.get('compression', None)
     categorize = kwargs.pop('categorize', None)
+    sample_nrows = kwargs.pop('sample_nrows', 1000)
     index = kwargs.pop('index', None)
     if index and categorize == None:
         categorize = True
@@ -54,16 +55,19 @@ def read_csv(fn, *args, **kwargs):
         first_fn = fn
 
     if names not in kwargs:
-        kwargs['names'] = csv_names(first_fn, compression=compression, **kwargs)
+        kwargs['names'] = csv_names(first_fn, **kwargs)
     if 'header' not in kwargs:
-        header = infer_header(first_fn, compression=compression, **kwargs)
+        header = infer_header(first_fn, **kwargs)
         if header is True:
             header = 0
     else:
         header = kwargs.pop('header')
 
-    head = pd.read_csv(first_fn, *args, nrows=1000, compression=compression,
-                       header=header, **kwargs)
+    try:
+        head = pd.read_csv(first_fn, *args, nrows=sample_nrows, header=header, **kwargs)
+    except StopIteration:
+        head = pd.read_csv(first_fn, *args, header=header, **kwargs)
+
 
     if 'parse_dates' not in kwargs:
         parse_dates = [col for col in head.dtypes.index
@@ -90,6 +94,8 @@ def read_csv(fn, *args, **kwargs):
     total_bytes = file_size(fn, compression)
     nchunks = int(ceil(float(total_bytes) / chunkbytes))
     divisions = [None] * (nchunks - 1)
+
+    kwargs.pop('compression', None)  # these functions will take StringIO
 
     first_read_csv = curry(pd.read_csv, *args, header=header, **kwargs)
     rest_read_csv = curry(pd.read_csv, *args, header=None, **kwargs)

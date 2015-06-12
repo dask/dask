@@ -2,10 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from contextlib import contextmanager
+from functools import partial
 import os
 import shutil
 import gzip
 import tempfile
+import inspect
 
 from .compatibility import unicode
 
@@ -217,3 +219,11 @@ def pseudorandom(n, p, key):
     for i, (low, high) in enumerate(zip(cp[:-1], cp[1:])):
         out[(x >= low) & (x < high)] = i
     return out
+
+
+def getargspec(func):
+    """Version of inspect.getargspec that works for functools.partial objects"""
+    if isinstance(func, partial):
+        return inspect.getargspec(func.func)
+    else:
+        return inspect.getargspec(func)

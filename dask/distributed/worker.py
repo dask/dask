@@ -213,7 +213,7 @@ class Worker(object):
         """
         loads = header.get('loads', pickle.loads)
         payload = loads(payload)
-        log(self.address, 'Setitem', payload)
+        log(self.address, 'Setitem', payload['key'])
         key = payload['key']
         value = payload['value']
         self.data[key] = value
@@ -418,6 +418,7 @@ class Worker(object):
 
         # Send out requests for data
         log(self.address, 'Collect data from peers', locations)
+        start = time()
         counter = 0
         with logerrors():
             for key, locs in locations.items():
@@ -436,7 +437,7 @@ class Worker(object):
                 queue.get()
 
             del self.queues[qkey]
-            log(self.address, 'Collect finishes')
+            log(self.address, 'Collect finishes', time() - start, 'seconds')
 
     def compute(self, header, payload):
         """ Compute dask task

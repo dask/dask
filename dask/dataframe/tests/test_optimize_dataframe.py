@@ -3,6 +3,7 @@ from toolz import valmap
 import bcolz
 from pframe import pframe
 from dask.dataframe.optimize import rewrite_rules, dataframe_from_ctable
+import dask.dataframe as dd
 import pandas as pd
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -51,3 +52,9 @@ def test_column_optimizations_with_bcolz_and_rewrite():
         assert result == expected
 
 
+def test_fast_functions():
+    df = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    e = df.a + df.b
+    assert len(e.dask) > 6
+
+    assert len(dd.optimize(e.dask, e._keys())) == 6
