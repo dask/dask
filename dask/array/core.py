@@ -4,7 +4,7 @@ import operator
 from operator import add, getitem
 import inspect
 from numbers import Number
-from collections import Iterable
+from collections import Iterable, MutableMapping
 from bisect import bisect
 from itertools import product, count
 from collections import Iterator
@@ -23,6 +23,12 @@ from ..utils import deepmap, ignoring, repr_long_list, concrete
 from ..compatibility import unicode
 from .. import threaded, core
 from ..context import _globals
+
+try:
+    from chest import Chest as Cache
+except NotImplementedError:
+    Cache = dict
+
 
 
 names = ('x_%d' % i for i in count(1))
@@ -715,6 +721,60 @@ class Array(object):
     def compute(self, **kwargs):
         result, = compute(self, **kwargs)
         return result
+
+    def cache(self, store=None, **kwargs):
+        """ Evaluate and cache array
+
+        This triggers evaluation and store the result in either
+
+        1.  An ndarray object supporting setitem (see da.store)
+        2.  A MutableMapping like a dict or chest
+
+        It then returns a new dask array that points to this store.
+        This returns a semantically equivalent dask array.
+
+        >>> import dask.array as da
+        >>> x = da.arange(5, chunks=2)
+        >>> y = 2*x + 1
+        >>> z = y.cache()  # triggers computation
+
+        >>> y.compute()  # Does entire computation
+        array([1, 3, 5, 7, 9])
+
+        >>> z.compute()  # Just pulls from store
+        array([1, 3, 5, 7, 9])
+
+        You might base a cache off of an array like a numpy array or
+        h5py.Dataset.
+
+        >>> cache = np.empty(5, dtype=x.dtype)
+        >>> z = y.cache(store=cache)
+        >>> cache
+        array([1, 3, 5, 7, 9])
+
+        Or one might use a MutableMapping like a dict or chest
+
+        >>> cache = dict()
+        >>> z = y.cache(store=cache)
+        >>> cache  # doctest: +SKIP
+        {('x', 0): array([1, 3]),
+         ('x', 1): array([5, 7]),
+         ('x', 2): array([9])}
+        """
+        if store is not None and hasattr(store, 'shape'):
+            self.store(store)
+            return from_array(store, chunks=self.chunks)
+        if store is None:
+            store = Cache()
+        if isinstance(store, MutableMapping):
+            name = next(names)
+            dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
+                    for k in core.flatten(self._keys()))
+            get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
+
+            dsk2 = dict((k, (operator.getitem, store, (tuple, list(k))))
+                        for k in store)
+            return Array(dsk2, self.name, chunks=self.chunks, dtype=self._dtype)
 
     def __int__(self):
         return int(self.compute())
