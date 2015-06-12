@@ -366,22 +366,6 @@ def test_field_access():
     assert eq(y[['b', 'a']], x[['b', 'a']])
 
 
-def test_reductions():
-    x = np.arange(400).reshape((20, 20))
-    a = from_array(x, chunks=(7, 7))
-
-    assert eq(a.sum(), x.sum())
-    assert eq(a.sum(axis=1), x.sum(axis=1))
-    assert eq(a.sum(axis=1, keepdims=True), x.sum(axis=1, keepdims=True))
-    assert eq(a.mean(), x.mean())
-    assert eq(a.var(axis=(1, 0)), x.var(axis=(1, 0)))
-
-    b = a.sum(keepdims=True)
-    assert b._keys() == [[(b.name, 0, 0)]]
-
-    assert eq(a.std(axis=0, keepdims=True), x.std(axis=0, keepdims=True))
-
-
 def test_tensordot():
     x = np.arange(400).reshape((20, 20))
     a = from_array(x, chunks=(5, 5))
@@ -855,26 +839,6 @@ def test_arithmetic():
     assert eq(l2, r2)
 
     assert eq(da.around(a, -1), np.around(x, -1))
-
-
-def test_reductions():
-    x = np.arange(5).astype('f4')
-    a = da.from_array(x, chunks=(2,))
-
-    assert eq(da.all(a), np.all(x))
-    assert eq(da.any(a), np.any(x))
-    assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-    assert eq(da.max(a), np.max(x))
-    assert eq(da.mean(a), np.mean(x))
-    assert eq(da.min(a), np.min(x))
-    assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
-    assert eq(da.nanmax(a), np.nanmax(x))
-    assert eq(da.nanmin(a), np.nanmin(x))
-    assert eq(da.nansum(a), np.nansum(x))
-    assert eq(da.nanvar(a), np.nanvar(x))
-    assert eq(da.nanstd(a), np.nanstd(x))
 
 
 def test_optimize():
