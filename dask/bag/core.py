@@ -24,16 +24,15 @@ with ignoring(ImportError):
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
-from pbag import PBag
-
 from ..multiprocessing import get as mpget
-from ..core import istask
-from ..optimize import fuse, cull
+from ..core import istask, get_dependencies, reverse_dict
+from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote)
 from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
+tokens = ('-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
 
 no_default = '__no__default__'
@@ -70,12 +69,34 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
+def inline_singleton_lists(dsk):
+    """ Inline lists that are only used once
+
+    >>> d = {'b': (list, 'a'),
+    ...      'c': (f, 'b', 1)}     # doctest: +SKIP
+    >>> inline_singleton_lists(d)  # doctest: +SKIP
+    {'c': (f, (list, 'a'), 1)}
+
+    Pairs nicely with lazify afterwards
+    """
+
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependents = reverse_dict(dependencies)
+
+    keys = [k for k, v in dsk.items() if istask(v) and v
+                                      and v[0] is list
+                                      and len(dependents[k]) == 1]
+    return inline(dsk, keys, inline_constants=False)
+
+
 def optimize(dsk, keys):
     """ Optimize a dask from a dask.bag """
     dsk2 = cull(dsk, keys)
     dsk3 = fuse(dsk2)
-    dsk4 = lazify(dsk3)
-    return dsk4
+    dsk4 = inline_singleton_lists(dsk3)
+    dsk5 = lazify(dsk4)
+    return dsk5
+
 
 def get(dsk, keys, get=None, **kwargs):
     """ Get function for dask.bag """
@@ -230,6 +251,13 @@ class Bag(object):
     @property
     def _args(self):
         return (self.dask, self.name, self.npartitions)
+
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
 
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
@@ -612,7 +640,8 @@ class Bag(object):
     def __iter__(self):
         return iter(self.compute())
 
-    def groupby(self, grouper, npartitions=None):
+    def groupby(self, grouper, npartitions=None, blocksize=2**20,
+                      use_server=False):
         """ Group collection by key function
 
         Note that this requires full dataset read, serialization and shuffle.
@@ -626,27 +655,43 @@ class Bag(object):
         --------
 
         Bag.foldby
-        pbag
         """
         if npartitions is None:
             npartitions = self.npartitions
 
-        paths = [tempfile.mkdtemp('%d.pbag' % i) for i in range(npartitions)]
+        import partd
+        p = ('partd' + next(tokens),)
+        if use_server:
+            try:
+                dsk1 = {p: partd.Python(partd.Snappy(partd.Client()))}
+            except AttributeError:
+                dsk1 = {p: partd.Python(partd.Client())}
+
+        else:
+            try:
+                dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
+            except AttributeError:
+                dsk1 = {p: (partd.Python, partd.File())}
 
         # Partition data on disk
         name = next(names)
-        dsk1 = dict(((name, i),
-                     (partition, grouper, (self.name, i), npartitions,
-                                 paths[i % len(paths)]))
+        dsk2 = dict(((name, i),
+                     (partition, grouper, (self.name, i),
+                                 npartitions, p, blocksize))
                      for i in range(self.npartitions))
+
+        # Barrier
+        barrier_token = 'barrier' + next(tokens)
+        def barrier(args):         return 0
+        dsk3 = {barrier_token: (barrier, list(dsk2))}
 
         # Collect groups
         name = next(names)
-        dsk2 = dict(((name, i),
-                     (collect, grouper, npartitions, i, sorted(dsk1.keys())))
+        dsk4 = dict(((name, i),
+                     (collect, grouper, i, p, barrier_token))
                     for i in range(npartitions))
 
-        return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
+        return Bag(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
 
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
@@ -693,26 +738,21 @@ class Bag(object):
                             name, columns, divisions)
 
 
-def partition(grouper, sequence, npartitions, path):
+def partition(grouper, sequence, npartitions, p, nelements=2**20):
     """ Partition a bag along a grouper, store partitions on disk """
+    for block in partition_all(nelements, sequence):
+        d = groupby(grouper, block)
+        d2 = defaultdict(list)
+        for k, v in d.items():
+            d2[abs(hash(k)) % npartitions].extend(v)
+        p.append(d2)
+    return p
 
-    with PBag(grouper, npartitions, path) as pb:
-        pb.extend(sequence)
 
-    return pb
-
-
-def collect(grouper, npartitions, group, pbags):
+def collect(grouper, group, p, barrier_token):
     """ Collect partitions from disk and yield k,v group pairs """
-    from pbag import PBag
-    pbags = list(take(npartitions, pbags))
-    result = defaultdict(list)
-    for pb in pbags:
-        part = pb.get_partition(group)
-        groups = groupby(grouper, part)
-        for k, v in groups.items():
-            result[k].extend(v)
-    return list(result.items())
+    d = groupby(grouper, p.get(group, lock=False))
+    return list(d.items())
 
 
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}

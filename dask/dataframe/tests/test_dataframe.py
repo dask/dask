@@ -195,8 +195,15 @@ def test_reductions():
     assert eq(d.b.mean(), full.b.mean())
 
 
+def test_map_blocks_multi_argument():
+    assert eq(dd.map_blocks(lambda a, b: a + b, 'c', d.a, d.b),
+              full.a + full.b)
+    assert eq(dd.map_blocks(lambda a, b, c: a + b + c, 'c', d.a, d.b, 1),
+              full.a + full.b + 1)
+
+
 def test_map_blocks():
-    assert eq(d.map_blocks(lambda df: df), full)
+    assert eq(d.map_blocks(lambda df: df, 'a'), full)
 
 
 def test_drop_duplicates():
@@ -221,7 +228,7 @@ def test_groupby_on_index():
         df['b'] = df.b - df.b.mean()
         return df
 
-    assert eq(d.groupby('a').apply(func),
+    assert eq(d.groupby('a').apply(func).set_index('a'),
               e.groupby(e.index).apply(func))
 
 

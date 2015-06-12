@@ -499,7 +499,8 @@ class Scheduler(object):
             Worker.getitem
         """
         payload = pickle.loads(payload)
-        log(self.address_to_workers, 'Getitem ack', payload)
+        log(self.address_to_workers, 'Getitem ack', payload['key'],
+                                                    payload['queue'])
         with logerrors():
             assert header['status'] == 'OK'
             self.queues[payload['queue']].put((payload['key'],
