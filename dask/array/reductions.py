@@ -4,21 +4,13 @@ import numpy as np
 from functools import partial, wraps
 from math import factorial
 from toolz import compose, curry
-import inspect
 
 from .core import _concatenate2, Array, atop, sqrt, elemwise
 from .slicing import insert_many
+from .numpy_compat import divide
 from ..core import flatten
 from . import chunk
-from ..utils import ignoring
-
-
-def getargspec(func):
-    """Version of inspect.getargspec that works for functools.partial objects"""
-    if isinstance(func, partial):
-        return inspect.getargspec(func.func)
-    else:
-        return inspect.getargspec(func)
+from ..utils import ignoring, getargspec
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
@@ -243,8 +235,8 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', **kwargs):
     keepdim_kw['keepdims'] = True
 
     n = ns.sum(**keepdim_kw)
-    mu = np.divide(totals.sum(**keepdim_kw), n, dtype=dtype)
-    inner_term = np.divide(totals, ns, dtype=dtype) - mu
+    mu = divide(totals.sum(**keepdim_kw), n, dtype=dtype)
+    inner_term = divide(totals, ns, dtype=dtype) - mu
 
     result = Ms[..., -1].sum(**kwargs)
 
@@ -253,7 +245,7 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', **kwargs):
         result += coeff * (Ms[..., order - k - 2] * inner_term**k).sum(**kwargs)
 
     result += (ns * inner_term**order).sum(**kwargs)
-    result = np.divide(result, (n.sum(**kwargs) - ddof), dtype=dtype)
+    result = divide(result, (n.sum(**kwargs) - ddof), dtype=dtype)
     return result
 
 

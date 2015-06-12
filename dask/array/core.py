@@ -926,6 +926,13 @@ class Array(object):
         Returns
         -------
         moment : ndarray
+
+        References
+        ----------
+        .. [1] Pebay, Philippe (2008), "Formulas for Robust, One-Pass Parallel
+        Computation of Covariances and Arbitrary-Order Statistical Moments"
+        (PDF), Technical Report SAND2008-6212, Sandia National Laboratories
+        
         """
 
         from .reductions import moment
