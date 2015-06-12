@@ -1029,3 +1029,17 @@ def test_numpy_compat_is_notimplemented():
     x = da.from_array(a, chunks=5)
 
     assert raises(NotImplementedError, lambda: x + a)
+
+
+def test_cache():
+    x = da.arange(15, chunks=5)
+    y = 2 * x + 1
+    z = y.cache()
+    assert len(z.dask) == 3  # very short graph
+    assert eq(y, z)
+
+    cache = np.empty(15, dtype=y.dtype)
+    z = y.cache(store=cache)
+    assert len(z.dask) < 6  # very short graph
+    assert z.chunks == y.chunks
+    assert eq(y, z)
