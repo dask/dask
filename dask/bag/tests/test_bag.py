@@ -7,7 +7,8 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream, stream_decompress, reify)
+        reduceby, bz2_stream, stream_decompress, reify, _parse_s3_URI)
+
 from dask.utils import filetexts, tmpfile, raises
 import dask
 from pbag import PBag
@@ -236,6 +237,51 @@ def test_from_filenames_bz2():
                  (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
 
 
+@pytest.mark.slow
+def test_from_s3():
+    # note we don't test connection modes with aws_access_key and
+    # aws_secret_key because these are not on travis-ci
+    boto = pytest.importorskip('boto')
+
+    five_tips = (u'total_bill,tip,sex,smoker,day,time,size\n',
+                 u'16.99,1.01,Female,No,Sun,Dinner,2\n',
+                 u'10.34,1.66,Male,No,Sun,Dinner,3\n',
+                 u'21.01,3.5,Male,No,Sun,Dinner,3\n',
+                 u'23.68,3.31,Male,No,Sun,Dinner,2\n')
+
+    # test compressed data
+    e = db.from_s3('tip-data', 't*.gz')
+    assert e.take(5) == five_tips
+
+    # test wit specific key
+    b = db.from_s3('tip-data', 't?ps.csv')
+    assert b.npartitions == 1
+
+    # test all keys in bucket
+    c = db.from_s3('tip-data')
+    assert c.npartitions == 4
+
+    d = db.from_s3('s3://tip-data')
+    assert d.npartitions == 4
+
+    e = db.from_s3('tip-data', 'tips.bz2')
+    assert e.take(5) == five_tips
+
+
+def test__parse_s3_URI():
+    bn, p = _parse_s3_URI('s3://mybucket/mykeys', '*')
+    assert (bn == 'mybucket') and (p == 'mykeys')
+
+    bn, p = _parse_s3_URI('s3://snow/g?obes', '*')
+    assert (bn == 'snow') and (p == 'g?obes')
+
+    bn, p = _parse_s3_URI('s3://tupper/wea*', '*')
+    assert (bn == 'tupper') and (p == 'wea*')
+
+    bn, p = _parse_s3_URI('s3://sand/', 'cast?es')
+    assert (bn == 'sand') and (p == 'cast?es')
+
+
 def test_from_sequence():
     b = db.from_sequence([1, 2, 3, 4, 5], npartitions=3)
     assert len(b.dask) == 3
@@ -303,7 +349,13 @@ def test_groupby_with_npartitions_changed():
 
     assert result.npartitions == 1
 
+
 def test_concat():
+    a = db.from_sequence([1, 2, 3])
+    b = db.from_sequence([4, 5, 6])
+    c = db.concat([a, b])
+    assert list(c) == [1, 2, 3, 4, 5, 6]
+
     b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
     assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])
 
@@ -379,15 +431,8 @@ def test_to_textfiles_inputs():
 def test_bz2_stream():
     text = '\n'.join(map(str, range(10000)))
     compressed = bz2.compress(text.encode())
-    assert list(take(100, bz2_stream(compressed))) == list(map(str, range(100)))
-
-
-def test_concat():
-    a = db.from_sequence([1, 2, 3])
-    b = db.from_sequence([4, 5, 6])
-    c = db.concat([a, b])
-
-    assert list(c) == [1, 2, 3, 4, 5, 6]
+    assert (list(take(100, bz2_stream(compressed))) ==
+            list(map(lambda x: str(x) + '\n', range(100))))
 
 
 def test_string_namespace():

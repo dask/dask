@@ -5,14 +5,11 @@ import math
 import tempfile
 import inspect
 import gzip
+import zlib
 import bz2
 import os
 
-try:
-    from urllib2 import urlopen
-except ImportError:
-    from urllib.request import urlopen
-
+from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
@@ -32,7 +29,8 @@ from pbag import PBag
 from ..multiprocessing import get as mpget
 from ..core import istask
 from ..optimize import fuse, cull
-from ..compatibility import apply, BytesIO, unicode
+from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
+        unquote)
 from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -590,7 +588,7 @@ class Bag(object):
     def compute(self, **kwargs):
         """ Force evaluation of bag """
         results = get(self.dask, self._keys(), **kwargs)
-        if isinstance(results[0], Iterable):
+        if isinstance(results[0], Iterable) and not isinstance(results[0], str):
             results = toolz.concat(results)
         if isinstance(results, Iterator):
             results = list(results)
@@ -772,6 +770,85 @@ def write(data, filename):
         f.close()
 
 
+def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
+                   anon):
+    """Connect to s3 and return a bucket"""
+    import boto
+    if anon is True:
+        connection = boto.connect_s3(anon=anon)
+    elif connection is None:
+        connection = boto.connect_s3(aws_access_key, aws_secret_key)
+    return connection.get_bucket(bucket_name)
+
+
+# we need an unmemoized function to call in the main thread. And memoized
+# functions for the dask.
+_memoized_get_bucket = toolz.memoize(_get_s3_bucket)
+
+
+def _get_key(bucket_name, conn_args, key_name):
+    bucket = _memoized_get_bucket(bucket_name, *conn_args)
+    key = bucket.get_key(key_name)
+    ext = key_name.split('.')[-1]
+    return stream_decompress(ext, key.read())
+
+
+def _parse_s3_URI(bucket_name, paths):
+    assert bucket_name.startswith('s3://')
+    o = urlparse('s3://' + quote(bucket_name[len('s3://'):]))
+    # if path is specified
+    if (paths == '*') and (o.path != '' and o.path != '/'):
+        paths = unquote(o.path[1:])
+    bucket_name = unquote(o.hostname)
+    return bucket_name, paths
+
+
+def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
+            connection=None, anon=False):
+    """ Create a Bag by loading textfiles from s3
+
+    Each line will be treated as one element and each file in S3 as one
+    partition.
+
+    You may specify a full s3 bucket
+
+    >>> b = from_s3('s3://bucket-name')  # doctest: +SKIP
+
+    Or select files, lists of files, or globstrings of files within that bucket
+
+    >>> b = from_s3('s3://bucket-name', 'myfile.json')  # doctest: +SKIP
+    >>> b = from_s3('s3://bucket-name', ['alice.json', 'bob.json'])  # doctest: +SKIP
+    >>> b = from_s3('s3://bucket-name', '*.json')  # doctest: +SKIP
+    """
+    conn_args = (aws_access_key, aws_secret_key, connection, anon)
+
+    bucket_name, paths = normalize_s3_names(bucket_name, paths, conn_args)
+
+    get_key = partial(_get_key, bucket_name, conn_args)
+
+    name = next(load_names)
+    dsk = dict(((name, i), (list, (get_key, k))) for i, k in enumerate(paths))
+    return Bag(dsk, name, len(paths))
+
+
+def normalize_s3_names(bucket_name, paths, conn_args):
+    """ Normalize bucket name and paths """
+    if bucket_name.startswith('s3://'):
+        bucket_name, paths = _parse_s3_URI(bucket_name, paths)
+
+    if isinstance(paths, str):
+        if ('*' not in paths) and ('?' not in paths):
+            return bucket_name, [paths]
+        else:
+            bucket = _get_s3_bucket(bucket_name, *conn_args)
+            keys = bucket.list()  # handle globs
+
+            matches = [k.name for k in keys if fnmatchcase(k.name, paths)]
+            return bucket_name, matches
+    else:
+        return bucket_name, paths
+
+
 def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
     """ Create dask by loading in files from HDFS
 
@@ -821,7 +898,7 @@ def bz2_stream(compressed, chunksize=100000):
         chunk = compressed[i: i+chunksize]
         decompressed = decompressor.decompress(chunk).decode()
         for line in decompressed.split('\n'):
-            yield line
+            yield line + '\n'
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
