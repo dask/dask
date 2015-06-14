@@ -21,8 +21,8 @@ except ImportError:
 from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
-from ..async import get_sync
-from ..threaded import get as get_threaded
+from .. import  async
+from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 
@@ -875,7 +875,7 @@ def quantiles(f, q, **kwargs):
 
 
 
-def get(dsk, keys, get=get_sync, **kwargs):
+def get(dsk, keys, get=threaded.get, **kwargs):
     """ Get function with optimizations specialized to dask.Dataframe """
     from .optimize import optimize
     dsk2 = optimize(dsk, keys, **kwargs)
