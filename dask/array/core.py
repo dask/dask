@@ -1402,13 +1402,24 @@ def concatenate(seq, axis=0):
 
 
 @wraps(np.take)
-def take(a, indices, axis):
+def take(a, indices, axis=0):
     if not -a.ndim <= axis < a.ndim:
         raise ValueError('axis=(%s) out of bounds' % axis)
     if axis < 0:
         axis += a.ndim
-    return a[(slice(None),) * axis + (indices,)]
+    if isinstance(a, np.ndarray) and isinstance(indices, Array):
+        return _take_dask_array_from_numpy(a, indices, axis)
+    else:
+        return a[(slice(None),) * axis + (indices,)]
 
+
+def _take_dask_array_from_numpy(a, indices, axis):
+    assert isinstance(a, np.ndarray)
+    assert isinstance(indices, Array)
+
+    return indices.map_blocks(lambda block: np.take(a, block, axis),
+                              chunks=indices.chunks,
+                              dtype=a.dtype)
 
 @wraps(np.transpose)
 def transpose(a, axes=None):
