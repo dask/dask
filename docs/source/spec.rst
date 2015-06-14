@@ -10,7 +10,7 @@ values.
 Definitions
 -----------
 
-A **dask** is a dictionary mapping data-keys to values or tasks.
+A **dask graph** is a dictionary mapping data-keys to values or tasks.
 
 .. code-block:: python
 
