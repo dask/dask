@@ -302,6 +302,15 @@ def test_loc():
     assert eq(d.loc[3:], full.loc[3:])
 
 
+def test_loc_with_text_dates():
+    A = tm.makeTimeSeries(10).iloc[:5]
+    B = tm.makeTimeSeries(10).iloc[5:]
+    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None, [A.index.max()])
+
+    assert eq(s.loc['2000': '2010'], s)
+    assert len(s.loc['2000-01-03': '2000-01-05'].compute()) == 3
+
+
 def test_iloc_raises():
     assert raises(AttributeError, lambda: d.iloc[:5])
 

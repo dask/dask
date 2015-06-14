@@ -6,6 +6,7 @@ import os
 from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
         first, partition)
 from operator import getitem, setitem
+from datetime import datetime
 import pandas as pd
 import numpy as np
 import operator
@@ -205,6 +206,7 @@ class _Frame(object):
 
     def _partition_of_index_value(self, val):
         """ In which partition does this value lie? """
+        val = _coerce_loc_index(self.divisions, val)
         return bisect.bisect_right(self.divisions, val)
 
     def _loc(self, ind):
@@ -545,6 +547,15 @@ def _assign(df, *pairs):
 
 def _loc(df, start, stop):
     return df.loc[slice(start, stop)]
+
+def _coerce_loc_index(divisions, o):
+    """ Transform values to be comparable against divisions
+
+    This is particularly valuable to use with pandas datetimes
+    """
+    if divisions and isinstance(divisions[0], (np.datetime64, datetime)):
+        return pd.Timestamp(o)
+    return o
 
 def head(x, n):
     """ First n elements of dask.Dataframe or dask.Series """
