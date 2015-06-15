@@ -748,9 +748,11 @@ class SeriesGroupBy(object):
             g = df.groupby(level=0)
             x = g.agg({(self.key, 'sum'): 'sum',
                        (self.key, 'count'): 'sum'})
-            return 1.0 * x[self.key]['sum'] / x[self.key]['count']
+            result = 1.0 * x[self.key]['sum'] / x[self.key]['count']
+            result.name = self.key
+            return result
         return aca([self.frame, self.index],
-                   chunk=chunk, aggregate=agg, columns=[])
+                   chunk=chunk, aggregate=agg, columns=[self.key])
 
 
 def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
