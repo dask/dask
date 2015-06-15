@@ -840,7 +840,7 @@ class Array(object):
 
     def astype(self, dtype, **kwargs):
         """ Copy of the array, cast to a specified type """
-        return elemwise(partial(np.ndarray.astype, dtype=dtype, **kwargs),
+        return elemwise(partial(lambda x, dtype, **kwargs: x.astype(dtype, **kwargs), dtype=dtype, **kwargs),
                         self, dtype=dtype)
 
     def __abs__(self):

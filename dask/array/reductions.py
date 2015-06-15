@@ -168,17 +168,17 @@ def nannumel(x, **kwargs):
     return chunk.sum(~np.isnan(x), **kwargs)
 
 
-def mean_chunk(x, sum=chunk.sum, numel=numel, **kwargs):
-    n = numel(x, **kwargs)
-    total = sum(x, **kwargs)
+def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
+    n = numel(x, dtype=dtype, **kwargs)
+    total = sum(x, dtype=dtype, **kwargs)
     result = np.empty(shape=n.shape,
               dtype=[('total', total.dtype), ('n', n.dtype)])
     result['n'] = n
     result['total'] = total
     return result
 
-def mean_agg(pair, **kwargs):
-    return pair['total'].sum(**kwargs) / pair['n'].sum(**kwargs)
+def mean_agg(pair, dtype='f8', **kwargs):
+    return divide(pair['total'].sum(dtype=dtype, **kwargs), pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
 
 
 @wraps(chunk.mean)
@@ -291,11 +291,17 @@ with ignoring(AttributeError):
 
 @wraps(chunk.std)
 def std(a, axis=None, dtype=None, keepdims=False, ddof=0):
-    return sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+    result = sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+    if dtype and dtype != result.dtype:
+        result = result.astype(dtype)
+    return result
 
 
 def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0):
-    return sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+    result = sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+    if dtype and dtype != result.dtype:
+        result = result.astype(dtype)
+    return result
 
 with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)
