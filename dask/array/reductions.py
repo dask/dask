@@ -177,8 +177,10 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     result['total'] = total
     return result
 
+
 def mean_agg(pair, dtype='f8', **kwargs):
-    return divide(pair['total'].sum(dtype=dtype, **kwargs), pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
+    return divide(pair['total'].sum(dtype=dtype, **kwargs),
+                  pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
 
 
 @wraps(chunk.mean)
