@@ -575,6 +575,8 @@ def blockdims_from_blockshape(shape, blockshape):
     >>> blockdims_from_blockshape((10, 10), (4, 3))
     ((4, 4, 2), (3, 3, 3, 1))
     """
+    shape = map(int, shape)
+    blockshape = map(int, blockshape)
     if blockshape is None:
         raise TypeError("Must supply chunks= keyword argument")
     if shape is None:
