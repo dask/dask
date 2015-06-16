@@ -227,3 +227,20 @@ def getargspec(func):
         return inspect.getargspec(func.func)
     else:
         return inspect.getargspec(func)
+
+
+def is_integer(i):
+    """
+    >>> is_integer(6)
+    True
+    >>> is_integer(42.0)
+    True
+    >>> is_integer('abc')
+    False
+    """
+    if isinstance(i, int):
+        return True
+    if isinstance(i, float):
+        return (i).is_integer()
+    else:
+        return False
