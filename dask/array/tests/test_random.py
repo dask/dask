@@ -4,6 +4,18 @@ pytest.importorskip('numpy')
 import numpy as np
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
+import dask.array as da
+import dask
+
+
+def test_RandomState():
+    state = da.random.RandomState(5)
+    x = state.normal(10, 1, size=10, chunks=5)
+    assert (x.compute(get=dask.get) == x.compute(get=dask.get)).all()
+
+    state = da.random.RandomState(5)
+    y = state.normal(10, 1, size=10, chunks=5)
+    assert (x.compute(get=dask.get) == y.compute(get=dask.get)).all()
 
 
 def test_random():

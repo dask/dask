@@ -54,3 +54,53 @@ TODO: Multivariate distributions
 dirichlet =
 multinomial =
 """
+
+from .core import normalize_chunks, Array, names
+from itertools import product
+from toolz import curry
+
+
+class RandomState(object):
+    def __init__(self, seed=None):
+        self.state = np.random.RandomState(seed)
+
+    def wrap(self, func, *args, **kwargs):
+        if 'shape' in kwargs and 'size' not in kwargs:
+            kwargs['size'] = kwargs.pop('shape')
+        if 'size' not in kwargs:
+            args, size = args[:-1], args[-1]
+        else:
+            size = kwargs.pop('size')
+
+        if not isinstance(size, (tuple, list)):
+            size = (size,)
+
+        chunks = kwargs.pop('chunks', None)
+        chunks = normalize_chunks(chunks, size)
+        name = kwargs.pop('name', next(names))
+
+        dtype = kwargs.pop('dtype', None)
+        if dtype is None:
+            kw = kwargs.copy(); kw['size'] = (0,)
+            dtype = func(np.random.RandomState(), *args, **kw).dtype
+
+        keys = product([name], *[range(len(bd)) for bd in chunks])
+        sizes = product(*chunks)
+
+        vals = ((apply_random, func, self.state.randint(2**31),
+                               size, args, kwargs)
+                  for size in sizes)
+
+        dsk = dict(zip(keys, vals))
+        return Array(dsk, name, chunks, dtype=dtype)
+
+    def uniform(self, *args, **kwargs):
+        return self.wrap(np.random.RandomState.uniform, *args, **kwargs)
+
+    def normal(self, *args, **kwargs):
+        return self.wrap(np.random.RandomState.normal, *args, **kwargs)
+
+
+def apply_random(func, seed, size, args, kwargs):
+    state = np.random.RandomState(seed)
+    return func(state, *args, size=size, **kwargs)
