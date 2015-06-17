@@ -85,7 +85,7 @@ def test_svd_compressed():
     mat = mat1.dot(mat2)
     data = from_array(mat, chunks=(50, 50))
 
-    n_iter = 4
+    n_iter = 6
     for i in range(n_iter):
         u, s, vt = svd_compressed(data, r)
         u = np.array(u)
@@ -97,7 +97,7 @@ def test_svd_compressed():
             usvt += np.dot(u, np.dot(np.diag(s), vt))
     usvt /= n_iter
 
-    tol = 1e-1
+    tol = 2e-1
     assert np.allclose(np.linalg.norm(mat - usvt),
                        np.linalg.norm(mat),
                        rtol=tol, atol=tol)  # average accuracy check
