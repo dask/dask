@@ -11,12 +11,13 @@ from math import ceil
 from toolz import curry, merge, partial
 from itertools import count
 import bcolz
-from operator import getitem, attrgetter
+from operator import getitem
 
 from ..compatibility import StringIO, unicode
 from ..utils import textblock
 
-from .core import names, DataFrame, compute, concat, categorize_block
+from . import core
+from .core import names, DataFrame, Series, compute, concat, categorize_block
 from .shuffle import set_partition
 
 
@@ -252,20 +253,20 @@ def from_array(x, chunksize=50000):
 from_dataframe_names = ('from-dataframe-%d' % i for i in count(1))
 
 
-def from_dataframe(df, npartitions):
+def from_pandas(data, npartitions):
     """Construct a dask DataFrame from a pandas DataFrame.
 
     Parameters
     ----------
-    df : pandas.DataFrame
-        The DataFrame with which to construct a dask DataFrame
+    df : pandas.DataFrame, pandas.Series
+        The DataFrame/Series with which to construct a dask DataFrame/Series
     npartitions : int
         The number of partitions of the index to create
 
     Returns
     -------
-    ddf : dask.DataFrame
-        A dask DataFrame partitioned along the index
+    ddf : dask.DataFrame, dask.Series
+        A dask DataFrame/Series partitioned along the index
 
     Examples
     --------
@@ -275,14 +276,18 @@ def from_dataframe(df, npartitions):
     >>> dd.divisions[0]
     Timestamp('2010-01-03 00:00:00', offset='D')
     """
-    nrows = len(df)
+    columns = getattr(data, 'columns', getattr(data, 'name', None))
+    if columns is None:
+        raise TypeError("Input must be a pandas DataFrame or Series")
+    nrows = len(data)
     chunksize = int(ceil(nrows / npartitions))
-    df = df.sort_index(ascending=True)
-    divisions = tuple(df.index[i] for i in range(chunksize, nrows, chunksize))
+    data = data.sort_index(ascending=True)
+    divisions = tuple(data.index[i]
+                      for i in range(chunksize, nrows, chunksize))
     name = next(from_dataframe_names)
-    dsk = dict(((name, i), df.iloc[i * chunksize:(i + 1) * chunksize])
+    dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions))
-    return DataFrame(dsk, name, tuple(df.columns), divisions)
+    return getattr(core, type(data).__name__)(dsk, name, columns, divisions)
 
 
 
