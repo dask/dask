@@ -9,7 +9,7 @@ from math import ceil
 from toolz import curry, merge, partial
 from itertools import count
 import bcolz
-from operator import getitem
+from operator import getitem, attrgetter
 
 from ..compatibility import StringIO, unicode
 from ..utils import textblock
@@ -245,6 +245,22 @@ def from_array(x, chunksize=50000):
             for i in range(0, int(ceil(float(len(x)) / chunksize))))
 
     return DataFrame(dsk, name, columns, divisions)
+
+
+from_dataframe_names = ('from-dataframe-%d' % i for i in count(1))
+
+
+def from_dataframe(df, npartitions=10):
+    nrows = len(df)
+    chunksize = int(ceil(float(nrows) / npartitions))
+    divisions = tuple(range(chunksize, nrows, chunksize))
+    name = next(from_dataframe_names)
+    iloc = df.iloc
+    dsk = dict(((name, i),
+                (getitem, iloc, (slice(i * chunksize, (i + 1) * chunksize),)))
+               for i in range(npartitions))
+    return DataFrame(dsk, name, tuple(df.columns), divisions)
+
 
 
 from pframe.categories import reapply_categories
