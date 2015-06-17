@@ -322,7 +322,8 @@ def test_empty_csv_file():
 
 def test_from_dataframe():
     a = list('aaaaaaabbbbbbbbccccccc')
-    df = pd.DataFrame(dict(a=a, b=np.random.randn(len(a))))
+    df = pd.DataFrame(dict(a=a, b=np.random.randn(len(a))),
+                      index=pd.date_range(start='20120101', periods=len(a)))
     ddf = dd.from_dataframe(df, 3)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) - 1
