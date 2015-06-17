@@ -257,9 +257,7 @@ def from_dataframe(df, npartitions=10):
     chunksize = int(ceil(nrows / npartitions))
     divisions = tuple(range(chunksize, nrows, chunksize))
     name = next(from_dataframe_names)
-    iloc = df.iloc
-    dsk = dict(((name, i),
-                (getitem, iloc, slice(i * chunksize, (i + 1) * chunksize)))
+    dsk = dict(((name, i), df.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions))
     return DataFrame(dsk, name, tuple(df.columns), divisions)
 
