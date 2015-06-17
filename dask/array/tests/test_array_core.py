@@ -1024,6 +1024,12 @@ def test_map_blocks3():
               x + 2*z)
 
 
+def test_from_array_with_missing_chunks():
+    x = np.random.randn(2, 4, 3)
+    d = da.from_array(x, chunks=(None, 2, None))
+    assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
+
+
 def test_numpy_compat_is_notimplemented():
     a = np.arange(10)
     x = da.from_array(a, chunks=5)
