@@ -22,6 +22,14 @@ def test_doc_randomstate():
     assert 'mean' in da.random.RandomState(5).normal.__doc__
 
 
+def test_determinisim_through_dask_values():
+    samples_1 = da.random.RandomState(42).normal(size=1000, chunks=10)
+    samples_2 = da.random.RandomState(42).normal(size=1000, chunks=10)
+
+    assert [v for k, v in sorted(samples_1.dask.items())] ==\
+           [v for k, v in sorted(samples_2.dask.items())]
+
+
 def test_random():
     a = random((10, 10), chunks=(5, 5))
     assert isinstance(a, Array)
