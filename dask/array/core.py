@@ -1092,12 +1092,15 @@ def normalize_chunks(chunks, shape=None):
         else:
             chunks = ((),) * len(shape)
 
-    if chunks and not isinstance(chunks[0], (tuple, list)):
-        chunks = blockdims_from_blockshape(shape, chunks)
+    if shape is not None:
+        chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
 
-    chunks = tuple(map(tuple, chunks))
+    if chunks and shape is not None:
+        chunks = sum((blockdims_from_blockshape((s,), (c,))
+                      if not isinstance(c, (tuple, list)) else (c,)
+                      for s, c in zip(shape, chunks)), ())
 
-    return chunks
+    return tuple(map(tuple, chunks))
 
 
 def from_array(x, chunks, name=None, lock=False, **kwargs):

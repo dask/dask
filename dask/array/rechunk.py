@@ -127,14 +127,14 @@ def intersect_chunks(old_chunks=None,
     old_chunks = normalize_chunks(old_chunks, shape)
     new_chunks = normalize_chunks(new_chunks, shape)
 
-    cmo = cumdims_label(old_chunks,'o')
-    cmn = cumdims_label(new_chunks,'n')
+    cmo = cumdims_label(old_chunks, 'o')
+    cmn = cumdims_label(new_chunks, 'n')
     sums = [sum(o) for o in old_chunks]
     sums2 = [sum(n) for n in old_chunks]
     if not sums == sums2:
         raise ValueError('Cannot change dimensions from to %r' % sums2)
-    zipped = zip(old_chunks,new_chunks)
-    old_to_new =  tuple(_intersect_1d(_breakpoints(cm[0],cm[1])) for cm in zip(cmo, cmn))
+    old_to_new = tuple(
+        _intersect_1d(_breakpoints(cm[0], cm[1])) for cm in zip(cmo, cmn))
     cross1 = tuple(product(*old_to_new))
     cross = tuple(chain(tuple(product(*cr)) for cr in cross1))
     return cross
@@ -196,6 +196,8 @@ def rechunk(x, chunks):
             chunks = blockshape_dict_to_tuple(x.chunks, chunks)
         else:
             chunks = blockdims_dict_to_tuple(x.chunks, chunks)
+    chunks = tuple(lc if lc is not None else rc
+                   for lc, rc in zip(chunks, x.chunks))
     chunks = normalize_chunks(chunks, x.shape)
     if not len(chunks) == x.ndim or tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Provided chunks are not consistent with shape")
