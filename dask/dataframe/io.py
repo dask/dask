@@ -1,3 +1,5 @@
+from __future__ import division
+
 import pandas as pd
 import numpy as np
 from functools import wraps
@@ -241,8 +243,8 @@ def from_array(x, chunksize=50000):
     name = next(from_array_names)
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
-            for i in range(0, int(ceil(float(len(x)) / chunksize))))
                               slice(i * chunksize, (i + 1) * chunksize))))
+            for i in range(0, int(ceil(len(x) / chunksize))))
 
     return DataFrame(dsk, name, columns, divisions)
 
@@ -252,7 +254,7 @@ from_dataframe_names = ('from-dataframe-%d' % i for i in count(1))
 
 def from_dataframe(df, npartitions=10):
     nrows = len(df)
-    chunksize = int(ceil(float(nrows) / npartitions))
+    chunksize = int(ceil(nrows / npartitions))
     divisions = tuple(range(chunksize, nrows, chunksize))
     name = next(from_dataframe_names)
     iloc = df.iloc
