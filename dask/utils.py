@@ -238,9 +238,12 @@ def is_integer(i):
     >>> is_integer('abc')
     False
     """
+    import numpy as np
     if isinstance(i, int):
         return True
     if isinstance(i, float):
         return (i).is_integer()
+    if issubclass(type(i), np.integer):
+        return i
     else:
         return False
