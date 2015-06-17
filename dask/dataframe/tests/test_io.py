@@ -325,4 +325,5 @@ def test_from_dataframe():
     df = pd.DataFrame(dict(a=a, b=np.random.randn(len(a))))
     ddf = dd.from_dataframe(df, 3)
     assert len(ddf.dask) == 3
+    assert len(ddf.divisions) == len(ddf.dask) - 1
     tm.assert_frame_equal(df, ddf.compute())
