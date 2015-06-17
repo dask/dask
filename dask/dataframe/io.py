@@ -94,7 +94,7 @@ def read_csv(fn, *args, **kwargs):
 
     # Chunk sizes and numbers
     total_bytes = file_size(fn, compression)
-    nchunks = int(ceil(float(total_bytes) / chunkbytes))
+    nchunks = int(ceil(total_bytes / chunkbytes))
     divisions = [None] * (nchunks - 1)
 
     kwargs.pop('compression', None)  # these functions will take StringIO
@@ -186,7 +186,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
 
     compression = kwargs.get('compression', None)
     total_bytes = file_size(fn, compression)
-    nchunks = int(ceil(float(total_bytes) / chunkbytes))
+    nchunks = int(ceil(total_bytes / chunkbytes))
 
     if infer_header(fn, **kwargs):
         kwargs['header'] = 0
@@ -312,14 +312,14 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
                   x,
                   (slice(i * chunksize, (i + 1) * chunksize),),
                   None, categories))
-           for i in range(0, int(ceil(float(len(x)) / chunksize))))
+           for i in range(0, int(ceil(len(x) / chunksize))))
 
     result = DataFrame(dsk, new_name, columns, divisions)
 
     if index:
         assert index in x.names
         a = da.from_array(x[index], chunks=(chunksize*len(x.names),))
-        q = np.linspace(1, 100, len(x) / chunksize + 2)[1:-1]
+        q = np.linspace(1, 100, len(x) // chunksize + 2)[1:-1]
         divisions = da.percentile(a, q).compute()
         return set_partition(result, index, divisions, **kwargs)
     else:
