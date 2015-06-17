@@ -272,9 +272,12 @@ def from_pandas(data, npartitions):
     --------
     >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
     ...                   index=pd.date_range(start='20100101', periods=6))
-    >>> dd = from_dataframe(df, npartitions=3)
+    >>> dd = from_pandas(df, npartitions=3)
     >>> dd.divisions[0]
     Timestamp('2010-01-03 00:00:00', offset='D')
+    >>> ds = from_pandas(df.a, npartitions=3)  # Works with Series too!
+    >>> ds.divisions[1]
+    Timestamp('2010-01-05 00:00:00', offset='D')
     """
     columns = getattr(data, 'columns', getattr(data, 'name', None))
     if columns is None:
