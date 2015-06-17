@@ -318,3 +318,11 @@ def test_empty_csv_file():
         df = dd.read_csv(fn)
         assert len(df.compute()) == 0
         assert list(df.columns) == ['a', 'b']
+
+
+def test_from_dataframe():
+    a = list('aaaaaaabbbbbbbbccccccc')
+    df = pd.DataFrame(dict(a=a, b=np.random.randn(len(a))))
+    ddf = dd.from_dataframe(df, 3)
+    assert len(ddf.dask) == 3
+    tm.assert_frame_equal(df, ddf.compute())
