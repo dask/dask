@@ -241,8 +241,8 @@ def from_array(x, chunksize=50000):
     name = next(from_array_names)
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
-                             (slice(i * chunksize, (i + 1) * chunksize),))))
             for i in range(0, int(ceil(float(len(x)) / chunksize))))
+                              slice(i * chunksize, (i + 1) * chunksize))))
 
     return DataFrame(dsk, name, columns, divisions)
 
@@ -257,7 +257,7 @@ def from_dataframe(df, npartitions=10):
     name = next(from_dataframe_names)
     iloc = df.iloc
     dsk = dict(((name, i),
-                (getitem, iloc, (slice(i * chunksize, (i + 1) * chunksize),)))
+                (getitem, iloc, slice(i * chunksize, (i + 1) * chunksize)))
                for i in range(npartitions))
     return DataFrame(dsk, name, tuple(df.columns), divisions)
 
