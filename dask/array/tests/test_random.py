@@ -18,6 +18,10 @@ def test_RandomState():
     assert (x.compute(get=dask.get) == y.compute(get=dask.get)).all()
 
 
+def test_doc_randomstate():
+    assert 'mean' in da.random.RandomState(5).normal.__doc__
+
+
 def test_random():
     a = random((10, 10), chunks=(5, 5))
     assert isinstance(a, Array)
