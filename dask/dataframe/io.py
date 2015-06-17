@@ -252,7 +252,29 @@ def from_array(x, chunksize=50000):
 from_dataframe_names = ('from-dataframe-%d' % i for i in count(1))
 
 
-def from_dataframe(df, npartitions=10):
+def from_dataframe(df, npartitions):
+    """Construct a dask DataFrame from a pandas DataFrame.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The DataFrame with which to construct a dask DataFrame
+    npartitions : int
+        The number of partitions of the index to create
+
+    Returns
+    -------
+    ddf : dask.DataFrame
+        A dask DataFrame partitioned along the index
+
+    Examples
+    --------
+    >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
+    ...                   index=pd.date_range(start='20100101', periods=6))
+    >>> dd = from_dataframe(df, npartitions=3)
+    >>> dd.divisions[0]
+    Timestamp('2010-01-03 00:00:00', offset='D')
+    """
     nrows = len(df)
     chunksize = int(ceil(nrows / npartitions))
     df = df.sort_index(ascending=True)
