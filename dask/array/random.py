@@ -71,33 +71,28 @@ class RandomState(object):
         self.state = np.random.RandomState(seed)
 
     def wrap(self, func, *args, **kwargs):
-        if 'shape' in kwargs and 'size' not in kwargs:
-            kwargs['size'] = kwargs.pop('shape')
-        if 'size' not in kwargs:
-            args, size = args[:-1], args[-1]
-        else:
-            size = kwargs.pop('size')
+        size = kwargs.pop('size')
+        chunks = kwargs.pop('chunks')
 
         if not isinstance(size, (tuple, list)):
             size = (size,)
 
-        chunks = kwargs.pop('chunks', None)
         chunks = normalize_chunks(chunks, size)
-        name = kwargs.pop('name', next(names))
+        name = next(names)
 
-        dtype = kwargs.pop('dtype', None)
-        if dtype is None:
-            kw = kwargs.copy(); kw['size'] = (0,)
-            dtype = func(np.random.RandomState(), *args, **kw).dtype
+        # Get dtype
+        kw = kwargs.copy()
+        kw['size'] = (0,)
+        dtype = func(np.random.RandomState(), *args, **kw).dtype
 
+        # Build graph
         keys = product([name], *[range(len(bd)) for bd in chunks])
         sizes = product(*chunks)
-
         vals = ((apply_random, func, self.state.randint(2**31),
                                size, args, kwargs)
                   for size in sizes)
-
         dsk = dict(zip(keys, vals))
+
         return Array(dsk, name, chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.beta)
