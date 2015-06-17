@@ -15,7 +15,7 @@ def doc_wraps(func):
 
 class RandomState(object):
     def __init__(self, seed=None):
-        self.state = np.random.RandomState(seed)
+        self._numpy_state = np.random.RandomState(seed)
 
     def wrap(self, func, *args, **kwargs):
         size = kwargs.pop('size')
@@ -35,9 +35,10 @@ class RandomState(object):
         # Build graph
         keys = product([name], *[range(len(bd)) for bd in chunks])
         sizes = product(*chunks)
-        vals = ((apply_random, func, self.state.randint(2**31),
-                               size, args, kwargs)
-                  for size in sizes)
+        vals = ((apply_random,
+                  func, self._numpy_state.randint(np.iinfo(np.uint32).max),
+                  size, args, kwargs)
+                for size in sizes)
         dsk = dict(zip(keys, vals))
 
         return Array(dsk, name, chunks, dtype=dtype)
@@ -168,6 +169,8 @@ class RandomState(object):
     def random_sample(self, size=None, chunks=None):
         return self.wrap(np.random.RandomState.random_sample,
                          size=size, chunks=chunks)
+
+    random = random_sample
 
     @doc_wraps(np.random.RandomState.rayleigh)
     def rayleigh(self, scale=1.0, size=None, chunks=None):
