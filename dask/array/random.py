@@ -1,65 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-from .wrap import wrap, wrap_func_size_as_kwarg
-
-"""
-Univariate distributions
-"""
-
-wrap = wrap(wrap_func_size_as_kwarg)
-
-random = wrap(np.random.random)
-beta = wrap(np.random.beta)
-binomial = wrap(np.random.binomial)
-chisquare = wrap(np.random.chisquare)
-exponential = wrap(np.random.exponential)
-f = wrap(np.random.f)
-gamma = wrap(np.random.gamma)
-geometric = wrap(np.random.geometric)
-gumbel = wrap(np.random.gumbel)
-hypergeometric = wrap(np.random.hypergeometric)
-laplace = wrap(np.random.laplace)
-logistic = wrap(np.random.logistic)
-lognormal = wrap(np.random.lognormal)
-logseries = wrap(np.random.logseries)
-negative_binomial = wrap(np.random.negative_binomial)
-noncentral_chisquare = wrap(np.random.noncentral_chisquare)
-noncentral_f = wrap(np.random.noncentral_f)
-normal = wrap(np.random.normal)
-pareto = wrap(np.random.pareto)
-poisson = wrap(np.random.poisson)
-power = wrap(np.random.power)
-rayleigh = wrap(np.random.rayleigh)
-triangular = wrap(np.random.triangular)
-uniform = wrap(np.random.uniform)
-vonmises = wrap(np.random.vonmises)
-wald = wrap(np.random.wald)
-weibull = wrap(np.random.weibull)
-zipf = wrap(np.random.zipf)
-
-"""
-Standard distributions
-"""
-
-standard_cauchy = wrap(np.random.standard_cauchy)
-standard_exponential = wrap(np.random.standard_exponential)
-standard_gamma = wrap(np.random.standard_gamma)
-standard_normal = wrap(np.random.standard_normal)
-standard_t = wrap(np.random.standard_t)
-
-"""
-TODO: Multivariate distributions
-
-dirichlet =
-multinomial =
-"""
-
-from .core import normalize_chunks, Array, names
 from itertools import product
 from toolz import curry
+from .core import normalize_chunks, Array, names
 
 def doc_wraps(func):
+    """ Copy docstring from one function to another """
     def _(func2):
         func2.__doc__ = func.__doc__
         return func2
@@ -120,7 +67,7 @@ class RandomState(object):
 
     @doc_wraps(np.random.RandomState.exponential)
     def exponential(self, scale=1.0, size=None, chunks=None):
-        return self.wrap(np.random.RandomState.exponential, scale=1.0,
+        return self.wrap(np.random.RandomState.exponential, scale,
                          size=size, chunks=chunks)
 
     @doc_wraps(np.random.RandomState.f)
@@ -151,17 +98,17 @@ class RandomState(object):
 
     @doc_wraps(np.random.RandomState.laplace)
     def laplace(self, loc=0.0, scale=1.0, size=None, chunks=None):
-        return self.wrap(np.random.RandomState.laplace, loc=0.0, scale=1.0,
+        return self.wrap(np.random.RandomState.laplace, loc, scale,
                          size=size, chunks=chunks)
 
     @doc_wraps(np.random.RandomState.logistic)
     def logistic(self, loc=0.0, scale=1.0, size=None, chunks=None):
-        return self.wrap(np.random.RandomState.logistic, loc=0.0, scale=1.0,
+        return self.wrap(np.random.RandomState.logistic, loc, scale,
                          size=size, chunks=chunks)
 
     @doc_wraps(np.random.RandomState.lognormal)
     def lognormal(self, mean=0.0, sigma=1.0, size=None, chunks=None):
-        return self.wrap(np.random.RandomState.lognormal, mean=0.0, sigma=1.0,
+        return self.wrap(np.random.RandomState.lognormal, mean, sigma,
                          size=size, chunks=chunks)
 
     @doc_wraps(np.random.RandomState.logseries)
@@ -224,7 +171,7 @@ class RandomState(object):
 
     @doc_wraps(np.random.RandomState.rayleigh)
     def rayleigh(self, scale=1.0, size=None, chunks=None):
-        return self.wrap(np.random.RandomState.rayleigh, scale=1.0,
+        return self.wrap(np.random.RandomState.rayleigh, scale,
                          size=size, chunks=chunks)
 
     @doc_wraps(np.random.RandomState.standard_cauchy)
@@ -291,3 +238,47 @@ class RandomState(object):
 def apply_random(func, seed, size, args, kwargs):
     state = np.random.RandomState(seed)
     return func(state, *args, size=size, **kwargs)
+
+
+_state = RandomState()
+
+
+beta = _state.beta
+binomial = _state.binomial
+chisquare = _state.chisquare
+exponential = _state.exponential
+f = _state.f
+gamma = _state.gamma
+geometric = _state.geometric
+gumbel = _state.gumbel
+hypergeometric = _state.hypergeometric
+laplace = _state.laplace
+logistic = _state.logistic
+lognormal = _state.lognormal
+logseries = _state.logseries
+negative_binomial = _state.negative_binomial
+noncentral_chisquare = _state.noncentral_chisquare
+noncentral_f = _state.noncentral_f
+normal = _state.normal
+pareto = _state.pareto
+poisson = _state.poisson
+power = _state.power
+rayleigh = _state.rayleigh
+random_sample = _state.random_sample
+random = random_sample
+triangular = _state.triangular
+uniform = _state.uniform
+vonmises = _state.vonmises
+wald = _state.wald
+weibull = _state.weibull
+zipf = _state.zipf
+
+"""
+Standard distributions
+"""
+
+standard_cauchy = _state.standard_cauchy
+standard_exponential = _state.standard_exponential
+standard_gamma = _state.standard_gamma
+standard_normal = _state.standard_normal
+standard_t = _state.standard_t
