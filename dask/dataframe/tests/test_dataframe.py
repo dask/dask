@@ -396,3 +396,11 @@ def test_random_partitions():
     assert isinstance(b, dd.DataFrame)
 
     assert len(a.compute()) + len(b.compute()) == len(full)
+
+
+def test_from_dataframe():
+    a = list('aaaaaaabbbbbbbbccccccc')
+    df = pd.DataFrame(dict(a=a, b=np.random.randn(len(a))))
+    ddf = dd.from_dataframe(df, 3)
+    assert len(ddf.dask) == 3
+    tm.assert_frame_equal(df, ddf.compute())
