@@ -47,7 +47,6 @@ functions to bind many dask arrays into one.
 
    >>> x = da.stack(arrays, axis=0)  # Stack along a new first axis
 
-
 Interact
 --------
 
@@ -107,6 +106,25 @@ You can store several arrays in one computation by passing lists of sources and
 destinations.
 
    >>> da.store([array1, array2], [output1, outpu2])  # doctest: +SKIP
+
+
+On-Disk Storage
+---------------
+
+In the example above we used ``h5py`` but ``dask.array`` works equally well
+with ``pytables``, ``bcolz``, or any library that provides an array object from
+which we can slice out numpy arrays.
+
+.. code-block:: Python
+
+   >>> x = ooc[1000:2000, :2000]  # pull out numpy array from on-disk object
+
+This API has become a standard in Scientific Python.  Dask works with any
+object that supports this operation and the equivalent assignment syntax.
+
+.. code-block:: Python
+
+   >>> ooc[1000:2000, :2000] = x  # Store numpy array in on-disk object
 
 
 Limitations
