@@ -326,4 +326,5 @@ def test_from_dataframe():
     ddf = dd.from_dataframe(df, 3)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) - 1
+    assert type(ddf.divisions[0]) == type(df.index[0])
     tm.assert_frame_equal(df, ddf.compute())
