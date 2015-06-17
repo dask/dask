@@ -579,9 +579,9 @@ def blockdims_from_blockshape(shape, chunks):
         raise TypeError("Must supply chunks= keyword argument")
     if shape is None:
         raise TypeError("Must supply shape= keyword argument")
-    if not all(map(lambda x: is_integer(x), chunks)):
+    if not all(map(is_integer, chunks)):
         raise ValueError("chunks can only contain integers.")
-    if not all(map(lambda x: is_integer(x), shape)):
+    if not all(map(is_integer, shape)):
         raise ValueError("shape can only contain integers.")
     shape = map(int, shape)
     chunks = map(int, chunks)
