@@ -2,14 +2,15 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 from functools import partial, wraps
+from math import factorial
 from toolz import compose, curry
-import inspect
 
 from .core import _concatenate2, Array, atop, sqrt, elemwise
 from .slicing import insert_many
+from .numpy_compat import divide
 from ..core import flatten
 from . import chunk
-from ..utils import ignoring
+from ..utils import ignoring, getargspec
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
@@ -23,9 +24,9 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
         axis = (axis,)
     axis = tuple(i if i >= 0 else x.ndim + i for i in axis)
 
-    if dtype and 'dtype' in inspect.getargspec(chunk).args:
+    if dtype and 'dtype' in getargspec(chunk).args:
         chunk = partial(chunk, dtype=dtype)
-    if dtype and 'dtype' in inspect.getargspec(aggregate).args:
+    if dtype and 'dtype' in getargspec(aggregate).args:
         aggregate = partial(aggregate, dtype=dtype)
 
     chunk2 = partial(chunk, axis=axis, keepdims=True)
@@ -167,17 +168,19 @@ def nannumel(x, **kwargs):
     return chunk.sum(~np.isnan(x), **kwargs)
 
 
-def mean_chunk(x, sum=chunk.sum, numel=numel, **kwargs):
-    n = numel(x, **kwargs)
-    total = sum(x, **kwargs)
+def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
+    n = numel(x, dtype=dtype, **kwargs)
+    total = sum(x, dtype=dtype, **kwargs)
     result = np.empty(shape=n.shape,
               dtype=[('total', total.dtype), ('n', n.dtype)])
     result['n'] = n
     result['total'] = total
     return result
 
-def mean_agg(pair, **kwargs):
-    return pair['total'].sum(**kwargs) / pair['n'].sum(**kwargs)
+
+def mean_agg(pair, dtype='f8', **kwargs):
+    return divide(pair['total'].sum(dtype=dtype, **kwargs),
+                  pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
 
 
 @wraps(chunk.mean)
@@ -206,37 +209,71 @@ with ignoring(AttributeError):
     nanmean = wraps(chunk.nanmean)(nanmean)
 
 
-def var_chunk(A, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
+def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
+    total = sum(A, dtype=dtype, **kwargs)
     n = numel(A, **kwargs)
-    x = sum(A, dtype=dtype, **kwargs)
-    x2 = sum(A**2, dtype=dtype, **kwargs)
-    result = np.empty(shape=n.shape, dtype=[('x', x.dtype),
-                                            ('x2', x2.dtype),
-                                            ('n', n.dtype)])
-    result['x'] = x
-    result['x2'] = x2
+    u = total/n
+    M = np.empty(shape=n.shape + (order - 1,), dtype=dtype)
+    for i in range(2, order + 1):
+        M[..., i - 2] = sum((A - u)**i, dtype=dtype, **kwargs)
+    result = np.empty(shape=n.shape, dtype=[('total', total.dtype),
+                                            ('n', n.dtype),
+                                            ('M', M.dtype, (order-1,))])
+    result['total'] = total
     result['n'] = n
+    result['M'] = M
     return result
 
-def var_agg(A, ddof=None, **kwargs):
-    x = A['x'].sum(**kwargs)
-    x2 = A['x2'].sum(**kwargs)
-    n = A['n'].sum(**kwargs)
-    result = (x2 / n) - (x / n)**2
-    if ddof:
-        result = result * n / (n - ddof)
+
+def moment_agg(data, order=2, ddof=0, dtype='f8', **kwargs):
+    totals = data['total']
+    ns = data['n']
+    Ms = data['M']
+
+    kwargs['dtype'] = dtype
+    # To properly handle ndarrays, the original dimensions need to be kept for
+    # part of the calculation.
+    keepdim_kw = kwargs.copy()
+    keepdim_kw['keepdims'] = True
+
+    n = ns.sum(**keepdim_kw)
+    mu = divide(totals.sum(**keepdim_kw), n, dtype=dtype)
+    inner_term = divide(totals, ns, dtype=dtype) - mu
+
+    result = Ms[..., -1].sum(**kwargs)
+
+    for k in range(1, order - 1):
+        coeff = factorial(order)/(factorial(k)*factorial(order - k))
+        result += coeff * (Ms[..., order - k - 2] * inner_term**k).sum(**kwargs)
+
+    result += (ns * inner_term**order).sum(**kwargs)
+    result = divide(result, (n.sum(**kwargs) - ddof), dtype=dtype)
     return result
+
+
+def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0):
+    if not isinstance(order, int) or order < 2:
+        raise ValueError("Order must be an integer >= 2")
+    if dtype is not None:
+        dt = dtype
+    elif a._dtype is not None:
+        dt = np.var(np.ones(shape=(1,), dtype=a._dtype)).dtype
+    else:
+        dt = None
+    return reduction(a, partial(moment_chunk, order=order), partial(moment_agg,
+                     order=order, ddof=ddof), axis=axis, keepdims=keepdims,
+                     dtype=dt)
 
 
 @wraps(chunk.var)
 def var(a, axis=None, dtype=None, keepdims=False, ddof=0):
     if dtype is not None:
         dt = dtype
-    if a._dtype is not None:
+    elif a._dtype is not None:
         dt = np.var(np.ones(shape=(1,), dtype=a._dtype)).dtype
     else:
         dt = None
-    return reduction(a, var_chunk, partial(var_agg, ddof=ddof), axis=axis,
+    return reduction(a, moment_chunk, partial(moment_agg, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt)
 
 
@@ -247,20 +284,26 @@ def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0):
         dt = np.var(np.ones(shape=(1,), dtype=a._dtype)).dtype
     else:
         dt = None
-    return reduction(a, partial(var_chunk, sum=chunk.nansum, numel=nannumel),
-                     partial(var_agg, ddof=ddof), axis=axis, keepdims=keepdims,
-                     dtype=dt)
+    return reduction(a, partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
+                     partial(moment_agg, ddof=ddof), axis=axis,
+                     keepdims=keepdims, dtype=dt)
 
 with ignoring(AttributeError):
     nanvar = wraps(chunk.nanvar)(nanvar)
 
 @wraps(chunk.std)
 def std(a, axis=None, dtype=None, keepdims=False, ddof=0):
-    return sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+    result = sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+    if dtype and dtype != result.dtype:
+        result = result.astype(dtype)
+    return result
 
 
 def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0):
-    return sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+    result = sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+    if dtype and dtype != result.dtype:
+        result = result.astype(dtype)
+    return result
 
 with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)

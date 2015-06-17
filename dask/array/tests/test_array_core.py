@@ -365,22 +365,6 @@ def test_field_access():
     assert eq(y[['b', 'a']], x[['b', 'a']])
 
 
-def test_reductions():
-    x = np.arange(400).reshape((20, 20))
-    a = from_array(x, chunks=(7, 7))
-
-    assert eq(a.sum(), x.sum())
-    assert eq(a.sum(axis=1), x.sum(axis=1))
-    assert eq(a.sum(axis=1, keepdims=True), x.sum(axis=1, keepdims=True))
-    assert eq(a.mean(), x.mean())
-    assert eq(a.var(axis=(1, 0)), x.var(axis=(1, 0)))
-
-    b = a.sum(keepdims=True)
-    assert b._keys() == [[(b.name, 0, 0)]]
-
-    assert eq(a.std(axis=0, keepdims=True), x.std(axis=0, keepdims=True))
-
-
 def test_tensordot():
     x = np.arange(400).reshape((20, 20))
     a = from_array(x, chunks=(5, 5))
@@ -692,7 +676,7 @@ def test_dtype_complex():
     assert eq(b.std()._dtype, b.std().dtype)
     assert eq(a.argmin(axis=0)._dtype, a.argmin(axis=0).dtype)
 
-    assert eq(da.sin(z)._dtype, np.sin(c).dtype)
+    assert eq(da.sin(c)._dtype, np.sin(z).dtype)
     assert eq(da.exp(b)._dtype, np.exp(y).dtype)
     assert eq(da.floor(a)._dtype, np.floor(x).dtype)
     assert eq(da.isnan(b)._dtype, np.isnan(y).dtype)
@@ -854,26 +838,6 @@ def test_arithmetic():
     assert eq(l2, r2)
 
     assert eq(da.around(a, -1), np.around(x, -1))
-
-
-def test_reductions():
-    x = np.arange(5).astype('f4')
-    a = da.from_array(x, chunks=(2,))
-
-    assert eq(da.all(a), np.all(x))
-    assert eq(da.any(a), np.any(x))
-    assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-    assert eq(da.max(a), np.max(x))
-    assert eq(da.mean(a), np.mean(x))
-    assert eq(da.min(a), np.min(x))
-    assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
-    assert eq(da.nanmax(a), np.nanmax(x))
-    assert eq(da.nanmin(a), np.nanmin(x))
-    assert eq(da.nansum(a), np.nansum(x))
-    assert eq(da.nanvar(a), np.nanvar(x))
-    assert eq(da.nanstd(a), np.nanstd(x))
 
 
 def test_optimize():
@@ -1064,3 +1028,33 @@ def test_from_array_with_missing_chunks():
     x = np.random.randn(2, 4, 3)
     d = da.from_array(x, chunks=(None, 2, None))
     assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
+
+
+def test_numpy_compat_is_notimplemented():
+    a = np.arange(10)
+    x = da.from_array(a, chunks=5)
+    assert raises(NotImplementedError, lambda: x + a)
+
+
+def test_cache():
+    x = da.arange(15, chunks=5)
+    y = 2 * x + 1
+    z = y.cache()
+    assert len(z.dask) == 3  # very short graph
+    assert eq(y, z)
+
+    cache = np.empty(15, dtype=y.dtype)
+    z = y.cache(store=cache)
+    assert len(z.dask) < 6  # very short graph
+    assert z.chunks == y.chunks
+    assert eq(y, z)
+
+
+def test_take_dask_from_numpy():
+    x = np.arange(5).astype('f8')
+    y = da.from_array(np.array([1, 2, 3, 3, 2 ,1]), chunks=3)
+
+    z = da.take(x * 2, y)
+
+    assert z.chunks == y.chunks
+    assert eq(z, np.array([2., 4., 6., 6., 4., 2.]))

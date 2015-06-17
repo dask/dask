@@ -14,6 +14,7 @@ from .core import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
         rint, fix, angle, real, imag, clip, fabs, sign, frexp, modf, around,
         isnull, notnull, isclose)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
+                         moment,
                          argmin, argmax,
                          nansum, nanmean, nanstd, nanvar, nanmin,
                          nanmax, nanargmin, nanargmax)
@@ -25,4 +26,4 @@ from .wrap import ones, zeros, empty, full
 from .rechunk import rechunk
 from ..context import set_options
 from .optimization import optimize
-from .creation import arange, linspace
+from .creation import arange, linspace, diag

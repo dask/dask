@@ -6,12 +6,12 @@ import os
 from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
         first, partition)
 from operator import getitem, setitem
+from datetime import datetime
 import pandas as pd
 import numpy as np
 import operator
 import gzip
 import bz2
-from pframe import pframe
 import bcolz
 try:
     from chest import Chest as Cache
@@ -21,8 +21,8 @@ except ImportError:
 from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
-from ..async import get_sync
-from ..threaded import get as get_threaded
+from .. import  async
+from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 
@@ -83,6 +83,14 @@ class Scalar(object):
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        from .optimize import optimize
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
 
 class _Frame(object):
     """ Superclass for DataFrame and Series """
@@ -98,6 +106,7 @@ class _Frame(object):
 
     def _visualize(self, optimize_graph=False):
         from dask.dot import dot_graph
+        from .optimize import optimize
         if optimize_graph:
             dot_graph(optimize(self.dask, self._keys()))
         else:
@@ -197,6 +206,7 @@ class _Frame(object):
 
     def _partition_of_index_value(self, val):
         """ In which partition does this value lie? """
+        val = _coerce_loc_index(self.divisions, val)
         return bisect.bisect_right(self.divisions, val)
 
     def _loc(self, ind):
@@ -538,6 +548,15 @@ def _assign(df, *pairs):
 def _loc(df, start, stop):
     return df.loc[slice(start, stop)]
 
+def _coerce_loc_index(divisions, o):
+    """ Transform values to be comparable against divisions
+
+    This is particularly valuable to use with pandas datetimes
+    """
+    if divisions and isinstance(divisions[0], (np.datetime64, datetime)):
+        return pd.Timestamp(o)
+    return o
+
 def head(x, n):
     """ First n elements of dask.Dataframe or dask.Series """
     return x.head(n)
@@ -647,12 +666,17 @@ class GroupBy(object):
             assert index in frame.columns
 
     def apply(self, func, columns=None):
-        if isinstance(self.index, Series) and self.index._name == self.frame.index._name:
+        if (isinstance(self.index, Series) and
+            self.index._name == self.frame.index._name):
             f = self.frame
+            return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
+                                columns=columns)
         else:
-            f = set_index(self.frame, self.index, **self.kwargs)
-        return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
-                            columns=columns)
+            # f = set_index(self.frame, self.index, **self.kwargs)
+            f = shuffle(self.frame, self.index, **self.kwargs)
+            return map_blocks(lambda df, index: df.groupby(index).apply(func),
+                              columns or self.frame.columns,
+                              self.frame, self.index)
 
     def __getitem__(self, key):
         if key in self.frame.columns:
@@ -681,9 +705,16 @@ class SeriesGroupBy(object):
         self.kwargs = kwargs
 
     def apply(func, columns=None):
-        f = set_index(self.frame, self.index, **self.kwargs)
-        return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
-                            columns=columns)
+        # f = set_index(self.frame, self.index, **self.kwargs)
+        if self.index._name == self.frame.index._name:
+            f = self.frame
+            return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
+                                columns=columns)
+        else:
+            f = shuffle(self.frame, self.index, **self.kwargs)
+            return map_blocks(lambda df, index: df.groupby(index).apply(func),
+                              columns or self.frame.columns,
+                              self.frame, self.index)
 
     def sum(self):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()
@@ -717,9 +748,11 @@ class SeriesGroupBy(object):
             g = df.groupby(level=0)
             x = g.agg({(self.key, 'sum'): 'sum',
                        (self.key, 'count'): 'sum'})
-            return 1.0 * x[self.key]['sum'] / x[self.key]['count']
+            result = 1.0 * x[self.key]['sum'] / x[self.key]['count']
+            result.name = self.key
+            return result
         return aca([self.frame, self.index],
-                   chunk=chunk, aggregate=agg, columns=[])
+                   chunk=chunk, aggregate=agg, columns=[self.key])
 
 
 def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
@@ -764,6 +797,26 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
                                       if isinstance(a, _Frame)]),
             b, columns, [])
 
+def map_blocks(func, columns, *args):
+    """ Apply Python function on each DataFrame block
+
+    Provide columns of the output if they are not the same as the input.
+    """
+    assert all(not isinstance(arg, _Frame) or
+               arg.divisions == args[0].divisions
+               for arg in args)
+
+    name = next(names)
+    dsk = dict(((name, i), (apply, func,
+                             (tuple, [(arg._name, i)
+                                      if isinstance(arg, _Frame)
+                                      else arg
+                                      for arg in args])))
+                for i in range(args[0].npartitions))
+
+    return type(args[0])(merge(dsk, *[arg.dask for arg in args
+                                               if isinstance(arg, _Frame)]),
+                      name, columns, args[0].divisions)
 
 aca = apply_concat_apply
 
@@ -824,7 +877,7 @@ def quantiles(f, q, **kwargs):
 
 
 
-def get(dsk, keys, get=get_sync, **kwargs):
+def get(dsk, keys, get=threaded.get, **kwargs):
     """ Get function with optimizations specialized to dask.Dataframe """
     from .optimize import optimize
     dsk2 = optimize(dsk, keys, **kwargs)
@@ -855,4 +908,4 @@ def pd_split(df, p, seed=0):
     return [df.iloc[index == i] for i in range(len(p))]
 
 
-from .shuffle import set_index, set_partition
+from .shuffle import set_index, set_partition, shuffle

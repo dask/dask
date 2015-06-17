@@ -27,11 +27,16 @@ Relevant Metadata
 
 Dask ``DataFrame`` objects contain the following data:
 
-*  dask graph - The task dependency graph necessary to compute the dataframe
-*  name - string like ``'f'`` that is the prefix to all keys to define this dataframe
+*  ``dask`` - The task dependency graph necessary to compute the dataframe
+*  ``_name`` - String like ``'f'`` that is the prefix to all keys to define this dataframe
    like ``('f', 0)``
-*  columns - list of column names to improve usability and error checking
-*  divisions - tuple of index values on which to partition our blocks
+*  ``columns`` - list of column names to improve usability and error checking
+
+    or
+
+    ``name`` - a single name used in a Series
+
+*  ``divisions`` - tuple of index values on which we partition our blocks
 
 The ``divisions`` attribute, analogous to ``chunks`` in ``dask.array`` is
 particularly important.  The values in divisions determine a partitioning of
@@ -39,6 +44,14 @@ left-inclusive / right-exclusive ranges on the index::
 
     divisions -- (10, 20, 40)
     ranges    -- (-oo, 10), [10, 20), [20, 40), [40, oo)
+
+Alternatively if our data is not partitioned (as is unfortunately often the
+case) then divisions will contain many instances of ``None``::
+
+    divisions -- (None, None, None)
+
+This is common if, for example, we read data from CSV files which don't have an
+obvious ordering.
 
 
 Example Partitioning
@@ -68,8 +81,8 @@ partitions arranged by name::
 
 Notice a few things
 
-1.  On the right Records are now organized by name; given any name it is
-    obvious in which block it belongs.
+1.  On the right records are now organized by name; given any name (e.g. Bob)
+    it is obvious to which block it belongs (the second).
 2.  Blocks are roughly the same size (though not exactly).  We prefer evenly
     sized blocks over predictable partition values, (e.g. A, B, C).  Because
     this dataset has many Alices we have a block just for her.
@@ -81,8 +94,9 @@ Our divisions in this case are ``['Bob', 'Edith']``
 Quantiles and Shuffle
 ---------------------
 
-Much of the complex bits of dask.dataframe are about shuffling records to obtain
-this nice arrangement of records along an index.  We do this in two stages
+Many of the complex bits of ``dask.dataframe`` are about shuffling records to
+obtain this nice arrangement of records along an index.  We do this in two
+stages
 
 1.  Find good values on which to partition our data
     (e.g. find, ``['Bob', 'Edith']``)
@@ -98,6 +112,19 @@ difficult due to the blocked nature of our storage, but has decent solutions.
 
 Currently we compute percentiles/quantiles on the new index of each block and
 then merge these together intelligently.
+
+
+Shuffle without Partitioning
+----------------------------
+
+For large datasets one should endeavor to store data in a partitioned way.
+Often this isn't possible and we need a sane fallback.
+
+We can shuffle data into separate groups without the approximate quantile step
+if we group by a decent hash function.  We can trust that idiosyncrasies in the
+distribution of our data (e.g. far more Alices than Bobs) will be somewhat
+smoothed over by the hash function.  This is a typical solution in many
+databases.
 
 
 Supported API
@@ -209,6 +236,7 @@ Additionally it has the following constraints
 Generally speakings users familiar with the mature and excellent functionality
 of Pandas should expect disappointment if they do not deeply understand the
 current design and limitations of dask.dataframe.
+
 
 .. _Chest: http://github.com/ContinuumIO/chest
 .. _pframe: pframe.html

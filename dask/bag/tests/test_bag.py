@@ -4,18 +4,19 @@ import pytest
 pytest.importorskip('dill')
 
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
-        partial)
+        partial, valmap)
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
-        reduceby, bz2_stream, stream_decompress, reify)
+        reduceby, bz2_stream, stream_decompress, reify, partition,
+        _parse_s3_URI, inline_singleton_lists, optimize)
 from dask.utils import filetexts, tmpfile, raises
 import dask
-from pbag import PBag
 import dask.bag as db
 import shutil
 import os
 import gzip
 import bz2
+import partd
 
 from collections import Iterator
 
@@ -58,7 +59,7 @@ def test_map():
 
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
-    assert list(b.map(lambda x, y: x + y)) == [11, 22, 33]
+    assert list(b.map(lambda x, y: x + y).compute(get=dask.get)) == [11, 22, 33]
 
 
 def test_filter():
@@ -67,6 +68,10 @@ def test_filter():
                                 (reify, (filter, iseven, (b.name, i))))
                                for i in range(b.npartitions)))
     assert c.dask == expected
+
+
+def test_remove():
+    assert list(b.remove(lambda x: x % 2 == 0)) == [1, 3] * 3
 
 
 def test_iter():
@@ -103,7 +108,8 @@ def test_frequencies():
 
 def test_topk():
     assert list(b.topk(4)) == [4, 4, 4, 3]
-    assert list(b.topk(4, key=lambda x: -x)) == [0, 0, 0, 1]
+    assert list(b.topk(4, key=lambda x: -x).compute(get=dask.get)) == \
+            [0, 0, 0, 1]
 
 
 def test_topk_with_non_callable_key():
@@ -182,6 +188,24 @@ def test_lazify():
     assert lazify(a) == b
 
 
+def test_inline_singleton_lists():
+    inp = {'b': (list, 'a'),
+           'c': (f, 'b', 1)}
+    out = {'c': (f, (list, 'a'), 1)}
+    assert inline_singleton_lists(inp) == out
+
+    out = {'c': (f,        'a' , 1)}
+    assert optimize(inp, ['c']) == out
+
+    inp = {'b': (list, 'a'),
+           'c': (f, 'b', 1),
+           'd': (f, 'b', 2)}
+    assert inline_singleton_lists(inp) == inp
+
+    inp = {'b': (4, 5)} # doesn't inline constants
+    assert inline_singleton_lists(inp) == inp
+
+
 def test_take():
     assert list(b.take(2)) == [0, 1]
     assert b.take(2) == (0, 1)
@@ -199,11 +223,10 @@ def test_can_use_dict_to_make_concrete():
 def test_from_url():
     a = db.from_url(['http://google.com', 'http://github.com'])
     assert a.npartitions == 2
-    a.compute()
 
     b = db.from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
     assert b.npartitions == 1
-    assert b'Dask\n' in b.compute()
+    assert b'Dask\n' in b.take(10)
 
 
 def test_from_filenames():
@@ -232,6 +255,51 @@ def test_from_filenames_bz2():
                  (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
 
 
+@pytest.mark.slow
+def test_from_s3():
+    # note we don't test connection modes with aws_access_key and
+    # aws_secret_key because these are not on travis-ci
+    boto = pytest.importorskip('boto')
+
+    five_tips = (u'total_bill,tip,sex,smoker,day,time,size\n',
+                 u'16.99,1.01,Female,No,Sun,Dinner,2\n',
+                 u'10.34,1.66,Male,No,Sun,Dinner,3\n',
+                 u'21.01,3.5,Male,No,Sun,Dinner,3\n',
+                 u'23.68,3.31,Male,No,Sun,Dinner,2\n')
+
+    # test compressed data
+    e = db.from_s3('tip-data', 't*.gz')
+    assert e.take(5) == five_tips
+
+    # test wit specific key
+    b = db.from_s3('tip-data', 't?ps.csv')
+    assert b.npartitions == 1
+
+    # test all keys in bucket
+    c = db.from_s3('tip-data')
+    assert c.npartitions == 4
+
+    d = db.from_s3('s3://tip-data')
+    assert d.npartitions == 4
+
+    e = db.from_s3('tip-data', 'tips.bz2')
+    assert e.take(5) == five_tips
+
+
+def test__parse_s3_URI():
+    bn, p = _parse_s3_URI('s3://mybucket/mykeys', '*')
+    assert (bn == 'mybucket') and (p == 'mykeys')
+
+    bn, p = _parse_s3_URI('s3://snow/g?obes', '*')
+    assert (bn == 'snow') and (p == 'g?obes')
+
+    bn, p = _parse_s3_URI('s3://tupper/wea*', '*')
+    assert (bn == 'tupper') and (p == 'wea*')
+
+    bn, p = _parse_s3_URI('s3://sand/', 'cast?es')
+    assert (bn == 'sand') and (p == 'cast?es')
+
+
 def test_from_sequence():
     b = db.from_sequence([1, 2, 3, 4, 5], npartitions=3)
     assert len(b.dask) == 3
@@ -255,26 +323,21 @@ def test_product():
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
 
 
-def test_collect():
-    a = PBag(identity, 2)
-    with a:
-        a.extend([0, 1, 2, 3])
 
-    b = PBag(identity, 2)
-    with b:
-        b.extend([0, 1, 2, 3])
+def test_partition_collect():
+    with partd.Pickle() as p:
+        partition(identity, range(6), 3, p)
+        assert set(p.get(0)) == set([0, 3])
+        assert set(p.get(1)) == set([1, 4])
+        assert set(p.get(2)) == set([2, 5])
 
-    result = merge(dict(collect(identity, 2, 0, [a, b])),
-                   dict(collect(identity, 2, 1, [a, b])))
-
-    assert result == {0: [0, 0],
-                      1: [1, 1],
-                      2: [2, 2],
-                      3: [3, 3]}
+        assert sorted(collect(identity, 0, p, '')) == \
+                [(0, [0]), (3, [3])]
 
 
 def test_groupby():
-    result = dict(b.groupby(lambda x: x))
+    c = b.groupby(lambda x: x)
+    result = dict(c)
     assert result == {0: [0, 0 ,0],
                       1: [1, 1, 1],
                       2: [2, 2, 2],
@@ -286,20 +349,27 @@ def test_groupby():
 def test_groupby_with_indexer():
     b = db.from_sequence([[1, 2, 3], [1, 4, 9], [2, 3, 4]])
     result = dict(b.groupby(0))
-    assert result == {1: [[1, 2, 3], [1, 4, 9]],
-                      2: [[2, 3, 4]]}
+    assert valmap(sorted, result) == {1: [[1, 2, 3], [1, 4, 9]],
+                                      2: [[2, 3, 4]]}
 
 def test_groupby_with_npartitions_changed():
     result = b.groupby(lambda x: x, npartitions=1)
-    assert dict(result) == {0: [0, 0 ,0],
-                            1: [1, 1, 1],
-                            2: [2, 2, 2],
-                            3: [3, 3, 3],
-                            4: [4, 4, 4]}
+    result2 = dict(result)
+    assert result2 == {0: [0, 0 ,0],
+                       1: [1, 1, 1],
+                       2: [2, 2, 2],
+                       3: [3, 3, 3],
+                       4: [4, 4, 4]}
 
     assert result.npartitions == 1
 
+
 def test_concat():
+    a = db.from_sequence([1, 2, 3])
+    b = db.from_sequence([4, 5, 6])
+    c = db.concat([a, b])
+    assert list(c) == [1, 2, 3, 4, 5, 6]
+
     b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
     assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])
 
@@ -375,15 +445,8 @@ def test_to_textfiles_inputs():
 def test_bz2_stream():
     text = '\n'.join(map(str, range(10000)))
     compressed = bz2.compress(text.encode())
-    assert list(take(100, bz2_stream(compressed))) == list(map(str, range(100)))
-
-
-def test_concat():
-    a = db.from_sequence([1, 2, 3])
-    b = db.from_sequence([4, 5, 6])
-    c = db.concat([a, b])
-
-    assert list(c) == [1, 2, 3, 4, 5, 6]
+    assert (list(take(100, bz2_stream(compressed))) ==
+            list(map(lambda x: str(x) + '\n', range(100))))
 
 
 def test_string_namespace():

@@ -1,6 +1,7 @@
 import os
 from functools import partial
 
+import numpy as np
 import pytest
 
 nx = pytest.importorskip("networkx")
@@ -46,3 +47,9 @@ def test_dot_graph():
 def test_aliases():
     g = to_networkx({'x': 1, 'y': 'x'})
     assert 'y' in g.edge['x']
+
+
+def test_np_graph():
+    g = to_networkx({'x': np.array([[1, 2]])})
+    assert g.node['x']['label'] == 'x=[[1 2]]' 
+    

@@ -1,2 +1,6 @@
-sphinx
+# pin sphinx to work around https://github.com/sphinx-doc/sphinx/issues/1822
+sphinx==1.2.3
 numpydoc
+toolz
+dill
+psutil

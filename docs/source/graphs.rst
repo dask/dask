@@ -8,10 +8,10 @@ Motivation
 ----------
 
 Normally humans write programs and then compilers/interpreters interpret them
-(e.g.  `python`, `javac`, `clang`).  Sometimes humans disagree with how these
-compilers/interpreters choose to interpret and execute their programs.  In
-these cases humans often bring the analysis, optimization, and execution of code
-into the code itself.
+(e.g.  ``python``, ``javac``, ``clang``).  Sometimes humans disagree with how
+these compilers/interpreters choose to interpret and execute their programs.
+In these cases humans often bring the analysis, optimization, and execution of
+code into the code itself.
 
 Commonly a desire for parallel execution causes this shift of responsibility
 from compiler to human developer.  In these cases we often represent the

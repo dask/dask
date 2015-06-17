@@ -4,7 +4,7 @@ import operator
 from operator import add, getitem
 import inspect
 from numbers import Number
-from collections import Iterable
+from collections import Iterable, MutableMapping
 from bisect import bisect
 from itertools import product, count
 from collections import Iterator
@@ -716,6 +716,77 @@ class Array(object):
         result, = compute(self, **kwargs)
         return result
 
+    def cache(self, store=None, **kwargs):
+        """ Evaluate and cache array
+
+        Parameters
+        ----------
+        store: MutableMapping or ndarray-like
+            Place to put computed and cached chunks
+        kwargs:
+            Keyword arguments to pass on to ``get`` function for scheduling
+
+        This triggers evaluation and store the result in either
+
+        1.  An ndarray object supporting setitem (see da.store)
+        2.  A MutableMapping like a dict or chest
+
+        It then returns a new dask array that points to this store.
+        This returns a semantically equivalent dask array.
+
+        >>> import dask.array as da
+        >>> x = da.arange(5, chunks=2)
+        >>> y = 2*x + 1
+        >>> z = y.cache()  # triggers computation
+
+        >>> y.compute()  # Does entire computation
+        array([1, 3, 5, 7, 9])
+
+        >>> z.compute()  # Just pulls from store
+        array([1, 3, 5, 7, 9])
+
+        You might base a cache off of an array like a numpy array or
+        h5py.Dataset.
+
+        >>> cache = np.empty(5, dtype=x.dtype)
+        >>> z = y.cache(store=cache)
+        >>> cache
+        array([1, 3, 5, 7, 9])
+
+        Or one might use a MutableMapping like a dict or chest
+
+        >>> cache = dict()
+        >>> z = y.cache(store=cache)
+        >>> cache  # doctest: +SKIP
+        {('x', 0): array([1, 3]),
+         ('x', 1): array([5, 7]),
+         ('x', 2): array([9])}
+        """
+        if store is not None and hasattr(store, 'shape'):
+            self.store(store)
+            return from_array(store, chunks=self.chunks)
+        if store is None:
+            try:
+                from chest import Chest
+                store = Chest()
+            except ImportError:
+                if self.nbytes <= 1e9:
+                    store = dict()
+                else:
+                    raise ValueError("No out-of-core storage found."
+                        "Either:\n"
+                        "1. Install ``chest``, an out-of-core dictionary\n"
+                        "2. Provide an on-disk array like an h5py.Dataset") # pragma: no cover
+        if isinstance(store, MutableMapping):
+            name = next(names)
+            dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
+                    for k in core.flatten(self._keys()))
+            get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
+
+            dsk2 = dict((k, (operator.getitem, store, (tuple, list(k))))
+                        for k in store)
+            return Array(dsk2, self.name, chunks=self.chunks, dtype=self._dtype)
+
     def __int__(self):
         return int(self.compute())
     def __bool__(self):
@@ -769,8 +840,7 @@ class Array(object):
 
     def astype(self, dtype, **kwargs):
         """ Copy of the array, cast to a specified type """
-        return elemwise(partial(np.ndarray.astype, dtype=dtype, **kwargs),
-                        self, dtype=dtype)
+        return elemwise(lambda x: x.astype(dtype, **kwargs), self, dtype=dtype)
 
     def __abs__(self):
         return elemwise(operator.abs, self)
@@ -899,6 +969,44 @@ class Array(object):
     def var(self, axis=None, dtype=None, keepdims=False, ddof=0):
         from .reductions import var
         return var(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof)
+
+    def moment(self, order, axis=None, dtype=None, keepdims=False, ddof=0):
+        """Calculate the nth centralized moment.
+
+        Parameters
+        ----------
+        order : int
+            Order of the moment that is returned, must be >= 2.
+        axis : int, optional
+            Axis along which the central moment is computed. The default is to
+            compute the moment of the flattened array.
+        dtype : data-type, optional
+            Type to use in computing the moment. For arrays of integer type the
+            default is float64; for arrays of float types it is the same as the
+            array type.
+        keepdims : bool, optional
+            If this is set to True, the axes which are reduced are left in the
+            result as dimensions with size one. With this option, the result
+            will broadcast correctly against the original array.
+        ddof : int, optional
+            "Delta Degrees of Freedom": the divisor used in the calculation is
+            N - ddof, where N represents the number of elements. By default
+            ddof is zero.
+
+        Returns
+        -------
+        moment : ndarray
+
+        References
+        ----------
+        .. [1] Pebay, Philippe (2008), "Formulas for Robust, One-Pass Parallel
+        Computation of Covariances and Arbitrary-Order Statistical Moments"
+        (PDF), Technical Report SAND2008-6212, Sandia National Laboratories
+        
+        """
+
+        from .reductions import moment
+        return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof)
 
     def vnorm(self, ord=None, axis=None, keepdims=False):
         """ Vector norm """
@@ -1296,13 +1404,24 @@ def concatenate(seq, axis=0):
 
 
 @wraps(np.take)
-def take(a, indices, axis):
+def take(a, indices, axis=0):
     if not -a.ndim <= axis < a.ndim:
         raise ValueError('axis=(%s) out of bounds' % axis)
     if axis < 0:
         axis += a.ndim
-    return a[(slice(None),) * axis + (indices,)]
+    if isinstance(a, np.ndarray) and isinstance(indices, Array):
+        return _take_dask_array_from_numpy(a, indices, axis)
+    else:
+        return a[(slice(None),) * axis + (indices,)]
 
+
+def _take_dask_array_from_numpy(a, indices, axis):
+    assert isinstance(a, np.ndarray)
+    assert isinstance(indices, Array)
+
+    return indices.map_blocks(lambda block: np.take(a, block, axis),
+                              chunks=indices.chunks,
+                              dtype=a.dtype)
 
 @wraps(np.transpose)
 def transpose(a, axes=None):
@@ -1420,8 +1539,10 @@ def elemwise(op, *args, **kwargs):
     expr_inds = tuple(range(out_ndim))[::-1]
 
     arrays = [arg for arg in args if isinstance(arg, Array)]
-    other = [(i, arg) for i, arg in enumerate(args) if not isinstance(arg, Array)]
-
+    other = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
+    if any(isinstance(arg, np.ndarray) for arg in args):
+        raise NotImplementedError("Dask.array operations only work on dask "
+                                  "arrays, not numpy arrays.")
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
     elif not all(a._dtype is not None for a in arrays):

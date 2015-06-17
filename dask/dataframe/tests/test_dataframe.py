@@ -195,8 +195,15 @@ def test_reductions():
     assert eq(d.b.mean(), full.b.mean())
 
 
+def test_map_blocks_multi_argument():
+    assert eq(dd.map_blocks(lambda a, b: a + b, 'c', d.a, d.b),
+              full.a + full.b)
+    assert eq(dd.map_blocks(lambda a, b, c: a + b + c, 'c', d.a, d.b, 1),
+              full.a + full.b + 1)
+
+
 def test_map_blocks():
-    assert eq(d.map_blocks(lambda df: df), full)
+    assert eq(d.map_blocks(lambda df: df, 'a'), full)
 
 
 def test_drop_duplicates():
@@ -221,7 +228,7 @@ def test_groupby_on_index():
         df['b'] = df.b - df.b.mean()
         return df
 
-    assert eq(d.groupby('a').apply(func),
+    assert eq(d.groupby('a').apply(func).set_index('a'),
               e.groupby(e.index).apply(func))
 
 
@@ -293,6 +300,15 @@ def test_loc():
     assert eq(d.loc[3:8], full.loc[3:8])
     assert eq(d.loc[:8], full.loc[:8])
     assert eq(d.loc[3:], full.loc[3:])
+
+
+def test_loc_with_text_dates():
+    A = tm.makeTimeSeries(10).iloc[:5]
+    B = tm.makeTimeSeries(10).iloc[5:]
+    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None, [A.index.max()])
+
+    assert eq(s.loc['2000': '2010'], s)
+    assert len(s.loc['2000-01-03': '2000-01-05'].compute()) == 3
 
 
 def test_iloc_raises():

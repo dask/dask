@@ -5,14 +5,11 @@ import math
 import tempfile
 import inspect
 import gzip
+import zlib
 import bz2
 import os
 
-try:
-    from urllib2 import urlopen
-except ImportError:
-    from urllib.request import urlopen
-
+from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
@@ -20,22 +17,22 @@ from functools import wraps, partial
 
 from toolz import (merge, frequencies, merge_with, take, curry, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   pluck, groupby, topk)
+                   remove, pluck, groupby, topk)
 import toolz
 from ..utils import tmpfile, ignoring
 with ignoring(ImportError):
     from cytoolz import (curry, frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
-from pbag import PBag
-
 from ..multiprocessing import get as mpget
-from ..core import istask
-from ..optimize import fuse, cull
-from ..compatibility import apply, BytesIO, unicode
+from ..core import istask, get_dependencies, reverse_dict
+from ..optimize import fuse, cull, inline
+from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
+        unquote)
 from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
+tokens = ('-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
 
 no_default = '__no__default__'
@@ -72,12 +69,34 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
+def inline_singleton_lists(dsk):
+    """ Inline lists that are only used once
+
+    >>> d = {'b': (list, 'a'),
+    ...      'c': (f, 'b', 1)}     # doctest: +SKIP
+    >>> inline_singleton_lists(d)  # doctest: +SKIP
+    {'c': (f, (list, 'a'), 1)}
+
+    Pairs nicely with lazify afterwards
+    """
+
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependents = reverse_dict(dependencies)
+
+    keys = [k for k, v in dsk.items() if istask(v) and v
+                                      and v[0] is list
+                                      and len(dependents[k]) == 1]
+    return inline(dsk, keys, inline_constants=False)
+
+
 def optimize(dsk, keys):
     """ Optimize a dask from a dask.bag """
     dsk2 = cull(dsk, keys)
     dsk3 = fuse(dsk2)
-    dsk4 = lazify(dsk3)
-    return dsk4
+    dsk4 = inline_singleton_lists(dsk3)
+    dsk5 = lazify(dsk4)
+    return dsk5
+
 
 def get(dsk, keys, get=None, **kwargs):
     """ Get function for dask.bag """
@@ -233,6 +252,13 @@ class Bag(object):
     def _args(self):
         return (self.dask, self.name, self.npartitions)
 
+    def _visualize(self, optimize_graph=False):
+        from dask.dot import dot_graph
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self._keys()))
+        else:
+            dot_graph(self.dask)
+
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
 
@@ -246,6 +272,22 @@ class Bag(object):
         """
         name = next(names)
         dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
+                        for i in range(self.npartitions))
+        return Bag(merge(self.dask, dsk), name, self.npartitions)
+
+    def remove(self, predicate):
+        """ Remove elements in collection that match predicate
+
+        >>> def iseven(x):
+        ...     return x % 2 == 0
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(5))
+        >>> list(b.remove(iseven))  # doctest: +SKIP
+        [1, 3]
+        """
+        name = next(names)
+        dsk = dict(((name, i), (reify, (remove, predicate, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
 
@@ -501,7 +543,7 @@ class Bag(object):
 
         The computation
 
-        >>> b.reduceby(key, binop, init)                        # doctest: +SKIP
+        >>> b.foldby(key, binop, init)                        # doctest: +SKIP
 
         is equivalent to the following:
 
@@ -574,7 +616,7 @@ class Bag(object):
     def compute(self, **kwargs):
         """ Force evaluation of bag """
         results = get(self.dask, self._keys(), **kwargs)
-        if isinstance(results[0], Iterable):
+        if isinstance(results[0], Iterable) and not isinstance(results[0], str):
             results = toolz.concat(results)
         if isinstance(results, Iterator):
             results = list(results)
@@ -598,7 +640,8 @@ class Bag(object):
     def __iter__(self):
         return iter(self.compute())
 
-    def groupby(self, grouper, npartitions=None):
+    def groupby(self, grouper, npartitions=None, blocksize=2**20,
+                      use_server=False):
         """ Group collection by key function
 
         Note that this requires full dataset read, serialization and shuffle.
@@ -612,27 +655,43 @@ class Bag(object):
         --------
 
         Bag.foldby
-        pbag
         """
         if npartitions is None:
             npartitions = self.npartitions
 
-        paths = [tempfile.mkdtemp('%d.pbag' % i) for i in range(npartitions)]
+        import partd
+        p = ('partd' + next(tokens),)
+        if use_server:
+            try:
+                dsk1 = {p: partd.Python(partd.Snappy(partd.Client()))}
+            except AttributeError:
+                dsk1 = {p: partd.Python(partd.Client())}
+
+        else:
+            try:
+                dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
+            except AttributeError:
+                dsk1 = {p: (partd.Python, partd.File())}
 
         # Partition data on disk
         name = next(names)
-        dsk1 = dict(((name, i),
-                     (partition, grouper, (self.name, i), npartitions,
-                                 paths[i % len(paths)]))
+        dsk2 = dict(((name, i),
+                     (partition, grouper, (self.name, i),
+                                 npartitions, p, blocksize))
                      for i in range(self.npartitions))
+
+        # Barrier
+        barrier_token = 'barrier' + next(tokens)
+        def barrier(args):         return 0
+        dsk3 = {barrier_token: (barrier, list(dsk2))}
 
         # Collect groups
         name = next(names)
-        dsk2 = dict(((name, i),
-                     (collect, grouper, npartitions, i, sorted(dsk1.keys())))
+        dsk4 = dict(((name, i),
+                     (collect, grouper, i, p, barrier_token))
                     for i in range(npartitions))
 
-        return Bag(merge(self.dask, dsk1, dsk2), name, npartitions)
+        return Bag(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
 
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
@@ -679,26 +738,21 @@ class Bag(object):
                             name, columns, divisions)
 
 
-def partition(grouper, sequence, npartitions, path):
+def partition(grouper, sequence, npartitions, p, nelements=2**20):
     """ Partition a bag along a grouper, store partitions on disk """
+    for block in partition_all(nelements, sequence):
+        d = groupby(grouper, block)
+        d2 = defaultdict(list)
+        for k, v in d.items():
+            d2[abs(hash(k)) % npartitions].extend(v)
+        p.append(d2)
+    return p
 
-    with PBag(grouper, npartitions, path) as pb:
-        pb.extend(sequence)
 
-    return pb
-
-
-def collect(grouper, npartitions, group, pbags):
+def collect(grouper, group, p, barrier_token):
     """ Collect partitions from disk and yield k,v group pairs """
-    from pbag import PBag
-    pbags = list(take(npartitions, pbags))
-    result = defaultdict(list)
-    for pb in pbags:
-        part = pb.get_partition(group)
-        groups = groupby(grouper, part)
-        for k, v in groups.items():
-            result[k].extend(v)
-    return list(result.items())
+    d = groupby(grouper, p.get(group, lock=False))
+    return list(d.items())
 
 
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
@@ -756,6 +810,85 @@ def write(data, filename):
         f.close()
 
 
+def _get_s3_bucket(bucket_name, aws_access_key, aws_secret_key, connection,
+                   anon):
+    """Connect to s3 and return a bucket"""
+    import boto
+    if anon is True:
+        connection = boto.connect_s3(anon=anon)
+    elif connection is None:
+        connection = boto.connect_s3(aws_access_key, aws_secret_key)
+    return connection.get_bucket(bucket_name)
+
+
+# we need an unmemoized function to call in the main thread. And memoized
+# functions for the dask.
+_memoized_get_bucket = toolz.memoize(_get_s3_bucket)
+
+
+def _get_key(bucket_name, conn_args, key_name):
+    bucket = _memoized_get_bucket(bucket_name, *conn_args)
+    key = bucket.get_key(key_name)
+    ext = key_name.split('.')[-1]
+    return stream_decompress(ext, key.read())
+
+
+def _parse_s3_URI(bucket_name, paths):
+    assert bucket_name.startswith('s3://')
+    o = urlparse('s3://' + quote(bucket_name[len('s3://'):]))
+    # if path is specified
+    if (paths == '*') and (o.path != '' and o.path != '/'):
+        paths = unquote(o.path[1:])
+    bucket_name = unquote(o.hostname)
+    return bucket_name, paths
+
+
+def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
+            connection=None, anon=False):
+    """ Create a Bag by loading textfiles from s3
+
+    Each line will be treated as one element and each file in S3 as one
+    partition.
+
+    You may specify a full s3 bucket
+
+    >>> b = from_s3('s3://bucket-name')  # doctest: +SKIP
+
+    Or select files, lists of files, or globstrings of files within that bucket
+
+    >>> b = from_s3('s3://bucket-name', 'myfile.json')  # doctest: +SKIP
+    >>> b = from_s3('s3://bucket-name', ['alice.json', 'bob.json'])  # doctest: +SKIP
+    >>> b = from_s3('s3://bucket-name', '*.json')  # doctest: +SKIP
+    """
+    conn_args = (aws_access_key, aws_secret_key, connection, anon)
+
+    bucket_name, paths = normalize_s3_names(bucket_name, paths, conn_args)
+
+    get_key = partial(_get_key, bucket_name, conn_args)
+
+    name = next(load_names)
+    dsk = dict(((name, i), (list, (get_key, k))) for i, k in enumerate(paths))
+    return Bag(dsk, name, len(paths))
+
+
+def normalize_s3_names(bucket_name, paths, conn_args):
+    """ Normalize bucket name and paths """
+    if bucket_name.startswith('s3://'):
+        bucket_name, paths = _parse_s3_URI(bucket_name, paths)
+
+    if isinstance(paths, str):
+        if ('*' not in paths) and ('?' not in paths):
+            return bucket_name, [paths]
+        else:
+            bucket = _get_s3_bucket(bucket_name, *conn_args)
+            keys = bucket.list()  # handle globs
+
+            matches = [k.name for k in keys if fnmatchcase(k.name, paths)]
+            return bucket_name, matches
+    else:
+        return bucket_name, paths
+
+
 def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
     """ Create dask by loading in files from HDFS
 
@@ -805,7 +938,7 @@ def bz2_stream(compressed, chunksize=100000):
         chunk = compressed[i: i+chunksize]
         decompressed = decompressor.decompress(chunk).decode()
         for line in decompressed.split('\n'):
-            yield line
+            yield line + '\n'
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
@@ -857,7 +990,8 @@ def from_url(urls):
     >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
     >>> a.npartitions
     1
-    >>> a.take(8)
+
+    >> a.take(8)  # doctest: +SKIP
     ('Dask\n',
      '====\n',
      '\n',
@@ -868,7 +1002,7 @@ def from_url(urls):
      'on large datasets on to graphs of many operations on small in-memory datasets.\n')
 
     >>> b = from_url(['http://github.com', 'http://google.com'])
-    >>> b.npartions
+    >>> b.npartitions
     2
 
     """
