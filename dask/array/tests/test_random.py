@@ -7,16 +7,26 @@ from dask.array.core import Array
 from dask.array.random import random, exponential, normal
 import dask.array as da
 import dask
+from dask.multiprocessing import get as mpget
 
 
 def test_RandomState():
     state = da.random.RandomState(5)
     x = state.normal(10, 1, size=10, chunks=5)
-    assert (x.compute(get=dask.get) == x.compute(get=dask.get)).all()
+    assert (x.compute() == x.compute()).all()
 
     state = da.random.RandomState(5)
     y = state.normal(10, 1, size=10, chunks=5)
-    assert (x.compute(get=dask.get) == y.compute(get=dask.get)).all()
+    assert (x.compute() == y.compute()).all()
+
+
+def test_concurrency():
+    state = da.random.RandomState(5)
+    x = state.normal(10, 1, size=100, chunks=2)
+
+    state = da.random.RandomState(5)
+    y = state.normal(10, 1, size=100, chunks=2)
+    assert (x.compute(get=mpget) == y.compute(get=mpget)).all()
 
 
 def test_doc_randomstate():
