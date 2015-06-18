@@ -1,3 +1,5 @@
+from __future__ import division
+
 from itertools import count
 from math import ceil, sqrt
 from functools import wraps
@@ -756,7 +758,7 @@ class SeriesGroupBy(object):
             g = df.groupby(level=0)
             x = g.agg({(self.key, 'sum'): 'sum',
                        (self.key, 'count'): 'sum'})
-            result = 1.0 * x[self.key]['sum'] / x[self.key]['count']
+            result = x[self.key]['sum'] / x[self.key]['count']
             result.name = self.key
             return result
         return aca([self.frame, self.index],
