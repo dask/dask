@@ -17,6 +17,7 @@ if PY3:
     long = int
     def apply(func, args):
         return func(*args)
+    range = range
 else:
     import __builtin__ as builtins
     from Queue import Queue, Empty
@@ -30,6 +31,7 @@ else:
     unicode = unicode
     long = long
     apply = apply
+    range = xrange
 
 
 def skip(func):

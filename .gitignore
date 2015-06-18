@@ -5,3 +5,5 @@ build/
 dist/
 .idea/
 log.*
+log
+.coverage

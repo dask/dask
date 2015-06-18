@@ -318,3 +318,26 @@ def test_empty_csv_file():
         df = dd.read_csv(fn)
         assert len(df.compute()) == 0
         assert list(df.columns) == ['a', 'b']
+
+
+def test_from_pandas_dataframe():
+    a = list('aaaaaaabbbbbbbbccccccc')
+    df = pd.DataFrame(dict(a=a, b=np.random.randn(len(a))),
+                      index=pd.date_range(start='20120101', periods=len(a)))
+    ddf = dd.from_pandas(df, 3)
+    assert len(ddf.dask) == 3
+    assert len(ddf.divisions) == len(ddf.dask) - 1
+    assert type(ddf.divisions[0]) == type(df.index[0])
+    tm.assert_frame_equal(df, ddf.compute())
+
+
+def test_from_pandas_series():
+    n = 20
+    s = pd.Series(np.random.randn(n),
+                  index=pd.date_range(start='20120101', periods=n),
+                  name='a')
+    ds = dd.from_pandas(s, 3)
+    assert len(ds.dask) == 3
+    assert len(ds.divisions) == len(ds.dask) - 1
+    assert type(ds.divisions[0]) == type(s.index[0])
+    tm.assert_series_equal(s, ds.compute())

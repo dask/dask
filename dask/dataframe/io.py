@@ -1,3 +1,5 @@
+from __future__ import division
+
 import pandas as pd
 import numpy as np
 from functools import wraps
@@ -11,9 +13,10 @@ from itertools import count
 import bcolz
 from operator import getitem
 
-from ..compatibility import StringIO, unicode
+from ..compatibility import StringIO, unicode, range
 from ..utils import textblock
 
+from . import core
 from .core import names, DataFrame, compute, concat, categorize_block
 from .shuffle import set_partition
 
@@ -92,7 +95,7 @@ def read_csv(fn, *args, **kwargs):
 
     # Chunk sizes and numbers
     total_bytes = file_size(fn, compression)
-    nchunks = int(ceil(float(total_bytes) / chunkbytes))
+    nchunks = int(ceil(total_bytes / chunkbytes))
     divisions = [None] * (nchunks - 1)
 
     kwargs.pop('compression', None)  # these functions will take StringIO
@@ -184,7 +187,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
 
     compression = kwargs.get('compression', None)
     total_bytes = file_size(fn, compression)
-    nchunks = int(ceil(float(total_bytes) / chunkbytes))
+    nchunks = int(ceil(total_bytes / chunkbytes))
 
     if infer_header(fn, **kwargs):
         kwargs['header'] = 0
@@ -220,7 +223,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     return categories, quantiles
 
 
-from_array_names = ('from-array-%d' % i for i in count(1))
+tokens = ('-%d' % i for i in count(1))
 
 
 def from_array(x, chunksize=50000):
@@ -238,16 +241,70 @@ def from_array(x, chunksize=50000):
     """
     columns = tuple(x.dtype.names)
     divisions = tuple(range(chunksize, len(x), chunksize))
-    name = next(from_array_names)
+    name = 'from_array' + next(tokens)
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
-                             (slice(i * chunksize, (i + 1) * chunksize),))))
-            for i in range(0, int(ceil(float(len(x)) / chunksize))))
+                              slice(i * chunksize, (i + 1) * chunksize))))
+            for i in range(0, int(ceil(len(x) / chunksize))))
 
     return DataFrame(dsk, name, columns, divisions)
 
 
-from pframe.categories import reapply_categories
+def from_pandas(data, npartitions):
+    """Construct a dask object from a pandas object.
+
+    If given a ``pandas.Series`` a ``dask.Series`` will be returned. If given a
+    ``pandas.DataFrame`` a ``dask.DataFrame`` will be returned. All other
+    pandas objects will raise a ``TypeError``.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame or pandas.Series
+        The DataFrame/Series with which to construct a dask DataFrame/Series
+    npartitions : int
+        The number of partitions of the index to create
+
+    Returns
+    -------
+    dask.DataFrame or dask.Series
+        A dask DataFrame/Series partitioned along the index
+
+    Examples
+    --------
+    >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
+    ...                   index=pd.date_range(start='20100101', periods=6))
+    >>> dd = from_pandas(df, npartitions=3)
+    >>> dd.divisions[0]
+    Timestamp('2010-01-03 00:00:00', offset='D')
+    >>> ds = from_pandas(df.a, npartitions=3)  # Works with Series too!
+    >>> ds.divisions[1]
+    Timestamp('2010-01-05 00:00:00', offset='D')
+
+    Raises
+    ------
+    TypeError
+        If something other than a ``pandas.DataFrame`` or ``pandas.Series`` is
+        passed in.
+
+    See Also
+    --------
+    from_array : Construct a dask.DataFrame from an array that has record dtype
+    from_bcolz : Construct a dask.DataFrame from a bcolz ctable
+    read_csv : Construct a dask.DataFrame from a CSV file
+    """
+    columns = getattr(data, 'columns', getattr(data, 'name', None))
+    if columns is None:
+        raise TypeError("Input must be a pandas DataFrame or Series")
+    nrows = len(data)
+    chunksize = int(ceil(nrows / npartitions))
+    data = data.sort_index(ascending=True)
+    divisions = tuple(data.index[i]
+                      for i in range(chunksize, nrows, chunksize))
+    name = 'from_pandas' + next(tokens)
+    dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
+               for i in range(npartitions))
+    return getattr(core, type(data).__name__)(dsk, name, columns, divisions)
+
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     """ Read dask Dataframe from bcolz.ctable
@@ -281,27 +338,27 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     if categorize:
         for name in x.names:
             if (np.issubdtype(x.dtype[name], np.string_) or
-                np.issubdtype(x.dtype[name], np.unicode_) or
-                np.issubdtype(x.dtype[name], np.object_)):
-                a = da.from_array(x[name], chunks=(chunksize*len(x.names),))
+                    np.issubdtype(x.dtype[name], np.unicode_) or
+                    np.issubdtype(x.dtype[name], np.object_)):
+                a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
                 categories[name] = da.unique(a)
 
     columns = tuple(x.dtype.names)
     divisions = tuple(range(chunksize, len(x), chunksize))
-    new_name = next(from_array_names)
+    new_name = 'from_bcolz' + next(tokens)
     dsk = dict(((new_name, i),
                 (dataframe_from_ctable,
-                  x,
-                  (slice(i * chunksize, (i + 1) * chunksize),),
-                  None, categories))
-           for i in range(0, int(ceil(float(len(x)) / chunksize))))
+                 x,
+                 (slice(i * chunksize, (i + 1) * chunksize),),
+                 None, categories))
+               for i in range(0, int(ceil(len(x) / chunksize))))
 
     result = DataFrame(dsk, new_name, columns, divisions)
 
     if index:
         assert index in x.names
-        a = da.from_array(x[index], chunks=(chunksize*len(x.names),))
-        q = np.linspace(1, 100, len(x) / chunksize + 2)[1:-1]
+        a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
+        q = np.linspace(1, 100, len(x) // chunksize + 2)[1:-1]
         divisions = da.percentile(a, q).compute()
         return set_partition(result, index, divisions, **kwargs)
     else:
