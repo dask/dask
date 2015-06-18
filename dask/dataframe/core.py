@@ -765,7 +765,7 @@ class SeriesGroupBy(object):
     def nunique(self):
         def chunk(df, index):
             return (df.groupby(index)
-                      .apply(lambda x: x.drop_duplicates(subset=self.key))
+                      .apply(pd.DataFrame.drop_duplicates, subset=self.key)
                       .set_index(index, drop=True))
 
         def agg(df):
