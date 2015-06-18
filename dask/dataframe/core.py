@@ -1,3 +1,5 @@
+from __future__ import division
+
 from itertools import count
 from math import ceil, sqrt
 from functools import wraps
@@ -378,16 +380,23 @@ class Series(_Frame):
 
     def sum(self):
         return reduction(self, pd.Series.sum, np.sum)
+
     def max(self):
         return reduction(self, pd.Series.max, np.max)
+
     def min(self):
         return reduction(self, pd.Series.min, np.min)
+
     def count(self):
         return reduction(self, pd.Series.count, np.sum)
+
+    def nunique(self):
+        return self.drop_duplicates().count()
 
     def mean(self):
         def chunk(ser):
             return (ser.sum(), ser.count())
+
         def agg(seq):
             sums, counts = list(zip(*seq))
             return 1.0 * sum(sums) / sum(counts)
@@ -396,6 +405,7 @@ class Series(_Frame):
     def var(self, ddof=1):
         def chunk(ser):
             return (ser.sum(), (ser**2).sum(), ser.count())
+
         def agg(seq):
             x, x2, n = list(zip(*seq))
             x = float(sum(x))
@@ -748,9 +758,23 @@ class SeriesGroupBy(object):
             g = df.groupby(level=0)
             x = g.agg({(self.key, 'sum'): 'sum',
                        (self.key, 'count'): 'sum'})
-            result = 1.0 * x[self.key]['sum'] / x[self.key]['count']
+            result = x[self.key]['sum'] / x[self.key]['count']
             result.name = self.key
             return result
+        return aca([self.frame, self.index],
+                   chunk=chunk, aggregate=agg, columns=[self.key])
+
+    def nunique(self):
+        def chunk(df, index):
+            # we call set_index here to force a possibly duplicate index
+            # for our reduce step
+            return (df.groupby(index)
+                      .apply(pd.DataFrame.drop_duplicates, subset=self.key)
+                      .set_index(index))
+
+        def agg(df):
+            return df.groupby(level=0)[self.key].nunique()
+
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key])
 
