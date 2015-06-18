@@ -415,7 +415,6 @@ def test_dataframe_groupby_nunique():
 
 
 def test_dataframe_groupby_nunique_across_group_same_value():
-    strings = list('aaabb')
     strings = list('aaabbccccdddeee')
     data = list(map(int, '123111223323412'))
     ps = pd.DataFrame(dict(strings=strings, data=data))
