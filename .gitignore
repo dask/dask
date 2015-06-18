@@ -6,3 +6,4 @@ dist/
 .idea/
 log.*
 log
+.coverage
