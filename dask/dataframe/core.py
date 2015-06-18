@@ -769,9 +769,7 @@ class SeriesGroupBy(object):
                       .set_index(index, drop=True))
 
         def agg(df):
-            return (df.drop_duplicates(subset=self.key)
-                      .groupby(level=0)[self.key]
-                      .count())
+            return df.groupby(level=0)[self.key].nunique()
 
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key])
