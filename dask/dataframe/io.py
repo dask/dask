@@ -251,18 +251,22 @@ def from_array(x, chunksize=50000):
 
 
 def from_pandas(data, npartitions):
-    """Construct a dask DataFrame from a pandas DataFrame.
+    """Construct a dask object from a pandas object.
+
+    If given a ``pandas.Series`` a ``dask.Series`` will be returned. If given a
+    ``pandas.DataFrame`` a ``dask.DataFrame`` will be returned. All other
+    pandas objects will raise a ``TypeError``.
 
     Parameters
     ----------
-    df : pandas.DataFrame, pandas.Series
+    df : pandas.DataFrame or pandas.Series
         The DataFrame/Series with which to construct a dask DataFrame/Series
     npartitions : int
         The number of partitions of the index to create
 
     Returns
     -------
-    ddf : dask.DataFrame, dask.Series
+    dask.DataFrame or dask.Series
         A dask DataFrame/Series partitioned along the index
 
     Examples
@@ -275,6 +279,18 @@ def from_pandas(data, npartitions):
     >>> ds = from_pandas(df.a, npartitions=3)  # Works with Series too!
     >>> ds.divisions[1]
     Timestamp('2010-01-05 00:00:00', offset='D')
+
+    Raises
+    ------
+    TypeError
+        If something other than a ``pandas.DataFrame`` or ``pandas.Series`` is
+        passed in.
+
+    See Also
+    --------
+    from_array : Construct a dask.DataFrame from an array that has record dtype
+    from_bcolz : Construct a dask.DataFrame from a bcolz ctable
+    read_csv : Construct a dask.DataFrame from a CSV file
     """
     columns = getattr(data, 'columns', getattr(data, 'name', None))
     if columns is None:
