@@ -7,7 +7,7 @@ import numpy as np
 import dask
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.core import get, concat, pd_split
+from dask.dataframe.core import get, concat
 
 
 def eq(a, b):
@@ -407,6 +407,17 @@ def test_series_nunique():
 def test_dataframe_groupby_nunique():
     strings = list('aaabbccccdddeee')
     data = np.random.randn(len(strings))
+    ps = pd.DataFrame(dict(strings=strings, data=data))
+    s = dd.from_pandas(ps, npartitions=3)
+    expected = ps.groupby('strings')['data'].nunique()
+    result = s.groupby('strings')['data'].nunique().compute()
+    tm.assert_series_equal(result, expected)
+
+
+def test_dataframe_groupby_nunique_across_group_same_value():
+    strings = list('aaabb')
+    strings = list('aaabbccccdddeee')
+    data = list(map(int, '123111223323412'))
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby('strings')['data'].nunique()
