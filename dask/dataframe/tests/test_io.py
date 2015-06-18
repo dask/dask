@@ -334,8 +334,7 @@ def test_from_pandas_dataframe():
 def test_from_pandas_series():
     n = 20
     s = pd.Series(np.random.randn(n),
-                  index=pd.date_range(start='20120101', periods=n),
-                  name='a')
+                  index=pd.date_range(start='20120101', periods=n))
     ds = dd.from_pandas(s, 3)
     assert len(ds.dask) == 3
     assert len(ds.divisions) == len(ds.dask) - 1
