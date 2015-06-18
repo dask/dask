@@ -36,7 +36,8 @@ class RandomState(object):
         keys = product([name], *[range(len(bd)) for bd in chunks])
         sizes = product(*chunks)
         vals = ((apply_random,
-                  func, self._numpy_state.randint(np.iinfo(np.uint32).max),
+                  func.__name__,
+                  self._numpy_state.randint(np.iinfo(np.uint32).max),
                   size, args, kwargs)
                 for size in sizes)
         dsk = dict(zip(keys, vals))
@@ -239,8 +240,14 @@ class RandomState(object):
 
 
 def apply_random(func, seed, size, args, kwargs):
+    """ Apply RandomState method with seed
+
+    >>> apply_random('normal', 123, 3, (10, 1.0), {})
+    array([  8.9143694 ,  10.99734545,  10.2829785 ])
+    """
     state = np.random.RandomState(seed)
-    return func(state, *args, size=size, **kwargs)
+    func = getattr(state, func)
+    return func(*args, size=size, **kwargs)
 
 
 _state = RandomState()

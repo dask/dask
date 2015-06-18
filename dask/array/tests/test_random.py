@@ -2,6 +2,7 @@ import pytest
 pytest.importorskip('numpy')
 
 import numpy as np
+import dill
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
 import dask.array as da
@@ -20,6 +21,15 @@ def test_RandomState():
 
 def test_doc_randomstate():
     assert 'mean' in da.random.RandomState(5).normal.__doc__
+
+
+def test_serializability():
+    state = da.random.RandomState(5)
+    x = state.normal(10, 1, size=10, chunks=5)
+
+    y = dill.loads(dill.dumps(x))
+
+    assert (x.compute() == y.compute()).all()
 
 
 def test_determinisim_through_dask_values():
