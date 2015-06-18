@@ -14,6 +14,26 @@ def doc_wraps(func):
 
 
 class RandomState(object):
+    """
+    Mersenne Twister pseudo-random number generator
+
+    This object contains state to deterministicly generate pseudo-random
+    numbers from a variety of probabilitiy distributions.  It is identical to
+    ``np.random.RandomState`` except that all functions also take a ``chunks=``
+    keyword argument.
+
+    Examples
+    --------
+
+    >>> import dask.array as da
+    >>> state = da.random.RandomState(1234)  # a seed
+    >>> x = state.normal(10, 0.1, size=3, chunks=(2,))
+    >>> x.compute()
+    array([  9.95487579,  10.02999135,  10.08498441])
+
+    See Also:
+        np.random.RandomState
+    """
     def __init__(self, seed=None):
         self._numpy_state = np.random.RandomState(seed)
 
