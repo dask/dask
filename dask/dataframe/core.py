@@ -378,16 +378,23 @@ class Series(_Frame):
 
     def sum(self):
         return reduction(self, pd.Series.sum, np.sum)
+
     def max(self):
         return reduction(self, pd.Series.max, np.max)
+
     def min(self):
         return reduction(self, pd.Series.min, np.min)
+
     def count(self):
         return reduction(self, pd.Series.count, np.sum)
+
+    def nunique(self):
+        return self.drop_duplicates().count()
 
     def mean(self):
         def chunk(ser):
             return (ser.sum(), ser.count())
+
         def agg(seq):
             sums, counts = list(zip(*seq))
             return 1.0 * sum(sums) / sum(counts)
@@ -396,6 +403,7 @@ class Series(_Frame):
     def var(self, ddof=1):
         def chunk(ser):
             return (ser.sum(), (ser**2).sum(), ser.count())
+
         def agg(seq):
             x, x2, n = list(zip(*seq))
             x = float(sum(x))
@@ -751,6 +759,20 @@ class SeriesGroupBy(object):
             result = 1.0 * x[self.key]['sum'] / x[self.key]['count']
             result.name = self.key
             return result
+        return aca([self.frame, self.index],
+                   chunk=chunk, aggregate=agg, columns=[self.key])
+
+    def nunique(self):
+        def chunk(df, index):
+            return (df.groupby(index)
+                      .apply(lambda x: x.drop_duplicates(subset=self.key))
+                      .set_index(index, drop=True))
+
+        def agg(df):
+            return (df.drop_duplicates(subset=self.key)
+                      .groupby(level=0)[self.key]
+                      .count())
+
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key])
 
