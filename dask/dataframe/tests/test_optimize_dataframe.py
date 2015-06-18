@@ -39,3 +39,23 @@ def test_fast_functions():
     assert len(e.dask) > 6
 
     assert len(dd.optimize(e.dask, e._keys())) == 6
+
+
+def test_castra_column_store():
+    try:
+        from castra import Castra
+    except ImportError:
+        return
+    df = pd.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+
+    with Castra(template=df) as c:
+        c.extend(df)
+
+        df = c.to_dask()
+
+        df2 = df[['x']]
+
+        dsk = dd.optimize(df2.dask, df2._keys())
+
+        assert dsk == {(df2._name, 0): (Castra.load_partition, c, '0--2',
+                                            (list, ['x']))}

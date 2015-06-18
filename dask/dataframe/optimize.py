@@ -8,13 +8,18 @@ from .. import core
 from toolz import valmap
 from operator import getitem
 import operator
+from castra import Castra
 
 
 rewrite_rules = RuleSet(
         # Merge column access into bcolz loading
         RewriteRule((getitem, (dataframe_from_ctable, a, b, c, d), e),
                     (dataframe_from_ctable, a, b, e, d),
-                    (a, b, c, d, e)))
+                    (a, b, c, d, e)),
+        RewriteRule((getitem, (Castra.load_partition, '~c', '~part', '~cols1'),
+                              '~cols2'),
+                    (Castra.load_partition, '~c', '~part', '~cols2'),
+                    ('~c', '~part', '~cols1', '~cols2')))
 
 
 fast_functions = [getattr(operator, attr) for attr in dir(operator)
