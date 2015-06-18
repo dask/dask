@@ -19,7 +19,7 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..utils import deepmap, ignoring, repr_long_list, concrete
+from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer
 from ..compatibility import unicode
 from .. import threaded, core
 from ..context import _globals
@@ -569,18 +569,25 @@ def store(sources, targets, **kwargs):
     get(dsk, keys, **kwargs)
 
 
-def blockdims_from_blockshape(shape, blockshape):
+def blockdims_from_blockshape(shape, chunks):
     """
 
     >>> blockdims_from_blockshape((10, 10), (4, 3))
     ((4, 4, 2), (3, 3, 3, 1))
     """
-    if blockshape is None:
+    if chunks is None:
         raise TypeError("Must supply chunks= keyword argument")
     if shape is None:
         raise TypeError("Must supply shape= keyword argument")
+    if not all(map(is_integer, chunks)):
+        raise ValueError("chunks can only contain integers.")
+    if not all(map(is_integer, shape)):
+        raise ValueError("shape can only contain integers.")
+    shape = map(int, shape)
+    chunks = map(int, chunks)
     return tuple((bd,) * (d // bd) + ((d % bd,) if d % bd else ())
-                              for d, bd in zip(shape, blockshape))
+                              for d, bd in zip(shape, chunks))
+
 
 class Array(object):
     """ Parallel Array
