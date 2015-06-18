@@ -17,7 +17,7 @@ from ..compatibility import StringIO, unicode
 from ..utils import textblock
 
 from . import core
-from .core import names, DataFrame, Series, compute, concat, categorize_block
+from .core import names, DataFrame, compute, concat, categorize_block
 from .shuffle import set_partition
 
 
@@ -223,7 +223,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     return categories, quantiles
 
 
-from_array_names = ('from-array-%d' % i for i in count(1))
+tokens = ('-%d' % i for i in count(1))
 
 
 def from_array(x, chunksize=50000):
@@ -241,16 +241,13 @@ def from_array(x, chunksize=50000):
     """
     columns = tuple(x.dtype.names)
     divisions = tuple(range(chunksize, len(x), chunksize))
-    name = next(from_array_names)
+    name = 'from_array' + next(tokens)
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
                               slice(i * chunksize, (i + 1) * chunksize))))
             for i in range(0, int(ceil(len(x) / chunksize))))
 
     return DataFrame(dsk, name, columns, divisions)
-
-
-from_dataframe_names = ('from-dataframe-%d' % i for i in count(1))
 
 
 def from_pandas(data, npartitions):
@@ -287,14 +284,11 @@ def from_pandas(data, npartitions):
     data = data.sort_index(ascending=True)
     divisions = tuple(data.index[i]
                       for i in range(chunksize, nrows, chunksize))
-    name = next(from_dataframe_names)
+    name = 'from_pandas' + next(tokens)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions))
     return getattr(core, type(data).__name__)(dsk, name, columns, divisions)
 
-
-
-from pframe.categories import reapply_categories
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     """ Read dask Dataframe from bcolz.ctable
@@ -328,26 +322,26 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     if categorize:
         for name in x.names:
             if (np.issubdtype(x.dtype[name], np.string_) or
-                np.issubdtype(x.dtype[name], np.unicode_) or
-                np.issubdtype(x.dtype[name], np.object_)):
-                a = da.from_array(x[name], chunks=(chunksize*len(x.names),))
+                    np.issubdtype(x.dtype[name], np.unicode_) or
+                    np.issubdtype(x.dtype[name], np.object_)):
+                a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
                 categories[name] = da.unique(a)
 
     columns = tuple(x.dtype.names)
     divisions = tuple(range(chunksize, len(x), chunksize))
-    new_name = next(from_array_names)
+    new_name = 'from_bcolz' + next(tokens)
     dsk = dict(((new_name, i),
                 (dataframe_from_ctable,
-                  x,
-                  (slice(i * chunksize, (i + 1) * chunksize),),
-                  None, categories))
-           for i in range(0, int(ceil(len(x) / chunksize))))
+                 x,
+                 (slice(i * chunksize, (i + 1) * chunksize),),
+                 None, categories))
+               for i in range(0, int(ceil(len(x) / chunksize))))
 
     result = DataFrame(dsk, new_name, columns, divisions)
 
     if index:
         assert index in x.names
-        a = da.from_array(x[index], chunks=(chunksize*len(x.names),))
+        a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
         q = np.linspace(1, 100, len(x) // chunksize + 2)[1:-1]
         divisions = da.percentile(a, q).compute()
         return set_partition(result, index, divisions, **kwargs)
