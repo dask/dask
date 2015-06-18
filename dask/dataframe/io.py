@@ -13,7 +13,7 @@ from itertools import count
 import bcolz
 from operator import getitem
 
-from ..compatibility import StringIO, unicode
+from ..compatibility import StringIO, unicode, range
 from ..utils import textblock
 
 from . import core

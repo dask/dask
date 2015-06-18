@@ -30,6 +30,7 @@ else:
     unicode = unicode
     long = long
     apply = apply
+    range = xrange
 
 
 def skip(func):
