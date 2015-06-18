@@ -764,9 +764,11 @@ class SeriesGroupBy(object):
 
     def nunique(self):
         def chunk(df, index):
+            # we call set_index here to force a possibly duplicate index
+            # for our reduce step
             return (df.groupby(index)
                       .apply(pd.DataFrame.drop_duplicates, subset=self.key)
-                      .set_index(index, drop=True))
+                      .set_index(index))
 
         def agg(df):
             return df.groupby(level=0)[self.key].nunique()
