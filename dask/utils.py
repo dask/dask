@@ -212,8 +212,7 @@ def pseudorandom(n, p, key):
     assert np.allclose(1, cp[-1])
     assert len(p) < 256
 
-    np.random.seed(key)
-    x = np.random.random(n)
+    x = np.random.RandomState(key).random_sample(n)
     out = np.empty(n, dtype='i1')
 
     for i, (low, high) in enumerate(zip(cp[:-1], cp[1:])):
