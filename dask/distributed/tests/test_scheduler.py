@@ -91,6 +91,12 @@ def test_cluster():
         assert b.scheduler == s.address_to_workers
 
 
+def test_pid():
+    with scheduler_and_workers() as (s, (a, b)):
+        assert isinstance(s.workers[a.address]['pid'], int)
+        assert isinstance(s.workers[b.address]['pid'], int)
+
+
 def inc(x):
     return x + 1
 

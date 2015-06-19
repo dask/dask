@@ -4,6 +4,7 @@ import uuid
 import random
 import socket
 import sys
+import os
 import traceback
 from threading import Thread, Lock
 from multiprocessing.pool import ThreadPool
@@ -110,7 +111,7 @@ class Worker(object):
 
         self.to_scheduler.setsockopt(zmq.IDENTITY, self.address)
         self.to_scheduler.connect(scheduler)
-        self.send_to_scheduler({'function': 'register'}, {})
+        self.send_to_scheduler({'function': 'register'}, {'pid': os.getpid()})
 
         self.scheduler_functions = {'status': self.status_to_scheduler,
                                     'compute': self.compute,
