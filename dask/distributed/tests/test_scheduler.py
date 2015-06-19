@@ -74,6 +74,8 @@ def test_status_client():
 def scheduler_and_workers(n=2):
     with scheduler() as s:
         workers = [Worker(s.address_to_workers) for i in range(n)]
+        while(len(s.workers) < n):
+            sleep(0.01)
         try:
             yield s, workers
         finally:
@@ -83,11 +85,16 @@ def scheduler_and_workers(n=2):
 
 def test_cluster():
     with scheduler_and_workers() as (s, (a, b)):
-        sleep(0.1)
         assert a.address in s.workers
         assert b.address in s.workers
         assert a.scheduler == s.address_to_workers
         assert b.scheduler == s.address_to_workers
+
+
+def test_pid():
+    with scheduler_and_workers() as (s, (a, b)):
+        assert isinstance(s.workers[a.address]['pid'], int)
+        assert isinstance(s.workers[b.address]['pid'], int)
 
 
 def inc(x):
@@ -99,7 +106,6 @@ def add(x, y):
 
 def test_compute_cycle():
     with scheduler_and_workers(n=2) as (s, (a, b)):
-        sleep(0.1)
         assert s.available_workers.qsize() == 2
 
         dsk = {'a': (add, 1, 2), 'b': (inc, 'a')}
@@ -191,7 +197,6 @@ def test_random_names():
 
 def test_close_workers():
     with scheduler_and_workers(n=2) as (s, (a, b)):
-        sleep(0.05)
         assert a.status != 'closed'
 
         s.close_workers()
