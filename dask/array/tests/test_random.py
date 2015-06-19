@@ -2,8 +2,52 @@ import pytest
 pytest.importorskip('numpy')
 
 import numpy as np
+import dill
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
+import dask.array as da
+import dask
+from dask.multiprocessing import get as mpget
+
+
+def test_RandomState():
+    state = da.random.RandomState(5)
+    x = state.normal(10, 1, size=10, chunks=5)
+    assert (x.compute() == x.compute()).all()
+
+    state = da.random.RandomState(5)
+    y = state.normal(10, 1, size=10, chunks=5)
+    assert (x.compute() == y.compute()).all()
+
+
+def test_concurrency():
+    state = da.random.RandomState(5)
+    x = state.normal(10, 1, size=100, chunks=2)
+
+    state = da.random.RandomState(5)
+    y = state.normal(10, 1, size=100, chunks=2)
+    assert (x.compute(get=mpget) == y.compute(get=mpget)).all()
+
+
+def test_doc_randomstate():
+    assert 'mean' in da.random.RandomState(5).normal.__doc__
+
+
+def test_serializability():
+    state = da.random.RandomState(5)
+    x = state.normal(10, 1, size=10, chunks=5)
+
+    y = dill.loads(dill.dumps(x))
+
+    assert (x.compute() == y.compute()).all()
+
+
+def test_determinisim_through_dask_values():
+    samples_1 = da.random.RandomState(42).normal(size=1000, chunks=10)
+    samples_2 = da.random.RandomState(42).normal(size=1000, chunks=10)
+
+    assert [v for k, v in sorted(samples_1.dask.items())] ==\
+           [v for k, v in sorted(samples_2.dask.items())]
 
 
 def test_random():
@@ -37,16 +81,6 @@ def test_kwargs():
     assert isinstance(a, Array)
     x = np.array(a)
     assert 8 < x.mean() < 12
-
-
-def test_kwargs_size_or_shape():
-    a = normal(loc=10.0, scale=0.1, shape=(10, 10), chunks=(5, 5))
-    b = normal(loc=10.0, scale=0.1, size=(10, 10), chunks=(5, 5))
-    assert isinstance(a, Array)
-    assert isinstance(b, Array)
-    assert a.chunks == b.chunks
-
-    assert np.array(a).shape == np.array(b).shape
 
 
 def test_unique_names():
