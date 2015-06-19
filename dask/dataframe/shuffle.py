@@ -97,7 +97,7 @@ def unique(divisions):
     raise NotImplementedError()
 
 
-def shuffle(df, index, npartitions=None, use_server=False):
+def shuffle(df, index, npartitions=None):
     """ Group DataFrame by index
 
     Hash grouping of elements.  After this operation all elements that have
@@ -118,13 +118,7 @@ def shuffle(df, index, npartitions=None, use_server=False):
 
     import partd
     p = ('zpartd' + next(tokens),)
-    if use_server:
-        dsk1 = {}
-        p = partd.PandasBlocks(partd.Client())
-    else:
-        dsk1 = {}
-        p = partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
-        # dsk1 = {p: (partd.PandasBlocks,)}
+    p = partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
 
     # Partition data on disk
     name = next(names)
@@ -152,7 +146,7 @@ def shuffle(df, index, npartitions=None, use_server=False):
 
     divisions = [None] * (npartitions - 1)
 
-    dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
+    dsk = merge(df.dask, dsk2, dsk3, dsk4)
     if isinstance(index, _Frame):
         dsk.update(index.dask)
 
@@ -174,3 +168,47 @@ def partition(df, index, npartitions, p):
 def collect(group, p, barrier_token):
     """ Collect partitions from partd, yield dataframes """
     return p.get(group)
+
+
+def shard_df_on_index(df, divisions):
+    """ Shard a DataFrame by ranges on its index
+
+    Example
+    -------
+
+    >>> df = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]})
+    >>> df
+        a  b
+    0   0  5
+    1  10  4
+    2  20  3
+    3  30  2
+    4  40  1
+
+    >>> shards = list(shard_df_on_index(df, [2, 4]))
+    >>> shards[0]
+        a  b
+    0   0  5
+    1  10  4
+
+    >>> shards[1]
+        a  b
+    2  20  3
+    3  30  2
+
+    >>> shards[2]
+        a  b
+    4  40  1
+    """
+    if isinstance(divisions, Iterator):
+        divisions = list(divisions)
+    if not len(divisions):
+        yield df
+    else:
+        divisions = np.array(divisions)
+        df = df.sort()
+        indices = df.index.searchsorted(divisions)
+        yield df.iloc[:indices[0]]
+        for i in range(len(indices) - 1):
+            yield df.iloc[indices[i]: indices[i+1]]
+        yield df.iloc[indices[-1]:]
