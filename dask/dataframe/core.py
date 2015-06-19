@@ -884,6 +884,8 @@ def quantiles(f, q, **kwargs):
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
     assert len(f.columns) == 1
+    if not len(q):
+        return da.zeros((0,), chunks=((0,),))
     from dask.array.percentile import _percentile, merge_percentiles
     name = next(names)
     val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
@@ -898,7 +900,6 @@ def quantiles(f, q, **kwargs):
 
     dsk = merge(f.dask, val_dsk, len_dsk, merge_dsk)
     return da.Array(dsk, name3, chunks=((len(q),),))
-
 
 
 def get(dsk, keys, get=threaded.get, **kwargs):

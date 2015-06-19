@@ -291,6 +291,10 @@ def test_quantiles():
     assert 3 < result[1] < 7
 
 
+def test_empty_quantiles():
+    assert d.b.quantiles([]).compute().tolist() == []
+
+
 def test_index():
     assert eq(d.index, full.index)
 
