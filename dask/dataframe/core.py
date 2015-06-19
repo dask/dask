@@ -692,7 +692,7 @@ class GroupBy(object):
         if key in self.frame.columns:
             return SeriesGroupBy(self.frame, self.index, key)
         else:
-            raise KeyError()
+            raise KeyError(key)
 
     def __dir__(self):
         return sorted(set(list(dir(type(self))) + list(self.frame.columns)))
