@@ -422,3 +422,20 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     expected = ps.groupby('strings')['data'].nunique()
     result = s.groupby('strings')['data'].nunique().compute()
     tm.assert_series_equal(result, expected)
+
+import pytest
+from itertools import product
+
+@pytest.mark.parametrize(['freq', 'how'],
+                         list(product(['T', 'H', 'D', 'M'],
+                                      ['sum', 'mean', 'count', 'nunique'])))
+def test_series_resample(freq, how):
+    n = 20000
+    index = pd.date_range(start='20120101', periods=n, freq='T').values
+    index = index[np.random.rand(n) > 0.5]
+    np.random.shuffle(index)
+    s = pd.Series(np.random.rand(len(index)) * 100, index=pd.Index(index))
+    expected = s.resample(freq, how=how)
+    ds = dd.from_pandas(s, npartitions=20)
+    result = ds.resample(freq, how=how).compute(get=dask.async.get_sync)
+    tm.assert_series_equal(expected, result, check_dtype=False)
