@@ -305,6 +305,15 @@ class Series(_Frame):
         """
         return quantiles(self, q)
 
+    def resample(self, rule, how='mean', axis=0, fill_method=None, closed=None,
+                 label=None, convention='start', kind=None, loffset=None,
+                 limit=None, base=0):
+        key = pd.TimeGrouper(freq=rule, axis=axis, fill_method=fill_method,
+                             closed=closed, label=label,
+                             convention=convention, kind=kind, loffset=loffset,
+                             limit=limit, base=base)
+        return getattr(SeriesGroupBy(self, self.index, key), how)()
+
     def __getitem__(self, key):
         name = next(names)
         if isinstance(key, Series) and self.divisions == key.divisions:
