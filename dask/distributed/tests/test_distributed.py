@@ -56,6 +56,7 @@ def ipcluster():
     finally:
         teardown_cluster()
 
+@pytest.mark.slow
 def test_dask_client_from_ipclient():
     with ipcluster() as c:
         dask_client = dask_client_from_ipclient(c)
