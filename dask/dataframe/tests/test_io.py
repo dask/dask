@@ -17,6 +17,7 @@ from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
 from dask.compatibility import StringIO
 
 from dask.utils import filetext, tmpfile
+from dask.async import get_sync
 
 
 ########
@@ -157,7 +158,7 @@ def test_read_csv_categorize_with_parse_dates():
 def test_read_csv_categorize_and_index():
     with filetext(text) as fn:
         f = read_csv(fn, chunkbytes=20, index='amount')
-        assert f.index.compute().name == 'amount'
+        assert f.index.compute(get=get_sync).name == 'amount'
 
         expected = pd.read_csv(fn).set_index('amount')
         expected['name'] = expected.name.astype('category')
@@ -198,11 +199,11 @@ def test_from_bcolz():
     d = dd.from_bcolz(t, chunksize=2)
     assert d.npartitions == 2
     assert str(d.dtypes['a']) == 'category'
-    assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
-    assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
+    assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
+    assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
 
     d = dd.from_bcolz(t, chunksize=2, index='x')
-    assert list(d.index.compute()) == [1, 2, 3]
+    assert list(d.index.compute(get=get_sync)) == [1, 2, 3]
 
 
 def test_from_bcolz_filename():

@@ -56,6 +56,10 @@ def set_partition(df, index, divisions):
     p = ('zpartd' + next(tokens),)
     p = partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
 
+    # Get Categories
+    catname = next(names)
+    dsk1 = {catname: (get_categories, df._keys()[0])}
+
     # Partition data on disk
     name = next(names)
     if isinstance(index, _Frame):
@@ -77,7 +81,7 @@ def set_partition(df, index, divisions):
     # Collect groups
     name = next(names)
     dsk4 = dict(((name, i),
-                 (_set_collect, i, p, barrier_token))
+                 (_categorize, catname, (_set_collect, i, p, barrier_token)))
                 for i in range(len(divisions) + 1))
 
     dsk = merge(df.dask, dsk2, dsk3, dsk4)
@@ -87,7 +91,39 @@ def set_partition(df, index, divisions):
     return DataFrame(dsk, name, df.columns, divisions)
 
 
+def iscategorical(dt):
+    return isinstance(dt, pd.core.common.CategoricalDtype)
+
+def get_categories(df):
+    """
+    Get Categories of dataframe
+
+    >>> df = pd.DataFrame({'x': [1, 2, 3], 'y': ['A', 'B', 'A']})
+    >>> df['y'] = df.y.astype('category')
+    >>> get_categories(df)
+    {'y': pd.Index(['A', 'B'], dtype='object')}
+    """
+    return dict((col, df[col].cat.categories) for col in df.columns
+                if iscategorical(df.dtypes[col]))
+
+from castra.core import _categorize
+
+def strip_categories(df):
+    """ Strip categories from dataframe
+
+    >>> df = pd.DataFrame({'x': [1, 2, 3], 'y': ['A', 'B', 'A']})
+    >>> df['y'] = df.y.astype('category')
+    >>> strip_categories(df)
+    """
+    return pd.DataFrame(dict((col, df[col].cat.codes
+                                   if iscategorical(df.dtypes[col])
+                                   else df[col])
+                              for col in df.columns),
+                        columns=df.columns,
+                        index=df.index)
+
 def _set_partition(df, index, divisions, p):
+    df = strip_categories(df)
     divisions = list(divisions)
     df = df.set_index(index)
     shards = shard_df_on_index(df, divisions)
