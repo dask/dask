@@ -358,12 +358,11 @@ def _top_level(net, term):
 
 
 def _bottom_up(net, term):
-    if not istask(term):
-        return net._rewrite(term)
-    else:
-        new_args = tuple(_bottom_up(net, t) for t in args(term))
-        new_term = (head(term),) + new_args
-    return net._rewrite(new_term)
+    if istask(term):
+        term = (head(term),) + tuple(_bottom_up(net, t) for t in args(term))
+    elif isinstance(term, list):
+        term = [_bottom_up(net, t) for t in args(term)]
+    return net._rewrite(term)
 
 
 strategies = {'top_level': _top_level,
