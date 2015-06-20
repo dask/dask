@@ -34,8 +34,10 @@ def cull(dsk, keys):
     return dict((k, v) for k, v in dsk.items() if k in seen)
 
 
-def fuse(dsk):
+def fuse(dsk, keys=None):
     """ Return new dask with linear sequence of tasks fused together.
+
+    If specified, the keys in ``keys`` keyword argument are *not* fused.
 
     This may be used as an optimization step.
 
@@ -45,7 +47,13 @@ def fuse(dsk):
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> fuse(d)  # doctest: +SKIP
     {'c': (inc, (inc, 1))}
+    >>> fuse(d, keys=['b'])  # doctest: +SKIP
+    {'b': (inc, 1), 'c': (inc, 'b')}
     """
+    if isinstance(keys, (set, list)):
+        keys = set(keys)
+    elif keys is not None:
+        keys = set([keys])
     # locate all members of linear chains
     parents = {}
     deadbeats = set()
@@ -55,7 +63,7 @@ def fuse(dsk):
             if child in parents:
                 del parents[child]
                 deadbeats.add(child)
-            elif len(deps) > 1:
+            elif len(deps) > 1 or (keys is not None and child in keys):
                 deadbeats.add(child)
             elif child not in deadbeats:
                 parents[child] = parent
@@ -117,7 +125,7 @@ def inline(dsk, keys=None, inline_constants=True):
     """
     if keys is None:
         keys  = set()
-    elif isinstance(keys, (set, tuple, list)):
+    elif isinstance(keys, (set, list)):
         keys = set(keys)
     else:
         keys = set([keys])
