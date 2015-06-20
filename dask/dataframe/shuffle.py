@@ -17,52 +17,86 @@ from ..utils import ignoring
 tokens = ('-%d' % i for i in count(1))
 
 
-def set_index(f, index, npartitions=None, **kwargs):
+def set_index(df, index, npartitions=None, **kwargs):
     """ Set DataFrame index to new column
 
     Sorts index and realigns Dataframe to new sorted order.  This shuffles and
     repartitions your data.
     """
-    npartitions = npartitions or f.npartitions
+    npartitions = npartitions or df.npartitions
     if not isinstance(index, Series):
-        index2 = f[index]
+        index2 = df[index]
     else:
         index2 = index
 
     divisions = (index2
                   .quantiles(np.linspace(0, 100, npartitions+1)[1:-1])
                   .compute())
-    return f.set_partition(index, divisions, **kwargs)
+    return df.set_partition(index, divisions, **kwargs)
 
 
-partition_names = ('set_partition-%d' % i for i in count(1))
+def set_partition(df, index, divisions):
+    """ Group DataFrame by index
 
-def set_partition(f, index, divisions, get=threaded.get, **kwargs):
-    """ Set new partitioning along index given divisions """
-    divisions = unique(divisions)
+    Hash grouping of elements.  After this operation all elements that have
+    the same index will be in the same partition.  Note that this requires
+    full dataset read, serialization and shuffle.  This is expensive.  If
+    possible you should avoid shuffles.
+
+    This does not preserve a meaningful index/partitioning scheme.
+
+    See Also
+    --------
+    partd
+    """
+    if isinstance(index, _Frame):
+        assert df.divisions == index.divisions
+
+    import partd
+    p = ('zpartd' + next(tokens),)
+    p = partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
+
+    # Partition data on disk
     name = next(names)
-    if isinstance(index, Series):
-        assert index.divisions == f.divisions
-        dsk = dict(((name, i), (f._partition_type.set_index, block, ind))
-                for i, (block, ind) in enumerate(zip(f._keys(), index._keys())))
-        f2 = type(f)(merge(f.dask, index.dask, dsk), name,
-                       f.column_info, f.divisions)
+    if isinstance(index, _Frame):
+        dsk2 = dict(((name, i),
+                     (_set_partition, part, ind, divisions, p))
+                     for i, (part, ind)
+                     in enumerate(zip(df._keys(), index._keys())))
     else:
-        dsk = dict(((name, i), (f._partition_type.set_index, block, index))
-                for i, block in enumerate(f._keys()))
-        f2 = type(f)(merge(f.dask, dsk), name, f.column_info, f.divisions)
+        dsk2 = dict(((name, i),
+                     (_set_partition, part, index, divisions, p))
+                     for i, part
+                     in enumerate(df._keys()))
 
-    head = f2.head()
-    pf = pframe(like=head, divisions=divisions, **kwargs)
+    # Barrier
+    barrier_token = 'barrier' + next(tokens)
+    def barrier(args):         return 0
+    dsk3 = {barrier_token: (barrier, list(dsk2))}
 
-    def append(block):
-        pf.append(block)
-        return 0
+    # Collect groups
+    name = next(names)
+    dsk4 = dict(((name, i),
+                 (_set_collect, i, p, barrier_token))
+                for i in range(len(divisions) + 1))
 
-    f2.map_blocks(append).compute(get=get)
-    pf.flush()
+    dsk = merge(df.dask, dsk2, dsk3, dsk4)
+    if isinstance(index, _Frame):
+        dsk.update(index.dask)
 
-    return from_pframe(pf)
+    return DataFrame(dsk, name, df.columns, divisions)
+
+
+def _set_partition(df, index, divisions, p):
+    divisions = list(divisions)
+    df = df.set_index(index)
+    shards = shard_df_on_index(df, divisions)
+    p.append(dict(enumerate(shards)))
+
+
+def _set_collect(group, p, barrier_token):
+    """ Collect partitions from partd, yield dataframes """
+    return p.get(group)
 
 
 def from_pframe(pf):

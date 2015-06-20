@@ -5,6 +5,7 @@ import pandas.util.testing as tm
 import numpy as np
 
 import dask
+from dask.async import get_sync
 from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.core import get, concat
@@ -12,9 +13,9 @@ from dask.dataframe.core import get, concat
 
 def eq(a, b):
     if hasattr(a, 'dask'):
-        a = a.compute(get=dask.get)
+        a = a.compute(get=get_sync)
     if hasattr(b, 'dask'):
-        b = b.compute(get=dask.get)
+        b = b.compute(get=get_sync)
     if isinstance(a, pd.DataFrame):
         a = a.sort_index()
         b = b.sort_index()
