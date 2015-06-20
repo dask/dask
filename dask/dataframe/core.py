@@ -305,6 +305,15 @@ class Series(_Frame):
         """
         return quantiles(self, q)
 
+    def resample(self, rule, how='mean', axis=0, fill_method=None, closed=None,
+                 label=None, convention='start', kind=None, loffset=None,
+                 limit=None, base=0):
+        key = pd.TimeGrouper(freq=rule, axis=axis, fill_method=fill_method,
+                             closed=closed, label=label,
+                             convention=convention, kind=kind, loffset=loffset,
+                             limit=limit, base=base)
+        return getattr(SeriesGroupBy(self, key, None), how)()
+
     def __getitem__(self, key):
         name = next(names)
         if isinstance(key, Series) and self.divisions == key.divisions:
@@ -692,7 +701,7 @@ class GroupBy(object):
         if key in self.frame.columns:
             return SeriesGroupBy(self.frame, self.index, key)
         else:
-            raise KeyError()
+            raise KeyError(key)
 
     def __dir__(self):
         return sorted(set(list(dir(type(self))) + list(self.frame.columns)))
@@ -714,11 +723,11 @@ class SeriesGroupBy(object):
         self.key = key
         self.kwargs = kwargs
 
-    def apply(func, columns=None):
+    def apply(self, func, columns=None):
         # f = set_index(self.frame, self.index, **self.kwargs)
         if self.index._name == self.frame.index._name:
             f = self.frame
-            return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
+            return f.map_blocks(lambda df: df.groupby(level=0)[self.key].apply(func),
                                 columns=columns)
         else:
             f = shuffle(self.frame, self.index, **self.kwargs)
@@ -727,38 +736,41 @@ class SeriesGroupBy(object):
                               self.frame, self.index)
 
     def sum(self):
-        chunk = lambda df, index: df.groupby(index)[self.key].sum()
-        agg = lambda df: df.groupby(level=0).sum()
+        chunk = lambda df, index: df.groupby(index).sum()
+        agg = lambda df: df.groupby(self.index).sum()
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key])
 
     def min(self):
-        chunk = lambda df, index: df.groupby(index)[self.key].min()
-        agg = lambda df: df.groupby(level=0).min()
+        chunk = lambda df, index: df.groupby(index).min()
+        agg = lambda df: df.groupby(self.index).min()
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key])
 
     def max(self):
-        chunk = lambda df, index: df.groupby(index)[self.key].max()
-        agg = lambda df: df.groupby(level=0).max()
+        chunk = lambda df, index: df.groupby(index).max()
+        agg = lambda df: df.groupby(self.index).max()
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key])
 
     def count(self):
-        chunk = lambda df, index: df.groupby(index)[self.key].count()
-        agg = lambda df: df.groupby(level=0).sum()
+        def chunk(df, index):
+            return df.groupby(index).count()
+
+        def agg(df):
+            return df.groupby(self.index).sum().fillna(0)
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key])
 
     def mean(self):
         def chunk(df, index):
             g = df.groupby(index)
-            return g.agg({self.key: ['sum', 'count']})
+            return g.agg(['sum', 'count'])
+
         def agg(df):
-            g = df.groupby(level=0)
-            x = g.agg({(self.key, 'sum'): 'sum',
-                       (self.key, 'count'): 'sum'})
-            result = x[self.key]['sum'] / x[self.key]['count']
+            g = df.groupby(self.index)
+            x = g.agg({'sum': 'sum', 'count': 'sum'})
+            result = x['sum'] / x['count']
             result.name = self.key
             return result
         return aca([self.frame, self.index],
@@ -768,12 +780,14 @@ class SeriesGroupBy(object):
         def chunk(df, index):
             # we call set_index here to force a possibly duplicate index
             # for our reduce step
-            return (df.groupby(index)
-                      .apply(pd.DataFrame.drop_duplicates, subset=self.key)
-                      .set_index(index))
+            dedup = type(df).drop_duplicates
+            grouped = df.groupby(index)
+            if isinstance(df, pd.DataFrame):
+                return grouped.apply(dedup, subset=self.key).set_index(index)
+            return grouped.apply(dedup)
 
         def agg(df):
-            return df.groupby(level=0)[self.key].nunique()
+            return df.groupby(self.index).nunique()
 
         return aca([self.frame, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key])

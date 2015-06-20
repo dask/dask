@@ -1,3 +1,4 @@
+from itertools import product
 from operator import getitem
 
 import pandas as pd
@@ -8,6 +9,8 @@ import dask
 from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.core import get, concat
+
+import pytest
 
 
 def eq(a, b):
@@ -426,3 +429,21 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     expected = ps.groupby('strings')['data'].nunique()
     result = s.groupby('strings')['data'].nunique().compute()
     tm.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize(['freq', 'how', 'npartitions'],
+                         list(product(['T', 'H', 'D', 'M'],
+                                      ['sum', 'mean', 'count', 'nunique'],
+                                      [2, 10])))
+def test_series_resample(freq, how, npartitions):
+    n = 24 * 60 * 3
+    index = pd.date_range(start='20120101', periods=n, freq='T').values
+    index = index[np.random.rand(n) > 0.5]
+    np.random.shuffle(index)
+    s = pd.Series(np.random.rand(len(index)) * 100, index=pd.Index(index))
+    expected = s.resample(freq, how=how)
+    ds = dd.from_pandas(s, npartitions=npartitions)
+
+    # the default scheduler segfaults :|
+    result = ds.resample(freq, how=how).compute(get=dask.async.get_sync)
+    tm.assert_series_equal(expected, result, check_dtype=False)
