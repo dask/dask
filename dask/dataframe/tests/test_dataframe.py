@@ -423,3 +423,13 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     expected = ps.groupby('strings')['data'].nunique()
     result = s.groupby('strings')['data'].nunique().compute()
     tm.assert_series_equal(result, expected)
+
+
+def test_set_partition_2():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')})
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf.set_partition('y', ['c'])
+    assert result.divisions == ('c',)
+
+    assert list(result.compute().index[-2:]) == ['d', 'd']
