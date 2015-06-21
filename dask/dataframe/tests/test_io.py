@@ -158,11 +158,23 @@ def test_read_csv_categorize_with_parse_dates():
 def test_read_csv_categorize_and_index():
     with filetext(text) as fn:
         f = read_csv(fn, chunkbytes=20, index='amount')
-        assert f.index.compute(get=get_sync).name == 'amount'
+        result = f.compute(get=get_sync)
+        assert result.index.name == 'amount'
+
+        blocks = dd.core.get(f.dask, f._keys(), get=get_sync)
+        for i, block in enumerate(blocks):
+            if i < len(f.divisions):
+                assert (block.index <= f.divisions[i]).all()
+            if i > 0:
+                assert (block.index > f.divisions[i - 1]).all()
 
         expected = pd.read_csv(fn).set_index('amount')
         expected['name'] = expected.name.astype('category')
-        assert eq(f, expected)
+
+        result = result.sort()
+        expected = expected.sort()
+
+        assert eq(result, expected)
 
 
 def test_usecols():

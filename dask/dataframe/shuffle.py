@@ -133,7 +133,10 @@ def _set_partition(df, index, divisions, p):
 
 def _set_collect(group, p, barrier_token):
     """ Collect partitions from partd, yield dataframes """
-    return p.get(group)
+    try:
+        return p.get(group)
+    except ValueError:
+        return pd.DataFrame()
 
 
 def from_pframe(pf):
