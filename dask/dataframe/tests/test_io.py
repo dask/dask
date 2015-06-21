@@ -5,7 +5,6 @@ import pandas.util.testing as tm
 import os
 import dask
 import bcolz
-from pframe import pframe
 from operator import getitem
 from toolz import valmap
 import tempfile
@@ -231,35 +230,6 @@ def test_from_bcolz_filename():
 
         d = dd.from_bcolz(fn, chunksize=2)
         assert list(d.x.compute()) == [1, 2, 3]
-
-
-#####################
-# Play with PFrames #
-#####################
-
-
-dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
-                              index=[0, 1, 3]),
-       ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
-                              index=[5, 6, 8]),
-       ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
-                              index=[9, 9, 9])}
-dfs = list(dsk.values())
-pf = pframe(like=dfs[0], divisions=[5])
-for df in dfs:
-    pf.append(df)
-
-
-def test_from_pframe():
-    d = dd.from_pframe(pf)
-    assert list(d.columns) == list(dfs[0].columns)
-    assert list(d.divisions) == list(pf.divisions)
-
-
-def test_column_store_from_pframe():
-    d = dd.from_pframe(pf)
-    assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
-    assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
 
 
 def test_skipinitialspace():

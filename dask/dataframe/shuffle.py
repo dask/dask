@@ -6,7 +6,6 @@ import toolz
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
-from pframe import pframe
 
 from .. import threaded
 from .core import DataFrame, Series, get, names, _Frame
@@ -137,15 +136,6 @@ def _set_collect(group, p, barrier_token):
         return p.get(group)
     except ValueError:
         return pd.DataFrame()
-
-
-def from_pframe(pf):
-    """ Load dask.array from pframe """
-    name = next(names)
-    dsk = dict(((name, i), (pframe.get_partition, pf, i))
-                for i in range(pf.npartitions))
-
-    return DataFrame(dsk, name, pf.columns, pf.divisions)
 
 
 def unique(divisions):
