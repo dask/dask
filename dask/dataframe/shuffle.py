@@ -192,7 +192,8 @@ def shuffle(df, index, npartitions=None):
 
     import partd
     p = ('zpartd' + next(tokens),)
-    p = partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
+    dsk1 = {p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,),
+                                                   (partd.File,)))}
 
     # Partition data on disk
     name = next(names)
@@ -220,7 +221,7 @@ def shuffle(df, index, npartitions=None):
 
     divisions = [None] * (npartitions - 1)
 
-    dsk = merge(df.dask, dsk2, dsk3, dsk4)
+    dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
     if isinstance(index, _Frame):
         dsk.update(index.dask)
 
