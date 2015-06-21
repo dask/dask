@@ -54,11 +54,12 @@ def set_partition(df, index, divisions):
 
     import partd
     p = ('zpartd' + next(tokens),)
-    p = partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
 
     # Get Categories
     catname = next(names)
-    dsk1 = {catname: (get_categories, df._keys()[0])}
+
+    dsk1 = {catname: (get_categories, df._keys()[0]),
+            p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,)))}
 
     # Partition data on disk
     name = next(names)
@@ -84,7 +85,7 @@ def set_partition(df, index, divisions):
                  (_categorize, catname, (_set_collect, i, p, barrier_token)))
                 for i in range(len(divisions) + 1))
 
-    dsk = merge(df.dask, dsk2, dsk3, dsk4)
+    dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
     if isinstance(index, _Frame):
         dsk.update(index.dask)
 

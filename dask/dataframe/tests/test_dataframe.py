@@ -432,4 +432,4 @@ def test_set_partition_2():
     result = ddf.set_partition('y', ['c'])
     assert result.divisions == ('c',)
 
-    assert list(result.compute().index[-2:]) == ['d', 'd']
+    assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']
