@@ -586,8 +586,34 @@ def _partition_of_index_value(divisions, val):
     return min(len(divisions) - 2, max(0, i - 1))
 
 
-def _loc(df, start, stop):
-    return df.loc[slice(start, stop)]
+def _loc(df, start, stop, include_right_boundary=True):
+    """
+
+    >>> df = pd.DataFrame({'x': [10, 20, 30, 40, 50]}, index=[1, 2, 2, 3, 4])
+    >>> _loc(df, 2, None)
+        x
+    2  20
+    2  30
+    3  40
+    4  50
+    >>> _loc(df, 1, 3)
+        x
+    1  10
+    2  20
+    2  30
+    3  40
+    >>> _loc(df, 1, 3, include_right_boundary=False)
+        x
+    1  10
+    2  20
+    2  30
+    """
+    result = df.loc[slice(start, stop)]
+    if not include_right_boundary:
+        # result = df[df.index != stop]
+        result = result.iloc[:result.index.get_slice_bound(stop, 'left',
+                                                   result.index.inferred_type)]
+    return result
 
 
 def _coerce_loc_index(divisions, o):
@@ -983,8 +1009,8 @@ def redivide_divisions(a, b, name, out1, out2):
     >>> redivide_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')
     {('b', 0): (<function _loc at 0x7f30e417e500>, ('a', 0), 1, 3),
      ('b', 1): (<function _loc at 0x7f30e417e500>, ('a', 1), 3, 4),
-     ('b', 2): (<function _loc at 0x7f30e417e500>, ('a', 2), 4, 6),
-     ('b', 3): (<function _loc at 0x7f30e417e500>, ('a', 3), 6, 7)
+     ('b', 2): (<function _loc at 0x7f30e417e500>, ('a', 1), 4, 6),
+     ('b', 3): (<function _loc at 0x7f30e417e500>, ('a', 2), 6, 7)
      ('c', 0): (<function concat at 0x7f710208c9b0>,
                 (<type 'list'>, [('b', 0), ('b', 1)])),
      ('c', 1): ('b', 2),
@@ -999,15 +1025,15 @@ def redivide_divisions(a, b, name, out1, out2):
     k = 0
     while (i < len(a) and j < len(b)):
         if a[i] < b[j]:
-            d[(out1, k)] = (_loc, (name, k), low, a[i])
+            d[(out1, k)] = (_loc, (name, i - 1), low, a[i], False)
             low = a[i]
             i += 1
         elif a[i] > b[j]:
-            d[(out1, k)] = (_loc, (name, k), low, b[j])
+            d[(out1, k)] = (_loc, (name, i - 1), low, b[j], False)
             low = b[j]
             j += 1
         else:
-            d[(out1, k)] = (_loc, (name, k), low, b[j])
+            d[(out1, k)] = (_loc, (name, i - 1), low, b[j])
             low = b[j]
             i += 1
             j += 1
