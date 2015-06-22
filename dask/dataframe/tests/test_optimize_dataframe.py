@@ -1,3 +1,4 @@
+import pytest
 from operator import getitem
 from toolz import valmap
 import bcolz
@@ -41,6 +42,7 @@ def test_fast_functions():
     assert len(dd.optimize(e.dask, e._keys())) == 6
 
 
+@pytest.mark.xfail
 def test_castra_column_store():
     try:
         from castra import Castra
