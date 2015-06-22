@@ -241,9 +241,13 @@ class _Frame(object):
                       for i in range(1, stop - start)),
                   {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
 
-                divisions = ((max(istart, self.divisions[start]),) +
+                divisions = ((max(istart, self.divisions[start])
+                              if ind.start is not None
+                              else self.divisions[0],) +
                              self.divisions[start+1:stop+1] +
-                             (min(istop, self.divisions[stop+1]),))
+                             (min(istop, self.divisions[stop+1])
+                              if ind.stop is not None
+                              else self.divisions[-1],))
 
             assert len(divisions) == len(dsk) + 1
             return type(self)(merge(self.dask, dsk),
