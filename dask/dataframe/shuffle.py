@@ -106,7 +106,34 @@ def get_categories(df):
     return dict((col, df[col].cat.categories) for col in df.columns
                 if iscategorical(df.dtypes[col]))
 
-from castra.core import _categorize
+
+def _categorize(categories, df):
+    """ Categorize columns in dataframe
+
+    >>> df = pd.DataFrame({'x': [1, 2, 3], 'y': [0, 2, 0]})
+    >>> categories = {'y': ['A', 'B', 'c']}
+    >>> _categorize(categories, df)
+       x  y
+    0  1  A
+    1  2  c
+    2  3  A
+    """
+    if isinstance(df, pd.Series):
+        if df.name in categories:
+            cat = pd.Categorical.from_codes(df.values, categories[df.name])
+            return pd.Series(cat, index=df.index)
+        else:
+            return df
+
+    else:
+        return pd.DataFrame(
+                dict((col, pd.Categorical.from_codes(df[col], categories[col])
+                           if col in categories
+                           else df[col])
+                    for col in df.columns),
+                columns=df.columns,
+                index=df.index)
+
 
 def strip_categories(df):
     """ Strip categories from dataframe
