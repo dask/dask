@@ -7,14 +7,11 @@ import pandas as pd
 import numpy as np
 
 from .. import threaded
-from .core import DataFrame, Series, get, names, _Frame
+from .core import DataFrame, Series, get, names, _Frame, tokens
 from ..compatibility import unicode
 from ..utils import ignoring
 from .utils import (strip_categories, unique, shard_df_on_index, _categorize,
         get_categories)
-
-
-tokens = ('-%d' % i for i in count(1))
 
 
 def set_index(df, index, npartitions=None, **kwargs):
