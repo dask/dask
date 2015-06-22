@@ -34,7 +34,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
+d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
 full = d.compute()
 
 
@@ -91,7 +91,7 @@ def test_set_index():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
                                   index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
     full = d.compute()
 
     d2 = d.set_index('b', npartitions=3)
@@ -115,7 +115,7 @@ def test_split_apply_combine_on_series():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
                                   index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
     full = d.compute()
 
     assert eq(d.groupby('b').a.sum(), full.groupby('b').a.sum())
@@ -234,8 +234,8 @@ def test_groupby_on_index():
 
 
 def test_set_partition():
-    d2 = d.set_partition('b', [2])
-    assert d2.divisions == (2,)
+    d2 = d.set_partition('b', [0, 2, 9])
+    assert d2.divisions == (0, 2, 9)
     expected = full.set_index('b').sort(ascending=True)
     assert eq(d2.compute().sort(ascending=True), expected)
 
@@ -247,7 +247,7 @@ def test_categorize():
            ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
                                    'b': ['A', 'A', 'B']},
                                    index=[3, 4, 5])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [3])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 3, 5])
     full = d.compute()
 
     c = d.categorize('a')
@@ -301,19 +301,28 @@ def test_index():
 
 
 def test_loc():
+    assert d.loc[3:8].divisions[0] == 3
+    assert d.loc[3:8].divisions[-1] == 8
+
+    assert d.loc[5].divisions == (5, 5)
+
     assert eq(d.loc[5], full.loc[5])
     assert eq(d.loc[3:8], full.loc[3:8])
     assert eq(d.loc[:8], full.loc[:8])
     assert eq(d.loc[3:], full.loc[3:])
 
 
+
 def test_loc_with_text_dates():
     A = tm.makeTimeSeries(10).iloc[:5]
     B = tm.makeTimeSeries(10).iloc[5:]
-    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None, [A.index.max()])
+    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None,
+                  [A.index.min(), A.index.max(), B.index.max()])
 
+    assert s.loc['2000': '2010'].divisions == s.divisions
     assert eq(s.loc['2000': '2010'], s)
     assert len(s.loc['2000-01-03': '2000-01-05'].compute()) == 3
+
 
 
 def test_iloc_raises():
@@ -348,18 +357,18 @@ def test_known_divisions():
     assert d.known_divisions
 
     df = dd.DataFrame({('x', 0): 'foo', ('x', 1): 'bar'}, 'x',
-                      ['a', 'b'], divisions=[None])
+                      ['a', 'b'], divisions=[None, None, None])
     assert not df.known_divisions
 
     df = dd.DataFrame({('x', 0): 'foo'}, 'x',
-                      ['a', 'b'], divisions=[])
+                      ['a', 'b'], divisions=[0, 1])
     assert d.known_divisions
 
-def test_unkonwn_divisions():
+def test_unknown_divisions():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
     full = d.compute(get=dask.get)
 
     assert eq(d.a.sum(), full.a.sum())
@@ -433,7 +442,7 @@ def test_set_partition_2():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')})
     ddf = dd.from_pandas(df, 2)
 
-    result = ddf.set_partition('y', ['c'])
-    assert result.divisions == ('c',)
+    result = ddf.set_partition('y', ['a', 'c', 'd'])
+    assert result.divisions == ('a', 'c', 'd')
 
     assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']

@@ -17,7 +17,7 @@ from ..compatibility import StringIO, unicode, range
 from ..utils import textblock
 
 from . import core
-from .core import names, DataFrame, compute, concat, categorize_block
+from .core import names, DataFrame, compute, concat, categorize_block, tokens
 from .shuffle import set_partition
 
 
@@ -96,7 +96,7 @@ def read_csv(fn, *args, **kwargs):
     # Chunk sizes and numbers
     total_bytes = file_size(fn, compression)
     nchunks = int(ceil(total_bytes / chunkbytes))
-    divisions = [None] * (nchunks - 1)
+    divisions = [None] * (nchunks + 1)
 
     kwargs.pop('compression', None)  # these functions will take StringIO
 
@@ -211,7 +211,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
 
     import dask
     if index:
-        quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
+        quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1))
         result = compute(quantiles, *categories)
         quantiles, categories = result[0], result[1:]
     else:
@@ -221,9 +221,6 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     categories = dict(zip(category_columns, categories))
 
     return categories, quantiles
-
-
-tokens = ('-%d' % i for i in count(1))
 
 
 def from_array(x, chunksize=50000):
@@ -240,7 +237,9 @@ def from_array(x, chunksize=50000):
 
     """
     columns = tuple(x.dtype.names)
-    divisions = tuple(range(chunksize, len(x), chunksize))
+    divisions = tuple(range(0, len(x), chunksize))
+    if divisions[-1] != len(x) - 1:
+        divisions = divisions + (len(x) - 1,)
     name = 'from_array' + next(tokens)
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
@@ -273,12 +272,18 @@ def from_pandas(data, npartitions):
     --------
     >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
     ...                   index=pd.date_range(start='20100101', periods=6))
-    >>> dd = from_pandas(df, npartitions=3)
-    >>> dd.divisions[0]
-    Timestamp('2010-01-03 00:00:00', offset='D')
-    >>> ds = from_pandas(df.a, npartitions=3)  # Works with Series too!
-    >>> ds.divisions[1]
-    Timestamp('2010-01-05 00:00:00', offset='D')
+    >>> ddf = from_pandas(df, npartitions=3)
+    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
+    (Timestamp('2010-01-01 00:00:00', offset='D'),
+     Timestamp('2010-01-03 00:00:00', offset='D'),
+     Timestamp('2010-01-05 00:00:00', offset='D'),
+     Timestamp('2010-01-06 00:00:00', offset='D'))
+    >>> ddf = from_pandas(df.a, npartitions=3)  # Works with Series too!
+    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
+    (Timestamp('2010-01-01 00:00:00', offset='D'),
+     Timestamp('2010-01-03 00:00:00', offset='D'),
+     Timestamp('2010-01-05 00:00:00', offset='D'),
+     Timestamp('2010-01-06 00:00:00', offset='D'))
 
     Raises
     ------
@@ -299,7 +304,9 @@ def from_pandas(data, npartitions):
     chunksize = int(ceil(nrows / npartitions))
     data = data.sort_index(ascending=True)
     divisions = tuple(data.index[i]
-                      for i in range(chunksize, nrows, chunksize))
+                      for i in range(0, nrows, chunksize))
+    if divisions[-1] != data.index[-1]:
+        divisions = divisions + (data.index[-1],)
     name = 'from_pandas' + next(tokens)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions))
@@ -344,7 +351,9 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
                 categories[name] = da.unique(a)
 
     columns = tuple(x.dtype.names)
-    divisions = tuple(range(chunksize, len(x), chunksize))
+    divisions = (0,) + tuple(range(-1, len(x), chunksize))[1:]
+    if divisions[-1] != len(x) - 1:
+        divisions = divisions + (len(x) - 1,)
     new_name = 'from_bcolz' + next(tokens)
     dsk = dict(((new_name, i),
                 (dataframe_from_ctable,
@@ -358,7 +367,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     if index:
         assert index in x.names
         a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
-        q = np.linspace(1, 100, len(x) // chunksize + 2)[1:-1]
+        q = np.linspace(0, 100, len(x) // chunksize + 2)
         divisions = da.percentile(a, q).compute()
         return set_partition(result, index, divisions, **kwargs)
     else:

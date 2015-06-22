@@ -27,7 +27,7 @@ def set_index(df, index, npartitions=None, **kwargs):
         index2 = index
 
     divisions = (index2
-                  .quantiles(np.linspace(0, 100, npartitions+1)[1:-1])
+                  .quantiles(np.linspace(0, 100, npartitions+1))
                   .compute())
     return df.set_partition(index, divisions, **kwargs)
 
@@ -88,7 +88,7 @@ def set_partition(df, index, divisions):
     name = next(names)
     dsk4 = dict(((name, i),
                  (_categorize, catname, (_set_collect, i, p, barrier_token)))
-                for i in range(len(divisions) + 1))
+                for i in range(len(divisions) - 1))
 
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
     if isinstance(index, _Frame):
@@ -102,7 +102,7 @@ def _set_partition(df, index, divisions, p):
     df = strip_categories(df)
     divisions = list(divisions)
     df = df.set_index(index)
-    shards = shard_df_on_index(df, divisions)
+    shards = shard_df_on_index(df, divisions[1:-1])
     p.append(dict(enumerate(shards)))
 
 
@@ -164,7 +164,7 @@ def shuffle(df, index, npartitions=None):
                  (collect, i, p, barrier_token))
                 for i in range(npartitions))
 
-    divisions = [None] * (npartitions - 1)
+    divisions = [None] * (npartitions + 1)
 
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
     if isinstance(index, _Frame):

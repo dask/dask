@@ -34,7 +34,7 @@ def test_column_optimizations_with_bcolz_and_rewrite():
 
 
 def test_fast_functions():
-    df = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    df = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
     e = df.a + df.b
     assert len(e.dask) > 6
 
