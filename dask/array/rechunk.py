@@ -196,6 +196,8 @@ def rechunk(x, chunks):
             chunks = blockshape_dict_to_tuple(x.chunks, chunks)
         else:
             chunks = blockdims_dict_to_tuple(x.chunks, chunks)
+    if not isinstance(chunks, (tuple, list)):
+        chunks = (chunks,)
     chunks = tuple(lc if lc is not None else rc
                    for lc, rc in zip(chunks, x.chunks))
     chunks = normalize_chunks(chunks, x.shape)
