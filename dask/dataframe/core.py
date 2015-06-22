@@ -715,7 +715,7 @@ class SeriesGroupBy(object):
         self.key = key
         self.kwargs = kwargs
 
-    def apply(func, columns=None):
+    def apply(self, func, columns=None):
         # f = set_index(self.frame, self.index, **self.kwargs)
         if self.index._name == self.frame.index._name:
             f = self.frame
