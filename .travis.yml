@@ -21,6 +21,7 @@ install:
   - conda install pytest numpy pip coverage toolz pandas scikit-learn cytoolz dill networkx pyzmq psutil ipython bcolz chest blosc cython
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install blosc --upgrade
+  - pip install git+https://github.com/Blosc/castra
 
   # Install dask
   - python setup.py install
