@@ -1,9 +1,11 @@
 from __future__ import print_function
 
-import zmq
+import os
 import itertools
 import uuid
 from datetime import datetime
+
+import zmq
 import dill
 from .scheduler import pickle
 from ..compatibility import unicode
