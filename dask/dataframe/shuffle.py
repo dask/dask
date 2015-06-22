@@ -38,15 +38,23 @@ def set_index(df, index, npartitions=None, **kwargs):
 def set_partition(df, index, divisions):
     """ Group DataFrame by index
 
-    Hash grouping of elements.  After this operation all elements that have
-    the same index will be in the same partition.  Note that this requires
-    full dataset read, serialization and shuffle.  This is expensive.  If
-    possible you should avoid shuffles.
+    Sets a new index and partitions data along that index according to
+    divisions.  Divisions are often found by computing approximate quantiles.
+    The function ``set_index`` will do both of these steps.
 
-    This does not preserve a meaningful index/partitioning scheme.
+    Parameters
+    ----------
+    df: DataFrame/Series
+        Data that we want to re-partition
+    index: string or Series
+        Column to become the new index
+    divisions: list
+        Values to form new divisions between partitions
 
     See Also
     --------
+    set_index
+    shuffle
     partd
     """
     if isinstance(index, _Frame):
@@ -93,6 +101,7 @@ def set_partition(df, index, divisions):
 
 
 def _set_partition(df, index, divisions, p):
+    """ Shard partition and dump into partd """
     df = strip_categories(df)
     divisions = list(divisions)
     df = df.set_index(index)
@@ -101,7 +110,7 @@ def _set_partition(df, index, divisions, p):
 
 
 def _set_collect(group, p, barrier_token):
-    """ Collect partitions from partd, yield dataframes """
+    """ Get new partition dataframe from partd """
     try:
         return p.get(group)
     except ValueError:
@@ -120,6 +129,8 @@ def shuffle(df, index, npartitions=None):
 
     See Also
     --------
+    set_index
+    set_partition
     partd
     """
     if isinstance(index, _Frame):
