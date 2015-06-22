@@ -1039,6 +1039,8 @@ def redivide_divisions(a, b, name, out1, out2):
             j += 1
         c.append(low)
         k = k + 1
+    tup = d[(out1, k - 1)]
+    d[(out1, k - 1)] = tup[:-1] + (True,)
     c.append(a[-1])
 
 
