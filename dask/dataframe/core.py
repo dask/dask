@@ -63,6 +63,7 @@ def compute(*args, **kwargs):
 
 
 names = ('f-%d' % i for i in count(1))
+tokens = ('-%d' % i for i in count(1))
 
 
 class Scalar(object):

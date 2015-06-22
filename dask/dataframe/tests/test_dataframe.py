@@ -5,6 +5,7 @@ import pandas.util.testing as tm
 import numpy as np
 
 import dask
+from dask.async import get_sync
 from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.core import get, concat
@@ -12,9 +13,9 @@ from dask.dataframe.core import get, concat
 
 def eq(a, b):
     if hasattr(a, 'dask'):
-        a = a.compute(get=dask.get)
+        a = a.compute(get=get_sync)
     if hasattr(b, 'dask'):
-        b = b.compute(get=dask.get)
+        b = b.compute(get=get_sync)
     if isinstance(a, pd.DataFrame):
         a = a.sort_index()
         b = b.sort_index()
@@ -426,3 +427,13 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     expected = ps.groupby('strings')['data'].nunique()
     result = s.groupby('strings')['data'].nunique().compute()
     tm.assert_series_equal(result, expected)
+
+
+def test_set_partition_2():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')})
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf.set_partition('y', ['c'])
+    assert result.divisions == ('c',)
+
+    assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']

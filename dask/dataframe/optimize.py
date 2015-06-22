@@ -7,15 +7,10 @@ from ..optimize import cull, fuse, inline_functions
 from .. import core
 from toolz import valmap
 from operator import getitem
-from pframe import pframe
 import operator
 
 
 rewrite_rules = RuleSet(
-        # Merge column access into pframe loading
-        RewriteRule((getitem, (pframe.get_partition, a, b), c),
-                    (pframe.get_partition, a, b, c),
-                    (a, b, c)),
         # Merge column access into bcolz loading
         RewriteRule((getitem, (dataframe_from_ctable, a, b, c, d), e),
                     (dataframe_from_ctable, a, b, e, d),

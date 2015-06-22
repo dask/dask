@@ -239,5 +239,4 @@ current design and limitations of dask.dataframe.
 
 
 .. _Chest: http://github.com/ContinuumIO/chest
-.. _pframe: pframe.html
 .. _shared: shared.html
