@@ -8,7 +8,7 @@ import dask
 from dask.async import get_sync
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.core import get, concat
+from dask.dataframe.core import get, concat, redivide_divisions, _loc
 
 
 def eq(a, b):
@@ -457,3 +457,14 @@ def test_redivide():
     assert b.divisions == (10, 20, 50, 60)
     assert eq(a, b)
     assert eq(get(b.dask, (b._name, 0)), df.iloc[:1])
+
+
+def test_redivide_divisions():
+    result = redivide_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    assert result == {('b', 0): (_loc, ('a', 0), 1, 3, False),
+                      ('b', 1): (_loc, ('a', 1), 3, 4, False),
+                      ('b', 2): (_loc, ('a', 1), 4, 6, False),
+                      ('b', 3): (_loc, ('a', 1), 6, 7, False),
+                      ('c', 0): (pd.concat, (list, [('b', 0), ('b', 1)])),
+                      ('c', 1): ('b', 2),
+                      ('c', 2): ('b', 3)}
