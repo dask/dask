@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from collections import Iterator
+import toolz
 
 
 def shard_df_on_index(df, divisions):
@@ -104,6 +105,11 @@ def strip_categories(df):
     >>> df = pd.DataFrame({'x': [1, 2, 3], 'y': ['A', 'B', 'A']})
     >>> df['y'] = df.y.astype('category')
     >>> strip_categories(df)
+       x  y
+    0  1  0
+    1  2  1
+    2  3  0
+
     """
     return pd.DataFrame(dict((col, df[col].cat.codes
                                    if iscategorical(df.dtypes[col])
@@ -123,7 +129,7 @@ def get_categories(df):
     >>> df = pd.DataFrame({'x': [1, 2, 3], 'y': ['A', 'B', 'A']})
     >>> df['y'] = df.y.astype('category')
     >>> get_categories(df)
-    {'y': pd.Index(['A', 'B'], dtype='object')}
+    {'y': Index(['A', 'B'], dtype='object')}
     """
     return dict((col, df[col].cat.categories) for col in df.columns
                 if iscategorical(df.dtypes[col]))
