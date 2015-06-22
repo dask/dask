@@ -963,4 +963,69 @@ def pd_split(df, p, seed=0):
     return [df.iloc[index == i] for i in range(len(p))]
 
 
+def redivide_divisions(a, b, name, out1, out2):
+    """ dask graph to redivide frame by new divisions
+
+    Parameters
+    ----------
+    a: tuple
+        old divisions
+    b: tuple
+        new divisions
+    name: str
+        name of old dataframe
+    out: str
+        name of new dataframe
+
+    >>> redivide_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')
+    {('b', 0): (<function _loc at 0x7f30e417e500>, ('a', 0), 1, 3),
+     ('b', 1): (<function _loc at 0x7f30e417e500>, ('a', 1), 3, 4),
+     ('b', 2): (<function _loc at 0x7f30e417e500>, ('a', 2), 4, 6),
+     ('b', 3): (<function _loc at 0x7f30e417e500>, ('a', 3), 6, 7)
+     ('c', 0): (<function concat at 0x7f710208c9b0>,
+                (<type 'list'>, [('b', 0), ('b', 1)])),
+     ('c', 1): ('b', 2),
+     ('c', 2): ('b', 3)}
+    """
+    assert a[0] == b[0]
+    assert a[-1] == b[-1]
+    c = [a[0]]
+    d = dict()
+    low = a[0]
+    i, j = 1, 1
+    k = 0
+    while (i < len(a) and j < len(b)):
+        if a[i] < b[j]:
+            d[(out1, k)] = (_loc, (name, k), low, a[i])
+            low = a[i]
+            i += 1
+        elif a[i] > b[j]:
+            d[(out1, k)] = (_loc, (name, k), low, b[j])
+            low = b[j]
+            j += 1
+        else:
+            d[(out1, k)] = (_loc, (name, k), low, b[j])
+            low = b[j]
+            i += 1
+            j += 1
+        c.append(low)
+        k = k + 1
+    c.append(a[-1])
+
+    i, j = 0, 1
+    while j < len(b):
+        tmp = []
+        while c[i] < b[j]:
+            tmp.append((out1, i))
+            i += 1
+        if len(tmp) == 1:
+            d[(out2, j - 1)] = tmp[0]
+        else:
+            d[(out2, j - 1)] = (pd.concat, (list, tmp))
+
+        j += 1
+
+    return d
+
+
 from .shuffle import set_index, set_partition, shuffle
