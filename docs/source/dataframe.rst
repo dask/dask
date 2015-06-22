@@ -43,7 +43,7 @@ particularly important.  The values in divisions determine a partitioning of
 left-inclusive / right-exclusive ranges on the index::
 
     divisions -- (0, 10, 20, 40, 50)
-    ranges    -- [0, 10), [10, 20), [20, 40), [40, 50)
+    ranges    -- [0, 10), [10, 20), [20, 40), [40, 50]
 
 Alternatively if our data is not partitioned (as is unfortunately often the
 case) then divisions will contain many instances of ``None``::

@@ -216,7 +216,8 @@ def test_from_bcolz():
     assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
 
     d = dd.from_bcolz(t, chunksize=2, index='x')
-    assert list(d.index.compute(get=get_sync)) == [1, 2, 3]
+    L = list(d.index.compute(get=get_sync))
+    assert L == [1, 2, 3] or L == [1, 3, 2]
 
 
 def test_from_bcolz_filename():

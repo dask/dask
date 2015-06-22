@@ -41,7 +41,7 @@ def shard_df_on_index(df, divisions):
     else:
         divisions = np.array(divisions)
         df = df.sort()
-        indices = df.index.searchsorted(divisions, side='right')
+        indices = df.index.searchsorted(divisions)
         yield df.iloc[:indices[0]]
         for i in range(len(indices) - 1):
             yield df.iloc[indices[i]: indices[i+1]]

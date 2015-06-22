@@ -575,7 +575,7 @@ def _partition_of_index_value(divisions, val):
     0
     """
     val = _coerce_loc_index(divisions, val)
-    i = bisect.bisect_right(divisions, val)
+    i = bisect.bisect_left(divisions, val)
     return min(len(divisions) - 2, max(0, i - 1))
 
 
