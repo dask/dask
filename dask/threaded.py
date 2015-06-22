@@ -14,7 +14,7 @@ from .context import _globals
 default_pool = ThreadPool()
 
 
-def get(dsk, result, cache=None, debug_counts=None, **kwargs):
+def get(dsk, result, cache=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
     Parameters
@@ -28,8 +28,6 @@ def get(dsk, result, cache=None, debug_counts=None, **kwargs):
         The number of threads to use in the ThreadPool that will actually execute tasks
     cache: dict-like (optional)
         Temporary storage of results
-    debug_counts: integer or None
-        This integer tells how often the scheduler should dump debugging info
 
     Examples
     --------
@@ -47,7 +45,6 @@ def get(dsk, result, cache=None, debug_counts=None, **kwargs):
 
     queue = Queue()
     results = get_async(pool.apply_async, len(pool._pool), dsk, result,
-                        cache=cache, debug_counts=debug_counts,
-                        queue=queue, **kwargs)
+                        cache=cache, queue=queue, **kwargs)
 
     return results

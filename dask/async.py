@@ -119,6 +119,7 @@ from __future__ import absolute_import, division, print_function
 import sys
 import traceback
 from operator import add
+from contextlib import contextmanager
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .optimize import inline_functions
 from .utils import deepmap
@@ -129,6 +130,12 @@ def inc(x):
 
 def double(x):
     return x * 2
+
+
+@contextmanager
+def default_cm(*args, **kwargs):
+    yield
+
 
 DEBUG = False
 
@@ -250,7 +257,8 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task, data, queue, raise_on_exception=False):
+def execute_task(key, task, data, queue, raise_on_exception=False,
+                 execute_cm=default_cm):
     """
     Compute task and handle all administration
 
@@ -258,8 +266,9 @@ def execute_task(key, task, data, queue, raise_on_exception=False):
         _execute_task - actually execute task
     """
     try:
-        result = _execute_task(task, data)
-        result = key, result, None
+        with execute_cm(key):
+            result = _execute_task(task, data)
+            result = key, result, None
     except Exception as e:
         if raise_on_exception:
             raise
@@ -347,9 +356,9 @@ def nested_get(ind, coll, lazy=False):
             return (nested_get(i, coll, lazy=lazy) for i in ind)
         else:
             return tuple([nested_get(i, coll, lazy=lazy) for i in ind])
-        return seq
     else:
         return coll[ind]
+
 
 '''
 Task Selection
@@ -370,8 +379,8 @@ The main function of the scheduler.  Get is the main entry point.
 '''
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-                debug_counts=None, queue=None, raise_on_exception=False,
-                **kwargs):
+              queue=None, raise_on_exception=False, execute_cm=None,
+              scheduler_callback=None, **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -396,8 +405,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         Keys corresponding to desired data
     cache: dict-like (optional)
         Temporary storage of results
-    debug_counts: integer or None
-        This integer tells how often the scheduler should dump debugging info
 
     See Also
     --------
@@ -414,18 +421,16 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     state = start_state_from_dask(dsk, cache=cache)
 
-    tick = [0]
-
     if state['waiting'] and not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
 
+    if not execute_cm:
+        execute_cm = default_cm
+
     def fire_task():
         """ Fire off a task to the thread pool """
-        # Update heartbeat
-        tick[0] += 1
-        # Emit visualization if called for
-        if debug_counts and tick[0] % debug_counts == 0:
-            visualize(dsk, state, filename='dask_%03d' % tick[0])
+        if scheduler_callback:
+            scheduler_callback(dsk, state)
         # Choose a good task to compute
         key = state['ready'].pop()
         state['ready-set'].remove(key)
@@ -436,7 +441,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                     for dep in get_dependencies(dsk, key))
         # Submit
         apply_async(execute_task, args=[key, dsk[key], data, queue,
-                                        raise_on_exception])
+                                        raise_on_exception, execute_cm])
 
     # Seed initial tasks into the thread pool
     while state['ready'] and len(state['running']) < num_workers:
@@ -457,8 +462,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['running'] or not queue.empty():
         key, res, tb = queue.get()
 
-    if debug_counts:
-        visualize(dsk, state, filename='dask_end')
+    if scheduler_callback:
+        scheduler_callback(dsk, state)
 
     return nested_get(result, state['cache'])
 
