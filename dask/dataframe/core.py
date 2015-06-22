@@ -262,6 +262,9 @@ class _Frame(object):
     def iloc(self):
         raise AttributeError("Dask Dataframe does not support iloc")
 
+    def redivide(self, divisions):
+        return redivide(self, divisions)
+
     def __getstate__(self):
         return self.__dict__
 
@@ -1027,5 +1030,12 @@ def redivide_divisions(a, b, name, out1, out2):
 
     return d
 
+
+def redivide(df, divisions):
+    tmp = 'redivide-split' + next(tokens)
+    out = 'redivide-merge' + next(tokens)
+    dsk = redivide_divisions(df.divisions, divisions, df._name, tmp, out)
+
+    return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
 
 from .shuffle import set_index, set_partition, shuffle
