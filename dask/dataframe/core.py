@@ -575,11 +575,11 @@ def _partition_of_index_value(divisions, val):
     1
     >>> _partition_of_index_value([0, 5, 10], 100)
     1
-    >>> _partition_of_index_value([0, 5, 10], 5)
-    0
+    >>> _partition_of_index_value([0, 5, 10], 5)  # left-inclusive divisions
+    1
     """
     val = _coerce_loc_index(divisions, val)
-    i = bisect.bisect_left(divisions, val)
+    i = bisect.bisect_right(divisions, val)
     return min(len(divisions) - 2, max(0, i - 1))
 
 
