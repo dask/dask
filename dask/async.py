@@ -181,7 +181,7 @@ def start_state_from_dask(dsk, cache=None):
     waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
 
     ready_set = set([k for k, v in waiting.items() if not v])
-    ready = sorted(ready_set)
+    ready = sorted(ready_set, key=sortkey)
     waiting = dict((k, v) for k, v in waiting.items() if v)
 
     state = {'dependencies': dependencies,
@@ -302,7 +302,7 @@ def finish_task(dsk, key, state, results, delete=True,
     if key in state['ready-set']:
         state['ready-set'].remove(key)
 
-    for dep in sorted(state['dependents'][key]):
+    for dep in sorted(state['dependents'][key], key=sortkey):
         s = state['waiting'][dep]
         s.remove(key)
         if not s:
@@ -532,3 +532,21 @@ def state_to_networkx(dsk, state):
     from .dot import to_networkx
     data, func = color_nodes(dsk, state)
     return to_networkx(dsk, data_attributes=data, function_attributes=func)
+
+
+def sortkey(item):
+    """ Sorting key function that is robust to different types
+
+    Both strings and tuples are common key types in dask graphs.
+    However In Python 3 one can not compare strings with tuples directly.
+    This function maps many types to a form where they can be compared
+
+    Examples
+    --------
+    >>> sortkey('Hello')
+    ('str', 'Hello')
+
+    >>> sortkey(('x', 1))
+    ('tuple', ('x', 1))
+    """
+    return (type(item).__name__, item)
