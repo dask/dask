@@ -33,6 +33,7 @@ class Client(object):
         self.socket = context.socket(zmq.DEALER)
         self.socket.setsockopt(zmq.IDENTITY, self.address)
         self.socket.connect(self.address_to_scheduler)
+        self.send_to_scheduler({'function': 'register'}, {})
 
     def get(self, dsk, keys):
         header = {'function': 'schedule',
