@@ -35,7 +35,7 @@ class Client(object):
         self.socket = context.socket(zmq.DEALER)
         self.socket.setsockopt(zmq.IDENTITY, self.address)
         self.socket.connect(self.address_to_scheduler)
-        self.send_to_scheduler({'function': 'register'}, {'pid': os.getpid()})
+        self.register_client()
 
     def get(self, dsk, keys):
         header = {'function': 'schedule',
@@ -124,3 +124,9 @@ class Client(object):
         if close_scheduler:
             self.close_scheduler()
         self.socket.close(1)
+
+    def register_client(self):
+        self.send_to_scheduler({'function': 'register'}, {'pid': os.getpid()})
+        header, payload = self.recv_from_scheduler()
+        self.registered_clients = payload['clients']
+        self.registered_workers = payload['workers']
