@@ -262,8 +262,12 @@ class _Frame(object):
     def iloc(self):
         raise AttributeError("Dask Dataframe does not support iloc")
 
-    def redivide(self, divisions):
-        return redivide(self, divisions)
+    def repartition(self, divisions):
+        """ Repartition dataframe along new divisions
+
+        >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
+        """
+        return repartition(self, divisions)
 
     def __getstate__(self):
         return self.__dict__
@@ -992,8 +996,8 @@ def pd_split(df, p, seed=0):
     return [df.iloc[index == i] for i in range(len(p))]
 
 
-def redivide_divisions(a, b, name, out1, out2):
-    """ dask graph to redivide frame by new divisions
+def repartition_divisions(a, b, name, out1, out2):
+    """ dask graph to repartition frame by new divisions
 
     Parameters
     ----------
@@ -1006,7 +1010,7 @@ def redivide_divisions(a, b, name, out1, out2):
     out: str
         name of new dataframe
 
-    >>> redivide_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
     {('b', 0): (<function _loc at ...>, ('a', 0), 1, 3, False),
      ('b', 1): (<function _loc at ...>, ('a', 1), 3, 4, False),
      ('b', 2): (<function _loc at ...>, ('a', 1), 4, 6, False),
@@ -1060,11 +1064,16 @@ def redivide_divisions(a, b, name, out1, out2):
     return d
 
 
-def redivide(df, divisions):
-    tmp = 'redivide-split' + next(tokens)
-    out = 'redivide-merge' + next(tokens)
-    dsk = redivide_divisions(df.divisions, divisions, df._name, tmp, out)
+def repartition(df, divisions):
+    """ Repartition dataframe along new divisions
+
+    >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
+    """
+    tmp = 'repartition-split' + next(tokens)
+    out = 'repartition-merge' + next(tokens)
+    dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
 
     return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
+
 
 from .shuffle import set_index, set_partition, shuffle
