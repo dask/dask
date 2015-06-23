@@ -468,3 +468,17 @@ def test_repartition_divisions():
                       ('c', 0): (pd.concat, (list, [('b', 0), ('b', 1)])),
                       ('c', 1): ('b', 2),
                       ('c', 2): ('b', 3)}
+
+
+def test_repartition_on_pandas_dataframe():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    ddf = dd.repartition(df, divisions=[10, 20, 50, 60])
+    assert isinstance(ddf, dd.DataFrame)
+    assert ddf.divisions == (10, 20, 50, 60)
+    assert eq(ddf, df)
+
+    ddf = dd.repartition(df.y, divisions=[10, 20, 50, 60])
+    assert isinstance(ddf, dd.Series)
+    assert ddf.divisions == (10, 20, 50, 60)
+    assert eq(ddf, df.y)

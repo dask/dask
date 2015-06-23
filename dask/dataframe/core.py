@@ -28,6 +28,7 @@ from .. import  async
 from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
+from .utils import shard_df_on_index
 
 
 def _concat(args):
@@ -1068,12 +1069,26 @@ def repartition(df, divisions):
     """ Repartition dataframe along new divisions
 
     >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
-    """
-    tmp = 'repartition-split' + next(tokens)
-    out = 'repartition-merge' + next(tokens)
-    dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
 
-    return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
+    Also works on Pandas objects
+
+    >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
+    """
+    if isinstance(df, _Frame):
+        tmp = 'repartition-split' + next(tokens)
+        out = 'repartition-merge' + next(tokens)
+        dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
+
+        return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
+
+    elif isinstance(df, pd.core.generic.NDFrame):
+        name = 'repartition-dataframe' + next(tokens)
+        dfs = shard_df_on_index(df, divisions[1:-1])
+        dsk = dict(((name, i), df) for i, df in enumerate(dfs))
+        if isinstance(df, pd.DataFrame):
+            return DataFrame(dsk, name, df.columns, divisions)
+        if isinstance(df, pd.Series):
+            return Series(dsk, name, df.name, divisions)
 
 
 from .shuffle import set_index, set_partition, shuffle
