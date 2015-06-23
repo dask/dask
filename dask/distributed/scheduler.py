@@ -13,7 +13,6 @@ from threading import Thread, Lock
 from contextlib import contextmanager
 import traceback
 import sys
-from time import sleep
 from ..compatibility import Queue, unicode, Empty
 try:
     import cPickle as pickle
