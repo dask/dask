@@ -218,7 +218,7 @@ class Scheduler(object):
         address = header['address']
         self.clients[address] = payload
         out_header = {}
-        out_payload = {'clients': self.clients, 'workers': self.workers}
+        out_payload = {'workers': self.workers}
         self.send_to_client(header['address'], out_header, out_payload)
 
     def _worker_registration(self, header, payload):
