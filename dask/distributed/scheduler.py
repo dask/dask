@@ -162,6 +162,7 @@ class Scheduler(object):
                 while not self.send_to_workers_queue.empty():
                     msg = self.send_to_workers_queue.get()
                     self.to_workers.send_multipart(msg)
+                    self.send_to_workers_queue.task_done()
 
             if self.to_workers in socks:
                 address, header, payload = self.to_workers.recv_multipart()
@@ -526,6 +527,8 @@ class Scheduler(object):
         header = {'function': 'close'}
         for w in self.workers:
             self.send_to_worker(w, header, {})
+        self.workers.clear()
+        self.send_to_workers_queue.join()
 
     def _close(self, header, payload):
         self.close()
