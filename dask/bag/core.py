@@ -397,6 +397,8 @@ class Bag(object):
         a = next(names)
         b = next(names)
         if key:
+            if callable(key) and takes_multiple_arguments(key):
+                key = curry(apply, key)
             func = curry(topk, key=key)
         else:
             func = topk
