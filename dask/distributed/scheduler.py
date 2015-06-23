@@ -214,10 +214,13 @@ class Scheduler(object):
         self._listen_to_clients_thread.join()
 
     def _client_registration(self, header, payload):
-        """ Client comes in, register it."""
+        """ Client comes in, register it, send back info about the cluster"""
         payload = pickle.loads(payload)
         address = header['address']
         self.clients[address] = payload
+        out_header = {}
+        out_payload = {'clients': self.clients, 'workers': self.workers}
+        self.send_to_client(header['address'], out_header, out_payload)
 
     def _worker_registration(self, header, payload):
         """ Worker came in, register them """
