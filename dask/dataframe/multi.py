@@ -1,6 +1,7 @@
-from .core import repartition
+from .core import repartition, tokens, DataFrame
 from bisect import bisect_left, bisect_right
-from toolz import merge_sorted, unique
+from toolz import merge_sorted, unique, merge
+import pandas as pd
 
 
 def bound(seq, left, right):
@@ -32,7 +33,6 @@ def align(*dfs):
     result: list
         A list of lists of keys that show which dataframes exist on which
         divisions
-
     """
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
     divisionss = [bound(divisions, df.divisions[0], df.divisions[-1])
@@ -49,5 +49,7 @@ def align(*dfs):
             if j < len(divs) - 1 and divs[j] == d:
                 L.append((dfs2[i]._name, inds[i]))
                 inds[i] += 1
+            else:
+                L.append(None)
         result.append(L)
     return dfs2, tuple(divisions), result
