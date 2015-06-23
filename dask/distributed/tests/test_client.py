@@ -117,5 +117,8 @@ def test_register_collections():
 def test_register_with_scheduler():
     with scheduler_and_workers() as (s, (a, b)):
         c = Client(s.address_to_clients)
-        sleep(.2)
+        pid = os.getpid()
         assert s.clients[c.address]['pid'] == os.getpid()
+        assert c.registered_clients == {c.address: {'pid': pid}}
+        assert (c.registered_workers == {a.address: {'pid': pid},
+                                         b.address: {'pid': pid}})
