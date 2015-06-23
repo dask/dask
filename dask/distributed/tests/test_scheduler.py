@@ -200,7 +200,12 @@ def test_close_workers():
         assert a.status != 'closed'
 
         s.close_workers()
-        sleep(0.05)
+        assert not s.workers
+        for i in range(100):
+            if a.status == 'closed' and b.status == 'closed':
+                break
+            else:
+                sleep(0.01)
         assert a.status == 'closed'
         assert b.status == 'closed'
 
