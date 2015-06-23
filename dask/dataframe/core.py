@@ -7,6 +7,7 @@ import bisect
 import os
 from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
         first, partition)
+import toolz
 from operator import getitem, setitem
 from datetime import datetime
 import pandas as pd
@@ -74,7 +75,7 @@ class Scalar(object):
     def __init__(self, dsk, _name):
         self.dask = dsk
         self._name = _name
-        self.divisions = []
+        self.divisions = [None, None]
 
     @property
     def _args(self):
@@ -99,7 +100,7 @@ class _Frame(object):
     """ Superclass for DataFrame and Series """
     @property
     def npartitions(self):
-        return len(self.divisions) + 1
+        return len(self.divisions) - 1
 
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
@@ -201,16 +202,11 @@ class _Frame(object):
         dsk = {(name, 0): (head, (self._name, 0), n)}
 
         result = type(self)(merge(self.dask, dsk), name,
-                            self.column_info, [])
+                            self.column_info, self.divisions[:2])
 
         if compute:
             result = result.compute()
         return result
-
-    def _partition_of_index_value(self, val):
-        """ In which partition does this value lie? """
-        val = _coerce_loc_index(self.divisions, val)
-        return bisect.bisect_right(self.divisions, val)
 
     def _loc(self, ind):
         """ Helper function for the .loc accessor """
@@ -219,22 +215,25 @@ class _Frame(object):
                 "Can not use loc on DataFrame without known divisions")
         name = next(names)
         if not isinstance(ind, slice):
-            part = self._partition_of_index_value(ind)
+            part = _partition_of_index_value(self.divisions, ind)
             dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
             return type(self)(merge(self.dask, dsk), name,
-                              self.column_info, [])
+                              self.column_info, [ind, ind])
         else:
             assert ind.step in (None, 1)
             if ind.start:
-                start = self._partition_of_index_value(ind.start)
+                start = _partition_of_index_value(self.divisions, ind.start)
             else:
                 start = 0
             if ind.stop is not None:
-                stop = self._partition_of_index_value(ind.stop)
+                stop = _partition_of_index_value(self.divisions, ind.stop)
             else:
                 stop = self.npartitions - 1
+            istart = _coerce_loc_index(self.divisions, ind.start)
+            istop = _coerce_loc_index(self.divisions, ind.stop)
             if stop == start:
                 dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
+                divisions = [istart, istop]
             else:
                 dsk = merge(
                   {(name, 0): (_loc, (self._name, start), ind.start, None)},
@@ -242,8 +241,18 @@ class _Frame(object):
                       for i in range(1, stop - start)),
                   {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
 
-            return type(self)(merge(self.dask, dsk), name, self.column_info,
-                              self.divisions[start:stop])
+                divisions = ((max(istart, self.divisions[start])
+                              if ind.start is not None
+                              else self.divisions[0],) +
+                             self.divisions[start+1:stop+1] +
+                             (min(istop, self.divisions[stop+1])
+                              if ind.stop is not None
+                              else self.divisions[-1],))
+
+            assert len(divisions) == len(dsk) + 1
+            return type(self)(merge(self.dask, dsk),
+                              name, self.column_info,
+                              divisions)
 
     @property
     def loc(self):
@@ -276,7 +285,7 @@ class Series(_Frame):
         self.dask = dsk
         self._name = _name
         self.name = name
-        self.divisions = divisions
+        self.divisions = tuple(divisions)
 
     @property
     def _args(self):
@@ -556,8 +565,27 @@ def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
     return df.assign(**kwargs)
 
+
+def _partition_of_index_value(divisions, val):
+    """ In which partition does this value lie?
+
+    >>> _partition_of_index_value([0, 5, 10], 3)
+    0
+    >>> _partition_of_index_value([0, 5, 10], 8)
+    1
+    >>> _partition_of_index_value([0, 5, 10], 100)
+    1
+    >>> _partition_of_index_value([0, 5, 10], 5)  # left-inclusive divisions
+    1
+    """
+    val = _coerce_loc_index(divisions, val)
+    i = bisect.bisect_right(divisions, val)
+    return min(len(divisions) - 2, max(0, i - 1))
+
+
 def _loc(df, start, stop):
     return df.loc[slice(start, stop)]
+
 
 def _coerce_loc_index(divisions, o):
     """ Transform values to be comparable against divisions
@@ -567,6 +595,7 @@ def _coerce_loc_index(divisions, o):
     if divisions and isinstance(divisions[0], (np.datetime64, datetime)):
         return pd.Timestamp(o)
     return o
+
 
 def head(x, n):
     """ First n elements of dask.Dataframe or dask.Series """
@@ -657,7 +686,7 @@ def concat(dfs):
             dsk[(name, i)] = key
             i += 1
 
-    divisions = [None] * (i - 1)
+    divisions = [None] * (i + 1)
 
     return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
                      dfs[0].columns, divisions)
@@ -820,7 +849,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
     return type(args[0])(
             merge(dsk, dsk2, *[a.dask for a in args
                                       if isinstance(a, _Frame)]),
-            b, columns, [])
+            b, columns, [None, None])
 
 def map_blocks(func, columns, *args):
     """ Apply Python function on each DataFrame block

@@ -1,3 +1,4 @@
+import pytest
 from operator import getitem
 from toolz import valmap
 import bcolz
@@ -34,13 +35,14 @@ def test_column_optimizations_with_bcolz_and_rewrite():
 
 
 def test_fast_functions():
-    df = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    df = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
     e = df.a + df.b
     assert len(e.dask) > 6
 
     assert len(dd.optimize(e.dask, e._keys())) == 6
 
 
+@pytest.mark.xfail
 def test_castra_column_store():
     try:
         from castra import Castra

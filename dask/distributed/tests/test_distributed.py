@@ -29,7 +29,7 @@ def setup_cluster():
             break
         elif 'CRITICAL | Cluster is already running' in line:
             raise RuntimeWarning("Cluster is already running")
-        elif time.time() - tic > 50:
+        elif time.time() - tic > 120:
             raise RuntimeError("Timeout waiting for cluster to start.")
         time.sleep(0.1)
 

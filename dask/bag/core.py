@@ -732,7 +732,7 @@ class Bag(object):
         dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
                    for i in range(self.npartitions))
 
-        divisions = [None] * (self.npartitions - 1)
+        divisions = [None] * (self.npartitions + 1)
 
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
                             name, columns, divisions)
