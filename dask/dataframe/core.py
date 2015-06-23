@@ -28,6 +28,7 @@ from .. import  async
 from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
+from .utils import shard_df_on_index
 
 
 def _concat(args):
@@ -261,6 +262,13 @@ class _Frame(object):
     @property
     def iloc(self):
         raise AttributeError("Dask Dataframe does not support iloc")
+
+    def repartition(self, divisions):
+        """ Repartition dataframe along new divisions
+
+        >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
+        """
+        return repartition(self, divisions)
 
     def __getstate__(self):
         return self.__dict__
@@ -583,8 +591,34 @@ def _partition_of_index_value(divisions, val):
     return min(len(divisions) - 2, max(0, i - 1))
 
 
-def _loc(df, start, stop):
-    return df.loc[slice(start, stop)]
+def _loc(df, start, stop, include_right_boundary=True):
+    """
+
+    >>> df = pd.DataFrame({'x': [10, 20, 30, 40, 50]}, index=[1, 2, 2, 3, 4])
+    >>> _loc(df, 2, None)
+        x
+    2  20
+    2  30
+    3  40
+    4  50
+    >>> _loc(df, 1, 3)
+        x
+    1  10
+    2  20
+    2  30
+    3  40
+    >>> _loc(df, 1, 3, include_right_boundary=False)
+        x
+    1  10
+    2  20
+    2  30
+    """
+    result = df.loc[slice(start, stop)]
+    if not include_right_boundary:
+        # result = df[df.index != stop]
+        result = result.iloc[:result.index.get_slice_bound(stop, 'left',
+                                                   result.index.inferred_type)]
+    return result
 
 
 def _coerce_loc_index(divisions, o):
@@ -961,6 +995,108 @@ def pd_split(df, p, seed=0):
     p = list(p)
     index = pseudorandom(len(df), p, seed)
     return [df.iloc[index == i] for i in range(len(p))]
+
+
+def repartition_divisions(a, b, name, out1, out2):
+    """ dask graph to repartition frame by new divisions
+
+    Parameters
+    ----------
+    a: tuple
+        old divisions
+    b: tuple
+        new divisions
+    name: str
+        name of old dataframe
+    out1: str
+        name of temporary splits
+    out2: str
+        name of new dataframe
+
+    >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    {('b', 0): (<function _loc at ...>, ('a', 0), 1, 3, False),
+     ('b', 1): (<function _loc at ...>, ('a', 1), 3, 4, False),
+     ('b', 2): (<function _loc at ...>, ('a', 1), 4, 6, False),
+     ('b', 3): (<function _loc at ...>, ('a', 1), 6, 7, False)
+     ('c', 0): (<function concat at ...>,
+                (<type 'list'>, [('b', 0), ('b', 1)])),
+     ('c', 1): ('b', 2),
+     ('c', 2): ('b', 3)}
+    """
+    assert a[0] == b[0]
+    assert a[-1] == b[-1]
+    c = [a[0]]
+    d = dict()
+    low = a[0]
+    i, j = 1, 1
+    k = 0
+    while (i < len(a) and j < len(b)):
+        if a[i] < b[j]:
+            d[(out1, k)] = (_loc, (name, i - 1), low, a[i], False)
+            low = a[i]
+            i += 1
+        elif a[i] > b[j]:
+            d[(out1, k)] = (_loc, (name, i - 1), low, b[j], False)
+            low = b[j]
+            j += 1
+        else:
+            d[(out1, k)] = (_loc, (name, i - 1), low, b[j], False)
+            low = b[j]
+            i += 1
+            j += 1
+        c.append(low)
+        k = k + 1
+    tup = d[(out1, k - 1)]
+    d[(out1, k - 1)] = tup[:-1] + (True,)
+    c.append(a[-1])
+
+    i, j = 0, 1
+    while j < len(b):
+        tmp = []
+        while c[i] < b[j]:
+            tmp.append((out1, i))
+            i += 1
+        if len(tmp) == 1:
+            d[(out2, j - 1)] = tmp[0]
+        else:
+            d[(out2, j - 1)] = (pd.concat, (list, tmp))
+
+        j += 1
+
+    return d
+
+
+def repartition(df, divisions):
+    """ Repartition dataframe along new divisions
+
+    Dask.DataFrame objects are partitioned along their index.  Often when
+    multiple dataframes interact we need to align these partitionings.  The
+    ``repartition`` function constructs a new DataFrame object holding the same
+    data but partitioned on different values.  It does this by performing a
+    sequence of ``loc`` and ``concat`` calls to split and merge the previous
+    generation of partitions.
+
+    >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
+
+    Also works on Pandas objects
+
+    >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
+    """
+    if isinstance(df, _Frame):
+        tmp = 'repartition-split' + next(tokens)
+        out = 'repartition-merge' + next(tokens)
+        dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
+
+        return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
+
+    elif isinstance(df, pd.core.generic.NDFrame):
+        name = 'repartition-dataframe' + next(tokens)
+        dfs = shard_df_on_index(df, divisions[1:-1])
+        dsk = dict(((name, i), df) for i, df in enumerate(dfs))
+        if isinstance(df, pd.DataFrame):
+            return DataFrame(dsk, name, df.columns, divisions)
+        if isinstance(df, pd.Series):
+            return Series(dsk, name, df.name, divisions)
 
 
 from .shuffle import set_index, set_partition, shuffle

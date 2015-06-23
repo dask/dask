@@ -8,7 +8,7 @@ import dask
 from dask.async import get_sync
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.core import get, concat
+from dask.dataframe.core import get, concat, repartition_divisions, _loc
 
 
 def eq(a, b):
@@ -446,3 +446,39 @@ def test_set_partition_2():
     assert result.divisions == ('a', 'c', 'd')
 
     assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']
+
+
+def test_repartition():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+
+    b = a.repartition(divisions=[10, 20, 50, 60])
+    assert b.divisions == (10, 20, 50, 60)
+    assert eq(a, b)
+    assert eq(get(b.dask, (b._name, 0)), df.iloc[:1])
+
+
+def test_repartition_divisions():
+    result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    assert result == {('b', 0): (_loc, ('a', 0), 1, 3, False),
+                      ('b', 1): (_loc, ('a', 1), 3, 4, False),
+                      ('b', 2): (_loc, ('a', 1), 4, 6, False),
+                      ('b', 3): (_loc, ('a', 1), 6, 7, True),
+                      ('c', 0): (pd.concat, (list, [('b', 0), ('b', 1)])),
+                      ('c', 1): ('b', 2),
+                      ('c', 2): ('b', 3)}
+
+
+def test_repartition_on_pandas_dataframe():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    ddf = dd.repartition(df, divisions=[10, 20, 50, 60])
+    assert isinstance(ddf, dd.DataFrame)
+    assert ddf.divisions == (10, 20, 50, 60)
+    assert eq(ddf, df)
+
+    ddf = dd.repartition(df.y, divisions=[10, 20, 50, 60])
+    assert isinstance(ddf, dd.Series)
+    assert ddf.divisions == (10, 20, 50, 60)
+    assert eq(ddf, df.y)
