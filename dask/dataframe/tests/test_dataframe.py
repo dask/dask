@@ -324,6 +324,9 @@ def test_loc_with_text_dates():
     assert len(s.loc['2000-01-03': '2000-01-05'].compute()) == 3
 
 
+def test_loc_with_series():
+    assert eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0])
+
 
 def test_iloc_raises():
     assert raises(AttributeError, lambda: d.iloc[:5])

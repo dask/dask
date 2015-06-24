@@ -211,49 +211,61 @@ class _Frame(object):
 
     def _loc(self, ind):
         """ Helper function for the .loc accessor """
-        if not self.known_divisions:
-            raise ValueError(
-                "Can not use loc on DataFrame without known divisions")
-        name = next(names)
-        if not isinstance(ind, slice):
-            part = _partition_of_index_value(self.divisions, ind)
-            dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
-            return type(self)(merge(self.dask, dsk), name,
-                              self.column_info, [ind, ind])
+        if isinstance(ind, Series):
+            return self._loc_series(ind)
+        elif isinstance(ind, slice):
+            return self._loc_slice(ind)
         else:
-            assert ind.step in (None, 1)
-            if ind.start:
-                start = _partition_of_index_value(self.divisions, ind.start)
-            else:
-                start = 0
-            if ind.stop is not None:
-                stop = _partition_of_index_value(self.divisions, ind.stop)
-            else:
-                stop = self.npartitions - 1
-            istart = _coerce_loc_index(self.divisions, ind.start)
-            istop = _coerce_loc_index(self.divisions, ind.stop)
-            if stop == start:
-                dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
-                divisions = [istart, istop]
-            else:
-                dsk = merge(
-                  {(name, 0): (_loc, (self._name, start), ind.start, None)},
-                  dict(((name, i), (self._name, start + i))
-                      for i in range(1, stop - start)),
-                  {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
+            return self._loc_element(ind)
 
-                divisions = ((max(istart, self.divisions[start])
-                              if ind.start is not None
-                              else self.divisions[0],) +
-                             self.divisions[start+1:stop+1] +
-                             (min(istop, self.divisions[stop+1])
-                              if ind.stop is not None
-                              else self.divisions[-1],))
+    def _loc_series(self, ind):
+        name = 'loc-series' + next(tokens)
+        if not self.divisions == ind.divisions:
+            raise ValueError("Partitions of dataframe and index not the same")
+        return map_blocks(lambda df, ind: df.loc[ind], self.columns, self, ind)
 
-            assert len(divisions) == len(dsk) + 1
-            return type(self)(merge(self.dask, dsk),
-                              name, self.column_info,
-                              divisions)
+    def _loc_element(self, ind):
+        name = 'loc-element' + next(tokens)
+        part = _partition_of_index_value(self.divisions, ind)
+        dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
+        return type(self)(merge(self.dask, dsk), name,
+                          self.column_info, [ind, ind])
+
+    def _loc_slice(self, ind):
+        name = 'loc-slice' + next(tokens)
+        assert ind.step in (None, 1)
+        if ind.start:
+            start = _partition_of_index_value(self.divisions, ind.start)
+        else:
+            start = 0
+        if ind.stop is not None:
+            stop = _partition_of_index_value(self.divisions, ind.stop)
+        else:
+            stop = self.npartitions - 1
+        istart = _coerce_loc_index(self.divisions, ind.start)
+        istop = _coerce_loc_index(self.divisions, ind.stop)
+        if stop == start:
+            dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
+            divisions = [istart, istop]
+        else:
+            dsk = merge(
+              {(name, 0): (_loc, (self._name, start), ind.start, None)},
+              dict(((name, i), (self._name, start + i))
+                  for i in range(1, stop - start)),
+              {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
+
+            divisions = ((max(istart, self.divisions[start])
+                          if ind.start is not None
+                          else self.divisions[0],) +
+                         self.divisions[start+1:stop+1] +
+                         (min(istop, self.divisions[stop+1])
+                          if ind.stop is not None
+                          else self.divisions[-1],))
+
+        assert len(divisions) == len(dsk) + 1
+        return type(self)(merge(self.dask, dsk),
+                          name, self.column_info,
+                          divisions)
 
     @property
     def loc(self):
@@ -586,6 +598,9 @@ def _partition_of_index_value(divisions, val):
     >>> _partition_of_index_value([0, 5, 10], 5)  # left-inclusive divisions
     1
     """
+    if divisions[0] is None:
+        raise ValueError(
+            "Can not use loc on DataFrame without known divisions")
     val = _coerce_loc_index(divisions, val)
     i = bisect.bisect_right(divisions, val)
     return min(len(divisions) - 2, max(0, i - 1))
