@@ -1,3 +1,58 @@
+"""
+Algorithms that Involve Multiple DataFrames
+===========================================
+
+The pandas operations ``concat``, ``join``, and ``merge`` combine multiple
+DataFrames.  This module contains analogous algorithms in the parallel case.
+
+There are two important cases:
+
+1.  We combine along a partitioned index
+2.  We combine along an unpartitioned index or other column
+
+In the first case we know which partitions of each dataframe interact with
+which others.  This lets uss be significantly more clever and efficient.
+
+In the second case each partition from one dataset interacts with all
+partitions from the other.  We handle this through a shuffle operation.
+
+Partitioned Joins
+-----------------
+
+In the first case where we join along a partitioned index we proceed in the
+following stages.
+
+1.  Align the partitions of all inputs to be the same.  This involves a call
+    to ``dd.repartition`` which will split up and concat existing partitions as
+    necessary.  After this step all inputs have partitions that align with
+    each other.  This step is relatively cheap.  See the function ``align``.
+2.  Remove unnecessary partitions based on the type of join we perform (left,
+    right, inner, outer).  We can do this at the partition level before any
+    computation happens.  We'll do it again on each partition when we call the
+    in-memory function.  See the function ``require``.
+3.  Embarrassingly parallel calls to ``pd.concat``, ``pd.join``, or
+    ``pd.merge``.  Now that the data is aligned and unnecessary blocks have
+    been removed we can rely on the fast in-memory Pandas join machinery to
+    execute joins per-partition.  We know that all intersecting records exist
+    within the same partition
+
+
+Hash Joins via Shuffle
+----------------------
+
+When we join along an unpartitioned index or along an arbitrary column any
+partition from one input might interact with any partition in another.  In
+this case we perform a hash-join by shuffling data in each input by that
+column.  This results in new inputs with the same partition structure cleanly
+separated along that column.
+
+We proceed with hash joins in the following stages:
+
+1.  Shuffle each input on the specified column.  See the function
+    ``dask.dataframe.shuffle.shuffle``.
+2.  Perform embarrassingly parallel join across shuffled inputs.
+"""
+
 from .core import repartition, tokens, DataFrame
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
