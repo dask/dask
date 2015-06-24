@@ -1,7 +1,9 @@
 import dask.dataframe as dd
 import pandas as pd
-from dask.dataframe.multi import align, join_indexed_dataframes, hash_join
+from dask.dataframe.multi import (align, join_indexed_dataframes, hash_join,
+        concat_indexed_dataframes)
 import pandas.util.testing as tm
+from dask.async import get_sync
 
 def test_align():
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
@@ -82,3 +84,24 @@ def test_hash_join():
     assert list(result.columns) == list(expected.columns)
     assert sorted(result.fillna(100).values.tolist()) == \
            sorted(expected.fillna(100).values.tolist())
+
+
+def test_indexed_concat():
+    A = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7], 'y': list('abcdef')},
+                     index=[1, 2, 3, 4, 6, 7])
+    a = dd.repartition(A, [1, 4, 7])
+
+    B = pd.DataFrame({'x': [10, 20, 40, 50, 60, 80]},
+                     index=[1, 2, 4, 5, 6, 8])
+    b = dd.repartition(B, [1, 2, 5, 8])
+
+    for how in ['inner', 'outer']:
+        c = concat_indexed_dataframes([a, b], join=how)
+
+        result = c.compute()
+        expected = pd.concat([A, B], 0, how)
+
+        assert list(result.columns) == list(expected.columns)
+
+        assert sorted(zip(result.values.tolist(), result.index.values.tolist())) == \
+               sorted(zip(expected.values.tolist(), expected.index.values.tolist()))

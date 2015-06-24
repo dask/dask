@@ -158,3 +158,23 @@ def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffix
 
     return DataFrame(merge(lhs2.dask, rhs2.dask, dsk),
                      name, j.columns, divisions)
+
+
+def concat_indexed_dataframes(dfs, join='outer'):
+    """ Concatenate indexed dataframes together along the index """
+    assert join in ('inner', 'outer')
+    dfs2, divisions, parts = align(*dfs)
+
+    empties = [pd.DataFrame([], columns=df.columns) for df in dfs]
+
+    columns = pd.concat(empties, 0, join).columns
+
+    parts2 = [[df if df is not None else empty
+               for df, empty in zip(part, empties)]
+              for part in parts]
+
+    name = 'concat-indexed' + next(tokens)
+    dsk = dict(((name, i), (pd.concat, part, 0, join))
+                for i, part in enumerate(parts2))
+
+    return DataFrame(merge(dsk, *[df.dask for df in dfs2]), name, columns, divisions)
