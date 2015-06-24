@@ -1,23 +1,6 @@
 from __future__ import absolute_import
 
-from contextlib import contextmanager
 from timeit import default_timer
-from threading import current_thread
-
-from .compatibility import Queue, Empty
-
-
-def _thread_getid():
-    return current_thread().ident
-
-
-def _process_getid():
-    from multiprocessing import current_process
-    return current_process().ident
-
-
-_worker_getid = {'thread': _thread_getid,
-                 'process': _process_getid}
 
 
 class Profiler(object):
@@ -26,48 +9,30 @@ class Profiler(object):
     Records the following information for each task:
         1. Key
         2. Task
-        3. Worker id
-        4. Start time in seconds since the epoch
-        5. Finish time in seconds since the epoch
+        3. Start time in seconds since the epoch
+        4. Finish time in seconds since the epoch
+        5. Worker id
     """
-    def __init__(self, get, worker_type="thread"):
+    def __init__(self, get):
         """Create a profiler
 
         Parameters
         ----------
         get : callable
             The scheduler get function to profile.
-        worker_type : string or callable.
-            If a string, must be either "thread" or "process". If a callable,
-            must take no parameters, and return the id of the current worker.
-            defaults to "thread".
         """
         self._get = get
-        if callable(worker_type):
-            self._getid = worker_type
-        else:
-            try:
-                self._getid = _worker_getid[worker_type.lower()]
-            except:
-                raise ValueError("Unknown worker type {0}".format(worker_type))
-        self._queue = Queue()
+        self._results = {}
 
-    @contextmanager
-    def _profile_cm(self, key, task):
-        """Callback to pass to the get function kwarg `execute_cm`"""
-        start = default_timer()
-        id = self._getid()
-        yield
-        stop = default_timer()
-        self._queue.put((key, task, id, start, stop))
+    def _start_callback(self, key, dask, state):
+        if key is not None:
+            start = default_timer()
+            self._results[key] = (key, dask[key], start)
 
-    def _clear_queue(self):
-        while not self._queue.empty():
-            try:
-                self._queue.get(False)
-            except Empty:
-                continue
-            self._queue.task_done()
+    def _end_callback(self, key, dask, state, id):
+        if key is not None:
+            end = default_timer()
+            self._results[key] += (end, id)
 
     def get(self, dsk, result, **kwargs):
         """Profiled get function.
@@ -75,20 +40,13 @@ class Profiler(object):
         Note that this clears the results from the last run before executing
         the dask."""
 
-        self._clear_queue()
-        return self._get(dsk, result, execute_cm=self._profile_cm, **kwargs)
-
-    def _results(self):
-        while not self._queue.empty():
-            try:
-                yield self._queue.get(False)
-            except Empty:
-                continue
-            self._queue.task_done()
+        self._results = {}
+        return self._get(dsk, result, start_callback=self._start_callback,
+                         end_callback=self._end_callback, **kwargs)
 
     def results(self):
         """Returns a list containing tuples of:
 
-        (key, task, worker id, start time, end time)"""
+        (key, task, start time, end time, worker_id)"""
 
-        return list(self._results())
+        return list(self._results.values())
