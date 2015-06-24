@@ -379,8 +379,8 @@ The main function of the scheduler.  Get is the main entry point.
 '''
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-              queue=None, raise_on_exception=False, execute_cm=None,
-              scheduler_callback=None, **kwargs):
+              queue=None, raise_on_exception=False,
+              scheduler_callback=None, execute_cm=None, **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -401,10 +401,18 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         The number of active tasks we should have at any one time
     dsk: dict
         A dask dictionary specifying a workflow
-    result: key or list of keys
+    result : key or list of keys
         Keys corresponding to desired data
-    cache: dict-like (optional)
+    cache : dict-like, optional
         Temporary storage of results
+    scheduler_callback : function, optional
+        Callback ran at every tick of the scheduler. Receives the key of the
+        next task to be run, the dask, and the scheduler state. The final
+        callback receives `None` instead of a key, as no new tasks were added
+        at that tick.
+    execute_cm : function, optional
+        A context manager that wraps the execution of a task. Receives the key
+        of the current task. This is useful for profiling task execution.
 
     See Also
     --------
@@ -429,12 +437,12 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     def fire_task():
         """ Fire off a task to the thread pool """
-        if scheduler_callback:
-            scheduler_callback(dsk, state)
         # Choose a good task to compute
         key = state['ready'].pop()
         state['ready-set'].remove(key)
         state['running'].add(key)
+        if scheduler_callback:
+            scheduler_callback(key, dsk, state)
 
         # Prep data to send
         data = dict((dep, state['cache'][dep])
@@ -463,7 +471,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         key, res, tb = queue.get()
 
     if scheduler_callback:
-        scheduler_callback(dsk, state)
+        scheduler_callback(None, dsk, state)
 
     return nested_get(result, state['cache'])
 
