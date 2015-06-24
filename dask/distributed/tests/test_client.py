@@ -1,3 +1,5 @@
+import os
+
 import pytest
 pytest.importorskip('zmq')
 pytest.importorskip('dill')
@@ -111,3 +113,11 @@ def test_register_collections():
         c.close()
         d.close()
 
+
+def test_register_with_scheduler():
+    with scheduler_and_workers() as (s, (a, b)):
+        c = Client(s.address_to_clients)
+        pid = os.getpid()
+        assert s.clients[c.address]['pid'] == os.getpid()
+        assert (c.registered_workers == {a.address: {'pid': pid},
+                                         b.address: {'pid': pid}})

@@ -13,7 +13,6 @@ from threading import Thread, Lock
 from contextlib import contextmanager
 import traceback
 import sys
-from time import sleep
 from ..compatibility import Queue, unicode, Empty
 try:
     import cPickle as pickle
@@ -104,6 +103,9 @@ class Scheduler(object):
             self.to_clients.bind('tcp://%s:%d' % (bind_to_clients, port_to_clients))
         self.address_to_clients = ('tcp://%s:%d' % (hostname, port_to_clients)).encode()
 
+        # Client state
+        self.clients = dict()
+
         # State about my workers and computed data
         self.workers = dict()
         self.who_has = defaultdict(set)
@@ -133,6 +135,7 @@ class Scheduler(object):
                                  'setitem-ack': self._setitem_ack,
                                  'getitem-ack': self._getitem_ack}
         self.client_functions = {'status': self._status_to_client,
+                                 'register': self._client_registration,
                                  'schedule': self._schedule_from_client,
                                  'set-collection': self._set_collection,
                                  'get-collection': self._get_collection,
@@ -209,6 +212,15 @@ class Scheduler(object):
         """
         self._listen_to_workers_thread.join()
         self._listen_to_clients_thread.join()
+
+    def _client_registration(self, header, payload):
+        """ Client comes in, register it, send back info about the cluster"""
+        payload = pickle.loads(payload)
+        address = header['address']
+        self.clients[address] = payload
+        out_header = {}
+        out_payload = {'workers': self.workers}
+        self.send_to_client(header['address'], out_header, out_payload)
 
     def _worker_registration(self, header, payload):
         """ Worker came in, register them """
