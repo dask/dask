@@ -98,3 +98,31 @@ def require(divisions, parts, required=None):
         divisions = tuple(divisions[min(present): max(present) + 2])
         parts = tuple(parts[min(present): max(present) + 1])
     return divisions, parts
+
+
+
+required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
+
+def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
+    """ Join two partitiond dataframes along their index """
+    (lhs, rhs), divisions, parts = align(lhs, rhs)
+    divisions, parts = require(divisions, parts, required[how])
+
+    left_empty = pd.DataFrame([], columns=lhs.columns)
+    right_empty = pd.DataFrame([], columns=rhs.columns)
+
+    name = 'join-indexed' + next(tokens)
+    dsk = dict(((name, i),
+                (pd.DataFrame.join, a, b, None, how, lsuffix, rsuffix)
+                if a is not None and b is not None else
+                (pd.DataFrame.join, a, right_empty, None, how, lsuffix, rsuffix)
+                if a is not None and how in ('left', 'outer') else
+                (pd.DataFrame.join, left_empty, b, None, how, lsuffix, rsuffix)
+                if b is not None and how in ('right', 'outer') else
+                None)
+                for i, (a, b) in enumerate(parts))
+
+    # fake column names
+    j = left_empty.join(right_empty, None, how, lsuffix, rsuffix)
+
+    return DataFrame(merge(lhs.dask, rhs.dask, dsk), name, j.columns, divisions)
