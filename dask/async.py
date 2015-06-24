@@ -488,12 +488,14 @@ def apply_sync(func, args=(), kwds={}):
     """ A naive synchronous version of apply_async """
     return func(*args, **kwds)
 
+def get_id():
+    return None
 
 def get_sync(dsk, keys, **kwargs):
     from .compatibility import Queue
     queue = Queue()
     return get_async(apply_sync, 1, dsk, keys, queue=queue,
-            raise_on_exception=True, **kwargs)
+            get_id=get_id, raise_on_exception=True, **kwargs)
 
 
 '''
