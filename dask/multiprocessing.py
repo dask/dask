@@ -9,8 +9,12 @@ from .async import get_async # TODO: get better get
 from .context import _globals
 
 
+def _process_get_id():
+    return multiprocessing.current_process().ident
+
+
 def get(dsk, keys, optimizations=[], num_workers=None,
-        func_loads=None, func_dumps=None):
+        func_loads=None, func_dumps=None, **kwargs):
     """ Multiprocessed get function appropriate for Bags
 
     Parameters
@@ -49,7 +53,7 @@ def get(dsk, keys, optimizations=[], num_workers=None,
     try:
         # Run
         result = get_async(apply_async, len(pool._pool), dsk3, keys,
-                           queue=queue)
+                           queue=queue, get_id=_process_get_id, **kwargs)
     finally:
         if cleanup:
             pool.close()

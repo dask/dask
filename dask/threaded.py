@@ -6,12 +6,17 @@ See async.py
 from __future__ import absolute_import, division, print_function
 
 from multiprocessing.pool import ThreadPool
+from threading import current_thread
 from .async import get_async, inc, add
 from .compatibility import Queue
 from .context import _globals
 
 
 default_pool = ThreadPool()
+
+
+def _thread_get_id():
+    return current_thread().ident
 
 
 def get(dsk, result, cache=None, **kwargs):
@@ -45,6 +50,7 @@ def get(dsk, result, cache=None, **kwargs):
 
     queue = Queue()
     results = get_async(pool.apply_async, len(pool._pool), dsk, result,
-                        cache=cache, queue=queue, **kwargs)
+                        cache=cache, queue=queue, get_id=_thread_get_id,
+                        **kwargs)
 
     return results

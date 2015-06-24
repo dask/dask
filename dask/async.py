@@ -119,7 +119,6 @@ from __future__ import absolute_import, division, print_function
 import sys
 import traceback
 from operator import add
-from contextlib import contextmanager
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .optimize import inline_functions
 from .utils import deepmap
@@ -130,11 +129,6 @@ def inc(x):
 
 def double(x):
     return x * 2
-
-
-@contextmanager
-def default_cm(*args, **kwargs):
-    yield
 
 
 DEBUG = False
@@ -257,8 +251,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task, data, queue, raise_on_exception=False,
-                 execute_cm=default_cm):
+def execute_task(key, task, data, queue, get_id, raise_on_exception=False):
     """
     Compute task and handle all administration
 
@@ -266,15 +259,15 @@ def execute_task(key, task, data, queue, raise_on_exception=False,
         _execute_task - actually execute task
     """
     try:
-        with execute_cm(key, task):
-            result = _execute_task(task, data)
-            result = key, result, None
+        result = _execute_task(task, data)
+        id = get_id()
+        result = key, result, None, id
     except Exception as e:
         if raise_on_exception:
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        result = key, e, tb
+        result = key, e, tb, None
     try:
         queue.put(result)
     except Exception as e:
@@ -282,7 +275,7 @@ def execute_task(key, task, data, queue, raise_on_exception=False,
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        queue.put((key, e, tb))
+        queue.put((key, e, tb, None))
 
 
 def release_data(key, state, delete=True):
@@ -379,8 +372,8 @@ The main function of the scheduler.  Get is the main entry point.
 '''
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-              queue=None, raise_on_exception=False,
-              scheduler_callback=None, execute_cm=None, **kwargs):
+              queue=None, get_id=None, raise_on_exception=False,
+              start_callback=None, end_callback=None, **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -405,15 +398,19 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         Keys corresponding to desired data
     cache : dict-like, optional
         Temporary storage of results
-    scheduler_callback : function, optional
-        Callback ran at every tick of the scheduler. Receives the key of the
-        next task to be run, the dask, and the scheduler state. The final
-        callback receives `None` instead of a key, as no new tasks were added
-        at that tick.
-    execute_cm : function, optional
-        A context manager that wraps the execution of a task. Receives the key
-        and task of the current task. This is useful for profiling task
-        execution.
+    get_id : callable
+        Function to return the worker id, takes no arguments. Examples are
+        `threading.current_thread` and `multiprocessing.current_process`.
+    start_callback : function, optional
+        Callback ran every time a new task is started. Receives the key of the
+        task to be run, the dask, and the scheduler state. The final callback
+        receives `None` instead of a key, as no new tasks were added at that
+        tick.
+    end_callback : function, optional
+        Callback ran every time a task is finished. Receives the key of the
+        task to be run, the dask, the scheduler state, and the id of the worker
+        that ran the task. The final callback receives `None` none for both key
+        worker id, as no new tasks were finished at that tick.
 
     See Also
     --------
@@ -421,6 +418,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     threaded.get
     """
     assert queue
+    assert get_id
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -433,24 +431,21 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     if state['waiting'] and not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
 
-    if not execute_cm:
-        execute_cm = default_cm
-
     def fire_task():
         """ Fire off a task to the thread pool """
         # Choose a good task to compute
         key = state['ready'].pop()
         state['ready-set'].remove(key)
         state['running'].add(key)
-        if scheduler_callback:
-            scheduler_callback(key, dsk, state)
+        if start_callback:
+            start_callback(key, dsk, state)
 
         # Prep data to send
         data = dict((dep, state['cache'][dep])
                     for dep in get_dependencies(dsk, key))
         # Submit
         apply_async(execute_task, args=[key, dsk[key], data, queue,
-                                        raise_on_exception, execute_cm])
+                                        get_id, raise_on_exception])
 
     # Seed initial tasks into the thread pool
     while state['ready'] and len(state['running']) < num_workers:
@@ -458,21 +453,26 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     # Main loop, wait on tasks to finish, insert new ones
     while state['waiting'] or state['ready'] or state['running']:
-        key, res, tb = queue.get()
+        key, res, tb, worker_id = queue.get()
         if isinstance(res, Exception):
             raise type(res)(" Exception in remote process\n\n"
                 + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
         finish_task(dsk, key, state, results)
+        if end_callback:
+            end_callback(key, dsk, state, worker_id)
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
 
     # Final reporting
     while state['running'] or not queue.empty():
-        key, res, tb = queue.get()
+        key, res, tb, worker_id = queue.get()
 
-    if scheduler_callback:
-        scheduler_callback(None, dsk, state)
+    # Run the callbacks one last time with the final state
+    if start_callback:
+        start_callback(None, dsk, state)
+    if end_callback:
+        end_callback(None, dsk, state, None)
 
     return nested_get(result, state['cache'])
 
