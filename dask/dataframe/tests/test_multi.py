@@ -1,6 +1,6 @@
 import dask.dataframe as dd
 import pandas as pd
-from dask.dataframe.multi import align, join_indexed_dataframes
+from dask.dataframe.multi import align, join_indexed_dataframes, hash_join
 import pandas.util.testing as tm
 
 def test_align():
@@ -53,3 +53,32 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
     assert c.divisions[0] == 1
     assert c.divisions[-1] == 8
     tm.assert_frame_equal(c.compute(), A.join(B, how='outer'))
+
+
+def test_hash_join():
+    A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
+    a = dd.repartition(A, [0, 4, 5])
+
+    B = pd.DataFrame({'y': [1, 3, 4, 4, 5, 6], 'z': [6, 5, 4, 3, 2, 1]})
+    b = dd.repartition(B, [0, 2, 5])
+
+    for how in ['inner', 'left', 'right', 'outer']:
+        c = hash_join(a, 'y', b, 'y', how)
+
+        result = c.compute()
+        expected = pd.merge(A, B, how, 'y')
+
+        assert list(result.columns) == list(expected.columns)
+        assert sorted(result.fillna(100).values.tolist()) == \
+               sorted(expected.fillna(100).values.tolist())
+
+
+    # Different columns and npartitions
+    c = hash_join(a, 'x', b, 'z', 'outer', npartitions=3)
+    assert c.npartitions == 3
+
+    result = c.compute()
+    expected = pd.merge(A, B, 'outer', None, 'x', 'z')
+    assert list(result.columns) == list(expected.columns)
+    assert sorted(result.fillna(100).values.tolist()) == \
+           sorted(expected.fillna(100).values.tolist())

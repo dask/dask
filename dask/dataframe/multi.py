@@ -1,6 +1,7 @@
 from .core import repartition, tokens, DataFrame
+from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
-from toolz import merge_sorted, unique, merge
+from toolz import merge_sorted, unique, merge, curry
 import pandas as pd
 
 
@@ -126,3 +127,34 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     j = left_empty.join(right_empty, None, how, lsuffix, rsuffix)
 
     return DataFrame(merge(lhs.dask, rhs.dask, dsk), name, j.columns, divisions)
+
+
+def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffixes=('_x', '_y')):
+    """ Join two DataFrames on particular columns with hash join
+
+    This shuffles both datasets on the joined column and then performs an
+    embarassingly parallel join partition-by-partition
+
+    >>> hash_join(a, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
+    """
+    if npartitions is None:
+        npartitions = max(lhs.npartitions, rhs.npartitions)
+
+    lhs2 = shuffle(lhs, on_left, npartitions)
+    rhs2 = shuffle(rhs, on_right, npartitions)
+
+    name = 'hash-join' + next(tokens)
+    pdmerge = curry(pd.merge, suffixes=suffixes)
+    dsk = dict(((name, i), (pdmerge, (lhs2._name, i), (rhs2._name, i),
+                             how, None, on_left, on_right))
+                for i in range(npartitions))
+
+    # fake column names
+    left_empty = pd.DataFrame([], columns=lhs.columns)
+    right_empty = pd.DataFrame([], columns=rhs.columns)
+    j = pd.merge(left_empty, right_empty, how, None, on_left, on_right)
+
+    divisions = [None] * (npartitions + 1)
+
+    return DataFrame(merge(lhs2.dask, rhs2.dask, dsk),
+                     name, j.columns, divisions)
