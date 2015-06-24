@@ -266,7 +266,7 @@ def execute_task(key, task, data, queue, raise_on_exception=False,
         _execute_task - actually execute task
     """
     try:
-        with execute_cm(key):
+        with execute_cm(key, task):
             result = _execute_task(task, data)
             result = key, result, None
     except Exception as e:
@@ -412,7 +412,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         at that tick.
     execute_cm : function, optional
         A context manager that wraps the execution of a task. Receives the key
-        of the current task. This is useful for profiling task execution.
+        and task of the current task. This is useful for profiling task
+        execution.
 
     See Also
     --------
