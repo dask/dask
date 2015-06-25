@@ -488,10 +488,11 @@ def test_repartition_on_pandas_dataframe():
 
 
 def test_embarrassingly_parallel_operations():
-    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
     a = dd.from_pandas(df, 2)
 
     assert eq(a.x.astype('float32'), df.x.astype('float32'))
     assert a.x.astype('float32').compute().dtype == 'float32'
 
+    assert eq(a.x.dropna(), df.x.dropna())
