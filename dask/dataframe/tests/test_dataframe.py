@@ -496,3 +496,6 @@ def test_embarrassingly_parallel_operations():
     assert a.x.astype('float32').compute().dtype == 'float32'
 
     assert eq(a.x.dropna(), df.x.dropna())
+
+    assert eq(a.x.fillna(100), df.x.fillna(100))
+    assert eq(a.fillna(100), df.fillna(100))

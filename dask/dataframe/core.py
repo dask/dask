@@ -289,6 +289,11 @@ class _Frame(object):
     def __setstate__(self, dict):
         self.__dict__ = dict
 
+    @wraps(pd.Series.fillna)
+    def fillna(self, value):
+        func = getattr(self._partition_type, 'fillna')
+        return map_partitions(func, self.column_info, self, value)
+
 
 class Series(_Frame):
     """ Out-of-core Series object
