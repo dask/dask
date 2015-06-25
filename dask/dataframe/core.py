@@ -323,6 +323,7 @@ class Series(_Frame):
         self._name = _name
         self.name = name
         self.divisions = tuple(divisions)
+        self.dt = DatetimeAccessor(self)
 
     @property
     def _args(self):
@@ -1152,6 +1153,40 @@ def repartition(df, divisions):
             return DataFrame(dsk, name, df.columns, divisions)
         if isinstance(df, pd.Series):
             return Series(dsk, name, df.name, divisions)
+
+
+class DatetimeAccessor(object):
+    """ Datetime functions
+
+    Examples
+    --------
+
+    >>> df.mydatetime.dt.microsecond  # doctest: +SKIP
+    """
+    def __init__(self, series):
+        self._series = series
+
+    def __dir__(self):
+        return sorted(set(dir(type(self)) + dir(pd.Series.dt)))
+
+    def _property_map(self, key):
+        return self._series.map_partitions(lambda s: getattr(s.dt, key))
+
+    def _function_map(self, key, *args):
+        func = lambda s: getattr(s.dt, key)(*args)
+        return self._series.map_partitions(func, *args)
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            if key in dir(pd.Series.dt):
+                if isinstance(getattr(pd.Series.dt, key), property):
+                    return self._property_map(key)
+                else:
+                    return partial(self._function_map, key)
+            else:
+                raise
 
 
 from .shuffle import set_index, set_partition, shuffle

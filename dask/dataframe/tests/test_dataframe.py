@@ -507,3 +507,13 @@ def test_embarrassingly_parallel_operations():
     assert eq(a.x.notnull(), df.x.notnull())
 
     assert len(a.sample(0.5).compute()) < len(df)
+
+
+def test_datetime():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    df['x'] = df.x.astype('M8[us]')
+
+    a = dd.from_pandas(df, 2)
+
+    assert eq(a.x.dt.date, df.x.dt.date)
+    assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
