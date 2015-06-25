@@ -322,6 +322,8 @@ def test_from_pandas_small():
     for i in [1, 2, 30]:
         a = dd.from_pandas(df, i)
         assert len(a.compute()) == 3
+        assert a.divisions[0] == 0
+        assert a.divisions[-1] == 2
 
 
 def test_from_pandas_series():
