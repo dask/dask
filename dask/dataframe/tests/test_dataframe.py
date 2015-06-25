@@ -196,15 +196,15 @@ def test_reductions():
     assert eq(d.b.mean(), full.b.mean())
 
 
-def test_map_blocks_multi_argument():
-    assert eq(dd.map_blocks(lambda a, b: a + b, 'c', d.a, d.b),
+def test_map_partitions_multi_argument():
+    assert eq(dd.map_partitions(lambda a, b: a + b, 'c', d.a, d.b),
               full.a + full.b)
-    assert eq(dd.map_blocks(lambda a, b, c: a + b + c, 'c', d.a, d.b, 1),
+    assert eq(dd.map_partitions(lambda a, b, c: a + b + c, 'c', d.a, d.b, 1),
               full.a + full.b + 1)
 
 
-def test_map_blocks():
-    assert eq(d.map_blocks(lambda df: df, 'a'), full)
+def test_map_partitions():
+    assert eq(d.map_partitions(lambda df: df, 'a'), full)
 
 
 def test_drop_duplicates():

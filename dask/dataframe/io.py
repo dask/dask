@@ -148,7 +148,7 @@ def read_csv(fn, *args, **kwargs):
 
     if categorize:
         func = partial(categorize_block, categories=categories)
-        result = result.map_blocks(func, columns=columns)
+        result = result.map_partitions(func, columns=columns)
 
     if index:
         result = set_partition(result, index, quantiles)
