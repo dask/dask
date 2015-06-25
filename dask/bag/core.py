@@ -397,6 +397,8 @@ class Bag(object):
         a = next(names)
         b = next(names)
         if key:
+            if callable(key) and takes_multiple_arguments(key):
+                key = curry(apply, key)
             func = curry(topk, key=key)
         else:
             func = topk
@@ -559,6 +561,47 @@ class Bag(object):
         >>> add = lambda x, y: x + y
         >>> dict(b.foldby(iseven, add))                         # doctest: +SKIP
         {True: 20, False: 25}
+
+        Key Function
+        ------------
+
+        The key function determines how to group the elements in your bag.
+        In the common case where your bag holds dictionaries then the key
+        function often gets out one of those elements.
+
+        >>> def key(x):
+        ...     return x['name']
+
+        This case is so common that it is special cased, and if you provide a
+        key that is not a callable function then dask.bag will turn it into one
+        automatically.  The following are equivalent:
+
+        >>> b.foldby(lambda x: x['name'], ...)  # doctest: +SKIP
+        >>> b.foldby('name', ...)  # doctest: +SKIP
+
+        Binops
+        ------
+
+        It can be tricky to construct the right binary operators to perform
+        analytic queries.  The ``foldby`` method accepts two binary operators,
+        ``binop`` and ``combine``.
+
+        Binop takes a running total and a new element and produces a new total
+
+        >>> def binop(total, x):
+        ...     return total + x['amount']
+
+        Combine takes two totals and combines them
+
+        >>> def combine(total1, total2):
+        ...     return total1 + total2
+
+        Each of these binary operators may have a default first value for
+        total, before any other value is seen.  For addition binary operators
+        like above this is often ``0`` or the identity element for your
+        operation.
+
+        >>> b.foldby('name', binop, 0, combine, 0)  # doctest: +SKIP
 
         See also
         --------
