@@ -324,6 +324,7 @@ class Series(_Frame):
         self.name = name
         self.divisions = tuple(divisions)
         self.dt = DatetimeAccessor(self)
+        self.str = StringAccessor(self)
 
     @property
     def _args(self):
@@ -1188,5 +1189,38 @@ class DatetimeAccessor(object):
             else:
                 raise
 
+
+class StringAccessor(object):
+    """ String functions
+
+    Examples
+    --------
+
+    >>> df.name.lower()  # doctest: +SKIP
+    """
+    def __init__(self, series):
+        self._series = series
+
+    def __dir__(self):
+        return sorted(set(dir(type(self)) + dir(pd.Series.str)))
+
+    def _property_map(self, key):
+        return self._series.map_partitions(lambda s: getattr(s.str, key))
+
+    def _function_map(self, key, *args):
+        func = lambda s: getattr(s.str, key)(*args)
+        return self._series.map_partitions(func, *args)
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            if key in dir(pd.Series.str):
+                if isinstance(getattr(pd.Series.str, key), property):
+                    return self._property_map(key)
+                else:
+                    return partial(self._function_map, key)
+            else:
+                raise
 
 from .shuffle import set_index, set_partition, shuffle

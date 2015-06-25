@@ -517,3 +517,11 @@ def test_datetime():
 
     assert eq(a.x.dt.date, df.x.dt.date)
     assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
+
+
+def test_datetime():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D']})
+
+    a = dd.from_pandas(df, 2)
+
+    assert eq(a.x.str.upper(), df.x.str.upper())
