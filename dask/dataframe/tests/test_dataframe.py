@@ -509,19 +509,23 @@ def test_embarrassingly_parallel_operations():
     assert len(a.sample(0.5).compute()) < len(df)
 
 
-def test_datetime():
+def test_datetime_accessor():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     df['x'] = df.x.astype('M8[us]')
 
     a = dd.from_pandas(df, 2)
 
+    assert 'date' in dir(a.x.dt)
+
     assert eq(a.x.dt.date, df.x.dt.date)
     assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
 
 
-def test_datetime():
+def test_str_accessor():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'D']})
 
     a = dd.from_pandas(df, 2)
+
+    assert 'upper' in dir(a.x.str)
 
     assert eq(a.x.str.upper(), df.x.str.upper())
