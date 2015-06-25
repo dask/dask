@@ -154,7 +154,7 @@ class _Frame(object):
     def __len__(self):
         return reduction(self, len, np.sum).compute()
 
-    def map_blocks(self, func, columns=None):
+    def map_partitions(self, func, columns=None):
         """ Apply Python function on each DataFrame block
 
         Provide columns of the output if they are not the same as the input.
@@ -222,7 +222,8 @@ class _Frame(object):
         name = 'loc-series' + next(tokens)
         if not self.divisions == ind.divisions:
             raise ValueError("Partitions of dataframe and index not the same")
-        return map_blocks(lambda df, ind: df.loc[ind], self.columns, self, ind)
+        return map_partitions(lambda df, ind: df.loc[ind],
+                              self.columns, self, ind)
 
     def _loc_element(self, ind):
         name = 'loc-element' + next(tokens)
@@ -758,14 +759,14 @@ class GroupBy(object):
         if (isinstance(self.index, Series) and
             self.index._name == self.frame.index._name):
             f = self.frame
-            return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
-                                columns=columns)
+            return f.map_partitions(lambda df: df.groupby(level=0).apply(func),
+                                    columns=columns)
         else:
             # f = set_index(self.frame, self.index, **self.kwargs)
             f = shuffle(self.frame, self.index, **self.kwargs)
-            return map_blocks(lambda df, index: df.groupby(index).apply(func),
-                              columns or self.frame.columns,
-                              self.frame, self.index)
+            return map_partitions(lambda df, ind: df.groupby(ind).apply(func),
+                                  columns or self.frame.columns,
+                                  self.frame, self.index)
 
     def __getitem__(self, key):
         if key in self.frame.columns:
@@ -797,13 +798,15 @@ class SeriesGroupBy(object):
         # f = set_index(self.frame, self.index, **self.kwargs)
         if self.index._name == self.frame.index._name:
             f = self.frame
-            return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
-                                columns=columns)
+            return f.map_partitions(
+                        lambda df: df.groupby(level=0)[self.key].apply(func),
+                        columns=columns)
         else:
             f = shuffle(self.frame, self.index, **self.kwargs)
-            return map_blocks(lambda df, index: df.groupby(index).apply(func),
-                              columns or self.frame.columns,
-                              self.frame, self.index)
+            return map_partitions(
+                        lambda df, index: df.groupby(index).apply(func),
+                        columns or self.frame.columns,
+                        self.frame, self.index)
 
     def sum(self):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()
@@ -900,7 +903,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
                                       if isinstance(a, _Frame)]),
             b, columns, [None, None])
 
-def map_blocks(func, columns, *args):
+def map_partitions(func, columns, *args):
     """ Apply Python function on each DataFrame block
 
     Provide columns of the output if they are not the same as the input.
@@ -953,7 +956,7 @@ def categorize(f, columns=None, **kwargs):
     values = compute(distincts, **kwargs)
 
     func = partial(categorize_block, categories=dict(zip(columns, values)))
-    return f.map_blocks(func, columns=f.columns)
+    return f.map_partitions(func, columns=f.columns)
 
 
 def quantiles(f, q, **kwargs):
