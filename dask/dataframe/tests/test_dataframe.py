@@ -485,3 +485,13 @@ def test_repartition_on_pandas_dataframe():
     assert isinstance(ddf, dd.Series)
     assert ddf.divisions == (10, 20, 50, 60)
     assert eq(ddf, df.y)
+
+
+def test_embarrassingly_parallel_operations():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+
+    assert eq(a.x.astype('float32'), df.x.astype('float32'))
+    assert a.x.astype('float32').compute().dtype == 'float32'
+

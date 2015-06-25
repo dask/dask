@@ -466,6 +466,9 @@ class Series(_Frame):
     def map(self, arg, na_action=None):
         return elemwise(pd.Series.map, self, arg, na_action, name=self.name)
 
+    def astype(self, dtype):
+        return map_partitions(pd.Series.astype, self.name, self, dtype)
+
 
 class Index(Series):
     pass
