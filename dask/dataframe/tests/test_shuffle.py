@@ -33,3 +33,8 @@ def test_default_partitions():
 def test_index_with_non_series():
     tm.assert_frame_equal(shuffle(d, d.b).compute(),
                           shuffle(d, 'b').compute())
+
+def test_index_with_dataframe():
+    assert sorted(shuffle(d, d[['b']]).compute().values.tolist()) ==\
+           sorted(shuffle(d, ['b']).compute().values.tolist()) ==\
+           sorted(shuffle(d, 'b').compute().values.tolist())
