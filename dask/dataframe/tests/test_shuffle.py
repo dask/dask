@@ -38,3 +38,12 @@ def test_index_with_dataframe():
     assert sorted(shuffle(d, d[['b']]).compute().values.tolist()) ==\
            sorted(shuffle(d, ['b']).compute().values.tolist()) ==\
            sorted(shuffle(d, 'b').compute().values.tolist())
+
+
+def test_shuffle_from_one_partition_to_one_other():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    a = dd.from_pandas(df, 1)
+
+    for i in [1, 2]:
+        b = shuffle(a, 'x', i)
+        assert len(a.compute(get=get_sync)) == len(b.compute(get=get_sync))

@@ -82,7 +82,6 @@ def set_partition(df, index, divisions):
 
     # Barrier
     barrier_token = 'barrier' + next(tokens)
-    def barrier(args):         return 0
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
@@ -97,6 +96,10 @@ def set_partition(df, index, divisions):
 
     return DataFrame(dsk, name, df.columns, divisions)
 
+
+def barrier(args):
+    list(args)
+    return 0
 
 def _set_partition(df, index, divisions, p):
     """ Shard partition and dump into partd """
@@ -156,7 +159,6 @@ def shuffle(df, index, npartitions=None):
 
     # Barrier
     barrier_token = 'barrier' + next(tokens)
-    def barrier(args):         return 0
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
