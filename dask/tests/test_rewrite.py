@@ -128,9 +128,10 @@ def test_matches():
 
 
 def test_rewrite():
+    # Rewrite inside list
     term = (sum, [(add, 1, 1), (add, 1, 1), (add, 1, 1)])
     new_term = rs.rewrite(term)
-    assert new_term == (add, (add, (add, 1, 1), (add, 1, 1)), (add, 1, 1))
+    assert new_term == (add, (add, (inc, 1), (inc, 1)), (inc, 1))
     # Rules aren't applied to exhaustion, this can be further simplified
     new_term = rs.rewrite(new_term)
     assert new_term == (add, (add, (double, 1), 2), (inc, 1))

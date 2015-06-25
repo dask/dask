@@ -19,7 +19,7 @@ def cull(dsk, keys):
     >>> cull(d, 'out')  # doctest: +SKIP
     {'x': 1, 'out': (add, 'x', 10)}
     """
-    if not isinstance(keys, list):
+    if not isinstance(keys, (list, set)):
         keys = [keys]
     nxt = set(flatten(keys))
     seen = nxt
@@ -34,8 +34,10 @@ def cull(dsk, keys):
     return dict((k, v) for k, v in dsk.items() if k in seen)
 
 
-def fuse(dsk):
+def fuse(dsk, keys=None):
     """ Return new dask with linear sequence of tasks fused together.
+
+    If specified, the keys in ``keys`` keyword argument are *not* fused.
 
     This may be used as an optimization step.
 
@@ -45,35 +47,45 @@ def fuse(dsk):
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> fuse(d)  # doctest: +SKIP
     {'c': (inc, (inc, 1))}
+    >>> fuse(d, keys=['b'])  # doctest: +SKIP
+    {'b': (inc, 1), 'c': (inc, 'b')}
     """
+    if keys is not None and not isinstance(keys, set):
+        if not isinstance(keys, list):
+            keys = [keys]
+        keys = set(flatten(keys))
+
     # locate all members of linear chains
-    parents = {}
-    deadbeats = set()
+    child2parent = {}
+    unfusible = set()
     for parent in dsk:
         deps = get_dependencies(dsk, parent, as_list=True)
+        has_many_children = len(deps) > 1
         for child in deps:
-            if child in parents:
-                del parents[child]
-                deadbeats.add(child)
-            elif len(deps) > 1:
-                deadbeats.add(child)
-            elif child not in deadbeats:
-                parents[child] = parent
+            if keys is not None and child in keys:
+                unfusible.add(child)
+            elif child in child2parent:
+                del child2parent[child]
+                unfusible.add(child)
+            elif has_many_children:
+                unfusible.add(child)
+            elif child not in unfusible:
+                child2parent[child] = parent
 
     # construct the chains from ancestor to descendant
     chains = []
-    children = dict(map(reversed, parents.items()))
-    while parents:
-        child, parent = parents.popitem()
+    parent2child = dict(map(reversed, child2parent.items()))
+    while child2parent:
+        child, parent = child2parent.popitem()
         chain = [child, parent]
-        while parent in parents:
-            parent = parents.pop(parent)
-            del children[parent]
+        while parent in child2parent:
+            parent = child2parent.pop(parent)
+            del parent2child[parent]
             chain.append(parent)
         chain.reverse()
-        while child in children:
-            child = children.pop(child)
-            del parents[child]
+        while child in parent2child:
+            child = parent2child.pop(child)
+            del child2parent[child]
             chain.append(child)
         chains.append(chain)
 
@@ -116,11 +128,11 @@ def inline(dsk, keys=None, inline_constants=True):
     {'x': 1, 'z': (add, 'x', (inc, 'x'))}
     """
     if keys is None:
-        keys  = set()
-    elif isinstance(keys, (set, tuple, list)):
-        keys = set(keys)
-    else:
-        keys = set([keys])
+        keys = []
+    elif not isinstance(keys, (list, set)):
+        keys = [keys]
+    keys = set(flatten(keys))
+
     if inline_constants:
         keys.update(k for k, v in dsk.items() if not istask(v))
 

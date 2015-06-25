@@ -120,8 +120,6 @@ import sys
 import traceback
 from operator import add
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
-from .optimize import inline_functions
-from .utils import deepmap
 from .context import _globals
 
 def inc(x):
@@ -129,6 +127,7 @@ def inc(x):
 
 def double(x):
     return x * 2
+
 
 DEBUG = False
 
@@ -181,7 +180,7 @@ def start_state_from_dask(dsk, cache=None):
     waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
 
     ready_set = set([k for k, v in waiting.items() if not v])
-    ready = sorted(ready_set)
+    ready = sorted(ready_set, key=sortkey)
     waiting = dict((k, v) for k, v in waiting.items() if v)
 
     state = {'dependencies': dependencies,
@@ -250,7 +249,7 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
-def execute_task(key, task, data, queue, raise_on_exception=False):
+def execute_task(key, task, data, queue, get_id, raise_on_exception=False):
     """
     Compute task and handle all administration
 
@@ -259,13 +258,14 @@ def execute_task(key, task, data, queue, raise_on_exception=False):
     """
     try:
         result = _execute_task(task, data)
-        result = key, result, None
+        id = get_id()
+        result = key, result, None, id
     except Exception as e:
         if raise_on_exception:
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        result = key, e, tb
+        result = key, e, tb, None
     try:
         queue.put(result)
     except Exception as e:
@@ -273,7 +273,7 @@ def execute_task(key, task, data, queue, raise_on_exception=False):
             raise
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        queue.put((key, e, tb))
+        queue.put((key, e, tb, None))
 
 
 def release_data(key, state, delete=True):
@@ -302,7 +302,7 @@ def finish_task(dsk, key, state, results, delete=True,
     if key in state['ready-set']:
         state['ready-set'].remove(key)
 
-    for dep in sorted(state['dependents'][key]):
+    for dep in sorted(state['dependents'][key], key=sortkey):
         s = state['waiting'][dep]
         s.remove(key)
         if not s:
@@ -347,9 +347,14 @@ def nested_get(ind, coll, lazy=False):
             return (nested_get(i, coll, lazy=lazy) for i in ind)
         else:
             return tuple([nested_get(i, coll, lazy=lazy) for i in ind])
-        return seq
     else:
         return coll[ind]
+
+
+def default_get_id():
+    """Default get_id"""
+    return None
+
 
 '''
 Task Selection
@@ -370,8 +375,8 @@ The main function of the scheduler.  Get is the main entry point.
 '''
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-                debug_counts=None, queue=None, raise_on_exception=False,
-                **kwargs):
+              queue=None, get_id=default_get_id, raise_on_exception=False,
+              start_callback=None, end_callback=None, **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -392,12 +397,23 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         The number of active tasks we should have at any one time
     dsk: dict
         A dask dictionary specifying a workflow
-    result: key or list of keys
+    result : key or list of keys
         Keys corresponding to desired data
-    cache: dict-like (optional)
+    cache : dict-like, optional
         Temporary storage of results
-    debug_counts: integer or None
-        This integer tells how often the scheduler should dump debugging info
+    get_id : callable, optional
+        Function to return the worker id, takes no arguments. Examples are
+        `threading.current_thread` and `multiprocessing.current_process`.
+    start_callback : function, optional
+        Callback ran every time a new task is started. Receives the key of the
+        task to be run, the dask, and the scheduler state. The final callback
+        receives `None` instead of a key, as no new tasks were added at that
+        tick.
+    end_callback : function, optional
+        Callback ran every time a task is finished. Receives the key of the
+        task to be run, the dask, the scheduler state, and the id of the worker
+        that ran the task. The final callback receives `None` none for both key
+        worker id, as no new tasks were finished at that tick.
 
     See Also
     --------
@@ -414,29 +430,24 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     state = start_state_from_dask(dsk, cache=cache)
 
-    tick = [0]
-
     if state['waiting'] and not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
 
     def fire_task():
         """ Fire off a task to the thread pool """
-        # Update heartbeat
-        tick[0] += 1
-        # Emit visualization if called for
-        if debug_counts and tick[0] % debug_counts == 0:
-            visualize(dsk, state, filename='dask_%03d' % tick[0])
         # Choose a good task to compute
         key = state['ready'].pop()
         state['ready-set'].remove(key)
         state['running'].add(key)
+        if start_callback:
+            start_callback(key, dsk, state)
 
         # Prep data to send
         data = dict((dep, state['cache'][dep])
                     for dep in get_dependencies(dsk, key))
         # Submit
         apply_async(execute_task, args=[key, dsk[key], data, queue,
-                                        raise_on_exception])
+                                        get_id, raise_on_exception])
 
     # Seed initial tasks into the thread pool
     while state['ready'] and len(state['running']) < num_workers:
@@ -444,21 +455,26 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     # Main loop, wait on tasks to finish, insert new ones
     while state['waiting'] or state['ready'] or state['running']:
-        key, res, tb = queue.get()
+        key, res, tb, worker_id = queue.get()
         if isinstance(res, Exception):
             raise type(res)(" Exception in remote process\n\n"
                 + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
         finish_task(dsk, key, state, results)
+        if end_callback:
+            end_callback(key, dsk, state, worker_id)
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
 
     # Final reporting
     while state['running'] or not queue.empty():
-        key, res, tb = queue.get()
+        key, res, tb, worker_id = queue.get()
 
-    if debug_counts:
-        visualize(dsk, state, filename='dask_end')
+    # Run the callbacks one last time with the final state
+    if start_callback:
+        start_callback(None, dsk, state)
+    if end_callback:
+        end_callback(None, dsk, state, None)
 
     return nested_get(result, state['cache'])
 
@@ -479,7 +495,7 @@ def get_sync(dsk, keys, **kwargs):
     from .compatibility import Queue
     queue = Queue()
     return get_async(apply_sync, 1, dsk, keys, queue=queue,
-            raise_on_exception=True, **kwargs)
+                     raise_on_exception=True, **kwargs)
 
 
 '''
@@ -495,7 +511,7 @@ normal dot graphs (see dot module).
 
 def visualize(dsk, state, filename='dask'):
     """ Visualize state of compputation as dot graph """
-    from dask.dot import dot_graph, write_networkx_to_dot
+    from dask.dot import write_networkx_to_dot
     g = state_to_networkx(dsk, state)
     write_networkx_to_dot(g, filename=filename)
 
@@ -532,3 +548,21 @@ def state_to_networkx(dsk, state):
     from .dot import to_networkx
     data, func = color_nodes(dsk, state)
     return to_networkx(dsk, data_attributes=data, function_attributes=func)
+
+
+def sortkey(item):
+    """ Sorting key function that is robust to different types
+
+    Both strings and tuples are common key types in dask graphs.
+    However In Python 3 one can not compare strings with tuples directly.
+    This function maps many types to a form where they can be compared
+
+    Examples
+    --------
+    >>> sortkey('Hello')
+    ('str', 'Hello')
+
+    >>> sortkey(('x', 1))
+    ('tuple', ('x', 1))
+    """
+    return (type(item).__name__, item)

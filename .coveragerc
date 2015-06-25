@@ -4,4 +4,3 @@ omit =
     dask/compatibility.py
 source = 
     dask
-    pframe

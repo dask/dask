@@ -1,7 +1,6 @@
 from ..optimize import cull, fuse
 from ..core import flatten
-from ..async import inline_functions
-from ..optimize import dealias
+from ..optimize import dealias, inline_functions
 from .core import getarray
 from operator import getitem
 from dask.rewrite import RuleSet, RewriteRule

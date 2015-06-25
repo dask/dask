@@ -8,7 +8,7 @@ import struct
 import os
 from glob import glob
 from math import ceil
-from toolz import curry, merge, partial
+from toolz import curry, merge, partial, dissoc
 from itertools import count
 import bcolz
 from operator import getitem
@@ -17,7 +17,7 @@ from ..compatibility import StringIO, unicode, range
 from ..utils import textblock
 
 from . import core
-from .core import names, DataFrame, compute, concat, categorize_block
+from .core import names, DataFrame, compute, concat, categorize_block, tokens
 from .shuffle import set_partition
 
 
@@ -41,79 +41,105 @@ def file_size(fn, compression=None):
     return result
 
 
+csv_defaults = {'compression': None}
+
+def fill_kwargs(fn, args, kwargs):
+    """ Read a csv file and fill up kwargs
+
+    This normalizes kwargs against a sample file.  It does the following:
+
+    1.  If given a globstring, just use one file
+    2.  Get names from csv file if not given
+    3.  Identify the presence of a header
+    4.  Identify dtypes
+    5.  Establish column names
+    6.  Switch around dtypes and column names if parse_dates is active
+
+    Normally ``pd.read_csv`` does this for us.  However for ``dd.read_csv`` we
+    need to be consistent across multiple files and don't want to do these
+    heuristics each time so we use the pandas solution once, record the
+    results, and then send back a fully explicit kwargs dict to send to future
+    calls to ``pd.read_csv``.
+
+    Returns
+    -------
+
+    kwargs: dict
+        keyword arguments to give to pd.read_csv
+    """
+    kwargs = merge(csv_defaults, kwargs)
+    sample_nrows = kwargs.pop('sample_nrows', 1000)
+    essentials = ['columns', 'names', 'header', 'parse_dates', 'dtype']
+    if set(essentials).issubset(kwargs):
+        return kwargs
+
+    # Let pandas infer on the first 100 rows
+    if '*' in fn:
+        fn = sorted(glob(fn))[0]
+
+    if 'names' not in kwargs:
+        kwargs['names'] = csv_names(fn, **kwargs)
+    if 'header' not in kwargs:
+        kwargs['header'] = infer_header(fn, **kwargs)
+        if kwargs['header'] is True:
+            kwargs['header'] = 0
+
+    try:
+        head = pd.read_csv(fn, *args, nrows=sample_nrows, **kwargs)
+    except StopIteration:
+        head = pd.read_csv(fn, *args, **kwargs)
+
+    if 'parse_dates' not in kwargs:
+        kwargs['parse_dates'] = [col for col in head.dtypes.index
+                           if np.issubdtype(head.dtypes[col], np.datetime64)]
+    if 'dtype' not in kwargs:
+        kwargs['dtype'] = dict(head.dtypes)
+        for col in kwargs['parse_dates']:
+            del kwargs['dtype'][col]
+
+    kwargs['columns'] = list(head.columns)
+
+    return kwargs
+
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
     chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
-    compression = kwargs.get('compression', None)
     categorize = kwargs.pop('categorize', None)
-    sample_nrows = kwargs.pop('sample_nrows', 1000)
     index = kwargs.pop('index', None)
     if index and categorize == None:
         categorize = True
 
-    # Let pandas infer on the first 100 rows
-    if '*' in fn:
-        first_fn = sorted(glob(fn))[0]
-    else:
-        first_fn = fn
-
-    if names not in kwargs:
-        kwargs['names'] = csv_names(first_fn, **kwargs)
-    if 'header' not in kwargs:
-        header = infer_header(first_fn, **kwargs)
-        if header is True:
-            header = 0
-    else:
-        header = kwargs.pop('header')
-
-    try:
-        head = pd.read_csv(first_fn, *args, nrows=sample_nrows, header=header, **kwargs)
-    except StopIteration:
-        head = pd.read_csv(first_fn, *args, header=header, **kwargs)
-
-
-    if 'parse_dates' not in kwargs:
-        parse_dates = [col for col in head.dtypes.index
-                           if np.issubdtype(head.dtypes[col], np.datetime64)]
-        if parse_dates:
-            kwargs['parse_dates'] = parse_dates
-    else:
-        parse_dates = kwargs.get('parse_dates')
-    if 'dtypes' in kwargs:
-        dtype = kwargs['dtype']
-    else:
-        dtype = dict(head.dtypes)
-        if parse_dates:
-            for col in parse_dates:
-                del dtype[col]
-
-    kwargs['dtype'] = dtype
+    kwargs = fill_kwargs(fn, args, kwargs)
 
     # Handle glob strings
     if '*' in fn:
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
 
+    columns = kwargs.pop('columns')
+
     # Chunk sizes and numbers
-    total_bytes = file_size(fn, compression)
+    total_bytes = file_size(fn, kwargs['compression'])
     nchunks = int(ceil(total_bytes / chunkbytes))
-    divisions = [None] * (nchunks - 1)
+    divisions = [None] * (nchunks + 1)
 
-    kwargs.pop('compression', None)  # these functions will take StringIO
+    header = kwargs.pop('header')
 
-    first_read_csv = curry(pd.read_csv, *args, header=header, **kwargs)
-    rest_read_csv = curry(pd.read_csv, *args, header=None, **kwargs)
+    first_read_csv = curry(pd.read_csv, *args, header=header,
+                           **dissoc(kwargs, 'compression'))
+    rest_read_csv = curry(pd.read_csv, *args, header=None,
+                          **dissoc(kwargs, 'compression'))
 
     # Create dask graph
     name = next(names)
     dsk = dict(((name, i), (rest_read_csv, (_StringIO,
                                (textblock, fn,
                                    i*chunkbytes, (i+1) * chunkbytes,
-                                   compression))))
+                                   kwargs['compression']))))
                for i in range(1, nchunks))
     dsk[(name, 0)] = (first_read_csv, (_StringIO,
-                       (textblock, fn, 0, chunkbytes, compression)))
+                       (textblock, fn, 0, chunkbytes, kwargs['compression'])))
 
-    result = DataFrame(dsk, name, head.columns, divisions)
+    result = DataFrame(dsk, name, columns, divisions)
 
     if categorize or index:
         categories, quantiles = categories_and_quantiles(fn, args, kwargs,
@@ -122,7 +148,7 @@ def read_csv(fn, *args, **kwargs):
 
     if categorize:
         func = partial(categorize_block, categories=categories)
-        result = result.map_blocks(func, columns=result.columns)
+        result = result.map_partitions(func, columns=columns)
 
     if index:
         result = set_partition(result, index, quantiles)
@@ -211,7 +237,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
 
     import dask
     if index:
-        quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1)[1:-1])
+        quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1))
         result = compute(quantiles, *categories)
         quantiles, categories = result[0], result[1:]
     else:
@@ -221,9 +247,6 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     categories = dict(zip(category_columns, categories))
 
     return categories, quantiles
-
-
-tokens = ('-%d' % i for i in count(1))
 
 
 def from_array(x, chunksize=50000):
@@ -240,7 +263,9 @@ def from_array(x, chunksize=50000):
 
     """
     columns = tuple(x.dtype.names)
-    divisions = tuple(range(chunksize, len(x), chunksize))
+    divisions = tuple(range(0, len(x), chunksize))
+    if divisions[-1] != len(x) - 1:
+        divisions = divisions + (len(x) - 1,)
     name = 'from_array' + next(tokens)
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
@@ -273,12 +298,18 @@ def from_pandas(data, npartitions):
     --------
     >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
     ...                   index=pd.date_range(start='20100101', periods=6))
-    >>> dd = from_pandas(df, npartitions=3)
-    >>> dd.divisions[0]
-    Timestamp('2010-01-03 00:00:00', offset='D')
-    >>> ds = from_pandas(df.a, npartitions=3)  # Works with Series too!
-    >>> ds.divisions[1]
-    Timestamp('2010-01-05 00:00:00', offset='D')
+    >>> ddf = from_pandas(df, npartitions=3)
+    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
+    (Timestamp('2010-01-01 00:00:00', offset='D'),
+     Timestamp('2010-01-03 00:00:00', offset='D'),
+     Timestamp('2010-01-05 00:00:00', offset='D'),
+     Timestamp('2010-01-06 00:00:00', offset='D'))
+    >>> ddf = from_pandas(df.a, npartitions=3)  # Works with Series too!
+    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
+    (Timestamp('2010-01-01 00:00:00', offset='D'),
+     Timestamp('2010-01-03 00:00:00', offset='D'),
+     Timestamp('2010-01-05 00:00:00', offset='D'),
+     Timestamp('2010-01-06 00:00:00', offset='D'))
 
     Raises
     ------
@@ -299,7 +330,9 @@ def from_pandas(data, npartitions):
     chunksize = int(ceil(nrows / npartitions))
     data = data.sort_index(ascending=True)
     divisions = tuple(data.index[i]
-                      for i in range(chunksize, nrows, chunksize))
+                      for i in range(0, nrows, chunksize))
+    if divisions[-1] != data.index[-1]:
+        divisions = divisions + (data.index[-1],)
     name = 'from_pandas' + next(tokens)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions))
@@ -344,7 +377,9 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
                 categories[name] = da.unique(a)
 
     columns = tuple(x.dtype.names)
-    divisions = tuple(range(chunksize, len(x), chunksize))
+    divisions = (0,) + tuple(range(-1, len(x), chunksize))[1:]
+    if divisions[-1] != len(x) - 1:
+        divisions = divisions + (len(x) - 1,)
     new_name = 'from_bcolz' + next(tokens)
     dsk = dict(((new_name, i),
                 (dataframe_from_ctable,
@@ -358,7 +393,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     if index:
         assert index in x.names
         a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
-        q = np.linspace(1, 100, len(x) // chunksize + 2)[1:-1]
+        q = np.linspace(0, 100, len(x) // chunksize + 2)
         divisions = da.percentile(a, q).compute()
         return set_partition(result, index, divisions, **kwargs)
     else:

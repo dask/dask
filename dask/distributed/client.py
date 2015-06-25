@@ -1,9 +1,11 @@
 from __future__ import print_function
 
-import zmq
+import os
 import itertools
 import uuid
 from datetime import datetime
+
+import zmq
 import dill
 from .scheduler import pickle
 from ..compatibility import unicode
@@ -33,6 +35,7 @@ class Client(object):
         self.socket = context.socket(zmq.DEALER)
         self.socket.setsockopt(zmq.IDENTITY, self.address)
         self.socket.connect(self.address_to_scheduler)
+        self.register_client()
 
     def get(self, dsk, keys):
         header = {'function': 'schedule',
@@ -121,3 +124,8 @@ class Client(object):
         if close_scheduler:
             self.close_scheduler()
         self.socket.close(1)
+
+    def register_client(self):
+        self.send_to_scheduler({'function': 'register'}, {'pid': os.getpid()})
+        header, payload = self.recv_from_scheduler()
+        self.registered_workers = payload['workers']

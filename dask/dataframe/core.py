@@ -7,6 +7,7 @@ import bisect
 import os
 from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
         first, partition)
+import toolz
 from operator import getitem, setitem
 from datetime import datetime
 import pandas as pd
@@ -27,6 +28,7 @@ from .. import  async
 from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
+from .utils import shard_df_on_index
 
 
 def _concat(args):
@@ -74,7 +76,7 @@ class Scalar(object):
     def __init__(self, dsk, _name):
         self.dask = dsk
         self._name = _name
-        self.divisions = []
+        self.divisions = [None, None]
 
     @property
     def _args(self):
@@ -99,7 +101,7 @@ class _Frame(object):
     """ Superclass for DataFrame and Series """
     @property
     def npartitions(self):
-        return len(self.divisions) + 1
+        return len(self.divisions) - 1
 
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
@@ -152,7 +154,7 @@ class _Frame(object):
     def __len__(self):
         return reduction(self, len, np.sum).compute()
 
-    def map_blocks(self, func, columns=None):
+    def map_partitions(self, func, columns=None):
         """ Apply Python function on each DataFrame block
 
         Provide columns of the output if they are not the same as the input.
@@ -201,49 +203,70 @@ class _Frame(object):
         dsk = {(name, 0): (head, (self._name, 0), n)}
 
         result = type(self)(merge(self.dask, dsk), name,
-                            self.column_info, [])
+                            self.column_info, self.divisions[:2])
 
         if compute:
             result = result.compute()
         return result
 
-    def _partition_of_index_value(self, val):
-        """ In which partition does this value lie? """
-        val = _coerce_loc_index(self.divisions, val)
-        return bisect.bisect_right(self.divisions, val)
-
     def _loc(self, ind):
         """ Helper function for the .loc accessor """
-        if not self.known_divisions:
-            raise ValueError(
-                "Can not use loc on DataFrame without known divisions")
-        name = next(names)
-        if not isinstance(ind, slice):
-            part = self._partition_of_index_value(ind)
-            dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
-            return type(self)(merge(self.dask, dsk), name,
-                              self.column_info, [])
+        if isinstance(ind, Series):
+            return self._loc_series(ind)
+        elif isinstance(ind, slice):
+            return self._loc_slice(ind)
         else:
-            assert ind.step in (None, 1)
-            if ind.start:
-                start = self._partition_of_index_value(ind.start)
-            else:
-                start = 0
-            if ind.stop is not None:
-                stop = self._partition_of_index_value(ind.stop)
-            else:
-                stop = self.npartitions - 1
-            if stop == start:
-                dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
-            else:
-                dsk = merge(
-                  {(name, 0): (_loc, (self._name, start), ind.start, None)},
-                  dict(((name, i), (self._name, start + i))
-                      for i in range(1, stop - start)),
-                  {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
+            return self._loc_element(ind)
 
-            return type(self)(merge(self.dask, dsk), name, self.column_info,
-                              self.divisions[start:stop])
+    def _loc_series(self, ind):
+        name = 'loc-series' + next(tokens)
+        if not self.divisions == ind.divisions:
+            raise ValueError("Partitions of dataframe and index not the same")
+        return map_partitions(lambda df, ind: df.loc[ind],
+                              self.columns, self, ind)
+
+    def _loc_element(self, ind):
+        name = 'loc-element' + next(tokens)
+        part = _partition_of_index_value(self.divisions, ind)
+        dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
+        return type(self)(merge(self.dask, dsk), name,
+                          self.column_info, [ind, ind])
+
+    def _loc_slice(self, ind):
+        name = 'loc-slice' + next(tokens)
+        assert ind.step in (None, 1)
+        if ind.start:
+            start = _partition_of_index_value(self.divisions, ind.start)
+        else:
+            start = 0
+        if ind.stop is not None:
+            stop = _partition_of_index_value(self.divisions, ind.stop)
+        else:
+            stop = self.npartitions - 1
+        istart = _coerce_loc_index(self.divisions, ind.start)
+        istop = _coerce_loc_index(self.divisions, ind.stop)
+        if stop == start:
+            dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
+            divisions = [istart, istop]
+        else:
+            dsk = merge(
+              {(name, 0): (_loc, (self._name, start), ind.start, None)},
+              dict(((name, i), (self._name, start + i))
+                  for i in range(1, stop - start)),
+              {(name, stop - start): (_loc, (self._name, stop), None, ind.stop)})
+
+            divisions = ((max(istart, self.divisions[start])
+                          if ind.start is not None
+                          else self.divisions[0],) +
+                         self.divisions[start+1:stop+1] +
+                         (min(istop, self.divisions[stop+1])
+                          if ind.stop is not None
+                          else self.divisions[-1],))
+
+        assert len(divisions) == len(dsk) + 1
+        return type(self)(merge(self.dask, dsk),
+                          name, self.column_info,
+                          divisions)
 
     @property
     def loc(self):
@@ -252,6 +275,13 @@ class _Frame(object):
     @property
     def iloc(self):
         raise AttributeError("Dask Dataframe does not support iloc")
+
+    def repartition(self, divisions):
+        """ Repartition dataframe along new divisions
+
+        >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
+        """
+        return repartition(self, divisions)
 
     def __getstate__(self):
         return self.__dict__
@@ -276,7 +306,7 @@ class Series(_Frame):
         self.dask = dsk
         self._name = _name
         self.name = name
-        self.divisions = divisions
+        self.divisions = tuple(divisions)
 
     @property
     def _args(self):
@@ -556,8 +586,56 @@ def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
     return df.assign(**kwargs)
 
-def _loc(df, start, stop):
-    return df.loc[slice(start, stop)]
+
+def _partition_of_index_value(divisions, val):
+    """ In which partition does this value lie?
+
+    >>> _partition_of_index_value([0, 5, 10], 3)
+    0
+    >>> _partition_of_index_value([0, 5, 10], 8)
+    1
+    >>> _partition_of_index_value([0, 5, 10], 100)
+    1
+    >>> _partition_of_index_value([0, 5, 10], 5)  # left-inclusive divisions
+    1
+    """
+    if divisions[0] is None:
+        raise ValueError(
+            "Can not use loc on DataFrame without known divisions")
+    val = _coerce_loc_index(divisions, val)
+    i = bisect.bisect_right(divisions, val)
+    return min(len(divisions) - 2, max(0, i - 1))
+
+
+def _loc(df, start, stop, include_right_boundary=True):
+    """
+
+    >>> df = pd.DataFrame({'x': [10, 20, 30, 40, 50]}, index=[1, 2, 2, 3, 4])
+    >>> _loc(df, 2, None)
+        x
+    2  20
+    2  30
+    3  40
+    4  50
+    >>> _loc(df, 1, 3)
+        x
+    1  10
+    2  20
+    2  30
+    3  40
+    >>> _loc(df, 1, 3, include_right_boundary=False)
+        x
+    1  10
+    2  20
+    2  30
+    """
+    result = df.loc[slice(start, stop)]
+    if not include_right_boundary:
+        # result = df[df.index != stop]
+        result = result.iloc[:result.index.get_slice_bound(stop, 'left',
+                                                   result.index.inferred_type)]
+    return result
+
 
 def _coerce_loc_index(divisions, o):
     """ Transform values to be comparable against divisions
@@ -567,6 +645,7 @@ def _coerce_loc_index(divisions, o):
     if divisions and isinstance(divisions[0], (np.datetime64, datetime)):
         return pd.Timestamp(o)
     return o
+
 
 def head(x, n):
     """ First n elements of dask.Dataframe or dask.Series """
@@ -657,7 +736,7 @@ def concat(dfs):
             dsk[(name, i)] = key
             i += 1
 
-    divisions = [None] * (i - 1)
+    divisions = [None] * (i + 1)
 
     return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
                      dfs[0].columns, divisions)
@@ -680,14 +759,14 @@ class GroupBy(object):
         if (isinstance(self.index, Series) and
             self.index._name == self.frame.index._name):
             f = self.frame
-            return f.map_blocks(lambda df: df.groupby(level=0).apply(func),
-                                columns=columns)
+            return f.map_partitions(lambda df: df.groupby(level=0).apply(func),
+                                    columns=columns)
         else:
             # f = set_index(self.frame, self.index, **self.kwargs)
             f = shuffle(self.frame, self.index, **self.kwargs)
-            return map_blocks(lambda df, index: df.groupby(index).apply(func),
-                              columns or self.frame.columns,
-                              self.frame, self.index)
+            return map_partitions(lambda df, ind: df.groupby(ind).apply(func),
+                                  columns or self.frame.columns,
+                                  self.frame, self.index)
 
     def __getitem__(self, key):
         if key in self.frame.columns:
@@ -719,13 +798,15 @@ class SeriesGroupBy(object):
         # f = set_index(self.frame, self.index, **self.kwargs)
         if self.index._name == self.frame.index._name:
             f = self.frame
-            return f.map_blocks(lambda df:df.groupby(level=0)[self.key].apply(func),
-                                columns=columns)
+            return f.map_partitions(
+                        lambda df: df.groupby(level=0)[self.key].apply(func),
+                        columns=columns)
         else:
             f = shuffle(self.frame, self.index, **self.kwargs)
-            return map_blocks(lambda df, index: df.groupby(index).apply(func),
-                              columns or self.frame.columns,
-                              self.frame, self.index)
+            return map_partitions(
+                        lambda df, index: df.groupby(index).apply(func),
+                        columns or self.frame.columns,
+                        self.frame, self.index)
 
     def sum(self):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()
@@ -820,9 +901,9 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
     return type(args[0])(
             merge(dsk, dsk2, *[a.dask for a in args
                                       if isinstance(a, _Frame)]),
-            b, columns, [])
+            b, columns, [None, None])
 
-def map_blocks(func, columns, *args):
+def map_partitions(func, columns, *args):
     """ Apply Python function on each DataFrame block
 
     Provide columns of the output if they are not the same as the input.
@@ -875,7 +956,7 @@ def categorize(f, columns=None, **kwargs):
     values = compute(distincts, **kwargs)
 
     func = partial(categorize_block, categories=dict(zip(columns, values)))
-    return f.map_blocks(func, columns=f.columns)
+    return f.map_partitions(func, columns=f.columns)
 
 
 def quantiles(f, q, **kwargs):
@@ -932,6 +1013,108 @@ def pd_split(df, p, seed=0):
     p = list(p)
     index = pseudorandom(len(df), p, seed)
     return [df.iloc[index == i] for i in range(len(p))]
+
+
+def repartition_divisions(a, b, name, out1, out2):
+    """ dask graph to repartition frame by new divisions
+
+    Parameters
+    ----------
+    a: tuple
+        old divisions
+    b: tuple
+        new divisions
+    name: str
+        name of old dataframe
+    out1: str
+        name of temporary splits
+    out2: str
+        name of new dataframe
+
+    >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    {('b', 0): (<function _loc at ...>, ('a', 0), 1, 3, False),
+     ('b', 1): (<function _loc at ...>, ('a', 1), 3, 4, False),
+     ('b', 2): (<function _loc at ...>, ('a', 1), 4, 6, False),
+     ('b', 3): (<function _loc at ...>, ('a', 1), 6, 7, False)
+     ('c', 0): (<function concat at ...>,
+                (<type 'list'>, [('b', 0), ('b', 1)])),
+     ('c', 1): ('b', 2),
+     ('c', 2): ('b', 3)}
+    """
+    assert a[0] == b[0]
+    assert a[-1] == b[-1]
+    c = [a[0]]
+    d = dict()
+    low = a[0]
+    i, j = 1, 1
+    k = 0
+    while (i < len(a) and j < len(b)):
+        if a[i] < b[j]:
+            d[(out1, k)] = (_loc, (name, i - 1), low, a[i], False)
+            low = a[i]
+            i += 1
+        elif a[i] > b[j]:
+            d[(out1, k)] = (_loc, (name, i - 1), low, b[j], False)
+            low = b[j]
+            j += 1
+        else:
+            d[(out1, k)] = (_loc, (name, i - 1), low, b[j], False)
+            low = b[j]
+            i += 1
+            j += 1
+        c.append(low)
+        k = k + 1
+    tup = d[(out1, k - 1)]
+    d[(out1, k - 1)] = tup[:-1] + (True,)
+    c.append(a[-1])
+
+    i, j = 0, 1
+    while j < len(b):
+        tmp = []
+        while c[i] < b[j]:
+            tmp.append((out1, i))
+            i += 1
+        if len(tmp) == 1:
+            d[(out2, j - 1)] = tmp[0]
+        else:
+            d[(out2, j - 1)] = (pd.concat, (list, tmp))
+
+        j += 1
+
+    return d
+
+
+def repartition(df, divisions):
+    """ Repartition dataframe along new divisions
+
+    Dask.DataFrame objects are partitioned along their index.  Often when
+    multiple dataframes interact we need to align these partitionings.  The
+    ``repartition`` function constructs a new DataFrame object holding the same
+    data but partitioned on different values.  It does this by performing a
+    sequence of ``loc`` and ``concat`` calls to split and merge the previous
+    generation of partitions.
+
+    >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
+
+    Also works on Pandas objects
+
+    >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
+    """
+    if isinstance(df, _Frame):
+        tmp = 'repartition-split' + next(tokens)
+        out = 'repartition-merge' + next(tokens)
+        dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
+
+        return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
+
+    elif isinstance(df, pd.core.generic.NDFrame):
+        name = 'repartition-dataframe' + next(tokens)
+        dfs = shard_df_on_index(df, divisions[1:-1])
+        dsk = dict(((name, i), df) for i, df in enumerate(dfs))
+        if isinstance(df, pd.DataFrame):
+            return DataFrame(dsk, name, df.columns, divisions)
+        if isinstance(df, pd.Series):
+            return Series(dsk, name, df.name, divisions)
 
 
 from .shuffle import set_index, set_partition, shuffle

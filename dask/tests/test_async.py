@@ -108,3 +108,8 @@ def test_cache_options():
 
     with dask.set_options(cache=cache):
         get_sync({'x': (inc2, 'y'), 'y': 1}, 'x')
+
+
+def test_sort_key():
+    L = ['x', ('x', 1), ('z', 0), ('x', 0)]
+    assert sorted(L, key=sortkey) == ['x', ('x', 0), ('x', 1), ('z', 0)]

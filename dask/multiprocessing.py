@@ -9,8 +9,12 @@ from .async import get_async # TODO: get better get
 from .context import _globals
 
 
-def get(dsk, keys, optimizations=[fuse], num_workers=None,
-        func_loads=None, func_dumps=None):
+def _process_get_id():
+    return multiprocessing.current_process().ident
+
+
+def get(dsk, keys, optimizations=[], num_workers=None,
+        func_loads=None, func_dumps=None, **kwargs):
     """ Multiprocessed get function appropriate for Bags
 
     Parameters
@@ -43,12 +47,13 @@ def get(dsk, keys, optimizations=[fuse], num_workers=None,
                                    func_dumps=func_dumps, func_loads=func_loads)
 
     # Optimize Dask
-    dsk2 = pipe(dsk, partial(cull, keys=keys), *optimizations)
+    dsk2 = fuse(dsk, keys)
+    dsk3 = pipe(dsk2, partial(cull, keys=keys), *optimizations)
 
     try:
         # Run
-        result = get_async(apply_async, len(pool._pool), dsk2, keys,
-                           queue=queue)
+        result = get_async(apply_async, len(pool._pool), dsk3, keys,
+                           queue=queue, get_id=_process_get_id, **kwargs)
     finally:
         if cleanup:
             pool.close()

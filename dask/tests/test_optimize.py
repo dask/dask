@@ -93,6 +93,26 @@ def test_fuse():
         'c': (add, 'b', 'b')
     }
 
+
+def test_fuse_keys():
+    assert (fuse({'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}, keys=['b'])
+            == {'b': (inc, 1), 'c': (inc, 'b')})
+    assert fuse({
+        'w': (inc, 'x'),
+        'x': (inc, 'y'),
+        'y': (inc, 'z'),
+        'z': (add, 'a', 'b'),
+        'a': 1,
+        'b': 2,
+    }, keys=['x', 'z']) == {
+        'w': (inc, 'x'),
+        'x': (inc, (inc, 'z')),
+        'z': (add, 'a', 'b'),
+        'a': 1,
+        'b': 2,
+    }
+
+
 def test_inline():
     d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'), 'd': (add, 'a', 'c')}
     assert inline(d) == {'b': (inc, 1), 'c': (inc, 'b'), 'd': (add, 1, 'c')}

@@ -118,6 +118,11 @@ def test_topk_with_non_callable_key():
     assert list(b.topk(2, key=0)) == [(3, 8), (2, 9)]
 
 
+def test_topk_with_multiarg_lambda():
+    b = db.from_sequence([(1, 10), (2, 9), (3, 8)], npartitions=2)
+    assert list(b.topk(2, key=lambda a, b: b)) == [(1, 10), (2, 9)]
+
+
 def test_lambdas():
     assert list(b.map(lambda x: x + 1)) == list(b.map(inc))
 

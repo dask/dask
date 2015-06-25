@@ -35,7 +35,7 @@ def worker(data=None, scheduler='tcp://localhost:5555'):
 @contextmanager
 def worker_and_router(*args, **kwargs):
     router = context.socket(zmq.ROUTER)
-    router.RCVTIMEO = 10000
+    router.RCVTIMEO = 100000
     port = kwargs.get('port')
     if port:
         router.bind('tcp://*:%d' % port)

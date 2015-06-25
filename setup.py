@@ -21,7 +21,7 @@ setup(name='dask',
       license='BSD',
       keywords='task-scheduling parallelism',
       packages=['dask', 'dask.array', 'dask.bag', 'dask.store',
-                'dask.dataframe', 'dask.distributed', 'pframe'],
+                'dask.dataframe', 'dask.distributed'],
       long_description=(open('README.rst').read() if exists('README.rst')
                         else ''),
       extras_require=extras_require,

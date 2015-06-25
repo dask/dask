@@ -5,7 +5,6 @@ import pandas.util.testing as tm
 import os
 import dask
 import bcolz
-from pframe import pframe
 from operator import getitem
 from toolz import valmap
 import tempfile
@@ -17,6 +16,7 @@ from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
 from dask.compatibility import StringIO
 
 from dask.utils import filetext, tmpfile
+from dask.async import get_sync
 
 
 ########
@@ -61,7 +61,7 @@ def test_file_size():
         assert file_size(fn, 'gzip') in counts
 
 
-def test_cateogories_and_quantiles():
+def test_categories_and_quantiles():
     with filetext(text) as fn:
         cats, quant = categories_and_quantiles(fn, (), {})
 
@@ -70,8 +70,10 @@ def test_cateogories_and_quantiles():
         cats, quant = categories_and_quantiles(fn, (), {}, index='amount',
                 chunkbytes=30)
 
-        assert len(quant) == 2
-        assert (-600 < quant).all() and (600 > quant).all()
+        assert len(quant) == 4
+        assert (-600 < quant[1:]).all() and (600 > quant[:-1]).all()
+        assert quant[0] == -500
+        assert quant[-1] == 600
 
 
 def test_read_multiple_csv():
@@ -157,11 +159,23 @@ def test_read_csv_categorize_with_parse_dates():
 def test_read_csv_categorize_and_index():
     with filetext(text) as fn:
         f = read_csv(fn, chunkbytes=20, index='amount')
-        assert f.index.compute().name == 'amount'
+        result = f.compute(get=get_sync)
+        assert result.index.name == 'amount'
+
+        blocks = dd.core.get(f.dask, f._keys(), get=get_sync)
+        for i, block in enumerate(blocks):
+            if i < len(f.divisions):
+                assert (block.index <= f.divisions[i + 1]).all()
+            if i > 0:
+                assert (block.index > f.divisions[i]).all()
 
         expected = pd.read_csv(fn).set_index('amount')
         expected['name'] = expected.name.astype('category')
-        assert eq(f, expected)
+
+        result = result.sort()
+        expected = expected.sort()
+
+        assert eq(result, expected)
 
 
 def test_usecols():
@@ -182,7 +196,7 @@ def test_from_array():
     d = dd.from_array(x, chunksize=4)
 
     assert list(d.columns) == ['a', 'b']
-    assert d.divisions == (4, 8)
+    assert d.divisions == (0, 4, 8, 9)
 
     assert (d.compute().to_records(index=False) == x).all()
 
@@ -198,11 +212,12 @@ def test_from_bcolz():
     d = dd.from_bcolz(t, chunksize=2)
     assert d.npartitions == 2
     assert str(d.dtypes['a']) == 'category'
-    assert list(d.x.compute(get=dask.get)) == [1, 2, 3]
-    assert list(d.a.compute(get=dask.get)) == ['a', 'b', 'a']
+    assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
+    assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
 
     d = dd.from_bcolz(t, chunksize=2, index='x')
-    assert list(d.index.compute()) == [1, 2, 3]
+    L = list(d.index.compute(get=get_sync))
+    assert L == [1, 2, 3] or L == [1, 3, 2]
 
 
 def test_from_bcolz_filename():
@@ -218,35 +233,6 @@ def test_from_bcolz_filename():
 
         d = dd.from_bcolz(fn, chunksize=2)
         assert list(d.x.compute()) == [1, 2, 3]
-
-
-#####################
-# Play with PFrames #
-#####################
-
-
-dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
-                              index=[0, 1, 3]),
-       ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
-                              index=[5, 6, 8]),
-       ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
-                              index=[9, 9, 9])}
-dfs = list(dsk.values())
-pf = pframe(like=dfs[0], divisions=[5])
-for df in dfs:
-    pf.append(df)
-
-
-def test_from_pframe():
-    d = dd.from_pframe(pf)
-    assert list(d.columns) == list(dfs[0].columns)
-    assert list(d.divisions) == list(pf.divisions)
-
-
-def test_column_store_from_pframe():
-    d = dd.from_pframe(pf)
-    assert eq(d[['a']].head(), pd.DataFrame({'a': [1, 2, 3]}, index=[0, 1, 3]))
-    assert eq(d.a.head(), pd.Series([1, 2, 3], index=[0, 1, 3], name='a'))
 
 
 def test_skipinitialspace():
@@ -326,7 +312,7 @@ def test_from_pandas_dataframe():
                       index=pd.date_range(start='20120101', periods=len(a)))
     ddf = dd.from_pandas(df, 3)
     assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) - 1
+    assert len(ddf.divisions) == len(ddf.dask) + 1
     assert type(ddf.divisions[0]) == type(df.index[0])
     tm.assert_frame_equal(df, ddf.compute())
 
@@ -337,6 +323,6 @@ def test_from_pandas_series():
                   index=pd.date_range(start='20120101', periods=n))
     ds = dd.from_pandas(s, 3)
     assert len(ds.dask) == 3
-    assert len(ds.divisions) == len(ds.dask) - 1
+    assert len(ds.divisions) == len(ds.dask) + 1
     assert type(ds.divisions[0]) == type(s.index[0])
     tm.assert_series_equal(s, ds.compute())

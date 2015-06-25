@@ -42,13 +42,13 @@ The ``divisions`` attribute, analogous to ``chunks`` in ``dask.array`` is
 particularly important.  The values in divisions determine a partitioning of
 left-inclusive / right-exclusive ranges on the index::
 
-    divisions -- (10, 20, 40)
-    ranges    -- (-oo, 10), [10, 20), [20, 40), [40, oo)
+    divisions -- (0, 10, 20, 40, 50)
+    ranges    -- [0, 10), [10, 20), [20, 40), [40, 50]
 
 Alternatively if our data is not partitioned (as is unfortunately often the
 case) then divisions will contain many instances of ``None``::
 
-    divisions -- (None, None, None)
+    divisions -- (None, None, None, None, None)
 
 This is common if, for example, we read data from CSV files which don't have an
 obvious ordering.
@@ -88,7 +88,7 @@ Notice a few things
     this dataset has many Alices we have a block just for her.
 3.  The blocks don't need to be sorted internally
 
-Our divisions in this case are ``['Bob', 'Edith']``
+Our divisions in this case are ``['Alice', 'Bob', 'Edith', 'Frank']``
 
 
 Quantiles and Shuffle
@@ -239,5 +239,4 @@ current design and limitations of dask.dataframe.
 
 
 .. _Chest: http://github.com/ContinuumIO/chest
-.. _pframe: pframe.html
 .. _shared: shared.html

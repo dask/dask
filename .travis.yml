@@ -21,12 +21,13 @@ install:
   - conda install pytest numpy pip coverage toolz pandas scikit-learn cytoolz dill networkx pyzmq psutil ipython bcolz chest blosc cython
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install blosc --upgrade
+  - pip install git+https://github.com/Blosc/castra
 
   # Install dask
   - python setup.py install
 
 script:
-    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run $(which py.test) dask pframe --runslow --doctest-modules --verbose; else py.test dask pframe --verbose; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
 
 after_success:
     - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
