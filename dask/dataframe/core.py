@@ -479,6 +479,19 @@ class Series(_Frame):
     def dropna(self):
         return map_partitions(pd.Series.dropna, self.name, self)
 
+    @wraps(pd.Series.between)
+    def between(self, left, right, inclusive=True):
+        return map_partitions(pd.Series.between, self.name, self, left, right,
+                inclusive)
+
+    @wraps(pd.Series.clip)
+    def clip(self, lower=None, upper=None):
+        return map_partitions(pd.Series.clip, self.name, self, lower, upper)
+
+    @wraps(pd.Series.notnull)
+    def notnull(self):
+        return map_partitions(pd.Series.notnull, self.name, self)
+
 
 class Index(Series):
     pass

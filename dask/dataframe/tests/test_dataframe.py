@@ -499,3 +499,9 @@ def test_embarrassingly_parallel_operations():
 
     assert eq(a.x.fillna(100), df.x.fillna(100))
     assert eq(a.fillna(100), df.fillna(100))
+
+    assert eq(a.x.between(2, 4), df.x.between(2, 4))
+
+    assert eq(a.x.clip(2, 4), df.x.clip(2, 4))
+
+    assert eq(a.x.notnull(), df.x.notnull())
