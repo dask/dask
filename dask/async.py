@@ -120,8 +120,6 @@ import sys
 import traceback
 from operator import add
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
-from .optimize import inline_functions
-from .utils import deepmap
 from .context import _globals
 
 def inc(x):
@@ -353,6 +351,11 @@ def nested_get(ind, coll, lazy=False):
         return coll[ind]
 
 
+def default_get_id():
+    """Default get_id"""
+    return None
+
+
 '''
 Task Selection
 --------------
@@ -372,7 +375,7 @@ The main function of the scheduler.  Get is the main entry point.
 '''
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
-              queue=None, get_id=None, raise_on_exception=False,
+              queue=None, get_id=default_get_id, raise_on_exception=False,
               start_callback=None, end_callback=None, **kwargs):
     """ Asynchronous get function
 
@@ -398,7 +401,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         Keys corresponding to desired data
     cache : dict-like, optional
         Temporary storage of results
-    get_id : callable
+    get_id : callable, optional
         Function to return the worker id, takes no arguments. Examples are
         `threading.current_thread` and `multiprocessing.current_process`.
     start_callback : function, optional
@@ -418,7 +421,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     threaded.get
     """
     assert queue
-    assert get_id
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -488,14 +490,12 @@ def apply_sync(func, args=(), kwds={}):
     """ A naive synchronous version of apply_async """
     return func(*args, **kwds)
 
-def get_id():
-    return None
 
 def get_sync(dsk, keys, **kwargs):
     from .compatibility import Queue
     queue = Queue()
     return get_async(apply_sync, 1, dsk, keys, queue=queue,
-            get_id=get_id, raise_on_exception=True, **kwargs)
+                     raise_on_exception=True, **kwargs)
 
 
 '''
@@ -511,7 +511,7 @@ normal dot graphs (see dot module).
 
 def visualize(dsk, state, filename='dask'):
     """ Visualize state of compputation as dot graph """
-    from dask.dot import dot_graph, write_networkx_to_dot
+    from dask.dot import write_networkx_to_dot
     g = state_to_networkx(dsk, state)
     write_networkx_to_dot(g, filename=filename)
 
