@@ -57,6 +57,17 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
     tm.assert_frame_equal(c.compute(), A.join(B, how='outer'))
 
 
+def list_eq(a, b):
+    if isinstance(a, dd.DataFrame):
+        a = a.compute(get=get_sync)
+    if isinstance(b, dd.DataFrame):
+        b = b.compute(get=get_sync)
+    assert list(a.columns) == list(b.columns)
+
+    assert sorted(a.fillna(100).values.tolist()) == \
+           sorted(b.fillna(100).values.tolist())
+
+
 def test_hash_join():
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
@@ -105,3 +116,41 @@ def test_indexed_concat():
 
         assert sorted(zip(result.values.tolist(), result.index.values.tolist())) == \
                sorted(zip(expected.values.tolist(), expected.index.values.tolist()))
+
+
+def test_merge():
+    A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
+    a = dd.repartition(A, [0, 4, 5])
+
+    B = pd.DataFrame({'y': [1, 3, 4, 4, 5, 6], 'z': [6, 5, 4, 3, 2, 1]})
+    b = dd.repartition(B, [0, 2, 5])
+
+    list_eq(dd.merge(a, b, left_index=True, right_index=True),
+            pd.merge(A, B, left_index=True, right_index=True))
+
+    list_eq(dd.merge(a, b, on='y'),
+            pd.merge(A, B, on='y'))
+
+    list_eq(dd.merge(a, b, left_on='x', right_on='z'),
+            pd.merge(A, B, left_on='x', right_on='z'))
+
+    list_eq(dd.merge(a, b),
+            pd.merge(A, B))
+
+    list_eq(dd.merge(a, B),
+            pd.merge(A, B))
+
+    list_eq(dd.merge(A, b),
+            pd.merge(A, B))
+
+    list_eq(dd.merge(A, B),
+            pd.merge(A, B))
+
+    list_eq(dd.merge(a, b, left_index=True, right_index=True),
+            pd.merge(A, B, left_index=True, right_index=True))
+
+    # list_eq(dd.merge(a, b, left_on='x', right_index=True),
+    #         pd.merge(A, B, left_on='x', right_index=True))
+
+    # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
+    #         pd.merge(A, B, left_index=True, right_on='y'))

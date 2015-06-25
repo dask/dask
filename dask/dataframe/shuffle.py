@@ -181,9 +181,11 @@ def partition(df, index, npartitions, p):
     rng = pd.Series(np.arange(len(df)))
     if isinstance(index, Iterator):
         index = list(index)
-    if not isinstance(index, pd.core.generic.NDFrame):
+    if not isinstance(index, (pd.Index, pd.core.generic.NDFrame)):
         index = df[index]
 
+    if isinstance(index, pd.Index):
+        groups = rng.groupby([abs(hash(x)) % npartitions for x in index])
     if isinstance(index, pd.Series):
         groups = rng.groupby(index.map(lambda x: abs(hash(x)) % npartitions).values)
     elif isinstance(index, pd.DataFrame):

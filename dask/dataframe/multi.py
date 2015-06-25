@@ -53,10 +53,12 @@ We proceed with hash joins in the following stages:
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
 
-from .core import repartition, tokens, DataFrame
+from .core import repartition, tokens, DataFrame, Index
+from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
-from toolz import merge_sorted, unique, merge, curry
+from toolz import merge_sorted, unique, curry, partial
+import toolz
 import pandas as pd
 
 
@@ -181,7 +183,20 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     # fake column names
     j = left_empty.join(right_empty, None, how, lsuffix, rsuffix)
 
-    return DataFrame(merge(lhs.dask, rhs.dask, dsk), name, j.columns, divisions)
+    return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk), name, j.columns, divisions)
+
+
+def pdmerge(left, right, *args, **kwargs):
+    default_left_columns = kwargs.pop('left_columns')
+    default_right_columns = kwargs.pop('right_columns')
+
+    if not len(left):
+        left = pd.DataFrame([], columns=default_left_columns)
+    if not len(right):
+        right = pd.DataFrame([], columns=default_right_columns)
+
+
+    return pd.merge(left, right, *args, **kwargs)
 
 
 def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffixes=('_x', '_y')):
@@ -198,20 +213,34 @@ def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffix
     lhs2 = shuffle(lhs, on_left, npartitions)
     rhs2 = shuffle(rhs, on_right, npartitions)
 
-    name = 'hash-join' + next(tokens)
-    pdmerge = curry(pd.merge, suffixes=suffixes)
-    dsk = dict(((name, i), (pdmerge, (lhs2._name, i), (rhs2._name, i),
-                             how, None, on_left, on_right))
-                for i in range(npartitions))
-
     # fake column names
     left_empty = pd.DataFrame([], columns=lhs.columns)
     right_empty = pd.DataFrame([], columns=rhs.columns)
-    j = pd.merge(left_empty, right_empty, how, None, on_left, on_right)
+    left_on = None if isinstance(on_left, Index) else on_left
+    left_index = isinstance(on_left, Index)
+    right_on = None if isinstance(on_right, Index) else on_right
+    right_index = isinstance(on_right, Index)
+    j = pd.merge(left_empty, right_empty, how, None,
+                 left_on=left_on, right_on=right_on,
+                 left_index=left_index, right_index=right_index)
+
+    if isinstance(on_left, list):
+        on_left = (list, tuple(on_left))
+    if isinstance(on_right, list):
+        on_right = (list, tuple(on_right))
+
+    pdmerge2 = partial(pdmerge, suffixes=suffixes,
+                       left_columns=list(lhs.columns),
+                       right_columns=list(rhs.columns))
+
+    name = 'hash-join' + next(tokens)
+    dsk = dict(((name, i), (pdmerge2, (lhs2._name, i), (rhs2._name, i),
+                             how, None, on_left, on_right))
+                for i in range(npartitions))
 
     divisions = [None] * (npartitions + 1)
 
-    return DataFrame(merge(lhs2.dask, rhs2.dask, dsk),
+    return DataFrame(toolz.merge(lhs2.dask, rhs2.dask, dsk),
                      name, j.columns, divisions)
 
 
@@ -232,4 +261,45 @@ def concat_indexed_dataframes(dfs, join='outer'):
     dsk = dict(((name, i), (pd.concat, part, 0, join))
                 for i, part in enumerate(parts2))
 
-    return DataFrame(merge(dsk, *[df.dask for df in dfs2]), name, columns, divisions)
+    return DataFrame(toolz.merge(dsk, *[df.dask for df in dfs2]), name, columns, divisions)
+
+
+def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
+          left_index=False, right_index=False, suffixes=('_x', '_y'),
+          npartitions=None):
+    if not on and not left_on and not right_on and not left_index and not right_index:
+        on = [c for c in left.columns if c in right.columns]
+        if not on:
+            left_index = right_index = True
+    if on and not left_on and not right_on:
+        left_on = right_on = on
+        on = None
+    if isinstance(left, pd.core.generic.NDFrame) and isinstance(right, pd.core.generic.NDFrame):
+        return pd.merge(left, right, how, on=on, left_on=left_on,
+                        right_on=right_on, left_index=left_index,
+                        right_index=right_index, suffixes=suffixes)
+
+    # Transform pandas objects into dask.dataframe objects
+    if isinstance(left, pd.core.generic.NDFrame):
+        if right_index and left_on:  # change to join on index
+            left = left.set_index(left[left_on])
+            left_on = False
+            left_index = True
+        left = from_pandas(left, npartitions=1)  # turn into dataframe
+    if isinstance(right, pd.core.generic.NDFrame):
+        if left_index and right_on:  # change to join on index
+            right = right.set_index(right[right_on])
+            right_on = False
+            right_index = True
+        right = from_pandas(right, npartitions=1)  # turn into dataframe
+
+    # Both sides are now dd.DataFrame or dd.Series objects
+
+    if left_index and right_index:  # Do indexed join
+        return join_indexed_dataframes(left, right, how=how,
+                                       lsuffix=suffixes[0], rsuffix=suffixes[1])
+
+    else:                           # Do hash join
+        return hash_join(left, left.index if left_index else left_on,
+                         right, right.index if right_index else right_on,
+                         how, npartitions, suffixes)
