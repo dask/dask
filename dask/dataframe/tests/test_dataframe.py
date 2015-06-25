@@ -505,3 +505,5 @@ def test_embarrassingly_parallel_operations():
     assert eq(a.x.clip(2, 4), df.x.clip(2, 4))
 
     assert eq(a.x.notnull(), df.x.notnull())
+
+    assert len(a.sample(0.5).compute()) < len(df)

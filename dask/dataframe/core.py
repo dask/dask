@@ -294,6 +294,17 @@ class _Frame(object):
         func = getattr(self._partition_type, 'fillna')
         return map_partitions(func, self.column_info, self, value)
 
+    def sample(self, frac):
+        """ Random sample of items
+
+        This only implements the ``frac`` option from pandas.
+
+        See Also:
+            pd.DataFrame.sample
+        """
+        func = getattr(self._partition_type, 'sample')
+        return map_partitions(func, self.column_info, self, None, frac)
+
 
 class Series(_Frame):
     """ Out-of-core Series object
