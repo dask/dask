@@ -317,6 +317,13 @@ def test_from_pandas_dataframe():
     tm.assert_frame_equal(df, ddf.compute())
 
 
+def test_from_pandas_small():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    for i in [1, 2, 30]:
+        a = dd.from_pandas(df, i)
+        assert len(a.compute()) == 3
+
+
 def test_from_pandas_series():
     n = 20
     s = pd.Series(np.random.randn(n),
