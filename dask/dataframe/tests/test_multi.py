@@ -1,11 +1,11 @@
 import dask.dataframe as dd
 import pandas as pd
-from dask.dataframe.multi import (align, join_indexed_dataframes, hash_join,
-        concat_indexed_dataframes)
+from dask.dataframe.multi import (align_partitions, join_indexed_dataframes,
+        hash_join, concat_indexed_dataframes)
 import pandas.util.testing as tm
 from dask.async import get_sync
 
-def test_align():
+def test_align_partitions():
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
                      index=[10, 20, 30, 40, 50, 60])
     a = dd.repartition(A, [10, 40, 60])
@@ -14,7 +14,7 @@ def test_align():
                      index=[30, 70, 80, 100])
     b = dd.repartition(B, [30, 80, 100])
 
-    (aa, bb), divisions, L = align(a, b)
+    (aa, bb), divisions, L = align_partitions(a, b)
     assert isinstance(a, dd.DataFrame)
     assert isinstance(b, dd.DataFrame)
     assert divisions == (10, 30, 40, 60, 80, 100)

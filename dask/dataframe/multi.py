@@ -25,7 +25,8 @@ following stages.
 1.  Align the partitions of all inputs to be the same.  This involves a call
     to ``dd.repartition`` which will split up and concat existing partitions as
     necessary.  After this step all inputs have partitions that align with
-    each other.  This step is relatively cheap.  See the function ``align``.
+    each other.  This step is relatively cheap.
+    See the function ``align_partitions``.
 2.  Remove unnecessary partitions based on the type of join we perform (left,
     right, inner, outer).  We can do this at the partition level before any
     computation happens.  We'll do it again on each partition when we call the
@@ -71,7 +72,7 @@ def bound(seq, left, right):
     return seq[bisect_left(seq, left): bisect_right(seq, right)]
 
 
-def align(*dfs):
+def align_partitions(*dfs):
     """ Mutually partition and align DataFrame blocks
 
     This serves as precursor to multi-dataframe operations like join, concat,
@@ -163,7 +164,7 @@ required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
 
 def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     """ Join two partitiond dataframes along their index """
-    (lhs, rhs), divisions, parts = align(lhs, rhs)
+    (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
     left_empty = pd.DataFrame([], columns=lhs.columns)
@@ -247,7 +248,7 @@ def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffix
 def concat_indexed_dataframes(dfs, join='outer'):
     """ Concatenate indexed dataframes together along the index """
     assert join in ('inner', 'outer')
-    dfs2, divisions, parts = align(*dfs)
+    dfs2, divisions, parts = align_partitions(*dfs)
 
     empties = [pd.DataFrame([], columns=df.columns) for df in dfs]
 
