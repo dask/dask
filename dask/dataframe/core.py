@@ -64,7 +64,7 @@ def compute(*args, **kwargs):
     return list(map(_concat, results))
 
 
-names = ('f-%d' % i for i in count(1))
+names = ('df-%d' % i for i in count(1))
 tokens = ('-%d' % i for i in count(1))
 
 
@@ -467,9 +467,9 @@ class Series(_Frame):
 
     def std(self, ddof=1):
         name = next(names)
-        f = self.var(ddof=ddof)
-        dsk = {(name, 0): (sqrt, (f._name, 0))}
-        return Scalar(merge(f.dask, dsk), name)
+        df = self.var(ddof=ddof)
+        dsk = {(name, 0): (sqrt, (df._name, 0))}
+        return Scalar(merge(df.dask, dsk), name)
 
     def value_counts(self):
         chunk = lambda s: s.value_counts()
@@ -726,19 +726,19 @@ def elemwise(op, *args, **kwargs):
     else:
         op2 = op
 
-    assert all(f.divisions == frames[0].divisions for f in frames)
-    assert all(f.npartitions == frames[0].npartitions for f in frames)
+    assert all(df.divisions == frames[0].divisions for df in frames)
+    assert all(df.npartitions == frames[0].npartitions for df in frames)
 
     dsk = dict(((_name, i), (op2,) + frs)
-                for i, frs in enumerate(zip(*[f._keys() for f in frames])))
+                for i, frs in enumerate(zip(*[df._keys() for df in frames])))
 
     if columns is not None:
-        return DataFrame(merge(dsk, *[f.dask for f in frames]),
+        return DataFrame(merge(dsk, *[df.dask for df in frames]),
                          _name, columns, frames[0].divisions)
     else:
-        column_name = name or consistent_name(n for f in frames
-                                                 for n in f.columns)
-        return Series(merge(dsk, *[f.dask for f in frames]),
+        column_name = name or consistent_name(n for df in frames
+                                                 for n in df.columns)
+        return Series(merge(dsk, *[df.dask for df in frames]),
                       _name, column_name, frames[0].divisions)
 
 
@@ -833,12 +833,12 @@ class GroupBy(object):
     def apply(self, func, columns=None):
         if (isinstance(self.index, Series) and
             self.index._name == self.frame.index._name):
-            f = self.frame
-            return f.map_partitions(lambda df: df.groupby(level=0).apply(func),
+            df = self.frame
+            return df.map_partitions(lambda df: df.groupby(level=0).apply(func),
                                     columns=columns)
         else:
-            # f = set_index(self.frame, self.index, **self.kwargs)
-            f = shuffle(self.frame, self.index, **self.kwargs)
+            # df = set_index(self.frame, self.index, **self.kwargs)
+            df = shuffle(self.frame, self.index, **self.kwargs)
             return map_partitions(lambda df, ind: df.groupby(ind).apply(func),
                                   columns or self.frame.columns,
                                   self.frame, self.index)
@@ -870,14 +870,14 @@ class SeriesGroupBy(object):
         self.kwargs = kwargs
 
     def apply(func, columns=None):
-        # f = set_index(self.frame, self.index, **self.kwargs)
+        # df = set_index(self.frame, self.index, **self.kwargs)
         if self.index._name == self.frame.index._name:
-            f = self.frame
-            return f.map_partitions(
+            df = self.frame
+            return df.map_partitions(
                         lambda df: df.groupby(level=0)[self.key].apply(func),
                         columns=columns)
         else:
-            f = shuffle(self.frame, self.index, **self.kwargs)
+            df = shuffle(self.frame, self.index, **self.kwargs)
             return map_partitions(
                         lambda df, index: df.groupby(index).apply(func),
                         columns or self.frame.columns,
@@ -1014,48 +1014,50 @@ def categorize_block(df, categories):
     return df
 
 
-def categorize(f, columns=None, **kwargs):
+def categorize(df, columns=None, **kwargs):
     """
-    Convert columns of dask.frame to category dtype
+    Convert columns of dataframe to category dtype
 
-    This greatly aids performance, both in-memory and in spilling to disk
+    This aids performance, both in-memory and in spilling to disk
     """
     if columns is None:
-        dtypes = f.dtypes
+        dtypes = df.dtypes
         columns = [name for name, dt in zip(dtypes.index, dtypes.values)
                     if dt == 'O']
     if not isinstance(columns, (list, tuple)):
         columns = [columns]
 
-    distincts = [f[col].drop_duplicates() for col in columns]
+    distincts = [df[col].drop_duplicates() for col in columns]
     values = compute(distincts, **kwargs)
 
     func = partial(categorize_block, categories=dict(zip(columns, values)))
-    return f.map_partitions(func, columns=f.columns)
+    return df.map_partitions(func, columns=df.columns)
 
 
-def quantiles(f, q, **kwargs):
+def quantiles(df, q, **kwargs):
     """ Approximate quantiles of column
 
+    Parameters
+    ----------
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
-    assert len(f.columns) == 1
+    assert len(df.columns) == 1
     if not len(q):
         return da.zeros((0,), chunks=((0,),))
     from dask.array.percentile import _percentile, merge_percentiles
     name = next(names)
     val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
-                   for i, key in enumerate(f._keys()))
+                   for i, key in enumerate(df._keys()))
     name2 = next(names)
-    len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(f._keys()))
+    len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
 
     name3 = next(names)
-    merge_dsk = {(name3, 0): (merge_percentiles, q, [q] * f.npartitions,
+    merge_dsk = {(name3, 0): (merge_percentiles, q, [q] * df.npartitions,
                                                 sorted(val_dsk),
                                                 sorted(len_dsk))}
 
-    dsk = merge(f.dask, val_dsk, len_dsk, merge_dsk)
+    dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
     return da.Array(dsk, name3, chunks=((len(q),),))
 
 
