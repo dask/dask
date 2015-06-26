@@ -64,7 +64,6 @@ def compute(*args, **kwargs):
     return list(map(_concat, results))
 
 
-names = ('df-%d' % i for i in count(1))
 tokens = ('-%d' % i for i in count(1))
 
 
@@ -137,7 +136,7 @@ class _Frame(object):
             cache = cache()
 
         # Evaluate and store in cache
-        name = next(names)
+        name = 'cache' + next(tokens)
         dsk = dict(((name, i), (setitem, cache, (tuple, list(key)), key))
                     for i, key in enumerate(self._keys()))
         get(merge(dsk, self.dask), list(dsk.keys()))
@@ -162,7 +161,7 @@ class _Frame(object):
         """
         if columns is None:
             columns = self.column_info
-        name = next(names)
+        name = 'map_partitions' + next(tokens)
         dsk = dict(((name, i), (func, (self._name, i)))
                     for i in range(self.npartitions))
 
@@ -199,7 +198,7 @@ class _Frame(object):
 
         Caveat, the only checks the first n rows of the first partition.
         """
-        name = next(names)
+        name = 'head' + next(tokens)
         dsk = {(name, 0): (head, (self._name, 0), n)}
 
         result = type(self)(merge(self.dask, dsk), name,
@@ -355,7 +354,7 @@ class Series(_Frame):
         return quantiles(self, q)
 
     def __getitem__(self, key):
-        name = next(names)
+        name = 'getitem' + next(tokens)
         if isinstance(key, Series) and self.divisions == key.divisions:
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
@@ -475,7 +474,7 @@ class Series(_Frame):
 
     @wraps(pd.Series.std)
     def std(self, ddof=1):
-        name = next(names)
+        name = 'std' + next(tokens)
         df = self.var(ddof=ddof)
         dsk = {(name, 0): (sqrt, (df._name, 0))}
         return Scalar(merge(df.dask, dsk), name)
@@ -569,7 +568,7 @@ class DataFrame(_Frame):
                 return DataFrame(merge(self.dask, dsk), name,
                                  key, self.divisions)
         if isinstance(key, Series) and self.divisions == key.divisions:
-            name = next(names)
+            name = 'slice-with-series' + next(tokens)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
@@ -726,7 +725,7 @@ def elemwise(op, *args, **kwargs):
     columns = kwargs.get('columns', None)
     name = kwargs.get('name', None)
 
-    _name = next(names)
+    _name = 'elemwise' + next(tokens)
 
     dfs = [arg for arg in args if isinstance(arg, _Frame)]
     other = [(i, arg) for i, arg in enumerate(args)
@@ -795,12 +794,13 @@ def reduction(x, chunk, aggregate):
 
     >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
     """
-    a = next(names)
+    a = 'reduction-chunk' + next(tokens)
     dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
                 for i in range(x.npartitions))
 
-    b = next(names)
-    dsk2 = {(b, 0): (aggregate, (remove_empties, [(a,i) for i in range(x.npartitions)]))}
+    b = 'reduction-aggregation' + next(tokens)
+    dsk2 = {(b, 0): (aggregate, (remove_empties,
+                        [(a,i) for i in range(x.npartitions)]))}
 
     return Scalar(merge(x.dask, dsk, dsk2), b)
 
@@ -814,7 +814,7 @@ def concat(dfs):
         # For this to work we need to add a final division for "maximum element"
         raise NotImplementedError("Concat can't currently handle dataframes"
                 " with known divisions")
-    name = next(names)
+    name = 'concat' + next(tokens)
     dsk = dict()
     i = 0
     for df in dfs:
@@ -973,13 +973,13 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
     assert all(arg.npartitions == args[0].npartitions
                 for arg in args
                 if isinstance(arg, _Frame))
-    a = next(names)
+    a = 'apply-concat-apply--first' + next(tokens)
     dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)
                                                 if isinstance(x, _Frame)
                                                 else x for x in args])))
                 for i in range(args[0].npartitions))
 
-    b = next(names)
+    b = 'apply-concat-apply--second' + next(tokens)
     dsk2 = {(b, 0): (aggregate,
                       (pd.concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
@@ -998,7 +998,7 @@ def map_partitions(func, columns, *args):
                arg.divisions == args[0].divisions
                for arg in args)
 
-    name = next(names)
+    name = 'map-partitions' + next(tokens)
     dsk = dict(((name, i), (apply, func,
                              (tuple, [(arg._name, i)
                                       if isinstance(arg, _Frame)
@@ -1057,13 +1057,13 @@ def quantiles(df, q, **kwargs):
     if not len(q):
         return da.zeros((0,), chunks=((0,),))
     from dask.array.percentile import _percentile, merge_percentiles
-    name = next(names)
+    name = 'quantiles-1' + next(tokens)
     val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
                    for i, key in enumerate(df._keys()))
-    name2 = next(names)
+    name2 = 'quantiles-2' + next(tokens)
     len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
 
-    name3 = next(names)
+    name3 = 'quantiles-3' + next(tokens)
     merge_dsk = {(name3, 0): (merge_percentiles, q, [q] * df.npartitions,
                                                 sorted(val_dsk),
                                                 sorted(len_dsk))}
