@@ -17,6 +17,21 @@ class Profiler(object):
         3. Start time in seconds since the epoch
         4. Finish time in seconds since the epoch
         5. Worker id
+
+    >>> from dask.diagnostics import thread_prof
+    >>> from operator import add, mul
+
+    >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
+    >>> thread_prof.get(dsk, 'z')  # works like normal scheduler
+    22
+
+    >>> thread_prof.results()  # doctest: +SKIP
+    [('y', (<built-in function add>, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
+     ('z', (<built-in function mul>, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
+
+    >>> thread_prof.clear()  # Clear out old results
+    >>> thread_prof.results()
+    []
     """
     def __init__(self, get):
         """Create a profiler
