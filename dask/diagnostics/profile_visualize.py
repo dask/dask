@@ -1,66 +1,68 @@
-from bokeh.plotting import output_file, figure, ColumnDataSource
-from bokeh import plotting
-from bokeh.palettes import brewer
-from bokeh.models import HoverTool
-from toolz import unique, groupby, valmap
+from __future__ import division, absolute_import
+
 from itertools import cycle
 from operator import itemgetter
-from dask.dot import name
+
+from toolz import unique, groupby, valmap
+import bokeh.plotting as bp
+from bokeh.palettes import brewer
+from bokeh.models import HoverTool
+
+from ..dot import name
 
 
-def get_colors(palette, names):
-    unique_names = list(sorted(unique(names)))
-    n_names = len(unique_names)
+def get_colors(palette, funcs):
+    unique_funcs = list(sorted(unique(funcs)))
+    n_funcs = len(unique_funcs)
     palette_lookup = brewer[palette]
     keys = list(palette_lookup.keys())
     low, high = min(keys), max(keys)
-    if n_names > high:
+    if n_funcs > high:
         colors = cycle(palette_lookup[high])
-    elif n_names < low:
+    elif n_funcs < low:
         colors = palette_lookup[low]
     else:
-        colors = palette_lookup[n_names]
-    color_lookup = dict(zip(unique_names, colors))
-    return [color_lookup[n] for n in names]
+        colors = palette_lookup[n_funcs]
+    color_lookup = dict(zip(unique_funcs, colors))
+    return [color_lookup[n] for n in funcs]
 
-
-label = lambda a: name(a[0])
 
 def visualize(results, palette='GnBu', file_path="profile.html",
-              tools="hover,save,reset,xwheel_zoom,xpan", show=True, **kwargs):
-    output_file(file_path)
+              show=True, **kwargs):
 
-    key, task, start, end, id = zip(*results)
+    bp.output_file(file_path)
+    keys, tasks, starts, ends, ids = zip(*results)
 
     id_group = groupby(itemgetter(4), results)
     diff = lambda v: v[3] - v[2]
-    f = lambda val: sum(map(diff, val))
-    total_id = [i[0] for i in reversed(sorted(valmap(f, id_group).items(), key=itemgetter(1)))]
+    timings = valmap(lambda val: sum(map(diff, val)), id_group)
+    id_lk = {t[0]: n for (n, t) in enumerate(sorted(timings.items(),
+                                             key=itemgetter(1), reverse=True))}
 
+    left = min(starts)
+    right = max(ends)
 
-    name = map(label, task)
-
-    left = min(start)
-    right = max(end)
-
-    p = figure(title="Profile Results", y_range=map(str, range(len(total_id))),
-               x_range=[0, right - left],
-               tools=tools, **kwargs)
+    defaults = dict(title="Profile Results",
+                    tools="hover,save,reset,resize,xwheel_zoom,xpan",
+                    plot_width=800, plot_height=400)
+    defaults.update(kwargs)
+    p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
+                  x_range=[0, right - left], **defaults)
 
     data = {}
-    data['x'] = [(e - s)/2 + s - left for (s, e) in zip(start, end)]
-    data['y'] = [total_id.index(i) + 1 for i in id]
-    data['height'] = [1 for i in id]
-    data['width'] = [e - s for (s, e) in zip(start, end)]
-    data['color'] = get_colors(palette, name)
+    data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
+    data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
+    data['y'] = [id_lk[i] + 1 for i in ids]
+    data['function'] = funcs = [name(i[0]) for i in tasks]
+    data['color'] = get_colors(palette, funcs)
 
-    f = lambda a: str(a).replace("'", "") # Bokeh barfs on quotes in hovers...
-    data['key'] = map(f, key)
-    data['function'] = name
-    source = ColumnDataSource(data=data)
+    # Bokeh barfs on quotes in hovers...
+    # https://github.com/bokeh/bokeh/issues/2094
+    data['key'] = [str(k).replace("'", "") for k in keys]
+    source = bp.ColumnDataSource(data=data)
 
-    p.rect(source=source, x='x', y='y', height='height', width='width',
-            color='color', line_color='gray')
+    p.rect(source=source, x='x', y='y', height=1, width='width',
+           color='color', line_color='gray')
     p.grid.grid_line_color = None
     p.axis.axis_line_color = None
     p.axis.major_tick_line_color = None
@@ -70,9 +72,8 @@ def visualize(results, palette='GnBu', file_path="profile.html",
     hover = p.select(type=HoverTool)
     hover.tooltips = [("Key:", "@key"),
                       ("Function:", "@function")]
-
     hover.point_policy = 'follow_mouse'
 
     if show:
-        plotting.show(p)
+        bp.show(p)
     return p

@@ -1,12 +1,14 @@
 from __future__ import absolute_import
 
-from collections import OrderedDict
+from collections import namedtuple
+from itertools import starmap
 from timeit import default_timer
 
 
-import dask.array as da
-from dask.array.core import get
-import numpy as np
+# Stores execution data for each task
+TaskData = namedtuple('TaskData', ('key', 'task', 'start_time',
+                                   'end_time', 'worker_id'))
+
 
 class Profiler(object):
     """A profiler for dask execution at the task level.
@@ -65,11 +67,11 @@ class Profiler(object):
                          end_callback=self._end_callback, **kwargs)
 
     def results(self):
-        """Returns a list containing tuples of:
+        """Returns a list containing namedtuples of:
 
-        (key, task, start time, end time, worker_id)"""
+        TaskData(key, task, start_time, end_time, worker_id)"""
 
-        return list(self._results.values())
+        return list(starmap(TaskData, self._results.values()))
 
     def visualize(self, **kwargs):
         from .profile_visualize import visualize
