@@ -485,3 +485,47 @@ def test_repartition_on_pandas_dataframe():
     assert isinstance(ddf, dd.Series)
     assert ddf.divisions == (10, 20, 50, 60)
     assert eq(ddf, df.y)
+
+
+def test_embarrassingly_parallel_operations():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+
+    assert eq(a.x.astype('float32'), df.x.astype('float32'))
+    assert a.x.astype('float32').compute().dtype == 'float32'
+
+    assert eq(a.x.dropna(), df.x.dropna())
+
+    assert eq(a.x.fillna(100), df.x.fillna(100))
+    assert eq(a.fillna(100), df.fillna(100))
+
+    assert eq(a.x.between(2, 4), df.x.between(2, 4))
+
+    assert eq(a.x.clip(2, 4), df.x.clip(2, 4))
+
+    assert eq(a.x.notnull(), df.x.notnull())
+
+    assert len(a.sample(0.5).compute()) < len(df)
+
+
+def test_datetime_accessor():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    df['x'] = df.x.astype('M8[us]')
+
+    a = dd.from_pandas(df, 2)
+
+    assert 'date' in dir(a.x.dt)
+
+    assert eq(a.x.dt.date, df.x.dt.date)
+    assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
+
+
+def test_str_accessor():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D']})
+
+    a = dd.from_pandas(df, 2)
+
+    assert 'upper' in dir(a.x.str)
+
+    assert eq(a.x.str.upper(), df.x.str.upper())

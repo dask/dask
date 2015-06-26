@@ -289,6 +289,22 @@ class _Frame(object):
     def __setstate__(self, dict):
         self.__dict__ = dict
 
+    @wraps(pd.Series.fillna)
+    def fillna(self, value):
+        func = getattr(self._partition_type, 'fillna')
+        return map_partitions(func, self.column_info, self, value)
+
+    def sample(self, frac):
+        """ Random sample of items
+
+        This only implements the ``frac`` option from pandas.
+
+        See Also:
+            pd.DataFrame.sample
+        """
+        func = getattr(self._partition_type, 'sample')
+        return map_partitions(func, self.column_info, self, None, frac)
+
 
 class Series(_Frame):
     """ Out-of-core Series object
@@ -307,6 +323,8 @@ class Series(_Frame):
         self._name = _name
         self.name = name
         self.divisions = tuple(divisions)
+        self.dt = DatetimeAccessor(self)
+        self.str = StringAccessor(self)
 
     @property
     def _args(self):
@@ -465,6 +483,27 @@ class Series(_Frame):
     @wraps(pd.Series.map)
     def map(self, arg, na_action=None):
         return elemwise(pd.Series.map, self, arg, na_action, name=self.name)
+
+    @wraps(pd.Series.astype)
+    def astype(self, dtype):
+        return map_partitions(pd.Series.astype, self.name, self, dtype)
+
+    @wraps(pd.Series.dropna)
+    def dropna(self):
+        return map_partitions(pd.Series.dropna, self.name, self)
+
+    @wraps(pd.Series.between)
+    def between(self, left, right, inclusive=True):
+        return map_partitions(pd.Series.between, self.name, self, left, right,
+                inclusive)
+
+    @wraps(pd.Series.clip)
+    def clip(self, lower=None, upper=None):
+        return map_partitions(pd.Series.clip, self.name, self, lower, upper)
+
+    @wraps(pd.Series.notnull)
+    def notnull(self):
+        return map_partitions(pd.Series.notnull, self.name, self)
 
 
 class Index(Series):
@@ -1116,5 +1155,72 @@ def repartition(df, divisions):
         if isinstance(df, pd.Series):
             return Series(dsk, name, df.name, divisions)
 
+
+class DatetimeAccessor(object):
+    """ Datetime functions
+
+    Examples
+    --------
+
+    >>> df.mydatetime.dt.microsecond  # doctest: +SKIP
+    """
+    def __init__(self, series):
+        self._series = series
+
+    def __dir__(self):
+        return sorted(set(dir(type(self)) + dir(pd.Series.dt)))
+
+    def _property_map(self, key):
+        return self._series.map_partitions(lambda s: getattr(s.dt, key))
+
+    def _function_map(self, key, *args):
+        func = lambda s: getattr(s.dt, key)(*args)
+        return self._series.map_partitions(func, *args)
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            if key in dir(pd.Series.dt):
+                if isinstance(getattr(pd.Series.dt, key), property):
+                    return self._property_map(key)
+                else:
+                    return partial(self._function_map, key)
+            else:
+                raise
+
+
+class StringAccessor(object):
+    """ String functions
+
+    Examples
+    --------
+
+    >>> df.name.lower()  # doctest: +SKIP
+    """
+    def __init__(self, series):
+        self._series = series
+
+    def __dir__(self):
+        return sorted(set(dir(type(self)) + dir(pd.Series.str)))
+
+    def _property_map(self, key):
+        return self._series.map_partitions(lambda s: getattr(s.str, key))
+
+    def _function_map(self, key, *args):
+        func = lambda s: getattr(s.str, key)(*args)
+        return self._series.map_partitions(func, *args)
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            if key in dir(pd.Series.str):
+                if isinstance(getattr(pd.Series.str, key), property):
+                    return self._property_map(key)
+                else:
+                    return partial(self._function_map, key)
+            else:
+                raise
 
 from .shuffle import set_index, set_partition, shuffle
