@@ -59,3 +59,7 @@ class Profiler(object):
     def visualize(self, **kwargs):
         from .profile_visualize import visualize
         return visualize(self.results(), **kwargs)
+
+    def clear(self):
+        """ Clear out old results from profiler """
+        self._results.clear()
