@@ -1,4 +1,5 @@
-from bokeh.plotting import output_file, show, figure, ColumnDataSource
+from bokeh.plotting import output_file, figure, ColumnDataSource
+from bokeh import plotting
 from bokeh.palettes import brewer
 from bokeh.models import HoverTool
 from toolz import unique, groupby, valmap
@@ -26,7 +27,7 @@ def get_colors(palette, names):
 label = lambda a: name(a[0])
 
 def visualize(results, palette='GnBu', file_path="profile.html",
-              tools="hover,save,reset,xwheel_zoom,xpan", **kwargs):
+              tools="hover,save,reset,xwheel_zoom,xpan", show=True, **kwargs):
     output_file(file_path)
 
     key, task, start, end, id = zip(*results)
@@ -72,5 +73,6 @@ def visualize(results, palette='GnBu', file_path="profile.html",
 
     hover.point_policy = 'follow_mouse'
 
-    show(p)
+    if show:
+        plotting.show(p)
     return p
