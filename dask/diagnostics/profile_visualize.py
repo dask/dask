@@ -4,6 +4,7 @@ from bokeh.models import HoverTool
 from toolz import unique, groupby, valmap
 from itertools import cycle
 from operator import itemgetter
+from dask.dot import name
 
 
 def get_colors(palette, names):
@@ -24,7 +25,8 @@ def get_colors(palette, names):
 
 label = lambda a: name(a[0])
 
-def visualize(results, palette='GnBu', file_path="profile.html"):
+def visualize(results, palette='GnBu', file_path="profile.html",
+              tools="hover,save,reset,xwheel_zoom,xpan", **kwargs):
     output_file(file_path)
 
     key, task, start, end, id = zip(*results)
@@ -41,8 +43,8 @@ def visualize(results, palette='GnBu', file_path="profile.html"):
     right = max(end)
 
     p = figure(title="Profile Results", y_range=map(str, range(len(total_id))),
-            x_range=[0, right - left],
-            plot_width=1200, plot_height=800, tools="hover,save,reset,xwheel_zoom,xpan")
+               x_range=[0, right - left],
+               tools=tools, **kwargs)
 
     data = {}
     data['x'] = [(e - s)/2 + s - left for (s, e) in zip(start, end)]

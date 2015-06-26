@@ -7,7 +7,6 @@ from timeit import default_timer
 import dask.array as da
 from dask.array.core import get
 import numpy as np
-from dask.dot import name
 
 class Profiler(object):
     """A profiler for dask execution at the task level.
@@ -57,6 +56,6 @@ class Profiler(object):
 
         return list(self._results.values())
 
-    def visualize(self):
+    def visualize(self, **kwargs):
         from .profile_visualize import visualize
-        return visualize(self.results())
+        return visualize(self.results(), **kwargs)
