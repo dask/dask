@@ -1,4 +1,5 @@
 from itertools import count
+from collections import Iterator
 from math import ceil
 from toolz import merge, accumulate, merge_sorted
 import toolz
@@ -81,7 +82,6 @@ def set_partition(df, index, divisions):
 
     # Barrier
     barrier_token = 'barrier' + next(tokens)
-    def barrier(args):         return 0
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
@@ -96,6 +96,10 @@ def set_partition(df, index, divisions):
 
     return DataFrame(dsk, name, df.columns, divisions)
 
+
+def barrier(args):
+    list(args)
+    return 0
 
 def _set_partition(df, index, divisions, p):
     """ Shard partition and dump into partd """
@@ -155,7 +159,6 @@ def shuffle(df, index, npartitions=None):
 
     # Barrier
     barrier_token = 'barrier' + next(tokens)
-    def barrier(args):         return 0
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
@@ -176,10 +179,19 @@ def shuffle(df, index, npartitions=None):
 def partition(df, index, npartitions, p):
     """ Partition a dataframe along a grouper, store partitions to partd """
     rng = pd.Series(np.arange(len(df)))
-    if not isinstance(index, pd.Series):
+    if isinstance(index, Iterator):
+        index = list(index)
+    if not isinstance(index, (pd.Index, pd.core.generic.NDFrame)):
         index = df[index]
 
-    groups = rng.groupby(index.map(lambda x: abs(hash(x)) % npartitions).values)
+    if isinstance(index, pd.Index):
+        groups = rng.groupby([abs(hash(x)) % npartitions for x in index])
+    if isinstance(index, pd.Series):
+        groups = rng.groupby(index.map(lambda x: abs(hash(x)) % npartitions).values)
+    elif isinstance(index, pd.DataFrame):
+        groups = rng.groupby(index.apply(
+                    lambda row: abs(hash(tuple(row))) % npartitions,
+                    axis=1).values)
     d = dict((i, df.iloc[groups.groups[i]]) for i in range(npartitions)
                                             if i in groups.groups)
     p.append(d)

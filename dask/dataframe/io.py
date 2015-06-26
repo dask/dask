@@ -331,11 +331,11 @@ def from_pandas(data, npartitions):
     data = data.sort_index(ascending=True)
     divisions = tuple(data.index[i]
                       for i in range(0, nrows, chunksize))
-    if divisions[-1] != data.index[-1]:
-        divisions = divisions + (data.index[-1],)
+    divisions = divisions + (data.index[-1],)
     name = 'from_pandas' + next(tokens)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
-               for i in range(npartitions))
+               for i in range(npartitions - 1))
+    dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
     return getattr(core, type(data).__name__)(dsk, name, columns, divisions)
 
 
