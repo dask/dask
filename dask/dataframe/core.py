@@ -147,6 +147,7 @@ class _Frame(object):
                     for key in self._keys())
         return type(self)(dsk2, name, self.column_info, self.divisions)
 
+    @wraps(pd.DataFrame.drop_duplicates)
     def drop_duplicates(self):
         chunk = lambda s: s.drop_duplicates()
         return aca(self, chunk=chunk, aggregate=chunk, columns=self.columns)
@@ -426,21 +427,27 @@ class Series(_Frame):
     def __rxor__(self, other):
         return elemwise(operator.xor, other, self)
 
+    @wraps(pd.Series.sum)
     def sum(self):
         return reduction(self, pd.Series.sum, np.sum)
 
+    @wraps(pd.Series.max)
     def max(self):
         return reduction(self, pd.Series.max, np.max)
 
+    @wraps(pd.Series.min)
     def min(self):
         return reduction(self, pd.Series.min, np.min)
 
+    @wraps(pd.Series.count)
     def count(self):
         return reduction(self, pd.Series.count, np.sum)
 
+    @wraps(pd.Series.nunique)
     def nunique(self):
         return self.drop_duplicates().count()
 
+    @wraps(pd.Series.mean)
     def mean(self):
         def chunk(ser):
             return (ser.sum(), ser.count())
@@ -450,6 +457,7 @@ class Series(_Frame):
             return 1.0 * sum(sums) / sum(counts)
         return reduction(self, chunk, agg)
 
+    @wraps(pd.Series.var)
     def var(self, ddof=1):
         def chunk(ser):
             return (ser.sum(), (ser**2).sum(), ser.count())
@@ -465,17 +473,20 @@ class Series(_Frame):
             return result
         return reduction(self, chunk, agg)
 
+    @wraps(pd.Series.std)
     def std(self, ddof=1):
         name = next(names)
         df = self.var(ddof=ddof)
         dsk = {(name, 0): (sqrt, (df._name, 0))}
         return Scalar(merge(df.dask, dsk), name)
 
+    @wraps(pd.Series.value_counts)
     def value_counts(self):
         chunk = lambda s: s.value_counts()
         agg = lambda s: s.groupby(level=0).sum()
         return aca(self, chunk=chunk, aggregate=agg, columns=self.columns)
 
+    @wraps(pd.Series.isin)
     def isin(self, other):
         return elemwise(pd.Series.isin, self, other)
 
