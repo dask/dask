@@ -1030,8 +1030,8 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 def from_url(urls):
     """Create a dask.bag from a url
 
-    >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
-    >>> a.npartitions
+    >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')  # doctest: +SKIP
+    >>> a.npartitions  # doctest: +SKIP
     1
 
     >> a.take(8)  # doctest: +SKIP
@@ -1044,10 +1044,9 @@ def from_url(urls):
      'algorithms and task scheduling.  It maps high-level NumPy and list operations\n',
      'on large datasets on to graphs of many operations on small in-memory datasets.\n')
 
-    >>> b = from_url(['http://github.com', 'http://google.com'])
-    >>> b.npartitions
+    >>> b = from_url(['http://github.com', 'http://google.com'])  # doctest: +SKIP
+    >>> b.npartitions  # doctest: +SKIP
     2
-
     """
     if isinstance(urls, str):
         urls = [urls]
