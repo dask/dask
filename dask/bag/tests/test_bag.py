@@ -17,6 +17,7 @@ import os
 import gzip
 import bz2
 import partd
+from tempfile import mkdtemp
 
 from collections import Iterator
 
@@ -416,21 +417,23 @@ def test_to_dataframe():
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
+    dir = mkdtemp()
     for ext, myopen in [('gz', gzip.open), ('bz2', bz2.BZ2File), ('', open)]:
-        c = b.to_textfiles('_foo/*.' + ext)
+        c = b.to_textfiles(os.path.join(dir, '*.' + ext))
         assert c.npartitions == b.npartitions
         try:
             c.compute(get=dask.get)
-            assert os.path.exists('_foo/1.' + ext)
+            assert os.path.exists(os.path.join(dir, '1.' + ext))
 
-            f = myopen('_foo/1.' + ext, 'r')
+            f = myopen(os.path.join(dir, '1.' + ext), 'r')
             text = f.read()
             if hasattr(text, 'decode'):
                 text = text.decode()
             assert 'xyz' in text
             f.close()
         finally:
-            shutil.rmtree('_foo')
+            if os.path.exists(dir):
+                shutil.rmtree(dir)
 
 
 def test_to_textfiles_inputs():
