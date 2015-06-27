@@ -9,7 +9,7 @@ import gzip
 import tempfile
 import inspect
 
-from .compatibility import unicode
+from .compatibility import unicode, long
 
 def raises(err, lamda):
     try:
@@ -238,7 +238,7 @@ def is_integer(i):
     False
     """
     import numpy as np
-    if isinstance(i, int):
+    if isinstance(i, (int, long)):
         return True
     if isinstance(i, float):
         return (i).is_integer()
