@@ -683,8 +683,7 @@ class Bag(object):
     def __iter__(self):
         return iter(self.compute())
 
-    def groupby(self, grouper, npartitions=None, blocksize=2**20,
-                      use_server=False):
+    def groupby(self, grouper, npartitions=None, blocksize=2**20):
         """ Group collection by key function
 
         Note that this requires full dataset read, serialization and shuffle.
@@ -704,17 +703,10 @@ class Bag(object):
 
         import partd
         p = ('partd' + next(tokens),)
-        if use_server:
-            try:
-                dsk1 = {p: partd.Python(partd.Snappy(partd.Client()))}
-            except AttributeError:
-                dsk1 = {p: partd.Python(partd.Client())}
-
-        else:
-            try:
-                dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
-            except AttributeError:
-                dsk1 = {p: (partd.Python, partd.File())}
+        try:
+            dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
+        except AttributeError:
+            dsk1 = {p: (partd.Python, partd.File())}
 
         # Partition data on disk
         name = next(names)
