@@ -335,6 +335,25 @@ class Series(_Frame):
         """
         return quantiles(self, q)
 
+    def resample(self, rule, how=None, axis=0, fill_method=None, closed=None,
+                 label=None, convention='start', kind=None, loffset=None,
+                 limit=None, base=0):
+        first, last = self.divisions[0], self.divisions[-1]
+        new_divisions = list(pd.date_range(start=first, end=last, freq=rule))
+        if not new_divisions:
+            raise ValueError('%s to %s by %s has no elements' %
+                             (first, last, rule))
+        if new_divisions[-1] < last:
+            new_divisions.append(last)
+        assert new_divisions[-1] == last
+        reparted = repartition(self, tuple(new_divisions))
+        block_func = methodcaller('resample', rule, how=how, axis=axis,
+                                  fill_method=fill_method, closed=closed,
+                                  label=label, convention=convention,
+                                  kind=kind, loffset=loffset,
+                                  limit=limit, base=base)
+        return reparted.map_partitions(block_func)
+
     def __getitem__(self, key):
         name = next(names)
         if isinstance(key, Series) and self.divisions == key.divisions:
