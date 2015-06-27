@@ -628,7 +628,7 @@ def _loc(df, start, stop, include_right_boundary=True):
     2  20
     2  30
     """
-    result = df.loc[slice(start, stop)]
+    result = df.loc[start:stop]
     if not include_right_boundary:
         # result = df[df.index != stop]
         result = result.iloc[:result.index.get_slice_bound(stop, 'left',
@@ -1062,7 +1062,7 @@ def repartition_divisions(a, b, name, out1, out2):
             i += 1
             j += 1
         c.append(low)
-        k = k + 1
+        k += 1
     tup = d[(out1, k - 1)]
     d[(out1, k - 1)] = tup[:-1] + (True,)
     c.append(a[-1])
