@@ -57,7 +57,7 @@ class RandomState(object):
         sizes = product(*chunks)
         vals = ((_apply_random,
                   func.__name__,
-                  self._numpy_state.randint(np.iinfo(np.uint32).max),
+                  self._numpy_state.randint(np.iinfo(np.int32).max),
                   size, args, kwargs)
                 for size in sizes)
         dsk = dict(zip(keys, vals))
