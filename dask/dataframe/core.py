@@ -1,21 +1,21 @@
 from __future__ import division
 
-from itertools import count
-from math import ceil, sqrt
-from functools import wraps
+import numbers
 import bisect
-import os
-from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
-        first, partition)
-import toolz
-from operator import getitem, setitem
-from datetime import datetime
-import pandas as pd
-import numpy as np
 import operator
-import gzip
-import bz2
-import bcolz
+
+from itertools import count
+from math import sqrt
+from functools import wraps
+from operator import getitem, setitem, methodcaller
+from datetime import datetime
+
+from toolz import merge, partial, first, partition
+
+import pandas as pd
+
+import numpy as np
+
 try:
     from chest import Chest as Cache
 except ImportError:
@@ -24,7 +24,6 @@ except ImportError:
 from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
-from .. import  async
 from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
