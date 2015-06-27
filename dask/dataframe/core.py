@@ -749,7 +749,7 @@ def remove_empties(seq):
     [1, 2, 4, 5]
 
     >>> remove_empties([('empty', np.nan)])
-    [np.nan]
+    [nan]
 
     >>> remove_empties([])
     []
@@ -762,7 +762,7 @@ def remove_empties(seq):
     if seq2:
         return seq2
     else:
-        return seq[0][1]
+        return [seq[0][1]]
 
 
 def empty_safe(func, arg):
