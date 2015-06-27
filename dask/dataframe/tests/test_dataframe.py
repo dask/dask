@@ -529,3 +529,11 @@ def test_str_accessor():
     assert 'upper' in dir(a.x.str)
 
     assert eq(a.x.str.upper(), df.x.str.upper())
+
+
+def test_empty_max():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    a = dd.DataFrame({('x', 0): pd.DataFrame({'x': [1]}),
+                      ('x', 1): pd.DataFrame({'x': []})}, 'x',
+                      ['x'], [None, None, None])
+    assert a.x.max().compute() == 1
