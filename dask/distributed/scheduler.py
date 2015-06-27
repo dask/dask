@@ -116,9 +116,9 @@ class Scheduler(object):
 
         self.send_to_workers_queue = Queue()
         self.send_to_workers_recv = self.context.socket(zmq.PAIR)
-        self.send_to_workers_recv.bind('ipc://to-workers-signal')
+        _port = self.send_to_workers_recv.bind_to_random_port('tcp://127.0.0.1')
         self.send_to_workers_send = self.context.socket(zmq.PAIR)
-        self.send_to_workers_send.connect('ipc://to-workers-signal')
+        self.send_to_workers_send.connect('tcp://127.0.0.1:%d' % _port)
         self.worker_poller.register(self.send_to_workers_recv, zmq.POLLIN)
 
         self.pool = ThreadPool(100)

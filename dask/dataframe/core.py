@@ -177,9 +177,8 @@ class _Frame(object):
         80/10/10 split, consistent seed
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
         """
-        if seed is not None:
-            np.random.seed(seed)
-        seeds = np.random.randint(0, 2**31, self.npartitions)
+        seeds = np.random.RandomState(seed).randint(0, np.iinfo(np.int32).max,
+                                                    self.npartitions)
         dsk_full = dict(((self._name + '-split-full', i),
                          (pd_split, (self._name, i), p, seed))
                        for i, seed in enumerate(seeds))
@@ -743,17 +742,54 @@ def elemwise(op, *args, **kwargs):
                       _name, column_name, frames[0].divisions)
 
 
+def remove_empties(seq):
+    """ Remove items of length 0
+
+    >>> remove_empties([1, 2, ('empty', np.nan), 4, 5])
+    [1, 2, 4, 5]
+
+    >>> remove_empties([('empty', np.nan)])
+    [nan]
+
+    >>> remove_empties([])
+    []
+    """
+    if not seq:
+        return seq
+
+    seq2 = [x for x in seq
+              if not (isinstance(x, tuple) and x and x[0] == 'empty')]
+    if seq2:
+        return seq2
+    else:
+        return [seq[0][1]]
+
+
+def empty_safe(func, arg):
+    """
+
+    >>> empty_safe(sum, [1, 2, 3])
+    6
+    >>> empty_safe(sum, [])
+    ('empty', 0)
+    """
+    if len(arg) == 0:
+        return ('empty', func(arg))
+    else:
+        return func(arg)
+
+
 def reduction(x, chunk, aggregate):
     """ General version of reductions
 
     >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
     """
     a = next(names)
-    dsk = dict(((a, i), (chunk, (x._name, i)))
+    dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
                 for i in range(x.npartitions))
 
     b = next(names)
-    dsk2 = {(b, 0): (aggregate, (tuple, [(a,i) for i in range(x.npartitions)]))}
+    dsk2 = {(b, 0): (aggregate, (remove_empties, [(a,i) for i in range(x.npartitions)]))}
 
     return Scalar(merge(x.dask, dsk, dsk2), b)
 
