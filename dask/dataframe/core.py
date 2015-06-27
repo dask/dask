@@ -177,9 +177,8 @@ class _Frame(object):
         80/10/10 split, consistent seed
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
         """
-        if seed is not None:
-            np.random.seed(seed)
-        seeds = np.random.randint(0, 2**31, self.npartitions)
+        seeds = np.random.RandomState(seed).randint(0, np.iinfo(np.int32).max,
+                                                    self.npartitions)
         dsk_full = dict(((self._name + '-split-full', i),
                          (pd_split, (self._name, i), p, seed))
                        for i, seed in enumerate(seeds))
