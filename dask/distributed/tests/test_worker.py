@@ -116,6 +116,9 @@ def test_close():
     with worker_and_router(data={'x': 10, 'y': 20}) as (w, r):
         assert w.pool._state == multiprocessing.pool.RUN
         w.close()
+        assert all(s.closed for s in w.dealers.values())
+        assert w.to_scheduler.closed
+        assert w.to_workers.closed
         assert w.pool._state == multiprocessing.pool.CLOSE
         w.close()  # idempotent
 
