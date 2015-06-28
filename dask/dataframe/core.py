@@ -1,6 +1,5 @@
 from __future__ import division
 
-import numbers
 import bisect
 import operator
 
@@ -357,9 +356,9 @@ class Series(_Frame):
     def __getitem__(self, key):
         name = next(names)
         if isinstance(key, Series) and self.divisions == key.divisions:
-            dsk = dict(((name, i), (operator.getitem, (self._name, i),
-                                                       (key._name, i)))
-                        for i in range(self.npartitions))
+            dsk = dict(((name, i),
+                        (operator.getitem, (self._name, i), (key._name, i)))
+                       for i in range(self.npartitions))
             return Series(merge(self.dask, key.dask, dsk), name,
                           self.name, self.divisions)
         raise NotImplementedError()
@@ -444,7 +443,7 @@ class Series(_Frame):
 
     def mean(self):
         def chunk(ser):
-            return (ser.sum(), ser.count())
+            return ser.sum(), ser.count()
 
         def agg(seq):
             sums, counts = list(zip(*seq))
@@ -453,7 +452,7 @@ class Series(_Frame):
 
     def var(self, ddof=1):
         def chunk(ser):
-            return (ser.sum(), (ser**2).sum(), ser.count())
+            return ser.sum(), (ser * ser).sum(), ser.count()
 
         def agg(seq):
             x, x2, n = list(zip(*seq))
@@ -1077,7 +1076,7 @@ def repartition_divisions(a, b, name, out1, out2):
     low = a[0]
     i, j = 1, 1
     k = 0
-    while (i < len(a) and j < len(b)):
+    while i < len(a) and j < len(b):
         if a[i] < b[j]:
             d[(out1, k)] = (_loc, (name, i - 1), low, a[i], False)
             low = a[i]
