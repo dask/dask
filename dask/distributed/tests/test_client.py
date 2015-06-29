@@ -119,8 +119,7 @@ def test_register_with_scheduler():
         c = Client(s.address_to_clients)
         pid = os.getpid()
         assert s.clients[c.address]['pid'] == os.getpid()
-        assert (c.registered_workers == {a.address: {'pid': pid},
-                                         b.address: {'pid': pid}})
+        assert c.registered_workers[a.address]['pid'] == pid
 
 
 def test_get_workers():
