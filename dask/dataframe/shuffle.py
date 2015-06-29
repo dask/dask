@@ -85,7 +85,7 @@ def set_partition(df, index, divisions):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name = 'set-partition--collet' + next(tokens)
+    name = 'set-partition--collect' + next(tokens)
     dsk4 = dict(((name, i),
                  (_categorize, catname, (_set_collect, i, p, barrier_token)))
                 for i in range(len(divisions) - 1))

@@ -99,10 +99,12 @@ one pandas dataframe.  These dataframes are split vertically along the index.
 When our index is sorted and we know the values of the divisions of our
 partitions then we can be clever and efficient.
 
-For example, if we have a time-series index then our partitoins might be divided by
-month.  All of January will live in one partition while all of February will
-live in the next.  In these cases operations like ``loc``, ``groupby``, and
-``join/merge`` along the index can be *much* more efficient than would otherwise be possible.  You can view the number of partitions and divisions of your dataframe with the following fields
+For example, if we have a time-series index then our partitions might be
+divided by month.  All of January will live in one partition while all of
+February will live in the next.  In these cases operations like ``loc``,
+``groupby``, and ``join/merge`` along the index can be *much* more efficient
+than would otherwise be possible.  You can view the number of partitions and
+divisions of your dataframe with the following fields
 
 .. code-block:: python
 
