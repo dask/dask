@@ -1,19 +1,19 @@
 Comparison to PySpark
 =====================
 
-Spark_ is a popular distributed computing tool written in Scala but with with
-PySpark_ a decent Python API.  It is growing to become a dominant name today
-in Big Data analysis in Python alongside Hadoop, for which MRJob_ is possibly
-the dominant Python layer.
+Spark_ is a popular distributed computing tool with a decent Python API
+PySpark_.  Spark is growing to become a dominant name today in Big Data
+analysis alongside Hadoop, for which MRJob_ is possibly the dominant
+Python layer.
 
 Dask has several elements that appear to intersect this space and as such we
 often receive the following question:
 
-*How does dask compare with Spark?*
+*How does Dask compare with Spark?*
 
-Answering such comparison questions in an unbiased and perfectly informed way
-is hard, particularly when the differences can be somewhat technical.  This
-document tries to do this; we welcome any corrections.
+Answering such comparison questions in an unbiased and informed way is hard,
+particularly when the differences can be somewhat technical.  This document
+tries to do this; we welcome any corrections.
 
 Brief Answer
 ------------
@@ -22,7 +22,8 @@ Apache Spark is more mature and better integrates with HDFS.  It handles
 resiliency and was originally built to scale up to thousands of nodes.
 
 Dask is pip installable, doesn't use the Java Virtual Machine (JVM), and was
-originally built to handle a large single workstation very efficiently.
+originally built to handle numeric workloads in a large single workstation very
+efficiently.
 
 
 User-Facing Differences
@@ -32,14 +33,14 @@ Scale
 ~~~~~
 
 Spark began its life aimed at the thousand node cluster case.  As such it
-thinks well about worker failures and tight integration with data-local file
-systems like the Hadoop FileSystem (HDFS).  That being said, Spark can run in
+thinks well about worker failures and integration with data-local file systems
+like the Hadoop FileSystem (HDFS).  That being said, Spark can run in
 standalone mode on a single machine.
 
 Dask began its life building out parallel algorithms for numerical array
 computations on a single computer.  As such it thinks well about low-latency
 scheduling, low memory footprints, shared memory, and efficient use of local
-disk.  That being said dask can run on a distributed cluster.
+disk.  That being said dask can run on a `distributed cluster`_.
 
 
 Java Python Performance
@@ -53,23 +54,25 @@ Spark development team is now focusing more on binary and native data formats
 with their new effort, Tungsten.
 
 Dask is written in Python, a multi-paradigm language built on top of the
-C/Fortan native stack.  It benefits from decades of scientific research
-optimizing very fast computation on numeric data.  As such, dask is very good
-on analytic computations on data such as you might find in HDF5 files or
-analytic databases.  It can also handle JSON blob type data using Python data
-structures (which are `surprisingly fast`_) using the cytoolz_ library in
+C/Fortan native stack.  This stack benefits from decades of scientific research
+optimizing very fast computation on numeric data.  As such, dask is already
+very good on analytic computations on data such as you might find in HDF5 files
+or analytic databases.  It can also handle JSON blob type data using Python
+data structures (which are `surprisingly fast`_) using the cytoolz_ library in
 parallel.
 
 
 Java Python Disconnect
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Python users or Spark sometimes express frustration by how far separated they
-are from computations.  Spark workers spin up JVMs which in turn spin up Python
-processes.  Data moving back and forth makes extra trips both through a
-distributed cluster and also through extra serialization layers (see py4j_) and
-computation layers.  Limitations like the Java heap size come as a surprise to
-users accustomed to native code execution.
+Python users on Spark sometimes express frustration by how far separated they
+are from computations.  Some of this is inevitable, distributed debugging is a
+hard problem.  Some of it however is due to having to hop over the JVM.  Spark
+workers spin up JVMs which in turn spin up Python processes.  Data moving back
+and forth makes extra trips both through a distributed cluster and also through
+extra serialization layers (see py4j_) and computation layers.  Limitations
+like the Java heap size and large Java stack traces come as a surprise to users
+accustomed to native code execution.
 
 Dask has an advantage for Python users because it is itself a Python library,
 so serialization and debugging when things go wrong happens more smoothly.
@@ -78,18 +81,23 @@ However, dask has no benefit to non-Python users while Spark is useful in a
 variety of JVM languages (Scala, Java, Clojure) as well as limited support in
 Python and R.  New Spark projects like the DataFrame skip serialization and
 boxed execution issues by forgoing the Python process entirely and instead have
-Python code drive native Scala code.
+Python code drive native Scala code.  APIs for these libraries tend to lag a
+bit behind their Scala counterparts.
+
 
 Scope
 ~~~~~
 
 Spark was originally built around the RDD, an unordered collection allowing
-repeats.  All spark add-ons were originally built on top of this construct.
+repeats.  Most spark add-ons were built on top of this construct, inheriting
+both its abilities and limitations.
 
-Dask is built on a slightly lower and more general construct of a generic task
+Dask is built on a lower-level and more general construct of a generic task
 graph with data dependencies.  This allows more general computations to be
 built by users within the dask framework.  This is probably the largest
-fundamental difference between the two projects.
+fundamental difference between the two projects.  Dask gives up high-level
+understanding to allow users to express more complex parallel algorithms.  This
+ended up being essential when writing complex projects like ``dask.array``.
 
 
 Developer-Facing Differences
@@ -104,10 +112,12 @@ graphs however represent computations at very different granularities.
 One operation on a Spark RDD might add a node like ``Map`` and ``Filter`` to
 the graph.  These are high-level operations that convey meaning and will
 eventually be turned into many little tasks to execute on individual nodes.
+This many-little-tasks state is only available internally to the Spark
+scheduler.
 
-Dask graphs skip this high-level representation and go directly to the "many
-little tasks" stage.  As such one ``map`` operation on a dask collection will
-immediately generate and add possibly thousands of tiny tasks to the dask
+Dask graphs skip this high-level representation and go directly to the
+many-little-tasks stage.  As such one ``map`` operation on a dask collection
+will immediately generate and add possibly thousands of tiny tasks to the dask
 graph.
 
 This difference in the scale of the underlying graph has implications on the
@@ -117,13 +127,17 @@ can because Dask does not have a top-down picture of the computation it was
 asked to perform.  However, dask is able to easily represent far more complex
 algorithms and expose the creation of these algorithms to normal users.
 
+Dask.bag, the equivalent of the Spark.RDD, is just one abstraction built on top
+of dask.  Others exist.  Alternatively power-users can forego high-level
+collections entirely and jump striaght to direct, low-level, task scheduling.
+
 
 Coding Styles
 ~~~~~~~~~~~~~
 
 Both Spark and Dask are written in a functional style.  Spark will probably be
 more familiar to those who enjoy algebraic types while dask will probably be
-more familiar to those who enjoy LISP and homoiconicity.
+more familiar to those who enjoy Lisp and "code as data structures".
 
 
 Conclusion
@@ -142,7 +156,7 @@ and Dask and go use Postgres_ or MongoDB_.
 .. _PySpark: https://spark.apache.org/docs/latest/api/python/
 .. _Hadoop: https://hadoop.apache.org/
 .. _MRJob: https://mrjob.readthedocs.org
-.. _`distributed computing`: distributed.html
+.. _`distributed cluster`: distributed.html
 .. _`surprisingly fast`: https://www.youtube.com/watch?v=PpBK4zIaFLE
 .. _cytoolz: https://toolz.readthedocs.org
 .. _py4j: http://py4j.sourceforge.net/
