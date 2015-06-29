@@ -20,7 +20,20 @@ class Profiler(object):
         4. Finish time in seconds since the epoch
         5. Worker id
 
-    >>> from dask.diagnostics import thread_prof
+    Examples
+    --------
+    Create a profiler from a scheduler ``get`` function:
+
+    >>> from dask.array.core import get
+    >>> array_profiler = Profiler(get)
+
+    For convenience, profilers for the threaded and multiprocessing scheduler
+    have already been created:
+
+    >>> from dask.diagnostics import thread_prof, process_prof
+
+    The ``get`` method of the profiler then works like a normal scheduler:
+
     >>> from operator import add, mul
 
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
@@ -31,9 +44,10 @@ class Profiler(object):
     [('y', (<built-in function add>, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
      ('z', (<built-in function mul>, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
 
-    >>> thread_prof.clear()  # Clear out old results
-    >>> thread_prof.results()
-    []
+    These results can be visualized in a bokeh plot using the ``visualize``
+    method. Note that this requires bokeh to be installed.
+
+    >>> thread_prof.visualize() # doctest: +SKIP
     """
     def __init__(self, get):
         """Create a profiler
@@ -62,7 +76,7 @@ class Profiler(object):
         Note that this clears the results from the last run before executing
         the dask."""
 
-        self._results = {}
+        self.clear()
         return self._get(dsk, result, start_callback=self._start_callback,
                          end_callback=self._end_callback, **kwargs)
 
@@ -74,9 +88,15 @@ class Profiler(object):
         return list(starmap(TaskData, self._results.values()))
 
     def visualize(self, **kwargs):
+        """Visualize the profiling run in a bokeh plot.
+
+        See also
+        --------
+        dask.diagnostics.profile_visualize.visualize
+        """
         from .profile_visualize import visualize
         return visualize(self.results(), **kwargs)
 
     def clear(self):
-        """ Clear out old results from profiler """
+        """Clear out old results from profiler"""
         self._results.clear()

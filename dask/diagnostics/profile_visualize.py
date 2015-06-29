@@ -12,6 +12,15 @@ from ..dot import name
 
 
 def get_colors(palette, funcs):
+    """Get a dict mapping funcs to colors from palette.
+
+    Parameters
+    ----------
+    palette : string
+        Name of the palette. Must be a key in bokeh.palettes.brewer
+    funcs : iterable
+        Iterable of function names
+    """
     unique_funcs = list(sorted(unique(funcs)))
     n_funcs = len(unique_funcs)
     palette_lookup = brewer[palette]
@@ -29,6 +38,26 @@ def get_colors(palette, funcs):
 
 def visualize(results, palette='GnBu', file_path="profile.html",
               show=True, **kwargs):
+    """Visualize the results of profiling in a bokeh plot.
+
+    Parameters
+    ----------
+    results : sequence
+        Output of profiler.results().
+    palette : string, optional
+        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+    file_path : string, optional
+        Name of the plot output file.
+    show : boolean, optional
+        If True (default), the plot is opened in a browser.
+    **kwargs
+        Other keyword arguments, passed to bokeh.figure. These will override
+        all defaults set by visualize.
+
+    Returns
+    -------
+    The completed bokeh plot object.
+    """
 
     bp.output_file(file_path)
     keys, tasks, starts, ends, ids = zip(*results)
