@@ -3,7 +3,7 @@ from __future__ import division, absolute_import
 from itertools import cycle
 from operator import itemgetter
 
-from toolz import unique, groupby, valmap
+from toolz import unique, groupby
 import bokeh.plotting as bp
 from bokeh.palettes import brewer
 from bokeh.models import HoverTool
@@ -63,10 +63,10 @@ def visualize(results, palette='GnBu', file_path="profile.html",
     keys, tasks, starts, ends, ids = zip(*results)
 
     id_group = groupby(itemgetter(4), results)
-    diff = lambda v: v[3] - v[2]
-    timings = valmap(lambda val: sum(map(diff, val)), id_group)
-    id_lk = {t[0]: n for (n, t) in enumerate(sorted(timings.items(),
-                                             key=itemgetter(1), reverse=True))}
+    timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
+                   id_group.items())
+    id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
+                 key=itemgetter(1), reverse=True)))
 
     left = min(starts)
     right = max(ends)
