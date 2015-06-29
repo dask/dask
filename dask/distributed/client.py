@@ -129,3 +129,8 @@ class Client(object):
         self.send_to_scheduler({'function': 'register'}, {'pid': os.getpid()})
         header, payload = self.recv_from_scheduler()
         self.registered_workers = payload['workers']
+
+    def get_registered_workers(self):
+        self.send_to_scheduler({'function': 'get_workers'}, {})
+        header, payload = self.recv_from_scheduler()
+        return payload['workers']
