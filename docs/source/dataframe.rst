@@ -55,11 +55,11 @@ working on releasing the GIL.
 What doesn't work?
 ------------------
 
-Dask.dataframe covers a small but well-used portion of the Pandas API.  This is
-for two reasons:
+Dask.dataframe only covers a small but well-used portion of the Pandas API.
+This limitation is for two reasons:
 
 1.  The Pandas API is *huge*
-2.  Some operations are genuinely hard to do in parallel
+2.  Some operations are genuinely hard to do in parallel (e.g. sort)
 
 Additionally, some important operations like ``set_index`` work, but are slower
 than in Pandas because they may write out to disk.
@@ -85,10 +85,10 @@ What definitely works?
     *  groupby-apply (with anything):  ``df.groupby(df.x).apply(myfunc)``
     *  Join not on the index:  ``pd.merge(df1, df2, on='name')``
 * Ingest operations
-    *  CSVs: ``pd.read_csv``
-    *  Pandas: ``pd.from_pandas``
-    *  Anything supporting numpy slicing: ``pd.from_array``
-    *  Dask.bag: ``b.to_dataframe(columns=[...])``
+    *  CSVs: ``dd.read_csv``
+    *  Pandas: ``dd.from_pandas``
+    *  Anything supporting numpy slicing: ``dd.from_array``
+    *  Dask.bag: ``mybag.to_dataframe(columns=[...])``
 
 
 Partitions
@@ -103,8 +103,8 @@ For example, if we have a time-series index then our partitions might be
 divided by month.  All of January will live in one partition while all of
 February will live in the next.  In these cases operations like ``loc``,
 ``groupby``, and ``join/merge`` along the index can be *much* more efficient
-than would otherwise be possible.  You can view the number of partitions and
-divisions of your dataframe with the following fields
+than would otherwise be possible in parallel.  You can view the number of
+partitions and divisions of your dataframe with the following fields
 
 .. code-block:: python
 
@@ -120,7 +120,7 @@ and which we can drop.
 
 .. code-block:: python
 
-   >>> df.loc['2015-01-20': '2015-02-10']
+   >>> df.loc['2015-01-20': '2015-02-10']  # Must inspect first two partitions
 
 Often we do not have such information about our partitions.  When reading CSV
 files for example we do not know, without extra user input, how the data is
@@ -132,6 +132,11 @@ divided.  In this case ``.divisions`` will be all ``None``.
    [None, None, None, None, None]
 
 
-See also the API_
+Related Pages
+-------------
 
-.. _API: dataframe-api.html
+.. toctree::
+   :maxdepth: 1
+
+   dataframe-create.rst
+   dataframe-api.rst
