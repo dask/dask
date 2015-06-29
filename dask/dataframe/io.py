@@ -2,13 +2,13 @@ from __future__ import division
 
 import pandas as pd
 import numpy as np
-from functools import wraps
+from functools import wraps, partial
 import re
 import struct
 import os
 from glob import glob
 from math import ceil
-from toolz import curry, merge, partial, dissoc
+from toolz import merge, dissoc
 from itertools import count
 import bcolz
 from operator import getitem
@@ -124,9 +124,9 @@ def read_csv(fn, *args, **kwargs):
 
     header = kwargs.pop('header')
 
-    first_read_csv = curry(pd.read_csv, *args, header=header,
+    first_read_csv = partial(pd.read_csv, *args, header=header,
                            **dissoc(kwargs, 'compression'))
-    rest_read_csv = curry(pd.read_csv, *args, header=None,
+    rest_read_csv = partial(pd.read_csv, *args, header=None,
                           **dissoc(kwargs, 'compression'))
 
     # Create dask graph

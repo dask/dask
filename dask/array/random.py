@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 from itertools import product
-from toolz import curry
 from .core import normalize_chunks, Array, names
 
 def doc_wraps(func):

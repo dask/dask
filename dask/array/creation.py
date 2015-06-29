@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from itertools import count
 
 import numpy as np
-from toolz import curry
+from functools import partial
 
 from .core import Array, normalize_chunks
 
@@ -63,7 +63,7 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
 
     for i, bs in enumerate(chunks[0]):
         blockstop = blockstart + ((bs - 1) * space)
-        task = (curry(np.linspace, dtype=dtype), blockstart, blockstop, bs)
+        task = (partial(np.linspace, dtype=dtype), blockstart, blockstop, bs)
         blockstart = blockstart + (space * bs)
         dsk[(name, i)] = task
 
