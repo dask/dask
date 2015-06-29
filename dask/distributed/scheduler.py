@@ -135,6 +135,7 @@ class Scheduler(object):
                                  'setitem-ack': self._setitem_ack,
                                  'getitem-ack': self._getitem_ack}
         self.client_functions = {'status': self._status_to_client,
+                                 'get_workers': self._get_workers,
                                  'register': self._client_registration,
                                  'schedule': self._schedule_from_client,
                                  'set-collection': self._set_collection,
@@ -704,3 +705,10 @@ class Scheduler(object):
                        'dumps': dill.dumps}
 
             self.send_to_client(header['address'], header2, payload2)
+
+    def _get_workers(self, header, payload):
+        with logerrors():
+            log(self.address_to_clients, "Get workers", header)
+            self.send_to_client(header['address'],
+                                {'status': 'OK'},
+                                {'workers': self.workers})
