@@ -4,3 +4,4 @@ numpydoc
 toolz
 dill
 psutil
+pandas
