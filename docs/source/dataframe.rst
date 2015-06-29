@@ -1,243 +1,142 @@
 DataFrame
 =========
 
-Dask.dataframe is not ready for public use.  This document targets developers,
-not users.
+The ``dask.dataframe`` module implements a blocked parallel DataFrame that
+mimics a subset of the Pandas DataFrame.  One dask DataFrame is comprised of
+several in-memory pandas DataFrames separated along the index.  An operation on
+one dask DataFrame triggers many operations on the constituent pandas
+DataFrames in a way that is mindful of potential parallelism and memory
+constraints.
 
-.. image:: images/frame.png
-   :width: 50%
-   :align: right
-   :alt: A dask dataframe
+Dask.dataframe copies the Pandas API
+------------------------------------
 
-Dask dataframe implements a blocked DataFrame as a sequence of in-memory Pandas
-DataFrames, partitioned along the index.
+Dask.dataframe copies a subset of the Pandas API so operations should be
+familiar to Pandas users.  There are however some alterations due to the
+parallel nature of dask.
 
-Partitioning along the index is good because it tells us which blocks hold
-which data.  This makes efficient implementations of complex operations like
-join and arbitrary groupby possible in a blocked setting as long as we
-join/group along the index.
+.. code-block:: python
 
-Partitioning along the index is also hard because, when we re-index, we need to
-shuffle all of our data between blocks.  This is tricky to code up and
-expensive to compute.
+   >>> import dask.dataframe as dd
+   >>> df = dd.read_csv('2014-*.csv.gz', compression='gzip')
+   >>> df.head()
+      x  y
+   0  1  a
+   1  2  b
+   2  3  c
+   3  4  a
+   4  5  b
+   5  6  c
 
+   >>> df2 = df[df.y == 'a'].x + 1
 
-Relevant Metadata
------------------
+As with all dask collections (e.g. Array, Bag, DataFrame) one triggers
+computation by calling the ``.compute()`` method.
 
-Dask ``DataFrame`` objects contain the following data:
+.. code-block:: python
 
-*  ``dask`` - The task dependency graph necessary to compute the dataframe
-*  ``_name`` - String like ``'f'`` that is the prefix to all keys to define this dataframe
-   like ``('f', 0)``
-*  ``columns`` - list of column names to improve usability and error checking
-
-    or
-
-    ``name`` - a single name used in a Series
-
-*  ``divisions`` - tuple of index values on which we partition our blocks
-
-The ``divisions`` attribute, analogous to ``chunks`` in ``dask.array`` is
-particularly important.  The values in divisions determine a partitioning of
-left-inclusive / right-exclusive ranges on the index::
-
-    divisions -- (10, 20, 40)
-    ranges    -- (-oo, 10), [10, 20), [20, 40), [40, oo)
-
-Alternatively if our data is not partitioned (as is unfortunately often the
-case) then divisions will contain many instances of ``None``::
-
-    divisions -- (None, None, None)
-
-This is common if, for example, we read data from CSV files which don't have an
-obvious ordering.
+   >>> df2.compute()
+   0    2
+   3    5
+   Name: x, dtype: int64
 
 
-Example Partitioning
---------------------
+Threaded Scheduling
+-------------------
 
-Consider the following dataset of twelve entries in an account book separated
-into three dataframes of size four.  We would like to organize them into
-partitions arranged by name::
-
-        name, balance                       name, balance
-        Alice, 100                          Alice, 100
-        Bob, 200                            Alice, 300
-        Alice, 300                          Alice, 600
-        Frank, 400                          Alice, 700
-                                            Alice, 900
-        name, balance
-        Dan, 500                            name, balance
-        Alice, 600       -> Shuffle ->      Bob, 200
-        Alice, 700                          Dan, 500
-        Charlie, 800                        Bob, 1200
-                                            Charlie, 800
-        name, balance
-        Alice, 900                          name, balance
-        Edith, 1000                         Frank, 400
-        Frank, 1100                         Edith, 1000
-        Bob, 1200                           Frank, 1100
-
-Notice a few things
-
-1.  On the right records are now organized by name; given any name (e.g. Bob)
-    it is obvious to which block it belongs (the second).
-2.  Blocks are roughly the same size (though not exactly).  We prefer evenly
-    sized blocks over predictable partition values, (e.g. A, B, C).  Because
-    this dataset has many Alices we have a block just for her.
-3.  The blocks don't need to be sorted internally
-
-Our divisions in this case are ``['Bob', 'Edith']``
+By default ``dask.dataframe`` uses the multi-threaded scheduler.
+This exposes some parallelism when pandas or the underlying numpy operations
+release the GIL.  Generally Pandas is more GIL bound than NumPy, so multi-core
+speedups are not as pronounced for ``dask.dataframe`` as they are for
+``dask.array``.  This is changing and the Pandas development team is actively
+working on releasing the GIL.
 
 
-Quantiles and Shuffle
----------------------
+What doesn't work?
+------------------
 
-Many of the complex bits of ``dask.dataframe`` are about shuffling records to
-obtain this nice arrangement of records along an index.  We do this in two
-stages
+Dask.dataframe only covers a small but well-used portion of the Pandas API.
+This limitation is for two reasons:
 
-1.  Find good values on which to partition our data
-    (e.g. find, ``['Bob', 'Edith']``)
-2.  Shuffle records from old blocks to new blocks
+1.  The Pandas API is *huge*
+2.  Some operations are genuinely hard to do in parallel (e.g. sort)
 
-
-Find partition values by approximate quantiles
-----------------------------------------------
-
-The problem of finding approximate values that regularly divide our data is
-exactly the problem of approximate quantiles.  This problem is somewhat
-difficult due to the blocked nature of our storage, but has decent solutions.
-
-Currently we compute percentiles/quantiles on the new index of each block and
-then merge these together intelligently.
+Additionally, some important operations like ``set_index`` work, but are slower
+than in Pandas because they may write out to disk.
 
 
-Shuffle without Partitioning
-----------------------------
+What definitely works?
+----------------------
 
-For large datasets one should endeavor to store data in a partitioned way.
-Often this isn't possible and we need a sane fallback.
-
-We can shuffle data into separate groups without the approximate quantile step
-if we group by a decent hash function.  We can trust that idiosyncrasies in the
-distribution of our data (e.g. far more Alices than Bobs) will be somewhat
-smoothed over by the hash function.  This is a typical solution in many
-databases.
-
-
-Supported API
--------------
-
-Dask dataframe supports the following API from Pandas
-
-* Trivially parallelizable (fast):
+* Trivially parallelizable operations (fast):
     *  Elementwise operations:  ``df.x + df.y``
     *  Row-wise selections:  ``df[df.x > 0]``
     *  Loc:  ``df.loc[4.0:10.5]``
     *  Common aggregations:  ``df.x.max()``
     *  Is in:  ``df[df.x.isin([1, 2, 3])]``
-* Cleverly parallelizable (also fast):
+    *  Datetime/string accessors:  ``df.timestamp.month``
+* Cleverly parallelizable operations (also fast):
     *  groupby-aggregate (with common aggregations): ``df.groupby(df.x).y.max()``
     *  value_counts:  ``df.x.value_counts``
     *  Drop duplicates:  ``df.x.drop_duplicates()``
-* Requires shuffle (slow-ish, unless on index)
+    *  Join on index:  ``dd.merge(df1, df2, left_index=True, right_index=True)``
+* Operations requiring a shuffle (slow-ish, unless on index)
     *  Set index:  ``df.set_index(df.x)``
     *  groupby-apply (with anything):  ``df.groupby(df.x).apply(myfunc)``
-* Ingest
-    *  ``pd.read_csv``  (in all its glory)
-
-Dask dataframe also introduces some new API
-
-* Requires full dataset read, but otherwise fast
-    *  Approximate quantiles:  ``df.x.quantiles([25, 50, 75])``
-    *  Convert object dtypes to categoricals:  ``df.categorize()``
-* Ingest
-    *  Read from bcolz (efficient on-disk column-store):
-      ``from_bcolz(x, index='mycol', categorize=True)``
+    *  Join not on the index:  ``pd.merge(df1, df2, on='name')``
+* Ingest operations
+    *  CSVs: ``dd.read_csv``
+    *  Pandas: ``dd.from_pandas``
+    *  Anything supporting numpy slicing: ``dd.from_array``
+    *  Dask.bag: ``mybag.to_dataframe(columns=[...])``
 
 
-Create Dask DataFrames
-----------------------
+Partitions
+----------
 
-From CSV files
-~~~~~~~~~~~~~~
+Internally a dask dataframe is split into many partitions, each partition is
+one pandas dataframe.  These dataframes are split vertically along the index.
+When our index is sorted and we know the values of the divisions of our
+partitions then we can be clever and efficient.
 
-``dask.dataframe.read_csv`` uses ``pandas.read_csv`` and so inherits all of
-that functions options.  Additionally it gains two new functionalities
-
-1.  You can provide a globstring
-
-.. code-block:: python
-
-   >>> df = dd.read_csv('data.*.csv.gz', compression='gzip')
-
-2.  You can specify the size of each block of data in bytes of uncompressed
-    data.  Note that, especially for text data the size on disk may be much
-    less than the number of bytes in memory.
+For example, if we have a time-series index then our partitions might be
+divided by month.  All of January will live in one partition while all of
+February will live in the next.  In these cases operations like ``loc``,
+``groupby``, and ``join/merge`` along the index can be *much* more efficient
+than would otherwise be possible in parallel.  You can view the number of
+partitions and divisions of your dataframe with the following fields
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.csv', chunkbytes=10000000)  # 1MB chunks
+   >>> df.npartitions
+   4
+   >>> df.divisions
+   ['2015-01-01', '2015-02-01', '2015-03-01', '2015-04-01', '2015-04-31']
 
-3.  You can ask to categorize your result.  This is slightly faster at read_csv
-    time because we can selectively read the object dtype columns first.  This
-    requires a full read of the dataset and may take some time
+Divisions includes the minimum value of every partition's index and the maximum
+value of the last partition's index.  In the example above if the user searches
+for a specific datetime range then we know which partitions we need to inspect
+and which we can drop.
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('data.csv', categorize=True)
+   >>> df.loc['2015-01-20': '2015-02-10']  # Must inspect first two partitions
+
+Often we do not have such information about our partitions.  When reading CSV
+files for example we do not know, without extra user input, how the data is
+divided.  In this case ``.divisions`` will be all ``None``.
+
+.. code-block:: python
+
+   >>> df.divisions
+   [None, None, None, None, None]
 
 
-so needs a docstring. Maybe we should have ``iris.csv`` somewhere in
-the project.
+Related Pages
+-------------
 
-From an Array
-~~~~~~~~~~~~~
+.. toctree::
+   :maxdepth: 1
 
-You can create a DataFrame from any sliceable array like object including both
-NumPy arrays and HDF5 datasets.
-
-.. code-block:: Python
-
-   >>> dd.from_array(x, chunksize=1000000)
-
-From BColz
-~~~~~~~~~~
-
-BColz_ is an on-disk, chunked, compressed, column-store.  These attributes make
-it very attractive for dask.dataframe which can operate particularly well on
-it.  There is a special ``from_bcolz`` function.
-
-.. code-block:: Python
-
-   >>> df = dd.from_bcolz('myfile.bcolz', chunksize=1000000)
-
-In particular column access on a dask.dataframe backed by a ``bcolz.ctable``
-will only read the necessary columns from disk.  This can provide dramatic
-performance improvements.
-
-
-Known Limitations
------------------
-
-Dask.dataframe is experimental and not to be used by the general public.
-Additionally it has the following constraints
-
-1.  Is uses the multiprocessing scheduler and so inherits those limitations
-    (see shared_)
-2.  The Pandas API is large and dask.dataframe does not attempt to fill it.
-    Many holes exist
-3.  Operations like groupby and join may take some time, as they are much more
-    challenging to do in parallel
-4.  Some operations like ``iloc`` cease to make sense
-
-Generally speakings users familiar with the mature and excellent functionality
-of Pandas should expect disappointment if they do not deeply understand the
-current design and limitations of dask.dataframe.
-
-
-.. _Chest: http://github.com/ContinuumIO/chest
-.. _pframe: pframe.html
-.. _shared: shared.html
+   dataframe-create.rst
+   dataframe-api.rst

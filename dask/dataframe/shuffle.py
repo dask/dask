@@ -6,98 +6,119 @@ import toolz
 from operator import getitem, setitem
 import pandas as pd
 import numpy as np
-from pframe import pframe
 
 from .. import threaded
-from .core import DataFrame, Series, get, names, _Frame
+from .core import DataFrame, Series, get, _Frame, tokens
 from ..compatibility import unicode
 from ..utils import ignoring
+from .utils import (strip_categories, unique, shard_df_on_index, _categorize,
+        get_categories)
 
 
-tokens = ('-%d' % i for i in count(1))
-
-
-def set_index(f, index, npartitions=None, **kwargs):
+def set_index(df, index, npartitions=None, **kwargs):
     """ Set DataFrame index to new column
 
     Sorts index and realigns Dataframe to new sorted order.  This shuffles and
     repartitions your data.
     """
-    npartitions = npartitions or f.npartitions
+    npartitions = npartitions or df.npartitions
     if not isinstance(index, Series):
-        index2 = f[index]
+        index2 = df[index]
     else:
         index2 = index
 
     divisions = (index2
-                  .quantiles(np.linspace(0, 100, npartitions+1)[1:-1])
+                  .quantiles(np.linspace(0, 100, npartitions+1))
                   .compute())
-    return f.set_partition(index, divisions, **kwargs)
+    return df.set_partition(index, divisions, **kwargs)
 
 
-partition_names = ('set_partition-%d' % i for i in count(1))
+def set_partition(df, index, divisions):
+    """ Group DataFrame by index
 
-def set_partition(f, index, divisions, get=threaded.get, **kwargs):
-    """ Set new partitioning along index given divisions """
-    divisions = unique(divisions)
-    name = next(names)
-    if isinstance(index, Series):
-        assert index.divisions == f.divisions
-        dsk = dict(((name, i), (f._partition_type.set_index, block, ind))
-                for i, (block, ind) in enumerate(zip(f._keys(), index._keys())))
-        f2 = type(f)(merge(f.dask, index.dask, dsk), name,
-                       f.column_info, f.divisions)
-    else:
-        dsk = dict(((name, i), (f._partition_type.set_index, block, index))
-                for i, block in enumerate(f._keys()))
-        f2 = type(f)(merge(f.dask, dsk), name, f.column_info, f.divisions)
+    Sets a new index and partitions data along that index according to
+    divisions.  Divisions are often found by computing approximate quantiles.
+    The function ``set_index`` will do both of these steps.
 
-    head = f2.head()
-    pf = pframe(like=head, divisions=divisions, **kwargs)
+    Parameters
+    ----------
+    df: DataFrame/Series
+        Data that we want to re-partition
+    index: string or Series
+        Column to become the new index
+    divisions: list
+        Values to form new divisions between partitions
 
-    def append(block):
-        pf.append(block)
-        return 0
-
-    f2.map_blocks(append).compute(get=get)
-    pf.flush()
-
-    return from_pframe(pf)
-
-
-def from_pframe(pf):
-    """ Load dask.array from pframe """
-    name = next(names)
-    dsk = dict(((name, i), (pframe.get_partition, pf, i))
-                for i in range(pf.npartitions))
-
-    return DataFrame(dsk, name, pf.columns, pf.divisions)
-
-
-def unique(divisions):
-    """ Polymorphic unique function
-
-    >>> list(unique([1, 2, 3, 1, 2, 3]))
-    [1, 2, 3]
-
-    >>> unique(np.array([1, 2, 3, 1, 2, 3]))
-    array([1, 2, 3])
-
-    >>> unique(pd.Categorical(['Alice', 'Bob', 'Alice'], ordered=False))
-    [Alice, Bob]
-    Categories (2, object): [Alice, Bob]
+    See Also
+    --------
+    set_index
+    shuffle
+    partd
     """
-    if isinstance(divisions, np.ndarray):
-        return np.unique(divisions)
-    if isinstance(divisions, pd.Categorical):
-        return pd.Categorical.from_codes(np.unique(divisions.codes),
-                divisions.categories, divisions.ordered)
-    if isinstance(divisions, (tuple, list, Iterator)):
-        return tuple(toolz.unique(divisions))
-    raise NotImplementedError()
+    if isinstance(index, _Frame):
+        assert df.divisions == index.divisions
+
+    import partd
+    p = ('zpartd' + next(tokens),)
+
+    # Get Categories
+    catname = 'set-partition--get-categories' + next(tokens)
+
+    dsk1 = {catname: (get_categories, df._keys()[0]),
+            p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,)))}
+
+    # Partition data on disk
+    name = 'set-partition--partition' + next(tokens)
+    if isinstance(index, _Frame):
+        dsk2 = dict(((name, i),
+                     (_set_partition, part, ind, divisions, p))
+                     for i, (part, ind)
+                     in enumerate(zip(df._keys(), index._keys())))
+    else:
+        dsk2 = dict(((name, i),
+                     (_set_partition, part, index, divisions, p))
+                     for i, part
+                     in enumerate(df._keys()))
+
+    # Barrier
+    barrier_token = 'barrier' + next(tokens)
+    dsk3 = {barrier_token: (barrier, list(dsk2))}
+
+    # Collect groups
+    name = 'set-partition--collect' + next(tokens)
+    dsk4 = dict(((name, i),
+                 (_categorize, catname, (_set_collect, i, p, barrier_token)))
+                for i in range(len(divisions) - 1))
+
+    dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
+    if isinstance(index, _Frame):
+        dsk.update(index.dask)
+
+    return DataFrame(dsk, name, df.columns, divisions)
 
 
-def shuffle(df, index, npartitions=None, use_server=False):
+def barrier(args):
+    list(args)
+    return 0
+
+def _set_partition(df, index, divisions, p):
+    """ Shard partition and dump into partd """
+    df = strip_categories(df)
+    divisions = list(divisions)
+    df = df.set_index(index)
+    shards = shard_df_on_index(df, divisions[1:-1])
+    p.append(dict(enumerate(shards)))
+
+
+def _set_collect(group, p, barrier_token):
+    """ Get new partition dataframe from partd """
+    try:
+        return p.get(group)
+    except ValueError:
+        return pd.DataFrame()
+
+
+def shuffle(df, index, npartitions=None):
     """ Group DataFrame by index
 
     Hash grouping of elements.  After this operation all elements that have
@@ -109,6 +130,8 @@ def shuffle(df, index, npartitions=None, use_server=False):
 
     See Also
     --------
+    set_index
+    set_partition
     partd
     """
     if isinstance(index, _Frame):
@@ -118,16 +141,11 @@ def shuffle(df, index, npartitions=None, use_server=False):
 
     import partd
     p = ('zpartd' + next(tokens),)
-    if use_server:
-        dsk1 = {}
-        p = partd.PandasBlocks(partd.Client())
-    else:
-        dsk1 = {}
-        p = partd.PandasBlocks(partd.Buffer(partd.Dict(), partd.File()))
-        # dsk1 = {p: (partd.PandasBlocks,)}
+    dsk1 = {p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,),
+                                                   (partd.File,)))}
 
     # Partition data on disk
-    name = next(names)
+    name = 'shuffle-partition' + next(tokens)
     if isinstance(index, _Frame):
         dsk2 = dict(((name, i),
                      (partition, part, ind, npartitions, p))
@@ -141,16 +159,15 @@ def shuffle(df, index, npartitions=None, use_server=False):
 
     # Barrier
     barrier_token = 'barrier' + next(tokens)
-    def barrier(args):         return 0
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name = next(names)
+    name = 'shuffle-collect' + next(tokens)
     dsk4 = dict(((name, i),
                  (collect, i, p, barrier_token))
                 for i in range(npartitions))
 
-    divisions = [None] * (npartitions - 1)
+    divisions = [None] * (npartitions + 1)
 
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
     if isinstance(index, _Frame):
@@ -162,10 +179,19 @@ def shuffle(df, index, npartitions=None, use_server=False):
 def partition(df, index, npartitions, p):
     """ Partition a dataframe along a grouper, store partitions to partd """
     rng = pd.Series(np.arange(len(df)))
-    if not isinstance(index, pd.Series):
+    if isinstance(index, Iterator):
+        index = list(index)
+    if not isinstance(index, (pd.Index, pd.core.generic.NDFrame)):
         index = df[index]
 
-    groups = rng.groupby(index.map(lambda x: abs(hash(x)) % npartitions).values)
+    if isinstance(index, pd.Index):
+        groups = rng.groupby([abs(hash(x)) % npartitions for x in index])
+    if isinstance(index, pd.Series):
+        groups = rng.groupby(index.map(lambda x: abs(hash(x)) % npartitions).values)
+    elif isinstance(index, pd.DataFrame):
+        groups = rng.groupby(index.apply(
+                    lambda row: abs(hash(tuple(row))) % npartitions,
+                    axis=1).values)
     d = dict((i, df.iloc[groups.groups[i]]) for i in range(npartitions)
                                             if i in groups.groups)
     p.append(d)

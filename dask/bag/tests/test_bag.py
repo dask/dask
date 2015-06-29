@@ -17,6 +17,7 @@ import os
 import gzip
 import bz2
 import partd
+from tempfile import mkdtemp
 
 from collections import Iterator
 
@@ -116,6 +117,11 @@ def test_topk_with_non_callable_key():
     b = db.from_sequence([(1, 10), (2, 9), (3, 8)], npartitions=2)
     assert list(b.topk(2, key=1)) == [(1, 10), (2, 9)]
     assert list(b.topk(2, key=0)) == [(3, 8), (2, 9)]
+
+
+def test_topk_with_multiarg_lambda():
+    b = db.from_sequence([(1, 10), (2, 9), (3, 8)], npartitions=2)
+    assert list(b.topk(2, key=lambda a, b: b)) == [(1, 10), (2, 9)]
 
 
 def test_lambdas():
@@ -220,6 +226,7 @@ def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
 
 
+@pytest.mark.slow
 def test_from_url():
     a = db.from_url(['http://google.com', 'http://github.com'])
     assert a.npartitions == 2
@@ -410,21 +417,23 @@ def test_to_dataframe():
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
+    dir = mkdtemp()
     for ext, myopen in [('gz', gzip.open), ('bz2', bz2.BZ2File), ('', open)]:
-        c = b.to_textfiles('_foo/*.' + ext)
+        c = b.to_textfiles(os.path.join(dir, '*.' + ext))
         assert c.npartitions == b.npartitions
         try:
             c.compute(get=dask.get)
-            assert os.path.exists('_foo/1.' + ext)
+            assert os.path.exists(os.path.join(dir, '1.' + ext))
 
-            f = myopen('_foo/1.' + ext, 'r')
+            f = myopen(os.path.join(dir, '1.' + ext), 'r')
             text = f.read()
             if hasattr(text, 'decode'):
                 text = text.decode()
             assert 'xyz' in text
             f.close()
         finally:
-            shutil.rmtree('_foo')
+            if os.path.exists(dir):
+                shutil.rmtree(dir)
 
 
 def test_to_textfiles_inputs():

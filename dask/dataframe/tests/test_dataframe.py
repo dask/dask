@@ -5,16 +5,17 @@ import pandas.util.testing as tm
 import numpy as np
 
 import dask
+from dask.async import get_sync
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.core import get, concat
+from dask.dataframe.core import get, concat, repartition_divisions, _loc
 
 
 def eq(a, b):
     if hasattr(a, 'dask'):
-        a = a.compute(get=dask.get)
+        a = a.compute(get=get_sync)
     if hasattr(b, 'dask'):
-        b = b.compute(get=dask.get)
+        b = b.compute(get=get_sync)
     if isinstance(a, pd.DataFrame):
         a = a.sort_index()
         b = b.sort_index()
@@ -33,7 +34,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[5, 6, 8]),
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]},
                               index=[9, 9, 9])}
-d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
+d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
 full = d.compute()
 
 
@@ -90,7 +91,7 @@ def test_set_index():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [9, 1, 8]},
                                   index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
     full = d.compute()
 
     d2 = d.set_index('b', npartitions=3)
@@ -114,7 +115,7 @@ def test_split_apply_combine_on_series():
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
                                   index=[9, 9, 9])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [4, 9])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
     full = d.compute()
 
     assert eq(d.groupby('b').a.sum(), full.groupby('b').a.sum())
@@ -195,15 +196,15 @@ def test_reductions():
     assert eq(d.b.mean(), full.b.mean())
 
 
-def test_map_blocks_multi_argument():
-    assert eq(dd.map_blocks(lambda a, b: a + b, 'c', d.a, d.b),
+def test_map_partitions_multi_argument():
+    assert eq(dd.map_partitions(lambda a, b: a + b, 'c', d.a, d.b),
               full.a + full.b)
-    assert eq(dd.map_blocks(lambda a, b, c: a + b + c, 'c', d.a, d.b, 1),
+    assert eq(dd.map_partitions(lambda a, b, c: a + b + c, 'c', d.a, d.b, 1),
               full.a + full.b + 1)
 
 
-def test_map_blocks():
-    assert eq(d.map_blocks(lambda df: df, 'a'), full)
+def test_map_partitions():
+    assert eq(d.map_partitions(lambda df: df, 'a'), full)
 
 
 def test_drop_duplicates():
@@ -233,8 +234,8 @@ def test_groupby_on_index():
 
 
 def test_set_partition():
-    d2 = d.set_partition('b', [2])
-    assert d2.divisions == (2,)
+    d2 = d.set_partition('b', [0, 2, 9])
+    assert d2.divisions == (0, 2, 9)
     expected = full.set_index('b').sort(ascending=True)
     assert eq(d2.compute().sort(ascending=True), expected)
 
@@ -246,7 +247,7 @@ def test_categorize():
            ('x', 1): pd.DataFrame({'a': ['Bob', 'Charlie', 'Charlie'],
                                    'b': ['A', 'A', 'B']},
                                    index=[3, 4, 5])}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [3])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 3, 5])
     full = d.compute()
 
     c = d.categorize('a')
@@ -300,19 +301,31 @@ def test_index():
 
 
 def test_loc():
+    assert d.loc[3:8].divisions[0] == 3
+    assert d.loc[3:8].divisions[-1] == 8
+
+    assert d.loc[5].divisions == (5, 5)
+
     assert eq(d.loc[5], full.loc[5])
     assert eq(d.loc[3:8], full.loc[3:8])
     assert eq(d.loc[:8], full.loc[:8])
     assert eq(d.loc[3:], full.loc[3:])
 
 
+
 def test_loc_with_text_dates():
     A = tm.makeTimeSeries(10).iloc[:5]
     B = tm.makeTimeSeries(10).iloc[5:]
-    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None, [A.index.max()])
+    s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', None,
+                  [A.index.min(), A.index.max(), B.index.max()])
 
+    assert s.loc['2000': '2010'].divisions == s.divisions
     assert eq(s.loc['2000': '2010'], s)
     assert len(s.loc['2000-01-03': '2000-01-05'].compute()) == 3
+
+
+def test_loc_with_series():
+    assert eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0])
 
 
 def test_iloc_raises():
@@ -347,18 +360,18 @@ def test_known_divisions():
     assert d.known_divisions
 
     df = dd.DataFrame({('x', 0): 'foo', ('x', 1): 'bar'}, 'x',
-                      ['a', 'b'], divisions=[None])
+                      ['a', 'b'], divisions=[None, None, None])
     assert not df.known_divisions
 
     df = dd.DataFrame({('x', 0): 'foo'}, 'x',
-                      ['a', 'b'], divisions=[])
+                      ['a', 'b'], divisions=[0, 1])
     assert d.known_divisions
 
-def test_unkonwn_divisions():
+def test_unknown_divisions():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
-    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
     full = d.compute(get=dask.get)
 
     assert eq(d.a.sum(), full.a.sum())
@@ -426,3 +439,101 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     expected = ps.groupby('strings')['data'].nunique()
     result = s.groupby('strings')['data'].nunique().compute()
     tm.assert_series_equal(result, expected)
+
+
+def test_set_partition_2():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')})
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf.set_partition('y', ['a', 'c', 'd'])
+    assert result.divisions == ('a', 'c', 'd')
+
+    assert list(result.compute(get=get_sync).index[-2:]) == ['d', 'd']
+
+
+def test_repartition():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+
+    b = a.repartition(divisions=[10, 20, 50, 60])
+    assert b.divisions == (10, 20, 50, 60)
+    assert eq(a, b)
+    assert eq(get(b.dask, (b._name, 0)), df.iloc[:1])
+
+
+def test_repartition_divisions():
+    result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    assert result == {('b', 0): (_loc, ('a', 0), 1, 3, False),
+                      ('b', 1): (_loc, ('a', 1), 3, 4, False),
+                      ('b', 2): (_loc, ('a', 1), 4, 6, False),
+                      ('b', 3): (_loc, ('a', 1), 6, 7, True),
+                      ('c', 0): (pd.concat, (list, [('b', 0), ('b', 1)])),
+                      ('c', 1): ('b', 2),
+                      ('c', 2): ('b', 3)}
+
+
+def test_repartition_on_pandas_dataframe():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    ddf = dd.repartition(df, divisions=[10, 20, 50, 60])
+    assert isinstance(ddf, dd.DataFrame)
+    assert ddf.divisions == (10, 20, 50, 60)
+    assert eq(ddf, df)
+
+    ddf = dd.repartition(df.y, divisions=[10, 20, 50, 60])
+    assert isinstance(ddf, dd.Series)
+    assert ddf.divisions == (10, 20, 50, 60)
+    assert eq(ddf, df.y)
+
+
+def test_embarrassingly_parallel_operations():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+
+    assert eq(a.x.astype('float32'), df.x.astype('float32'))
+    assert a.x.astype('float32').compute().dtype == 'float32'
+
+    assert eq(a.x.dropna(), df.x.dropna())
+
+    assert eq(a.x.fillna(100), df.x.fillna(100))
+    assert eq(a.fillna(100), df.fillna(100))
+
+    assert eq(a.x.between(2, 4), df.x.between(2, 4))
+
+    assert eq(a.x.clip(2, 4), df.x.clip(2, 4))
+
+    assert eq(a.x.notnull(), df.x.notnull())
+
+    assert len(a.sample(0.5).compute()) < len(df)
+
+
+def test_datetime_accessor():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    df['x'] = df.x.astype('M8[us]')
+
+    a = dd.from_pandas(df, 2)
+
+    assert 'date' in dir(a.x.dt)
+
+    assert eq(a.x.dt.date, df.x.dt.date)
+    assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
+
+
+def test_str_accessor():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D']})
+
+    a = dd.from_pandas(df, 2)
+
+    assert 'upper' in dir(a.x.str)
+
+    assert eq(a.x.str.upper(), df.x.str.upper())
+
+
+def test_empty_max():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    a = dd.DataFrame({('x', 0): pd.DataFrame({'x': [1]}),
+                      ('x', 1): pd.DataFrame({'x': []})}, 'x',
+                      ['x'], [None, None, None])
+    assert a.x.max().compute() == 1

@@ -12,7 +12,7 @@ from functools import partial, wraps
 
 from toolz.curried import (pipe, partition, concat, unique, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
-                           curry, reduce, interleave, sliding_window)
+                           curry, reduce, interleave, sliding_window, partial)
 import numpy as np
 
 from threading import Lock
@@ -1009,7 +1009,7 @@ class Array(object):
         .. [1] Pebay, Philippe (2008), "Formulas for Robust, One-Pass Parallel
         Computation of Covariances and Arbitrary-Order Statistical Moments"
         (PDF), Technical Report SAND2008-6212, Sandia National Laboratories
-        
+
         """
 
         from .reductions import moment
@@ -1433,7 +1433,7 @@ def _take_dask_array_from_numpy(a, indices, axis):
 @wraps(np.transpose)
 def transpose(a, axes=None):
     axes = axes or tuple(range(a.ndim))[::-1]
-    return atop(curry(np.transpose, axes=axes),
+    return atop(partial(np.transpose, axes=axes),
                 axes,
                 a, tuple(range(a.ndim)), dtype=a._dtype)
 
@@ -1446,7 +1446,7 @@ def many(a, b, binop=None, reduction=None, **kwargs):
     >>> many([1, 2, 3], [10, 20, 30], mul, sum)  # dot product
     140
     """
-    return reduction(map(curry(binop, **kwargs), a, b))
+    return reduction(map(partial(binop, **kwargs), a, b))
 
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'

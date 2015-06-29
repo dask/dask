@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from functools import partial, wraps
 from math import factorial
-from toolz import compose, curry
+from toolz import compose
 
 from .core import _concatenate2, Array, atop, sqrt, elemwise
 from .slicing import insert_many
@@ -37,7 +37,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
 
     inds2 = tuple(i for i in inds if i not in axis)
 
-    result = atop(compose(aggregate2, curry(_concatenate2, axes=axis)),
+    result = atop(compose(aggregate2, partial(_concatenate2, axes=axis)),
                   inds2, tmp, inds, dtype=dtype)
 
     if keepdims:

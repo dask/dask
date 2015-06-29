@@ -32,10 +32,10 @@ def test_status_worker():
     with scheduler() as s:
         sock = context.socket(zmq.DEALER)
         try:
-            sock.setsockopt(zmq.IDENTITY, b'ipc://worker1')
+            sock.setsockopt(zmq.IDENTITY, b'worker1')
             sock.connect(s.address_to_workers)
 
-            header = {'address': b'ipc://worker1', 'jobid': 1, 'function': 'status'}
+            header = {'address': b'worker1', 'jobid': 1, 'function': 'status'}
             payload = {'function': 'status'}
             sock.send_multipart([pickle.dumps(header), pickle.dumps(payload)])
 
@@ -53,10 +53,10 @@ def test_status_client():
     with scheduler() as s:
         sock = context.socket(zmq.DEALER)
         try:
-            sock.setsockopt(zmq.IDENTITY, b'ipc://client-1')
+            sock.setsockopt(zmq.IDENTITY, b'client-1')
             sock.connect(s.address_to_clients)
 
-            header = {'address': b'ipc://client-1', 'jobid': 2, 'function': 'status'}
+            header = {'address': b'client-1', 'jobid': 2, 'function': 'status'}
             payload = {'function': 'status'}
             sock.send_multipart([pickle.dumps(header), pickle.dumps(payload)])
 
@@ -200,7 +200,12 @@ def test_close_workers():
         assert a.status != 'closed'
 
         s.close_workers()
-        sleep(0.05)
+        assert not s.workers
+        for i in range(100):
+            if a.status == 'closed' and b.status == 'closed':
+                break
+            else:
+                sleep(0.01)
         assert a.status == 'closed'
         assert b.status == 'closed'
 

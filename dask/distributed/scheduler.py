@@ -13,7 +13,6 @@ from threading import Thread, Lock
 from contextlib import contextmanager
 import traceback
 import sys
-from time import sleep
 from ..compatibility import Queue, unicode, Empty
 try:
     import cPickle as pickle
@@ -104,6 +103,9 @@ class Scheduler(object):
             self.to_clients.bind('tcp://%s:%d' % (bind_to_clients, port_to_clients))
         self.address_to_clients = ('tcp://%s:%d' % (hostname, port_to_clients)).encode()
 
+        # Client state
+        self.clients = dict()
+
         # State about my workers and computed data
         self.workers = dict()
         self.who_has = defaultdict(set)
@@ -114,9 +116,9 @@ class Scheduler(object):
 
         self.send_to_workers_queue = Queue()
         self.send_to_workers_recv = self.context.socket(zmq.PAIR)
-        self.send_to_workers_recv.bind('ipc://to-workers-signal')
+        _port = self.send_to_workers_recv.bind_to_random_port('tcp://127.0.0.1')
         self.send_to_workers_send = self.context.socket(zmq.PAIR)
-        self.send_to_workers_send.connect('ipc://to-workers-signal')
+        self.send_to_workers_send.connect('tcp://127.0.0.1:%d' % _port)
         self.worker_poller.register(self.send_to_workers_recv, zmq.POLLIN)
 
         self.pool = ThreadPool(100)
@@ -133,6 +135,8 @@ class Scheduler(object):
                                  'setitem-ack': self._setitem_ack,
                                  'getitem-ack': self._getitem_ack}
         self.client_functions = {'status': self._status_to_client,
+                                 'get_workers': self._get_workers,
+                                 'register': self._client_registration,
                                  'schedule': self._schedule_from_client,
                                  'set-collection': self._set_collection,
                                  'get-collection': self._get_collection,
@@ -162,6 +166,7 @@ class Scheduler(object):
                 while not self.send_to_workers_queue.empty():
                     msg = self.send_to_workers_queue.get()
                     self.to_workers.send_multipart(msg)
+                    self.send_to_workers_queue.task_done()
 
             if self.to_workers in socks:
                 address, header, payload = self.to_workers.recv_multipart()
@@ -208,6 +213,15 @@ class Scheduler(object):
         """
         self._listen_to_workers_thread.join()
         self._listen_to_clients_thread.join()
+
+    def _client_registration(self, header, payload):
+        """ Client comes in, register it, send back info about the cluster"""
+        payload = pickle.loads(payload)
+        address = header['address']
+        self.clients[address] = payload
+        out_header = {}
+        out_payload = {'workers': self.workers}
+        self.send_to_client(header['address'], out_header, out_payload)
 
     def _worker_registration(self, header, payload):
         """ Worker came in, register them """
@@ -526,6 +540,8 @@ class Scheduler(object):
         header = {'function': 'close'}
         for w in self.workers:
             self.send_to_worker(w, header, {})
+        self.workers.clear()
+        self.send_to_workers_queue.join()
 
     def _close(self, header, payload):
         self.close()
@@ -689,3 +705,10 @@ class Scheduler(object):
                        'dumps': dill.dumps}
 
             self.send_to_client(header['address'], header2, payload2)
+
+    def _get_workers(self, header, payload):
+        with logerrors():
+            log(self.address_to_clients, "Get workers", header)
+            self.send_to_client(header['address'],
+                                {'status': 'OK'},
+                                {'workers': self.workers})
