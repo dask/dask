@@ -528,8 +528,7 @@ class Worker(object):
         while self.status != 'closed':
             header = {'function': 'heartbeat'}
             payload = {}
-            future = self.pool.apply_async(self.send_to_scheduler,
-                                           args=(header, payload))
+            self.send_to_scheduler(header, payload)
             self._heartbeat_thread.event.wait(pulse)
 
 
