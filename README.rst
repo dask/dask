@@ -172,6 +172,7 @@ following:
 *  Spartan_
 *  Distarray_
 *  Biggus_
+*  Thunder_
 
 There is a rich history of distributed array computing.  An incomplete sampling
 includes the following projects:
@@ -184,6 +185,7 @@ includes the following projects:
 .. _Spartan: https://github.com/spartan-array/spartan
 .. _Distarray: http://docs.enthought.com/distarray/
 .. _Biggus: https://github.com/SciTools/biggus
+.. _Thunder: https://github.com/thunder-project/thunder/
 
 .. _MLlib: http://spark.apache.org/docs/1.1.0/mllib-data-types.html
 .. _Elemental: http://libelemental.org/
