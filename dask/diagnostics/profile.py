@@ -24,8 +24,8 @@ class Profiler(object):
     --------
     Create a profiler from a scheduler ``get`` function:
 
-    >>> from dask.array.core import get
-    >>> array_profiler = Profiler(get)
+    >>> from dask.threaded import get
+    >>> thread_prof = Profiler(get)
 
     For convenience, profilers for the threaded and multiprocessing scheduler
     have already been created:
@@ -41,8 +41,8 @@ class Profiler(object):
     22
 
     >>> thread_prof.results()  # doctest: +SKIP
-    [('y', (<built-in function add>, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
-     ('z', (<built-in function mul>, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
+    [('y', (add, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
+     ('z', (mul, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
 
     These results can be visualized in a bokeh plot using the ``visualize``
     method. Note that this requires bokeh to be installed.
