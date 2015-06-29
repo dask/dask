@@ -126,8 +126,7 @@ def test_get_workers():
     with scheduler_and_workers() as (s, (a, b)):
         c = Client(s.address_to_clients)
         pid = os.getpid()
-        assert c.get_registered_workers() == {a.address: {'pid': pid},
-                                              b.address: {'pid': pid}}
+        assert c.get_registered_workers()[a.address]['pid'] == pid
 
         s.close_workers()
         assert c.get_registered_workers() == {}
