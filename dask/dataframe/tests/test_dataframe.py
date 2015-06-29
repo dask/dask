@@ -8,7 +8,8 @@ import dask
 from dask.async import get_sync
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.core import get, concat, repartition_divisions, _loc
+from dask.dataframe.core import (get, concat, repartition_divisions, _loc,
+        _coerce_loc_index)
 
 
 def eq(a, b):

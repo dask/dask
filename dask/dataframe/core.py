@@ -690,8 +690,10 @@ def _coerce_loc_index(divisions, o):
 
     This is particularly valuable to use with pandas datetimes
     """
-    if divisions and isinstance(divisions[0], (np.datetime64, datetime)):
+    if divisions and isinstance(divisions[0], datetime):
         return pd.Timestamp(o)
+    if divisions and isinstance(divisions[0], np.datetime64):
+        return np.datetime64(o)
     return o
 
 
