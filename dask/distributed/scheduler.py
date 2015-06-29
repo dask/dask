@@ -410,12 +410,12 @@ class Scheduler(object):
         2.  Scheduler sends 'setitem' requests to workers with
             {'key': ..., 'value': ... 'queue': ...}
         3.  Scheduler waits on queue for all responses
-        3.  Workers receive 'setitem' requests, send back on 'setitem-ack' with
+        4.  Workers receive 'setitem' requests, send back on 'setitem-ack' with
             {'key': ..., 'queue': ...}
-        4.  Scheduler's 'setitem-ack' function pushes keys into the queue
-        5.  Once the same number of replies is heard scheduler scatter function
+        5.  Scheduler's 'setitem-ack' function pushes keys into the queue
+        6.  Once the same number of replies is heard scheduler scatter function
             returns
-        6.  Scheduler cleans up queue
+        7.  Scheduler cleans up queue
 
         See Also:
             Scheduler.setitem_ack
