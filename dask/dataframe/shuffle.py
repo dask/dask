@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 
 from .. import threaded
+from ..optimize import cull
 from .core import DataFrame, Series, get, _Frame, tokens
 from ..compatibility import unicode
 from ..utils import ignoring
@@ -33,7 +34,7 @@ def set_index(df, index, npartitions=None, **kwargs):
     return df.set_partition(index, divisions, **kwargs)
 
 
-def set_partition(df, index, divisions):
+def set_partition(df, index, divisions, compute=False):
     """ Group DataFrame by index
 
     Sets a new index and partitions data along that index according to
@@ -84,6 +85,10 @@ def set_partition(df, index, divisions):
     barrier_token = 'barrier' + next(tokens)
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
+    if compute:
+        import pdb; pdb.set_trace()
+        p, barrier_token = get(merge(df.dask, dsk1, dsk2, dsk3), [p, barrier_token])
+
     # Collect groups
     name = 'set-partition--collect' + next(tokens)
     dsk4 = dict(((name, i),
@@ -93,6 +98,9 @@ def set_partition(df, index, divisions):
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
     if isinstance(index, _Frame):
         dsk.update(index.dask)
+
+    if compute:
+        dsk = cull(dsk, dsk4.keys())
 
     return DataFrame(dsk, name, df.columns, divisions)
 
