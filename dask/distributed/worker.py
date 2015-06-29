@@ -65,6 +65,11 @@ class Worker(object):
         Port on which to listen to worker connections
     bind_to_workers: string
         Addresses from which we accept worker connections, defaults to *
+    heartbeat_on: bool
+        On/off switch for heartbeats, defaults to True
+    heartbeat_pulse: int
+        How frequently to send heartbeat messages to the scheduler in seconds,
+        defaults to 5
 
     State
     -----
@@ -83,12 +88,13 @@ class Worker(object):
     """
     def __init__(self, scheduler, data=None, nthreads=100,
                  hostname=None, port_to_workers=None, bind_to_workers='*',
-                 block=False, heartbeat_pulse=5):
+                 block=False, heartbeat_on=True, heartbeat_pulse=5):
         if isinstance(scheduler, unicode):
             scheduler = scheduler.encode()
         self.data = data if data is not None else dict()
         self.pool = ThreadPool(nthreads)
         self.scheduler = scheduler
+        self.heartbeat_on = heartbeat_on
         self.status = 'run'
         self.context = zmq.Context()
 
@@ -528,7 +534,8 @@ class Worker(object):
         while self.status != 'closed':
             header = {'function': 'heartbeat'}
             payload = {}
-            self.send_to_scheduler(header, payload)
+            if self.heartbeat_on:
+                self.send_to_scheduler(header, payload)
             self._heartbeat_thread.event.wait(pulse)
 
 
