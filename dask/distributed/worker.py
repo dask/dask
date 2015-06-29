@@ -6,11 +6,11 @@ import socket
 import sys
 import os
 import traceback
-from threading import Thread, Lock
+from threading import Thread, Lock, Event
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
 from datetime import datetime
-from time import time
+from time import time, sleep
 
 try:
     import cPickle as pickle
@@ -83,7 +83,7 @@ class Worker(object):
     """
     def __init__(self, scheduler, data=None, nthreads=100,
                  hostname=None, port_to_workers=None, bind_to_workers='*',
-                 block=False):
+                 block=False, heartbeat_pulse=5):
         if isinstance(scheduler, unicode):
             scheduler = scheduler.encode()
         self.data = data if data is not None else dict()
@@ -130,6 +130,10 @@ class Worker(object):
         self._listen_scheduler_thread.start()
         self._listen_workers_thread = Thread(target=self.listen_to_workers)
         self._listen_workers_thread.start()
+        self._heartbeat_thread = Thread(target=self.heartbeat,
+                                        kwargs={'pulse': heartbeat_pulse})
+        self._heartbeat_thread.event = Event()
+        self._heartbeat_thread.start()
 
         if block:
             self.block()
@@ -371,6 +375,8 @@ class Worker(object):
         """
         self._listen_workers_thread.join()
         self._listen_scheduler_thread.join()
+        self._heartbeat_thread.event.set()  # stop heartbeat
+        self._heartbeat_thread.join()
         log('Unblocked')
 
     def collect(self, locations):
@@ -516,6 +522,15 @@ class Worker(object):
 
     def __del__(self):
         self.close()
+
+    def heartbeat(self, pulse=5):
+        """Send a message to scheduler at a given interval"""
+        while self.status != 'closed':
+            header = {'function': 'heartbeat'}
+            payload = {}
+            future = self.pool.apply_async(self.send_to_scheduler,
+                                           args=(header, payload))
+            self._heartbeat_thread.event.wait(pulse)
 
 
 def status():
