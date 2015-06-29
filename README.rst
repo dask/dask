@@ -57,12 +57,35 @@ multiple cores.
    89CE71B8514E7674F1C662296809DDF6     869.274052
    Name: trip_time_in_secs, dtype: float64
 
+Use ``dask.bag``
+----------------
+
+Dask.bag implements a large collection of Python objects and mimicing the
+toolz_ interface
+
+.. code-block:: python
+
+   >>> import dask.bag as db
+   >>> import json
+   >>> b = db.from_filenames('2014-*.json.gz')
+   ...       .map(json.loads)
+
+   >>> alices = b.filter(lambda d: d['name'] == 'Alice')
+   >>> alices.take(3)
+   ({'name': 'Alice', 'city': 'LA',  'balance': 100},
+    {'name': 'Alice', 'city': 'LA',  'balance': 200},
+    {'name': 'Alice', 'city': 'NYC', 'balance': 300},
+
+   >>> dict(alices.pluck('city').frequencies())
+   {'LA': 10000, 'NYC': 20000, ...}
+
 
 Use Dask Graphs
 ---------------
 
-Dask.array and dask.dataframe are thin layers on top of dask graphs, which
-represent task graphs of regular Python functions on regular Python objects.
+Dask.array, dask.dataframe, and dask.bag are thin layers on top of dask graphs,
+which represent computational task graphs of regular Python functions on
+regular Python objects.
 
 As an example consider the following simple program:
 
@@ -86,11 +109,11 @@ We encode this computation as a dask graph in the following way:
         'y': (inc, 'x'),
         'z': (add, 'y', 10)}
 
-A "dask graph" is nothing more than a dictionary of tuples where the first
-element of the tuple is a function and the rest are the arguments for that
-function.  While this representation of the computation above may be less
-aesthetically pleasing, it may now be analyzed, optimized, and computed by
-other Python code, not just the Python interpreter.
+A dask graph is just a dictionary of tuples where the first element of the
+tuple is a function and the rest are the arguments for that function.  While
+this representation of the computation above may be less aesthetically
+pleasing, it may now be analyzed, optimized, and computed by other Python code,
+not just the Python interpreter.
 
 .. image:: docs/source/_static/dask-simple.png
    :height: 400px
@@ -194,6 +217,7 @@ includes the following projects:
 .. _Luigi: http://luigi.readthedocs.org
 .. _Joblib: https://pythonhosted.org/joblib/index.html
 .. _mrjob: https://pythonhosted.org/mrjob/
+.. _toolz: https://toolz.readthedocs.org/en/latest/
 .. _Condor: http://research.cs.wisc.edu/htcondor/
 .. _Pegasus: http://pegasus.isi.edu/
 .. _Swiftlang: http://swift-lang.org/main/
