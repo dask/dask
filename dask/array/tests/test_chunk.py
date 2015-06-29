@@ -6,6 +6,7 @@ pytest.importorskip('numpy')
 import numpy as np
 
 from dask.array.chunk import coarsen, keepdims_wrapper, trim
+import dask.array as da
 
 
 def test_keepdims_wrapper_no_axis():
@@ -114,3 +115,7 @@ def test_coarsen_on_uneven_shape():
     assert y[0, 0] == np.sum(x[:2, :4])
     assert eq(y[11, :], x[23, :])
 """
+
+
+def test_integer_input():
+    assert da.zeros((4, 6), chunks=2).rechunk(3).chunks == ((3, 1), (3, 3))
