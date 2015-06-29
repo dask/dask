@@ -375,7 +375,6 @@ class Worker(object):
         """
         self._listen_workers_thread.join()
         self._listen_scheduler_thread.join()
-        self._heartbeat_thread.event.set()  # stop heartbeat
         self._heartbeat_thread.join()
         log('Unblocked')
 
@@ -511,6 +510,7 @@ class Worker(object):
         if do_close:
             log(self.address, 'Close')
             self.status = 'closed'
+            self._heartbeat_thread.event.set()  # stop heartbeat
             for sock in self.dealers.values():
                 sock.close(linger=1)
             self.to_workers.close(linger=1)
