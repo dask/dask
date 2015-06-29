@@ -17,7 +17,7 @@ from ..compatibility import StringIO, unicode, range
 from ..utils import textblock
 
 from . import core
-from .core import names, DataFrame, compute, concat, categorize_block, tokens
+from .core import DataFrame, compute, concat, categorize_block, tokens
 from .shuffle import set_partition
 
 
@@ -130,7 +130,7 @@ def read_csv(fn, *args, **kwargs):
                           **dissoc(kwargs, 'compression'))
 
     # Create dask graph
-    name = next(names)
+    name = 'read-csv' + next(tokens)
     dsk = dict(((name, i), (rest_read_csv, (_StringIO,
                                (textblock, fn,
                                    i*chunkbytes, (i+1) * chunkbytes,
@@ -432,7 +432,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
             columns = list(columns)
         x = x[columns]
 
-    name = next(names)
+    name = 'from-bcolz' + next(tokens)
 
     if isinstance(x, bcolz.ctable):
         chunks = [x[name][slc] for name in x.names]

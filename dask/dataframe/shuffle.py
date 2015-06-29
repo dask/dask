@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 
 from .. import threaded
-from .core import DataFrame, Series, get, names, _Frame, tokens
+from .core import DataFrame, Series, get, _Frame, tokens
 from ..compatibility import unicode
 from ..utils import ignoring
 from .utils import (strip_categories, unique, shard_df_on_index, _categorize,
@@ -62,13 +62,13 @@ def set_partition(df, index, divisions):
     p = ('zpartd' + next(tokens),)
 
     # Get Categories
-    catname = next(names)
+    catname = 'set-partition--get-categories' + next(tokens)
 
     dsk1 = {catname: (get_categories, df._keys()[0]),
             p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,)))}
 
     # Partition data on disk
-    name = next(names)
+    name = 'set-partition--partition' + next(tokens)
     if isinstance(index, _Frame):
         dsk2 = dict(((name, i),
                      (_set_partition, part, ind, divisions, p))
@@ -85,7 +85,7 @@ def set_partition(df, index, divisions):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name = next(names)
+    name = 'set-partition--collect' + next(tokens)
     dsk4 = dict(((name, i),
                  (_categorize, catname, (_set_collect, i, p, barrier_token)))
                 for i in range(len(divisions) - 1))
@@ -145,7 +145,7 @@ def shuffle(df, index, npartitions=None):
                                                    (partd.File,)))}
 
     # Partition data on disk
-    name = next(names)
+    name = 'shuffle-partition' + next(tokens)
     if isinstance(index, _Frame):
         dsk2 = dict(((name, i),
                      (partition, part, ind, npartitions, p))
@@ -162,7 +162,7 @@ def shuffle(df, index, npartitions=None):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name = next(names)
+    name = 'shuffle-collect' + next(tokens)
     dsk4 = dict(((name, i),
                  (collect, i, p, barrier_token))
                 for i in range(npartitions))
