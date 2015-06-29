@@ -708,7 +708,7 @@ class Scheduler(object):
 
     def _get_workers(self, header, payload):
         with logerrors():
-            log(self.address_to_clients, "Set collection", header)
+            log(self.address_to_clients, "Get workers", header)
             self.send_to_client(header['address'],
                                 {'status': 'OK'},
                                 {'workers': self.workers})
