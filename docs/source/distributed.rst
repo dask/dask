@@ -28,9 +28,14 @@ to each other to share intermediate results.  The clients communicate to the
 scheduler periodically when they deliver full dask graphs for scheduling.  The
 clients do not talk directly to the workers.
 
-
 Setup
 -----
+
+.. raw:: html
+
+   <iframe width="560" height="315"
+           src="https://www.youtube.com/embed/uQro_CaP9Fo?rel=0" frameborder="0"
+           allowfullscreen=""></iframe>
 
 The scheduler and workers should be close-by in order to minimize scheduling
 overhead from network latency.  The client is generally on the users' personal
