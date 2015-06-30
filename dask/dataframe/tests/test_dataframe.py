@@ -444,17 +444,16 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     tm.assert_series_equal(result, expected)
 
 
-# TODO: things break when the resampling frequency isn't a multiple of
-# npartitions
+@pytest.mark.xfail
 @pytest.mark.parametrize(['freq', 'how', 'npartitions', 'nskipped'],
-                         list(product(['30T', 'H', 'D'],# '57T'],
+                         list(product(['57T', '30T', 'H', 'D'],
                                       ['sum', 'mean', 'count', 'nunique'],
-                                      [2, 10],
-                                      [2]  #, 3]
+                                      [2, 5],
+                                      [2, 3]
                                       )))
 def test_series_resample(freq, how, npartitions, nskipped):
     n = 24 * 60 * 3
-    index = pd.date_range(start='20120101', periods=n, freq='T').values
+    index = pd.date_range(start='20120102', periods=n, freq='T').values
     index = index[::nskipped]
     s = pd.Series(np.random.rand(len(index)) * 100, index=pd.Index(index))
     expected = s.resample(freq, how=how)
@@ -462,6 +461,28 @@ def test_series_resample(freq, how, npartitions, nskipped):
 
     # the default scheduler segfaults :|
     result = ds.resample(freq, how=how).compute(get=dask.async.get_sync)
+    tm.assert_series_equal(result, expected, check_dtype=False)
+
+
+@pytest.mark.xfail
+@pytest.mark.parametrize(['how', 'npartitions'],
+                         list(product(['sum', 'mean', 'count', 'nunique'],
+                                      [2, 5])))
+def test_series_resample_big_freq(how, npartitions):
+    from pandas.tseries.offsets import Week
+    freq = 'W'
+    divisions = tuple(map(pd.Timestamp,
+                          ['21-JAN-2013', '28-FEB-2014',
+                           '1-OCT-2014', '3-NOV-2014']))
+
+    data = dict((('series-1', i),
+                pd.Series(i, index=pd.date_range(start=start, end=end,
+                                                 freq=Week())))
+                for i, (start, end) in enumerate(zip(divisions[:-1],
+                                                     divisions[1:])))
+    ds = dd.Series(data, 'series-1', 'a', divisions)
+    result = ds.resample(freq, how=how).compute(get=dask.async.get_sync)
+    expected = ds.compute().resample(freq, how=how)
     tm.assert_series_equal(result, expected, check_dtype=False)
 
 
