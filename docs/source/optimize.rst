@@ -184,7 +184,6 @@ API
 
 .. autosummary::
    cull
-   dealias
    fuse
    inline
    inline_functions
@@ -192,6 +191,7 @@ API
 **Utility functions**
 
 .. autosummary::
+   dealias
    dependency_dict
    equivalent
    functions_of
@@ -203,14 +203,14 @@ Definitions
 ~~~~~~~~~~~
 
 .. autofunction:: cull
-.. autofunction:: dealias
 .. autofunction:: fuse
 .. autofunction:: inline
 .. autofunction:: inline_functions
 
 
-.. autofunction:: functions_of
-.. autofunction:: equivalent
+.. autofunction:: dealias
 .. autofunction:: dependency_dict
-.. autofunction:: sync_keys
+.. autofunction:: equivalent
+.. autofunction:: functions_of
 .. autofunction:: merge_sync
+.. autofunction:: sync_keys
