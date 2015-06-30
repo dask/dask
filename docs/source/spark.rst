@@ -54,7 +54,7 @@ Spark development team is now focusing more on binary and native data formats
 with their new effort, Tungsten.
 
 Dask is written in Python, a multi-paradigm language built on top of the
-C/Fortan native stack.  This stack benefits from decades of scientific research
+C/Fortran native stack.  This stack benefits from decades of scientific research
 optimizing very fast computation on numeric data.  As such, dask is already
 very good on analytic computations on data such as you might find in HDF5 files
 or analytic databases.  It can also handle JSON blob type data using Python
@@ -129,7 +129,7 @@ algorithms and expose the creation of these algorithms to normal users.
 
 Dask.bag, the equivalent of the Spark.RDD, is just one abstraction built on top
 of dask.  Others exist.  Alternatively power-users can forego high-level
-collections entirely and jump striaght to direct, low-level, task scheduling.
+collections entirely and jump straight to direct, low-level, task scheduling.
 
 
 Coding Styles
