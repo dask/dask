@@ -427,6 +427,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     Name: b, dtype: int64
 
     """
+    import bcolz
     if columns is not None:
         if isinstance(columns, tuple):
             columns = list(columns)
