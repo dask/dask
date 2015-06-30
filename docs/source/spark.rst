@@ -144,12 +144,12 @@ Conclusion
 ----------
 
 If you have petabytes of JSON files, a simple workflow,  and a thousand node
-cluster then you should probably use Spark.  If you have terabytes of binary
-data, a complex workflow, and a multi-core workstation then you should probably
-use dask.
+cluster then you should probably use Spark.  If you have 10s-1000s of gigabytes
+of binary or numeric data, complex algorithms, and a large multi-core
+workstation then you should probably use dask.
 
-If you have a terabyte of CSV or JSON data then you should forget both Spark
-and Dask and go use Postgres_ or MongoDB_.
+If you have a terabyte or less of CSV or JSON data then you should forget both
+Spark and Dask and use Postgres_ or MongoDB_.
 
 
 .. _Spark: https://spark.apache.org/
