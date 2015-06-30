@@ -405,15 +405,16 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         Function to return the worker id, takes no arguments. Examples are
         `threading.current_thread` and `multiprocessing.current_process`.
     start_callback : function, optional
-        Callback ran every time a new task is started. Receives the key of the
-        task to be run, the dask, and the scheduler state. The final callback
-        receives `None` instead of a key, as no new tasks were added at that
-        tick.
+        Callback run every time a new task is started. Receives the key of the
+        task to be run, the dask, and the scheduler state. At the end of
+        computation this will called a final time with ``None`` as the key, as
+        no new tasks were added at that tick.
     end_callback : function, optional
-        Callback ran every time a task is finished. Receives the key of the
+        Callback run every time a task is finished. Receives the key of the
         task to be run, the dask, the scheduler state, and the id of the worker
-        that ran the task. The final callback receives `None` none for both key
-        worker id, as no new tasks were finished at that tick.
+        that ran the task.  At the end of computation this will called a final
+        time with ``None`` for both key and worker id, as no new tasks were
+        finished at that tick.
 
     See Also
     --------
