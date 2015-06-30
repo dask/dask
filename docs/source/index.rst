@@ -68,7 +68,7 @@ or using a distributed cluster.
    shared.rst
    distributed.rst
 
-**Administrative:**
+**Other**
 
 .. toctree::
    :maxdepth: 1
@@ -77,6 +77,7 @@ or using a distributed cluster.
    inspect.rst
    diagnostics.rst
    faq.rst
+   spark.rst
 
 Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 
