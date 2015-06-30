@@ -16,7 +16,7 @@ from .utils import (strip_categories, unique, shard_df_on_index, _categorize,
         get_categories)
 
 
-def set_index(df, index, npartitions=None, **kwargs):
+def set_index(df, index, npartitions=None, compute=True, **kwargs):
     """ Set DataFrame index to new column
 
     Sorts index and realigns Dataframe to new sorted order.  This shuffles and
@@ -31,10 +31,10 @@ def set_index(df, index, npartitions=None, **kwargs):
     divisions = (index2
                   .quantiles(np.linspace(0, 100, npartitions+1))
                   .compute())
-    return df.set_partition(index, divisions, **kwargs)
+    return df.set_partition(index, divisions, compute=compute, **kwargs)
 
 
-def set_partition(df, index, divisions, compute=False):
+def set_partition(df, index, divisions, compute=False, **kwargs):
     """ Group DataFrame by index
 
     Sets a new index and partitions data along that index according to
@@ -86,8 +86,8 @@ def set_partition(df, index, divisions, compute=False):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     if compute:
-        import pdb; pdb.set_trace()
-        p, barrier_token = get(merge(df.dask, dsk1, dsk2, dsk3), [p, barrier_token])
+        p, barrier_token = get(merge(df.dask, dsk1, dsk2, dsk3),
+                               [p, barrier_token], **kwargs)
 
     # Collect groups
     name = 'set-partition--collect' + next(tokens)
