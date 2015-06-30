@@ -413,7 +413,7 @@ def merge_sync(dsk1, dsk2):
         A mapping between the keys from `dsk2` to their new names in `new_dsk`.
 
     Examples
-    -------
+    --------
     >>> from operator import add, mul
     >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
     >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
