@@ -19,7 +19,7 @@ Brief Answer
 ------------
 
 Apache Spark is more mature and better integrates with HDFS.  It handles
-resiliency and was originally built to scale up to thousands of nodes.
+resiliency and was originally built to scale up to thousands of workers.
 
 Dask is pip installable, doesn't use the Java Virtual Machine (JVM), and was
 originally built to handle numeric workloads in a large single workstation very
@@ -32,10 +32,10 @@ User-Facing Differences
 Scale
 ~~~~~
 
-Spark began its life aimed at the thousand node cluster case.  As such it
-thinks well about worker failures and integration with data-local file systems
-like the Hadoop FileSystem (HDFS).  That being said, Spark can run in
-standalone mode on a single machine.
+Spark began its life aimed at the thousand node cluster case.  As
+such it thinks well about worker failures and integration with data-local
+file systems like the Hadoop FileSystem (HDFS).  That being said, Spark can
+run in standalone mode on a single machine.
 
 Dask began its life building out parallel algorithms for numerical array
 computations on a single computer.  As such it thinks well about low-latency
@@ -111,7 +111,7 @@ graphs however represent computations at very different granularities.
 
 One operation on a Spark RDD might add a node like ``Map`` and ``Filter`` to
 the graph.  These are high-level operations that convey meaning and will
-eventually be turned into many little tasks to execute on individual nodes.
+eventually be turned into many little tasks to execute on individual workers.
 This many-little-tasks state is only available internally to the Spark
 scheduler.
 
