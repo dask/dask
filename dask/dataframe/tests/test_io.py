@@ -5,6 +5,7 @@ import pandas.util.testing as tm
 import os
 import dask
 from operator import getitem
+import pytest
 from toolz import valmap
 import tempfile
 import shutil
@@ -201,10 +202,7 @@ def test_from_array():
 
 
 def test_from_bcolz():
-    try:
-        import bcolz
-    except ImportError:
-        return
+    bcolz = pytest.importorskip('bcolz')
 
     t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                      names=['x', 'y', 'a'])
@@ -220,10 +218,8 @@ def test_from_bcolz():
 
 
 def test_from_bcolz_filename():
-    try:
-        import bcolz
-    except ImportError:
-        return
+    bcolz = pytest.importorskip('bcolz')
+
     with tmpfile('.bcolz') as fn:
         t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                          names=['x', 'y', 'a'],
