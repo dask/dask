@@ -337,21 +337,17 @@ class Series(_Frame):
     def resample(self, rule, how=None, axis=0, fill_method=None, closed=None,
                  label=None, convention='start', kind=None, loffset=None,
                  limit=None, base=0):
-        first, last = self.divisions[0], self.divisions[-1]
-        new_divisions = list(pd.date_range(start=first, end=last, freq=rule))
-        if not new_divisions:
-            raise ValueError('%s to %s by %s has no elements' %
-                             (first, last, rule))
-        if new_divisions[-1] < last:
-            new_divisions.append(last)
-        assert new_divisions[-1] == last
-        reparted = repartition(self, tuple(new_divisions))
         block_func = methodcaller('resample', rule, how=how, axis=axis,
                                   fill_method=fill_method, closed=closed,
                                   label=label, convention=convention,
                                   kind=kind, loffset=loffset,
                                   limit=limit, base=base)
-        return reparted.map_partitions(block_func)
+        newdivs = [self.divisions[0]]
+        rule = pd.datetools.to_offset(rule)
+        for div in self.divisions[1:-1]:
+            newdivs.append(rule.rollforward(div))
+        newdivs.append(self.divisions[-1])
+        return self.repartition(newdivs).map_partitions(block_func)
 
     def __getitem__(self, key):
         name = next(names)
