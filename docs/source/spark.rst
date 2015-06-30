@@ -49,7 +49,7 @@ Java Python Performance
 Spark is written in Scala, a multi-paradigm language built on top of the Java
 Virtual Machine (JVM).  Since the rise of Hadoop, Java based languages have
 steadily gained traction on data warehousing tasks and are good at managing
-large amounts of heterogeneous data such as you mind find in JSON blobs.  The
+large amounts of heterogeneous data such as you might find in JSON blobs.  The
 Spark development team is now focusing more on binary and native data formats
 with their new effort, Tungsten.
 
@@ -66,7 +66,7 @@ Java Python Disconnect
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Python users on Spark sometimes express frustration by how far separated they
-are from computations.  Some of this is inevitable, distributed debugging is a
+are from computations.  Some of this is inevitable; distributed debugging is a
 hard problem.  Some of it however is due to having to hop over the JVM.  Spark
 workers spin up JVMs which in turn spin up Python processes.  Data moving back
 and forth makes extra trips both through a distributed cluster and also through
@@ -93,8 +93,8 @@ repeats.  Most spark add-ons were built on top of this construct, inheriting
 both its abilities and limitations.
 
 Dask is built on a lower-level and more general construct of a generic task
-graph with data dependencies.  This allows more general computations to be
-built by users within the dask framework.  This is probably the largest
+graph with arbitrary data dependencies.  This allows more general computations
+to be built by users within the dask framework.  This is probably the largest
 fundamental difference between the two projects.  Dask gives up high-level
 understanding to allow users to express more complex parallel algorithms.  This
 ended up being essential when writing complex projects like ``dask.array``.
@@ -123,13 +123,13 @@ graph.
 This difference in the scale of the underlying graph has implications on the
 kinds of analysis and optimizations one can do and also on the generality that
 one exposes to users.  Dask is unable to perform some optimizations that Spark
-can because Dask does not have a top-down picture of the computation it was
-asked to perform.  However, dask is able to easily represent far more complex
-algorithms and expose the creation of these algorithms to normal users.
+can because Dask schedulers do not have a top-down picture of the computation
+they were asked to perform.  However, dask is able to easily represent far more
+`complex algorithms`_ and expose the creation of these algorithms to normal users.
 
 Dask.bag, the equivalent of the Spark.RDD, is just one abstraction built on top
 of dask.  Others exist.  Alternatively power-users can forego high-level
-collections entirely and jump straight to direct, low-level, task scheduling.
+collections entirely and jump straight to direct low-level task scheduling.
 
 
 Coding Styles
@@ -162,3 +162,4 @@ Spark and Dask and use Postgres_ or MongoDB_.
 .. _py4j: http://py4j.sourceforge.net/
 .. _Postgres: http://www.postgresql.org/
 .. _MongoDB: https://www.mongodb.org/
+.. _`complex algorithms`: http://matthewrocklin.com/blog/work/2015/06/26/Complex-Graphs/
