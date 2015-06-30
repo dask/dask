@@ -8,7 +8,8 @@ import dask
 from dask.async import get_sync
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.core import get, concat, repartition_divisions, _loc
+from dask.dataframe.core import (get, concat, repartition_divisions, _loc,
+        _coerce_loc_index)
 
 
 def eq(a, b):
@@ -238,6 +239,14 @@ def test_set_partition():
     assert d2.divisions == (0, 2, 9)
     expected = full.set_index('b').sort(ascending=True)
     assert eq(d2.compute().sort(ascending=True), expected)
+
+
+def test_set_partition_compute():
+    d2 = d.set_partition('b', [0, 2, 9])
+    d3 = d.set_partition('b', [0, 2, 9], compute=True)
+
+    assert eq(d2, d3)
+    assert len(d2.dask) > len(d3.dask)
 
 
 def test_categorize():
@@ -537,3 +546,26 @@ def test_empty_max():
                       ('x', 1): pd.DataFrame({'x': []})}, 'x',
                       ['x'], [None, None, None])
     assert a.x.max().compute() == 1
+
+
+def test_loc_on_numpy_datetimes():
+    df = pd.DataFrame({'x': [1, 2, 3]},
+                      index=list(map(np.datetime64, ['2014', '2015', '2016'])))
+    a = dd.from_pandas(df, 2)
+    a.divisions = list(map(np.datetime64, a.divisions))
+
+    assert eq(a.loc['2014': '2015'], a.loc['2014': '2015'])
+
+
+def test_loc_on_pandas_datetimes():
+    df = pd.DataFrame({'x': [1, 2, 3]},
+                      index=list(map(pd.Timestamp, ['2014', '2015', '2016'])))
+    a = dd.from_pandas(df, 2)
+    a.divisions = list(map(pd.Timestamp, a.divisions))
+
+    assert eq(a.loc['2014': '2015'], a.loc['2014': '2015'])
+
+
+def test_coerce_loc_index():
+    for t in [pd.Timestamp, np.datetime64]:
+        assert isinstance(_coerce_loc_index([t('2014')], '2014'), t)
