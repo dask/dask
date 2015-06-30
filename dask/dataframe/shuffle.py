@@ -102,7 +102,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
         dsk.update(index.dask)
 
     if compute:
-        dsk = cull(dsk, dsk4.keys())
+        dsk = cull(dsk, list(dsk4.keys()))
 
     return DataFrame(dsk, name, df.columns, divisions)
 
