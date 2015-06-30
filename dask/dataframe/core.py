@@ -701,12 +701,8 @@ def _loc(df, start, stop, include_right_boundary=True):
     # this is horrible
     # i need to find a non-type-specific way to generate a range containing
     # values that don't exist in the index and fill that with NaNs
-    d = np.diff(df.index.values)
-    assert (d > 0).all()
-    assert (d == d[0]).all()
-    freq = pd.datetools.to_offset(df.index[1] - df.index[0])
     return pd.Series([np.nan],
-                     pd.date_range(start=start, end=stop, freq=freq))
+                     pd.date_range(start, stop, freq=pd.infer_freq(df.index)))
 
 
 def _coerce_loc_index(divisions, o):
