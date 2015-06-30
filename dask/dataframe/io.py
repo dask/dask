@@ -2,13 +2,13 @@ from __future__ import division
 
 import pandas as pd
 import numpy as np
-from functools import wraps
+from functools import wraps, partial
 import re
 import struct
 import os
 from glob import glob
 from math import ceil
-from toolz import curry, merge, partial, dissoc
+from toolz import merge, dissoc
 from itertools import count
 import bcolz
 from operator import getitem
@@ -17,7 +17,7 @@ from ..compatibility import StringIO, unicode, range
 from ..utils import textblock
 
 from . import core
-from .core import names, DataFrame, compute, concat, categorize_block, tokens
+from .core import DataFrame, compute, concat, categorize_block, tokens
 from .shuffle import set_partition
 
 
@@ -124,13 +124,13 @@ def read_csv(fn, *args, **kwargs):
 
     header = kwargs.pop('header')
 
-    first_read_csv = curry(pd.read_csv, *args, header=header,
+    first_read_csv = partial(pd.read_csv, *args, header=header,
                            **dissoc(kwargs, 'compression'))
-    rest_read_csv = curry(pd.read_csv, *args, header=None,
+    rest_read_csv = partial(pd.read_csv, *args, header=None,
                           **dissoc(kwargs, 'compression'))
 
     # Create dask graph
-    name = next(names)
+    name = 'read-csv' + next(tokens)
     dsk = dict(((name, i), (rest_read_csv, (_StringIO,
                                (textblock, fn,
                                    i*chunkbytes, (i+1) * chunkbytes,
@@ -331,11 +331,11 @@ def from_pandas(data, npartitions):
     data = data.sort_index(ascending=True)
     divisions = tuple(data.index[i]
                       for i in range(0, nrows, chunksize))
-    if divisions[-1] != data.index[-1]:
-        divisions = divisions + (data.index[-1],)
+    divisions = divisions + (data.index[-1],)
     name = 'from_pandas' + next(tokens)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
-               for i in range(npartitions))
+               for i in range(npartitions - 1))
+    dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
     return getattr(core, type(data).__name__)(dsk, name, columns, divisions)
 
 
@@ -432,7 +432,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
             columns = list(columns)
         x = x[columns]
 
-    name = next(names)
+    name = 'from-bcolz' + next(tokens)
 
     if isinstance(x, bcolz.ctable):
         chunks = [x[name][slc] for name in x.names]

@@ -508,6 +508,7 @@ class Worker(object):
             for sock in self.dealers.values():
                 sock.close(linger=1)
             self.to_workers.close(linger=1)
+            self.to_scheduler.close(linger=1)
             self.pool.close()
             self.pool.join()
             self.block()

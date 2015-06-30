@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from itertools import count, product
+from functools import partial
 
 from toolz import curry
 import numpy as np
@@ -53,7 +54,7 @@ def wrap_func_size_as_kwarg(func, *args, **kwargs):
     if not kwargs:
         vals = ((func,) + args + (size,) for size in sizes)
     else:
-        vals = ((curry(func, *args, size=size, **kwargs),) for size in sizes)
+        vals = ((partial(func, *args, size=size, **kwargs),) for size in sizes)
 
     dsk = dict(zip(keys, vals))
     return Array(dsk, name, chunks, dtype=dtype)
@@ -83,7 +84,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
 
     keys = product([name], *[range(len(bd)) for bd in chunks])
     shapes = product(*chunks)
-    func = curry(func, dtype=dtype, **kwargs)
+    func = partial(func, dtype=dtype, **kwargs)
     vals = ((func,) + (s,) + args for s in shapes)
 
     dsk = dict(zip(keys, vals))
@@ -92,7 +93,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
 
 @curry
 def wrap(wrap_func, func, **kwargs):
-    f = curry(wrap_func, func, **kwargs)
+    f = partial(wrap_func, func, **kwargs)
     f.__doc__ = """
     Blocked variant of %(name)s
 

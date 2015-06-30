@@ -1060,3 +1060,7 @@ def test_take_dask_from_numpy():
 
     assert z.chunks == y.chunks
     assert eq(z, np.array([2., 4., 6., 6., 4., 2.]))
+
+
+def test_normalize_chunks():
+    assert normalize_chunks(3, (4, 6)) == ((3, 1), (3, 3))

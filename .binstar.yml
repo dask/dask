@@ -1,7 +1,7 @@
 package: dask
 user: blaze
 
-platform: 
+platform:
   - linux-64
   - linux-32
   - osx-64

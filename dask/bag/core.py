@@ -15,13 +15,13 @@ from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 
 
-from toolz import (merge, frequencies, merge_with, take, curry, reduce,
+from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
                    remove, pluck, groupby, topk)
 import toolz
 from ..utils import tmpfile, ignoring
 with ignoring(ImportError):
-    from cytoolz import (curry, frequencies, merge_with, join, reduceby,
+    from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
 from ..multiprocessing import get as mpget
@@ -243,7 +243,7 @@ class Bag(object):
         """
         name = next(names)
         if takes_multiple_arguments(func):
-            func = curry(apply, func)
+            func = partial(apply, func)
         dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
                         for i in range(self.npartitions))
         return Bag(merge(self.dask, dsk), name, self.npartitions)
@@ -398,8 +398,8 @@ class Bag(object):
         b = next(names)
         if key:
             if callable(key) and takes_multiple_arguments(key):
-                key = curry(apply, key)
-            func = curry(topk, key=key)
+                key = partial(apply, key)
+            func = partial(topk, key=key)
         else:
             func = topk
         dsk = dict(((a, i), (list, (func, k, (self.name, i))))
@@ -631,7 +631,7 @@ class Bag(object):
         else:
             dsk2 = {(b, 0): (dictitems,
                               (merge_with,
-                                (curry, reduce, combine),
+                                (partial, reduce, combine),
                                 list(dsk.keys())))}
         return Bag(merge(self.dask, dsk, dsk2), b, 1)
 
@@ -683,8 +683,7 @@ class Bag(object):
     def __iter__(self):
         return iter(self.compute())
 
-    def groupby(self, grouper, npartitions=None, blocksize=2**20,
-                      use_server=False):
+    def groupby(self, grouper, npartitions=None, blocksize=2**20):
         """ Group collection by key function
 
         Note that this requires full dataset read, serialization and shuffle.
@@ -704,17 +703,10 @@ class Bag(object):
 
         import partd
         p = ('partd' + next(tokens),)
-        if use_server:
-            try:
-                dsk1 = {p: partd.Python(partd.Snappy(partd.Client()))}
-            except AttributeError:
-                dsk1 = {p: partd.Python(partd.Client())}
-
-        else:
-            try:
-                dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
-            except AttributeError:
-                dsk1 = {p: (partd.Python, partd.File())}
+        try:
+            dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
+        except AttributeError:
+            dsk1 = {p: (partd.Python, partd.File())}
 
         # Partition data on disk
         name = next(names)
@@ -771,7 +763,7 @@ class Bag(object):
             elif isinstance(head, (tuple, list)):
                 columns = list(range(len(head)))
         name = next(names)
-        DataFrame = curry(pd.DataFrame, columns=columns)
+        DataFrame = partial(pd.DataFrame, columns=columns)
         dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
                    for i in range(self.npartitions))
 
@@ -1030,8 +1022,8 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 def from_url(urls):
     """Create a dask.bag from a url
 
-    >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
-    >>> a.npartitions
+    >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')  # doctest: +SKIP
+    >>> a.npartitions  # doctest: +SKIP
     1
 
     >> a.take(8)  # doctest: +SKIP
@@ -1044,10 +1036,9 @@ def from_url(urls):
      'algorithms and task scheduling.  It maps high-level NumPy and list operations\n',
      'on large datasets on to graphs of many operations on small in-memory datasets.\n')
 
-    >>> b = from_url(['http://github.com', 'http://google.com'])
-    >>> b.npartitions
+    >>> b = from_url(['http://github.com', 'http://google.com'])  # doctest: +SKIP
+    >>> b.npartitions  # doctest: +SKIP
     2
-
     """
     if isinstance(urls, str):
         urls = [urls]

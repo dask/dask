@@ -116,9 +116,9 @@ class Scheduler(object):
 
         self.send_to_workers_queue = Queue()
         self.send_to_workers_recv = self.context.socket(zmq.PAIR)
-        self.send_to_workers_recv.bind('ipc://to-workers-signal')
+        _port = self.send_to_workers_recv.bind_to_random_port('tcp://127.0.0.1')
         self.send_to_workers_send = self.context.socket(zmq.PAIR)
-        self.send_to_workers_send.connect('ipc://to-workers-signal')
+        self.send_to_workers_send.connect('tcp://127.0.0.1:%d' % _port)
         self.worker_poller.register(self.send_to_workers_recv, zmq.POLLIN)
 
         self.pool = ThreadPool(100)
@@ -135,6 +135,7 @@ class Scheduler(object):
                                  'setitem-ack': self._setitem_ack,
                                  'getitem-ack': self._getitem_ack}
         self.client_functions = {'status': self._status_to_client,
+                                 'get_workers': self._get_workers,
                                  'register': self._client_registration,
                                  'schedule': self._schedule_from_client,
                                  'set-collection': self._set_collection,
@@ -704,3 +705,10 @@ class Scheduler(object):
                        'dumps': dill.dumps}
 
             self.send_to_client(header['address'], header2, payload2)
+
+    def _get_workers(self, header, payload):
+        with logerrors():
+            log(self.address_to_clients, "Get workers", header)
+            self.send_to_client(header['address'],
+                                {'status': 'OK'},
+                                {'workers': self.workers})

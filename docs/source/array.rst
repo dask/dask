@@ -12,6 +12,7 @@ these blocked algorithms using ``dask`` graphs.
    array-overview.rst
    array-design.rst
    array-creation.rst
+   array-api.rst
    slicing.rst
    stack.rst
    random.rst
