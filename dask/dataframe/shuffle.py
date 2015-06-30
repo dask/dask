@@ -86,8 +86,10 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     if compute:
-        p, barrier_token = get(merge(df.dask, dsk1, dsk2, dsk3),
-                               [p, barrier_token], **kwargs)
+        dsk = merge(df.dask, dsk1, dsk2, dsk3)
+        if isinstance(index, _Frame):
+            dsk.update(index.dask)
+        p, barrier_token = get(dsk, [p, barrier_token], **kwargs)
 
     # Collect groups
     name = 'set-partition--collect' + next(tokens)
