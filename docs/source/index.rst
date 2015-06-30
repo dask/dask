@@ -1,16 +1,21 @@
-Dask - Parallel Processing Through Blocked Algorithms
-=====================================================
+Dask
+====
 
-Dask collections provide parallel computation on larger-than-memory data while
-mimicking existing libraries
+**Dask enables parallel computing** through task scheduling and blocked algorithms.
+This allows developers to write complex parallel algorithms and execute them
+in parallel either on a modern multi-core machine or on a distributed cluster.
+
+On a single machine dask increases the scale of comfortable data from
+*fits-in-memory* to *fits-on-disk* by intelligently streaming data from disk
+and by leveraging all the cores of a modern CPU.
+
+Users interact with dask either by making graphs directly or through the *dask
+collections* which provide larger-than-memory counterparts to existing popular
+libraries:
 
 * ``dask.array`` = ``numpy`` + ``threading``
 * ``dask.bag`` = ``map, filter, toolz`` + ``multiprocessing``
-* ``dask.dataframe`` = ``pandas`` + ``multiprocessing`` (experimental)
-
-This increases the scale of comfortable data from *fits-in-memory* to
-*fits-on-disk* by intelligently streaming data from disk and by leveraging all
-the cores of a modern CPU.
+* ``dask.dataframe`` = ``pandas`` + ``threading``
 
 Dask primarily targets parallel computations that run on a single machine.  It
 integrates nicely with the existing PyData ecosystem and is trivial to setup
@@ -46,7 +51,7 @@ then you should start here.
 
 Dask graphs encode algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  If you are a dask *developer* then you should start here.
+dask collections.  If you are a *developer* then you should start here.
 
 .. toctree::
    :maxdepth: 1
@@ -68,7 +73,7 @@ or using a distributed cluster.
    shared.rst
    distributed.rst
 
-**Administrative:**
+**Other**
 
 .. toctree::
    :maxdepth: 1
@@ -77,6 +82,7 @@ or using a distributed cluster.
    inspect.rst
    diagnostics.rst
    faq.rst
+   spark.rst
 
 Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 

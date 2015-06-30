@@ -10,7 +10,6 @@ from glob import glob
 from math import ceil
 from toolz import merge, dissoc
 from itertools import count
-import bcolz
 from operator import getitem
 
 from ..compatibility import StringIO, unicode, range
@@ -361,6 +360,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     from_array: more generic function not optimized for bcolz
     """
     import dask.array as da
+    import bcolz
     if isinstance(x, (str, unicode)):
         x = bcolz.ctable(rootdir=x)
     bc_chunklen = max(x[name].chunklen for name in x.names)
@@ -410,6 +410,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     slc: slice
     columns: list of column names or None
 
+    >>> import bcolz
     >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
     >>> dataframe_from_ctable(x, slice(1, 3))
        a   b
@@ -427,6 +428,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     Name: b, dtype: int64
 
     """
+    import bcolz
     if columns is not None:
         if isinstance(columns, tuple):
             columns = list(columns)

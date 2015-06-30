@@ -1,7 +1,6 @@
 import pytest
 from operator import getitem
 from toolz import valmap
-import bcolz
 from dask.dataframe.optimize import rewrite_rules, dataframe_from_ctable
 import dask.dataframe as dd
 import pandas as pd
@@ -16,6 +15,10 @@ dfs = list(dsk.values())
 
 
 def test_column_optimizations_with_bcolz_and_rewrite():
+    try:
+        import bcolz
+    except ImportError:
+        return
     bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
     func = lambda x: x
     for cols in [None, 'abc', ['abc']]:

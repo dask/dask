@@ -6,11 +6,11 @@ import socket
 import sys
 import os
 import traceback
-from threading import Thread, Lock
+from threading import Thread, Lock, Event
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
 from datetime import datetime
-from time import time
+from time import time, sleep
 
 try:
     import cPickle as pickle
@@ -65,6 +65,9 @@ class Worker(object):
         Port on which to listen to worker connections
     bind_to_workers: string
         Addresses from which we accept worker connections, defaults to *
+    heartbeat: int, bool
+        The time between heartbeats in seconds, or False to turn off
+        heartbeats, defaults to 5
 
     State
     -----
@@ -83,12 +86,13 @@ class Worker(object):
     """
     def __init__(self, scheduler, data=None, nthreads=100,
                  hostname=None, port_to_workers=None, bind_to_workers='*',
-                 block=False):
+                 block=False, heartbeat=5):
         if isinstance(scheduler, unicode):
             scheduler = scheduler.encode()
         self.data = data if data is not None else dict()
         self.pool = ThreadPool(nthreads)
         self.scheduler = scheduler
+        self.heartbeat = heartbeat
         self.status = 'run'
         self.context = zmq.Context()
 
@@ -130,6 +134,11 @@ class Worker(object):
         self._listen_scheduler_thread.start()
         self._listen_workers_thread = Thread(target=self.listen_to_workers)
         self._listen_workers_thread.start()
+        if self.heartbeat:
+            self._heartbeat_thread = Thread(target=self.heart,
+                                            kwargs={'pulse': heartbeat})
+            self._heartbeat_thread.event = Event()
+            self._heartbeat_thread.start()
 
         if block:
             self.block()
@@ -371,6 +380,8 @@ class Worker(object):
         """
         self._listen_workers_thread.join()
         self._listen_scheduler_thread.join()
+        if self.heartbeat:
+            self._heartbeat_thread.join()
         log('Unblocked')
 
     def collect(self, locations):
@@ -505,6 +516,8 @@ class Worker(object):
         if do_close:
             log(self.address, 'Close')
             self.status = 'closed'
+            if self.heartbeat:
+                self._heartbeat_thread.event.set()  # stop heartbeat
             for sock in self.dealers.values():
                 sock.close(linger=1)
             self.to_workers.close(linger=1)
@@ -516,6 +529,14 @@ class Worker(object):
 
     def __del__(self):
         self.close()
+
+    def heart(self, pulse=5):
+        """Send a message to scheduler at a given interval"""
+        while self.status != 'closed':
+            header = {'function': 'heartbeat'}
+            payload = {}
+            self.send_to_scheduler(header, payload)
+            self._heartbeat_thread.event.wait(pulse)
 
 
 def status():

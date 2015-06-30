@@ -14,6 +14,7 @@ from toolz import merge, partial, first, partition
 import pandas as pd
 
 import numpy as np
+import operator
 
 try:
     from chest import Chest as Cache
@@ -27,6 +28,7 @@ from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
+from ..context import _globals
 
 
 def _concat(args):
@@ -710,8 +712,10 @@ def _coerce_loc_index(divisions, o):
 
     This is particularly valuable to use with pandas datetimes
     """
-    if divisions and isinstance(divisions[0], (np.datetime64, datetime)):
+    if divisions and isinstance(divisions[0], datetime):
         return pd.Timestamp(o)
+    if divisions and isinstance(divisions[0], np.datetime64):
+        return np.datetime64(o)
     return o
 
 
@@ -1092,10 +1096,11 @@ def quantiles(df, q, **kwargs):
     return da.Array(dsk, name3, chunks=((len(q),),))
 
 
-def get(dsk, keys, get=threaded.get, **kwargs):
+def get(dsk, keys, get=None, **kwargs):
     """ Get function with optimizations specialized to dask.Dataframe """
     from .optimize import optimize
     dsk2 = optimize(dsk, keys, **kwargs)
+    get = get or _globals['get'] or threaded.get
     return get(dsk2, keys, **kwargs)  # use synchronous scheduler for now
 
 

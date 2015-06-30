@@ -6,8 +6,8 @@ import dask
 
 extras_require = {
   'array': ['numpy', 'toolz'],
-  'bag': ['dill', 'psutil', 'toolz', 'partd'],
-  'dataframe': ['bcolz >= 0.9.0', 'numpy', 'pandas >= 0.16.0', 'toolz', 'partd'],
+  'bag': ['dill', 'toolz', 'partd >= 0.3.2'],
+  'dataframe': ['numpy', 'pandas >= 0.16.0', 'toolz', 'partd >= 0.3.2'],
   'distributed': ['pyzmq', 'dill']
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))

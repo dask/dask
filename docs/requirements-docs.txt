@@ -3,5 +3,4 @@ sphinx==1.2.3
 numpydoc
 toolz
 dill
-psutil
 pandas

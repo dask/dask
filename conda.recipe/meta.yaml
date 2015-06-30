@@ -1,6 +1,6 @@
 package:
   name: dask
-  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.5.0') }}
+  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.6.0') }}
 
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
@@ -22,10 +22,9 @@ requirements:
     - toolz
     - numpy
     - pandas
-    - bcolz
     - pyzmq
     - dill
-    - psutil
+    - partd
     - chest
 
 test:
