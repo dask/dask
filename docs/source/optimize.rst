@@ -122,7 +122,7 @@ can be used.
 .. code-block:: python
 
     >>> from dask.optimize import inline_functions
-    >>> dsk3 = inline_functions(dsk2)
+    >>> dsk3 = inline_functions(dsk2, [len, str.split])
     >>> results = get(dsk3, ['print1', 'print2'])
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
