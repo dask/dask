@@ -4,22 +4,121 @@ Dask
 |Build Status| |Coverage| |Doc Status| |Gitter| |Downloads|
 
 Dask provides multi-core execution on larger-than-memory datasets using blocked
-algorithms and task scheduling.  It maps high-level NumPy and list operations
-on large datasets on to graphs of many operations on small in-memory datasets.
-It then executes these graphs in parallel on a single machine.  Dask lets us
-use traditional NumPy and list programming while operating on inconveniently
-large data in a small amount of space.
-
+algorithms and task scheduling.  It maps high-level NumPy, Pandas, and list
+operations on large datasets on to many operations on small in-memory
+datasets.  It then executes these graphs in parallel on a single machine.  Dask
+lets us use traditional NumPy, Pandas, and list programming while operating on
+inconveniently large data in a small amount of space.
 
 *  ``dask`` is a specification to describe task dependency graphs.
 *  ``dask.array`` is a drop-in NumPy replacement (for a subset of NumPy) that encodes blocked algorithms in ``dask`` dependency graphs.
 *  ``dask.bag`` encodes blocked algorithms on Python lists of arbitrary Python objects.
+*  ``dask.dataframe`` encodes blocked algorithms on Pandas DataFrames.
 *  ``dask.async`` is a shared-memory asynchronous scheduler efficiently execute ``dask`` dependency graphs on multiple cores.
-
-Dask does not currently have a distributed memory scheduler.
 
 See full documentation at http://dask.pydata.org or read developer-focused
 blogposts_ about dask's development.
+
+
+Use ``dask.array``
+------------------
+
+Dask.array implements a numpy clone on larger-than-memory datasets using
+multiple cores.
+
+.. code-block:: python
+
+    >>> import dask.array as da
+
+    >>> x = da.random.normal(10, 0.1, size=(100000, 100000), chunks=(1000, 1000))
+
+    >>> x.mean(axis=0)[:3].compute()
+    array([ 10.00026926,  10.0000592 ,  10.00038236])
+
+
+Use ``dask.dataframe``
+----------------------
+
+Dask.dataframe implements a Pandas clone on larger-than-memory datasets using
+multiple cores.
+
+.. code-block:: python
+
+   >>> import dask.dataframe as dd
+   >>> df = dd.read_csv('nyc-taxi-*.csv.gz')
+
+   >>> g = df.groupby('medallion')
+   >>> g.trip_time_in_secs.mean().head(5)
+   medallion
+   0531373C01FD1416769E34F5525B54C8     795.875026
+   867D18559D9D2941173AD7A0F3B33E77     924.187954
+   BD34A40EDD5DC5368B0501F704E952E7     717.966875
+   5A47679B2C90EA16E47F772B9823CE51     763.005149
+   89CE71B8514E7674F1C662296809DDF6     869.274052
+   Name: trip_time_in_secs, dtype: float64
+
+Use ``dask.bag``
+----------------
+
+Dask.bag implements a large collection of Python objects and mimicing the
+toolz_ interface
+
+.. code-block:: python
+
+   >>> import dask.bag as db
+   >>> import json
+   >>> b = db.from_filenames('2014-*.json.gz')
+   ...       .map(json.loads)
+
+   >>> alices = b.filter(lambda d: d['name'] == 'Alice')
+   >>> alices.take(3)
+   ({'name': 'Alice', 'city': 'LA',  'balance': 100},
+    {'name': 'Alice', 'city': 'LA',  'balance': 200},
+    {'name': 'Alice', 'city': 'NYC', 'balance': 300},
+
+   >>> dict(alices.pluck('city').frequencies())
+   {'LA': 10000, 'NYC': 20000, ...}
+
+
+Use Dask Graphs
+---------------
+
+Dask.array, dask.dataframe, and dask.bag are thin layers on top of dask graphs,
+which represent computational task graphs of regular Python functions on
+regular Python objects.
+
+As an example consider the following simple program:
+
+.. code-block:: python
+
+   def inc(i):
+       return i + 1
+
+   def add(a, b):
+       return a + b
+
+   x = 1
+   y = inc(x)
+   z = add(y, 10)
+
+We encode this computation as a dask graph in the following way:
+
+.. code-block:: python
+
+   d = {'x': 1,
+        'y': (inc, 'x'),
+        'z': (add, 'y', 10)}
+
+A dask graph is just a dictionary of tuples where the first element of the
+tuple is a function and the rest are the arguments for that function.  While
+this representation of the computation above may be less aesthetically
+pleasing, it may now be analyzed, optimized, and computed by other Python code,
+not just the Python interpreter.
+
+.. image:: docs/source/_static/dask-simple.png
+   :height: 400px
+   :alt: A simple dask dictionary
+   :align: right
 
 
 Install
@@ -35,67 +134,9 @@ Dask is easily installable through your favorite Python package manager::
     or
     pip install dask[bag]
     or
+    pip install dask[dataframe]
+    or
     pip install dask[complete]
-
-
-Dask Graphs
------------
-
-Consider the following simple program:
-
-.. code-block:: python
-
-   def inc(i):
-       return i + 1
-
-   def add(a, b):
-       return a + b
-
-   x = 1
-   y = inc(x)
-   z = add(y, 10)
-
-We encode this as a dictionary in the following way:
-
-.. code-block:: python
-
-   d = {'x': 1,
-        'y': (inc, 'x'),
-        'z': (add, 'y', 10)}
-
-While less aesthetically pleasing this dictionary may now be analyzed,
-optimized, and computed on by other Python code, not just the Python
-interpreter.
-
-.. image:: docs/source/_static/dask-simple.png
-   :height: 400px
-   :alt: A simple dask dictionary
-   :align: right
-
-
-Dask Arrays
------------
-
-The ``dask.array`` module creates these graphs from NumPy-like operations
-
-.. code-block:: python
-
-   >>> import dask.array as da
-   >>> x = da.random.random((4, 4), chunks=(2, 2))
-   >>> x.T[0, 3].dask
-   {('x', 0, 0): (np.random.random, (2, 2)),
-    ('x', 0, 1): (np.random.random, (2, 2)),
-    ('x', 1, 0): (np.random.random, (2, 2)),
-    ('x', 1, 1): (np.random.random, (2, 2)),
-    ('y', 0, 0): (np.transpose, ('x', 0, 0)),
-    ('y', 0, 1): (np.transpose, ('x', 1, 0)),
-    ('y', 1, 0): (np.transpose, ('x', 0, 1)),
-    ('y', 1, 1): (np.transpose, ('x', 1, 1)),
-    ('z',): (getitem, ('y', 0, 1), (0, 1))}
-
-Finally, a scheduler executes these graphs to achieve the intended result.  The
-``dask.async`` module contains a shared memory scheduler that efficiently
-leverages multiple cores.
 
 
 Dependencies
@@ -154,6 +195,7 @@ following:
 *  Spartan_
 *  Distarray_
 *  Biggus_
+*  Thunder_
 
 There is a rich history of distributed array computing.  An incomplete sampling
 includes the following projects:
@@ -166,6 +208,7 @@ includes the following projects:
 .. _Spartan: https://github.com/spartan-array/spartan
 .. _Distarray: http://docs.enthought.com/distarray/
 .. _Biggus: https://github.com/SciTools/biggus
+.. _Thunder: https://github.com/thunder-project/thunder/
 
 .. _MLlib: http://spark.apache.org/docs/1.1.0/mllib-data-types.html
 .. _Elemental: http://libelemental.org/
@@ -174,6 +217,7 @@ includes the following projects:
 .. _Luigi: http://luigi.readthedocs.org
 .. _Joblib: https://pythonhosted.org/joblib/index.html
 .. _mrjob: https://pythonhosted.org/mrjob/
+.. _toolz: https://toolz.readthedocs.org/en/latest/
 .. _Condor: http://research.cs.wisc.edu/htcondor/
 .. _Pegasus: http://pegasus.isi.edu/
 .. _Swiftlang: http://swift-lang.org/main/

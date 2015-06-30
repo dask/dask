@@ -1,18 +1,22 @@
 DataFrame
 =========
 
+Dask dataframes look and feel like Pandas dataframes but operate on datasets
+larger than memory using multiple threads.  Dask.dataframe does not implement
+the complete Pandas interface.
+
 The ``dask.dataframe`` module implements a blocked parallel DataFrame that
 mimics a subset of the Pandas DataFrame.  One dask DataFrame is comprised of
 several in-memory pandas DataFrames separated along the index.  An operation on
-one dask DataFrame triggers many operations on the constituent pandas
+one dask DataFrame triggers many pandas operations on the constituent pandas
 DataFrames in a way that is mindful of potential parallelism and memory
 constraints.
 
 Dask.dataframe copies the Pandas API
 ------------------------------------
 
-Dask.dataframe copies a subset of the Pandas API so operations should be
-familiar to Pandas users.  There are however some alterations due to the
+Because the ``dask.dataframe`` API is a subset of the Pandas API it should be
+familiar to Pandas users.  There are some slight alterations due to the
 parallel nature of dask.
 
 .. code-block:: python
