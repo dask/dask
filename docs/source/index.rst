@@ -6,7 +6,7 @@ mimicking existing libraries
 
 * ``dask.array`` = ``numpy`` + ``threading``
 * ``dask.bag`` = ``map, filter, toolz`` + ``multiprocessing``
-* ``dask.dataframe`` = ``pandas`` + ``multiprocessing`` (experimental)
+* ``dask.dataframe`` = ``pandas`` + ``threading``
 
 This increases the scale of comfortable data from *fits-in-memory* to
 *fits-on-disk* by intelligently streaming data from disk and by leveraging all
@@ -46,7 +46,7 @@ then you should start here.
 
 Dask graphs encode algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  If you are a dask *developer* then you should start here.
+dask collections.  If you are a *developer* then you should start here.
 
 .. toctree::
    :maxdepth: 1
