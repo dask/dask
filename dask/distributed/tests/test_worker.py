@@ -24,7 +24,7 @@ def worker(data=None, scheduler='tcp://localhost:5555'):
     if data is None:
         data = dict()
 
-    a = Worker(scheduler, data)
+    a = Worker(scheduler, data, heartbeat=False)
 
     try:
         yield a

@@ -130,6 +130,7 @@ class Scheduler(object):
 
         # RPC functions that workers and clients can trigger
         self.worker_functions = {'register': self._worker_registration,
+                                 'heartbeat': self._heartbeat,
                                  'status': self._status_to_worker,
                                  'finished-task': self._worker_finished_task,
                                  'setitem-ack': self._setitem_ack,
@@ -409,12 +410,12 @@ class Scheduler(object):
         2.  Scheduler sends 'setitem' requests to workers with
             {'key': ..., 'value': ... 'queue': ...}
         3.  Scheduler waits on queue for all responses
-        3.  Workers receive 'setitem' requests, send back on 'setitem-ack' with
+        4.  Workers receive 'setitem' requests, send back on 'setitem-ack' with
             {'key': ..., 'queue': ...}
-        4.  Scheduler's 'setitem-ack' function pushes keys into the queue
-        5.  Once the same number of replies is heard scheduler scatter function
+        5.  Scheduler's 'setitem-ack' function pushes keys into the queue
+        6.  Once the same number of replies is heard scheduler scatter function
             returns
-        6.  Scheduler cleans up queue
+        7.  Scheduler cleans up queue
 
         See Also:
             Scheduler.setitem_ack
@@ -712,3 +713,9 @@ class Scheduler(object):
             self.send_to_client(header['address'],
                                 {'status': 'OK'},
                                 {'workers': self.workers})
+
+    def _heartbeat(self, header, payload):
+        with logerrors():
+            log(self.address_to_clients, "Heartbeat", header)
+            address = header['address']
+            self.workers[address]['last-seen'] = datetime.utcnow()

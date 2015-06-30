@@ -210,6 +210,18 @@ def test_close_workers():
         assert b.status == 'closed'
 
 
+def test_heartbeats():
+    with scheduler_and_workers(n=1) as (s, (a,)):
+        for i in range(100):
+            if 'last-seen' in s.workers[a.address]:
+                break
+            else:
+                sleep(0.01)
+        last_seen = s.workers[a.address]['last-seen']
+        now = datetime.utcnow()
+        assert abs(last_seen - now).seconds < 0.1
+
+
 def test_close_scheduler():
     s = Scheduler()
     s.close()
