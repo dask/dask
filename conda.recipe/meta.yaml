@@ -22,7 +22,6 @@ requirements:
     - toolz
     - numpy
     - pandas
-    - bcolz
     - pyzmq
     - dill
     - psutil

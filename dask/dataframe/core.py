@@ -15,7 +15,6 @@ import numpy as np
 import operator
 import gzip
 import bz2
-import bcolz
 try:
     from chest import Chest as Cache
 except ImportError:

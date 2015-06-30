@@ -4,7 +4,6 @@ import numpy as np
 import pandas.util.testing as tm
 import os
 import dask
-import bcolz
 from operator import getitem
 from toolz import valmap
 import tempfile
