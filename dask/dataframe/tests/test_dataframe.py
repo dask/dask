@@ -464,7 +464,6 @@ def test_series_resample(freq, how, npartitions, nskipped):
     tm.assert_series_equal(result, expected, check_dtype=False)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize(['how', 'npartitions'],
                          list(product(['sum', 'mean', 'count', 'nunique'],
                                       [2, 5])))
