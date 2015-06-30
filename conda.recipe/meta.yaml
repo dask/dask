@@ -24,7 +24,6 @@ requirements:
     - pandas
     - pyzmq
     - dill
-    - psutil
     - chest
 
 test:

@@ -6,7 +6,7 @@ import dask
 
 extras_require = {
   'array': ['numpy', 'toolz'],
-  'bag': ['dill', 'psutil', 'toolz', 'partd'],
+  'bag': ['dill', 'toolz', 'partd'],
   'dataframe': ['numpy', 'pandas >= 0.16.0', 'toolz', 'partd'],
   'distributed': ['pyzmq', 'dill']
 }
