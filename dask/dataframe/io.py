@@ -410,6 +410,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     slc: slice
     columns: list of column names or None
 
+    >>> import bcolz
     >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
     >>> dataframe_from_ctable(x, slice(1, 3))
        a   b
