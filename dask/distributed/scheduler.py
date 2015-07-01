@@ -719,3 +719,25 @@ class Scheduler(object):
             log(self.address_to_clients, "Heartbeat", header)
             address = header['address']
             self.workers[address]['last-seen'] = datetime.utcnow()
+
+    def prune_workers(self, timeout=20):
+        """
+        Remove workers from scheduler that have not sent a heartbeat in
+        `timeout` seconds.
+        """
+        now = datetime.utcnow()
+        remove = []
+        with self.lock:
+            for worker, data in self.workers.items():
+                if abs(data['last-seen'] - now).microseconds > (timeout * 1e6):
+                    remove.append(worker)
+            [self.workers.pop(r) for r in remove]
+        return remove
+
+    def prune_and_notify(self, timeout=20):
+        removed = self.prune_workers(timeout=timeout)
+        if removed != []:
+            for w_address in self.workers:
+                header = {'function': 'worker-death'}
+                payload = {'removed': removed}
+                self.send_to_worker(w_address, header, payload)
