@@ -71,10 +71,15 @@ def test_status_client():
 
 
 @contextmanager
-def scheduler_and_workers(n=2):
+def scheduler_and_workers(n=2, heartbeat=None):
     with scheduler() as s:
-        workers = [Worker(s.address_to_workers) for i in range(n)]
+        workers = [Worker(s.address_to_workers, heartbeat=heartbeat) for i in range(n)]
+
+        # wait for workers to register
         while(len(s.workers) < n):
+            sleep(0.01)
+        # wait until scheduler sees all heartbeats
+        while not all('last-seen' in s.workers[workers[i].address] for i in range(n)):
             sleep(0.01)
         try:
             yield s, workers
@@ -229,3 +234,48 @@ def test_close_scheduler():
     assert not s._listen_to_clients_thread.is_alive()
     assert not s._listen_to_workers_thread.is_alive()
     assert s.context.closed
+
+
+def test_prune_workers():
+    """
+    We close a worker, then make sure prune workers notices this and removes
+    it from the scheduler. This is "correcting the schedulers' state".
+    """
+    with scheduler_and_workers(heartbeat=0.1) as (s, (w1, w2)):
+        assert w1.address in s.workers
+        assert w2.address in s.workers
+
+        w2.close()
+        sleep(0.2)
+        assert s.prune_workers(timeout=0.2) == w2.address
+        assert w1.address in s.workers
+        assert w2.address not in s.workers
+
+
+def test_prune_and_notify():
+    with scheduler_and_workers(heartbeat=0.1) as (s, (w1, w2)):
+        assert w1.address in s.workers
+        assert w2.address in s.workers
+
+        # Oh no! A worker died!
+        w2.close()
+        sleep(0.1)  # sleep to make sure worker is closed
+
+        # But the living worker gets into a bad state by trying to collect data
+        # from the dead worker! Double oh no!
+        def bad_collect():
+            # This won't work and should be interrupted.
+            w1.collect({'x': [w2.address]})
+
+        result = w1.pool.apply_async(w1.collect, args=({'x': [w2.address]},))
+        sleep(0.1)  # some sleeping to give show the function is hanging
+        assert result.ready() is False
+
+        # The scheduler notices, and corrects it state.
+        s.prune_and_notify(timeout=0.2)
+        assert w1.address in s.workers
+        assert w2.address not in s.workers
+
+        # But the sheduler notified the workers about the death
+        sleep(0.1)
+        assert result.ready() is True
