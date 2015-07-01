@@ -172,7 +172,93 @@ In summary, the above operations:
 4. Fused linear tasks together to ensure they run on the same worker, using ``fuse``
 
 These are just a few of the optimizations provided in ``dask.optimize``, for
-more information see the api below.
+more information see the api below. As stated previously, these optimizations
+are already performed automatically in the dask collections. Users not working
+with custom graphs or computations should have little reason to directly
+interact with them.
+
+
+Rewrite Rules
+-------------
+
+For context based optimizations, ``dask.rewrite`` provides functionality for
+pattern matching and term rewriting. This is useful for replacing expensive
+computations with equivalent, cheaper computations. For example, ``dask.array``
+uses the rewrite functionality to replace series of array slicing operations
+with a more efficient single slice.
+
+
+The interface to the rewrite system consists of two classes:
+
+1. ``RewriteRule(lhs, rhs, vars)``
+
+    Given a left-hand-side (``lhs``), a right-hand-side (``rhs``), and a set of
+    variables (``vars``), a rewrite rule declaratively encodes the following
+    operation:
+
+    ``lhs -> rhs if task matches lhs over variables``
+
+2. ``RuleSet(*rules)``
+
+    A collection of rewrite rules. The design of ``RuleSet`` class allows for
+    efficient "many-to-one" pattern matching, meaning that there is minimal
+    overhead for rewriting with multiple rules in a rule set.
+
+
+Example
+~~~~~~~
+
+Here we create two rewrite rules expressing the following mathematical transformations:
+
+1. ``a + a -> 2*a``
+2. ``a * a -> a**2``
+
+where ``'a'`` is a variable.
+
+.. code-block:: python
+
+    >>> from dask.rewrite import RewriteRule, RuleSet
+    >>> from operator import add, mul, pow
+
+    >>> variables = ('a',)
+
+    >>> rule1 = RewriteRule((add, 'a', 'a'), (mul, 'a', 2), variables)
+
+    >>> rule2 = RewriteRule((mul, 'a', 'a'), (pow, 'a', 2), variables)
+
+    >>> rs = RuleSet(rule1, rule2)
+
+The ``RewriteRule`` objects describe the desired transformations in a
+declarative way, and the ``RuleSet`` builds an efficient automata for applying
+that transformation. Rewriting can then be done using the ``rewrite`` method.
+
+.. code-block:: python
+
+    >>> rs.rewrite((add, 5, 5))
+    (mul, 1, 2)
+
+    >>> rs.rewrite((mul, 5, 5))
+    (pow, 5, 2)
+
+    >>> rs.rewrite((mul, (add, 3, 3), (add, 3, 3)))
+    (pow, (mul, 3, 2), 2)
+
+The whole task is traversed by default. If you only want to apply a transform
+to the top-level of the task, you can pass in ``strategy='top_level'``.
+
+.. code-block:: python
+
+    # Transforms whole task
+    >>> rs.rewrite((sum, [(add, 3, 3), (mul, 3, 3)]))
+    (sum, [(mul, 3, 2), (pow, 3, 2)])
+
+    # Only applies to top level, no transform occurs
+    >>> rs.rewrite((sum, [(add, 3, 3), (mul, 3, 3)]), strategy='top_level')
+    (sum, [(add, 3, 3), (mul, 3, 3)])
+
+The rewriting system provides a powerful abstraction for transforming
+computations at a task level, but for many users directly interacting with
+these transformations will be unnecessary.
 
 
 API
@@ -198,15 +284,24 @@ API
    merge_sync
    sync_keys
 
+**Rewrite Rules**
+
+.. currentmodule:: dask.rewrite
+
+.. autosummary::
+    RewriteRule
+    RuleSet
+
 
 Definitions
 ~~~~~~~~~~~
+
+.. currentmodule:: dask.optimize
 
 .. autofunction:: cull
 .. autofunction:: fuse
 .. autofunction:: inline
 .. autofunction:: inline_functions
-
 
 .. autofunction:: dealias
 .. autofunction:: dependency_dict
@@ -214,3 +309,8 @@ Definitions
 .. autofunction:: functions_of
 .. autofunction:: merge_sync
 .. autofunction:: sync_keys
+
+.. currentmodule:: dask.rewrite
+
+.. autofunction:: RewriteRule
+.. autofunction:: RuleSet
