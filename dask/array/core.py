@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import contextlib
 import operator
 from operator import add, getitem
 import inspect
@@ -569,6 +570,66 @@ def store(sources, targets, **kwargs):
     get(dsk, keys, **kwargs)
 
 
+def insert_to_ooc_context(out_context, arr):
+    # nb. the proper functioning of the dask created by this task relies on
+    # the last-in-first-out policy of dask's task scheduler
+    lock = Lock()
+
+    def store(x, out, index):
+        with lock:
+            out[index] = np.asanyarray(x)
+        return None
+
+    slices = slices_from_chunks(arr.chunks)
+
+    name = 'store-%s' % arr.name
+    out_enter = 'out-enter-%s' % arr.name
+    out_exit = 'out-exit-%s' % arr.name
+
+    dsk = dict(((name,) + t[1:], (store, t, out_enter, slc))
+               for t, slc in zip(core.flatten(arr._keys()), slices))
+    dsk[out_exit] = (lambda *args: out_context.__exit__,) + tuple(dsk)
+    dsk[out_enter] = (out_context.__enter__,)
+
+    return out_exit, dsk
+
+
+def store_context(sources, target_contexts, **kwargs):
+    """ Store dask arrays in array-like objects created and cleaned up by
+    context-managers.
+
+    This is useful, for example, if you would like to store arrays in a very
+    larger number of files, such that creating each of the files in which to
+    store these arrays ahead of time would exhaust your file pointers.
+
+    Parameters
+    ----------
+
+    sources: iterable of Arrays
+    target_contexts: iterable of context managers yielding array-likes
+        The values yielded from each context manager should support setitem
+        syntax ``target[10:20] = ...``
+
+    Examples
+    --------
+
+    >>> import h5py  # doctest: +SKIP
+    >>> @contextlib.contextmanager
+    ... def out(n, shape, dtype):
+    ...     with h5py.File('%s.hdf5' % n) as f:
+    ...         yield f.create_dataset('/data', shape=shape, dtype=dtype)  # doctest: +SKIP
+
+    >>> target_contexts = [out(n, a.shape, a.dtype) for n, a in enumerate(arrays)]  # doctest: +SKIP
+    >>> store_context(arrays, target_contexts)  # doctest: +SKIP
+
+    """
+    updates = [insert_to_ooc_context(tgt, src)
+               for tgt, src in zip(target_contexts, sources)]
+    dsk = merge([src.dask for src in sources] + [d for _, d in updates])
+    keys = [k for k, _ in updates]
+    get(dsk, keys, **kwargs)
+
+
 def blockdims_from_blockshape(shape, chunks):
     """
 
@@ -1009,7 +1070,7 @@ class Array(object):
         .. [1] Pebay, Philippe (2008), "Formulas for Robust, One-Pass Parallel
         Computation of Covariances and Arbitrary-Order Statistical Moments"
         (PDF), Technical Report SAND2008-6212, Sandia National Laboratories
-        
+
         """
 
         from .reductions import moment
