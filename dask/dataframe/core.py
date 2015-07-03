@@ -354,19 +354,40 @@ class Series(_Frame):
         """
         return quantiles(self, q)
 
-    def resample(self, rule, how=None, axis=0, fill_method=None, closed=None,
+    def resample(self, rule, how='mean', axis=0, fill_method=None, closed=None,
                  label=None, convention='start', kind=None, loffset=None,
                  limit=None, base=0):
-        block_func = methodcaller('resample', rule, how=how, axis=axis,
-                                  fill_method=fill_method, closed=closed,
-                                  label=label, convention=convention,
-                                  kind=kind, loffset=loffset,
-                                  limit=limit, base=base)
-        newdivs = [self.divisions[0]]
+        func = curry(pd.Series.resample, rule=rule, how=how, axis=axis,
+                     fill_method=fill_method, closed=closed, label=label,
+                     convention=convention, kind=kind, loffset=loffset,
+                     limit=limit, base=base)
+        start = self.divisions[0]
+        end = self.divisions[-1]
+        index = pd.date_range(start=start, end=end, freq=rule)
+        newdivs = [start]
         rule = pd.datetools.to_offset(rule)
         for div in self.divisions[1:-1]:
-            newdivs.append(rule.rollforward(div))
-        newdivs.append(self.divisions[-1])
+            pos = np.searchsorted(index.values, div.asm8, side='right')
+            actual_pos = min(len(index) - 1, pos)
+            newdiv = index[actual_pos]
+            assert newdiv.offset == rule
+            newdivs.append(index[actual_pos])
+        newdivs.append(end)
+
+        # unique because our searchsorted algo above can return the same
+        # div multiple times and repartition will generate an empty list, which
+        # pandas concat does not accept
+
+        newdivs = tuple(unique(newdivs))
+
+        def block_func(df, newdivs=newdivs):
+            first = df.index[0]
+            anchor = first.normalize() == first
+            result = func(df, anchor=anchor)
+            # TODO: should the following always pass? (currently it doesn't)
+            # assert result.index[0] in newdivs
+            return result
+
         return self.repartition(newdivs).map_partitions(block_func)
 
     def __getitem__(self, key):
