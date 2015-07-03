@@ -453,23 +453,22 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     tm.assert_series_equal(result, expected)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize(['freq', 'how', 'npartitions', 'nskipped'],
                          list(product(['57T', '30T', 'H', 'D'],
                                       ['sum', 'mean', 'count', 'nunique'],
-                                      [2, 5],
+                                      [2, 3],
                                       [2, 3]
                                       )))
 def test_series_resample(freq, how, npartitions, nskipped):
     n = 24 * 60 * 3
     index = pd.date_range(start='20120102', periods=n, freq='T').values
     index = index[::nskipped]
-    s = pd.Series(np.random.rand(len(index)) * 100, index=pd.Index(index))
+    s = pd.Series(np.arange(len(index), dtype='f8'), index=pd.Index(index))
     expected = s.resample(freq, how=how)
     ds = dd.from_pandas(s, npartitions=npartitions)
 
-    # the default scheduler segfaults :|
-    result = ds.resample(freq, how=how).compute(get=dask.async.get_sync)
+    resampled = ds.resample(freq, how=how)
+    result = resampled.compute(get=dask.async.get_sync)
     tm.assert_series_equal(result, expected, check_dtype=False)
 
 
@@ -489,7 +488,8 @@ def test_series_resample_big_freq(how, npartitions):
                 for i, (start, end) in enumerate(zip(divisions[:-1],
                                                      divisions[1:])))
     ds = dd.Series(data, 'series-1', 'a', divisions)
-    result = ds.resample(freq, how=how).compute(get=dask.async.get_sync)
+    resampled = ds.resample(freq, how=how)
+    result = resampled.compute(get=dask.async.get_sync)
     expected = ds.compute().resample(freq, how=how)
     tm.assert_series_equal(result, expected, check_dtype=False)
 
