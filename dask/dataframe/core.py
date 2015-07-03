@@ -716,9 +716,9 @@ def _loc(df, start, stop, include_right_boundary=True):
     """
     result = df.loc[start:stop]
     if not include_right_boundary:
-        # result = df[df.index != stop]
-        result = result.iloc[:result.index.get_slice_bound(stop, 'left',
-                                                   result.index.inferred_type)]
+        right_index = result.index.get_slice_bound(stop, 'left',
+                                                   result.index.inferred_type)
+        result = result.iloc[:right_index]
     if not result.empty:
         return result
 
@@ -1017,23 +1017,24 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
     if not isinstance(args, (tuple, list)):
         args = [args]
     assert all(arg.npartitions == args[0].npartitions
-                for arg in args
-                if isinstance(arg, _Frame))
+               for arg in args
+               if isinstance(arg, _Frame))
     a = 'apply-concat-apply--first' + next(tokens)
     dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)
-                                                if isinstance(x, _Frame)
-                                                else x for x in args])))
-                for i in range(args[0].npartitions))
+                                               if isinstance(x, _Frame)
+                                               else x for x in args])))
+               for i in range(args[0].npartitions))
 
     b = 'apply-concat-apply--second' + next(tokens)
     dsk2 = {(b, 0): (aggregate,
-                      (pd.concat,
-                        (list, [(a, i) for i in range(args[0].npartitions)])))}
+                     (pd.concat,
+                      (list, [(a, i) for i in range(args[0].npartitions)])))}
 
     return type(args[0])(
-            merge(dsk, dsk2, *[a.dask for a in args
-                                      if isinstance(a, _Frame)]),
-            b, columns, [None, None])
+        merge(dsk, dsk2, *[arg.dask for arg in args
+                           if isinstance(arg, _Frame)]),
+        b, columns, [None, None])
+
 
 def map_partitions(func, columns, *args):
     """ Apply Python function on each DataFrame block
@@ -1046,15 +1047,15 @@ def map_partitions(func, columns, *args):
 
     name = 'map-partitions' + next(tokens)
     dsk = dict(((name, i), (apply, func,
-                             (tuple, [(arg._name, i)
-                                      if isinstance(arg, _Frame)
-                                      else arg
-                                      for arg in args])))
-                for i in range(args[0].npartitions))
+                            (tuple, [(arg._name, i)
+                                     if isinstance(arg, _Frame)
+                                     else arg
+                                     for arg in args])))
+               for i in range(args[0].npartitions))
 
     return type(args[0])(merge(dsk, *[arg.dask for arg in args
-                                               if isinstance(arg, _Frame)]),
-                      name, columns, args[0].divisions)
+                                      if isinstance(arg, _Frame)]),
+                         name, columns, args[0].divisions)
 
 aca = apply_concat_apply
 
