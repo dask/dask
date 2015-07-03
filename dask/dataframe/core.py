@@ -1213,6 +1213,10 @@ def repartition_divisions(a, b, name, out1, out2):
         if len(tmp) == 1:
             d[(out2, j - 1)] = tmp[0]
         else:
+            if not tmp:
+                raise ValueError('check for duplicate partitions\nold:\n%s\n\n'
+                                 'new:\n%s\n\ncombined:\n%s'
+                                 % (pformat(a), pformat(b), pformat(c)))
             d[(out2, j - 1)] = (pd.concat, (list, tmp))
 
         j += 1
