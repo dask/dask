@@ -122,6 +122,19 @@ Clients provide a ``get`` method to request the computation of a dask graph
 Multiple clients can connect to the same scheduler.
 
 
+Screencast
+----------
+
+This screencast demonstrates how to set up and connect dask.distributed
+Schedulers, Clients, and Workers.
+
+.. raw:: html
+
+   <iframe width="560" height="315"
+           src="https://www.youtube.com/embed/uQro_CaP9Fo?rel=0" frameborder="0"
+           allowfullscreen=""></iframe>
+
+
 Store Collections
 -----------------
 
