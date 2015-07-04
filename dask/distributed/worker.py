@@ -6,6 +6,7 @@ import socket
 import sys
 import os
 import traceback
+from collections import defaultdict
 from threading import Thread, Lock, Event
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
@@ -102,7 +103,7 @@ class Worker(object):
         if port_to_workers is None:
             port_to_workers = self.to_workers.bind_to_random_port('tcp://' + bind_to_workers)
         else:
-            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers, port))
+            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers, port_to_workers))
         self.address = ('tcp://%s:%s' % (self.hostname, port_to_workers)).encode()
 
         self.dealers = dict()
@@ -110,6 +111,7 @@ class Worker(object):
         self.lock = Lock()
 
         self.queues = dict()
+        self.queues_by_worker = defaultdict(list)
 
         self.to_scheduler = self.context.socket(zmq.DEALER)
 
@@ -122,6 +124,7 @@ class Worker(object):
                                     'getitem': self.getitem_scheduler,
                                     'delitem': self.delitem,
                                     'setitem': self.setitem,
+                                    'worker-death': self.worker_death,
                                     'close': self.close_from_scheduler}
 
         self.worker_functions = {'getitem': self.getitem_worker,
@@ -437,6 +440,8 @@ class Worker(object):
                 if key in self.data:  # already have this locally
                     continue
                 worker = random.choice(tuple(locs))  # randomly select one peer
+                self.queues_by_worker[worker].append(qkey)
+
                 header = {'jobid': key,
                           'function': 'getitem'}
                 payload = {'function': 'getitem',
@@ -537,6 +542,22 @@ class Worker(object):
             payload = {}
             self.send_to_scheduler(header, payload)
             self._heartbeat_thread.event.wait(pulse)
+
+    def worker_death(self, header, payload):
+        """We could be trying to collect data from the dead workers, so we send
+        a message to ourself pretending to be the dead worker, responding with
+        a "bad-key" message.
+        """
+        """
+        But how do we know the info about the worker's request to the dead worker?
+        """
+        with logerrors():
+            loads = header.get('loads', pickle.loads)
+            payload = loads(payload)
+            removed = payload['removed']
+            effected_queues_by_worker = [self.queues_by_worker[w] for w in removed]
+            for queues in effected_queues_by_worker:
+                [self.queues[q].put('death') for q in queues]
 
 
 def status():
