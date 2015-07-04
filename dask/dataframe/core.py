@@ -4,13 +4,14 @@ import bisect
 import operator
 
 from itertools import count
+from operator import methodcaller
 from pprint import pformat
 from math import sqrt
 from functools import wraps
 from operator import getitem, setitem
 from datetime import datetime
 
-from toolz import merge, partial, first, partition, unique, curry
+from toolz import merge, partial, first, partition, unique
 
 import pandas as pd
 
@@ -357,10 +358,6 @@ class Series(_Frame):
     def resample(self, rule, how='mean', axis=0, fill_method=None, closed=None,
                  label=None, convention='start', kind=None, loffset=None,
                  limit=None, base=0):
-        func = curry(pd.Series.resample, rule=rule, how=how, axis=axis,
-                     fill_method=fill_method, closed=closed, label=label,
-                     convention=convention, kind=kind, loffset=loffset,
-                     limit=limit, base=base)
         start = self.divisions[0]
         end = self.divisions[-1]
         index = pd.date_range(start=start, end=end, freq=rule)
@@ -377,15 +374,19 @@ class Series(_Frame):
         # unique because our searchsorted algo above can return the same
         # div multiple times and repartition will generate an empty list, which
         # pandas concat does not accept
-
         newdivs = tuple(unique(newdivs))
 
-        def block_func(df, newdivs=newdivs):
-            first = df.index[0]
-            anchor = first.normalize() == first
-            result = func(df, anchor=anchor)
-            # TODO: should the following always pass? (currently it doesn't)
-            # assert result.index[0] in newdivs
+        func = methodcaller('resample', rule=rule, how=how, axis=axis,
+                            fill_method=fill_method, closed=closed,
+                            label=label, convention=convention, kind=kind,
+                            loffset=loffset, limit=limit, base=base)
+
+        def block_func(df, newdivs=frozenset(newdivs)):
+            result = func(df)
+            if result.index[0] not in newdivs:
+                raise ValueError('resample result starts with incorrect index '
+                                 'value.\nExpected one of:\n%s\ngot:\n%r' %
+                                 (pformat(newdivs), result.index[0]))
             return result
 
         return self.repartition(newdivs).map_partitions(block_func)
