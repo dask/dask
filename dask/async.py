@@ -409,6 +409,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     get_id : callable, optional
         Function to return the worker id, takes no arguments. Examples are
         `threading.current_thread` and `multiprocessing.current_process`.
+    rerun_on_exception : bool, optional
+        Whether to rerun failing tasks in local process to enable debugging
+        (False by default)
     start_callback : function, optional
         Callback run every time a new task is started. Receives the key of the
         task to be run, the dask, and the scheduler state. At the end of
