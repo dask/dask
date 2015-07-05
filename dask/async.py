@@ -380,7 +380,8 @@ The main function of the scheduler.  Get is the main entry point.
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               queue=None, get_id=default_get_id, raise_on_exception=False,
-              start_callback=None, end_callback=None, **kwargs):
+              start_callback=None, end_callback=None, rerun_on_exception=False,
+              **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -464,8 +465,14 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['waiting'] or state['ready'] or state['running']:
         key, res, tb, worker_id = queue.get()
         if isinstance(res, Exception):
-            raise type(res)(" Exception in remote process\n\n"
-                + str(res) + "\n\nTraceback:\n" + tb)
+            if rerun_on_exception:
+                data = dict((dep, state['cache'][dep])
+                            for dep in get_dependencies(dsk, key))
+                task = dsk[key]
+                _execute_task(task, data)  # Re-execute locally
+            else:
+                raise type(res)(" Exception in remote process\n\n"
+                    + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
         finish_task(dsk, key, state, results, keyorder.get)
         if end_callback:
