@@ -149,7 +149,7 @@ def test_order_of_startstate():
     assert result['ready'] == ['b', 'y']
 
 
-def test_rerun_on_exception():
+def test_rerun_exceptions_locally():
     counter = [0]
     def f():
         counter[0] += 1
@@ -162,6 +162,6 @@ def test_rerun_on_exception():
         assert 'remote' in str(e).lower()
 
     try:
-        get({'x': (f,)}, 'x', rerun_on_exception)
+        get({'x': (f,)}, 'x', rerun_exceptions_locally=True)
     except Exception as e:
         assert 'remote' not in str(e).lower()

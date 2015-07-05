@@ -380,7 +380,8 @@ The main function of the scheduler.  Get is the main entry point.
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               queue=None, get_id=default_get_id, raise_on_exception=False,
-              start_callback=None, end_callback=None, rerun_on_exception=False,
+              start_callback=None, end_callback=None,
+              rerun_exceptions_locally=False,
               **kwargs):
     """ Asynchronous get function
 
@@ -409,7 +410,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     get_id : callable, optional
         Function to return the worker id, takes no arguments. Examples are
         `threading.current_thread` and `multiprocessing.current_process`.
-    rerun_on_exception : bool, optional
+    rerun_exceptions_locally : bool, optional
         Whether to rerun failing tasks in local process to enable debugging
         (False by default)
     start_callback : function, optional
@@ -468,7 +469,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['waiting'] or state['ready'] or state['running']:
         key, res, tb, worker_id = queue.get()
         if isinstance(res, Exception):
-            if rerun_on_exception:
+            if rerun_exceptions_locally:
                 data = dict((dep, state['cache'][dep])
                             for dep in get_dependencies(dsk, key))
                 task = dsk[key]
@@ -479,7 +480,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 "Something you've asked dask to compute raised an exception.\n"
                 "That exception and the traceback are copied below.\n"
                 "To use pdb, rerun the computation with the keyword argument\n"
-                "    rerun_on_exception=True\n\n"
+                "    rerun_exceptions_locally=True\n\n"
                 "The original exception and traceback follow below:\n\n"
                     + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
