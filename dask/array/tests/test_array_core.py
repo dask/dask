@@ -619,6 +619,22 @@ def test_store():
     assert raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
+def test_store_context():
+    d = da.ones((4, 4), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.empty(shape=(4, 4))
+    bt = np.empty(shape=(4, 4))
+
+    @contextlib.contextmanager
+    def gen_array(arr):
+        yield arr
+
+    store_context([a, b], [gen_array(at), gen_array(bt)])
+    assert (at == 2).all()
+    assert (bt == 3).all()
+
+
 def test_to_hdf5():
     try:
         import h5py
