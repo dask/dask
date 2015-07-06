@@ -272,9 +272,8 @@ def from_array(x, chunksize=50000, columns=None):
                          ' array with shape %r' % (x.shape,))
     if columns is None:
         if has_record_dtype:
-            # record array has named columns
-            columns = tuple(x.dtype.names)
-        else:
+            columns = tuple(x.dtype.names)  # record array has named columns
+        elif x.ndim == 2:
             columns = [str(i) for i in range(x.shape[1])]
     if isinstance(x, da.Array):
         return from_dask_array(x, columns=columns)

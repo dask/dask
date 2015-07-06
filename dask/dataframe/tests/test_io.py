@@ -374,6 +374,10 @@ def test_Series_from_dask_array():
     ser = from_dask_array(x)
     assert ser.name is None
 
+    # dd.from_array should re-route to from_dask_array
+    ser2 = dd.from_array(x)
+    assert eq(ser, ser2)
+
 
 def test_from_dask_array_raises():
     x = da.ones((3, 3, 3), chunks=2)
