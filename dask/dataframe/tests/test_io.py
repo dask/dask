@@ -361,3 +361,12 @@ def test_from_dask_array_raises():
 
     x = da.ones((10, 3), chunks=(3, 3))
     pytest.raises(ValueError, lambda: from_dask_array(x))  # no columns
+
+    # Not enough columns
+    pytest.raises(ValueError, lambda: from_dask_array(x, columns=['a']))
+
+    try:
+        from_dask_array(x, columns=['hello'])
+    except Exception as e:
+        assert 'hello' in str(e)
+        assert '3' in str(e)

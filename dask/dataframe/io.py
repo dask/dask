@@ -495,7 +495,8 @@ def from_dask_array(x, columns=None):
         if columns is None:
             raise ValueError("Must provide columns for DataFrame")
         if len(columns) != x.shape[1]:
-            raise ValueError("Columns must be the same length as array width")
+            raise ValueError("Columns must be the same length as array width\n"
+                    "  columns: %s\n  width: %d" % (str(columns), x.shape[1]))
         if len(x.chunks[1]) > 1:
             x = x.rechunk({1: x.shape[1]})
         dsk = dict(((name, i), (pd.DataFrame, chunk[0], ind, columns))
