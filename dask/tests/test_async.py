@@ -113,3 +113,22 @@ def test_cache_options():
 def test_sort_key():
     L = ['x', ('x', 1), ('z', 0), ('x', 0)]
     assert sorted(L, key=sortkey) == ['x', ('x', 0), ('x', 1), ('z', 0)]
+
+
+def test_callback():
+    f = lambda x: x + 1
+    dsk = {'a': (f, 1)}
+    from dask.threaded import get
+
+    def start_callback(key, d, state):
+        assert key == 'a' or key is None
+        assert d == dsk
+        assert isinstance(state, dict)
+
+    def end_callback(key, value, d, state, worker_id):
+        assert key == 'a' or key is None
+        assert value == 2 or value is None
+        assert d == dsk
+        assert isinstance(state, dict)
+
+    get(dsk, 'a', start_callback=start_callback, end_callback=end_callback)
