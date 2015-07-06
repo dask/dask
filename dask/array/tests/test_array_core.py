@@ -442,6 +442,14 @@ def test_coarsen():
                     coarsen(da.sum, d, {0: 2, 1: 4}))
 
 
+def test_coarsen_with_excess():
+    x = da.arange(10, chunks=5)
+    assert eq(coarsen(np.min, x, {0: 3}, trim_excess=True),
+              np.array([0, 5]))
+    assert eq(coarsen(np.sum, x, {0: 3}, trim_excess=True),
+              np.array([0+1+2, 5+6+7]))
+
+
 def test_insert():
     x = np.random.randint(10, size=(10, 10))
     a = from_array(x, chunks=(5, 5))

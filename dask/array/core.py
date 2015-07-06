@@ -1774,9 +1774,10 @@ def where(condition, x=None, y=None):
 
 
 @wraps(chunk.coarsen)
-def coarsen(reduction, x, axes):
-    if not all(bd % div == 0 for i, div in axes.items()
-                             for bd in x.chunks[i]):
+def coarsen(reduction, x, axes, trim_excess=False):
+    if (not trim_excess and
+        not all(bd % div == 0 for i, div in axes.items()
+                             for bd in x.chunks[i])):
         raise ValueError(
             "Coarsening factor does not align with block dimensions")
 
@@ -1784,9 +1785,10 @@ def coarsen(reduction, x, axes):
         reduction = getattr(np, reduction.__name__)
 
     name = next(names)
-    dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes))
+    dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes,
+                                        trim_excess))
                 for key in core.flatten(x._keys()))
-    chunks = tuple(tuple(int(bd / axes.get(i, 1)) for bd in bds)
+    chunks = tuple(tuple(int(bd // axes.get(i, 1)) for bd in bds)
                       for i, bds in enumerate(x.chunks))
 
     if x._dtype is not None:
