@@ -14,7 +14,6 @@ def cull(dsk, keys):
 
     Examples
     --------
-
     >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
     >>> cull(d, 'out')  # doctest: +SKIP
     {'x': 1, 'out': (add, 'x', 10)}
@@ -43,7 +42,6 @@ def fuse(dsk, keys=None):
 
     Examples
     --------
-
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> fuse(d)  # doctest: +SKIP
     {'c': (inc, (inc, 1))}
@@ -116,7 +114,6 @@ def inline(dsk, keys=None, inline_constants=True):
 
     Examples
     --------
-
     >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
     >>> inline(d)  # doctest: +SKIP
     {'y': (inc, 1), 'z': (add, 1, 'y')}
@@ -164,6 +161,8 @@ def inline(dsk, keys=None, inline_constants=True):
 def inline_functions(dsk, fast_functions=None, inline_constants=False):
     """ Inline cheap functions into larger operations
 
+    Examples
+    --------
     >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
     ...        'i': (inc, 'x'),
     ...        'd': (double, 'y'),
@@ -193,6 +192,8 @@ def inline_functions(dsk, fast_functions=None, inline_constants=False):
 def functions_of(task):
     """ Set of functions contained within nested task
 
+    Examples
+    --------
     >>> task = (add, (mul, 1, 2), (inc, 3))  # doctest: +SKIP
     >>> functions_of(task)  # doctest: +SKIP
     set([add, mul, inc])
@@ -225,7 +226,6 @@ def dealias(dsk):
 
     Examples
     --------
-
     >>> dsk = {'a': (range, 5),
     ...        'b': 'a',
     ...        'c': 'b',
@@ -413,7 +413,7 @@ def merge_sync(dsk1, dsk2):
         A mapping between the keys from `dsk2` to their new names in `new_dsk`.
 
     Examples
-    -------
+    --------
     >>> from operator import add, mul
     >>> dsk1 = {'a': 1, 'b': (add, 'a', 10), 'c': (mul, 'b', 5)}
     >>> dsk2 = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
