@@ -14,6 +14,7 @@ from operator import getitem
 
 from ..compatibility import StringIO, unicode, range
 from ..utils import textblock
+from .. import array as da
 
 from . import core
 from .core import DataFrame, Series, compute, concat, categorize_block, tokens
@@ -248,20 +249,35 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     return categories, quantiles
 
 
-def from_array(x, chunksize=50000):
-    """ Read dask Dataframe from any slicable array with record dtype
+def from_array(x, chunksize=50000, columns=None):
+    """ Read dask Dataframe from any slicable array
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
     a NumPy array but must support slicing syntax
 
         x[50000:100000]
 
-    and have a record dtype
+    and have 2 dimensions:
+
+        x.ndim == 2
+
+    or have a record dtype:
 
         x.dtype == [('name', 'O'), ('balance', 'i8')]
 
     """
-    columns = tuple(x.dtype.names)
+    has_record_dtype = getattr(x.dtype, 'names', None) is not None
+    if x.ndim > 2:
+        raise ValueError('from_array does not input more than 2D array, got'
+                         ' array with shape %r' % (x.shape,))
+    if columns is None:
+        if has_record_dtype:
+            # record array has named columns
+            columns = tuple(x.dtype.names)
+        else:
+            columns = [str(i) for i in range(x.shape[1])]
+    if isinstance(x, da.Array):
+        return from_dask_array(x, columns=columns)
     divisions = tuple(range(0, len(x), chunksize))
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
