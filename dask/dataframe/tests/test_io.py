@@ -10,6 +10,7 @@ from toolz import valmap
 import tempfile
 import shutil
 
+import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
         dataframe_from_ctable, from_array, from_bcolz, infer_header,
@@ -334,7 +335,6 @@ def test_from_pandas_series():
 
 
 def test_DataFrame_from_dask_array():
-    import dask.array as da
     x = da.ones((10, 3), chunks=(4, 2))
 
     df = from_dask_array(x, ['a', 'b', 'c'])
@@ -344,7 +344,6 @@ def test_DataFrame_from_dask_array():
 
 
 def test_Series_from_dask_array():
-    import dask.array as da
     x = da.ones(10, chunks=4)
 
     ser = from_dask_array(x, 'a')
@@ -354,3 +353,11 @@ def test_Series_from_dask_array():
 
     ser = from_dask_array(x)
     assert ser.name is None
+
+
+def test_from_dask_array_raises():
+    x = da.ones((3, 3, 3), chunks=2)
+    pytest.raises(ValueError, lambda: from_dask_array(x))
+
+    x = da.ones((10, 3), chunks=(3, 3))
+    pytest.raises(ValueError, lambda: from_dask_array(x))  # no columns

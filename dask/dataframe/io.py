@@ -503,4 +503,5 @@ def from_dask_array(x, columns=None):
         return DataFrame(merge(x.dask, dsk), name, columns, divisions)
 
     else:
-        raise NotImplementedError()
+        raise ValueError("Array must have one or two dimensions.  Had %d" %
+                         x.ndim)
