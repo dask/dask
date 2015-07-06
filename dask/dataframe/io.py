@@ -501,6 +501,8 @@ def from_dask_array(x, columns=None):
 
     index = [(range, a, b) for a, b in zip(divisions[:-1], divisions[1:])]
 
+    divisions[-1] -= 1
+
     if x.ndim == 1:
         dsk = dict(((name, i), (pd.Series, chunk, ind, x.dtype, columns))
                 for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
