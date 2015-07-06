@@ -10,9 +10,11 @@ from toolz import valmap
 import tempfile
 import shutil
 
+import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
-        dataframe_from_ctable, from_array, from_bcolz, infer_header)
+        dataframe_from_ctable, from_array, from_bcolz, infer_header,
+        from_dask_array)
 from dask.compatibility import StringIO
 
 from dask.utils import filetext, tmpfile
@@ -330,3 +332,41 @@ def test_from_pandas_series():
     assert len(ds.divisions) == len(ds.dask) + 1
     assert type(ds.divisions[0]) == type(s.index[0])
     tm.assert_series_equal(s, ds.compute())
+
+
+def test_DataFrame_from_dask_array():
+    x = da.ones((10, 3), chunks=(4, 2))
+
+    df = from_dask_array(x, ['a', 'b', 'c'])
+    assert list(df.columns) == ['a', 'b', 'c']
+    assert list(df.divisions) == [0, 4, 8, 10]
+    assert (df.compute(get=get_sync).values == x.compute(get=get_sync)).all()
+
+
+def test_Series_from_dask_array():
+    x = da.ones(10, chunks=4)
+
+    ser = from_dask_array(x, 'a')
+    assert ser.name == 'a'
+    assert list(ser.divisions) == [0, 4, 8, 10]
+    assert (ser.compute(get=get_sync).values == x.compute(get=get_sync)).all()
+
+    ser = from_dask_array(x)
+    assert ser.name is None
+
+
+def test_from_dask_array_raises():
+    x = da.ones((3, 3, 3), chunks=2)
+    pytest.raises(ValueError, lambda: from_dask_array(x))
+
+    x = da.ones((10, 3), chunks=(3, 3))
+    pytest.raises(ValueError, lambda: from_dask_array(x))  # no columns
+
+    # Not enough columns
+    pytest.raises(ValueError, lambda: from_dask_array(x, columns=['a']))
+
+    try:
+        from_dask_array(x, columns=['hello'])
+    except Exception as e:
+        assert 'hello' in str(e)
+        assert '3' in str(e)
