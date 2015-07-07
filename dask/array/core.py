@@ -1142,7 +1142,7 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
-def from_func(func, shape, dtype, name=None):
+def from_func(func, shape, dtype=None, name=None):
     """ Create dask array in a single block from a function
 
     Calling the provided function without any arguments should return a NumPy
