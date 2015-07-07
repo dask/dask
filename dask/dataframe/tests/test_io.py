@@ -394,3 +394,13 @@ def test_from_dask_array_raises():
     except Exception as e:
         assert 'hello' in str(e)
         assert '3' in str(e)
+
+
+def test_to_castra():
+    pytest.importorskip('castra')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D'],
+                       'y': [1, 2, 3, 4]})
+    a = dd.from_pandas(df, 2)
+
+    c = a.to_castra()
+    assert eq(a, c[:])
