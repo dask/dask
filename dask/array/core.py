@@ -2032,13 +2032,24 @@ def concatenate3(arrays):
 
 
 def to_hdf5(filename, *args, **kwargs):
-    """ Store array in HDF5 file
+    """ Store arrays in HDF5 file
 
-    >>> x.to_hdf5('myfile.hdf5', '/x')  # doctest: +SKIP
+    This saves several dask arrays into several datapaths in an HDF5 file.
+    It creates the necessary datasets and handles clean file opening/closing.
+
+    >>> da.to_hdf5('myfile.hdf5', '/x', x)  # doctest: +SKIP
+
+    or
+
+    >>> da.to_hdf5('myfile.hdf5', {'/x': x, '/y': y})  # doctest: +SKIP
 
     Optionally provide arguments as though to ``h5py.File.create_dataset``
 
-    >>> x.to_hdf5('myfile.hdf5', '/x', compression='lzf', shuffle=True)  # doctest: +SKIP
+    >>> da.to_hdf5('myfile.hdf5', '/x', x, compression='lzf', shuffle=True)  # doctest: +SKIP
+
+    This can also be used as a method on a single Array
+
+    >>> x.to_hdf5('myfile.hdf5', '/x')  # doctest: +SKIP
 
     See also
     --------
