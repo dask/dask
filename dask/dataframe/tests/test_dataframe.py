@@ -279,6 +279,8 @@ def test_cache():
     d2 = d.cache()
     assert all(task[0] == getitem for task in d2.dask.values())
 
+    assert eq(d2.a, d.a)
+
 
 def test_value_counts():
     result = d.b.value_counts().compute()
