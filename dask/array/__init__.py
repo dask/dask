@@ -4,7 +4,7 @@ from ..utils import ignoring
 from .core import (Array, stack, concatenate, take, tensordot, transpose,
         from_array, choose, where, coarsen, insert, broadcast_to,
         fromfunction, compute, unique, store, squeeze, topk, bincount,
-        map_blocks, atop)
+        map_blocks, atop, to_hdf5)
 from .core import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
         expm1, sqrt, square, sin, cos, tan, arcsin, arccos, arctan, arctan2,
         hypot, sinh, cosh, tanh, arcsinh, arccosh, arctanh, deg2rad, rad2deg,
