@@ -129,8 +129,7 @@ class Scheduler(object):
         self._schedule_lock = Lock()
 
         # RPC functions that workers and clients can trigger
-        self.worker_functions = {'register': self._worker_registration,
-                                 'heartbeat': self._heartbeat,
+        self.worker_functions = {'heartbeat': self._heartbeat,
                                  'status': self._status_to_worker,
                                  'finished-task': self._worker_finished_task,
                                  'setitem-ack': self._setitem_ack,
@@ -223,13 +222,6 @@ class Scheduler(object):
         out_header = {}
         out_payload = {'workers': self.workers}
         self.send_to_client(header['address'], out_header, out_payload)
-
-    def _worker_registration(self, header, payload):
-        """ Worker came in, register them """
-        payload = pickle.loads(payload)
-        address = header['address']
-        self.workers[address] = payload
-        self.available_workers.put(address)
 
     def _worker_finished_task(self, header, payload):
         """ Worker reports back as having finished task, ready for more
@@ -717,7 +709,13 @@ class Scheduler(object):
     def _heartbeat(self, header, payload):
         with logerrors():
             log(self.address_to_clients, "Heartbeat", header)
+            payload = pickle.loads(payload)
             address = header['address']
+
+            if address not in self.workers:
+                self.available_workers.put(address)
+
+            self.workers[address] = payload
             self.workers[address]['last-seen'] = datetime.utcnow()
 
     def prune_workers(self, timeout=20):
