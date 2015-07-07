@@ -247,7 +247,7 @@ def test_prune_workers():
 
         w2.close()
         sleep(0.2)
-        assert s.prune_workers(timeout=0.2) == w2.address
+        assert w2.address in s.prune_workers(timeout=0.2)
         assert w1.address in s.workers
         assert w2.address not in s.workers
 
