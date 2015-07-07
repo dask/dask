@@ -442,6 +442,14 @@ def test_coarsen():
                     coarsen(da.sum, d, {0: 2, 1: 4}))
 
 
+def test_coarsen_with_excess():
+    x = da.arange(10, chunks=5)
+    assert eq(coarsen(np.min, x, {0: 3}, trim_excess=True),
+              np.array([0, 5]))
+    assert eq(coarsen(np.sum, x, {0: 3}, trim_excess=True),
+              np.array([0+1+2, 5+6+7]))
+
+
 def test_insert():
     x = np.random.randint(10, size=(10, 10))
     a = from_array(x, chunks=(5, 5))
@@ -625,6 +633,7 @@ def test_to_hdf5():
     except ImportError:
         return
     x = da.ones((4, 4), chunks=(2, 2))
+    y = da.ones(4, chunks=2, dtype='i4')
 
     with tmpfile('.hdf5') as fn:
         x.to_hdf5(fn, '/x')
@@ -633,6 +642,15 @@ def test_to_hdf5():
 
             assert eq(d[:], x)
             assert d.chunks == (2, 2)
+
+    with tmpfile('.hdf5') as fn:
+        da.to_hdf5(fn, {'/x': x, '/y': y})
+
+        with h5py.File(fn) as f:
+            assert eq(f['/x'][:], x)
+            assert f['/x'].chunks == (2, 2)
+            assert eq(f['/y'][:], y)
+            assert f['/y'].chunks == (2,)
 
 
 def test_np_array_with_zero_dimensions():

@@ -14,9 +14,10 @@ from operator import getitem
 
 from ..compatibility import StringIO, unicode, range
 from ..utils import textblock
+from .. import array as da
 
 from . import core
-from .core import DataFrame, compute, concat, categorize_block, tokens
+from .core import DataFrame, Series, compute, concat, categorize_block, tokens
 from .shuffle import set_partition
 
 
@@ -248,20 +249,34 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     return categories, quantiles
 
 
-def from_array(x, chunksize=50000):
-    """ Read dask Dataframe from any slicable array with record dtype
+def from_array(x, chunksize=50000, columns=None):
+    """ Read dask Dataframe from any slicable array
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
     a NumPy array but must support slicing syntax
 
         x[50000:100000]
 
-    and have a record dtype
+    and have 2 dimensions:
+
+        x.ndim == 2
+
+    or have a record dtype:
 
         x.dtype == [('name', 'O'), ('balance', 'i8')]
 
     """
-    columns = tuple(x.dtype.names)
+    has_record_dtype = getattr(x.dtype, 'names', None) is not None
+    if x.ndim > 2:
+        raise ValueError('from_array does not input more than 2D array, got'
+                         ' array with shape %r' % (x.shape,))
+    if columns is None:
+        if has_record_dtype:
+            columns = tuple(x.dtype.names)  # record array has named columns
+        elif x.ndim == 2:
+            columns = [str(i) for i in range(x.shape[1])]
+    if isinstance(x, da.Array):
+        return from_dask_array(x, columns=columns)
     divisions = tuple(range(0, len(x), chunksize))
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
@@ -452,3 +467,59 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
                         np.searchsorted(categories[columns], chunk),
                         categories[columns], True)
         return pd.Series(chunk, name=columns)
+
+
+def from_dask_array(x, columns=None):
+    """ Convert dask Array to dask DataFrame
+
+    Converts a 2d array into a DataFrame and a 1d array into a Series.
+
+    Parameters
+    ----------
+    x: da.Array
+    columns: list or string
+        list of column names if DataFrame, single string if Series
+
+    Example
+    -------
+
+    >>> import dask.array as da
+    >>> import dask.dataframe as dd
+    >>> x = da.ones((4, 2), chunks=(2, 2))
+    >>> df = dd.io.from_dask_array(x, columns=['a', 'b'])
+    >>> df.compute()
+       a  b
+    0  1  1
+    1  1  1
+    2  1  1
+    3  1  1
+    """
+    name = 'from-dask-array' + next(tokens)
+    divisions = [0]
+    for c in x.chunks[0]:
+        divisions.append(divisions[-1] + c)
+
+    index = [(range, a, b) for a, b in zip(divisions[:-1], divisions[1:])]
+
+    divisions[-1] -= 1
+
+    if x.ndim == 1:
+        dsk = dict(((name, i), (pd.Series, chunk, ind, x.dtype, columns))
+                for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
+        return Series(merge(x.dask, dsk), name, columns, divisions)
+
+    elif x.ndim == 2:
+        if columns is None:
+            raise ValueError("Must provide columns for DataFrame")
+        if len(columns) != x.shape[1]:
+            raise ValueError("Columns must be the same length as array width\n"
+                    "  columns: %s\n  width: %d" % (str(columns), x.shape[1]))
+        if len(x.chunks[1]) > 1:
+            x = x.rechunk({1: x.shape[1]})
+        dsk = dict(((name, i), (pd.DataFrame, chunk[0], ind, columns))
+                for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
+        return DataFrame(merge(x.dask, dsk), name, columns, divisions)
+
+    else:
+        raise ValueError("Array must have one or two dimensions.  Had %d" %
+                         x.ndim)
