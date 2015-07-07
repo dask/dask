@@ -71,7 +71,7 @@ def test_status_client():
 
 
 @contextmanager
-def scheduler_and_workers(n=2, heartbeat=None):
+def scheduler_and_workers(n=2, heartbeat=5):
     with scheduler() as s:
         workers = [Worker(s.address_to_workers, heartbeat=heartbeat) for i in range(n)]
 
