@@ -61,22 +61,52 @@ arithmetic operators, ufuncs, slicing, dot products, and reductions.
 Store
 -----
 
+In Memory
+~~~~~~~~~
+
 If your data is small you can call ``np.array`` on your dask array to turn it
 in to a normal NumPy array.
 
-If your data is large then you can store your dask array in any object that
-supports numpy-style item assignment like an ``h5py.Dataset``.
+.. code-block:: Python
+
+   >>> x = da.arange(6, chunks=3)
+   >>> y = x**2
+   >>> np.array(y)
+   array([0, 1, 4, 9, 16, 25])
+
+
+HDF5
+~~~~
+
+Use the ``to_hdf5`` function to store data into HDF5 using ``h5py``.
 
 .. code-block:: Python
 
-   >>> import h5py  # doctest: +SKIP
-   >>> f = h5py.File('myfile.hdf5')
+   >>> da.to_hdf5('myfile.hdf5', '/y', y)  # doctest: +SKIP
 
-   >>> dset = f.create_dataset('/data', shape=y.shape,
-   ...                                  chunks=[t[0] for t in y.chunks],
-   ...                                  dtype='f8')
+Store several arrays in one computation with the function
+``da.to_hdf5`` by passing in a dict.
 
-   >>> y.store(dset)
+.. code-block:: Python
+
+   >>> da.to_hdf5('myfile.hdf5', {'/x': x, '/y': y})  # doctest: +SKIP
+
+Other On-Disk Storage
+~~~~~~~~~~~~~~~~~~~~~
+
+Alternatively you can store dask arrays in any object that supports numpy-style
+slice assignment like ``h5py.Dataset``, or ``bcolz.carray``.
+
+.. code-block:: Python
+
+   >>> import bcolz  # doctest: +SKIP
+   >>> out = bcolz.zeros(shape=y.shape, rootdir='myfile.bcolz')  # doctest: +SKIP
+   >>> da.store(y, out)  # doctest: +SKIP
+
+You can store several arrays in one computation by passing lists of sources and
+destinations.
+
+   >>> da.store([array1, array2], [output1, outpu2])  # doctest: +SKIP
 
 
 Limitations
