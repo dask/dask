@@ -78,9 +78,6 @@ def scheduler_and_workers(n=2, heartbeat=5):
         # wait for workers to register
         while(len(s.workers) < n):
             sleep(0.01)
-        # wait until scheduler sees all heartbeats
-        while not all('last-seen' in s.workers[workers[i].address] for i in range(n)):
-            sleep(0.01)
         try:
             yield s, workers
         finally:
