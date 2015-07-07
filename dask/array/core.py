@@ -1142,6 +1142,25 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
+def from_func(func, shape, dtype, name=None):
+    """ Create dask array in a single block from a function
+
+    Calling the provided function without any arguments should return a NumPy
+    array of the indicated shape and dtype.
+
+    Example
+    -------
+
+    >>> a = from_func(lambda: np.arange(3), (3,), np.int64)
+    >>> a.compute()
+    array([0, 1, 2])
+    """
+    name = name or next(names)
+    dsk = {(name,) + (0,) * len(shape): (func,)}
+    chunks = tuple((i,) for i in shape)
+    return Array(dsk, name, chunks, dtype)
+
+
 def atop(func, out_ind, *args, **kwargs):
     """ Tensor operation: Generalized inner and outer products
 
