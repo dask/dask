@@ -6,7 +6,6 @@ import socket
 import sys
 import os
 import traceback
-from collections import defaultdict
 from threading import Thread, Lock, Event
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
@@ -111,7 +110,7 @@ class Worker(object):
         self.lock = Lock()
 
         self.queues = dict()
-        self.queues_by_worker = defaultdict(list)
+        self.queues_by_worker = dict()
 
         self.to_scheduler = self.context.socket(zmq.DEALER)
 
@@ -440,7 +439,14 @@ class Worker(object):
                 if key in self.data:  # already have this locally
                     continue
                 worker = random.choice(tuple(locs))  # randomly select one peer
-                self.queues_by_worker[worker].append(qkey)
+
+                # track keys and where they are comming from
+                if worker not in self.queues_by_worker:
+                    self.queues_by_worker.update({worker: {qkey: [key]}})
+                elif qkey not in self.queues_by_worker[worker]:
+                    self.queues_by_worker[worker].update({qkey: [key]})
+                elif key not in self.queues_by_worker[worker][qkey]:
+                    self.queues_by_worker[worker][qkey].append(key)
 
                 header = {'jobid': key,
                           'function': 'getitem'}
@@ -557,7 +563,8 @@ class Worker(object):
             removed = payload['removed']
             effected_queues_by_worker = [self.queues_by_worker[w] for w in removed]
             for queues in effected_queues_by_worker:
-                [self.queues[q].put('death') for q in queues]
+                for q in queues:
+                    [self.queues[q].put(k) for k in q]
 
 
 def status():
