@@ -703,20 +703,7 @@ class Array(object):
         da.store
         h5py.File.create_dataset
         """
-        import h5py
-        with h5py.File(filename) as f:
-            if 'chunks' not in kwargs:
-                kwargs['chunks'] = tuple([c[0] for c in self.chunks])
-            d = f.require_dataset(datapath, shape=self.shape, dtype=self.dtype, **kwargs)
-
-        slices = slices_from_chunks(self.chunks)
-
-        name = next(names)
-        dsk = dict(((name,) + t[1:], (write_hdf5_chunk, filename, datapath, slc, t))
-                    for t, slc in zip(core.flatten(self._keys()), slices))
-
-        myget = kwargs.get('get', get)
-        myget(merge(dsk, self.dask), list(dsk.keys()))
+        return to_hdf5(filename, datapath, self, **kwargs)
 
     @wraps(compute)
     def compute(self, **kwargs):
@@ -1934,13 +1921,6 @@ def unique(x):
     return np.unique(np.concatenate(parts))
 
 
-def write_hdf5_chunk(fn, datapath, index, data):
-    import h5py
-    with h5py.File(fn) as f:
-        d = f[datapath]
-        d[index] = data
-
-
 @wraps(np.bincount)
 def bincount(x, weights=None, minlength=None):
     if minlength is None:
@@ -2049,3 +2029,35 @@ def concatenate3(arrays):
         result[idx] = arr
 
     return result
+
+
+def to_hdf5(filename, *args, **kwargs):
+    """ Store array in HDF5 file
+
+    >>> x.to_hdf5('myfile.hdf5', '/x')  # doctest: +SKIP
+
+    Optionally provide arguments as though to ``h5py.File.create_dataset``
+
+    >>> x.to_hdf5('myfile.hdf5', '/x', compression='lzf', shuffle=True)  # doctest: +SKIP
+
+    See also
+    --------
+    da.store
+    h5py.File.create_dataset
+    """
+    if len(args) == 1 and isinstance(args[0], dict):
+        data = args[0]
+    elif (len(args) == 2 and
+          isinstance(args[0], str) and
+          isinstance(args[1], Array)):
+        data = {args[0]: args[1]}
+    else:
+        raise ValueError("Please provide {'/data/path': array} dictionary")
+
+    import h5py
+    with h5py.File(filename) as f:
+        dsets = [f.require_dataset(dp, shape=x.shape, dtype=x.dtype,
+                                        chunks=tuple([c[0] for c in x.chunks]),
+                                        **kwargs)
+                    for dp, x in data.items()]
+        store(list(data.values()), dsets)

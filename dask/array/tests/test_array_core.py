@@ -633,6 +633,7 @@ def test_to_hdf5():
     except ImportError:
         return
     x = da.ones((4, 4), chunks=(2, 2))
+    y = da.ones(4, chunks=2, dtype='i4')
 
     with tmpfile('.hdf5') as fn:
         x.to_hdf5(fn, '/x')
@@ -641,6 +642,15 @@ def test_to_hdf5():
 
             assert eq(d[:], x)
             assert d.chunks == (2, 2)
+
+    with tmpfile('.hdf5') as fn:
+        da.to_hdf5(fn, {'/x': x, '/y': y})
+
+        with h5py.File(fn) as f:
+            assert eq(f['/x'][:], x)
+            assert f['/x'].chunks == (2, 2)
+            assert eq(f['/y'][:], y)
+            assert f['/y'].chunks == (2,)
 
 
 def test_np_array_with_zero_dimensions():
