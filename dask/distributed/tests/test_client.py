@@ -19,6 +19,8 @@ def inc(x):
 def scheduler_and_workers(n=2):
     s = Scheduler()
     workers = [Worker(s.address_to_workers) for i in range(n)]
+    while len(s.workers) < n:
+        sleep(0.01)
     try:
         yield s, workers
     finally:
