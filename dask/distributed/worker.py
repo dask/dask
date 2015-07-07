@@ -112,11 +112,12 @@ class Worker(object):
         self.queues = dict()
         self.queues_by_worker = dict()
 
+        self.pid = os.getpid()
+
         self.to_scheduler = self.context.socket(zmq.DEALER)
 
         self.to_scheduler.setsockopt(zmq.IDENTITY, self.address)
         self.to_scheduler.connect(scheduler)
-        self.send_to_scheduler({'function': 'register'}, {'pid': os.getpid()})
 
         self.scheduler_functions = {'status': self.status_to_scheduler,
                                     'compute': self.compute,
@@ -545,7 +546,7 @@ class Worker(object):
         """Send a message to scheduler at a given interval"""
         while self.status != 'closed':
             header = {'function': 'heartbeat'}
-            payload = {}
+            payload = {'pid': self.pid}
             self.send_to_scheduler(header, payload)
             self._heartbeat_thread.event.wait(pulse)
 
