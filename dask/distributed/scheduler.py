@@ -21,7 +21,8 @@ except ImportError:
 
 from ..core import get_dependencies, flatten
 from .. import core
-from ..async import finish_task, start_state_from_dask as dag_state_from_dask
+from ..async import (sortkey, finish_task,
+        start_state_from_dask as dag_state_from_dask)
 
 with open('log.scheduler', 'w') as f:  # delete file
     pass
@@ -634,7 +635,7 @@ class Scheduler(object):
                     raise payload['status']
 
                 key = payload['key']
-                finish_task(dsk, key, dag_state, results,
+                finish_task(dsk, key, dag_state, results, sortkey,
                             release_data=self._release_data)
 
                 while dag_state['ready'] and self.available_workers.qsize() > 0:
