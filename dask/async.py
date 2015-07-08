@@ -567,3 +567,129 @@ def sortkey(item):
     ('tuple', ('x', 1))
     """
     return (type(item).__name__, item)
+
+
+def get_deps(dsk):
+    """ Get dependencies and dependents from dask dask graph
+
+    >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
+    >>> dependencies, dependents = get_deps(dsk)
+    >>> dependencies
+    {'a': set([]), 'c': set(['b']), 'b': set(['a'])}
+    >>> dependents
+    {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
+    """
+    dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+    dependents = reverse_dict(dependencies)
+    return dependencies, dependents
+
+
+def ndependents(dependencies, dependents):
+    """ Number of total data elements that depend on key
+
+    >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
+    >>> dependencies, dependents = get_deps(dsk)
+
+    >>> sorted(ndependents(dependencies, dependents).items())
+    [('a', 3), ('b', 2), ('c', 1)]
+    """
+    result = dict()
+
+    roots = [k for k, v in dependents.items() if not v]
+
+    result.update(dict((r, 1) for r in roots))
+
+    leaves = [k for k, v in dependencies.items() if not v]
+
+    for leaf in leaves:
+        _ndependents(leaf, result, dependencies, dependents)
+
+    return result
+
+
+def _ndependents(key, result, dependencies, dependents):
+    """ Helper function for ndependents """
+    if key not in result:
+        deps = dependents[key]
+        result[key] = sum(
+            [_ndependents(k, result, dependencies, dependents)
+             for k in deps]) + 1
+    return result[key]
+
+
+def child_max(dependencies, dependents, scores):
+    """
+
+    >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
+    >>> scores = {'a': 3, 'b': 2, 'c': 2, 'd': 1}
+    >>> dependencies, dependents = get_deps(dsk)
+
+    >>> sorted(child_max(dependencies, dependents, scores).items())
+    [('a', 3), ('b', 2), ('c', 3), ('d', 3)]
+    """
+    result = dict()
+
+    leaves = [k for k, v in dependencies.items() if not v]
+
+    for leaf in leaves:
+        result[leaf] = scores[leaf]
+
+    roots = [k for k, v in dependents.items() if not v]
+
+    for root in roots:
+        _child_max(root, scores, result, dependencies, dependents)
+
+    return result
+
+
+def _child_max(key, scores, result, dependencies, dependents):
+    """ Recursive helper function for child_max """
+    if key not in result:
+        deps = dependencies[key]
+        result[key] = max([_child_max(k, scores, result, dependencies,
+                                      dependents) for k in deps])
+    return result[key]
+
+
+def dfs(dependencies, dependents, key=lambda x: x):
+    """
+
+    >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
+    >>> dependencies, dependents = get_deps(dsk)
+
+    >>> sorted(dfs(dependencies, dependents).items())
+    [('a', 3), ('b', 1), ('c', 2), ('d', 0)]
+    """
+    result = dict()
+    i = 0
+
+    roots = [k for k, v in dependents.items() if not v]
+    stack = sorted(roots, key=key, reverse=True)
+
+    while stack:
+        item = stack.pop()
+
+        result[item] = i
+        stack.extend(sorted(dependencies[item], key=key, reverse=True))
+        i += 1
+
+    return result
+
+
+def order(dsk):
+    """ Order nodes in dask graph
+
+    The ordering will be a toposort but will also have other convenient
+    properties
+
+    1.  Depth first search
+    2.  DFS prefers nodes that enable the most data
+
+    >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
+    >>> order(dsk)
+    {'a': 3, 'c': 2, 'b': 1, 'd': 0}
+    """
+    dependencies, dependents = get_deps(dsk)
+    ndeps = ndependents(dependencies, dependents)
+    maxes = child_max(dependencies, dependents, ndeps)
+    return dfs(dependencies, dependents, key=maxes.get)

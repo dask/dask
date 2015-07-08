@@ -132,3 +132,21 @@ def test_callback():
         assert isinstance(state, dict)
 
     get(dsk, 'a', start_callback=start_callback, end_callback=end_callback)
+
+
+def issorted(L, reverse=False):
+    return sorted(L, reverse=reverse) == L
+
+
+def test_ordering():
+    a, b, c = 'abc'
+    f = lambda *args: None
+    d = {(a, 0): (f,), (b, 0): 0, (c, 0): (f,),
+         (a, 1): (f,), (b, 1): (f, (a, 0), (b, 0), (c, 0)), (c, 1): (f,),
+         (a, 2): (f,), (b, 2): (f, (a, 1), (b, 1), (c, 1)), (c, 2): (f,),
+         (a, 3): (f,), (b, 3): (f, (a, 2), (b, 2), (c, 2)), (c, 3): (f,)}
+
+    o = order(d)
+
+    assert issorted(map(o.get, [(a, i) for i in range(4)]), reverse=True)
+    assert issorted(map(o.get, [(c, i) for i in range(4)]), reverse=True)
