@@ -468,10 +468,11 @@ def test_series_resample(freq, how, npartitions, nskipped):
 
     resampled = ds.resample(freq, how=how)
     result = resampled.compute()
+    assert resampled.divisions[0] == result.index[0]
     tm.assert_series_equal(result, expected, check_dtype=False)
 
 
-@pytest.mark.xfail(raises=ValueError)
+@pytest.mark.xfail(raises=NotImplementedError)
 @pytest.mark.parametrize(['freq', 'how', 'npartitions', 'nskipped'],
                          list(product(['57T'],
                                       ['sum', 'mean', 'count', 'nunique'],
@@ -490,7 +491,6 @@ def test_series_resample_failing(freq, how, npartitions, nskipped):
     tm.assert_series_equal(result, expected, check_dtype=False)
 
 
-@pytest.mark.xfail(raises=ValueError)
 @pytest.mark.parametrize(['how', 'npartitions'],
                          list(product(['sum', 'mean', 'count', 'nunique'],
                                       [2, 5])))
