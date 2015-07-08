@@ -149,8 +149,8 @@ def test_ordering_prefers_depth_first():
 
     o = order(d)
 
-    assert issorted(map(o.get, [(a, i) for i in range(4)]), reverse=True)
-    assert issorted(map(o.get, [(c, i) for i in range(4)]), reverse=True)
+    assert issorted(list(map(o.get, [(a, i) for i in range(4)])), reverse=True)
+    assert issorted(list(map(o.get, [(c, i) for i in range(4)])), reverse=True)
 
 
 def test_ordering_keeps_groups_together():
