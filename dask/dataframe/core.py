@@ -381,13 +381,14 @@ class Series(_Frame):
                             label=label, convention=convention, kind=kind,
                             loffset=loffset, limit=limit, base=base)
 
-        def block_func(df, newdivs=frozenset(newdivs)):
-            result = func(df)
-            if result.index[0] not in newdivs:
-                raise ValueError('resample result starts with incorrect index '
-                                 'value.\nExpected one of:\n%s\ngot:\n%r' %
-                                 (pformat(newdivs), result.index[0]))
-            return result
+        day_nanos = pd.datetools.Day().nanos
+
+        def block_func(df):
+            if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
+                raise NotImplementedError('Resampling frequency %s that does'
+                                          ' not evenly divide a day is not '
+                                          'implemented' % rule)
+            return func(df)
 
         return self.repartition(newdivs).map_partitions(block_func)
 
