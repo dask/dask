@@ -670,12 +670,18 @@ def dfs(dependencies, dependents, key=lambda x: x):
 
     roots = [k for k, v in dependents.items() if not v]
     stack = sorted(roots, key=key, reverse=True)
+    seen = set()
 
     while stack:
         item = stack.pop()
+        seen.add(item)
 
         result[item] = i
-        stack.extend(sorted(dependencies[item], key=key, reverse=True))
+        deps = dependencies[item]
+        deps -= seen
+        seen |= deps
+        deps = sorted(deps, key=key, reverse=True)
+        stack.extend(deps)
         i += 1
 
     return result
