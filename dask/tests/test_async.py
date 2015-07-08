@@ -196,10 +196,10 @@ def test_order_of_startstate():
            'x': 1, 'y': (inc, 'x')}
     result = start_state_from_dask(dsk)
 
-    assert result['ready'] == ['b', 'y']
+    assert result['ready'] == ['y', 'b']
 
     dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y'),
            'a': 1, 'b': (inc, 'a')}
     result = start_state_from_dask(dsk)
 
-    assert result['ready'] == ['y', 'b']
+    assert result['ready'] == ['b', 'y']
