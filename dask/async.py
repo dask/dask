@@ -625,12 +625,16 @@ def _ndependents(key, result, dependencies, dependents):
 def child_max(dependencies, dependents, scores):
     """
 
+    The maximum of all child scores minus a half.
+    This half score lets us pass a little bit of information
+    down the graph about dependence.  Otherwise things tend to flatten out.
+
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> scores = {'a': 3, 'b': 2, 'c': 2, 'd': 1}
     >>> dependencies, dependents = get_deps(dsk)
 
     >>> sorted(child_max(dependencies, dependents, scores).items())
-    [('a', 3), ('b', 2), ('c', 3), ('d', 3)]
+    [('a', 3), ('b', 2), ('c', 2.5), ('d', 2.0)]
     """
     result = dict()
 
@@ -652,7 +656,7 @@ def _child_max(key, scores, result, dependencies, dependents):
     if key not in result:
         deps = dependencies[key]
         result[key] = max([_child_max(k, scores, result, dependencies,
-                                      dependents) for k in deps])
+                                      dependents) for k in deps]) - 0.5
     return result[key]
 
 
