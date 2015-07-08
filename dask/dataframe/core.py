@@ -485,6 +485,11 @@ class Series(_Frame):
         agg = lambda s: s.groupby(level=0).sum()
         return aca(self, chunk=chunk, aggregate=agg, columns=self.columns)
 
+    @wraps(pd.Series.nlargest)
+    def nlargest(self, n=5):
+        f = lambda s: s.nlargest(n)
+        return aca(self, f, f, columns=self.columns)
+
     @wraps(pd.Series.isin)
     def isin(self, other):
         return elemwise(pd.Series.isin, self, other)

@@ -569,3 +569,10 @@ def test_loc_on_pandas_datetimes():
 def test_coerce_loc_index():
     for t in [pd.Timestamp, np.datetime64]:
         assert isinstance(_coerce_loc_index([t('2014')], '2014'), t)
+
+
+def test_nlargest_series():
+    s = pd.Series([1, 3, 5, 2, 4, 6])
+    ss = dd.from_pandas(s, npartitions=2)
+
+    assert eq(ss.nlargest(2), s.nlargest(2))
