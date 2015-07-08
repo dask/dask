@@ -678,7 +678,7 @@ def dfs(dependencies, dependents, key=lambda x: x):
 
         result[item] = i
         deps = dependencies[item]
-        deps -= seen
+        deps = deps - seen
         seen |= deps
         deps = sorted(deps, key=key, reverse=True)
         stack.extend(deps)
