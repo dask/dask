@@ -7,8 +7,9 @@ from dask.core import istask, get_dependencies
 def make_hashable(x):
     try:
         hash(x)
+        assert len(str(x)) < 100
         return x
-    except TypeError:
+    except:
         return hash(str(x))
 
 
