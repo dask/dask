@@ -142,8 +142,9 @@ class _Frame(object):
         get(merge(dsk, self.dask), list(dsk.keys()))
 
         # Create new dataFrame pointing to that cache
-        dsk2 = dict((key, (getitem, cache, (tuple, list(key))))
-                    for key in self._keys())
+        name = 'from-cache' + next(tokens)
+        dsk2 = dict(((name, i), (getitem, cache, (tuple, list(key))))
+                    for i, key in enumerate(self._keys()))
         return type(self)(dsk2, name, self.column_info, self.divisions)
 
     @wraps(pd.DataFrame.drop_duplicates)
