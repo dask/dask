@@ -411,10 +411,10 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         no new tasks were added at that tick.
     end_callback : function, optional
         Callback run every time a task is finished. Receives the key of the
-        task to be run, the dask, the scheduler state, and the id of the worker
-        that ran the task.  At the end of computation this will called a final
-        time with ``None`` for both key and worker id, as no new tasks were
-        finished at that tick.
+        task just run, resulting value, dask, scheduler state, and id of the
+        worker that ran the task.  At the end of computation this will called a
+        final time with ``None`` for key, value and worker id, as no new tasks
+        were finished at that step.
 
     See Also
     --------
@@ -463,7 +463,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         state['cache'][key] = res
         finish_task(dsk, key, state, results)
         if end_callback:
-            end_callback(key, dsk, state, worker_id)
+            end_callback(key, res, dsk, state, worker_id)
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
 
@@ -475,7 +475,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     if start_callback:
         start_callback(None, dsk, state)
     if end_callback:
-        end_callback(None, dsk, state, None)
+        end_callback(None, None, dsk, state, None)
 
     return nested_get(result, state['cache'])
 
