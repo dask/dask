@@ -635,6 +635,22 @@ class DataFrame(_Frame):
 
         return elemwise(_assign, self, *pairs, columns=list(df2.columns))
 
+    def to_castra(self, fn=None, categories=None):
+        """ Write DataFrame to Castra on-disk store
+
+        See https://github.com/blosc/castra for details
+
+        See Also:
+            Castra.to_dask
+        """
+        from castra import Castra
+        name = 'to-castra' + next(tokens)
+        dsk = {name: (Castra, fn, (self._name, 0), categories)}
+        dsk.update(dict(((name, i), (Castra.extend, name, (self._name, i)))
+                        for i in range(self.npartitions)))
+        c, _ = get(merge(dsk, self.dask), [name, list(dsk.keys())])
+        return c
+
 
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
