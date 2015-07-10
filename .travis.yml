@@ -18,7 +18,7 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest numpy pip coverage toolz pandas scikit-learn cytoolz dill pyzmq ipython bcolz chest blosc cython
+  - conda install pytest numpy pip coverage toolz pandas scikit-learn cytoolz dill pyzmq ipython bcolz chest blosc cython pydot
   - if [[ $TRAVIS_PYTHON_VERSION != '2.6' ]]; then conda install bokeh; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install blosc --upgrade
