@@ -540,9 +540,10 @@ normal dot graphs (see dot module).
 
 def visualize(dsk, state, filename='dask'):
     """ Visualize state of compputation as dot graph """
-    from dask.dot import write_networkx_to_dot
-    g = state_to_networkx(dsk, state)
-    write_networkx_to_dot(g, filename=filename)
+    from dask.dot import dot_graph
+    data, func = color_nodes(dsk, state)
+    dot_graph(dsk, filename=filename, data_attributes=data,
+              func_attributes=func)
 
 
 def color_nodes(dsk, state):
@@ -566,17 +567,6 @@ def color_nodes(dsk, state):
         func[key]['penwidth'] = 4
         data[key]['penwidth'] = 4
     return data, func
-
-
-def state_to_networkx(dsk, state):
-    """ Convert state to networkx for visualization
-
-    See Also:
-        visualize
-    """
-    from .dot import to_networkx
-    data, func = color_nodes(dsk, state)
-    return to_networkx(dsk, data_attributes=data, function_attributes=func)
 
 
 def sortkey(item):
