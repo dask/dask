@@ -21,4 +21,3 @@ def test_dask_function():
 
 def test_named_value():
     assert 'X' in value(1, name='X').dask
-    assert all(value(1).dask.keys())

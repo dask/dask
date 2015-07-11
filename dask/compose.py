@@ -1,6 +1,6 @@
-from uuid import uuid4
 import operator
 from functools import partial, wraps
+from itertools import count
 
 from toolz import merge
 
@@ -16,11 +16,23 @@ def get_name_dasks(v):
         return v, []
 
 
+def tokenize(v):
+    try:
+        return str(hash(v))
+    except TypeError:
+        pass
+    if isinstance(v, (list, dict)):
+        return str(hash(str(v)))
+    else:
+        return str(id(v))
+
+
+
 def applyfunc(func, *args, **kwargs):
     if kwargs:
         func = partial(func, **kwargs)
     names, dsks = zip(*map(get_name_dasks, args))
-    name = uuid4().hex
+    name = tokenize((func, args, frozenset(kwargs.items())))
     dsks = sum(dsks, [{name: (func,) + names}])
     return Value(name, dsks)
 
@@ -71,5 +83,5 @@ class Value(object):
 
 def value(val, name=None):
     """Create a value from a python object"""
-    name = name or uuid4().hex
+    name = name or tokenize(val)
     return Value(name, [{name: val}])
