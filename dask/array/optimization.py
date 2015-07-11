@@ -1,3 +1,4 @@
+from ..compatibility import PY2
 from ..optimize import cull, fuse
 from ..core import flatten
 from ..optimize import dealias, inline_functions
@@ -5,6 +6,7 @@ from .core import getarray
 from operator import getitem
 from dask.rewrite import RuleSet, RewriteRule
 from toolz import valmap, partial
+import operator
 import numpy as np
 
 
@@ -95,6 +97,29 @@ rewrite_rules = RuleSet(
         RewriteRule((getitem, (getarray, x, a), b),
                     fuse_slice_dict,
                     (a, b, x)))
+
+
+def add_elemwise_getitem_swap_rule(op, nargs):
+    index = '~index'
+    args = tuple('~%s' % i for i in range(nargs))
+    for getitem_ in [getitem, getarray]:
+        rule = RewriteRule((getitem_, (op,) + args, index),
+                           (op,) + tuple((getitem_, a, index) for a in args),
+                           (index,) + args)
+        rewrite_rules.add(rule)
+
+
+binary_ops = ('lt le eq ne ge gt add and_ floordiv lshift mod or_ pow rshift '
+              'sub truediv xor').split()
+if PY2:
+    binary_ops += ['div']
+unary_ops = 'invert neg pos'.split()
+
+ops_nargs = ([(getattr(operator, op), 2) for op in binary_ops]
+             + [(getattr(operator, op), 1) for op in unary_ops] + [(abs, 1)])
+
+for op, nargs in ops_nargs:
+    add_elemwise_getitem_swap_rule(op, nargs)
 
 
 def normalize_slice(s):

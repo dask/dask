@@ -1,3 +1,5 @@
+import operator
+import numpy as np
 import pytest
 pytest.importorskip('numpy')
 
@@ -101,3 +103,32 @@ def test_hard_fuse_slice_cases():
     term = (getarray, (getarray, 'x', (None, slice(None, None))),
                      (slice(None, None), 5))
     assert rewrite_rules.rewrite(term) == (getarray, 'x', (None, 5))
+
+
+def test_swap_getitem_elemwise():
+    pairs = [((getarray, (abs, 'x'), 0),
+              (abs, (getarray, 'x', 0))),
+
+             ((getitem, (abs, 'x'), 0),
+              (abs, (getitem, 'x', 0))),
+
+             ((getitem, (operator.neg, 'x'), 0),
+              (operator.neg, (getitem, 'x', 0))),
+
+             ((getitem, (operator.add, 'x', 'y'), 0),
+              (operator.add, (getitem, 'x', 0), (getitem, 'y', 0))),
+
+             ((getarray, (operator.add, 'x', 'y'), 0),
+              (operator.add, (getarray, 'x', 0), (getarray, 'y', 0))),
+
+             ((getitem, (np.sin, 'x'), 0),
+              (np.sin, (getitem, 'x', 0))),
+
+             ((getitem, (np.logical_or, 'x', 'y'), 0),
+              (np.logical_or, (getitem, 'x', 0), (getitem, 'y', 0))),
+
+        ]
+
+    for inp, expected in pairs:
+        result = rewrite_rules.rewrite(inp)
+        assert result == expected
