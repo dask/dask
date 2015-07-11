@@ -611,6 +611,8 @@ class Array(object):
         self.dask = dask
         self.name = name
         self.chunks = normalize_chunks(chunks, shape)
+        if self.chunks is None:
+            raise ValueError(chunks_none_error_message)
         if dtype is not None:
             dtype = np.dtype(dtype)
         self._dtype = dtype
@@ -1081,10 +1083,10 @@ def normalize_chunks(chunks, shape=None):
     if isinstance(chunks, Number):
         chunks = (chunks,) * len(shape)
     if not chunks:
-        if shape is None:
+        if not shape:
             chunks = ()
         else:
-            chunks = ((),) * len(shape)
+            raise ValueError(chunks_none_error_message)
 
     if shape is not None:
         chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
@@ -1752,6 +1754,13 @@ for a more thorough explanation:
 """.strip()
 
 
+chunks_none_error_message = """
+You must specify a chunks= keyword argument.
+This specifies the chunksize of your array blocks.
+
+See the following documentation page for details:
+  http://dask.pydata.org/en/latest/array-creation.html#chunks
+""".strip()
 
 @wraps(np.where)
 def where(condition, x=None, y=None):

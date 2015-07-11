@@ -1082,3 +1082,13 @@ def test_take_dask_from_numpy():
 
 def test_normalize_chunks():
     assert normalize_chunks(3, (4, 6)) == ((3, 1), (3, 3))
+
+
+def test_raise_on_no_chunks():
+    x = da.ones(6, chunks=3)
+    try:
+        Array(x.dask, x.name, chunks=None, dtype=x.dtype)
+    except ValueError as e:
+        assert "dask.pydata.org" in str(e)
+
+    assert raises(ValueError, lambda: da.ones(6))
