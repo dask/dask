@@ -442,7 +442,7 @@ def map_blocks(func, *arrs, **kwargs):
         chunks = tuple([nb * (bs,)
                         for nb, bs in zip(result.numblocks, chunks)])
     if chunks is not None:
-        result.chunks = chunks
+        result._chunks = chunks
 
     return result
 
@@ -605,13 +605,13 @@ class Array(object):
         block sizes along each dimension
     """
 
-    __slots__ = 'dask', 'name', 'chunks', '_dtype'
+    __slots__ = 'dask', 'name', '_chunks', '_dtype'
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
         self.name = name
-        self.chunks = normalize_chunks(chunks, shape)
-        if self.chunks is None:
+        self._chunks = normalize_chunks(chunks, shape)
+        if self._chunks is None:
             raise ValueError(chunks_none_error_message)
         if dtype is not None:
             dtype = np.dtype(dtype)
@@ -628,6 +628,16 @@ class Array(object):
     @property
     def shape(self):
         return tuple(map(sum, self.chunks))
+
+    def _get_chunks(self):
+        return self._chunks
+
+    def _set_chunks(self, chunks):
+        raise ValueError("Can not set chunks directly\n\n"
+            "Please use the rechunk method instead:\n"
+            "  x.rechunk(%s)" % str(chunks))
+
+    chunks = property(_get_chunks, _set_chunks, "chunks property")
 
     def __len__(self):
         return sum(self.chunks[0])
