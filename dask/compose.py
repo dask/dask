@@ -65,7 +65,7 @@ class Value(object):
         return merge(*self._dasks)
 
 
-def value(val):
+def value(val, name=None):
     """Create a value from a python object"""
-    uuid = uuid4().hex
-    return Value(uuid, [{uuid: val}])
+    name = name or uuid4().hex
+    return Value(name, [{name: val}])

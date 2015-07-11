@@ -18,3 +18,7 @@ def test_dask_function():
     assert d.compute() == 1 + 2 + 3
     assert set(a.dask.keys()).issubset(set(d.dask.keys()))
 
+
+def test_named_value():
+    assert 'X' in value(1, name='X').dask
+    assert all(value(1).dask.keys())
