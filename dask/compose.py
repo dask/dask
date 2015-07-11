@@ -17,7 +17,8 @@ def get_uuid_dasks(v):
 
 
 def applyfunc(func, *args, **kwargs):
-    func = partial(func, **kwargs)
+    if kwargs:
+        func = partial(func, **kwargs)
     uuids, dsks = zip(*map(get_uuid_dasks, args))
     uuid = uuid4().hex
     dsks = sum(dsks, [{uuid: (func,) + uuids}])
@@ -58,6 +59,10 @@ class Value(object):
         dask1 = merge(*self._dasks)
         dask2 = cull(dask1, self._uuid)
         return get(dask2, self._uuid, **kwargs)
+
+    @property
+    def dask(self):
+        return merge(*self._dasks)
 
 
 def value(val):
