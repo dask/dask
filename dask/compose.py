@@ -64,6 +64,10 @@ class Value(object):
     def dask(self):
         return merge(*self._dasks)
 
+    def visualize(self):
+        from dask.dot import dot_graph
+        dot_graph(self.dask)
+
 
 def value(val, name=None):
     """Create a value from a python object"""
