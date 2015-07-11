@@ -9,9 +9,9 @@ from .context import _globals
 from . import threaded
 
 
-def get_uuid_dasks(v):
+def get_name_dasks(v):
     if isinstance(v, Value):
-        return v._uuid, v._dasks
+        return v._name, v._dasks
     else:
         return v, []
 
@@ -19,10 +19,10 @@ def get_uuid_dasks(v):
 def applyfunc(func, *args, **kwargs):
     if kwargs:
         func = partial(func, **kwargs)
-    uuids, dsks = zip(*map(get_uuid_dasks, args))
-    uuid = uuid4().hex
-    dsks = sum(dsks, [{uuid: (func,) + uuids}])
-    return Value(uuid, dsks)
+    names, dsks = zip(*map(get_name_dasks, args))
+    name = uuid4().hex
+    dsks = sum(dsks, [{name: (func,) + names}])
+    return Value(name, dsks)
 
 
 def daskify(func):
@@ -45,8 +45,8 @@ class Value(object):
 
     Equivalent to the output from a single key in a dask graph.
     """
-    def __init__(self, uuid, dasks):
-        self._uuid = uuid
+    def __init__(self, name, dasks):
+        self._name = name
         self._dasks = dasks
 
     __add__ = daskify(operator.add)
@@ -57,8 +57,8 @@ class Value(object):
 
     def compute(self, **kwargs):
         dask1 = merge(*self._dasks)
-        dask2 = cull(dask1, self._uuid)
-        return get(dask2, self._uuid, **kwargs)
+        dask2 = cull(dask1, self._name)
+        return get(dask2, self._name, **kwargs)
 
     @property
     def dask(self):
