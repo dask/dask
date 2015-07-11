@@ -1100,5 +1100,5 @@ def test_chunks_is_immutable():
     try:
         x.chunks = 2
         assert False
-    except ValueError as e:
+    except TypeError as e:
         assert 'rechunk(2)' in str(e)

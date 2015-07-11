@@ -633,7 +633,7 @@ class Array(object):
         return self._chunks
 
     def _set_chunks(self, chunks):
-        raise ValueError("Can not set chunks directly\n\n"
+        raise TypeError("Can not set chunks directly\n\n"
             "Please use the rechunk method instead:\n"
             "  x.rechunk(%s)" % str(chunks))
 
