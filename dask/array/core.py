@@ -1078,15 +1078,14 @@ def normalize_chunks(chunks, shape=None):
     >>> normalize_chunks((), shape=(0, 0))  #  respects null dimensions
     ((), ())
     """
+    if chunks is None:
+        raise ValueError(chunks_none_error_message)
     if isinstance(chunks, list):
         chunks = tuple(chunks)
     if isinstance(chunks, Number):
         chunks = (chunks,) * len(shape)
-    if not chunks:
-        if not shape:
-            chunks = ()
-        else:
-            raise ValueError(chunks_none_error_message)
+    if not chunks and shape and all(s == 0 for s in shape):
+        chunks = ((),) * len(shape)
 
     if shape is not None:
         chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
