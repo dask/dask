@@ -161,7 +161,6 @@ class Value(object):
     __add__ = do(operator.add)
     __and__ = do(operator.and_)
     __concat__ = do(operator.concat)
-    __contains__ = do(operator.contains)
     __delitem__ = do(operator.delitem)
     __div__ = do(operator.floordiv)
     __eq__ = do(operator.eq)

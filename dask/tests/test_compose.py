@@ -1,5 +1,8 @@
-from dask.compose import value, do
 from operator import add
+from collections import Iterator
+
+from dask.compose import value, do
+from dask.utils import raises
 
 
 def test_value():
@@ -8,16 +11,83 @@ def test_value():
     assert 1 in v.dask.values()
 
 
-def test_dask_function():
+def test_operators():
+    a = value([1, 2, 3])
+    assert a[0].compute() == 1
+    assert (a + a).compute() == [1, 2, 3, 1, 2, 3]
+
+    a = value(10)
+    assert (a + 1).compute() == 11
+    assert (a >> 1).compute() == 5
+    assert (a > 2).compute()
+    assert (a ** 2).compute() == 100
+
+
+def test_methods():
+    a = value("a b c d e")
+    assert a.split(' ') == ['a', 'b', 'c', 'd', 'e']
+    assert a.upper().replace('B', 'A').split().count('A') == 2
+
+
+def test_value_errors():
+    a = value([1, 2, 3])
+    # Immutable
+    assert raises(TypeError, lambda: setattr(a, 'foo', 1))
+    assert raises(TypeError, lambda: setattr(a, '_name', 'test'))
+    # Can't iterate, or check if contains
+    assert raises(TypeError, lambda: 1 in a)
+    assert raises(TypeError, lambda: list(a))
+    # No dynamic generation of magic methods
+    assert raises(AttributeError, lambda: a.__len__())
+
+
+def test_do():
     add2 = do(add)
-
-    a, b, c = map(value, [1, 2, 3])
-
-    d = add2(add2(a, b), c)
-
-    assert d.compute() == 1 + 2 + 3
-    assert set(a.dask.keys()).issubset(set(d.dask.keys()))
+    assert add2(1, 2).compute() == 3
+    assert (add2(1, 2) + 3).compute() == 6
+    assert add2(add2(1, 2), 3).compute() == 6
+    a = value(1)
+    b = add2(add2(a, 2), 3)
+    assert a in b.dask
 
 
 def test_named_value():
-    assert 'X' in value(1, name='X').dask
+    assert 'X' in [i._name for i in value(1, name='X').dask]
+
+
+def test_common_subexpressions():
+    a = value([1, 2, 3])
+    res = a[0] + a[0]
+    assert a[0] in res.dask
+    assert a in res.dask
+    assert len(res.dask) == 3
+
+
+def test_lists():
+    a = value(1)
+    b = value(2)
+    c = do(sum)([a, b])
+    assert c.compute() == 3
+
+
+def test_lists_are_concrete():
+    a = value(1)
+    b = value(2)
+    c = do(max)([[a, 10], [b, 20]], key=lambda x: x[0])[1]
+
+    assert c.compute() == 20
+
+
+def test_iterators():
+    a = value(1)
+    b = value(2)
+    c = do(sum)(iter([a, b]))
+
+    assert c.compute() == 3
+
+    def f(seq):
+        assert isinstance(seq, Iterator)
+        return sum(seq)
+
+    c = do(f)(iter([a, b]))
+    assert c.compute() == 3
