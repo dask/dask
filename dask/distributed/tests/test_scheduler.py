@@ -332,3 +332,14 @@ def test_worker_death():
         assert msg['got_key'] == False
         assert msg['key'] == dkey
         assert msg['worker'] == w2.address
+
+
+def test_monitor_workers():
+    with scheduler_and_workers(scheduler_kwargs={'worker_timeout': 0.01},
+                               worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
+        w2.close()
+        while w2.status != 'closed':  # wait to close
+            sleep(1e-3)
+        while w2.address in s.workers:  # wait to be removed
+            sleep(1e-3)
+        assert w2.address not in s.workers
