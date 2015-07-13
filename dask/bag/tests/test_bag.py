@@ -520,3 +520,9 @@ def test_ensure_compute_output_is_concrete():
     b = db.from_sequence([1, 2, 3])
     result = b.map(lambda x: x + 1).compute()
     assert not isinstance(result, Iterator)
+
+
+def test_fragment():
+    b = db.from_sequence(range(16), npartitions=2)
+    assert b.fragment(2).npartitions == b.npartitions * 2
+    assert list(b) == list(b.fragment(2))
