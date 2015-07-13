@@ -36,6 +36,9 @@ class RandomState(object):
     def __init__(self, seed=None):
         self._numpy_state = np.random.RandomState(seed)
 
+    def seed(self, seed=None):
+        self._numpy_state.seed(seed)
+
     def _wrap(self, func, *args, **kwargs):
         size = kwargs.pop('size')
         chunks = kwargs.pop('chunks')
@@ -270,6 +273,9 @@ def _apply_random(func, seed, size, args, kwargs):
 
 
 _state = RandomState()
+
+
+seed = _state.seed
 
 
 beta = _state.beta
