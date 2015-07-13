@@ -192,7 +192,9 @@ class Worker(object):
             assert header['status'] == 'OK'
 
             self.data[payload['key']] = payload['value']
-            self.queues[payload['queue']].put(payload['key'])
+            msg = {'got_key': True, 'key': payload['key'],
+                   'worker': self.address}
+            self.queues[payload['queue']].put(msg)
 
     def getitem_scheduler(self, header, payload):
         """ Send local data to scheduler
@@ -438,6 +440,7 @@ class Worker(object):
         with logerrors():
             for key, locs in locations.items():
                 if key in self.data:  # already have this locally
+                    locations.pop(key)
                     continue
                 worker = random.choice(tuple(locs))  # randomly select one peer
 
@@ -457,10 +460,18 @@ class Worker(object):
                 self.send_to_worker(worker, header, payload)
                 counter += 1
 
-            for i in range(counter):
-                queue.get()
+            msgs = [queue.get() for i in range(counter)]
+            for m in msgs:
+                if not m['got_key']:
+                    locations[m['key']].remove(m['worker'])
+                else:
+                    locations.pop(m['key'])
 
             del self.queues[qkey]
+            if locations != {}:
+                log(self.address, 'Retrying collect with keys and locations',
+                    locations)
+                self.collect(locations)
             log(self.address, 'Collect finishes', time() - start, 'seconds')
 
     def compute(self, header, payload):
@@ -551,21 +562,19 @@ class Worker(object):
             self._heartbeat_thread.event.wait(pulse)
 
     def worker_death(self, header, payload):
-        """We could be trying to collect data from the dead workers, so we send
-        a message to ourself pretending to be the dead worker, responding with
-        a "bad-key" message.
         """
-        """
-        But how do we know the info about the worker's request to the dead worker?
         """
         with logerrors():
             loads = header.get('loads', pickle.loads)
             payload = loads(payload)
-            removed = payload['removed']
-            effected_queues_by_worker = [self.queues_by_worker[w] for w in removed]
-            for queues in effected_queues_by_worker:
-                for q in queues:
-                    [self.queues[q].put(k) for k in q]
+            removed_workers = payload['removed']
+            for w in removed_workers:
+                for queue, keys in self.queues_by_worker[w].items():
+                    for k in keys:
+                        msg = {'got_key': False,
+                               'key': k,
+                               'worker': w}
+                        self.queues[queue].put(msg)
 
 
 def status():
