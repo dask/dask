@@ -480,7 +480,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 "Something you've asked dask to compute raised an exception.\n"
                 "That exception and the traceback are copied below.\n"
                 "To use pdb, rerun the computation with the keyword argument\n"
-                "    rerun_exceptions_locally=True\n\n"
+                "    dask.set_options(rerun_exceptions_locally=True)\n"
+                "    or\n"
+                "    dataset.compute(rerun_exceptions_locally=True)\n\n"
                 "The original exception and traceback follow below:\n\n"
                     + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
