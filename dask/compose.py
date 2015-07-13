@@ -69,8 +69,8 @@ def do(func):
     ... def add(a, b):
     ...     return a + b
     >>> res = add(1, 2)
-    >>> type(res)
-    Value
+    >>> type(res) == Value
+    True
     >>> res.compute()
     3
 
@@ -78,8 +78,6 @@ def do(func):
     time:
 
     >>> res2 = do(sum)([res, 2, 3])
-    >>> type(res2)
-    Value
     >>> res2.compute()
     8
     """
