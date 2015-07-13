@@ -97,3 +97,16 @@ def test_docs():
 
 def test_can_make_really_big_random_array():
     x = normal(10, 1, (1000000, 1000000), chunks=(100000, 100000))
+
+
+def test_random_seed():
+    da.random.seed(123)
+    x = da.random.normal(size=10, chunks=5)
+    y = da.random.normal(size=10, chunks=5)
+
+    da.random.seed(123)
+    a = da.random.normal(size=10, chunks=5)
+    b = da.random.normal(size=10, chunks=5)
+
+    assert (x.compute() == a.compute()).all()
+    assert (y.compute() == b.compute()).all()
