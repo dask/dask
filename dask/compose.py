@@ -1,19 +1,19 @@
 import operator
 from functools import partial, wraps
-from itertools import count
+from itertools import chain
 
 from toolz import merge
 
+from .core import preorder_traversal
 from .optimize import cull
 from .context import _globals
 from . import threaded
 
 
-def get_name_dasks(v):
-    if isinstance(v, Value):
-        return v._name, v._dasks
-    else:
-        return v, []
+def get_dasks(task):
+    dsks = chain.from_iterable(t._dasks for t in preorder_traversal(task)
+                               if isinstance(t, Value))
+    return list(dict((id(d), d) for d in dsks).values())
 
 
 def tokenize(v):
@@ -27,14 +27,17 @@ def tokenize(v):
         return str(id(v))
 
 
-
 def applyfunc(func, *args, **kwargs):
     if kwargs:
         func = partial(func, **kwargs)
-    names, dsks = zip(*map(get_name_dasks, args))
+    task = (func,) + args
+    dasks = get_dasks(task)
     name = tokenize((func, args, frozenset(kwargs.items())))
-    dsks = sum(dsks, [{name: (func,) + names}])
-    return Value(name, dsks)
+    new_dsk = {}
+    dasks.append(new_dsk)
+    res = Value(name, dasks)
+    new_dsk[res] = task
+    return res
 
 
 def daskify(func):
@@ -61,6 +64,12 @@ class Value(object):
         self._name = name
         self._dasks = dasks
 
+    def __hash__(self):
+        return hash(self._name)
+
+    def __repr__(self):
+        return "Value({0})".format(repr(self._name))
+
     __add__ = daskify(operator.add)
     __sub__ = daskify(operator.sub)
     __mul__ = daskify(operator.mul)
@@ -69,8 +78,8 @@ class Value(object):
 
     def compute(self, **kwargs):
         dask1 = merge(*self._dasks)
-        dask2 = cull(dask1, self._name)
-        return get(dask2, self._name, **kwargs)
+        dask2 = cull(dask1, self)
+        return get(dask2, self, **kwargs)
 
     @property
     def dask(self):
@@ -84,4 +93,7 @@ class Value(object):
 def value(val, name=None):
     """Create a value from a python object"""
     name = name or tokenize(val)
-    return Value(name, [{name: val}])
+    dsk = {}
+    res = Value(name, [dsk])
+    dsk[res] = val
+    return res
