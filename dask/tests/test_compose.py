@@ -1,4 +1,4 @@
-from dask.compose import value, daskify
+from dask.compose import value, do
 from operator import add
 
 
@@ -9,7 +9,7 @@ def test_value():
 
 
 def test_dask_function():
-    add2 = daskify(add)
+    add2 = do(add)
 
     a, b, c = map(value, [1, 2, 3])
 
