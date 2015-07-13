@@ -4,7 +4,7 @@ from itertools import chain
 
 from toolz import merge
 
-from .core import preorder_traversal
+from .core import preorder_traversal, istask
 from .optimize import cull
 from .context import _globals
 from . import threaded
@@ -16,21 +16,27 @@ def get_dasks(task):
     return list(dict((id(d), d) for d in dsks).values())
 
 
+def insert_lists(task):
+    if isinstance(task, list):
+        return (list, [insert_lists(i) for i in task])
+    elif istask(task):
+        return (task[0],) + tuple(insert_lists(i) for i in task[1:])
+    else:
+        return task
+
+
 def tokenize(v):
     try:
         return str(hash(v))
     except TypeError:
         pass
-    if isinstance(v, (list, dict)):
-        return str(hash(str(v)))
-    else:
-        return str(id(v))
+    return str(hash(str(v)))
 
 
 def applyfunc(func, *args, **kwargs):
     if kwargs:
         func = partial(func, **kwargs)
-    task = (func,) + args
+    task = insert_lists((func,) + args)
     dasks = get_dasks(task)
     name = tokenize((func, args, frozenset(kwargs.items())))
     new_dsk = {}
