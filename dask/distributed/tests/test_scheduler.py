@@ -2,19 +2,20 @@ import pytest
 pytest.importorskip('zmq')
 pytest.importorskip('dill')
 
-from dask.distributed.scheduler import Scheduler
-from dask.distributed.worker import Worker
 import multiprocessing
-import itertools
-from datetime import datetime
-from contextlib import contextmanager
-from toolz import take
-from time import sleep
-import dill
 import pickle
 import re
+from datetime import datetime
+from contextlib import contextmanager
+from time import sleep
 
 import zmq
+import dill
+
+from dask.distributed.scheduler import Scheduler
+from dask.distributed.worker import Worker
+
+from ..compatibility import Queue
 
 context = zmq.Context()
 
@@ -250,29 +251,83 @@ def test_prune_workers():
 
 
 def test_prune_and_notify():
-    with scheduler_and_workers(heartbeat=0.1) as (s, (w1, w2)):
-        assert w1.address in s.workers
-        assert w2.address in s.workers
-
+    with scheduler_and_workers(heartbeat=0.005) as (s, (w1, w2)):
         # Oh no! A worker died!
         w2.close()
         sleep(0.1)  # sleep to make sure worker is closed
-
-        # But the living worker gets into a bad state by trying to collect data
-        # from the dead worker! Double oh no!
-        def bad_collect():
-            # This won't work and should be interrupted.
-            w1.collect({'x': [w2.address]})
 
         result = w1.pool.apply_async(w1.collect, args=({'x': [w2.address]},))
         sleep(0.1)  # some sleeping to give show the function is hanging
         assert result.ready() is False
 
         # The scheduler notices, and corrects it state.
-        s.prune_and_notify(timeout=0.2)
-        assert w1.address in s.workers
-        assert w2.address not in s.workers
+        while w2.address in s.workers:
+            s.prune_and_notify(timeout=0.01)
 
         # But the sheduler notified the workers about the death
         sleep(0.1)
         assert result.ready() is True
+
+
+def test_workers_reregister():
+    with scheduler_and_workers(n=2, heartbeat=1e-4) as (s, (w1, w2)):
+        assert w1.address in s.workers
+
+        assert s.workers.pop(w1.address)
+        assert w1.address not in s.workers  # removed
+
+        while w1.address not in s.workers:
+            sleep(1e-6)
+        assert w1.address in s.workers  # but now its back
+
+
+def test_collect_retry():
+    with scheduler_and_workers(n=3, heartbeat=0.001) as (s, (w1, w2, w3)):
+        w3.data['x'] = 42
+        w2.close()
+        while w2.status != 'closed':  # make sure closed
+            sleep(1e-6)
+
+        result = w1.pool.apply_async(w1.collect,
+                                     args=({'x': [w2.address, w3.address]},))
+        while w2.address in s.workers:
+            s.prune_and_notify(timeout=0.002)
+
+        # make sure prune_and_notify didn't remove these
+        assert w1.address in s.workers
+        assert w3.address in s.workers
+
+        while not result.ready():  # make sure collect finishes
+            sleep(1e-6)
+        assert result.ready() == True
+        assert 'x' in w1.data
+        assert w1.data['x'] == 42
+
+
+def test_collect():
+    with scheduler_and_workers(n=2, heartbeat=0.01) as (s, (w1, w2)):
+        w1.data['x'] = 42
+        w2.collect({'x': [w1.address]})
+        assert w2.data['x'] == 42
+
+
+def test_worker_death():
+    with scheduler_and_workers(n=2) as (s, (w1, w2)):
+        # setup worker
+        qkey = 'queue_key'
+        dkey = 'data_key'
+        w1.queues[qkey] = Queue()
+        w1.queues_by_worker[w2.address] = {qkey: [dkey]}
+
+        # mock message
+        header = {}
+        payload = pickle.dumps({'removed': [w2.address]})
+
+        # worker death
+        w1.worker_death(header, payload)
+
+        # assertions
+        msg = w1.queues[qkey].get()
+        assert msg['got_key'] == False
+        assert msg['key'] == dkey
+        assert msg['worker'] == w2.address
