@@ -117,14 +117,14 @@ which we can slice out numpy arrays.
 
 .. code-block:: Python
 
-   >>> x = ooc[1000:2000, :2000]  # pull out numpy array from on-disk object
+   >>> x = dataset[1000:2000, :2000]  # pull out numpy array from on-disk object
 
 This API has become a standard in Scientific Python.  Dask works with any
 object that supports this operation and the equivalent assignment syntax.
 
 .. code-block:: Python
 
-   >>> ooc[1000:2000, :2000] = x  # Store numpy array in on-disk object
+   >>> dataset[1000:2000, :2000] = x  # Store numpy array in on-disk object
 
 
 Limitations
