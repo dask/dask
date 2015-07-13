@@ -82,7 +82,7 @@ class Scheduler(object):
     """
     def __init__(self, port_to_workers=None, port_to_clients=None,
                  bind_to_workers='*', bind_to_clients='*',
-                 hostname=None, block=False):
+                 hostname=None, block=False, worker_timeout=20):
         self.context = zmq.Context()
         hostname = hostname or socket.gethostname()
 
@@ -148,6 +148,9 @@ class Scheduler(object):
         self._listen_to_workers_thread.start()
         self._listen_to_clients_thread = Thread(target=self._listen_to_clients)
         self._listen_to_clients_thread.start()
+        self._monitor_workers_thread = Thread(target=self._monitor_workers,
+                                              kwargs={'timeout': worker_timeout})
+        self._monitor_workers_thread.start()
 
         if block:
             self.block()
@@ -204,6 +207,11 @@ class Scheduler(object):
                 log(self.address_to_clients, 'Unknown function', header)
             else:
                 self.pool.apply_async(function, args=(header, payload))
+
+    def _monitor_workers(self, timeout=20):
+        """ Event loop: Monitor worker heartbeats """
+        while self.status != 'closed':
+            self.prune_and_notify(timeout=timeout)
 
     def block(self):
         """ Block until listener threads close
