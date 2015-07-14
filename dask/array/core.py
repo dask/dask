@@ -1142,19 +1142,28 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
-def from_func(func, shape, dtype=None, name=None):
-    """ Create dask array in a single block from a function
+def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
+    """ Create dask array in a single block by calling a function
 
-    Calling the provided function without any arguments should return a NumPy
-    array of the indicated shape and dtype.
+    Calling the provided function with func(*args, **kwargs) should return a
+    NumPy array of the indicated shape and dtype.
 
     Example
     -------
 
-    >>> a = from_func(lambda: np.arange(3), (3,), np.int64)
+    >>> a = from_func(np.arange, (3,), np.int64, args=(3,))
     >>> a.compute()
     array([0, 1, 2])
+
+    This works particularly well with coupled with dask.array functions like
+    concatenate and stack:
+
+    >>> arrays = [from_func(np.array, (), args=(n,)) for n in range(5)]
+    >>> stack(arrays).compute()
+    array([0, 1, 2, 3, 4])
     """
+    if args or kwargs:
+        func = partial(func, *args, **kwargs)
     name = name or next(names)
     dsk = {(name,) + (0,) * len(shape): (func,)}
     chunks = tuple((i,) for i in shape)
