@@ -1,7 +1,7 @@
 from operator import add
 from collections import Iterator
 
-from dask.compose import value, do
+from dask.compose import value, do, to_task_dasks
 from dask.utils import raises
 
 
@@ -9,6 +9,23 @@ def test_value():
     v = value(1)
     assert v.compute() == 1
     assert 1 in v.dask.values()
+
+
+def test_to_task_dasks():
+    a = value(1, 'a')
+    b = value(2, 'b')
+    task, dasks = to_task_dasks([a, b, 3])
+    assert task == (list, ['a', 'b', 3])
+    assert len(dasks) == 2
+    assert a.dask in dasks
+    assert b.dask in dasks
+
+    task, dasks = to_task_dasks({a: 1, b: 2})
+    assert (task == (dict, (list, [(list, ['b', 2]), (list, ['a', 1])]))
+            or task == (dict, (list, [(list, ['a', 1]), (list, ['b', 2])])))
+    assert len(dasks) == 2
+    assert a.dask in dasks
+    assert b.dask in dasks
 
 
 def test_operators():

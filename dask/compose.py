@@ -38,6 +38,23 @@ def to_task_dasks(task):
     -------
     task : normalized task to be run
     dasks : list of dasks that form the dag for this task
+
+    Examples
+    --------
+
+    >>> a = value(1, 'a')
+    >>> b = value(2, 'b')
+    >>> task, dasks = to_task_dasks([a, b, 3])
+    >>> task # doctest: +SKIP
+    (list, ['a', 'b', 3])
+    >>> dasks # doctest: +SKIP
+    [{'a': 1}, {'b': 2}]
+
+    >>> task, dasks = to_task_dasks({a: 1, b: 2})
+    >>> task # doctest: +SKIP
+    (dict, (list, [(list, ['a', 1]), (list, ['b', 2])]))
+    >>> dasks # doctest: +SKIP
+    [{'a': 1}, {'b': 2}]
     """
     if istask(task) and not isinstance(task[0], Value):
         args, dasks = unzip(map(to_task_dasks, task[1:]), 2)
@@ -54,7 +71,7 @@ def to_task_dasks(task):
         else:
             return args, dasks
     elif isinstance(task, dict):
-        args, dasks = to_task_dasks(tuple((k, v) for k, v in task.items()))
+        args, dasks = to_task_dasks(list([k, v] for k, v in task.items()))
         return (dict, args), dasks
     else:
         return task, []
@@ -76,11 +93,12 @@ def applyfunc(func, *args, **kwargs):
     Given a function and arguments, return a Value that represents the result
     of that computation."""
 
+    args, dasks = unzip(map(to_task_dasks, args), 2)
+    dasks = flat_unique(dasks)
+    name = tokenize((func, args, frozenset(kwargs.items())))
     if kwargs:
         func = partial(func, **kwargs)
-    task, dasks = to_task_dasks((func,) + args)
-    name = tokenize((func, args, frozenset(kwargs.items())))
-    dasks.append({name: task})
+    dasks.append({name: (func,) + args})
     return Value(name, dasks)
 
 
