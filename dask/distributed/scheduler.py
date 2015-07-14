@@ -543,10 +543,9 @@ class Scheduler(object):
 
     def close_workers(self):
         header = {'function': 'close'}
-        with self.lock:
-            for w in self.workers:
-                self.send_to_worker(w, header, {})
-        self.workers.clear()
+        while self.workers != {}:
+            w, v = self.workers.popitem()
+            self.send_to_worker(w, header, {})
         self.send_to_workers_queue.join()
 
     def _close(self, header, payload):
