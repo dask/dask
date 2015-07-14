@@ -20,8 +20,8 @@ context = zmq.Context()
 
 
 @contextmanager
-def scheduler(scheduler_kwargs={}):
-    s = Scheduler(**scheduler_kwargs)
+def scheduler(kwargs={}):
+    s = Scheduler(**kwargs)
     try:
         yield s
     finally:
