@@ -1,19 +1,21 @@
 from __future__ import print_function
 
-import zmq
 import socket
-import dill
 import uuid
-from collections import defaultdict
 import itertools
-from multiprocessing.pool import ThreadPool
+import traceback
+import sys
 import random
+from collections import defaultdict
+from multiprocessing.pool import ThreadPool
 from datetime import datetime
 from threading import Thread, Lock
 from contextlib import contextmanager
 from time import sleep
-import traceback
-import sys
+
+import dill
+import zmq
+
 from ..compatibility import Queue, unicode, Empty
 try:
     import cPickle as pickle
