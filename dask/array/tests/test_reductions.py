@@ -217,3 +217,13 @@ def test_nan():
     assert eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
     with ignoring(AttributeError):
         assert eq(np.nanprod(x), da.nanprod(d))
+
+
+def test_0d_array():
+    x = da.mean(da.ones(4, chunks=4), axis=0).compute()
+    y = np.mean(np.ones(4))
+    assert type(x) == type(y)
+
+    x = da.sum(da.zeros(4, chunks=1)).compute()
+    y = np.sum(np.zeros(4))
+    assert type(x) == type(y)

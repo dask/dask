@@ -74,6 +74,10 @@ def test_concatenate3():
                             [x, x, x]]).shape == (2, 6)
 
 
+def test_concatenate3_on_scalars():
+    assert eq(concatenate3([1, 2]), np.array([1, 2]))
+
+
 def eq(a, b):
     if isinstance(a, Array):
         adt = a._dtype
@@ -252,6 +256,14 @@ def test_short_stack():
     s = da.stack([d])
     assert s.shape == (1, 1)
     assert get(s.dask, s._keys())[0][0].shape == (1, 1)
+
+
+def test_stack_scalars():
+    d = da.arange(4, chunks=2)
+
+    s = da.stack([d.mean(), d.sum()])
+
+    assert s.compute().tolist() == [np.arange(4).mean(), np.arange(4).sum()]
 
 
 def test_concatenate():

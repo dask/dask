@@ -1987,11 +1987,21 @@ def chunks_from_arrays(arrays):
     >>> x = np.array([[1, 2]])
     >>> chunks_from_arrays([[x, x]])
     ((1,), (2, 2))
+
+    >>> chunks_from_arrays([1, 1])
+    ((1, 1),)
     """
     result = []
     dim = 0
+
+    def shape(x):
+        try:
+            return x.shape
+        except AttributeError:
+            return (1,)
+
     while isinstance(arrays, (list, tuple)):
-        result.append(tuple(deepfirst(a).shape[dim] for a in arrays))
+        result.append(tuple(shape(deepfirst(a))[dim] for a in arrays))
         arrays = arrays[0]
         dim += 1
     return tuple(result)
@@ -2039,11 +2049,19 @@ def concatenate3(arrays):
         return arrays
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
-    result = np.empty(shape=shape, dtype=deepfirst(arrays).dtype)
+
+    def dtype(x):
+        try:
+            return x.dtype
+        except AttributeError:
+            return type(x)
+
+    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
 
     for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
-        while arr.ndim < ndim:
-            arr = arr[None, ...]
+        if hasattr(arr, 'ndim'):
+            while arr.ndim < ndim:
+                arr = arr[None, ...]
         result[idx] = arr
 
     return result
