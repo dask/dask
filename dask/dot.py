@@ -79,6 +79,11 @@ def write_networkx_to_dot(dg, filename='mydask'):
 def dot_graph(d, filename='mydask', **kwargs):
     dg = to_networkx(d, **kwargs)
     write_networkx_to_dot(dg, filename=filename)
+    try:
+        from IPython.display import Image
+        return Image(filename + '.png')
+    except ImportError:
+        pass
 
 
 if __name__ == '__main__':
