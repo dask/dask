@@ -93,9 +93,9 @@ class Scalar(object):
         from dask.dot import dot_graph
         from .optimize import optimize
         if optimize_graph:
-            dot_graph(optimize(self.dask, self._keys()))
+            return dot_graph(optimize(self.dask, self._keys()))
         else:
-            dot_graph(self.dask)
+            return dot_graph(self.dask)
 
 
 class _Frame(object):
@@ -114,9 +114,9 @@ class _Frame(object):
         from dask.dot import dot_graph
         from .optimize import optimize
         if optimize_graph:
-            dot_graph(optimize(self.dask, self._keys()))
+            return dot_graph(optimize(self.dask, self._keys()))
         else:
-            dot_graph(self.dask)
+            return dot_graph(self.dask)
 
     @property
     def index(self):
@@ -673,6 +673,22 @@ class DataFrame(_Frame):
         df2 = df.assign(**dict((k, []) for k in kwargs))
 
         return elemwise(_assign, self, *pairs, columns=list(df2.columns))
+
+    def to_castra(self, fn=None, categories=None):
+        """ Write DataFrame to Castra on-disk store
+
+        See https://github.com/blosc/castra for details
+
+        See Also:
+            Castra.to_dask
+        """
+        from castra import Castra
+        name = 'to-castra' + next(tokens)
+        dsk = {name: (Castra, fn, (self._name, 0), categories)}
+        dsk.update(dict(((name, i), (Castra.extend, name, (self._name, i)))
+                        for i in range(self.npartitions)))
+        c, _ = get(merge(dsk, self.dask), [name, list(dsk.keys())])
+        return c
 
 
 def _assign(df, *pairs):

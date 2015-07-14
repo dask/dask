@@ -65,7 +65,7 @@ class Profiler(object):
             start = default_timer()
             self._results[key] = (key, dask[key], start)
 
-    def _end_callback(self, key, dask, state, id):
+    def _end_callback(self, key, value, dask, state, id):
         if key is not None:
             end = default_timer()
             self._results[key] += (end, id)

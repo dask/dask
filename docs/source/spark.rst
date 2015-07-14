@@ -77,7 +77,7 @@ accustomed to native code execution.
 Dask has an advantage for Python users because it is itself a Python library,
 so serialization and debugging when things go wrong happens more smoothly.
 
-However, dask has no benefit to non-Python users while Spark is useful in a
+However, dask only benefits Python users while Spark is useful in a
 variety of JVM languages (Scala, Java, Clojure) as well as limited support in
 Python and R.  New Spark projects like the DataFrame skip serialization and
 boxed execution issues by forgoing the Python process entirely and instead have

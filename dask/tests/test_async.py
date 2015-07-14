@@ -46,6 +46,7 @@ def test_start_state_with_independent_but_runnable_tasks():
 
 def test_finish_task():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
+    sortkey = order(dsk).get
     state = start_state_from_dask(dsk)
     state['ready'].remove('z')
     state['ready-set'].remove('z')
@@ -55,7 +56,7 @@ def test_finish_task():
 
     oldstate = deepcopy(state)
     state['cache']['z'] = result
-    finish_task(dsk, task, state, set())
+    finish_task(dsk, task, state, set(), sortkey)
 
     assert state == {
           'cache': {'y': 2, 'z': 2},
@@ -113,3 +114,60 @@ def test_cache_options():
 def test_sort_key():
     L = ['x', ('x', 1), ('z', 0), ('x', 0)]
     assert sorted(L, key=sortkey) == ['x', ('x', 0), ('x', 1), ('z', 0)]
+
+
+def test_callback():
+    f = lambda x: x + 1
+    dsk = {'a': (f, 1)}
+    from dask.threaded import get
+
+    def start_callback(key, d, state):
+        assert key == 'a' or key is None
+        assert d == dsk
+        assert isinstance(state, dict)
+
+    def end_callback(key, value, d, state, worker_id):
+        assert key == 'a' or key is None
+        assert value == 2 or value is None
+        assert d == dsk
+        assert isinstance(state, dict)
+
+    get(dsk, 'a', start_callback=start_callback, end_callback=end_callback)
+
+
+def test_order_of_startstate():
+    dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
+           'x': 1, 'y': (inc, 'x')}
+    result = start_state_from_dask(dsk)
+
+    assert result['ready'] == ['y', 'b']
+
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y'),
+           'a': 1, 'b': (inc, 'a')}
+    result = start_state_from_dask(dsk)
+
+    assert result['ready'] == ['b', 'y']
+
+
+def test_rerun_exceptions_locally():
+    counter = [0]
+    def f():
+        counter[0] += 1
+        raise Exception('TOKEN')
+
+    from dask.threaded import get
+    try:
+        get({'x': (f,)}, 'x')
+    except Exception as e:
+        assert 'remote' in str(e).lower()
+
+    try:
+        get({'x': (f,)}, 'x', rerun_exceptions_locally=True)
+    except Exception as e:
+        assert 'remote' not in str(e).lower()
+
+    try:
+        with dask.set_options(rerun_exceptions_locally=True):
+            get({'x': (f,)}, 'x')
+    except Exception as e:
+        assert 'remote' not in str(e).lower()

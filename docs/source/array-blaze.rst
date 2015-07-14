@@ -15,7 +15,7 @@ Blaze reasons about and optimizes the expressions that a user types in,
 optimizing order of execution, operator fusion, checking type errors, etc..
 Blaze applies these optimizations and then translates to a variety of
 computational systems, passing work off to them.  One such computational system
-in dask.array.
+is dask.array.
 
 Dask.arrays are fundamentally a way to create task schedules that execute
 blocked matrix algorithms.  Dask.array does not think or optimize at the

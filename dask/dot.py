@@ -7,8 +7,9 @@ from dask.core import istask, get_dependencies
 def make_hashable(x):
     try:
         hash(x)
+        assert len(str(x)) < 100
         return x
-    except TypeError:
+    except:
         return hash(str(x))
 
 
@@ -78,6 +79,11 @@ def write_networkx_to_dot(dg, filename='mydask'):
 def dot_graph(d, filename='mydask', **kwargs):
     dg = to_networkx(d, **kwargs)
     write_networkx_to_dot(dg, filename=filename)
+    try:
+        from IPython.display import Image
+        return Image(filename + '.png')
+    except ImportError:
+        pass
 
 
 if __name__ == '__main__':

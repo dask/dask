@@ -84,7 +84,17 @@ or using a distributed cluster.
    faq.rst
    spark.rst
 
+**Contact**
+
+* For user questions please tag StackOverflow questions with the `#dask tag`_.
+* For bug reports and feature requests please use the `GitHub issue tracker`_
+* For community discussion please use `blaze-dev@continuum.io`_
+
 Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 
-.. _Blaze: http://continuum.io/open-source/blaze/
+.. _Blaze: http://continuum.io/open-source/blaze
 .. _`Continuum Analytics`: http://continuum.io
+
+.. _`#dask tag`: http://stackoverflow.com/questions/tagged/dask
+.. _`GitHub issue tracker`: https://github.com/ContinuumIO/dask/issues
+.. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev

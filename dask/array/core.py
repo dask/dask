@@ -442,7 +442,7 @@ def map_blocks(func, *arrs, **kwargs):
         chunks = tuple([nb * (bs,)
                         for nb, bs in zip(result.numblocks, chunks)])
     if chunks is not None:
-        result.chunks = chunks
+        result._chunks = chunks
 
     return result
 
@@ -605,12 +605,14 @@ class Array(object):
         block sizes along each dimension
     """
 
-    __slots__ = 'dask', 'name', 'chunks', '_dtype'
+    __slots__ = 'dask', 'name', '_chunks', '_dtype'
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
         self.name = name
-        self.chunks = normalize_chunks(chunks, shape)
+        self._chunks = normalize_chunks(chunks, shape)
+        if self._chunks is None:
+            raise ValueError(chunks_none_error_message)
         if dtype is not None:
             dtype = np.dtype(dtype)
         self._dtype = dtype
@@ -627,15 +629,25 @@ class Array(object):
     def shape(self):
         return tuple(map(sum, self.chunks))
 
+    def _get_chunks(self):
+        return self._chunks
+
+    def _set_chunks(self, chunks):
+        raise TypeError("Can not set chunks directly\n\n"
+            "Please use the rechunk method instead:\n"
+            "  x.rechunk(%s)" % str(chunks))
+
+    chunks = property(_get_chunks, _set_chunks, "chunks property")
+
     def __len__(self):
         return sum(self.chunks[0])
 
     def _visualize(self, optimize_graph=False):
         from dask.dot import dot_graph
         if optimize_graph:
-            dot_graph(optimize(self.dask, self._keys()))
+            return dot_graph(optimize(self.dask, self._keys()))
         else:
-            dot_graph(self.dask)
+            return dot_graph(self.dask)
 
     @property
     @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].chunks))
@@ -1076,15 +1088,14 @@ def normalize_chunks(chunks, shape=None):
     >>> normalize_chunks((), shape=(0, 0))  #  respects null dimensions
     ((), ())
     """
+    if chunks is None:
+        raise ValueError(chunks_none_error_message)
     if isinstance(chunks, list):
         chunks = tuple(chunks)
     if isinstance(chunks, Number):
         chunks = (chunks,) * len(shape)
-    if not chunks:
-        if shape is None:
-            chunks = ()
-        else:
-            chunks = ((),) * len(shape)
+    if not chunks and shape and all(s == 0 for s in shape):
+        chunks = ((),) * len(shape)
 
     if shape is not None:
         chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
@@ -1122,7 +1133,7 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
-    name = name or next(names)
+    name = name or 'from-array' + next(tokens)
     dsk = getem(name, chunks)
     if lock is True:
         lock = Lock()
@@ -1752,6 +1763,13 @@ for a more thorough explanation:
 """.strip()
 
 
+chunks_none_error_message = """
+You must specify a chunks= keyword argument.
+This specifies the chunksize of your array blocks.
+
+See the following documentation page for details:
+  http://dask.pydata.org/en/latest/array-creation.html#chunks
+""".strip()
 
 @wraps(np.where)
 def where(condition, x=None, y=None):

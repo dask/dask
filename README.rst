@@ -168,7 +168,7 @@ One might ask why we didn't use one of these other fine libraries:
 * Luigi_
 * Joblib_
 * mrjob_
-* Any of the fine schedulers in numeric analysis (DAGue_, ...)
+* Any of the fine schedulers in numeric analysis (Plasma_, PaRSEC_, ...)
 * Any of the fine high-throughput schedulers (Condor_, Pegasus_, Swiftlang_, ...)
 
 The answer is because we wanted all of the following:
@@ -221,7 +221,7 @@ includes the following projects:
 .. _Condor: http://research.cs.wisc.edu/htcondor/
 .. _Pegasus: http://pegasus.isi.edu/
 .. _Swiftlang: http://swift-lang.org/main/
-.. _DAGue: http://icl.eecs.utk.edu/dague/
+.. _PaRSEC: http://icl.eecs.utk.edu/parsec/index.html
 .. _blogposts: http://matthewrocklin.com/blog/tags.html#dask-ref
 .. |Build Status| image:: https://travis-ci.org/ContinuumIO/dask.png
    :target: https://travis-ci.org/ContinuumIO/dask
