@@ -29,6 +29,12 @@ def test_methods():
     assert a.upper().replace('B', 'A').split().count('A') == 2
 
 
+def test_attributes():
+    a = value(2 + 1j)
+    assert a.real.compute() == 2
+    assert a.imag.compute() == 1
+
+
 def test_value_errors():
     a = value([1, 2, 3])
     # Immutable

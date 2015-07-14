@@ -5,8 +5,9 @@ from itertools import chain
 from toolz import merge
 
 from .core import preorder_traversal, istask
-from .optimize import cull
+from .optimize import cull, fuse
 from .context import _globals
+from .compatibility import apply
 from . import threaded
 
 __all__ = ['do', 'value', 'Value']
@@ -87,16 +88,16 @@ def do(func):
     return _dfunc
 
 
+def optimize(dsk, keys):
+    dsk2 = cull(dsk, keys)
+    return fuse(dsk2)
+
+
 def get(dsk, keys, get=None, **kwargs):
     """Specialized get function"""
     get = get or _globals['get'] or threaded.get
-    dsk2 = cull(dsk, keys)
+    dsk2 = optimize(dsk, keys)
     return get(dsk2, keys, **kwargs)
-
-
-def methodcaller(self, method, *args, **kwargs):
-    """Calls method on self with args/kwargs"""
-    return getattr(self, method)(*args, **kwargs)
 
 
 def right(method):
@@ -127,10 +128,13 @@ class Value(object):
     def dask(self):
         return merge(*self._dasks)
 
-    def visualize(self, **kwargs):
+    def visualize(self, optimize_graph=False, **kwargs):
         """Visualize the dask as a graph"""
         from dask.dot import dot_graph
-        dot_graph(self.dask, **kwargs)
+        if optimize_graph:
+            dot_graph(optimize(self.dask, self), **kwargs)
+        else:
+            dot_graph(self.dask, **kwargs)
 
     def __hash__(self):
         return hash(self._name)
@@ -143,9 +147,7 @@ class Value(object):
 
     def __getattr__(self, attr):
         if not attr.startswith('_'):
-            def _inner(*args, **kwargs):
-                return do(methodcaller)(self, attr, *args, **kwargs)
-            return _inner
+            return do(getattr)(self, attr)
         else:
             raise AttributeError("Attribute {0} not found".format(attr))
 
@@ -154,6 +156,12 @@ class Value(object):
 
     def __iter__(self):
         raise TypeError("Value objects are not iterable")
+
+    def __bool__(self):
+        raise TypeError("Truth of Value objects is not supported")
+
+    def __call__(self, *args, **kwargs):
+        return do(apply)(self, args, kwargs)
 
     __abs__ = do(operator.abs)
     __add__ = do(operator.add)
@@ -224,7 +232,7 @@ def value(val, name=None):
     >>> a[1].compute()
     2
 
-    Method axis also works:
+    Method and attribute access also works:
 
     >>> a.count(2).compute()
     1
@@ -239,5 +247,7 @@ def value(val, name=None):
     name = name or tokenize(val)
     dsk = {}
     res = Value(name, [dsk])
+    if isinstance(val, list):
+        val = (list, val)
     dsk[res] = val
     return res
