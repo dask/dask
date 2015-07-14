@@ -121,6 +121,7 @@ import traceback
 from operator import add
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .context import _globals
+from .order import order
 
 def inc(x):
     return x + 1
@@ -131,7 +132,8 @@ def double(x):
 
 DEBUG = False
 
-def start_state_from_dask(dsk, cache=None):
+
+def start_state_from_dask(dsk, cache=None, sortkey=None):
     """ Start state from a dask
 
     Example
@@ -159,6 +161,8 @@ def start_state_from_dask(dsk, cache=None):
                       'y': set(['w']),
                       'z': set(['w'])}}
     """
+    if sortkey is None:
+        sortkey = order(dsk).get
     if cache is None:
         cache = _globals['cache']
     if cache is None:
@@ -292,7 +296,7 @@ def release_data(key, state, delete=True):
         del state['cache'][key]
 
 
-def finish_task(dsk, key, state, results, delete=True,
+def finish_task(dsk, key, state, results, sortkey, delete=True,
                 release_data=release_data):
     """
     Update execution state after a task finishes
@@ -429,7 +433,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         result_flat = set([result])
     results = set(result_flat)
 
-    state = start_state_from_dask(dsk, cache=cache)
+    keyorder = order(dsk)
+
+    state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
 
     if state['waiting'] and not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
@@ -461,7 +467,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
             raise type(res)(" Exception in remote process\n\n"
                 + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
-        finish_task(dsk, key, state, results)
+        finish_task(dsk, key, state, results, keyorder.get)
         if end_callback:
             end_callback(key, res, dsk, state, worker_id)
         while state['ready'] and len(state['running']) < num_workers:

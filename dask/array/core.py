@@ -1133,7 +1133,7 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
-    name = name or next(names)
+    name = name or 'from-array' + next(tokens)
     dsk = getem(name, chunks)
     if lock is True:
         lock = Lock()

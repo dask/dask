@@ -46,6 +46,7 @@ def test_start_state_with_independent_but_runnable_tasks():
 
 def test_finish_task():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
+    sortkey = order(dsk).get
     state = start_state_from_dask(dsk)
     state['ready'].remove('z')
     state['ready-set'].remove('z')
@@ -55,7 +56,7 @@ def test_finish_task():
 
     oldstate = deepcopy(state)
     state['cache']['z'] = result
-    finish_task(dsk, task, state, set())
+    finish_task(dsk, task, state, set(), sortkey)
 
     assert state == {
           'cache': {'y': 2, 'z': 2},
@@ -132,3 +133,17 @@ def test_callback():
         assert isinstance(state, dict)
 
     get(dsk, 'a', start_callback=start_callback, end_callback=end_callback)
+
+
+def test_order_of_startstate():
+    dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
+           'x': 1, 'y': (inc, 'x')}
+    result = start_state_from_dask(dsk)
+
+    assert result['ready'] == ['y', 'b']
+
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y'),
+           'a': 1, 'b': (inc, 'a')}
+    result = start_state_from_dask(dsk)
+
+    assert result['ready'] == ['b', 'y']
