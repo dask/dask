@@ -91,9 +91,9 @@ class Scalar(object):
         from dask.dot import dot_graph
         from .optimize import optimize
         if optimize_graph:
-            dot_graph(optimize(self.dask, self._keys()))
+            return dot_graph(optimize(self.dask, self._keys()))
         else:
-            dot_graph(self.dask)
+            return dot_graph(self.dask)
 
 
 class _Frame(object):
@@ -112,9 +112,9 @@ class _Frame(object):
         from dask.dot import dot_graph
         from .optimize import optimize
         if optimize_graph:
-            dot_graph(optimize(self.dask, self._keys()))
+            return dot_graph(optimize(self.dask, self._keys()))
         else:
-            dot_graph(self.dask)
+            return dot_graph(self.dask)
 
     @property
     def index(self):
