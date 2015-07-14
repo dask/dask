@@ -35,7 +35,7 @@ def scheduler_and_workers(n=2, scheduler_kwargs={}, worker_kwargs={}):
 
         # wait for workers to register
         while(len(s.workers) < n):
-            sleep(0.01)
+            sleep(1e-6)
         try:
             yield s, workers
         finally:
@@ -240,25 +240,26 @@ def test_prune_workers():
     We close a worker, then make sure prune workers notices this and removes
     it from the scheduler. This is "correcting the schedulers' state".
     """
-    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.1}) as (s, (w1, w2)):
-        assert w1.address in s.workers
-        assert w2.address in s.workers
+    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
 
         w2.close()
-        sleep(0.2)
-        assert w2.address in s.prune_workers(timeout=0.2)
+        while w2.status != 'closed':
+            sleep(1e-6)
+        assert w2.address in s.prune_workers(timeout=0.01)
         assert w1.address in s.workers
         assert w2.address not in s.workers
 
 
 def test_prune_and_notify():
-    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.005}) as (s, (w1, w2)):
+    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
         # Oh no! A worker died!
         w2.close()
-        sleep(0.1)  # sleep to make sure worker is closed
+        while w2.status != 'closed':
+            sleep(1e-6)
 
+        # worker 1 tries to collect data from the dead worker.
         result = w1.pool.apply_async(w1.collect, args=({'x': [w2.address]},))
-        sleep(0.1)  # some sleeping to give show the function is hanging
+        sleep(0.01)  # sleep to show w1.collect hangs
         assert result.ready() is False
 
         # The scheduler notices, and corrects it state.
@@ -266,12 +267,13 @@ def test_prune_and_notify():
             s.prune_and_notify(timeout=0.01)
 
         # But the sheduler notified the workers about the death
-        sleep(0.1)
+        while not result.ready():
+            sleep(1e-6)
         assert result.ready() is True
 
 
 def test_workers_reregister():
-    with scheduler_and_workers(worker_kwargs={'heartbeat': 1e-4}) as (s, (w1, w2)):
+    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
         assert w1.address in s.workers
 
         assert s.workers.pop(w1.address)
@@ -292,7 +294,7 @@ def test_collect_retry():
         result = w1.pool.apply_async(w1.collect,
                                      args=({'x': [w2.address, w3.address]},))
         while w2.address in s.workers:
-            s.prune_and_notify(timeout=0.002)
+            s.prune_and_notify(timeout=0.01)
 
         # make sure prune_and_notify didn't remove these
         assert w1.address in s.workers
@@ -306,7 +308,7 @@ def test_collect_retry():
 
 
 def test_collect():
-    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
+    with scheduler_and_workers() as (s, (w1, w2)):
         w1.data['x'] = 42
         w2.collect({'x': [w1.address]})
         assert w2.data['x'] == 42
@@ -339,7 +341,7 @@ def test_monitor_workers():
                                worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
         w2.close()
         while w2.status != 'closed':  # wait to close
-            sleep(1e-3)
+            sleep(1e-6)
         while w2.address in s.workers:  # wait to be removed
-            sleep(1e-3)
+            sleep(1e-6)
         assert w2.address not in s.workers
