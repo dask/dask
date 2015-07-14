@@ -432,15 +432,16 @@ class Worker(object):
         qkey = str(uuid.uuid1())
         queue = Queue()
         self.queues[qkey] = queue
+        locations_copy = locations.copy()  # don't mutate global locations
 
         # Send out requests for data
-        log(self.address, 'Collect data from peers', locations)
+        log(self.address, 'Collect data from peers', locations_copy)
         start = time()
         counter = 0
         with logerrors():
-            for key, locs in locations.items():
+            for key, locs in locations_copy.items():
                 if key in self.data:  # already have this locally
-                    locations.pop(key)
+                    locations_copy.pop(key)
                     continue
                 worker = random.choice(tuple(locs))  # randomly select one peer
 
@@ -463,15 +464,17 @@ class Worker(object):
             msgs = [queue.get() for i in range(counter)]
             for m in msgs:
                 if not m['got_key']:
-                    locations[m['key']].remove(m['worker'])
+                    locations_copy[m['key']].remove(m['worker'])
+                    log(self.address, 'Failed to get key: ', m['key'],
+                        ' from worker: ', m['worker'])
                 else:
-                    locations.pop(m['key'])
+                    locations_copy.pop(m['key'])
 
             del self.queues[qkey]
-            if locations != {}:
+            if locations_copy != {}:
                 log(self.address, 'Retrying collect with keys and locations',
-                    locations)
-                self.collect(locations)
+                    locations_copy)
+                self.collect(locations_copy)
             log(self.address, 'Collect finishes', time() - start, 'seconds')
 
     def compute(self, header, payload):
