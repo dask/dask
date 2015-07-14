@@ -566,6 +566,8 @@ class Worker(object):
 
     def worker_death(self, header, payload):
         """
+        A worker died, check no queues are blocking waiting for data from the
+        worker.
         """
         with logerrors():
             loads = header.get('loads', pickle.loads)
