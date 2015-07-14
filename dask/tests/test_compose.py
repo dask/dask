@@ -81,8 +81,8 @@ def test_literates():
     b = a + 1
     lit = (a, b, 3)
     assert value(lit).compute() == (1, 2, 3)
-    lit = {a, b, 3}
-    assert value(lit).compute() == {1, 2, 3}
+    lit = set((a, b, 3))
+    assert value(lit).compute() == set((1, 2, 3))
     lit = {a: 'a', b: 'b', 3: 'c'}
     assert value(lit).compute() == {1: 'a', 2: 'b', 3: 'c'}
     assert value(lit)[a].compute() == 'a'
