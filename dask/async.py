@@ -380,7 +380,9 @@ The main function of the scheduler.  Get is the main entry point.
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               queue=None, get_id=default_get_id, raise_on_exception=False,
-              start_callback=None, end_callback=None, **kwargs):
+              start_callback=None, end_callback=None,
+              rerun_exceptions_locally=None,
+              **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -408,6 +410,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     get_id : callable, optional
         Function to return the worker id, takes no arguments. Examples are
         `threading.current_thread` and `multiprocessing.current_process`.
+    rerun_exceptions_locally : bool, optional
+        Whether to rerun failing tasks in local process to enable debugging
+        (False by default)
     start_callback : function, optional
         Callback run every time a new task is started. Receives the key of the
         task to be run, the dask, and the scheduler state. At the end of
@@ -437,6 +442,9 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
 
+    if rerun_exceptions_locally is None:
+        rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
+
     if state['waiting'] and not state['ready']:
         raise ValueError("Found no accessible jobs in dask")
 
@@ -464,8 +472,22 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['waiting'] or state['ready'] or state['running']:
         key, res, tb, worker_id = queue.get()
         if isinstance(res, Exception):
-            raise type(res)(" Exception in remote process\n\n"
-                + str(res) + "\n\nTraceback:\n" + tb)
+            if rerun_exceptions_locally:
+                data = dict((dep, state['cache'][dep])
+                            for dep in get_dependencies(dsk, key))
+                task = dsk[key]
+                _execute_task(task, data)  # Re-execute locally
+            else:
+                raise type(res)(
+                "Exception occurred in remote worker.\n\n"
+                "Something you've asked dask to compute raised an exception.\n"
+                "That exception and the traceback are copied below.\n"
+                "To use pdb, rerun the computation with the keyword argument\n"
+                "    dask.set_options(rerun_exceptions_locally=True)\n"
+                "    or\n"
+                "    dataset.compute(rerun_exceptions_locally=True)\n\n"
+                "The original exception and traceback follow below:\n\n"
+                    + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
         finish_task(dsk, key, state, results, keyorder.get)
         if end_callback:
