@@ -254,6 +254,14 @@ def test_short_stack():
     assert get(s.dask, s._keys())[0][0].shape == (1, 1)
 
 
+def test_stack_scalars():
+    d = da.arange(4, chunks=2)
+
+    s = da.stack([d.mean(), d.sum()])
+
+    assert s.compute().tolist() == [np.arange(4).mean(), np.arange(4).sum()]
+
+
 def test_concatenate():
     a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
                      name, shape=(4, 6), chunks=(2, 3))
