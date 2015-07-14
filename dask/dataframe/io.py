@@ -12,19 +12,13 @@ from toolz import merge, dissoc
 from itertools import count
 from operator import getitem
 
-from ..compatibility import StringIO, unicode, range
+from ..compatibility import BytesIO, unicode, range
 from ..utils import textblock
 from .. import array as da
 
 from . import core
 from .core import DataFrame, Series, compute, concat, categorize_block, tokens
 from .shuffle import set_partition
-
-
-def _StringIO(data):
-    if isinstance(data, bytes):
-        data = data.decode()
-    return StringIO(data)
 
 
 def file_size(fn, compression=None):
@@ -131,12 +125,12 @@ def read_csv(fn, *args, **kwargs):
 
     # Create dask graph
     name = 'read-csv' + next(tokens)
-    dsk = dict(((name, i), (rest_read_csv, (_StringIO,
+    dsk = dict(((name, i), (rest_read_csv, (BytesIO,
                                (textblock, fn,
                                    i*chunkbytes, (i+1) * chunkbytes,
                                    kwargs['compression']))))
                for i in range(1, nchunks))
-    dsk[(name, 0)] = (first_read_csv, (_StringIO,
+    dsk[(name, 0)] = (first_read_csv, (BytesIO,
                        (textblock, fn, 0, chunkbytes, kwargs['compression'])))
 
     result = DataFrame(dsk, name, columns, divisions)
