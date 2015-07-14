@@ -1155,7 +1155,7 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     >>> a.compute()
     array([0, 1, 2])
 
-    This works particularly well with coupled with dask.array functions like
+    This works particularly well when coupled with dask.array functions like
     concatenate and stack:
 
     >>> arrays = [from_func(np.array, (), args=(n,)) for n in range(5)]
