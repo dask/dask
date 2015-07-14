@@ -539,8 +539,9 @@ class Scheduler(object):
 
     def close_workers(self):
         header = {'function': 'close'}
-        for w in self.workers:
-            self.send_to_worker(w, header, {})
+        with self.lock:
+            for w in self.workers:
+                self.send_to_worker(w, header, {})
         self.workers.clear()
         self.send_to_workers_queue.join()
 
