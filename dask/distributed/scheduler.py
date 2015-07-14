@@ -737,11 +737,10 @@ class Scheduler(object):
         """
         now = datetime.utcnow()
         remove = []
-        with self.lock:
-            for worker, data in self.workers.items():
-                if abs(data['last-seen'] - now).microseconds > (timeout * 1e6):
-                    remove.append(worker)
-            [self.workers.pop(r) for r in remove]
+        for worker, data in self.workers.items():
+            if abs(data['last-seen'] - now).microseconds > (timeout * 1e6):
+                remove.append(worker)
+        [self.workers.pop(r) for r in remove]
         return remove
 
     def prune_and_notify(self, timeout=20):
