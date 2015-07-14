@@ -74,6 +74,10 @@ def test_concatenate3():
                             [x, x, x]]).shape == (2, 6)
 
 
+def test_concatenate3_on_scalars():
+    assert eq(concatenate3([1, 2]), np.array([1, 2]))
+
+
 def eq(a, b):
     if isinstance(a, Array):
         adt = a._dtype
