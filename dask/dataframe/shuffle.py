@@ -34,6 +34,14 @@ def set_index(df, index, npartitions=None, compute=True, **kwargs):
     return df.set_partition(index, divisions, compute=compute, **kwargs)
 
 
+def new_categories(categories, index):
+    """ Flop around index for '.index' """
+    if index in categories:
+        categories = categories.copy()
+        categories['.index'] = categories.pop(index)
+    return categories
+
+
 def set_partition(df, index, divisions, compute=False, **kwargs):
     """ Group DataFrame by index
 
@@ -63,10 +71,14 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     p = ('zpartd' + next(tokens),)
 
     # Get Categories
-    catname = 'set-partition--get-categories' + next(tokens)
+    token = next(tokens)
+    catname = 'set-partition--get-categories-old' + token
+    catname_new = 'set-partition--get-categories-new' + token
 
     dsk1 = {catname: (get_categories, df._keys()[0]),
-            p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,)))}
+            p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,))),
+            catname_new: (new_categories, catname,
+                            index.name if isinstance(index, Series) else index)}
 
     # Partition data on disk
     name = 'set-partition--partition' + next(tokens)
@@ -94,7 +106,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     # Collect groups
     name = 'set-partition--collect' + next(tokens)
     dsk4 = dict(((name, i),
-                 (_categorize, catname, (_set_collect, i, p, barrier_token)))
+                 (_categorize, catname_new, (_set_collect, i, p, barrier_token)))
                 for i in range(len(divisions) - 1))
 
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)

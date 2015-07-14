@@ -581,7 +581,16 @@ def test_nlargest_series():
 
 
 def test_categorical_set_index():
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['a', 'b', 'b', 'a']})
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['a', 'b', 'b', 'c']})
     df['y'] = df.y.astype('category')
     a = dd.from_pandas(df, npartitions=2)
+
     b = a.set_index('y')
+    df2 = df.set_index('y')
+
+    assert list(b.index.compute()), list(df2.index)
+
+    with dask.set_options(get=get_sync):
+        b = a.set_index(a.y)
+        df2 = df.set_index(df.y)
+        assert list(b.index.compute()), list(df2.index)
