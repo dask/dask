@@ -592,6 +592,13 @@ def get_deps(dsk):
 def ndependents(dependencies, dependents):
     """ Number of total data elements that depend on key
 
+    For each key we return the number of data that can only be run after this
+    key is run.  The root nodes have value 1 while deep child nodes will have
+    larger values.
+
+    Examples
+    --------
+
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
 
@@ -623,11 +630,17 @@ def _ndependents(key, result, dependencies, dependents):
 
 
 def child_max(dependencies, dependents, scores):
-    """
+    """ Maximum-ish of scores of children
 
-    The maximum of all child scores minus a half.
-    This half score lets us pass a little bit of information
-    down the graph about dependence.  Otherwise things tend to flatten out.
+    This takes a dictionary of scores per key and returns a new set of scores
+    per key that is the maximum of the scores of all children of that node
+    minus a half.  In some sense this ranks each node by the maximum importance
+    of their children but then subtracts a little bit to ensure that the parent
+    node is slightly less important.  This half-score stops us from losing
+    information about depth, otherwise things tend to flatten out.
+
+    Examples
+    --------
 
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> scores = {'a': 3, 'b': 2, 'c': 2, 'd': 1}
@@ -661,7 +674,17 @@ def _child_max(key, scores, result, dependencies, dependents):
 
 
 def dfs(dependencies, dependents, key=lambda x: x):
-    """
+    """ Depth First Search of dask graph
+
+    This traverses from root/output nodes down to leaf/input nodes in a depth
+    first manner.  At each node it traverses down its immediate children by the
+    order determined by maximizing the key function.
+
+    As inputs it takes dependencies and dependents as can be computed from
+    ``get_deps(dsk)``.
+
+    Examples
+    --------
 
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> dependencies, dependents = get_deps(dsk)
