@@ -11,6 +11,7 @@ import random
 from datetime import datetime
 from threading import Thread, Lock
 from contextlib import contextmanager
+from time import sleep
 import traceback
 import sys
 from ..compatibility import Queue, unicode, Empty
@@ -212,6 +213,7 @@ class Scheduler(object):
         """ Event loop: Monitor worker heartbeats """
         while self.status != 'closed':
             self.prune_and_notify(timeout=timeout)
+            sleep(timeout)
 
     def block(self):
         """ Block until listener threads close
