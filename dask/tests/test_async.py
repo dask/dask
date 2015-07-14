@@ -165,3 +165,9 @@ def test_rerun_exceptions_locally():
         get({'x': (f,)}, 'x', rerun_exceptions_locally=True)
     except Exception as e:
         assert 'remote' not in str(e).lower()
+
+    try:
+        with dask.set_options(rerun_exceptions_locally=True):
+            get({'x': (f,)}, 'x')
+    except Exception as e:
+        assert 'remote' not in str(e).lower()
