@@ -960,6 +960,15 @@ def test_from_array_with_lock():
     assert eq(e + f, x + x)
 
 
+def test_from_func():
+    x = np.arange(10)
+    d = from_func(lambda n: n * x, (10,), np.int64, kwargs={'n': 2})
+
+    assert d.shape == x.shape
+    assert d.dtype == x.dtype
+    assert eq(d.compute(), 2 * x)
+
+
 def test_topk():
     x = np.array([5, 2, 1, 6])
     d = da.from_array(x, chunks=2)
