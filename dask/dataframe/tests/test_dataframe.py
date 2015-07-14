@@ -578,3 +578,10 @@ def test_nlargest_series():
     ss = dd.from_pandas(s, npartitions=2)
 
     assert eq(ss.nlargest(2), s.nlargest(2))
+
+
+def test_categorical_set_index():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['a', 'b', 'b', 'a']})
+    df['y'] = df.y.astype('category')
+    a = dd.from_pandas(df, npartitions=2)
+    b = a.set_index('y')

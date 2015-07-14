@@ -1088,12 +1088,12 @@ def quantiles(df, q, **kwargs):
     len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
 
     name3 = 'quantiles-3' + next(tokens)
-    merge_dsk = {(name3, 0): (merge_percentiles, q, [q] * df.npartitions,
+    merge_dsk = {(name3, 0): (pd.Series, (merge_percentiles, q, [q] * df.npartitions,
                                                 sorted(val_dsk),
-                                                sorted(len_dsk))}
+                                                sorted(len_dsk)))}
 
     dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
-    return da.Array(dsk, name3, chunks=((len(q),),))
+    return Series(dsk, name3, df.name, [df.divisions[0], df.divisions[-1]])
 
 
 def get(dsk, keys, get=None, **kwargs):

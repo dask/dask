@@ -239,7 +239,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     if index:
         quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1))
         result = compute(quantiles, *categories)
-        quantiles, categories = result[0], result[1:]
+        quantiles, categories = result[0].values, result[1:]
     else:
         categories = compute(*categories)
         quantiles = None
