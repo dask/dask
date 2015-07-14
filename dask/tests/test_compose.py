@@ -25,8 +25,8 @@ def test_operators():
 
 def test_methods():
     a = value("a b c d e")
-    assert a.split(' ') == ['a', 'b', 'c', 'd', 'e']
-    assert a.upper().replace('B', 'A').split().count('A') == 2
+    assert a.split(' ').compute() == ['a', 'b', 'c', 'd', 'e']
+    assert a.upper().replace('B', 'A').split().count('A').compute() == 2
 
 
 def test_attributes():
@@ -39,7 +39,7 @@ def test_value_errors():
     a = value([1, 2, 3])
     # Immutable
     assert raises(TypeError, lambda: setattr(a, 'foo', 1))
-    assert raises(TypeError, lambda: setattr(a, '_name', 'test'))
+    assert raises(TypeError, lambda: setattr(a, '_key', 'test'))
     # Can't iterate, or check if contains
     assert raises(TypeError, lambda: 1 in a)
     assert raises(TypeError, lambda: list(a))
@@ -54,18 +54,18 @@ def test_do():
     assert add2(add2(1, 2), 3).compute() == 6
     a = value(1)
     b = add2(add2(a, 2), 3)
-    assert a in b.dask
+    assert a.key in b.dask
 
 
 def test_named_value():
-    assert 'X' in [i._name for i in value(1, name='X').dask]
+    assert 'X' in value(1, name='X').dask
 
 
 def test_common_subexpressions():
     a = value([1, 2, 3])
     res = a[0] + a[0]
-    assert a[0] in res.dask
-    assert a in res.dask
+    assert a[0].key in res.dask
+    assert a.key in res.dask
     assert len(res.dask) == 3
 
 
@@ -74,6 +74,21 @@ def test_lists():
     b = value(2)
     c = do(sum)([a, b])
     assert c.compute() == 3
+
+
+def test_literates():
+    a = value(1)
+    b = a + 1
+    lit = (a, b, 3)
+    assert value(lit).compute() == (1, 2, 3)
+    lit = {a, b, 3}
+    assert value(lit).compute() == {1, 2, 3}
+    lit = {a: 'a', b: 'b', 3: 'c'}
+    assert value(lit).compute() == {1: 'a', 2: 'b', 3: 'c'}
+    assert value(lit)[a].compute() == 'a'
+    lit = {'a': a, 'b': b, 'c': 3}
+    assert value(lit).compute() == {'a': 1, 'b': 2, 'c': 3}
+    assert value(lit)['a'].compute() == 1
 
 
 def test_lists_are_concrete():

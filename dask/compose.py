@@ -1,10 +1,11 @@
 import operator
 from functools import partial, wraps
 from itertools import chain
+from collections import Iterator
 
-from toolz import merge
+from toolz import merge, unique
 
-from .core import preorder_traversal, istask
+from .core import istask
 from .optimize import cull, fuse
 from .context import _globals
 from .compatibility import apply
@@ -13,22 +14,50 @@ from . import threaded
 __all__ = ['do', 'value', 'Value']
 
 
-def get_dasks(task):
-    """Given a task, return a list of all unique dasks for any `Value` object
-    it's composed of"""
-    dsks = chain.from_iterable(t._dasks for t in preorder_traversal(task)
-                               if isinstance(t, Value))
-    return list(dict((id(d), d) for d in dsks).values())
+def flat_unique(ls):
+    """Flatten ``ls``, filter by unique id, and return a list"""
+    return list(unique(chain.from_iterable(ls), key=id))
 
 
-def insert_lists(task):
-    """Insert calls to `list` in a task around all literal lists"""
-    if isinstance(task, list):
-        return (list, [insert_lists(i) for i in task])
-    elif istask(task):
-        return (task[0],) + tuple(insert_lists(i) for i in task[1:])
+def unzip(ls, nout):
+    """Unzip a list of lists into ``nout`` outputs."""
+    out = list(zip(*ls))
+    if not out:
+        out = [()] * nout
+    return out
+
+
+def to_task_dasks(task):
+    """Normalize a task and extract all sub-dasks.
+
+    - Replace ``Values`` with their keys
+    - Convert literals to things the schedulers can handle
+    - Extract dasks from all enclosed values
+
+    Returns
+    -------
+    task : normalized task to be run
+    dasks : list of dasks that form the dag for this task
+    """
+    if istask(task) and not isinstance(task[0], Value):
+        args, dasks = unzip(map(to_task_dasks, task[1:]), 2)
+        return (task[0],) + tuple(args), flat_unique(dasks)
+    elif isinstance(task, Value):
+        return task.key, task._dasks
+    elif isinstance(task, (Iterator, list, tuple, set)):
+        args, dasks = unzip(map(to_task_dasks, task), 2)
+        args = list(args)
+        dasks = flat_unique(dasks)
+        # Ensure output type matches input type
+        if isinstance(task, (list, tuple, set)):
+            return (type(task), args), dasks
+        else:
+            return args, dasks
+    elif isinstance(task, dict):
+        args, dasks = to_task_dasks(tuple((k, v) for k, v in task.items()))
+        return (dict, args), dasks
     else:
-        return task
+        return task, []
 
 
 def tokenize(v):
@@ -49,14 +78,10 @@ def applyfunc(func, *args, **kwargs):
 
     if kwargs:
         func = partial(func, **kwargs)
-    task = insert_lists((func,) + args)
-    dasks = get_dasks(task)
+    task, dasks = to_task_dasks((func,) + args)
     name = tokenize((func, args, frozenset(kwargs.items())))
-    new_dsk = {}
-    dasks.append(new_dsk)
-    res = Value(name, dasks)
-    new_dsk[res] = task
-    return res
+    dasks.append({name: task})
+    return Value(name, dasks)
 
 
 def do(func):
@@ -112,35 +137,39 @@ class Value(object):
 
     Equivalent to the output from a single key in a dask graph.
     """
-    __slots__ = ('_name', '_dasks')
+    __slots__ = ('_key', '_dasks')
 
     def __init__(self, name, dasks):
-        object.__setattr__(self, '_name', name)
+        object.__setattr__(self, '_key', name)
         object.__setattr__(self, '_dasks', dasks)
 
     def compute(self, **kwargs):
         """Compute the result."""
         dask1 = merge(*self._dasks)
-        dask2 = cull(dask1, self)
-        return get(dask2, self, **kwargs)
+        dask2 = cull(dask1, self.key)
+        return get(dask2, self.key, **kwargs)
 
     @property
     def dask(self):
         return merge(*self._dasks)
 
+    @property
+    def key(self):
+        return self._key
+
     def visualize(self, optimize_graph=False, **kwargs):
         """Visualize the dask as a graph"""
         from dask.dot import dot_graph
         if optimize_graph:
-            dot_graph(optimize(self.dask, self), **kwargs)
+            dot_graph(optimize(self.dask, self.key), **kwargs)
         else:
             dot_graph(self.dask, **kwargs)
 
-    def __hash__(self):
-        return hash(self._name)
-
     def __repr__(self):
-        return "Value({0})".format(repr(self._name))
+        return "Value({0})".format(repr(self._key))
+
+    def __hash__(self):
+        return hash(self.key)
 
     def __dir__(self):
         return list(self.__dict__.keys())
@@ -157,11 +186,13 @@ class Value(object):
     def __iter__(self):
         raise TypeError("Value objects are not iterable")
 
+    def __call__(self, *args, **kwargs):
+        return do(apply)(self, args, kwargs)
+
     def __bool__(self):
         raise TypeError("Truth of Value objects is not supported")
 
-    def __call__(self, *args, **kwargs):
-        return do(apply)(self, args, kwargs)
+    __nonzero__ = __bool__
 
     __abs__ = do(operator.abs)
     __add__ = do(operator.add)
@@ -245,9 +276,6 @@ def value(val, name=None):
     """
 
     name = name or tokenize(val)
-    dsk = {}
-    res = Value(name, [dsk])
-    if isinstance(val, list):
-        val = (list, val)
-    dsk[res] = val
-    return res
+    task, dasks = to_task_dasks(val)
+    dasks.append({name: task})
+    return Value(name, dasks)
