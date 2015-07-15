@@ -180,9 +180,9 @@ class Value(object):
         """Visualize the dask as a graph"""
         from dask.dot import dot_graph
         if optimize_graph:
-            dot_graph(optimize(self.dask, self.key), **kwargs)
+            return dot_graph(optimize(self.dask, self.key), **kwargs)
         else:
-            dot_graph(self.dask, **kwargs)
+            return dot_graph(self.dask, **kwargs)
 
     def __repr__(self):
         return "Value({0})".format(repr(self.key))
