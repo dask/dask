@@ -125,9 +125,9 @@ def barrier(args):
 
 def _set_partition(df, index, divisions, p):
     """ Shard partition and dump into partd """
+    df = df.set_index(index)
     df = strip_categories(df)
     divisions = list(divisions)
-    df = df.set_index(index)
     shards = shard_df_on_index(df, divisions[1:-1])
     p.append(dict(enumerate(shards)))
 

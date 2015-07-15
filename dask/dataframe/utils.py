@@ -41,7 +41,10 @@ def shard_df_on_index(df, divisions):
     else:
         divisions = np.array(divisions)
         df = df.sort_index()
-        indices = df.index.searchsorted(divisions)
+        index = df.index
+        if iscategorical(index.dtype):
+            index = index.as_ordered()
+        indices = index.searchsorted(divisions)
         yield df.iloc[:indices[0]]
         for i in range(len(indices) - 1):
             yield df.iloc[indices[i]: indices[i+1]]
