@@ -404,7 +404,7 @@ def test_to_castra():
 
     c = a.to_castra()
     try:
-        assert eq(a, c[:])
+        tm.assert_frame_equal(df, c[:])
     finally:
         c.drop()
 

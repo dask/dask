@@ -575,11 +575,16 @@ def to_castra(df, fn=None, categories=None):
         Castra.to_dask
     """
     from castra import Castra
-    name = 'to-castra' + next(tokens)
     if isinstance(categories, list):
         categories = (list, categories)
-    dsk = {name: (Castra, fn, (df._name, 0), categories)}
-    dsk.update(dict(((name, i), (Castra.extend, name, (df._name, i)))
-                    for i in range(df.npartitions)))
-    c, _ = get(merge(dsk, df.dask), [name, list(dsk.keys())])
+
+    name = 'to-castra' + next(tokens)
+
+    dsk = dict()
+    dsk[(name, -1)] = (Castra, fn, (df._name, 0), categories)
+    for i in range(0, df.npartitions):
+        dsk[(name, i)] = (_link, (name, i - 1),
+                          (Castra.extend, (name, -1), (df._name, i)))
+
+    c, _ = get(merge(dsk, df.dask), [(name, -1), list(dsk.keys())])
     return c
