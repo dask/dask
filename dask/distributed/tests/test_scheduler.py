@@ -14,7 +14,6 @@ import dill
 
 from dask.distributed.scheduler import Scheduler
 from dask.distributed.worker import Worker
-from dask.compatibility import Queue
 
 context = zmq.Context()
 
@@ -290,35 +289,6 @@ def test_collect_retry():
         assert result.ready() == True
         assert 'x' in w1.data
         assert w1.data['x'] == 42
-
-
-def test_collect():
-    with scheduler_and_workers() as (s, (w1, w2)):
-        w1.data['x'] = 42
-        w2.collect({'x': [w1.address]})
-        assert w2.data['x'] == 42
-
-
-def test_worker_death():
-    with scheduler_and_workers() as (s, (w1, w2)):
-        # setup worker
-        qkey = 'queue_key'
-        dkey = 'data_key'
-        w1.queues[qkey] = Queue()
-        w1.queues_by_worker[w2.address] = {qkey: [dkey]}
-
-        # mock message
-        header = {}
-        payload = pickle.dumps({'removed': [w2.address]})
-
-        # worker death
-        w1.worker_death(header, payload)
-
-        # assertions
-        msg = w1.queues[qkey].get()
-        assert msg['got_key'] == False
-        assert msg['key'] == dkey
-        assert msg['worker'] == w2.address
 
 
 def test_monitor_workers():
