@@ -24,6 +24,7 @@ install:
   - source activate test-environment
   - conda install pytest numpy pip coverage toolz pandas scikit-learn cytoolz dill pyzmq ipython bcolz chest blosc cython pytables
   - if [[ $TRAVIS_PYTHON_VERSION != '2.6' ]]; then conda install bokeh; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then conda install unittest2; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install blosc --upgrade
   - pip install graphviz
