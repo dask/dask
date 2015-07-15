@@ -24,10 +24,10 @@ else:
     import operator
     from itertools import izip_longest as zip_longest
     from StringIO import StringIO
+    from io import BytesIO
     from urllib2 import urlopen
     from urlparse import urlparse
     from urllib import quote, unquote
-    BytesIO = StringIO
     unicode = unicode
     long = long
     apply = apply
