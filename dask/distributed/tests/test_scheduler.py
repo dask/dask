@@ -269,7 +269,8 @@ def test_workers_reregister():
 
 
 def test_collect_retry():
-    with scheduler_and_workers(n=3, worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2, w3)):
+    with scheduler_and_workers(n=3, scheduler_kwargs={'worker_timeout': 0.05},
+                               worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2, w3)):
         w3.data['x'] = 42
         w2.close()
         while w2.status != 'closed':  # make sure closed
@@ -278,7 +279,7 @@ def test_collect_retry():
         result = w1.pool.apply_async(w1.collect,
                                      args=({'x': [w2.address, w3.address]},))
         while w2.address in s.workers:
-            s.prune_and_notify(timeout=0.05)
+            sleep(1e-6)
 
         # make sure prune_and_notify didn't remove these
         assert w1.address in s.workers
