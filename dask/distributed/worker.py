@@ -439,7 +439,7 @@ class Worker(object):
         start = time()
         counter = 0
         with logerrors():
-            for key, locs in locations_copy.items():
+            for key, locs in list(locations_copy.items()):
                 if key in self.data:  # already have this locally
                     locations_copy.pop(key)
                     continue
