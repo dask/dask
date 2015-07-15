@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 from functools import wraps, partial
 import re
-import struct
 import os
 from glob import glob
 from math import ceil
@@ -13,26 +12,12 @@ from itertools import count
 from operator import getitem
 
 from ..compatibility import BytesIO, unicode, range
-from ..utils import textblock
+from ..utils import textblock, file_size
 from .. import array as da
 
 from . import core
 from .core import DataFrame, Series, compute, concat, categorize_block, tokens
 from .shuffle import set_partition
-
-
-def file_size(fn, compression=None):
-    """ Size of a file on disk
-
-    If compressed then return the uncompressed file size
-    """
-    if compression == 'gzip':
-        with open(fn, 'rb') as f:
-            f.seek(-4, 2)
-            result = struct.unpack('I', f.read(4))[0]
-    else:
-        result = os.stat(fn).st_size
-    return result
 
 
 csv_defaults = {'compression': None}

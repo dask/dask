@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from functools import partial
 import os
 import shutil
+import struct
 import gzip
 import tempfile
 import inspect
@@ -246,3 +247,17 @@ def is_integer(i):
         return i
     else:
         return False
+
+
+def file_size(fn, compression=None):
+    """ Size of a file on disk
+
+    If compressed then return the uncompressed file size
+    """
+    if compression == 'gzip':
+        with open(fn, 'rb') as f:
+            f.seek(-4, 2)
+            result = struct.unpack('I', f.read(4))[0]
+    else:
+        result = os.stat(fn).st_size
+    return result

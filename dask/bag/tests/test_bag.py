@@ -10,6 +10,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
         _parse_s3_URI, inline_singleton_lists, optimize)
 from dask.utils import filetexts, tmpfile, raises
+from dask.async import get_sync
 import dask
 import dask.bag as db
 import shutil
@@ -260,6 +261,31 @@ def test_from_filenames_bz2():
     assert (set(b.dask.values()) ==
             set([(list, (bz2.BZ2File, os.path.abspath('foo.json.bz2'))),
                  (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
+
+
+def test_from_filenames_large():
+    with tmpfile() as fn:
+        with open(fn, 'w') as f:
+            f.write('Hello, world!\n' * 100)
+        b = db.from_filenames(fn, chunkbytes=100)
+        c = db.from_filenames(fn)
+        assert len(b.dask) > 5
+        assert list(b) == list(c)
+
+        d = db.from_filenames([fn], chunkbytes=100)
+        assert list(b) == list(d)
+
+
+def test_from_filenames_large_gzip():
+    with tmpfile('gz') as fn:
+        f = gzip.open(fn, 'wb')
+        f.write(b'Hello, world!\n' * 100)
+        f.close()
+
+        b = db.from_filenames(fn, chunkbytes=100)
+        c = db.from_filenames(fn)
+        assert len(b.dask) > 5
+        assert list(b) == [s.decode() for s in c]
 
 
 @pytest.mark.slow

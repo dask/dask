@@ -19,7 +19,7 @@ from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
                    remove, pluck, groupby, topk)
 import toolz
-from ..utils import tmpfile, ignoring
+from ..utils import tmpfile, ignoring, file_size, textblock
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
@@ -28,7 +28,7 @@ from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
-        unquote)
+        unquote, StringIO)
 from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -793,7 +793,7 @@ def collect(grouper, group, p, barrier_token):
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
-def from_filenames(filenames):
+def from_filenames(filenames, chunkbytes=None):
     """ Create dask by loading in lines from many files
 
     Provide list of filenames
@@ -803,6 +803,11 @@ def from_filenames(filenames):
     Or a globstring
 
     >>> b = from_filenames('myfiles.*.txt')  # doctest: +SKIP
+
+    Parallelize a large files by providing the number of uncompressed bytes to
+    load into each partition.
+
+    >>> b = from_filenames('largefile.txt', chunkbytes=1e7)  # doctest: +SKIP
 
     See also:
         from_sequence: A more generic bag creation function
@@ -815,12 +820,30 @@ def from_filenames(filenames):
 
     full_filenames = [os.path.abspath(f) for f in filenames]
 
-    extension = os.path.splitext(filenames[0])[1].strip('.')
-    myopen = opens.get(extension, open)
+    name = 'from-filename' + next(tokens)
 
-    d = dict((('load', i), (list, (myopen, fn)))
-             for i, fn in enumerate(full_filenames))
-    return Bag(d, 'load', len(d))
+    if chunkbytes:
+        chunkbytes = int(chunkbytes)
+        taskss = [_chunk_read_file(fn, chunkbytes) for fn in full_filenames]
+        d = dict(((name, i), task)
+                 for i, task in enumerate(toolz.concat(taskss)))
+    else:
+        extension = os.path.splitext(filenames[0])[1].strip('.')
+        myopen = opens.get(extension, open)
+
+        d = dict(((name, i), (list, (myopen, fn)))
+                 for i, fn in enumerate(full_filenames))
+
+    return Bag(d, name, len(d))
+
+
+def _chunk_read_file(filename, chunkbytes):
+    extension = os.path.splitext(filename)[1].strip('.')
+    compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
+
+    return [(list, (StringIO, (bytes.decode,
+                    (textblock, filename, i, i + chunkbytes, compression))))
+             for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
 def write(data, filename):
