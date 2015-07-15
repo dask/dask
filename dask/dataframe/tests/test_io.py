@@ -421,3 +421,26 @@ def test_to_hdf():
             a.x.to_hdf(fn, '/data')
             out = pd.read_hdf(fn, '/data')
             tm.assert_series_equal(df.x, out[:])
+
+
+def test_read_hdf():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data')
+        try:
+            dd.read_hdf(fn, '/data', chunksize=2)
+            assert False
+        except TypeError as e:
+            assert "format='table'" in str(e)
+
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+        a = dd.read_hdf(fn, '/data', chunksize=2)
+        assert a.npartitions == 2
+
+        tm.assert_frame_equal(a.compute(), df)
+
+        tm.assert_frame_equal(
+              dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
+              pd.read_hdf(fn, '/data', start=1, stop=3))

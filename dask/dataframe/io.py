@@ -533,3 +533,34 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                             'fletcher32': fletcher32}))
 
     get(merge(df.dask, dsk), (name, i), **kwargs)
+
+
+dont_use_fixed_error_message = """
+This HDFStore is not partitionable and can only be use monolithically with
+pandas.  In the future when creating HDFStores use the ``format='table'``
+option to ensure that your dataset can be parallelized"""
+
+@wraps(pd.read_hdf)
+def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
+        chunksize=1000000):
+    with pd.HDFStore(path_or_buf) as hdf:
+        storer = hdf.get_storer(key)
+        if storer.format_type != 'table':
+            raise TypeError(dont_use_fixed_error_message)
+        if stop is None:
+            stop = storer.nrows
+
+    if columns is None:
+        columns = list(pd.read_hdf(path_or_buf, key, stop=0).columns)
+
+    name = 'read-hdf' + next(tokens)
+
+    dsk = dict(((name, i), (apply, pd.read_hdf,
+                             (path_or_buf, key),
+                             {'start': s, 'stop': s + chunksize,
+                              'columns': columns}))
+                for i, s in enumerate(range(start, stop, chunksize)))
+
+    divisions = [None] * (len(dsk) + 1)
+
+    return DataFrame(dsk, name, columns, divisions)
