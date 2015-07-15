@@ -272,6 +272,16 @@ def test_from_filenames_large():
         assert list(b) == list(c)
 
 
+def test_from_filenames_large_gzip():
+    with tmpfile('gz') as fn:
+        with gzip.open(fn, 'wb') as f:
+            f.write('Hello, world!\n' * 100)
+        b = db.from_filenames(fn, chunkbytes=100)
+        c = db.from_filenames(fn)
+        assert len(b.dask) > 5
+        assert list(b) == list(c)
+
+
 @pytest.mark.slow
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and

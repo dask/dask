@@ -835,7 +835,8 @@ def _chunk_read_file(filename, chunkbytes):
     extension = os.path.splitext(filename)[1].strip('.')
     compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
 
-    return [(list, (StringIO, (textblock, filename, i, i + chunkbytes)))
+    return [(list, (StringIO,
+                    (textblock, filename, i, i + chunkbytes, compression)))
              for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
