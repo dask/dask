@@ -190,12 +190,17 @@ class Worker(object):
             loads = header.get('loads', pickle.loads)
             payload = loads(payload)
             log(self.address, 'Getitem ack', payload)
-            assert header['status'] == 'OK'
+            if header['status'] == 'Bad key':
+                msg = {'status': 'failed',
+                       'key': payload['key'],
+                       'worker': header['address']}
 
-            self.data[payload['key']] = payload['value']
-            msg = {'status': 'success',
-                   'key': payload['key'],
-                   'worker': self.address}
+            elif header['status'] == 'OK':
+                self.data[payload['key']] = payload['value']
+                msg = {'status': 'success',
+                       'key': payload['key'],
+                       'worker': header['address']}
+
             self.queues[payload['queue']].put(msg)
 
     def getitem_scheduler(self, header, payload):
