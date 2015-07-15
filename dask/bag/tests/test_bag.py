@@ -262,6 +262,16 @@ def test_from_filenames_bz2():
                  (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
 
 
+def test_from_filenames_large():
+    with tmpfile() as fn:
+        with open(fn, 'w') as f:
+            f.write('Hello, world!\n' * 100)
+        b = db.from_filenames(fn, chunkbytes=100)
+        c = db.from_filenames(fn)
+        assert len(b.dask) > 5
+        assert list(b) == list(c)
+
+
 @pytest.mark.slow
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
