@@ -399,12 +399,15 @@ def test_from_dask_array_raises():
 def test_to_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]})
+                       'y': [1, 2, 3, 4]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
     c = a.to_castra()
+    b = c.to_dask()
     try:
         tm.assert_frame_equal(df, c[:])
+        tm.assert_frame_equal(b.compute(), df)
     finally:
         c.drop()
 
