@@ -1,9 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-from operator import itemgetter
 import os
 
-from pydot import Graph, Node, Edge
+from graphviz import Digraph
 
 from .core import istask, get_dependencies, ishashable
 
@@ -24,51 +23,47 @@ def name(x):
         return str(hash(str(x)))
 
 
-def to_pydot(d, data_attributes=None, function_attributes=None):
+def to_graphviz(dsk, data_attributes=None, function_attributes=None):
     if data_attributes is None:
         data_attributes = {}
     if function_attributes is None:
         function_attributes = {}
 
-    g = Graph(graph_type='digraph')
+    g = Digraph(graph_attr={'rankdir': 'BT'})
 
-    node_lk = {}
+    seen = set()
 
-    for k, v in sorted(d.items(), key=itemgetter(0)):
+    for k, v in dsk.items():
         k_name = name(k)
-        if k_name not in node_lk:
-            node_lk[k_name] = node = Node(k_name, shape='box', label=str(k),
-                                          **data_attributes.get(k, {}))
-            g.add_node(node)
+        if k_name not in seen:
+            seen.add(k_name)
+            g.node(k_name, label=str(k), shape='box',
+                   **data_attributes.get(k, {}))
 
         if istask(v):
             func = v[0]
             func_name = name((k, 'function'))
-            if func_name not in node_lk:
-                node_lk[func_name] = node = Node(func_name, shape='circle',
-                                                 label=label(func),
-                                                 **function_attributes.get(k, {}))
-                g.add_node(node)
-            g.add_edge(Edge(func_name, k_name, arrowhead='none'))
+            if func_name not in seen:
+                seen.add(func_name)
+                g.node(func_name, label=label(func), shape='circle',
+                       **function_attributes.get(k, {}))
+            g.edge(func_name, k_name)
 
-            for dep in sorted(get_dependencies(d, k)):
+            for dep in get_dependencies(dsk, k):
                 dep_name = name(dep)
-                if dep_name not in node_lk:
-                    node_lk[dep_name] = node = Node(dep_name, label=str(dep),
-                                                    shape='box',
-                                                    **data_attributes.get(dep, {}))
-                    g.add_node(node)
-                g.add_edge(Edge(dep_name, func_name, arrowhead='none'))
-        elif ishashable(v) and v in d:
-            g.add_edge(Edge(name(v), k_name, arrowhead='none'))
-        g.set_rankdir('BT')
+                if dep_name not in seen:
+                    seen.add(dep_name)
+                    g.node(dep_name, label=str(dep), shape='box',
+                           **data_attributes.get(dep, {}))
+                g.edge(dep_name, func_name)
+        elif ishashable(v) and v in dsk:
+            g.edge(name(v), k_name)
     return g
 
 
-def dot_graph(d, filename='mydask', **kwargs):
-    p = to_pydot(d, **kwargs)
-    with open(filename + '.dot', 'w') as f:
-        f.write(p.to_string())
+def dot_graph(dsk, filename='mydask', **kwargs):
+    g = to_graphviz(dsk, **kwargs)
+    g.save(filename + '.dot')
 
     os.system('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename))
     os.system('dot -Tpdf {0}.dot -o {0}.png'.format(filename))
