@@ -5,7 +5,6 @@ from collections import Iterator
 
 from toolz import merge, unique
 
-from .core import istask
 from .optimize import cull, fuse
 from .context import _globals
 from .compatibility import apply
@@ -27,12 +26,18 @@ def unzip(ls, nout):
     return out
 
 
-def to_task_dasks(task):
-    """Normalize a task and extract all sub-dasks.
+def to_task_dasks(expr):
+    """Normalize a python object and extract all sub-dasks.
 
     - Replace ``Values`` with their keys
     - Convert literals to things the schedulers can handle
     - Extract dasks from all enclosed values
+
+    Parameters
+    ----------
+    expr : object
+        The object to be normalized. This function knows how to handle
+        ``Value``s, as well as most builtin python types.
 
     Returns
     -------
@@ -56,25 +61,22 @@ def to_task_dasks(task):
     >>> dasks # doctest: +SKIP
     [{'a': 1}, {'b': 2}]
     """
-    if istask(task) and not isinstance(task[0], Value):
-        args, dasks = unzip(map(to_task_dasks, task[1:]), 2)
-        return (task[0],) + tuple(args), flat_unique(dasks)
-    elif isinstance(task, Value):
-        return task.key, task._dasks
-    elif isinstance(task, (Iterator, list, tuple, set)):
-        args, dasks = unzip(map(to_task_dasks, task), 2)
+    if isinstance(expr, Value):
+        return expr.key, expr._dasks
+    elif isinstance(expr, (Iterator, list, tuple, set)):
+        args, dasks = unzip(map(to_task_dasks, expr), 2)
         args = list(args)
         dasks = flat_unique(dasks)
         # Ensure output type matches input type
-        if isinstance(task, (list, tuple, set)):
-            return (type(task), args), dasks
+        if isinstance(expr, (list, tuple, set)):
+            return (type(expr), args), dasks
         else:
             return args, dasks
-    elif isinstance(task, dict):
-        args, dasks = to_task_dasks(list([k, v] for k, v in task.items()))
+    elif isinstance(expr, dict):
+        args, dasks = to_task_dasks(list([k, v] for k, v in expr.items()))
         return (dict, args), dasks
     else:
-        return task, []
+        return expr, []
 
 
 def tokenize(v):

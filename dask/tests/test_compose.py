@@ -35,6 +35,7 @@ def test_operators():
 
     a = value(10)
     assert (a + 1).compute() == 11
+    assert (1 + a).compute() == 11
     assert (a >> 1).compute() == 5
     assert (a > 2).compute()
     assert (a ** 2).compute() == 100
@@ -62,6 +63,8 @@ def test_value_errors():
     assert raises(TypeError, lambda: list(a))
     # No dynamic generation of magic methods
     assert raises(AttributeError, lambda: a.__len__())
+    # Truth of values forbidden
+    assert raises(TypeError, lambda: bool(a))
 
 
 def test_do():
