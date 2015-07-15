@@ -1,7 +1,7 @@
 Dask
 ====
 
-|Build Status| |Coverage| |Doc Status| |Gitter| |Downloads|
+|Build Status| |Windows Status| |Coverage| |Doc Status| |Gitter| |Downloads|
 
 Dask provides multi-core execution on larger-than-memory datasets using blocked
 algorithms and task scheduling.  It maps high-level NumPy, Pandas, and list
@@ -225,6 +225,8 @@ includes the following projects:
 .. _blogposts: http://matthewrocklin.com/blog/tags.html#dask-ref
 .. |Build Status| image:: https://travis-ci.org/ContinuumIO/dask.png
    :target: https://travis-ci.org/ContinuumIO/dask
+.. |Windows Status| image:: https://ci.appveyor.com/api/projects/status/7qh6jn1bn6rmyld8/branch/master?svg=true
+   :target: https://ci.appveyor.com/project/jcrist/dask-u9ok5
 .. |Version Status| image:: https://pypip.in/v/dask.png
    :target: https://pypi.python.org/pypi/dask/
 .. |Doc Status| image:: https://readthedocs.org/projects/dask/badge/?version=latest
