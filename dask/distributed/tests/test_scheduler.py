@@ -235,21 +235,6 @@ def test_close_scheduler():
     assert s.context.closed
 
 
-def test_prune_workers():
-    """
-    We close a worker, then make sure prune workers notices this and removes
-    it from the scheduler. This is "correcting the schedulers' state".
-    """
-    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
-
-        w2.close()
-        while w2.status != 'closed':
-            sleep(1e-6)
-        assert w2.address in s.prune_workers(timeout=0.01)
-        assert w1.address in s.workers
-        assert w2.address not in s.workers
-
-
 def test_prune_and_notify():
     with scheduler_and_workers(worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
         # Oh no! A worker died!
@@ -281,7 +266,7 @@ def test_workers_reregister():
 
         while w1.address not in s.workers:
             sleep(1e-6)
-        assert w1.address in s.workers  # but now its back
+        assert w1.address in s.workers  # but now it's back
 
 
 def test_collect_retry():
