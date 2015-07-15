@@ -11,7 +11,7 @@ from toolz import merge, dissoc
 from itertools import count
 from operator import getitem
 
-from ..compatibility import BytesIO, unicode, range
+from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
 from .. import array as da
 
