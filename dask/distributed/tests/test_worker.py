@@ -10,6 +10,8 @@ import zmq
 from time import sleep
 import pickle
 
+from dask.compatibility import Queue
+
 context = zmq.Context()
 
 def inc(x):
@@ -132,6 +134,7 @@ def test_collect():
 
                 c.collect({'x': [a.address],
                            'a': [b.address],
+                           'c': [c.address],
                            'y': [a.address]})
 
                 assert c.data == dict(a=1, c=5, x=10, y=20)
@@ -160,3 +163,28 @@ def test_compute():
             assert result['key'] == 'c'
             assert result['status'] == 'OK'
             assert result['queue'] == payload['queue']
+
+
+def test_worker_death():
+    with worker_and_router() as (w1, r):
+        with worker(scheduler=w1.scheduler) as w2:
+            r.recv_multipart()  # burn handshake
+
+            # setup worker
+            qkey = 'queue_key'
+            dkey = 'data_key'
+            w1.queues[qkey] = Queue()
+            w1.queues_by_worker[w2.address] = {qkey: [dkey]}
+
+            # mock message
+            header = {}
+            payload = pickle.dumps({'removed': [w2.address]})
+
+            # worker death
+            w1.worker_death(header, payload)
+
+            # assertions
+            msg = w1.queues[qkey].get()
+            assert msg['got_key'] == False
+            assert msg['key'] == dkey
+            assert msg['worker'] == w2.address
