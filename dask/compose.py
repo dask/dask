@@ -163,9 +163,8 @@ class Value(object):
 
     def compute(self, **kwargs):
         """Compute the result."""
-        dask1 = merge(*self._dasks)
-        dask2 = cull(dask1, self.key)
-        return get(dask2, self.key, **kwargs)
+        dask1 = cull(self.dask, self.key)
+        return get(dask1, self.key, **kwargs)
 
     @property
     def dask(self):
@@ -184,7 +183,7 @@ class Value(object):
             dot_graph(self.dask, **kwargs)
 
     def __repr__(self):
-        return "Value({0})".format(repr(self._key))
+        return "Value({0})".format(repr(self.key))
 
     def __hash__(self):
         return hash(self.key)
