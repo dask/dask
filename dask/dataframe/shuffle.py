@@ -31,7 +31,7 @@ def set_index(df, index, npartitions=None, compute=True, **kwargs):
     divisions = (index2
                   .quantiles(np.linspace(0, 100, npartitions+1))
                   .compute()).tolist()
-    return df.set_partition(index, divisions, compute=compute, **kwargs)
+    return set_partition(df, index, divisions, compute=compute, **kwargs)
 
 
 def new_categories(categories, index):
@@ -73,11 +73,11 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     # Get Categories
     token = next(tokens)
     catname = 'set-partition--get-categories-old' + token
-    catname_new = 'set-partition--get-categories-new' + token
+    catname2 = 'set-partition--get-categories-new' + token
 
     dsk1 = {catname: (get_categories, df._keys()[0]),
             p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,))),
-            catname_new: (new_categories, catname,
+            catname2: (new_categories, catname,
                             index.name if isinstance(index, Series) else index)}
 
     # Partition data on disk
@@ -101,13 +101,21 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
         dsk = merge(df.dask, dsk1, dsk2, dsk3)
         if isinstance(index, _Frame):
             dsk.update(index.dask)
-        p, barrier_token = get(dsk, [p, barrier_token], **kwargs)
+        p, barrier_token, categories = get(dsk, [p, barrier_token, catname], **kwargs)
+        dsk4 = {catname2: categories}
+    else:
+        dsk4 = {}
 
     # Collect groups
     name = 'set-partition--collect' + next(tokens)
-    dsk4 = dict(((name, i),
-                 (_categorize, catname_new, (_set_collect, i, p, barrier_token)))
-                for i in range(len(divisions) - 1))
+    if compute and not categories:
+        dsk4.update(dict(((name, i),
+                     (_set_collect, i, p, barrier_token))
+                     for i in range(len(divisions) - 1)))
+    else:
+        dsk4.update(dict(((name, i),
+                     (_categorize, catname2, (_set_collect, i, p, barrier_token)))
+                    for i in range(len(divisions) - 1)))
 
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
     if isinstance(index, _Frame):
