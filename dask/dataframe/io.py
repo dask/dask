@@ -505,7 +505,7 @@ def from_dask_array(x, columns=None):
                          x.ndim)
 
 
-def _link(result, token):
+def _link(token, result):
     return None
 
 
@@ -564,3 +564,22 @@ def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
     divisions = [None] * (len(dsk) + 1)
 
     return DataFrame(dsk, name, columns, divisions)
+
+
+def to_castra(df, fn=None, categories=None):
+    """ Write DataFrame to Castra on-disk store
+
+    See https://github.com/blosc/castra for details
+
+    See Also:
+        Castra.to_dask
+    """
+    from castra import Castra
+    name = 'to-castra' + next(tokens)
+    if isinstance(categories, list):
+        categories = (list, categories)
+    dsk = {name: (Castra, fn, (df._name, 0), categories)}
+    dsk.update(dict(((name, i), (Castra.extend, name, (df._name, i)))
+                    for i in range(df.npartitions)))
+    c, _ = get(merge(dsk, df.dask), [name, list(dsk.keys())])
+    return c

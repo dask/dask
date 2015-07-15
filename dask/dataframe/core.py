@@ -650,15 +650,8 @@ class DataFrame(_Frame):
         See Also:
             Castra.to_dask
         """
-        from castra import Castra
-        name = 'to-castra' + next(tokens)
-        if isinstance(categories, list):
-            categories = (list, categories)
-        dsk = {name: (Castra, fn, (self._name, 0), categories)}
-        dsk.update(dict(((name, i), (Castra.extend, name, (self._name, i)))
-                        for i in range(self.npartitions)))
-        c, _ = get(merge(dsk, self.dask), [name, list(dsk.keys())])
-        return c
+        from .io import to_castra
+        return to_castra(self, fn, categories)
 
 
 def _assign(df, *pairs):
