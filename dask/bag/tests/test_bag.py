@@ -278,8 +278,10 @@ def test_from_filenames_large():
 
 def test_from_filenames_large_gzip():
     with tmpfile('gz') as fn:
-        with gzip.open(fn, 'wb') as f:
-            f.write(b'Hello, world!\n' * 100)
+        f = gzip.open(fn, 'wb')
+        f.write(b'Hello, world!\n' * 100)
+        f.close()
+
         b = db.from_filenames(fn, chunkbytes=100)
         c = db.from_filenames(fn)
         assert len(b.dask) > 5
