@@ -10,7 +10,8 @@ from threading import Thread, Lock, Event
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
 from datetime import datetime
-from time import time, sleep
+from time import time
+from collections import defaultdict
 
 try:
     import cPickle as pickle
@@ -110,7 +111,7 @@ class Worker(object):
         self.lock = Lock()
 
         self.queues = dict()
-        self.queues_by_worker = dict()
+        self.queues_by_worker = defaultdict(lambda: defaultdict(set))
 
         self.pid = os.getpid()
 
@@ -447,12 +448,7 @@ class Worker(object):
                 worker = random.choice(tuple(locs))  # randomly select one peer
 
                 # track keys and where they are comming from
-                if worker not in self.queues_by_worker:
-                    self.queues_by_worker.update({worker: {qkey: [key]}})
-                elif qkey not in self.queues_by_worker[worker]:
-                    self.queues_by_worker[worker].update({qkey: [key]})
-                elif key not in self.queues_by_worker[worker][qkey]:
-                    self.queues_by_worker[worker][qkey].append(key)
+                self.queues_by_worker[worker][qkey].add(key)
 
                 header = {'jobid': key,
                           'function': 'getitem'}
