@@ -530,6 +530,11 @@ class Worker(object):
     def __del__(self):
         self.close()
 
+    def __repr__(self):
+        s = '<dask.distributed.Worker at %s address=%s, scheduler=%s>'
+        return s % (hex(id(self)), self.address.decode('utf-8')[6:],
+                    self.scheduler.decode('utf-8')[6:])
+
     def heart(self, pulse=5):
         """Send a message to scheduler at a given interval"""
         while self.status != 'closed':
