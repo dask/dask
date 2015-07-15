@@ -1,99 +1,74 @@
 from __future__ import absolute_import, division, print_function
 
-import networkx as nx
-from dask.core import istask, get_dependencies
+import os
+
+from graphviz import Digraph
+
+from .core import istask, get_dependencies, ishashable
 
 
-def make_hashable(x):
+def label(func):
     try:
-        hash(x)
-        assert len(str(x)) < 100
-        return x
-    except:
-        return hash(str(x))
-
-
-def lower(func):
-    while hasattr(func, 'func'):
-        func = func.func
-    return func
-
-def name(func):
-    try:
-        return lower(func).__name__
+        while hasattr(func, 'func'):
+            func = func.func
+        return func.__name__
     except AttributeError:
         return 'func'
 
 
-def to_networkx(d, data_attributes=None, function_attributes=None):
+def name(x):
+    try:
+        return str(hash(x))
+    except TypeError:
+        return str(hash(str(x)))
+
+
+def to_graphviz(dsk, data_attributes=None, function_attributes=None):
     if data_attributes is None:
-        data_attributes = dict()
+        data_attributes = {}
     if function_attributes is None:
-        function_attributes = dict()
+        function_attributes = {}
 
-    g = nx.DiGraph()
+    g = Digraph(graph_attr={'rankdir': 'BT'})
 
-    for k, v in sorted(d.items(), key=lambda x: x[0]):
-        g.add_node(k, shape='box', **data_attributes.get(k, dict()))
+    seen = set()
+
+    for k, v in dsk.items():
+        k_name = name(k)
+        if k_name not in seen:
+            seen.add(k_name)
+            g.node(k_name, label=str(k), shape='box',
+                   **data_attributes.get(k, {}))
+
         if istask(v):
-            func, args = v[0], v[1:]
-            func_node = make_hashable((v, 'function'))
-            g.add_node(func_node,
-                       shape='circle',
-                       label=name(func),
-                       **function_attributes.get(k, dict()))
-            g.add_edge(func_node, k)
-            for dep in sorted(get_dependencies(d, k)):
-                arg2 = make_hashable(dep)
-                g.add_node(arg2,
-                           label=str(dep),
-                           shape='box',
-                           **data_attributes.get(dep, dict()))
-                g.add_edge(arg2, func_node)
-        else:
-            v_hash = make_hashable(v)
-            if v_hash not in d:
-                g.add_node(k, label='%s=%s' % (k, v), **data_attributes.get(k, dict()))
-            else:  # alias situation
-                g.add_edge(v_hash, k)
+            func = v[0]
+            func_name = name((k, 'function'))
+            if func_name not in seen:
+                seen.add(func_name)
+                g.node(func_name, label=label(func), shape='circle',
+                       **function_attributes.get(k, {}))
+            g.edge(func_name, k_name)
 
+            for dep in get_dependencies(dsk, k):
+                dep_name = name(dep)
+                if dep_name not in seen:
+                    seen.add(dep_name)
+                    g.node(dep_name, label=str(dep), shape='box',
+                           **data_attributes.get(dep, {}))
+                g.edge(dep_name, func_name)
+        elif ishashable(v) and v in dsk:
+            g.edge(name(v), k_name)
     return g
 
 
-def write_networkx_to_dot(dg, filename='mydask'):
-    import os
-    try:
-        p = nx.to_pydot(dg)
-    except AttributeError:
-        raise ImportError("Can not find pydot module. Please install.\n"
-                          "    pip install pydot")
-    p.set_rankdir('BT')
-    with open(filename + '.dot', 'w') as f:
-        f.write(p.to_string())
+def dot_graph(dsk, filename='mydask', **kwargs):
+    g = to_graphviz(dsk, **kwargs)
+    g.save(filename + '.dot')
 
-    os.system('dot -Tpdf %s.dot -o %s.pdf' % (filename, filename))
-    os.system('dot -Tpng %s.dot -o %s.png' % (filename, filename))
-    print("Writing graph to %s.pdf" % filename)
-
-
-def dot_graph(d, filename='mydask', **kwargs):
-    dg = to_networkx(d, **kwargs)
-    write_networkx_to_dot(dg, filename=filename)
+    os.system('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename))
+    os.system('dot -Tpdf {0}.dot -o {0}.png'.format(filename))
     try:
         from IPython.display import Image
         return Image(filename + '.png')
     except ImportError:
         pass
-
-
-if __name__ == '__main__':
-    def add(x, y):
-        return x + y
-    def inc(x):
-        return x + 1
-
-    dsk = {'x': 1, 'y': (inc, 'x'),
-           'a': 2, 'b': (inc, 'a'),
-           'z': (add, 'y', 'b')}
-
-    dot_graph(dsk)
