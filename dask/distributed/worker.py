@@ -450,7 +450,11 @@ class Worker(object):
                 if key in self.data:  # already have this locally
                     locations.pop(key)
                     continue
-                worker = random.choice(tuple(locs))  # randomly select one peer
+                try:
+                    worker = random.choice(tuple(locs))  # randomly select one peer
+                except IndexError:
+                    raise ValueError("%s could not be collected from any "
+                                     "locations." % (key))
 
                 # track keys and where they are comming from
                 self.queues_by_worker[worker][qkey].add(key)

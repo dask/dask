@@ -2,6 +2,7 @@ import pytest
 pytest.importorskip('zmq')
 pytest.importorskip('dill')
 
+from dask.utils import raises
 from dask.distributed.worker import Worker
 from contextlib import contextmanager
 import multiprocessing
@@ -138,6 +139,9 @@ def test_collect():
                            'y': [a.address]})
 
                 assert c.data == dict(a=1, c=5, x=10, y=20)
+
+                assert raises(ValueError,
+                              lambda: c.collect({'nope': [a.address]}))
 
 
 def test_compute():
