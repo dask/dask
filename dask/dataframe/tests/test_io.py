@@ -407,23 +407,24 @@ def test_to_castra():
 
 
 def test_to_hdf():
+    pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     a = dd.from_pandas(df, 2)
 
-    with ignoring(ImportError):
-        with tmpfile('h5') as fn:
-            a.to_hdf(fn, '/data')
-            out = pd.read_hdf(fn, '/data')
-            tm.assert_frame_equal(df, out[:])
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data')
+        out = pd.read_hdf(fn, '/data')
+        tm.assert_frame_equal(df, out[:])
 
-        with tmpfile('h5') as fn:
-            a.x.to_hdf(fn, '/data')
-            out = pd.read_hdf(fn, '/data')
-            tm.assert_series_equal(df.x, out[:])
+    with tmpfile('h5') as fn:
+        a.x.to_hdf(fn, '/data')
+        out = pd.read_hdf(fn, '/data')
+        tm.assert_series_equal(df.x, out[:])
 
 
 def test_read_hdf():
+    pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     with tmpfile('h5') as fn:
