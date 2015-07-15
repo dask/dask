@@ -4,7 +4,7 @@ from .core import istask, get
 from .context import set_options
 
 try:
-    from .compose import do, value
+    from .imperative import do, value
 except ImportError:
     pass
 

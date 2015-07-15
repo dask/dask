@@ -1,7 +1,7 @@
 from operator import add
 from collections import Iterator
 
-from dask.compose import value, do, to_task_dasks
+from dask.imperative import value, do, to_task_dasks
 from dask.utils import raises
 
 
