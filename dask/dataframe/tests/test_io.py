@@ -398,12 +398,21 @@ def test_from_dask_array_raises():
 
 def test_to_castra():
     pytest.importorskip('castra')
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D'],
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]})
     a = dd.from_pandas(df, 2)
 
     c = a.to_castra()
-    assert eq(a, c[:])
+    try:
+        assert eq(a, c[:])
+    finally:
+        c.drop()
+
+    c = a.to_castra(categories=['x'])
+    try:
+        assert c[:].dtypes['x'] == 'category'
+    finally:
+        c.drop()
 
 
 def test_to_hdf():

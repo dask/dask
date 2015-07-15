@@ -652,6 +652,8 @@ class DataFrame(_Frame):
         """
         from castra import Castra
         name = 'to-castra' + next(tokens)
+        if isinstance(categories, list):
+            categories = (list, categories)
         dsk = {name: (Castra, fn, (self._name, 0), categories)}
         dsk.update(dict(((name, i), (Castra.extend, name, (self._name, i)))
                         for i in range(self.npartitions)))
