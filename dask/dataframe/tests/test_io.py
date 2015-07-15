@@ -17,7 +17,7 @@ from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
         from_dask_array)
 from dask.compatibility import StringIO
 
-from dask.utils import filetext, tmpfile
+from dask.utils import filetext, tmpfile, ignoring
 from dask.async import get_sync
 
 
@@ -411,7 +411,7 @@ def test_to_hdf():
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     a = dd.from_pandas(df, 2)
 
-    with dask.set_options(get=get_sync):
+    with ignoring(ImportError):
         with tmpfile('h5') as fn:
             a.to_hdf(fn, '/data')
             out = pd.read_hdf(fn, '/data')
