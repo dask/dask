@@ -194,7 +194,7 @@ class _Frame(object):
                            self.divisions)
                 for i, dsk in enumerate(dsks)]
 
-    def head(self, n=10, compute=True):
+    def head(self, n=5, compute=True):
         """ First n rows of the dataset
 
         Caveat, the only checks the first n rows of the first partition.
