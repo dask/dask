@@ -192,7 +192,8 @@ class Worker(object):
             assert header['status'] == 'OK'
 
             self.data[payload['key']] = payload['value']
-            msg = {'got_key': True, 'key': payload['key'],
+            msg = {'status': 'success',
+                   'key': payload['key'],
                    'worker': self.address}
             self.queues[payload['queue']].put(msg)
 
@@ -463,7 +464,7 @@ class Worker(object):
 
             msgs = [queue.get() for i in range(counter)]
             for m in msgs:
-                if not m['got_key']:
+                if m['status'] == 'failed':
                     locations[m['key']].remove(m['worker'])
                     log(self.address, 'Failed to get key: ', m['key'],
                         ' from worker: ', m['worker'])
@@ -576,7 +577,7 @@ class Worker(object):
             for w in removed_workers:
                 for queue, keys in self.queues_by_worker[w].items():
                     for k in keys:
-                        msg = {'got_key': False,
+                        msg = {'status': 'failed',
                                'key': k,
                                'worker': w}
                         self.queues[queue].put(msg)

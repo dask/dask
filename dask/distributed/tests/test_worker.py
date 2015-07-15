@@ -185,6 +185,6 @@ def test_worker_death():
 
             # assertions
             msg = w1.queues[qkey].get()
-            assert msg['got_key'] == False
+            assert msg['status'] == 'failed'
             assert msg['key'] == dkey
             assert msg['worker'] == w2.address
