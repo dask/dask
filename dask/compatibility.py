@@ -15,8 +15,11 @@ if PY3:
     from urllib.parse import quote, unquote
     unicode = str
     long = int
-    def apply(func, args):
-        return func(*args)
+    def apply(func, args, kwargs=None):
+        if kwargs:
+            return func(*args, **kwargs)
+        else:
+            return func(*args)
     range = range
 else:
     import __builtin__ as builtins
