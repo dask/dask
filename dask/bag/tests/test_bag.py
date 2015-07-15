@@ -271,6 +271,9 @@ def test_from_filenames_large():
         assert len(b.dask) > 5
         assert list(b) == list(c)
 
+        d = db.from_filenames([fn], chunkbytes=100)
+        assert list(b) == list(d)
+
 
 def test_from_filenames_large_gzip():
     with tmpfile('gz') as fn:

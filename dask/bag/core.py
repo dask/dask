@@ -804,6 +804,11 @@ def from_filenames(filenames, chunkbytes=None):
 
     >>> b = from_filenames('myfiles.*.txt')  # doctest: +SKIP
 
+    Parallelize a large files by providing the number of uncompressed bytes to
+    load into each partition.
+
+    >>> b = from_filenames('largefile.txt', chunkbytes=1e7)  # 10 MB chunks
+
     See also:
         from_sequence: A more generic bag creation function
     """
@@ -818,6 +823,7 @@ def from_filenames(filenames, chunkbytes=None):
     name = 'from-filename' + next(tokens)
 
     if chunkbytes:
+        chunkbytes = int(chunkbytes)
         taskss = [_chunk_read_file(fn, chunkbytes) for fn in full_filenames]
         d = dict(((name, i), task)
                  for i, task in enumerate(toolz.concat(taskss)))
