@@ -278,7 +278,7 @@ def test_collect_retry():
         result = w1.pool.apply_async(w1.collect,
                                      args=({'x': [w2.address, w3.address]},))
         while w2.address in s.workers:
-            s.prune_and_notify(timeout=0.01)
+            s.prune_and_notify(timeout=0.05)
 
         # make sure prune_and_notify didn't remove these
         assert w1.address in s.workers
