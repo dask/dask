@@ -214,8 +214,8 @@ class Scheduler(object):
     def _monitor_workers(self, timeout=20):
         """ Event loop: Monitor worker heartbeats """
         while self.status != 'closed':
-            self.prune_and_notify(timeout=timeout)
             sleep(timeout)
+            self.prune_and_notify(timeout=timeout)
 
     def block(self):
         """ Block until listener threads close
