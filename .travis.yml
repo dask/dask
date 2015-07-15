@@ -6,6 +6,10 @@ python:
     - "3.3"
     - "3.4"
 
+addons:
+    apt:
+        packages:
+        - graphviz
 
 install:
   # Install conda
