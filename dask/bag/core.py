@@ -807,7 +807,7 @@ def from_filenames(filenames, chunkbytes=None):
     Parallelize a large files by providing the number of uncompressed bytes to
     load into each partition.
 
-    >>> b = from_filenames('largefile.txt', chunkbytes=1e7)  # 10 MB chunks
+    >>> b = from_filenames('largefile.txt', chunkbytes=1e7)  # doctest: +SKIP
 
     See also:
         from_sequence: A more generic bag creation function
@@ -841,8 +841,8 @@ def _chunk_read_file(filename, chunkbytes):
     extension = os.path.splitext(filename)[1].strip('.')
     compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
 
-    return [(list, (StringIO,
-                    (textblock, filename, i, i + chunkbytes, compression)))
+    return [(list, (StringIO, (bytes.decode,
+                    (textblock, filename, i, i + chunkbytes, compression))))
              for i in range(0, file_size(filename, compression), chunkbytes)]
 
 

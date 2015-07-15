@@ -10,6 +10,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
         _parse_s3_URI, inline_singleton_lists, optimize)
 from dask.utils import filetexts, tmpfile, raises
+from dask.async import get_sync
 import dask
 import dask.bag as db
 import shutil
@@ -278,11 +279,11 @@ def test_from_filenames_large():
 def test_from_filenames_large_gzip():
     with tmpfile('gz') as fn:
         with gzip.open(fn, 'wb') as f:
-            f.write('Hello, world!\n' * 100)
+            f.write(b'Hello, world!\n' * 100)
         b = db.from_filenames(fn, chunkbytes=100)
         c = db.from_filenames(fn)
         assert len(b.dask) > 5
-        assert list(b) == list(c)
+        assert list(b) == [s.decode() for s in c]
 
 
 @pytest.mark.slow
