@@ -404,3 +404,20 @@ def test_to_castra():
 
     c = a.to_castra()
     assert eq(a, c[:])
+
+
+def test_to_hdf():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    a = dd.from_pandas(df, 2)
+
+    with dask.set_options(get=get_sync):
+        with tmpfile('h5') as fn:
+            a.to_hdf(fn, '/data')
+            out = pd.read_hdf(fn, '/data')
+            tm.assert_frame_equal(df, out[:])
+
+        with tmpfile('h5') as fn:
+            a.x.to_hdf(fn, '/data')
+            out = pd.read_hdf(fn, '/data')
+            tm.assert_series_equal(df.x, out[:])

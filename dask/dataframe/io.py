@@ -16,7 +16,8 @@ from ..utils import textblock, file_size
 from .. import array as da
 
 from . import core
-from .core import DataFrame, Series, compute, concat, categorize_block, tokens
+from .core import (DataFrame, Series, compute, concat, categorize_block,
+        tokens, get)
 from .shuffle import set_partition
 
 
@@ -502,3 +503,33 @@ def from_dask_array(x, columns=None):
     else:
         raise ValueError("Array must have one or two dimensions.  Had %d" %
                          x.ndim)
+
+
+def _link(result, token):
+    return None
+
+
+@wraps(pd.DataFrame.to_hdf)
+def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
+           complib=None, fletcher32=False, **kwargs):
+    name = 'to-hdf' + next(tokens)
+    token = 'token' + next(tokens)
+
+    pd_to_hdf = getattr(df._partition_type, 'to_hdf')
+
+    dsk = dict()
+    dsk[(name, 0)] = (_link, None,
+                      (apply, pd_to_hdf,
+                          (tuple, [(df._name, 0), path_or_buf, key]),
+                          {'mode':  mode, 'format': 'table', 'append': append,
+                           'complevel': complevel, 'complib': complib,
+                           'fletcher32': fletcher32}))
+    for i in range(1, df.npartitions):
+        dsk[(name, i)] = (_link, (name, i - 1),
+                          (apply, pd_to_hdf,
+                           (tuple, [(df._name, i), path_or_buf, key]),
+                           {'mode': 'a', 'format': 'table', 'append': True,
+                            'complevel': complevel, 'complib': complib,
+                            'fletcher32': fletcher32}))
+
+    get(merge(df.dask, dsk), (name, i), **kwargs)

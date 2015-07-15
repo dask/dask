@@ -305,6 +305,13 @@ class _Frame(object):
         func = getattr(self._partition_type, 'sample')
         return map_partitions(func, self.column_info, self, None, frac)
 
+    @wraps(pd.DataFrame.to_hdf)
+    def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
+               complib=None, fletcher32=False, **kwargs):
+        from .io import to_hdf
+        return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
+                fletcher32, **kwargs)
+
 
 class Series(_Frame):
     """ Out-of-core Series object
