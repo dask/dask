@@ -266,7 +266,7 @@ def test_workers_reregister():
 
         while w1.address not in s.workers:
             sleep(1e-6)
-        assert w1.address in s.workers  # but now it's back
+        assert w1.address in s.workers  # but now its back
 
 
 def test_collect_retry():
