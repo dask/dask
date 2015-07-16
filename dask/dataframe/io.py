@@ -506,6 +506,11 @@ def from_dask_array(x, columns=None):
 
 
 def _link(token, result):
+    """ A dummy function to link results together in a graph
+
+    We use this to enforce an artificial sequential ordering on tasks that
+    don't explicitly pass around a shared resource
+    """
     return None
 
 
