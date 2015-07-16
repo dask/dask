@@ -359,12 +359,37 @@ class Series(_Frame):
     def resample(self, rule, how='mean', axis=0, fill_method=None, closed=None,
                  label=None, convention='start', kind=None, loffset=None,
                  limit=None, base=0):
+        """Group by a DatetimeIndex values in time periods of size `rule`.
+
+        Parameters
+        ----------
+        rule : str or pandas.datetools.Tick
+            The frequency to resample by. For example, 'H' is one hour
+            intervals.
+        how : str or callable
+            Method to use to summarize your data. For example, 'mean' takes the
+            average value of the Series in the time interval `rule`.
+
+        Notes
+        -----
+        For additional argument descriptions please consult the pandas
+        documentation.
+
+        Returns
+        -------
+        dask.dataframe.Series
+
+        See Also
+        --------
+        pandas.Series.resample
+        """
         start = self.divisions[0]
         end = self.divisions[-1]
         index = pd.date_range(start=start, end=end, freq=rule)
         newdivs = [start]
         rule = pd.datetools.to_offset(rule)
         for div in self.divisions[1:-1]:
+            # TODO: can we compute this value in O(1) instead of O(log n)?
             pos = np.searchsorted(index.values, div.asm8, side='right')
             actual_pos = min(len(index) - 1, pos)
             newdiv = index[actual_pos]
