@@ -63,7 +63,7 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
 
-    return list(map(_concat, results))
+    return [_concat(r) for r in results]
 
 
 tokens = ('-%d' % i for i in count(1))
