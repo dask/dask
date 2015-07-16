@@ -531,8 +531,8 @@ class Worker(object):
         self.close()
 
     def __repr__(self):
-        s = '<dask.distributed.Worker at %s address=%s, scheduler=%s>'
-        return s % (hex(id(self)), self.address.decode('utf-8')[6:],
+        s = '<dask.distributed.Worker address=%s, scheduler=%s>'
+        return s % (self.address.decode('utf-8')[6:],
                     self.scheduler.decode('utf-8')[6:])
 
     def heart(self, pulse=5):
