@@ -2,30 +2,44 @@ import pytest
 pytest.importorskip('zmq')
 pytest.importorskip('dill')
 
-from dask.distributed.scheduler import Scheduler
-from dask.distributed.worker import Worker
 import multiprocessing
-import itertools
-from datetime import datetime
-from contextlib import contextmanager
-from toolz import take
-from time import sleep
-import dill
 import pickle
 import re
+from datetime import datetime
+from contextlib import contextmanager
+from time import sleep
 
 import zmq
+import dill
+
+from dask.distributed.scheduler import Scheduler
+from dask.distributed.worker import Worker
 
 context = zmq.Context()
 
 
 @contextmanager
-def scheduler():
-    s = Scheduler()
+def scheduler(kwargs={}):
+    s = Scheduler(**kwargs)
     try:
         yield s
     finally:
         s.close()
+
+
+@contextmanager
+def scheduler_and_workers(n=2, scheduler_kwargs={}, worker_kwargs={}):
+    with scheduler(scheduler_kwargs) as s:
+        workers = [Worker(s.address_to_workers, **worker_kwargs) for i in range(n)]
+
+        # wait for workers to register
+        while(len(s.workers) < n):
+            sleep(1e-6)
+        try:
+            yield s, workers
+        finally:
+            for w in workers:
+                w.close()
 
 
 def test_status_worker():
@@ -70,19 +84,6 @@ def test_status_client():
             sock.close(1)
 
 
-@contextmanager
-def scheduler_and_workers(n=2):
-    with scheduler() as s:
-        workers = [Worker(s.address_to_workers) for i in range(n)]
-        while(len(s.workers) < n):
-            sleep(0.01)
-        try:
-            yield s, workers
-        finally:
-            for w in workers:
-                w.close()
-
-
 def test_cluster():
     with scheduler_and_workers() as (s, (a, b)):
         assert a.address in s.workers
@@ -105,7 +106,7 @@ def add(x, y):
 
 
 def test_compute_cycle():
-    with scheduler_and_workers(n=2) as (s, (a, b)):
+    with scheduler_and_workers() as (s, (a, b)):
         assert s.available_workers.qsize() == 2
 
         dsk = {'a': (add, 1, 2), 'b': (inc, 'a')}
@@ -128,7 +129,7 @@ def test_compute_cycle():
 
 
 def test_send_release_data():
-    with scheduler_and_workers(n=2) as (s, (a, b)):
+    with scheduler_and_workers() as (s, (a, b)):
         s.send_data('x', 1, a.address)
         assert a.data['x'] == 1
         assert a.address in s.who_has['x']
@@ -140,8 +141,9 @@ def test_send_release_data():
         assert a.address not in s.who_has['x']
         assert 'x' not in s.worker_has[a.address]
 
+
 def test_scatter():
-    with scheduler_and_workers(n=2) as (s, (a, b)):
+    with scheduler_and_workers() as (s, (a, b)):
         data = {'x': 1, 'y': 2, 'z': 3}
         sleep(0.05)  # make sure all workers come in before scatter
         s.scatter(data)
@@ -149,8 +151,9 @@ def test_scatter():
         assert all(k in a.data or k in b.data for k in data)
         assert set([len(a.data), len(b.data)]) == set([1, 2])  # fair
 
+
 def test_schedule():
-    with scheduler_and_workers(n=2) as (s, (a, b)):
+    with scheduler_and_workers() as (s, (a, b)):
         dsk = {'x': (add, 1, 2), 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
 
         result = s.schedule(dsk, ['y'])
@@ -174,7 +177,7 @@ def test_schedule():
 
 
 def test_gather():
-    with scheduler_and_workers(n=2) as (s, (a, b)):
+    with scheduler_and_workers() as (s, (a, b)):
         s.send_data('x', 1, a.address)
         s.send_data('y', 2, b.address)
 
@@ -196,7 +199,7 @@ def test_random_names():
 
 
 def test_close_workers():
-    with scheduler_and_workers(n=2) as (s, (a, b)):
+    with scheduler_and_workers() as (s, (a, b)):
         assert a.status != 'closed'
 
         s.close_workers()
@@ -229,3 +232,72 @@ def test_close_scheduler():
     assert not s._listen_to_clients_thread.is_alive()
     assert not s._listen_to_workers_thread.is_alive()
     assert s.context.closed
+
+
+def test_prune_and_notify():
+    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
+        # Oh no! A worker died!
+        w2.close()
+        while w2.status != 'closed':
+            sleep(1e-6)
+
+        # worker 1 tries to collect data from the dead worker.
+        result = w1.pool.apply_async(w1.collect, args=({'x': [w2.address]},))
+        sleep(0.01)  # sleep to show w1.collect hangs
+        assert result.ready() is False
+
+        # The scheduler notices, and corrects it state.
+        while w2.address in s.workers:
+            s.prune_and_notify(timeout=0.01)
+
+        # But the sheduler notified the workers about the death
+        while not result.ready():
+            sleep(1e-6)
+        assert result.ready() is True
+
+
+def test_workers_reregister():
+    with scheduler_and_workers(worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
+        assert w1.address in s.workers
+
+        assert s.workers.pop(w1.address)
+        assert w1.address not in s.workers  # removed
+
+        while w1.address not in s.workers:
+            sleep(1e-6)
+        assert w1.address in s.workers  # but now its back
+
+
+def test_collect_retry():
+    with scheduler_and_workers(n=3, scheduler_kwargs={'worker_timeout': 0.05},
+                               worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2, w3)):
+        w3.data['x'] = 42
+        w2.close()
+        while w2.status != 'closed':  # make sure closed
+            sleep(1e-6)
+
+        result = w1.pool.apply_async(w1.collect,
+                                     args=({'x': [w2.address, w3.address]},))
+        while w2.address in s.workers:
+            sleep(1e-6)
+
+        # make sure prune_and_notify didn't remove these
+        assert w1.address in s.workers
+        assert w3.address in s.workers
+
+        while not result.ready():  # make sure collect finishes
+            sleep(1e-6)
+        assert result.ready() == True
+        assert 'x' in w1.data
+        assert w1.data['x'] == 42
+
+
+def test_monitor_workers():
+    with scheduler_and_workers(scheduler_kwargs={'worker_timeout': 0.01},
+                               worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2)):
+        w2.close()
+        while w2.status != 'closed':  # wait to close
+            sleep(1e-6)
+        while w2.address in s.workers:  # wait to be removed
+            sleep(1e-6)
+        assert w2.address not in s.workers
