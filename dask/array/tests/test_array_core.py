@@ -1123,3 +1123,12 @@ def test_chunks_is_immutable():
         assert False
     except TypeError as e:
         assert 'rechunk(2)' in str(e)
+
+
+def test_raise_on_bad_kwargs():
+    x = da.ones(5, chunks=3)
+    try:
+        da.minimum(x, out=None)
+    except TypeError as e:
+        assert 'minimum' in str(e)
+        assert 'out' in str(e)

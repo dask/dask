@@ -1566,6 +1566,9 @@ def elemwise(op, *args, **kwargs):
     --------
     atop
     """
+    if not set(['name', 'dtype']).issuperset(kwargs):
+        raise TypeError("%s does not take the following keyword arguments %s" %
+            (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
     name = kwargs.get('name') or next(names)
     out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
                    for arg in args)
