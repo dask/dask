@@ -11,12 +11,13 @@ from toolz import merge, dissoc
 from itertools import count
 from operator import getitem
 
-from ..compatibility import BytesIO, unicode, range
+from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
 from .. import array as da
 
 from . import core
-from .core import DataFrame, Series, compute, concat, categorize_block, tokens
+from .core import (DataFrame, Series, compute, concat, categorize_block,
+        tokens, get)
 from .shuffle import set_partition
 
 
@@ -502,3 +503,93 @@ def from_dask_array(x, columns=None):
     else:
         raise ValueError("Array must have one or two dimensions.  Had %d" %
                          x.ndim)
+
+
+def _link(token, result):
+    """ A dummy function to link results together in a graph
+
+    We use this to enforce an artificial sequential ordering on tasks that
+    don't explicitly pass around a shared resource
+    """
+    return None
+
+
+@wraps(pd.DataFrame.to_hdf)
+def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
+           complib=None, fletcher32=False, **kwargs):
+    name = 'to-hdf' + next(tokens)
+    token = 'token' + next(tokens)
+
+    pd_to_hdf = getattr(df._partition_type, 'to_hdf')
+
+    dsk = dict()
+    dsk[(name, 0)] = (_link, None,
+                      (apply, pd_to_hdf,
+                          (tuple, [(df._name, 0), path_or_buf, key]),
+                          {'mode':  mode, 'format': 'table', 'append': append,
+                           'complevel': complevel, 'complib': complib,
+                           'fletcher32': fletcher32}))
+    for i in range(1, df.npartitions):
+        dsk[(name, i)] = (_link, (name, i - 1),
+                          (apply, pd_to_hdf,
+                           (tuple, [(df._name, i), path_or_buf, key]),
+                           {'mode': 'a', 'format': 'table', 'append': True,
+                            'complevel': complevel, 'complib': complib,
+                            'fletcher32': fletcher32}))
+
+    get(merge(df.dask, dsk), (name, i), **kwargs)
+
+
+dont_use_fixed_error_message = """
+This HDFStore is not partitionable and can only be use monolithically with
+pandas.  In the future when creating HDFStores use the ``format='table'``
+option to ensure that your dataset can be parallelized"""
+
+@wraps(pd.read_hdf)
+def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
+        chunksize=1000000):
+    with pd.HDFStore(path_or_buf) as hdf:
+        storer = hdf.get_storer(key)
+        if storer.format_type != 'table':
+            raise TypeError(dont_use_fixed_error_message)
+        if stop is None:
+            stop = storer.nrows
+
+    if columns is None:
+        columns = list(pd.read_hdf(path_or_buf, key, stop=0).columns)
+
+    name = 'read-hdf' + next(tokens)
+
+    dsk = dict(((name, i), (apply, pd.read_hdf,
+                             (path_or_buf, key),
+                             {'start': s, 'stop': s + chunksize,
+                              'columns': columns}))
+                for i, s in enumerate(range(start, stop, chunksize)))
+
+    divisions = [None] * (len(dsk) + 1)
+
+    return DataFrame(dsk, name, columns, divisions)
+
+
+def to_castra(df, fn=None, categories=None):
+    """ Write DataFrame to Castra on-disk store
+
+    See https://github.com/blosc/castra for details
+
+    See Also:
+        Castra.to_dask
+    """
+    from castra import Castra
+    if isinstance(categories, list):
+        categories = (list, categories)
+
+    name = 'to-castra' + next(tokens)
+
+    dsk = dict()
+    dsk[(name, -1)] = (Castra, fn, (df._name, 0), categories)
+    for i in range(0, df.npartitions):
+        dsk[(name, i)] = (_link, (name, i - 1),
+                          (Castra.extend, (name, -1), (df._name, i)))
+
+    c, _ = get(merge(dsk, df.dask), [(name, -1), list(dsk.keys())])
+    return c

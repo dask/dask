@@ -17,7 +17,7 @@ from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
         from_dask_array)
 from dask.compatibility import StringIO
 
-from dask.utils import filetext, tmpfile
+from dask.utils import filetext, tmpfile, ignoring
 from dask.async import get_sync
 
 
@@ -398,9 +398,62 @@ def test_from_dask_array_raises():
 
 def test_to_castra():
     pytest.importorskip('castra')
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D'],
-                       'y': [1, 2, 3, 4]})
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
     c = a.to_castra()
-    assert eq(a, c[:])
+    b = c.to_dask()
+    try:
+        tm.assert_frame_equal(df, c[:])
+        tm.assert_frame_equal(b.compute(), df)
+    finally:
+        c.drop()
+
+    c = a.to_castra(categories=['x'])
+    try:
+        assert c[:].dtypes['x'] == 'category'
+    finally:
+        c.drop()
+
+
+def test_to_hdf():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    a = dd.from_pandas(df, 2)
+
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data')
+        out = pd.read_hdf(fn, '/data')
+        tm.assert_frame_equal(df, out[:])
+
+    with tmpfile('h5') as fn:
+        a.x.to_hdf(fn, '/data')
+        out = pd.read_hdf(fn, '/data')
+        tm.assert_series_equal(df.x, out[:])
+
+
+def test_read_hdf():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data')
+        try:
+            dd.read_hdf(fn, '/data', chunksize=2)
+            assert False
+        except TypeError as e:
+            assert "format='table'" in str(e)
+
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+        a = dd.read_hdf(fn, '/data', chunksize=2)
+        assert a.npartitions == 2
+
+        tm.assert_frame_equal(a.compute(), df)
+
+        tm.assert_frame_equal(
+              dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
+              pd.read_hdf(fn, '/data', start=1, stop=3))

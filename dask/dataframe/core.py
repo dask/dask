@@ -194,7 +194,7 @@ class _Frame(object):
                            self.divisions)
                 for i, dsk in enumerate(dsks)]
 
-    def head(self, n=10, compute=True):
+    def head(self, n=5, compute=True):
         """ First n rows of the dataset
 
         Caveat, the only checks the first n rows of the first partition.
@@ -304,6 +304,13 @@ class _Frame(object):
         """
         func = getattr(self._partition_type, 'sample')
         return map_partitions(func, self.column_info, self, None, frac)
+
+    @wraps(pd.DataFrame.to_hdf)
+    def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
+               complib=None, fletcher32=False, **kwargs):
+        from .io import to_hdf
+        return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
+                fletcher32, **kwargs)
 
 
 class Series(_Frame):
@@ -643,13 +650,8 @@ class DataFrame(_Frame):
         See Also:
             Castra.to_dask
         """
-        from castra import Castra
-        name = 'to-castra' + next(tokens)
-        dsk = {name: (Castra, fn, (self._name, 0), categories)}
-        dsk.update(dict(((name, i), (Castra.extend, name, (self._name, i)))
-                        for i in range(self.npartitions)))
-        c, _ = get(merge(dsk, self.dask), [name, list(dsk.keys())])
-        return c
+        from .io import to_castra
+        return to_castra(self, fn, categories)
 
 
 def _assign(df, *pairs):
