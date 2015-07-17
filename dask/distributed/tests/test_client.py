@@ -76,16 +76,15 @@ def test_multiple_clients():
 
         assert c.get({'x': (inc, 1)}, 'x') == d.get({'x': (inc, 1)}, 'x')
 
-        def sleep_inc(x):
-            sleep(0.5)
-            return x + 1
-
         pool = ThreadPool(2)
 
         future1 = pool.apply_async(c.get,
-                                   args=({'x': 1, 'y': (sleep_inc, 'x')}, 'y'))
+                                   args=({'x': 1, 'y': (inc, 'x')}, 'y'))
         future2 = pool.apply_async(d.get,
-                                   args=({'a': 1, 'b': (sleep_inc, 'a')}, 'b'))
+                                   args=({'a': 1, 'b': (inc, 'a')}, 'b'))
+
+        while not (future1.ready() and future2.ready()):
+            sleep(1e-6)
 
         assert future1.get() == future2.get()
         c.close()
