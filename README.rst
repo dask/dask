@@ -223,9 +223,9 @@ includes the following projects:
 .. _Swiftlang: http://swift-lang.org/main/
 .. _PaRSEC: http://icl.eecs.utk.edu/parsec/index.html
 .. _blogposts: http://matthewrocklin.com/blog/tags.html#dask-ref
-.. |Build Status| image:: https://travis-ci.org/ContinuumIO/dask.png
+.. |Build Status| image:: https://travis-ci.org/ContinuumIO/dask.svg
    :target: https://travis-ci.org/ContinuumIO/dask
-.. |Version Status| image:: https://pypip.in/v/dask.png
+.. |Version Status| image:: https://img.shields.io/pypi/v/dask.svg
    :target: https://pypi.python.org/pypi/dask/
 .. |Doc Status| image:: https://readthedocs.org/projects/dask/badge/?version=latest
    :target: https://readthedocs.org/projects/dask/?badge=latest
