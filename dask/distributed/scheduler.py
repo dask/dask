@@ -227,6 +227,7 @@ class Scheduler(object):
         Warning: If some other thread doesn't call `.close()` then, in the
         common case you can not easily escape from this.
         """
+        self._monitor_workers_thread.join()
         self._listen_to_workers_thread.join()
         self._listen_to_clients_thread.join()
 
