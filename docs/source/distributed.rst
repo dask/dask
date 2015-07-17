@@ -183,9 +183,10 @@ cluster.
     # Dask Client.get method computes dask graphs on the cluster.
     dclient.get({'a': 41, 'b': (lambda x: x + 1, 'a')}, 'b')
 
-More info about setting up an IPython cluster can be found here_.
+More info about setting up an IPython cluster can be found at the
+`IPython docs`_.
 
-.. _here: http://ipython.org/ipython-doc/dev/parallel/parallel_process.html
+.. _`IPython docs`: http://ipython.org/ipython-doc/dev/parallel/parallel_process.html
 
 
 Known Limitations
