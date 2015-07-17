@@ -269,17 +269,23 @@ def test_workers_reregister():
 
 
 def test_collect_retry():
-    with scheduler_and_workers(n=3, scheduler_kwargs={'worker_timeout': 0.05},
-                               worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2, w3)):
+    """
+    This tests that when a worker tries to "collect" data from a dead worker,
+    it will try other available workers.
+    """
+    with scheduler_and_workers(n=3, worker_kwargs={'heartbeat': 0.001}) as (s, (w1, w2, w3)):
         w3.data['x'] = 42
         w2.close()
         while w2.status != 'closed':  # make sure closed
             sleep(1e-6)
-
         result = w1.pool.apply_async(w1.collect,
                                      args=({'x': [w2.address, w3.address]},))
+        # sometimes the above^ call to w1.collect will get called *after*,
+        # prune_and_notify below. Causing a hang. I'm not sure what to do
+        # about this, so here is a sleep.
+        sleep(0.1)
         while w2.address in s.workers:
-            sleep(1e-6)
+            s.prune_and_notify(timeout=0.1)
 
         # make sure prune_and_notify didn't remove these
         assert w1.address in s.workers
