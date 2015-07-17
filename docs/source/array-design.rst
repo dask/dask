@@ -78,13 +78,11 @@ identity matrix
 
 .. code-block:: python
 
-   names = ('eye-%d' % i for i in itertools.count(1))  # sequence of names
-
    def eye(n, blocksize):
        chunks = ((blocksize,) * n // blocksize,
                  (blocksize,) * n // blocksize)
 
-       name = next(names)
+       name = 'eye' + next(tokens)  # unique identifier
 
        dsk = {(name, i, j): (np.eye, blocksize)
                             if i == j else
@@ -92,4 +90,7 @@ identity matrix
                 for i in range(n // blocksize)
                 for j in range(n // blocksize)}
 
-       return da.Array(dsk, name, chunks)
+
+       dtype = np.eye(0).dtype  # take dtype default from numpy
+
+       return Array(dsk, name, chunks, dtype)
