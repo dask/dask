@@ -1,7 +1,7 @@
 Dask
 ====
 
-|Build Status| |Coverage| |Doc Status| |Gitter| |Downloads|
+|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |Downloads|
 
 Dask provides multi-core execution on larger-than-memory datasets using blocked
 algorithms and task scheduling.  It maps high-level NumPy, Pandas, and list
