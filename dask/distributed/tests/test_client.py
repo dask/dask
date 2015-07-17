@@ -20,7 +20,7 @@ def scheduler_and_workers(n=2):
     s = Scheduler()
     workers = [Worker(s.address_to_workers) for i in range(n)]
     while len(s.workers) < n:
-        sleep(0.01)
+        sleep(1e-6)
     try:
         yield s, workers
     finally:
