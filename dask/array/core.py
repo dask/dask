@@ -1108,7 +1108,7 @@ def normalize_chunks(chunks, shape=None):
     return tuple(map(tuple, chunks))
 
 
-def from_array(x, chunks, name=None, lock=False, **kwargs):
+def from_array(x, chunks, name=None, lock=False):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -1238,7 +1238,10 @@ def atop(func, out_ind, *args, **kwargs):
         top - dict formulation of this function, contains most logic
     """
     out = kwargs.pop('name', None) or next(names)
-    dtype = kwargs.get('dtype', None)
+    dtype = kwargs.pop('dtype', None)
+    if kwargs:
+        raise TypeError("%s does not take the following keyword arguments %s" %
+            (func.__name__, str(sorted(kwargs.keys()))))
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
@@ -1566,6 +1569,9 @@ def elemwise(op, *args, **kwargs):
     --------
     atop
     """
+    if not set(['name', 'dtype']).issuperset(kwargs):
+        raise TypeError("%s does not take the following keyword arguments %s" %
+            (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
     name = kwargs.get('name') or next(names)
     out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
                    for arg in args)
