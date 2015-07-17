@@ -74,6 +74,10 @@ class Client(object):
         log(self.address, 'Received from scheduler', header)
         return header, payload
 
+    def send_recv(self, header, payload):
+        self.send_to_scheduler(header, payload)
+        return self.recv_from_scheduler()
+
     def set_collection(self, name, collection):
         """ Store collection in scheduler
 
@@ -84,8 +88,8 @@ class Client(object):
         payload = {'type': type(collection),
                    'args': collection._args,
                    'name': name}
-        self.send_to_scheduler(header, payload)
-        header2, payload2 = self.recv_from_scheduler()
+
+        header2, payload2 = self.send_recv(header, payload)
 
         assert header2['status'] == 'OK'
 
@@ -111,8 +115,7 @@ class Client(object):
         header = {'function': 'get-collection'}
         payload = {'name': name}
 
-        self.send_to_scheduler(header, payload)
-        header2, payload2 = self.recv_from_scheduler()
+        header2, payload2 = self.send_recv(header, payload)
 
         return payload2['type'](*payload2['args'])
 
@@ -126,9 +129,10 @@ class Client(object):
         self.socket.close(1)
 
     def register_client(self):
-        self.send_to_scheduler({'function': 'register'}, {'pid': os.getpid()})
-        header, payload = self.recv_from_scheduler()
-        self.registered_workers = payload['workers']
+        header = {'function': 'register'}
+        payload = {'pid': os.getpid()}
+        header2, payload2 = self.send_recv(header, payload)
+        self.registered_workers = payload2['workers']
 
     def get_registered_workers(self):
         self.send_to_scheduler({'function': 'get_workers'}, {})
