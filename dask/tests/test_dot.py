@@ -3,12 +3,11 @@ from functools import partial
 import re
 from operator import add, neg
 
-import numpy as np
 import pytest
 
 pytest.importorskip("graphviz")
 
-from dask.dot import dot_graph, label, to_graphviz
+from dask.dot import dot_graph, task_label, to_graphviz
 
 # Since graphviz doesn't store a graph, we need to parse the output
 label_re = re.compile('.*\[label=(.*?) shape=.*\]')
@@ -26,8 +25,10 @@ dsk = {'a': 1,
        'f': (sum, ['a', 'e'])}
 
 
-def test_label():
-    assert label(partial(add, 1)) == 'add'
+def test_task_label():
+    assert task_label((partial(add, 1), 1)) == 'add'
+    assert task_label((add, 1)) == 'add'
+    assert task_label((add, (add, 1, 2))) == 'add(...)'
 
 
 def test_to_graphviz():
