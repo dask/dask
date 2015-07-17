@@ -168,7 +168,9 @@ class Scheduler(object):
                     continue
             except zmq.ZMQError:
                 break
-            if self.send_to_workers_recv in socks:
+            if (self.send_to_workers_recv in socks and
+                    not self.send_to_workers_recv.closed):
+
                 self.send_to_workers_recv.recv()
                 while not self.send_to_workers_queue.empty():
                     msg = self.send_to_workers_queue.get()
