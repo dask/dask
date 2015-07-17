@@ -2222,3 +2222,69 @@ def to_hdf5(filename, *args, **kwargs):
                                         **kwargs)
                     for dp, x in data.items()]
         store(list(data.values()), dsets)
+
+
+def isel(x, *indexes):
+    """ Point wise slicing
+
+    This is equivalent to numpy slicing with multiple input lists
+
+    >>> x = np.arange(56).reshape((7, 8))
+    >>> x
+    array([[ 0,  1,  2,  3,  4,  5,  6,  7],
+           [ 8,  9, 10, 11, 12, 13, 14, 15],
+           [16, 17, 18, 19, 20, 21, 22, 23],
+           [24, 25, 26, 27, 28, 29, 30, 31],
+           [32, 33, 34, 35, 36, 37, 38, 39],
+           [40, 41, 42, 43, 44, 45, 46, 47],
+           [48, 49, 50, 51, 52, 53, 54, 55]])
+
+    >>> d = from_array(x, chunks=(3, 4))
+    >>> result = isel(d, [0, 1, 6, 0], [0, 1, 0, 7])
+    >>> result.compute()
+    array([ 0,  9, 48,  7])
+    """
+    indexes = list(map(list, indexes))
+    bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
+    points = list()
+
+    for i, idx in enumerate(zip(*indexes)):
+        block_idx = [np.searchsorted(b, ind, 'right') - 1 for b, ind in zip(bounds, idx)]
+        inblock_idx = [ind - bounds[k][j]
+                    for k, (ind, j) in enumerate(zip(idx, block_idx))]
+        points.append((i, (x.name,) + tuple(block_idx), tuple(inblock_idx)))
+
+    per_block = groupby(1, points)
+
+    token = next(tokens)
+    name = 'isel-slice' + token
+    dsk = dict(((name, i), (_isel_slice, key, list(pluck(2, per_block[key]))))
+               for i, key in enumerate(per_block))
+
+    dsk[('isel-merge' + token, 0)] = (_isel_merge,
+                               [list(pluck(0, per_block[key])) for key in per_block],
+                               [(name, i) for i in range(len(per_block))])
+
+    chunks = ((len(points),),)
+
+    return Array(merge(x.dask, dsk), 'isel-merge' + token, chunks, x.dtype)
+
+
+def _isel_slice(block, points):
+    points2 = list(zip(*points))
+    return block[points2]
+
+
+def _isel_merge(locations, values):
+    locations = list(map(list, locations))
+    values = list(values)
+
+    n = sum(map(len, locations))
+    dtype = values[0].dtype
+
+    x = np.empty(n, dtype=dtype)
+
+    for loc, values in zip(locations, values):
+        x[loc] = values
+
+    return x

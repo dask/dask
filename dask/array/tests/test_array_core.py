@@ -1220,3 +1220,14 @@ def test_h5py_newaxis():
 
 def test_ellipsis_slicing():
     assert eq(da.ones(4, chunks=2)[...], np.ones(4))
+
+
+def test_point_slicing():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(3, 4))
+
+    result = isel(d, [1, 2, 5, 5], [3, 1, 6, 1])
+    assert eq(result, x[[1, 2, 5, 5], [3, 1, 6, 1]])
+
+    result = isel(d, [0, 1, 6, 0], [0, 1, 0, 7])
+    assert eq(result, x[[0, 1, 6, 0], [0, 1, 0, 7]])
