@@ -9,9 +9,8 @@ import random
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 from datetime import datetime
-from threading import Thread, Lock
+from threading import Thread, Lock, Event
 from contextlib import contextmanager
-from time import sleep
 
 import dill
 import zmq
@@ -152,6 +151,7 @@ class Scheduler(object):
         self._listen_to_workers_thread.start()
         self._listen_to_clients_thread = Thread(target=self._listen_to_clients)
         self._listen_to_clients_thread.start()
+        self._monitor_workers_event = Event()
         self._monitor_workers_thread = Thread(target=self._monitor_workers,
                                               kwargs={'timeout': worker_timeout})
         self._monitor_workers_thread.start()
@@ -168,7 +168,9 @@ class Scheduler(object):
                     continue
             except zmq.ZMQError:
                 break
-            if self.send_to_workers_recv in socks:
+            if (self.send_to_workers_recv in socks and
+                    not self.send_to_workers_recv.closed):
+
                 self.send_to_workers_recv.recv()
                 while not self.send_to_workers_queue.empty():
                     msg = self.send_to_workers_queue.get()
@@ -215,8 +217,9 @@ class Scheduler(object):
     def _monitor_workers(self, timeout=20):
         """ Event loop: Monitor worker heartbeats """
         while self.status != 'closed':
-            sleep(timeout)
+            self._monitor_workers_event.wait(timeout)
             self.prune_and_notify(timeout=timeout)
+            self._monitor_workers_event.clear()
 
     def block(self):
         """ Block until listener threads close
@@ -224,6 +227,7 @@ class Scheduler(object):
         Warning: If some other thread doesn't call `.close()` then, in the
         common case you can not easily escape from this.
         """
+        self._monitor_workers_thread.join()
         self._listen_to_workers_thread.join()
         self._listen_to_clients_thread.join()
 
@@ -556,6 +560,7 @@ class Scheduler(object):
         """ Close Scheduler """
         self.close_workers()
         self.status = 'closed'
+        self._monitor_workers_event.set()
         self.to_workers.close(linger=1)
         self.to_clients.close(linger=1)
         self.send_to_workers_send.close(linger=1)
