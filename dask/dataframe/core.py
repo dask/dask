@@ -490,7 +490,7 @@ class Series(_Frame):
     @wraps(pd.Series.value_counts)
     def value_counts(self):
         chunk = lambda s: s.value_counts()
-        agg = lambda s: s.groupby(level=0).sum()
+        agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
         return aca(self, chunk=chunk, aggregate=agg, columns=self.columns)
 
     @wraps(pd.Series.nlargest)
