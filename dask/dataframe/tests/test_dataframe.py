@@ -283,9 +283,11 @@ def test_cache():
 
 
 def test_value_counts():
-    result = d.b.value_counts().compute()
-    expected = full.b.value_counts()
-    assert eq(result.sort_index(), expected.sort_index())
+    df = pd.DataFrame({'x': [1, 2, 1, 3, 3, 1, 4]})
+    a = dd.from_pandas(df, npartitions=3)
+    result = a.x.value_counts()
+    expected = df.x.value_counts()
+    assert eq(result, expected)
 
 
 def test_isin():
