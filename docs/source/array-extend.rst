@@ -11,7 +11,9 @@ you need the following:
 
 Often ``dask.array`` functions take other ``Array`` objects as inputs along
 with parameters, add tasks to a new dask dictionary, create a new ``chunks``
-tuple, and then construct and return a new ``Array`` object.
+tuple, and then construct and return a new ``Array`` object.  The hard parts
+are invariably creating the right tasks and creating a new ``chunks`` tuple.
+Careful review of the `array design document`_ is suggested.
 
 
 Example `eye`
@@ -20,6 +22,8 @@ Example `eye`
 Consider this simple example with the ``eye`` function.
 
 .. code-block:: python
+
+   from dask.array.core import tokens
 
    def eye(n, blocksize):
        chunks = ((blocksize,) * n // blocksize,
