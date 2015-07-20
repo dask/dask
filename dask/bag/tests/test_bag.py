@@ -266,7 +266,7 @@ def test_from_filenames_bz2():
 def test_from_filenames_large():
     with tmpfile() as fn:
         with open(fn, 'w') as f:
-            f.write('Hello, world!\n' * 100)
+            f.write(('Hello, world!' + os.linesep) * 100)
         b = db.from_filenames(fn, chunkbytes=100)
         c = db.from_filenames(fn)
         assert len(b.dask) > 5
