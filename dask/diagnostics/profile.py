@@ -59,6 +59,7 @@ class Profiler(object):
         """
         self._get = get
         self._results = {}
+        self._dsk = {}
 
     def _start_callback(self, key, dask, state):
         if key is not None:
@@ -77,6 +78,7 @@ class Profiler(object):
         the dask."""
 
         self.clear()
+        self._dsk = dsk.copy()
         return self._get(dsk, result, start_callback=self._start_callback,
                          end_callback=self._end_callback, **kwargs)
 
@@ -95,8 +97,9 @@ class Profiler(object):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
-        return visualize(self.results(), **kwargs)
+        return visualize(self.results(), self._dsk, **kwargs)
 
     def clear(self):
         """Clear out old results from profiler"""
         self._results.clear()
+        self._dsk = {}

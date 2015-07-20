@@ -1,5 +1,5 @@
 from operator import add, mul
-from dask.diagnostics import Profiler, thread_prof, process_prof
+from dask.diagnostics import thread_prof
 import pytest
 try:
     import bokeh
@@ -27,8 +27,19 @@ def test_profiler():
 
 
 @pytest.mark.skipif("not bokeh")
+def test_pprint_task():
+    from dask.diagnostics.profile_visualize import pprint_task
+    keys = set(['a', 'b', 'c', 'd', 'e'])
+    assert pprint_task((add, 'a', 1), keys) == 'add(_, 1)'
+    assert pprint_task((add, (add, 'a', 1)), keys) == 'add(add(_, 1))'
+    res = 'sum([1, _, add(_, 1)])'
+    assert pprint_task((sum, [1, 'b', (add, 'a', 1)]), keys) == res
+    assert pprint_task((sum, (1, 2, 3, 4, 5, 6, 7)), keys) == 'sum(<tuple>)'
+
+
+@pytest.mark.skipif("not bokeh")
 def test_profiler_plot():
-    out = thread_prof.get(dsk, 'e')
+    thread_prof.get(dsk, 'e')
     # Run just to see that it doesn't error
     thread_prof.visualize(show=False)
     p = thread_prof.visualize(plot_width=500,

@@ -7,13 +7,46 @@ from graphviz import Digraph
 from .core import istask, get_dependencies, ishashable
 
 
-def label(func):
-    try:
-        while hasattr(func, 'func'):
-            func = func.func
-        return func.__name__
-    except AttributeError:
-        return 'func'
+def task_label(task):
+    """Label for a task on a dot graph.
+
+    Examples
+    --------
+    >>> from operator import add
+    >>> task_label((add, 1, 2))
+    'add'
+    >>> task_label((add, (add, 1, 2), 3))
+    'add(...)'
+    """
+    func = task[0]
+    if hasattr(func, 'funcs'):
+        if len(func.funcs) > 1:
+            return '{0}(...)'.format(funcname(func.funcs[0]))
+        else:
+            head = funcname(func.funcs[0])
+    else:
+        head = funcname(task[0])
+    if any(has_sub_tasks(i) for i in task[1:]):
+        return '{0}(...)'.format(head)
+    else:
+        return head
+
+
+def has_sub_tasks(task):
+    """Returns True if the task has sub tasks"""
+    if istask(task):
+        return True
+    elif isinstance(task, list):
+        return any(has_sub_tasks(i) for i in task)
+    else:
+        return False
+
+
+def funcname(func):
+    """Get the name of a function."""
+    while hasattr(func, 'func'):
+        func = func.func
+    return func.__name__
 
 
 def name(x):
@@ -41,11 +74,10 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
                    **data_attributes.get(k, {}))
 
         if istask(v):
-            func = v[0]
             func_name = name((k, 'function'))
             if func_name not in seen:
                 seen.add(func_name)
-                g.node(func_name, label=label(func), shape='circle',
+                g.node(func_name, label=task_label(v), shape='circle',
                        **function_attributes.get(k, {}))
             g.edge(func_name, k_name)
 

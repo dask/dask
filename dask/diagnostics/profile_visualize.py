@@ -8,7 +8,52 @@ import bokeh.plotting as bp
 from bokeh.palettes import brewer
 from bokeh.models import HoverTool
 
-from ..dot import name
+from ..dot import funcname
+from ..core import istask
+
+
+def pprint_task(task, keys):
+    """Return a nicely formatted string for a task.
+
+    Examples
+    --------
+    >>> from operator import add, mul
+    >>> dsk = {'a': 1,
+    ...        'b': 2,
+    ...        'c': (add, 'a', 'b'),
+    ...        'd': (add, (mul, 'a', 'b'), 'c'),
+    ...        'e': (sum, ['a', 'b', 5])}
+
+    >>> pprint_task(dsk['c'], dsk)
+    'add(_, _)'
+    >>> pprint_task(dsk['d'], dsk)
+    'add(mul(_, _), _)'
+    >>> pprint_task(dsk['e'], dsk)
+    'sum([_, _, 5])'
+    """
+    if istask(task):
+        func = task[0]
+        if hasattr(func, 'funcs'):
+            head = '('.join(funcname(f) for f in func.funcs)
+            tail = ')'*len(func.funcs)
+        else:
+            head = funcname(task[0])
+            tail = ')'
+        args = ', '.join(pprint_task(t, keys) for t in task[1:])
+        return '{0}({1}{2}'.format(head, args, tail)
+    elif isinstance(task, list):
+        args = ', '.join(pprint_task(t, keys) for t in task)
+        return '[{0}]'.format(args)
+    else:
+        try:
+            if task in keys:
+                return '_'
+        except TypeError:
+            pass
+        res = str(task)
+        if len(res) < 10:
+            return res
+        return '<{0}>'.format(type(task).__name__)
 
 
 def get_colors(palette, funcs):
@@ -36,7 +81,7 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(results, palette='GnBu', file_path="profile.html",
+def visualize(results, dsk, palette='GnBu', file_path="profile.html",
               show=True, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
@@ -44,6 +89,8 @@ def visualize(results, palette='GnBu', file_path="profile.html",
     ----------
     results : sequence
         Output of profiler.results().
+    dsk : dict
+        The dask graph being profiled.
     palette : string, optional
         Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
     file_path : string, optional
@@ -75,6 +122,7 @@ def visualize(results, palette='GnBu', file_path="profile.html",
                     tools="hover,save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=400)
     defaults.update(kwargs)
+
     p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
                   x_range=[0, right - left], **defaults)
 
@@ -82,12 +130,10 @@ def visualize(results, palette='GnBu', file_path="profile.html",
     data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
     data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
     data['y'] = [id_lk[i] + 1 for i in ids]
-    data['function'] = funcs = [name(i[0]) for i in tasks]
+    data['function'] = funcs = [pprint_task(i, dsk) for i in tasks]
     data['color'] = get_colors(palette, funcs)
+    data['key'] = [str(i) for i in keys]
 
-    # Bokeh barfs on quotes in hovers...
-    # https://github.com/bokeh/bokeh/issues/2094
-    data['key'] = [str(k).replace("'", "") for k in keys]
     source = bp.ColumnDataSource(data=data)
 
     p.rect(source=source, x='x', y='y', height=1, width='width',
@@ -98,9 +144,17 @@ def visualize(results, palette='GnBu', file_path="profile.html",
     p.yaxis.axis_label = "Worker ID"
     p.xaxis.axis_label = "Time (s)"
 
-    hover = p.select(type=HoverTool)
-    hover.tooltips = [("Key:", "@key"),
-                      ("Function:", "@function")]
+    hover = p.select(HoverTool)
+    hover.tooltips = """
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
+        <span style="font-size: 12px;">@key</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Task:</span>&nbsp;
+        <span style="font-size: 12px;">@function</span>
+    </div>
+    """
     hover.point_policy = 'follow_mouse'
 
     if show:
