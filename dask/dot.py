@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import os
+from subprocess import check_call
 
 from graphviz import Digraph
 
@@ -65,8 +65,8 @@ def dot_graph(dsk, filename='mydask', **kwargs):
     g = to_graphviz(dsk, **kwargs)
     g.save(filename + '.dot')
 
-    os.system('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename))
-    os.system('dot -Tpdf {0}.dot -o {0}.png'.format(filename))
+    check_call('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename), shell=True)
+    check_call('dot -Tpng {0}.dot -o {0}.png'.format(filename), shell=True)
     try:
         from IPython.display import Image
         return Image(filename + '.png')
