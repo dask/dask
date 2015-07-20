@@ -324,6 +324,10 @@ def test_loc():
     assert eq(d.loc[:8], full.loc[:8])
     assert eq(d.loc[3:], full.loc[3:])
 
+    assert raises(KeyError, lambda: d.loc[1000])
+    assert eq(d.loc[1000:], full.loc[1000:])
+    assert eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
+
 
 
 def test_loc_with_text_dates():
