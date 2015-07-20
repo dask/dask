@@ -22,7 +22,7 @@ from .percentile import percentile
 with ignoring(ImportError):
     from .reductions import nanprod
 from . import random, linalg, ghost, learn
-from .wrap import ones, zeros, empty, full
+from .wrap import ones, zeros, empty, full, histogram
 from .rechunk import rechunk
 from ..context import set_options
 from .optimization import optimize

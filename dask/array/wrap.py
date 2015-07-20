@@ -6,7 +6,8 @@ from functools import partial
 from toolz import curry
 import numpy as np
 
-from .core import Array, normalize_chunks
+from ..core import flatten
+from .core import Array, normalize_chunks, tokens, from_array
 from .numpy_compat import full
 
 names = ('wrapped_%d' % i for i in count(1))
@@ -90,7 +91,6 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     dsk = dict(zip(keys, vals))
     return Array(dsk, name, chunks, dtype=dtype)
 
-
 @curry
 def wrap(wrap_func, func, **kwargs):
     f = partial(wrap_func, func, **kwargs)
@@ -113,3 +113,48 @@ ones = w(np.ones, dtype='f8')
 zeros = w(np.zeros, dtype='f8')
 empty = w(np.empty, dtype='f8')
 full = w(full)
+
+def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
+    """
+    Blocked variant of numpy.histogram.
+    
+    Follows the signature of numpy.histogram exactly except that it also
+    requires a keyword argument chunks=().
+    
+    Also, either the ``bins`` or ``range`` argument is required in the 
+    blocked version, as computing ``min`` and ``max`` over blocked arrays 
+    is an expensive operation that must be performed explicitly.
+    
+    Original signature follows below.
+    """ + np.histogram.__doc__
+    
+    nchunks = len(list(flatten(a._keys())))
+    chunks = ((1,) * nchunks, (len(bins) - 1,))
+    
+    name1 = 'histogram_' + next(tokens)
+    # Map the histogram to all bins
+
+    def block_hist(x):
+        return np.histogram(x, bins)[0][np.newaxis]
+    
+    dsk = { (name1, i, 0) : (block_hist, k) 
+                               for i, k in enumerate(flatten(a._keys()))}
+    dsk.update(a.dask)
+    
+    mapped = Array(dsk, name1, chunks, dtype=bins.dtype)
+    n = mapped.sum(axis=0)
+    
+    # We need to replicate normed and density options from numpy
+    if density is not None:
+        if density:
+            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
+            return n/db/n.sum(), bins
+        else:
+            return n, bins
+    else:
+        # deprecated, will be removed from Numpy 2.0
+        if normed:
+            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
+            return n/(n*db).sum(), bins
+        else:
+            return n, bins
