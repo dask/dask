@@ -593,3 +593,25 @@ def to_castra(df, fn=None, categories=None):
 
     c, _ = get(merge(dsk, df.dask), [(name, -1), list(dsk.keys())])
     return c
+
+
+def to_csv(df, filename, **kwargs):
+    myget = kwargs.pop('get')
+    name = 'to-csv' + next(tokens)
+
+    dsk = dict()
+    dsk[(name, 0)] = (apply, pd.DataFrame.to_csv,
+                        (tuple, [(df._name, 0), filename]),
+                        kwargs)
+
+    kwargs2 = kwargs.copy()
+    kwargs2['mode'] = 'a'
+    kwargs2['header'] = False
+
+    for i in range(1, df.npartitions):
+        dsk[(name, i)] = (_link, (name, i - 1),
+                           (apply, pd.DataFrame.to_csv,
+                             (tuple, [(df._name, i), filename]),
+                             kwargs2))
+
+    get(merge(dsk, df.dask), (name, i), get=myget)
