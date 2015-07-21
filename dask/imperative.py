@@ -240,6 +240,9 @@ class Value(object):
     def __setattr__(self, attr, val):
         raise TypeError("Value objects are immutable")
 
+    def __setitem__(self, index, val):
+        raise TypeError("Value objects are immutable")
+
     def __iter__(self):
         raise TypeError("Value objects are not iterable")
 
@@ -290,7 +293,6 @@ class Value(object):
     __rsub__ = do(right(operator.sub), True)
     __rtruediv__ = do(right(operator.truediv), True)
     __rxor__ = do(right(operator.xor), True)
-    __setitem__ = do(operator.setitem, True)
     __sub__ = do(operator.sub, True)
     __truediv__ = do(operator.truediv, True)
     __xor__ = do(operator.xor, True)
