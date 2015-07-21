@@ -228,6 +228,8 @@ class _Frame(object):
     def _loc_element(self, ind):
         name = 'loc-element' + next(tokens)
         part = _partition_of_index_value(self.divisions, ind)
+        if ind < self.divisions[0] or ind > self.divisions[-1]:
+            raise KeyError('the label [%s] is not in the index' % str(ind))
         dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
         return type(self)(merge(self.dask, dsk), name,
                           self.column_info, [ind, ind])

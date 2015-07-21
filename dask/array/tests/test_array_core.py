@@ -967,7 +967,7 @@ def test_from_array_with_lock():
 
 def test_from_func():
     x = np.arange(10)
-    d = from_func(lambda n: n * x, (10,), np.int64, kwargs={'n': 2})
+    d = from_func(lambda n: n * x, (10,), x.dtype, kwargs={'n': 2})
 
     assert d.shape == x.shape
     assert d.dtype == x.dtype
