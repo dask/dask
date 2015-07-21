@@ -157,13 +157,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return np.histogram(x, bins, weights=weights)[0][np.newaxis]
     
     if weights is None:
-        dsk = { (name1, i, 0) : (block_hist, k) 
-                                   for i, k in enumerate(flatten(a._keys()))}
+        dsk = dict(((name1, i, 0), (block_hist, k))
+                    for i, k in enumerate(flatten(a._keys())))
     else:
         a_keys = flatten(a._keys())
         w_keys = flatten(weights._keys())
-        dsk = { (name1, i, 0) : (block_hist, k, w) 
-                                   for i, (k, w) in enumerate(zip(a_keys, w_keys))}
+        dsk = dict(((name1, i, 0), (block_hist, k, w)) 
+                    for i, (k, w) in enumerate(zip(a_keys, w_keys)))
         dsk.update(weights.dask)
 
     dsk.update(a.dask)
