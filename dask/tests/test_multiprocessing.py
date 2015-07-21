@@ -1,7 +1,8 @@
 import pytest
 pytest.importorskip('dill')
 
-from dask.multiprocessing import get, dill_apply_async
+from dask.multiprocessing import (get, dill_apply_async, run_in_process,
+        run_in_processes)
 from dask.context import set_options
 import multiprocessing
 import dill
@@ -67,3 +68,8 @@ def test_dumps_loads():
 def test_fuse_doesnt_clobber_intermediates():
     d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 10, 'y')}
     assert get(d, ['y', 'z']) == (2, 12)
+
+
+def test_run_in_processes():
+    dsk = {'x': 1, 'y': (inc, 'x')}
+    assert run_in_processes(dsk) == {'x': 1, 'y': (run_in_process, inc, 'x')}

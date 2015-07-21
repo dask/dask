@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from toolz import curry, pipe, partial
 from .optimize import fuse, cull
+from .core import istask
 import multiprocessing
 import dill
 import pickle
@@ -76,3 +77,17 @@ def dill_apply_async(apply_async, func, args=(), kwds={},
     skwds = dumps(kwds)
     return apply_async(curry(apply_func, loads=func_loads),
                        args=[sfunc, sargs, skwds])
+
+
+_pool = [None]
+
+def run_in_process(func, *args):
+    if not _pool[0]:
+        _pool[0] = multiprocessing.Pool()
+
+    return pool.apply(func, args)
+
+
+def run_in_processes(dsk):
+    return dict((k, (run_in_process, v[0]) + v[1:] if istask(v) else v)
+                for k, v in dsk.items())
