@@ -1036,10 +1036,8 @@ def test_histogram_return_type():
     bins = np.arange(0, 1.01, 0.01)
     # Check if return type is same as hist
     bins = np.arange(0, 11, 1, dtype='i4')
-    (a1, b1) = da.histogram(v * 10, bins=bins)
-    (a2, b2) = np.histogram(v * 10, bins=bins)
-    assert eq(a1, a2)
-    assert a1.dtype == a2.dtype
+    assert eq(da.histogram(v * 10, bins=bins)[0],
+              np.histogram(v * 10, bins=bins)[0])
 
 
 def test_histogram_extra_args_and_shapes():
