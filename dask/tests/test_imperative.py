@@ -1,5 +1,6 @@
 from operator import add
 from collections import Iterator
+from random import random
 
 from dask.imperative import value, do, to_task_dasks
 from dask.utils import raises
@@ -132,3 +133,12 @@ def test_iterators():
 
     c = do(f)(iter([a, b]))
     assert c.compute() == 3
+
+
+def test_pure():
+    v1 = do(add, pure=True)(1, 2)
+    v2 = do(add, pure=True)(1, 2)
+    assert v1.key == v2.key
+
+    myrand = do(random)
+    assert myrand().key != myrand().key
