@@ -6,7 +6,7 @@ from functools import partial
 from toolz import curry
 import numpy as np
 
-from .core import Array, normalize_chunks
+from .core import Array, normalize_chunks, tokens
 from .numpy_compat import full
 
 names = ('wrapped_%d' % i for i in count(1))
@@ -89,7 +89,6 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
 
     dsk = dict(zip(keys, vals))
     return Array(dsk, name, chunks, dtype=dtype)
-
 
 @curry
 def wrap(wrap_func, func, **kwargs):
