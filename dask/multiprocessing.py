@@ -85,7 +85,8 @@ def run_in_process(func, *args):
     if not _pool[0]:
         _pool[0] = multiprocessing.Pool()
 
-    return pool.apply(func, args)
+    future = dill_apply_async(_pool[0].apply_async, func, args)
+    return future.get()
 
 
 def run_in_processes(dsk):

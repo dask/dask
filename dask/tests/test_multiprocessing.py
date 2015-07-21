@@ -72,4 +72,8 @@ def test_fuse_doesnt_clobber_intermediates():
 
 def test_run_in_processes():
     dsk = {'x': 1, 'y': (inc, 'x')}
-    assert run_in_processes(dsk) == {'x': 1, 'y': (run_in_process, inc, 'x')}
+    dsk2 = run_in_processes(dsk)
+    assert dsk2 == {'x': 1, 'y': (run_in_process, inc, 'x')}
+
+    from dask.threaded import get as thget
+    assert thget(dsk2, 'y') == get(dsk, 'y')
