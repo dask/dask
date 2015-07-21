@@ -1,5 +1,6 @@
 from operator import add
 from collections import Iterator
+from random import random
 
 from dask.imperative import value, do, to_task_dasks
 from dask.utils import raises
@@ -58,6 +59,9 @@ def test_value_errors():
     # Immutable
     assert raises(TypeError, lambda: setattr(a, 'foo', 1))
     assert raises(TypeError, lambda: setattr(a, '_key', 'test'))
+    def setitem(a, ind, val):
+        a[ind] = val
+    assert raises(TypeError, lambda: setitem(a, 1, 0))
     # Can't iterate, or check if contains
     assert raises(TypeError, lambda: 1 in a)
     assert raises(TypeError, lambda: list(a))
@@ -132,3 +136,12 @@ def test_iterators():
 
     c = do(f)(iter([a, b]))
     assert c.compute() == 3
+
+
+def test_pure():
+    v1 = do(add, pure=True)(1, 2)
+    v2 = do(add, pure=True)(1, 2)
+    assert v1.key == v2.key
+
+    myrand = do(random)
+    assert myrand().key != myrand().key

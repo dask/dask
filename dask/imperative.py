@@ -1,9 +1,9 @@
 import operator
 from functools import partial, wraps
-from itertools import chain
+from itertools import chain, count
 from collections import Iterator
 
-from toolz import merge, unique
+from toolz import merge, unique, curry
 
 from .optimize import cull, fuse
 from .context import _globals
@@ -79,17 +79,31 @@ def to_task_dasks(expr):
         return expr, []
 
 
-def tokenize(v):
-    """Mapping function from task -> consistent name"""
+tokens = ('_{0}'.format(i) for i in count(1))
+
+
+def tokenize(v, pure=False):
+    """Mapping function from task -> consistent name.
+
+    Parameters
+    ----------
+    v : object
+        Any python object (or tuple of objects) that summarize the task.
+    pure : boolean, optional
+        If True, a consistent hash function is tried on the input. If this
+        fails, then a unique identifier is used. If False (default), then a
+        unique identifier is always used.
+    """
     # TODO: May have hash collisions...
-    try:
-        return str(hash(v))
-    except TypeError:
-        pass
-    return str(hash(str(v)))
+    if pure:
+        try:
+            return str(hash(v))
+        except TypeError:
+            pass
+    return next(tokens)
 
 
-def applyfunc(func, *args, **kwargs):
+def applyfunc(func, args, kwargs, pure=False):
     """Create a Value by applying a function to args.
 
     Given a function and arguments, return a Value that represents the result
@@ -97,14 +111,15 @@ def applyfunc(func, *args, **kwargs):
 
     args, dasks = unzip(map(to_task_dasks, args), 2)
     dasks = flat_unique(dasks)
-    name = tokenize((func, args, frozenset(kwargs.items())))
+    name = tokenize((func, args, frozenset(kwargs.items())), pure)
     if kwargs:
         func = partial(func, **kwargs)
     dasks.append({name: (func,) + args})
     return Value(name, dasks)
 
 
-def do(func):
+@curry
+def do(func, pure=False):
     """Wraps a function so that it outputs a ``Value``.
 
     Examples
@@ -126,10 +141,33 @@ def do(func):
     >>> res2 = do(sum)([res, 2, 3])
     >>> res2.compute()
     8
+
+    ``do`` also accepts an optional keyword ``pure``. If False (default), then
+    subsequent calls will always produce a different ``Value``. This is useful
+    for non-pure functions (such as ``time`` or ``random``).
+
+    >>> from random import random
+    >>> out1 = do(random)()
+    >>> out2 = do(random)()
+    >>> out1.key == out2.key
+    False
+
+    If you know a function is pure (output only depends on the input, with no
+    global state), then you can set ``pure=True``. This will attempt to apply a
+    consistent name to the output, but will fallback on the same behavior of
+    ``pure=False`` if this fails.
+
+    >>> @do(pure=True)
+    ... def add(a, b):
+    ...     return a + b
+    >>> out1 = add(1, 2)
+    >>> out2 = add(1, 2)
+    >>> out1.key == out2.key
+    True
     """
     @wraps(func)
     def _dfunc(*args, **kwargs):
-        return applyfunc(func, *args, **kwargs)
+        return applyfunc(func, args, kwargs, pure=pure)
     return _dfunc
 
 
@@ -195,11 +233,14 @@ class Value(object):
 
     def __getattr__(self, attr):
         if not attr.startswith('_'):
-            return do(getattr)(self, attr)
+            return do(getattr, True)(self, attr)
         else:
             raise AttributeError("Attribute {0} not found".format(attr))
 
     def __setattr__(self, attr, val):
+        raise TypeError("Value objects are immutable")
+
+    def __setitem__(self, index, val):
         raise TypeError("Value objects are immutable")
 
     def __iter__(self):
@@ -213,49 +254,48 @@ class Value(object):
 
     __nonzero__ = __bool__
 
-    __abs__ = do(operator.abs)
-    __add__ = do(operator.add)
-    __and__ = do(operator.and_)
-    __concat__ = do(operator.concat)
-    __delitem__ = do(operator.delitem)
-    __div__ = do(operator.floordiv)
-    __eq__ = do(operator.eq)
-    __floordiv__ = do(operator.floordiv)
-    __ge__ = do(operator.ge)
-    __getitem__ = do(operator.getitem)
-    __gt__ = do(operator.gt)
-    __index__ = do(operator.index)
-    __inv__ = do(operator.inv)
-    __invert__ = do(operator.invert)
-    __le__ = do(operator.le)
-    __lshift__ = do(operator.lshift)
-    __lt__ = do(operator.lt)
-    __mod__ = do(operator.mod)
-    __mul__ = do(operator.mul)
-    __ne__ = do(operator.ne)
-    __neg__ = do(operator.neg)
-    __not__ = do(operator.not_)
-    __or__ = do(operator.or_)
-    __pos__ = do(operator.pos)
-    __pow__ = do(operator.pow)
-    __radd__ = do(right(operator.add))
-    __rand__ = do(right(operator.and_))
-    __rdiv__ = do(right(operator.floordiv))
-    __rfloordiv__ = do(right(operator.floordiv))
-    __rlshift__ = do(right(operator.lshift))
-    __rmod__ = do(right(operator.mod))
-    __rmul__ = do(right(operator.mul))
-    __ror__ = do(right(operator.or_))
-    __rpow__ = do(right(operator.pow))
-    __rrshift__ = do(right(operator.rshift))
-    __rshift__ = do(operator.rshift)
-    __rsub__ = do(right(operator.sub))
-    __rtruediv__ = do(right(operator.truediv))
-    __rxor__ = do(right(operator.xor))
-    __setitem__ = do(operator.setitem)
-    __sub__ = do(operator.sub)
-    __truediv__ = do(operator.truediv)
-    __xor__ = do(operator.xor)
+    __abs__ = do(operator.abs, True)
+    __add__ = do(operator.add, True)
+    __and__ = do(operator.and_, True)
+    __concat__ = do(operator.concat, True)
+    __delitem__ = do(operator.delitem, True)
+    __div__ = do(operator.floordiv, True)
+    __eq__ = do(operator.eq, True)
+    __floordiv__ = do(operator.floordiv, True)
+    __ge__ = do(operator.ge, True)
+    __getitem__ = do(operator.getitem, True)
+    __gt__ = do(operator.gt, True)
+    __index__ = do(operator.index, True)
+    __inv__ = do(operator.inv, True)
+    __invert__ = do(operator.invert, True)
+    __le__ = do(operator.le, True)
+    __lshift__ = do(operator.lshift, True)
+    __lt__ = do(operator.lt, True)
+    __mod__ = do(operator.mod, True)
+    __mul__ = do(operator.mul, True)
+    __ne__ = do(operator.ne, True)
+    __neg__ = do(operator.neg, True)
+    __not__ = do(operator.not_, True)
+    __or__ = do(operator.or_, True)
+    __pos__ = do(operator.pos, True)
+    __pow__ = do(operator.pow, True)
+    __radd__ = do(right(operator.add), True)
+    __rand__ = do(right(operator.and_), True)
+    __rdiv__ = do(right(operator.floordiv), True)
+    __rfloordiv__ = do(right(operator.floordiv), True)
+    __rlshift__ = do(right(operator.lshift), True)
+    __rmod__ = do(right(operator.mod), True)
+    __rmul__ = do(right(operator.mul), True)
+    __ror__ = do(right(operator.or_), True)
+    __rpow__ = do(right(operator.pow), True)
+    __rrshift__ = do(right(operator.rshift), True)
+    __rshift__ = do(operator.rshift, True)
+    __rsub__ = do(right(operator.sub), True)
+    __rtruediv__ = do(right(operator.truediv), True)
+    __rxor__ = do(right(operator.xor), True)
+    __sub__ = do(operator.sub, True)
+    __truediv__ = do(operator.truediv, True)
+    __xor__ = do(operator.xor, True)
 
 
 def value(val, name=None):
@@ -294,7 +334,7 @@ def value(val, name=None):
     AttributeError("'list' object has no attribute 'not_a_real_method'")
     """
 
-    name = name or tokenize(val)
+    name = name or tokenize(val, True)
     task, dasks = to_task_dasks(val)
     dasks.append({name: task})
     return Value(name, dasks)
