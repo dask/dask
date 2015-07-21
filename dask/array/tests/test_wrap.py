@@ -33,6 +33,11 @@ def test_histogram():
     assert a1.sum(axis=0) == n
     cmp_hist(a1, a2)
     
+    # Other input
+    (a1, b1) = da.histogram(v, bins=10, range=(0, 1))
+    (a2, b2) = np.histogram(v, bins=10, range=(0, 1))
+    cmp_hist(a1, a2)
+    
     # Check if return type is same as hist
     bins = np.arange(0, 11, 1, dtype='i4')
     (a1, b1) = da.histogram(v * 10, bins=bins)
@@ -40,16 +45,29 @@ def test_histogram():
     cmp_hist(a1, a2)
     assert a1.dtype == a2.dtype
     
-    # Check for extra args
-    bins = np.arange(0, 1.1, 0.1)
-    (a1, b1) = da.histogram(v, bins=bins, normed=True)
-    (a2, b2) = np.histogram(v, bins=bins, normed=True)
-    cmp_hist(a1, a2)
+    # Check for extra args and shapes
+    data = [(v, bins, ones(n, chunks=v.chunks) * 5),
+            (da.random.random((50, 50), chunks=10), bins, ones((50, 50), chunks=10) * 5)]
     
-    (a1, b1) = da.histogram(v, bins=bins, density=True)
-    (a2, b2) = np.histogram(v, bins=bins, density=True)
-    cmp_hist(a1, a2)
+    for v, bins, w in data:
+        # density
+        (a1, b1) = da.histogram(v, bins=bins, normed=True)
+        (a2, b2) = np.histogram(v, bins=bins, normed=True)
+        cmp_hist(a1, a2)
+        
+        # normed
+        (a1, b1) = da.histogram(v, bins=bins, density=True)
+        (a2, b2) = np.histogram(v, bins=bins, density=True)
+        cmp_hist(a1, a2)
+        
+        # weights
+        (a1, b1) = da.histogram(v, bins=bins, weights=w)
+        (a2, b2) = np.histogram(v, bins=bins, weights=w)
+        cmp_hist(a1, a2)
     
+        (a1, b1) = da.histogram(v, bins=bins, weights=w, density=True)
+        (a2, b2) = da.histogram(v, bins=bins, weights=w, density=True)
+        cmp_hist(a1, a2)
 
 def test_size_as_list():
     a = ones([10, 10], dtype='i4', chunks=(4, 4))

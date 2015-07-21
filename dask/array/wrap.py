@@ -118,27 +118,54 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     """
     Blocked variant of numpy.histogram.
     
-    Follows the signature of numpy.histogram exactly except that it also
-    requires a keyword argument chunks=().
+    Follows the signature of numpy.histogram exactly with the following
+    exceptions:
     
-    Also, either the ``bins`` or ``range`` argument is required in the 
-    blocked version, as computing ``min`` and ``max`` over blocked arrays 
-    is an expensive operation that must be performed explicitly.
+    - either the ``bins`` or ``range`` argument is required as computing 
+      ``min`` and ``max`` over blocked arrays is an expensive operation 
+      that must be performed explicitly.
+    
+    - ``weights`` must be a dask.array.Array with the same block structure
+       as ``a``.
     
     Original signature follows below.
     """ + np.histogram.__doc__
+    if bins is None or (range is None and bins is None):
+        raise ValueError('dask.array.histogram requires either bins '
+                         'or bins and range to be defined.')
+    
+    if weights is not None and weights.chunks != a.chunks:
+        raise ValueError('Input array and weights must have the same'
+                         'chunked structure')
+    
+    if not np.iterable(bins):
+        mn, mx = range
+        if mn == mx:
+            mn -= 0.5
+            mx += 0.5
+        
+        bins = np.linspace(mn, mx, bins + 1, endpoint=True)
     
     nchunks = len(list(flatten(a._keys())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
     
     name1 = 'histogram_' + next(tokens)
-    # Map the histogram to all bins
-
-    def block_hist(x):
-        return np.histogram(x, bins)[0][np.newaxis]
     
-    dsk = { (name1, i, 0) : (block_hist, k) 
-                               for i, k in enumerate(flatten(a._keys()))}
+    
+    # Map the histogram to all bins
+    def block_hist(x, weights=None):
+        return np.histogram(x, bins, weights=weights)[0][np.newaxis]
+    
+    if weights is None:
+        dsk = { (name1, i, 0) : (block_hist, k) 
+                                   for i, k in enumerate(flatten(a._keys()))}
+    else:
+        a_keys = flatten(a._keys())
+        w_keys = flatten(weights._keys())
+        dsk = { (name1, i, 0) : (block_hist, k, w) 
+                                   for i, (k, w) in enumerate(zip(a_keys, w_keys))}
+        dsk.update(weights.dask)
+
     dsk.update(a.dask)
     
     mapped = Array(dsk, name1, chunks, dtype=bins.dtype)
