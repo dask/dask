@@ -1014,7 +1014,7 @@ def test_histogram():
     bins = np.arange(0, 1.01, 0.01)
     (a1, b1) = da.histogram(v, bins=bins)
     (a2, b2) = np.histogram(v, bins=bins)
-    
+
     # Check if the sum of the bins equals the number of samples
     assert a2.sum(axis=0) == n
     assert a1.sum(axis=0) == n
@@ -1046,20 +1046,20 @@ def test_histogram_extra_args_and_shapes():
     v = da.random.random(100, chunks=10)
     data = [(v, bins, da.ones(100, chunks=v.chunks) * 5),
             (da.random.random((50, 50), chunks=10), bins, da.ones((50, 50), chunks=10) * 5)]
-    
+
     for v, bins, w in data:
         # density
         assert eq(da.histogram(v, bins=bins, normed=True)[0],
                   np.histogram(v, bins=bins, normed=True)[0])
-        
+
         # normed
         assert eq(da.histogram(v, bins=bins, density=True)[0],
                   np.histogram(v, bins=bins, density=True)[0])
-        
+
         # weights
         assert eq(da.histogram(v, bins=bins, weights=w)[0],
                   np.histogram(v, bins=bins, weights=w)[0])
-        
+
         assert eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
                   da.histogram(v, bins=bins, weights=w, density=True)[0])
 
@@ -1189,3 +1189,10 @@ def test_raise_on_bad_kwargs():
     except TypeError as e:
         assert 'minimum' in str(e)
         assert 'out' in str(e)
+
+
+def test_long_slice():
+    x = np.arange(10000)
+    d = da.from_array(x, chunks=1)
+
+    assert eq(d[8000:8200], x[8000:8200])
