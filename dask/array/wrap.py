@@ -149,7 +149,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     nchunks = len(list(flatten(a._keys())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
     
-    name1 = 'histogram_' + next(tokens)
+    name1 = 'histogram-' + next(tokens)
     
     
     # Map the histogram to all bins
