@@ -10,6 +10,7 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
+from dask.async import get_sync
 from dask.array.core import *
 from dask.utils import raises, ignoring, tmpfile
 
@@ -911,6 +912,10 @@ def test_slicing_with_non_ndarrays():
 
 def test_getarray():
     assert type(getarray(np.matrix([[1]]), 0)) == np.ndarray
+    assert eq(getarray([1, 2, 3, 4, 5], slice(1, 4)), np.array([2, 3, 4]))
+
+    assert eq(getarray(np.arange(5), (None, slice(None, None))),
+              np.arange(5)[None, :])
 
 
 def test_squeeze():
@@ -1196,3 +1201,18 @@ def test_long_slice():
     d = da.from_array(x, chunks=1)
 
     assert eq(d[8000:8200], x[8000:8200])
+
+
+def test_h5py_newaxis():
+    try:
+        import h5py
+    except ImportError:
+        return
+
+    with tmpfile('h5') as fn:
+        with h5py.File(fn) as f:
+            x = f.create_dataset('/x', shape=(10, 10), dtype='f8')
+            d = da.from_array(x, chunks=(5, 5))
+            assert d[None, :, :].compute(get=get_sync).shape == (1, 10, 10)
+            assert d[:, None, :].compute(get=get_sync).shape == (10, 1, 10)
+            assert d[:, :, None].compute(get=get_sync).shape == (10, 10, 1)
