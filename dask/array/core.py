@@ -20,7 +20,7 @@ from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
 from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer
-from ..compatibility import unicode
+from ..compatibility import unicode, long
 from .. import threaded, core
 from ..context import _globals
 
@@ -35,6 +35,13 @@ def getarray(a, b, lock=None):
     >>> getarray([1, 2, 3, 4, 5], slice(1, 4))
     array([2, 3, 4])
     """
+    if isinstance(b, tuple) and any(x is None for x in b):
+        b2 = tuple(x for x in b if x is not None)
+        b3 = tuple(None if x is None else slice(None, None)
+                    for x in b
+                    if not isinstance(x, (int, long)))
+        return getarray(a, b2, lock)[b3]
+
     if lock:
         lock.acquire()
     try:
@@ -2009,45 +2016,45 @@ def bincount(x, weights=None, minlength=None):
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
     Blocked variant of numpy.histogram.
-    
+
     Follows the signature of numpy.histogram exactly with the following
     exceptions:
-    
-    - either the ``bins`` or ``range`` argument is required as computing 
-      ``min`` and ``max`` over blocked arrays is an expensive operation 
+
+    - either the ``bins`` or ``range`` argument is required as computing
+      ``min`` and ``max`` over blocked arrays is an expensive operation
       that must be performed explicitly.
-    
+
     - ``weights`` must be a dask.array.Array with the same block structure
        as ``a``.
-    
+
     Original signature follows below.
     """ + np.histogram.__doc__
     if bins is None or (range is None and bins is None):
         raise ValueError('dask.array.histogram requires either bins '
                          'or bins and range to be defined.')
-    
+
     if weights is not None and weights.chunks != a.chunks:
         raise ValueError('Input array and weights must have the same '
                          'chunked structure')
-    
+
     if not np.iterable(bins):
         mn, mx = range
         if mn == mx:
             mn -= 0.5
             mx += 0.5
-        
+
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
-    
+
     nchunks = len(list(core.flatten(a._keys())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
-    
+
     name1 = 'histogram-sum' + next(tokens)
-    
-    
+
+
     # Map the histogram to all bins
     def block_hist(x, weights=None):
         return np.histogram(x, bins, weights=weights)[0][np.newaxis]
-    
+
     if weights is None:
         dsk = dict(((name1, i, 0), (block_hist, k))
                     for i, k in enumerate(core.flatten(a._keys())))
@@ -2055,16 +2062,16 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     else:
         a_keys = core.flatten(a._keys())
         w_keys = core.flatten(weights._keys())
-        dsk = dict(((name1, i, 0), (block_hist, k, w)) 
+        dsk = dict(((name1, i, 0), (block_hist, k, w))
                     for i, (k, w) in enumerate(zip(a_keys, w_keys)))
         dsk.update(weights.dask)
         dtype = weights.dtype
 
     dsk.update(a.dask)
-    
+
     mapped = Array(dsk, name1, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
-    
+
     # We need to replicate normed and density options from numpy
     if density is not None:
         if density:
