@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('partd')
+
 from operator import getitem
 
 import pandas as pd

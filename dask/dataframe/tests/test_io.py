@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('partd')
+
 import gzip
 import pandas as pd
 import numpy as np

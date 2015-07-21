@@ -1,3 +1,6 @@
+import pytest
+pytest.importorskip('partd')
+
 import dask.dataframe as dd
 import pandas as pd
 from dask.dataframe.multi import (align_partitions, join_indexed_dataframes,
