@@ -2051,14 +2051,14 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     if weights is None:
         dsk = dict(((name1, i, 0), (block_hist, k))
                     for i, k in enumerate(core.flatten(a._keys())))
-        dtype = 'i8'
+        dtype = int
     else:
         a_keys = core.flatten(a._keys())
         w_keys = core.flatten(weights._keys())
         dsk = dict(((name1, i, 0), (block_hist, k, w)) 
                     for i, (k, w) in enumerate(zip(a_keys, w_keys)))
         dsk.update(weights.dask)
-        dtype = 'f8'
+        dtype = weights.dtype
 
     dsk.update(a.dask)
     
