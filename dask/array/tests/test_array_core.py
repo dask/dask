@@ -1018,7 +1018,7 @@ def test_histogram():
     # Check if the sum of the bins equals the number of samples
     assert a2.sum(axis=0) == n
     assert a1.sum(axis=0) == n
-    eq(a1, a2)
+    assert eq(a1, a2)
 
 
 def test_histogram_alternative_bins_range():
@@ -1027,8 +1027,8 @@ def test_histogram_alternative_bins_range():
     # Other input
     (a1, b1) = da.histogram(v, bins=10, range=(0, 1))
     (a2, b2) = np.histogram(v, bins=10, range=(0, 1))
-    eq(a1, a2)
-    eq(b1, b2)
+    assert eq(a1, a2)
+    assert eq(b1, b2)
 
 
 def test_histogram_return_type():
@@ -1038,7 +1038,7 @@ def test_histogram_return_type():
     bins = np.arange(0, 11, 1, dtype='i4')
     (a1, b1) = da.histogram(v * 10, bins=bins)
     (a2, b2) = np.histogram(v * 10, bins=bins)
-    eq(a1, a2)
+    assert eq(a1, a2)
     assert a1.dtype == a2.dtype
 
 
@@ -1051,19 +1051,19 @@ def test_histogram_extra_args_and_shapes():
     
     for v, bins, w in data:
         # density
-        eq(da.histogram(v, bins=bins, normed=True)[0],
-           np.histogram(v, bins=bins, normed=True)[0])
+        assert eq(da.histogram(v, bins=bins, normed=True)[0],
+                  np.histogram(v, bins=bins, normed=True)[0])
         
         # normed
-        eq(da.histogram(v, bins=bins, density=True)[0],
-           np.histogram(v, bins=bins, density=True)[0])
+        assert eq(da.histogram(v, bins=bins, density=True)[0],
+                  np.histogram(v, bins=bins, density=True)[0])
         
         # weights
-        eq(da.histogram(v, bins=bins, weights=w)[0],
-           np.histogram(v, bins=bins, weights=w)[0])
+        assert eq(da.histogram(v, bins=bins, weights=w)[0],
+                  np.histogram(v, bins=bins, weights=w)[0])
         
-        eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
-           da.histogram(v, bins=bins, weights=w, density=True)[0])
+        assert eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
+                  da.histogram(v, bins=bins, weights=w, density=True)[0])
 
 
 def test_concatenate3():
