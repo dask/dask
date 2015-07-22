@@ -596,7 +596,7 @@ def to_castra(df, fn=None, categories=None):
 
 
 def to_csv(df, filename, **kwargs):
-    myget = kwargs.pop('get')
+    myget = kwargs.pop('get', None)
     name = 'to-csv' + next(tokens)
 
     dsk = dict()

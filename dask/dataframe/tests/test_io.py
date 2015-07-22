@@ -466,7 +466,7 @@ def test_to_csv():
     for npartitions in [1, 2]:
         a = dd.from_pandas(df, npartitions)
         with tmpfile('csv') as fn:
-            a.to_csv(fn, get=get_sync)
+            a.to_csv(fn)
 
             result = pd.read_csv(fn, index_col=0)
 
