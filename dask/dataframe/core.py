@@ -655,6 +655,11 @@ class DataFrame(_Frame):
         from .io import to_castra
         return to_castra(self, fn, categories)
 
+    @wraps(pd.DataFrame.to_csv)
+    def to_csv(self, filename, **kwargs):
+        from .io import to_csv
+        return to_csv(self, filename, **kwargs)
+
 
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
