@@ -219,7 +219,7 @@ def test_full_groupby():
     def func(df):
         df['b'] = df.b - df.b.mean()
         return df
-    # assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+    assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
 
 
 def test_groupby_on_index():
