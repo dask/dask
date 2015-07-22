@@ -59,6 +59,7 @@ dask collections.  If you are a *developer* then you should start here.
    graphs.rst
    spec.rst
    custom-graphs.rst
+   imperative.rst
    optimize.rst
 
 **Scheduling:**
