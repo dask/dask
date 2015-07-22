@@ -1145,7 +1145,7 @@ def normalize_chunks(chunks, shape=None):
     return tuple(map(tuple, chunks))
 
 
-def from_array(x, chunks, name=None, lock=False):
+def from_array(x, chunks, name=None, lock=False, use_processes=False):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -1176,6 +1176,10 @@ def from_array(x, chunks, name=None, lock=False):
         lock = Lock()
     if lock:
         dsk = dict((k, v + (lock,)) for k, v in dsk.items())
+
+    if use_processes:
+        from multiprocessing import run_in_processes
+        dsk = run_in_processes(dsk)
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
