@@ -23,11 +23,11 @@ def add(x, y):
 
 
 @contextmanager
-def worker(data=None, scheduler='tcp://localhost:5555'):
+def worker(data=None, scheduler='tcp://127.0.0.1:5555'):
     if data is None:
         data = dict()
 
-    a = Worker(scheduler, data)
+    a = Worker(scheduler, data, hostname='127.0.0.1', nthreads=50)
 
     try:
         yield a
