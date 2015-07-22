@@ -11,15 +11,6 @@ arange_names = ('arange-%d' % i for i in count(1))
 diag_names = ('diag-%d' % i for i in count(1))
 
 
-def _get_blocksizes(num, blocksize):
-    # compute blockdims
-    remainder = (num % blocksize,)
-    if remainder == (0,):
-        remainder = tuple()
-    blocksizes = ((blocksize,) * int(num // blocksize)) + remainder
-    return blocksizes
-
-
 def linspace(start, stop, num=50, chunks=None, dtype=None):
     """
     Return `num` evenly spaced values over the closed interval [`start`,
