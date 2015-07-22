@@ -726,11 +726,12 @@ class Scheduler(object):
 
     def _heartbeat(self, header, payload):
         with logerrors():
-            log(self.address_to_clients, "Heartbeat", header)
+            # log(self.address_to_workers, "Heartbeat", header)
             payload = pickle.loads(payload)
             address = header['address']
 
             if address not in self.workers:
+                log(self.address_to_workers, "New Worker", header)
                 self.available_workers.put(address)
 
             self.workers[address] = payload
@@ -746,7 +747,8 @@ class Scheduler(object):
         for worker, data in self.workers.items():
             if abs(data['last-seen'] - now).microseconds > (timeout * 1e6):
                 remove.append(worker)
-        [self.workers.pop(r) for r in remove]
+        for r in remove:
+            self.workers.pop(r)
         return remove
 
     def prune_and_notify(self, timeout=20):

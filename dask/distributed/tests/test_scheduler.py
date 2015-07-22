@@ -248,7 +248,7 @@ def test_prune_and_notify():
 
         # The scheduler notices, and corrects it state.
         while w2.address in s.workers:
-            s.prune_and_notify(timeout=0.01)
+            s.prune_and_notify(timeout=0.1)
 
         # But the sheduler notified the workers about the death
         while not result.ready():

@@ -394,7 +394,7 @@ class Worker(object):
         self._listen_scheduler_thread.join()
         if self.heartbeat:
             self._heartbeat_thread.join()
-        log('Unblocked')
+        log(self.address, 'Unblocked')
 
     def collect(self, locations):
         """ Collect data from peers
