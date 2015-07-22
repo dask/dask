@@ -33,6 +33,14 @@ def shard_df_on_index(df, divisions):
     >>> shards[2]
         a  b
     4  40  1
+
+    >>> list(shard_df_on_index(df, []))[0]  # empty case
+        a  b
+    0   0  5
+    1  10  4
+    2  20  3
+    3  30  2
+    4  40  1
     """
     if isinstance(divisions, Iterator):
         divisions = list(divisions)
@@ -84,6 +92,13 @@ def _categorize(categories, df):
     0  1  A
     1  2  c
     2  3  A
+
+    >>> _categorize(categories, df.y)
+    0    A
+    1    c
+    2    A
+    dtype: category
+    Categories (3, object): [A, B, c]
     """
     if '.index' in categories:
         index = pd.CategoricalIndex(
