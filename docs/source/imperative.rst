@@ -49,7 +49,7 @@ the call to ``compute`` at the end.
 How it works
 ------------
 
-The imperative consists of two functions:
+The ``dask.imperative`` interface consists of two functions:
 
 1. ``do``
 
