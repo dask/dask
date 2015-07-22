@@ -98,7 +98,10 @@ def slice_array(out_name, in_name, blockdims, index):
 
     # x[:, :, :] - Punt and return old value
     if all(index == slice(None, None, None) for index in index):
-        return {out_name: in_name}, blockdims
+        suffixes = product(*[range(len(bd)) for bd in blockdims])
+        dsk = dict(((out_name,) + s, (in_name,) + s)
+                   for s in suffixes)
+        return dsk, blockdims
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
     missing = len(blockdims) - (len(index) - index.count(None))
