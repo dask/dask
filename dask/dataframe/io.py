@@ -7,7 +7,7 @@ import re
 import os
 from glob import glob
 from math import ceil
-from toolz import merge, dissoc
+from toolz import merge, dissoc, assoc
 from itertools import count
 from operator import getitem
 
@@ -65,7 +65,7 @@ def fill_kwargs(fn, args, kwargs):
             kwargs['header'] = 0
 
     try:
-        head = pd.read_csv(fn, *args, nrows=sample_nrows, **kwargs)
+        head = pd.read_csv(fn, *args, **assoc(kwargs, 'nrows', sample_nrows))
     except StopIteration:
         head = pd.read_csv(fn, *args, **kwargs)
 
@@ -95,31 +95,37 @@ def read_csv(fn, *args, **kwargs):
     if '*' in fn:
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
 
+    name = 'read-csv' + next(tokens)
+
     columns = kwargs.pop('columns')
-
-    # Chunk sizes and numbers
-    total_bytes = file_size(fn, kwargs['compression'])
-    nchunks = int(ceil(total_bytes / chunkbytes))
-    divisions = [None] * (nchunks + 1)
-
     header = kwargs.pop('header')
 
-    first_read_csv = partial(pd.read_csv, *args, header=header,
-                           **dissoc(kwargs, 'compression'))
-    rest_read_csv = partial(pd.read_csv, *args, header=None,
-                          **dissoc(kwargs, 'compression'))
+    if 'nrows' in kwargs:  # Just create single partition
+        dsk = {(name, 0): (apply, pd.read_csv, (fn,),
+                                  assoc(kwargs, 'header', header))},
+        result = DataFrame(dsk, name, columns, [None, None])
 
-    # Create dask graph
-    name = 'read-csv' + next(tokens)
-    dsk = dict(((name, i), (rest_read_csv, (BytesIO,
-                               (textblock, fn,
-                                   i*chunkbytes, (i+1) * chunkbytes,
-                                   kwargs['compression']))))
-               for i in range(1, nchunks))
-    dsk[(name, 0)] = (first_read_csv, (BytesIO,
-                       (textblock, fn, 0, chunkbytes, kwargs['compression'])))
+    else:
+        # Chunk sizes and numbers
+        total_bytes = file_size(fn, kwargs['compression'])
+        nchunks = int(ceil(total_bytes / chunkbytes))
+        divisions = [None] * (nchunks + 1)
 
-    result = DataFrame(dsk, name, columns, divisions)
+        first_read_csv = partial(pd.read_csv, *args, header=header,
+                               **dissoc(kwargs, 'compression'))
+        rest_read_csv = partial(pd.read_csv, *args, header=None,
+                              **dissoc(kwargs, 'compression'))
+
+        # Create dask graph
+        dsk = dict(((name, i), (rest_read_csv, (BytesIO,
+                                   (textblock, fn,
+                                       i*chunkbytes, (i+1) * chunkbytes,
+                                       kwargs['compression']))))
+                   for i in range(1, nchunks))
+        dsk[(name, 0)] = (first_read_csv, (BytesIO,
+                           (textblock, fn, 0, chunkbytes, kwargs['compression'])))
+
+        result = DataFrame(dsk, name, columns, divisions)
 
     if categorize or index:
         categories, quantiles = categories_and_quantiles(fn, args, kwargs,
@@ -157,9 +163,11 @@ def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
 def csv_names(fn, encoding='utf-8', compression=None, names=None,
                 parse_dates=None, usecols=None, dtype=None, **kwargs):
     try:
+        kwargs['nrows'] = 5
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, parse_dates=parse_dates, nrows=5, **kwargs)
+                names=names, parse_dates=parse_dates, **kwargs)
     except StopIteration:
+        kwargs['nrows'] = None
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
                 names=names, parse_dates=parse_dates, **kwargs)
     return list(df.columns)
