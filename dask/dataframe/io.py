@@ -614,4 +614,4 @@ def to_csv(df, filename, **kwargs):
                              (tuple, [(df._name, i), filename]),
                              kwargs2))
 
-    get(merge(dsk, df.dask), (name, i), get=myget)
+    get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)

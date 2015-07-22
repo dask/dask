@@ -462,11 +462,12 @@ def test_read_hdf():
 def test_to_csv():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
-    a = dd.from_pandas(df, 2)
 
-    with tmpfile('csv') as fn:
-        a.to_csv(fn, get=get_sync)
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpfile('csv') as fn:
+            a.to_csv(fn, get=get_sync)
 
-        result = pd.read_csv(fn, index_col=0)
+            result = pd.read_csv(fn, index_col=0)
 
-        tm.assert_frame_equal(result, df)
+            tm.assert_frame_equal(result, df)
