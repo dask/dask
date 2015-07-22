@@ -105,8 +105,11 @@ def test_read_csv_categorize():
         assert len(f.compute().name.cat.categories) == 6
 
 
+def normalize_text(s):
+    return '\n'.join(map(str.strip, s.strip().split('\n')))
+
 def test_consistent_dtypes():
-    text = """
+    text = normalize_text("""
     name,amount
     Alice,100.5
     Bob,-200.5
@@ -114,7 +117,7 @@ def test_consistent_dtypes():
     Dennis,400
     Edith,-500
     Frank,600
-    """.strip()
+    """)
 
     with filetext(text) as fn:
         df = read_csv(fn, chunkbytes=30)
@@ -248,7 +251,7 @@ def test_from_bcolz_filename():
 
 
 def test_skipinitialspace():
-    text = """
+    text = normalize_text("""
     name, amount
     Alice,100
     Bob,-200
@@ -256,7 +259,7 @@ def test_skipinitialspace():
     Dennis,400
     Edith,-500
     Frank,600
-    """.strip()
+    """)
 
     with filetext(text) as fn:
         df = dd.read_csv(fn, skipinitialspace=True, chunkbytes=20)
@@ -266,19 +269,19 @@ def test_skipinitialspace():
 
 
 def test_consistent_dtypes():
-    text1 = """
+    text1 = normalize_text("""
     name,amount
     Alice,100
     Bob,-200
     Charlie,300
-    """.strip()
+    """)
 
-    text2 = """
+    text2 = normalize_text("""
     name,amount
     1,400
     2,-500
     Frank,600
-    """.strip()
+    """)
     try:
         with open('_foo.1.csv', 'w') as f:
             f.write(text1)
