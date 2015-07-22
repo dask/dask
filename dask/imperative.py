@@ -257,7 +257,6 @@ class Value(object):
     __abs__ = do(operator.abs, True)
     __add__ = do(operator.add, True)
     __and__ = do(operator.and_, True)
-    __delitem__ = do(operator.delitem, True)
     __div__ = do(operator.floordiv, True)
     __eq__ = do(operator.eq, True)
     __floordiv__ = do(operator.floordiv, True)
