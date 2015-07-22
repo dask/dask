@@ -126,9 +126,6 @@ from .order import order
 def inc(x):
     return x + 1
 
-def double(x):
-    return x * 2
-
 
 DEBUG = False
 
@@ -525,48 +522,6 @@ def get_sync(dsk, keys, **kwargs):
     queue = Queue()
     return get_async(apply_sync, 1, dsk, keys, queue=queue,
                      raise_on_exception=True, **kwargs)
-
-
-'''
-Debugging
----------
-
-The threaded nature of this project presents challenging to normal unit-test
-and debug workflows.  Visualization of the execution state has value.
-
-Our main mechanism is a visualization of the execution state as colors on our
-normal dot graphs (see dot module).
-'''
-
-def visualize(dsk, state, filename='dask'):
-    """ Visualize state of compputation as dot graph """
-    from dask.dot import dot_graph
-    data, func = color_nodes(dsk, state)
-    dot_graph(dsk, filename=filename, data_attributes=data,
-              func_attributes=func)
-
-
-def color_nodes(dsk, state):
-    data, func = dict(), dict()
-    for key in dsk:
-        func[key] = {'color': 'gray'}
-        data[key] = {'color': 'gray'}
-
-    for key in state['released']:
-        data[key] = {'color': 'blue'}
-
-    for key in state['cache']:
-        data[key] = {'color': 'red'}
-
-    for key in state['finished']:
-            func[key] = {'color': 'blue'}
-    for key in state['running']:
-            func[key] = {'color': 'red'}
-
-    for key in dsk:
-        func[key]['penwidth'] = 4
-        data[key]['penwidth'] = 4
-    return data, func
 
 
 def sortkey(item):
