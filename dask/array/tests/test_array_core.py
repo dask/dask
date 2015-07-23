@@ -1216,3 +1216,7 @@ def test_h5py_newaxis():
             assert d[None, :, :].compute(get=get_sync).shape == (1, 10, 10)
             assert d[:, None, :].compute(get=get_sync).shape == (10, 1, 10)
             assert d[:, :, None].compute(get=get_sync).shape == (10, 10, 1)
+
+
+def test_ellipsis_slicing():
+    assert eq(da.ones(4, chunks=2)[...], np.ones(4))
