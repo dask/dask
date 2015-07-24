@@ -1104,7 +1104,10 @@ def takes_multiple_arguments(func):
     False
     """
     try:
-        spec = inspect.getargspec(func)
+        if inspect.isclass(func):
+            spec = inspect.getargspec(func.__init__)
+        else:
+            spec = inspect.getargspec(func)
     except:
         return False
     if spec.varargs:
