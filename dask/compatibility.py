@@ -16,7 +16,11 @@ if PY3:
     unicode = str
     long = int
     def apply(func, args, kwargs=None):
-        if kwargs:
+        if not isinstance(args, list) and not isinstance(args, tuple) and kwargs is None:
+            return func(args)
+        elif not isinstance(args, list) and not isinstance(args, tuple):
+            return func(args, **kwargs)
+        elif kwargs:
             return func(*args, **kwargs)
         else:
             return func(*args)
