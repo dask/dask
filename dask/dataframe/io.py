@@ -225,7 +225,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
 
     import dask
     if index:
-        quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1))
+        quantiles = d[index].quantile(np.linspace(0, 1, nchunks + 1))
         result = compute(quantiles, *categories)
         quantiles, categories = result[0].values, result[1:]
     else:

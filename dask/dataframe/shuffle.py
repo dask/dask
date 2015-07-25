@@ -29,7 +29,7 @@ def set_index(df, index, npartitions=None, compute=True, **kwargs):
         index2 = index
 
     divisions = (index2
-                  .quantiles(np.linspace(0, 100, npartitions+1))
+                  .quantile(np.linspace(0, 1, npartitions+1))
                   .compute()).tolist()
     return set_partition(df, index, divisions, compute=compute, **kwargs)
 
