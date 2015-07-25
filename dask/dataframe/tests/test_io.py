@@ -474,3 +474,11 @@ def test_to_csv():
             result = pd.read_csv(fn, index_col=0)
 
             tm.assert_frame_equal(result, df)
+
+
+def test_read_csv_with_nrows():
+    with filetext(text) as fn:
+        f = read_csv(fn, nrows=3)
+        assert list(f.columns) == ['name', 'amount']
+        assert f.npartitions == 1
+        assert eq(read_csv(fn, nrows=3), pd.read_csv(fn, nrows=3))
