@@ -644,6 +644,19 @@ class DataFrame(_Frame):
 
         return elemwise(_assign, self, *pairs, columns=list(df2.columns))
 
+    @wraps(pd.DataFrame.query)
+    def query(self, expr, **kwargs):
+        name = 'query' + next(tokens)
+        if kwargs:
+            dsk = dict(((name, i), (apply, pd.DataFrame.query,
+                                    ((self._name, i), (expr,), kwargs)))
+                       for i in range(self.npartitions))
+        else:
+            dsk = dict(((name, i), (pd.DataFrame.query, (self._name, i), expr))
+                       for i in range(self.npartitions))
+
+        return DataFrame(merge(dsk, self.dask), name, self.columns, self.divisions)
+
     def to_castra(self, fn=None, categories=None):
         """ Write DataFrame to Castra on-disk store
 
