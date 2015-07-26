@@ -941,6 +941,22 @@ class Series(_Frame):
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
 
+    def apply(self, func, convert_dtype=True, args=(), **kwds):
+        """ Parallel version of pandas.Series.apply
+
+        This is identical to the Pandas algorithm but assumes that axis=0.
+        The function will be applied per row, not per column.
+
+        The original docstring follows:\n
+        """ + pd.Series.apply.__doc__
+        name = 'apply' + next(tokens)
+        dsk = dict(((name, i),
+                    (apply, pd.Series.apply,
+                      (tuple, [(self._name, i), func, convert_dtype, args]),
+                      kwds))
+                    for i in range(self.npartitions))
+        return Series(merge(self.dask, dsk), name, None, self.divisions)
+
 
 class Index(Series):
 

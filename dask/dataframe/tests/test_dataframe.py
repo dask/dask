@@ -2020,3 +2020,12 @@ def test_series_groupby():
     assert raises(TypeError, lambda: ss.groupby([1, 2]))
     sss = dd.from_pandas(s, npartitions=3)
     assert raises(NotImplementedError, lambda: ss.groupby(sss))
+
+
+def test_apply():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    a = dd.from_pandas(df, npartitions=2)
+
+
+    func = lambda row: row['x'] + row['y']
+    assert eq(a.x.apply(lambda x: x + 1), df.x.apply(lambda x: x + 1))
