@@ -1081,7 +1081,13 @@ def dictitems(d):
     return list(d.items())
 
 
-ONE_ARITY_BUILTINS = {list, tuple, str}
+ONE_ARITY_BUILTINS = {abs, all, any, ascii, bool, bytearray, bytes, callable, chr, 
+    classmethod, complex, dict, dir, enumerate, eval, exec, float, format, frozenset, 
+    hash, hex, id, int, iter, len, list, max, memoryview, min, next, oct, open, ord,
+    range, repr, reversed, round, set, slice, sorted, staticmethod, str, sum, tuple, 
+    type, vars, zip}
+MULTI_ARITY_BUILTINS = {compile, delattr, divmod, filter, getattr, hasattr, isinstance, 
+    issubclass, map, pow, setattr}
 
 def takes_multiple_arguments(func):
     """
@@ -1107,18 +1113,25 @@ def takes_multiple_arguments(func):
     """
     if func in ONE_ARITY_BUILTINS:
         return False
+    elif func in MULTI_ARITY_BUILTINS:
+        return True
+
     try:
-        if inspect.isclass(func):
-            spec = inspect.getargspec(func.__init__)
-        else:
-            spec = inspect.getargspec(func)
+        spec = inspect.getargspec(func)
     except:
         return False
+
+    try:
+        is_constructor = spec.args[0] == 'self' and isinstance(func, type)
+    except:
+        is_constructor = False
+
     if spec.varargs:
         return True
+
     if spec.defaults is None:
-        return len(spec.args) != 1
-    return len(spec.args) - len(spec.defaults) > 1
+        return len(spec.args) - is_constructor != 1
+    return len(spec.args) - len(spec.defaults) - is_constructor > 1
 
 
 def concat(bags):
