@@ -1081,6 +1081,8 @@ def dictitems(d):
     return list(d.items())
 
 
+ONE_ARITY_BUILTINS = {list, tuple, str}
+
 def takes_multiple_arguments(func):
     """
 
@@ -1103,6 +1105,8 @@ def takes_multiple_arguments(func):
     >>> takes_multiple_arguments(map)  # default to False
     False
     """
+    if func in ONE_ARITY_BUILTINS:
+        return False
     try:
         if inspect.isclass(func):
             spec = inspect.getargspec(func.__init__)
