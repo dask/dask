@@ -62,6 +62,13 @@ def test_map():
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
     assert list(b.map(lambda x, y: x + y).compute(get=dask.get)) == [11, 22, 33]
+    assert list(b.map(list).compute()) == [(1, 10), (2, 20), (3, 30)]
+
+
+def test_map_with_builtins():
+    b = db.from_sequence(range(3))
+    assert ' '.join(b.map(str)) == '0 1 2'
+    assert b.map(str).map(tuple).compute() == [('0',), ('1',), ('2',)]
 
 
 def test_filter():
