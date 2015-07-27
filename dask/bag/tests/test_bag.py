@@ -546,3 +546,22 @@ def test_ensure_compute_output_is_concrete():
     b = db.from_sequence([1, 2, 3])
     result = b.map(lambda x: x + 1).compute()
     assert not isinstance(result, Iterator)
+
+
+class BagOfDicts(db.Bag):
+    def get(self, key, default=None):
+        return self.map(lambda d: d.get(key, default))
+
+    def set(self, key, value):
+        def setter(d):
+            d[key] = value
+            return d
+        return self.map(setter)
+
+def test_bag_class_extend():
+    dictbag = BagOfDicts(*db.from_sequence([{'a': {'b': 'c'}}])._args)
+    assert dictbag.get('a').get('b').compute()[0] == 'c'
+    assert dictbag.get('a').set('d', 'EXTENSIBILITY!!!').compute()[0] == \
+        {'b': 'c', 'd': 'EXTENSIBILITY!!!'}
+    assert isinstance(dictbag.get('a').get('b'), BagOfDicts)
+
