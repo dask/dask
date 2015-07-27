@@ -298,16 +298,18 @@ def test_len():
     assert len(d) == len(full)
 
 
-def test_quantiles():
-    result = d.b.quantiles([30, 70]).compute()
+def test_quantile():
+    result = d.b.quantile([.3, .7]).compute()
     assert len(result) == 2
     assert result[0] == 0
     assert 3 < result[1] < 7
 
 
-def test_empty_quantiles():
-    assert d.b.quantiles([]).compute().tolist() == []
+def test_empty_quantile():
+    assert d.b.quantile([]).compute().tolist() == []
 
+def test_quantiles_raises():
+    assert raises(NotImplementedError, lambda: d.b.quantiles([30]))
 
 def test_index():
     assert eq(d.index, full.index)

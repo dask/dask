@@ -355,13 +355,20 @@ class Series(_Frame):
         return ("dd.Series<%s, divisions=%s>" %
                 (self._name, repr_long_list(self.divisions)))
 
-    def quantiles(self, q):
+    def quantile(self, q):
         """ Approximate quantiles of column
 
         q : list/array of floats
-            Iterable of numbers ranging from 0 to 100 for the desired quantiles
+            Iterable of numbers ranging from 0 to 1 for the desired quantiles
         """
-        return quantiles(self, q)
+        # pandas uses quantile in [0, 1]
+        # numpy / everyone else uses [0, 100]
+        return quantile(self, np.asarray(q) * 100)
+
+    def quantiles(self, *args, **kwargs):
+        raise NotImplementedError("This has moved to quantile to match the Pandas API\n"
+                                  "Also, quantiles will now be specified on the range "
+                                  "[0, 1], not [0, 100]")
 
     def __getitem__(self, key):
         name = 'getitem' + next(tokens)
@@ -1078,7 +1085,7 @@ def categorize(df, columns=None, **kwargs):
     return df.map_partitions(func, columns=df.columns)
 
 
-def quantiles(df, q, **kwargs):
+def quantile(df, q, **kwargs):
     """ Approximate quantiles of column
 
     Parameters
