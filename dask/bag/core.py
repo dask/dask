@@ -246,7 +246,7 @@ class Bag(object):
             func = partial(apply, func)
         dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     @property
     def _args(self):
@@ -273,7 +273,7 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def remove(self, predicate):
         """ Remove elements in collection that match predicate
@@ -289,7 +289,7 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (reify, (remove, predicate, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def map_partitions(self, func):
         """ Apply function to every partition within collection
@@ -302,7 +302,7 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (func, (self.name, i)))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
@@ -323,7 +323,7 @@ class Bag(object):
         else:
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
                        for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     @classmethod
     def from_sequence(cls, *args, **kwargs):
@@ -379,7 +379,7 @@ class Bag(object):
                         for i in range(self.npartitions))
         dsk2 = {(b, 0): (dictitems,
                             (merge_with, sum, list(sorted(dsk.keys()))))}
-        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
 
     def topk(self, k, key=None):
@@ -405,7 +405,7 @@ class Bag(object):
         dsk = dict(((a, i), (list, (func, k, (self.name, i))))
                         for i in range(self.npartitions))
         dsk2 = {(b, 0): (list, (func, k, (toolz.concat, list(dsk.keys()))))}
-        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
     def distinct(self):
         """ Distinct elements of collection
@@ -421,7 +421,7 @@ class Bag(object):
         b = next(names)
         dsk2 = {(b, 0): (apply, set.union, (list2, list(dsk.keys())))}
 
-        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
     def reduction(self, perpartition, aggregate):
         """ Reduce collection with reduction operators
@@ -523,7 +523,7 @@ class Bag(object):
         dsk = dict(((name, i), (list, (join, on_other, other,
                                        on_self, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def product(self, other):
         """ Cartesian product between two bags """
@@ -534,7 +534,7 @@ class Bag(object):
                    (list, (itertools.product, (self.name, i),
                                               (other.name, j))))
                    for i in range(n) for j in range(m))
-        return Bag(merge(self.dask, other.dask, dsk), name, n*m)
+        return type(self)(merge(self.dask, other.dask, dsk), name, n*m)
 
     def foldby(self, key, binop, initial=no_default, combine=None,
                combine_initial=no_default):
@@ -633,7 +633,7 @@ class Bag(object):
                               (merge_with,
                                 (partial, reduce, combine),
                                 list(dsk.keys())))}
-        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
     def take(self, k, compute=True):
         """ Take the first k elements
@@ -678,7 +678,7 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def __iter__(self):
         return iter(self.compute())
@@ -726,7 +726,7 @@ class Bag(object):
                      (collect, grouper, i, p, barrier_token))
                     for i in range(npartitions))
 
-        return Bag(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
+        return type(self)(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
 
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
