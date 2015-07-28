@@ -845,6 +845,11 @@ class Array(object):
             "At least two entries must be a list\n"
             "For other combinations try doing normal slicing first, followed\n"
             "by vindex slicing.  Got: \n\t%s" % str(key))
+        if any((isinstance(k, np.ndarray) and k.ndim != 1) or
+               (isinstance(k, list) and k and isinstance(k[0], list))
+               for k in key):
+            raise IndexError("vindex does not support multi-dimensional keys\n"
+                    "Got: %s" % str(key))
         key = [i if isinstance(i, list) else
                i.tolist() if isinstance(i, np.ndarray) else
                None for i in key]

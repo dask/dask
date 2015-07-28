@@ -1260,7 +1260,7 @@ def test_vindex_errors():
     assert raises(IndexError, lambda: d.vindex[0])
     assert raises(IndexError, lambda: d.vindex[[1, 2, 3]])
     assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [1, 2, 3], 0])
-
+    assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [[1], [2], [3]]])
 
 def test_vindex_merge():
     from dask.array.core import _vindex_merge
