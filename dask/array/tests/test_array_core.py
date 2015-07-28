@@ -1244,10 +1244,12 @@ def test_point_slicing_with_full_slice():
             [[1, 2, 3], [3, 2, 1], [3, 2, 1], [5, 3, 4]],
             [[], [], [], None],
             [None, None, [1, 2, 3], [4, 3, 2]],
+            [np.array([1, 2, 3]), None, np.array([4, 3, 2]), None],
             ]
 
     for ind in inds:
-        slc = [i if isinstance(i, list) else slice(None, None) for i in ind]
+        slc = [i if isinstance(i, (np.ndarray, list)) else slice(None, None)
+                for i in ind]
         result = d.vindex[tuple(slc)]
         expected = x[tuple(slc)]
         assert eq(result, expected)

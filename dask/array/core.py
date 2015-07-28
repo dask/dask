@@ -838,13 +838,16 @@ class Array(object):
 
     def _vindex(self, key):
         if (not isinstance(key, tuple) or
-           not len([k for k in key if isinstance(k, list)]) >= 2 or
-           not all(isinstance(k, list) or k == slice(None, None) for k in key)):
+           not len([k for k in key if isinstance(k, (np.ndarray, list))]) >= 2 or
+           not all(isinstance(k, (np.ndarray, list)) or k == slice(None, None)
+                   for k in key)):
             raise IndexError("vindex expects only lists and full slices\n"
             "At least two entries must be a list\n"
             "For other combinations try doing normal slicing first, followed\n"
-            "by vindex slicing")
-        key = [i if isinstance(i, list) else None for i in key]
+            "by vindex slicing.  Got: \n\t%s" % str(key))
+        key = [i if isinstance(i, list) else
+               i.tolist() if isinstance(i, np.ndarray) else
+               None for i in key]
         return _vindex(self, *key)
 
     @property
