@@ -2,21 +2,31 @@ from __future__ import division
 import sys
 
 from ..core import istask
+from ..async import callbacks
 
 
 class ProgressBar(object):
 
-    def __init__(self, get, nbins=50):
-        self._get = get
+    def __init__(self, nbins=50):
         self._nbins = nbins
 
-    def _end_callback(self, key, value, dsk, state, id):
-        if key is not None:
-            self._ndone += 1
-            if not self._ndone % self._update_rate:
-                self._update_bar()
-        else:
-            self._finalize_bar()
+    def _start(self, dsk, state):
+        self._ntasks = len([k for (k, v) in dsk.items() if istask(v)])
+        self._ndone = 0
+        self._update_rate = max(1, self._ntasks // self._nbins)
+        self._update_bar()
+
+    def _posttask(self, key, value, dsk, state, id):
+        self._ndone += 1
+        if not self._ndone % self._update_rate:
+            self._update_bar()
+
+    def _finish(self, dsk, state):
+        self._finalize_bar()
+
+    @property
+    def callbacks(self):
+        return callbacks(self._start, None, self._posttask, self._finish)
 
     @staticmethod
     def _draw_bar(ndone, ntasks, nbins):
@@ -33,11 +43,3 @@ class ProgressBar(object):
     def _finalize_bar(self):
         self._draw_bar(self._ndone, self._ntasks, self._nbins)
         sys.stdout.write('\n')
-
-    def get(self, dsk, result, **kwargs):
-        self._ntasks = len([k for (k, v) in dsk.items() if istask(v)])
-        self._ndone = 0
-        self._update_rate = max(1, self._ntasks // self._nbins)
-        self._update_bar()
-        return self._get(dsk, result, end_callback=self._end_callback,
-                         **kwargs)

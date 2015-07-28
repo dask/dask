@@ -1,10 +1,15 @@
 from operator import add, mul
-from dask.diagnostics import thread_prof
+from dask.diagnostics import Profiler
+from dask.threaded import get
+from dask.context import set_options
 import pytest
 try:
     import bokeh
 except:
     bokeh = None
+
+
+prof = Profiler()
 
 
 dsk = {'a': 1,
@@ -15,15 +20,16 @@ dsk = {'a': 1,
 
 
 def test_profiler():
-    out = thread_prof.get(dsk, 'e')
+    with set_options(callbacks=prof.callbacks):
+        out = get(dsk, 'e')
     assert out == 6
-    prof_data = sorted(thread_prof.results(), key=lambda d: d.key)
+    prof_data = sorted(prof.results(), key=lambda d: d.key)
     keys = [i.key for i in prof_data]
     assert keys == ['c', 'd', 'e']
     tasks = [i.task for i in prof_data]
     assert tasks == [(add, 'a', 'b'), (mul, 'a', 'b'), (mul, 'c', 'd')]
-    thread_prof.clear()
-    assert thread_prof.results() == []
+    prof.clear()
+    assert prof.results() == []
 
 
 @pytest.mark.skipif("not bokeh")
@@ -39,14 +45,15 @@ def test_pprint_task():
 
 @pytest.mark.skipif("not bokeh")
 def test_profiler_plot():
-    thread_prof.get(dsk, 'e')
+    with set_options(callbacks=prof.callbacks):
+        get(dsk, 'e')
     # Run just to see that it doesn't error
-    thread_prof.visualize(show=False)
-    p = thread_prof.visualize(plot_width=500,
-                              plot_height=300,
-                              tools="hover",
-                              title="Not the default",
-                              show=False)
+    prof.visualize(show=False)
+    p = prof.visualize(plot_width=500,
+                       plot_height=300,
+                       tools="hover",
+                       title="Not the default",
+                       show=False)
     assert p.plot_width == 500
     assert p.plot_height == 300
     assert len(p.tools) == 1
