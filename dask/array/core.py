@@ -2264,6 +2264,20 @@ def interleave_none(a, b):
     return tuple(result)
 
 
+def keyname(name, i, okey, axis):
+    """
+
+    >>> keyname('x', 3, [0, None, 2])
+    ('x', 0, 3, 2)
+
+    >>> keyname('x', 3, [None, None, 0, 2])
+    ('x', 3, 0, 2)
+    """
+    okey = [k for k in okey if k is not None]
+    okey.insert(axis, i)
+    return (name,) + tuple(okey)
+
+
 def isel(x, *indexes):
     """ Point wise slicing
 
@@ -2286,16 +2300,19 @@ def isel(x, *indexes):
     """
     indexes = [list(index) if index is not None else index for index in indexes]
     bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
-    axis = next(i for i, v in enumerate(indexes) if v is not None)
+    bounds2 = [b for i, b in zip(indexes, bounds) if i is not None]
+    axis = _get_axis(indexes)
 
     points = list()
     for i, idx in enumerate(zip(*[i for i in indexes if i is not None])):
-        block_idx = [np.searchsorted(b, ind, 'right') - 1 for b, ind in zip(bounds, idx)]
-        inblock_idx = [ind - bounds[k][j]
+        block_idx = [np.searchsorted(b, ind, 'right') - 1
+                     for b, ind in zip(bounds2, idx)]
+        inblock_idx = [ind - bounds2[k][j]
                     for k, (ind, j) in enumerate(zip(idx, block_idx))]
         points.append((i, tuple(block_idx), tuple(inblock_idx)))
 
     per_block = groupby(1, points)
+    per_block = dict((k, v) for k, v in per_block.items() if v)
 
     other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
                                 for i, c in zip(indexes, x.chunks)]))
@@ -2303,32 +2320,51 @@ def isel(x, *indexes):
     token = next(tokens)
     name = 'isel-slice' + token
 
-    def keyname(name, i, okey):
-        okey = list(okey)
-        okey[okey.index(None)] = i
-        okey = [k for k in okey if k is not None]
-        return (name,) + tuple(okey)
-
     full_slices = [slice(None, None) if i is None else None for i in indexes]
 
-    dsk = dict((keyname(name, i, okey),
+    dsk = dict((keyname(name, i, okey, axis),
                 (_isel_slice, (x.name,) + interleave_none(okey, key),
                               interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))))
                 for i, key in enumerate(per_block)
                 for okey in other_blocks)
 
-    dsk2 = dict((keyname('isel-merge' + token, 0, okey),
-                 (_isel_merge,
-                   [list(pluck(0, per_block[key])) for key in per_block],
-                   [keyname(name, i, okey) for i in range(len(per_block))],
-                   axis))
-                 for okey in other_blocks)
+    if per_block:
+        dsk2 = dict((keyname('isel-merge' + token, 0, okey, axis),
+                     (_isel_merge,
+                       [list(pluck(0, per_block[key])) for key in per_block],
+                       [keyname(name, i, okey, axis) for i in range(len(per_block))],
+                       axis))
+                     for okey in other_blocks)
+    else:
+        dsk2 = dict()
 
     chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
-    chunks.insert(axis, (len(points),),)
+    chunks.insert(axis, (len(points),) if points else ())
     chunks = tuple(chunks)
 
+    import pdb; pdb.set_trace()
+
     return Array(merge(x.dask, dsk, dsk2), 'isel-merge' + token, chunks, x.dtype)
+
+
+def _get_axis(indexes):
+    """ Get axis along which point-wise slicing results lie
+
+    This is mostly a hack because I can't figure out NumPy's rule on this and
+    can't be bothered to go reading.
+
+    >>> _get_axis([[1, 2], None, [1, 2], None])
+    0
+    >>> _get_axis([None, [1, 2] [1, 2], None])
+    1
+    >>> _get_axis([None, None, [1, 2] [1, 2]])
+    2
+    """
+    ndim = len(indexes)
+    indexes = [slice(None, None) if i is None else [0] for i in indexes]
+    x = np.empty((2,) * ndim)
+    x2 = x[tuple(indexes)]
+    return x2.shape.index(1)
 
 
 def _isel_slice(block, points):

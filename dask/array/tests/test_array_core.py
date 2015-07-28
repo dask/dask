@@ -1237,12 +1237,14 @@ def test_point_slicing_with_full_slice():
     x = np.arange(4*5*6*7).reshape((4, 5, 6, 7))
     d = da.from_array(x, chunks=(2, 3, 3, 4))
 
-    inds = [[[1, 2, 3], None, [4, 3, 2], None],
-            [None, None, [1, 2, 3], [4, 3, 2]],
+    inds = [
+            [None, [0, 2, 3], None, [0, 3, 2]],
+            [[1, 2, 3], None, [3, 2, 1], [5, 3, 4]],
+            [[1, 2, 3], None, [4, 3, 2], None],
             [[1, 2, 3], [3, 2, 1], [3, 2, 1], [5, 3, 4]],
             [[], [], [], None],
-            [[1, 2, 3], None, [3, 2, 1], [5, 3, 4]]]
-
+            [None, None, [1, 2, 3], [4, 3, 2]],
+            ]
 
     for ind in inds:
         slc = [i if isinstance(i, list) else slice(None, None) for i in ind]
@@ -1253,12 +1255,12 @@ def test_point_slicing_with_full_slice():
 
 def test_isel_merge():
     from dask.array.core import _isel_merge
-    locations = [0], [2, 1]
+    locations = [1], [0, 2]
     values = [np.array([[1, 2, 3]]),
               np.array([[10, 20, 30], [40, 50, 60]])]
 
-    assert (_isel_merge(locations, values, 0) == np.array([[1, 2, 3],
-                                                           [40, 50, 60],
+    assert (_isel_merge(locations, values, 0) == np.array([[40, 50, 60],
+                                                           [1, 2, 3],
                                                            [10, 20, 30]])).all()
 
 
