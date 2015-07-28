@@ -2224,6 +2224,40 @@ def to_hdf5(filename, *args, **kwargs):
         store(list(data.values()), dsets)
 
 
+'''
+def rekey(key, where_none, other):
+    """
+
+    >>> rekey(('x', 1), [0], [5])
+    ('x', 5, 1)
+    >>> rekey(('x', 1), [0, 2], [5, 3])
+    ('x', 5, 1, 3)
+    """
+    result = [key[0]]
+    for i in range(1, len(key) + len(other)):
+
+'''
+
+def interleave_none(a, b):
+    """
+
+    >>> interleave_none([0, None, 2, None], [1, 3])
+    (0, 1, 2, 3)
+    """
+    result = []
+    i = j = 0
+    n = len(a) + len(b)
+    while i + j < n:
+        if a[i] is not None:
+            result.append(a[i])
+            i += 1
+        else:
+            result.append(b[j])
+            i += 1
+            j += 1
+    return tuple(result)
+
+
 def isel(x, *indexes):
     """ Point wise slicing
 
@@ -2244,47 +2278,87 @@ def isel(x, *indexes):
     >>> result.compute()
     array([ 0,  9, 48,  7])
     """
-    indexes = list(map(list, indexes))
+    indexes = [list(index) if index is not None else index for index in indexes]
     bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
-    points = list()
+    axis = next(i for i, v in enumerate(indexes) if v is not None)
 
-    for i, idx in enumerate(zip(*indexes)):
+    points = list()
+    for i, idx in enumerate(zip(*[i for i in indexes if i is not None])):
         block_idx = [np.searchsorted(b, ind, 'right') - 1 for b, ind in zip(bounds, idx)]
         inblock_idx = [ind - bounds[k][j]
                     for k, (ind, j) in enumerate(zip(idx, block_idx))]
-        points.append((i, (x.name,) + tuple(block_idx), tuple(inblock_idx)))
+        points.append((i, tuple(block_idx), tuple(inblock_idx)))
 
     per_block = groupby(1, points)
 
+    other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
+                                for i, c in zip(indexes, x.chunks)]))
+
     token = next(tokens)
     name = 'isel-slice' + token
-    dsk = dict(((name, i), (_isel_slice, key, list(pluck(2, per_block[key]))))
-               for i, key in enumerate(per_block))
 
-    dsk[('isel-merge' + token, 0)] = (_isel_merge,
-                               [list(pluck(0, per_block[key])) for key in per_block],
-                               [(name, i) for i in range(len(per_block))])
+    def keyname(name, i, okey):
+        okey = list(okey)
+        okey[okey.index(None)] = i
+        okey = [k for k in okey if k is not None]
+        return (name,) + tuple(okey)
 
-    chunks = ((len(points),),)
+    full_slices = [slice(None, None) if i is None else None for i in indexes]
 
-    return Array(merge(x.dask, dsk), 'isel-merge' + token, chunks, x.dtype)
+    dsk = dict((keyname(name, i, okey),
+                (_isel_slice, (x.name,) + interleave_none(okey, key),
+                              interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))))
+                for i, key in enumerate(per_block)
+                for okey in other_blocks)
+
+    dsk2 = dict((keyname('isel-merge' + token, 0, okey),
+                 (_isel_merge,
+                   [list(pluck(0, per_block[key])) for key in per_block],
+                   [keyname(name, i, okey) for i in range(len(per_block))],
+                   axis))
+                 for okey in other_blocks)
+
+    chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
+    chunks.insert(axis, (len(points),),)
+    chunks = tuple(chunks)
+
+    return Array(merge(x.dask, dsk, dsk2), 'isel-merge' + token, chunks, x.dtype)
 
 
 def _isel_slice(block, points):
-    points2 = list(zip(*points))
-    return block[points2]
+    """ Pull out point-wise slices from block """
+    points = [p if isinstance(p, slice) else list(p) for p in points]
+    return block[tuple(points)]
 
 
-def _isel_merge(locations, values):
+def _isel_merge(locations, values, axis):
+    """
+
+    >>> locations = [0], [2, 1]
+    >>> values = [np.array([[1, 2, 3]]),
+    ...           np.array([[10, 20, 30], [40, 50, 60]])]
+
+    >>> _isel_merge(locations, values, 0)
+    array([[ 1,  2,  3],
+           [40, 50, 60],
+           [10, 20, 30]])
+    """
     locations = list(map(list, locations))
     values = list(values)
 
     n = sum(map(len, locations))
+
+    shape = list(values[0].shape)
+    shape[axis] = n
+    shape = tuple(shape)
+
     dtype = values[0].dtype
 
-    x = np.empty(n, dtype=dtype)
+    x = np.empty(shape, dtype=dtype)
 
-    for loc, values in zip(locations, values):
-        x[loc] = values
+    ind = [slice(None, None) for i in range(x.ndim)]
+    for loc, val in zip(locations, values):
+        ind[axis] = loc
+        x[tuple(ind)] = val
 
     return x
