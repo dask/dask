@@ -26,6 +26,7 @@ class Profiler(Callback):
     --------
 
     >>> from operator import add, mul
+    >>> from dask.threaded import get
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
     >>> with Profiler() as prof:
     ...     get(dsk, 'z')
