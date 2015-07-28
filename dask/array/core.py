@@ -19,7 +19,8 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer
+from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
+        IndexCallable)
 from ..compatibility import unicode, long
 from .. import threaded, core
 from ..context import _globals
@@ -834,6 +835,18 @@ class Array(object):
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
+
+    def _vindex(self, key):
+        if not len([k for k in key if isinstance(k, list)]) >= 2:
+            raise IndexError("vindex must receive at least two lists")
+        if not all(isinstance(k, list) or k == slice(None, None) for k in key):
+            raise IndexError("vindex must receive only lists and full slices")
+        key = [i if isinstance(i, list) else None for i in key]
+        return _vindex(self, *key)
+
+    @property
+    def vindex(self):
+        return IndexCallable(self._vindex)
 
     @wraps(np.dot)
     def dot(self, other):
@@ -2278,7 +2291,7 @@ def keyname(name, i, okey, axis):
     return (name,) + tuple(okey)
 
 
-def isel(x, *indexes):
+def _vindex(x, *indexes):
     """ Point wise slicing
 
     This is equivalent to numpy slicing with multiple input lists
@@ -2294,7 +2307,7 @@ def isel(x, *indexes):
            [48, 49, 50, 51, 52, 53, 54, 55]])
 
     >>> d = from_array(x, chunks=(3, 4))
-    >>> result = isel(d, [0, 1, 6, 0], [0, 1, 0, 7])
+    >>> result = _vindex(d, [0, 1, 6, 0], [0, 1, 0, 7])
     >>> result.compute()
     array([ 0,  9, 48,  7])
     """
@@ -2318,19 +2331,19 @@ def isel(x, *indexes):
                                 for i, c in zip(indexes, x.chunks)]))
 
     token = next(tokens)
-    name = 'isel-slice' + token
+    name = 'vindex-slice' + token
 
     full_slices = [slice(None, None) if i is None else None for i in indexes]
 
     dsk = dict((keyname(name, i, okey, axis),
-                (_isel_slice, (x.name,) + interleave_none(okey, key),
+                (_vindex_slice, (x.name,) + interleave_none(okey, key),
                               interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))))
                 for i, key in enumerate(per_block)
                 for okey in other_blocks)
 
     if per_block:
-        dsk2 = dict((keyname('isel-merge' + token, 0, okey, axis),
-                     (_isel_merge,
+        dsk2 = dict((keyname('vindex-merge' + token, 0, okey, axis),
+                     (_vindex_merge,
                        [list(pluck(0, per_block[key])) for key in per_block],
                        [keyname(name, i, okey, axis) for i in range(len(per_block))],
                        axis))
@@ -2342,9 +2355,7 @@ def isel(x, *indexes):
     chunks.insert(axis, (len(points),) if points else ())
     chunks = tuple(chunks)
 
-    import pdb; pdb.set_trace()
-
-    return Array(merge(x.dask, dsk, dsk2), 'isel-merge' + token, chunks, x.dtype)
+    return Array(merge(x.dask, dsk, dsk2), 'vindex-merge' + token, chunks, x.dtype)
 
 
 def _get_axis(indexes):
@@ -2367,20 +2378,20 @@ def _get_axis(indexes):
     return x2.shape.index(1)
 
 
-def _isel_slice(block, points):
+def _vindex_slice(block, points):
     """ Pull out point-wise slices from block """
     points = [p if isinstance(p, slice) else list(p) for p in points]
     return block[tuple(points)]
 
 
-def _isel_merge(locations, values, axis):
+def _vindex_merge(locations, values, axis):
     """
 
     >>> locations = [0], [2, 1]
     >>> values = [np.array([[1, 2, 3]]),
     ...           np.array([[10, 20, 30], [40, 50, 60]])]
 
-    >>> _isel_merge(locations, values, 0)
+    >>> _vindex_merge(locations, values, 0)
     array([[ 1,  2,  3],
            [40, 50, 60],
            [10, 20, 30]])

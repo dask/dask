@@ -1226,10 +1226,10 @@ def test_point_slicing():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(3, 4))
 
-    result = isel(d, [1, 2, 5, 5], [3, 1, 6, 1])
+    result = d.vindex[[1, 2, 5, 5], [3, 1, 6, 1]]
     assert eq(result, x[[1, 2, 5, 5], [3, 1, 6, 1]])
 
-    result = isel(d, [0, 1, 6, 0], [0, 1, 0, 7])
+    result = d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]]
     assert eq(result, x[[0, 1, 6, 0], [0, 1, 0, 7]])
 
 
@@ -1248,18 +1248,18 @@ def test_point_slicing_with_full_slice():
 
     for ind in inds:
         slc = [i if isinstance(i, list) else slice(None, None) for i in ind]
-        result = isel(d, *ind)
+        result = d.vindex[tuple(slc)]
         expected = x[tuple(slc)]
         assert eq(result, expected)
 
 
-def test_isel_merge():
-    from dask.array.core import _isel_merge
-    locations = [1], [0, 2]
+def test_vindex_merge():
+    from dask.array.core import _vindex_merge
+    locations = [1], [2, 0]
     values = [np.array([[1, 2, 3]]),
               np.array([[10, 20, 30], [40, 50, 60]])]
 
-    assert (_isel_merge(locations, values, 0) == np.array([[40, 50, 60],
+    assert (_vindex_merge(locations, values, 0) == np.array([[40, 50, 60],
                                                            [1, 2, 3],
                                                            [10, 20, 30]])).all()
 
