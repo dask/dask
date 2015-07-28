@@ -20,7 +20,7 @@ dsk = {'a': 1,
 
 
 def test_profiler():
-    with set_options(callbacks=prof.callbacks):
+    with prof:
         out = get(dsk, 'e')
     assert out == 6
     prof_data = sorted(prof.results(), key=lambda d: d.key)
@@ -45,7 +45,7 @@ def test_pprint_task():
 
 @pytest.mark.skipif("not bokeh")
 def test_profiler_plot():
-    with set_options(callbacks=prof.callbacks):
+    with prof:
         get(dsk, 'e')
     # Run just to see that it doesn't error
     prof.visualize(show=False)

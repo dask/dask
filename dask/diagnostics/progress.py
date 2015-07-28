@@ -2,10 +2,10 @@ from __future__ import division
 import sys
 
 from ..core import istask
-from ..async import callbacks
+from .core import Callback
 
 
-class ProgressBar(object):
+class ProgressBar(Callback):
 
     def __init__(self, nbins=50):
         self._nbins = nbins
@@ -23,10 +23,6 @@ class ProgressBar(object):
 
     def _finish(self, dsk, state):
         self._finalize_bar()
-
-    @property
-    def callbacks(self):
-        return callbacks(self._start, None, self._posttask, self._finish)
 
     @staticmethod
     def _draw_bar(ndone, ntasks, nbins):
