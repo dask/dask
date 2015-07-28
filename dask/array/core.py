@@ -2283,10 +2283,10 @@ def interleave_none(a, b):
 def keyname(name, i, okey, axis):
     """
 
-    >>> keyname('x', 3, [0, None, 2])
+    >>> keyname('x', 3, [0, None, 2], 1)
     ('x', 0, 3, 2)
 
-    >>> keyname('x', 3, [None, None, 0, 2])
+    >>> keyname('x', 3, [None, None, 0, 2], 0)
     ('x', 3, 0, 2)
     """
     okey = [k for k in okey if k is not None]
@@ -2369,9 +2369,9 @@ def _get_axis(indexes):
 
     >>> _get_axis([[1, 2], None, [1, 2], None])
     0
-    >>> _get_axis([None, [1, 2] [1, 2], None])
+    >>> _get_axis([None, [1, 2], [1, 2], None])
     1
-    >>> _get_axis([None, None, [1, 2] [1, 2]])
+    >>> _get_axis([None, None, [1, 2], [1, 2]])
     2
     """
     ndim = len(indexes)
