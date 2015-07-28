@@ -1253,6 +1253,13 @@ def test_point_slicing_with_full_slice():
         assert eq(result, expected)
 
 
+def test_vindex_errors():
+    d = da.ones((5, 5, 5), chunks=(3, 3, 3))
+    assert raises(IndexError, lambda: d.vindex[0])
+    assert raises(IndexError, lambda: d.vindex[[1, 2, 3]])
+    assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [1, 2, 3], 0])
+
+
 def test_vindex_merge():
     from dask.array.core import _vindex_merge
     locations = [1], [2, 0]

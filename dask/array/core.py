@@ -837,10 +837,13 @@ class Array(object):
         return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
 
     def _vindex(self, key):
-        if not len([k for k in key if isinstance(k, list)]) >= 2:
-            raise IndexError("vindex must receive at least two lists")
-        if not all(isinstance(k, list) or k == slice(None, None) for k in key):
-            raise IndexError("vindex must receive only lists and full slices")
+        if (not isinstance(key, tuple) or
+           not len([k for k in key if isinstance(k, list)]) >= 2 or
+           not all(isinstance(k, list) or k == slice(None, None) for k in key)):
+            raise IndexError("vindex expects only lists and full slices\n"
+            "At least two entries must be a list\n"
+            "For other combinations try doing normal slicing first, followed\n"
+            "by vindex slicing")
         key = [i if isinstance(i, list) else None for i in key]
         return _vindex(self, *key)
 
