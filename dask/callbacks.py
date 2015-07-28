@@ -3,33 +3,19 @@ from collections import namedtuple
 
 from .context import _globals
 
-callbacks = namedtuple('callbacks', ['start', 'pretask', 'posttask', 'finish'])
-default_callbacks = callbacks(None, None, None, None)
+Callback = namedtuple('Callback', ['start', 'pretask', 'posttask', 'finish'])
 
 
-def combine(funcs):
-    """Build a function that applies all functions in `funcs` iteratively on
-    the same input."""
-    funcs = list(funcs)
-    if funcs:
-        def _inner(*args, **kwargs):
-            for f in funcs:
-                f(*args, **kwargs)
-        return _inner
-
-
-def setup_callbacks(cbs):
-    """Take a callback or iterable of callbacks, and return a single callback
-    object."""
+def unpack_callbacks(cbs):
+    """Take a callback tuple or iterable of callback tuples, and return a list
+    of each callback."""
     if cbs:
-        if isinstance(cbs, callbacks):
-            return cbs
-        elif isinstance(cbs, tuple):
-            return callbacks(*cbs)
+        if isinstance(cbs, tuple):
+            return [list(i) for i in cbs if i]
         else:
-            return callbacks(*(combine(filter(None, f)) for f in zip(*cbs)))
+            return [[i for i in f if i] for f in zip(*cbs)]
     else:
-        return default_callbacks
+        return [(), (), (), ()]
 
 
 @contextmanager
