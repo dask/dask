@@ -644,8 +644,19 @@ class DataFrame(_Frame):
 
         return elemwise(_assign, self, *pairs, columns=list(df2.columns))
 
-    @wraps(pd.DataFrame.query)
     def query(self, expr, **kwargs):
+        """ Blocked version of pd.DataFrame.query
+
+        This is like the sequential version except that this will also happen
+        in many threads.  This may conflict with ``numexpr`` which will use
+        multiple threads itself.  We recommend that you set numexpr to use a
+        single thread
+
+            import numexpr
+            numexpr.set_nthreads(1)
+
+        The original docstring follows below:\n
+        """ + pd.DataFrame.query.__doc__
         name = 'query' + next(tokens)
         if kwargs:
             dsk = dict(((name, i), (apply, pd.DataFrame.query,
