@@ -1260,3 +1260,7 @@ def test_isel_merge():
     assert (_isel_merge(locations, values, 0) == np.array([[1, 2, 3],
                                                            [40, 50, 60],
                                                            [10, 20, 30]])).all()
+
+
+def test_empty_array():
+    assert eq(np.arange(0), da.arange(0, chunks=5))

@@ -2105,6 +2105,8 @@ def chunks_from_arrays(arrays):
     >>> chunks_from_arrays([1, 1])
     ((1, 1),)
     """
+    if not arrays:
+        return ()
     result = []
     dim = 0
 
@@ -2136,6 +2138,8 @@ def deepfirst(seq):
 def ndimlist(seq):
     if not isinstance(seq, (list, tuple)):
         return 0
+    elif not seq:
+        return 1
     else:
         return 1 + ndimlist(seq[0])
 
@@ -2161,6 +2165,8 @@ def concatenate3(arrays):
     ndim = ndimlist(arrays)
     if not ndim:
         return arrays
+    if not arrays:
+        return np.empty(())
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
 
