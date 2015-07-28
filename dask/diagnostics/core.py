@@ -1,8 +1,7 @@
-from ..async import callbacks
-from ..context import set_options
+from ..callbacks import callbacks, add_callbacks
 
 
-class Callback(object):
+class Diagnostic(object):
     """Base class for diagnostics using the callback mechanism."""
 
     @property
@@ -12,9 +11,9 @@ class Callback(object):
         return callbacks(*cbs)
 
     def __enter__(self):
-        self._set_options = set_options(callbacks=self.callbacks)
-        self._set_options.__enter__()
+        self._cm = add_callbacks(self.callbacks)
+        self._cm.__enter__()
         return self
 
     def __exit__(self, *args):
-        self._set_options.__exit__(*args)
+        self._cm.__exit__(*args)

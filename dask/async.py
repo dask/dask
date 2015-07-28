@@ -119,10 +119,10 @@ from __future__ import absolute_import, division, print_function
 import sys
 import traceback
 from operator import add
-from collections import namedtuple
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .context import _globals
 from .order import order
+from .callbacks import setup_callbacks
 
 def inc(x):
     return x + 1
@@ -353,10 +353,6 @@ def nested_get(ind, coll, lazy=False):
         return coll[ind]
 
 
-callbacks = namedtuple('callbacks', ['start', 'pretask', 'posttask', 'finish'])
-default_callbacks = callbacks(None, None, None, None)
-
-
 def default_get_id():
     """Default get_id"""
     return None
@@ -422,7 +418,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     assert queue
 
     if callbacks is None:
-        callbacks = _globals.get('callbacks', default_callbacks)
+        callbacks = _globals['callbacks']
+    callbacks = setup_callbacks(callbacks)
 
     if isinstance(result, list):
         result_flat = set(flatten(result))

@@ -2,10 +2,10 @@ from __future__ import division
 import sys
 
 from ..core import istask
-from .core import Callback
+from .core import Diagnostic
 
 
-class ProgressBar(Callback):
+class ProgressBar(Diagnostic):
 
     def __init__(self, nbins=50):
         self._nbins = nbins
