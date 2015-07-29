@@ -2254,20 +2254,6 @@ def to_hdf5(filename, *args, **kwargs):
         store(list(data.values()), dsets)
 
 
-'''
-def rekey(key, where_none, other):
-    """
-
-    >>> rekey(('x', 1), [0], [5])
-    ('x', 5, 1)
-    >>> rekey(('x', 1), [0, 2], [5, 3])
-    ('x', 5, 1, 3)
-    """
-    result = [key[0]]
-    for i in range(1, len(key) + len(other)):
-
-'''
-
 def interleave_none(a, b):
     """
 
