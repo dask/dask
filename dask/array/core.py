@@ -2288,18 +2288,13 @@ def interleave_none(a, b):
     return tuple(result)
 
 
-def keyname(name, i, okey, axis):
+def keyname(name, i, okey):
     """
 
-    >>> keyname('x', 3, [0, None, 2], 1)
-    ('x', 0, 3, 2)
-
-    >>> keyname('x', 3, [None, None, 0, 2], 0)
+    >>> keyname('x', 3, [None, None, 0, 2])
     ('x', 3, 0, 2)
     """
-    okey = [k for k in okey if k is not None]
-    okey.insert(axis, i)
-    return (name,) + tuple(okey)
+    return (name, i) + tuple(k for k in okey if k is not None)
 
 
 def _vindex(x, *indexes):
@@ -2346,24 +2341,25 @@ def _vindex(x, *indexes):
 
     full_slices = [slice(None, None) if i is None else None for i in indexes]
 
-    dsk = dict((keyname(name, i, okey, axis),
-                (_vindex_slice, (x.name,) + interleave_none(okey, key),
-                              interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))))
+    dsk = dict((keyname(name, i, okey),
+                (_vindex_transpose,
+                  (_vindex_slice, (x.name,) + interleave_none(okey, key),
+                     interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))),
+                  axis))
                 for i, key in enumerate(per_block)
                 for okey in other_blocks)
 
     if per_block:
-        dsk2 = dict((keyname('vindex-merge' + token, 0, okey, axis),
+        dsk2 = dict((keyname('vindex-merge' + token, 0, okey),
                      (_vindex_merge,
                        [list(pluck(0, per_block[key])) for key in per_block],
-                       [keyname(name, i, okey, axis) for i in range(len(per_block))],
-                       axis))
+                       [keyname(name, i, okey) for i in range(len(per_block))]))
                      for okey in other_blocks)
     else:
         dsk2 = dict()
 
     chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
-    chunks.insert(axis, (len(points),) if points else ())
+    chunks.insert(0, (len(points),) if points else ())
     chunks = tuple(chunks)
 
     return Array(merge(x.dask, dsk, dsk2), 'vindex-merge' + token, chunks, x.dtype)
@@ -2394,15 +2390,18 @@ def _vindex_slice(block, points):
     points = [p if isinstance(p, slice) else list(p) for p in points]
     return block[tuple(points)]
 
+def _vindex_transpose(block, axis):
+    axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
+    return block.transpose(axes)
 
-def _vindex_merge(locations, values, axis):
+def _vindex_merge(locations, values):
     """
 
     >>> locations = [0], [2, 1]
     >>> values = [np.array([[1, 2, 3]]),
     ...           np.array([[10, 20, 30], [40, 50, 60]])]
 
-    >>> _vindex_merge(locations, values, 0)
+    >>> _vindex_merge(locations, values)
     array([[ 1,  2,  3],
            [40, 50, 60],
            [10, 20, 30]])
@@ -2413,7 +2412,7 @@ def _vindex_merge(locations, values, axis):
     n = sum(map(len, locations))
 
     shape = list(values[0].shape)
-    shape[axis] = n
+    shape[0] = n
     shape = tuple(shape)
 
     dtype = values[0].dtype
@@ -2422,7 +2421,7 @@ def _vindex_merge(locations, values, axis):
 
     ind = [slice(None, None) for i in range(x.ndim)]
     for loc, val in zip(locations, values):
-        ind[axis] = loc
+        ind[0] = loc
         x[tuple(ind)] = val
 
     return x
