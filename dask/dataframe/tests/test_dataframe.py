@@ -602,3 +602,9 @@ def test_categorical_set_index():
         b = a.set_index(a.y)
         df2 = df.set_index(df.y)
         assert list(b.index.compute()), list(df2.index)
+
+
+def test_query():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+    assert eq(a.query('x**2 > y'), df.query('x**2 > y'))
