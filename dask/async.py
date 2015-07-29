@@ -409,6 +409,10 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     rerun_exceptions_locally : bool, optional
         Whether to rerun failing tasks in local process to enable debugging
         (False by default)
+    callbacks : tuple or list of tuples, optional
+        Callbacks are passed in as tuples of length 4. Multiple sets of
+        callbacks may be passed in as a list of tuples. For more information,
+        see the dask.diagnostics documentation.
 
     See Also
     --------

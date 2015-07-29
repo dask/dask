@@ -20,6 +20,19 @@ def unpack_callbacks(cbs):
 
 @contextmanager
 def add_callbacks(*args):
+    """Context manager for callbacks.
+
+    Takes several callback tuples and applies them only in the enclosed
+    context.
+
+    Examples
+    --------
+    >>> def pretask(key, dsk, state):
+    ...     print("Now running {0}").format(key)
+    >>> callbacks = (None, pretask, None, None)
+    >>> with add_callbacks(callbacks):    # doctest: +SKIP
+    ...     res.compute()
+    """
     old = _globals['callbacks'].copy()
     _globals['callbacks'].update(args)
     yield

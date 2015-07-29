@@ -1,7 +1,6 @@
 from operator import add, mul
 from dask.diagnostics import Profiler
 from dask.threaded import get
-from dask.context import set_options
 import pytest
 try:
     import bokeh
