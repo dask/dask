@@ -19,6 +19,7 @@ Frequently Asked Questions
     schedulers but with only one worker.  ``dask.get`` is dead-simple but does
     not cache data and so can be slow for some workloads.
 
+
 2.  **Q: In ``dask.array`` what is ``chunks``?**
 
     Dask.array breaks your large array into lots of little pieces, each of
@@ -33,6 +34,7 @@ Frequently Asked Questions
 
     However internally dask uses a different representation (a tuple of tuples)
     to handle uneven chunk sizes that inevitably occur during computation.
+
 
 3.  **Q: How do I select a good value for ``chunks``?**
 
@@ -55,7 +57,7 @@ Frequently Asked Questions
     Note that you can ``rechunk()`` an array if necessary.
 
 
-3.  **Q: My computation fills memory, how do I spill to disk?**
+4.  **Q: My computation fills memory, how do I spill to disk?**
 
     The schedulers endeavor not to use up all of your memory.  However for some
     algorithms filling up memory is unavoidable.  In these cases we can swap
@@ -64,7 +66,9 @@ Frequently Asked Questions
     this nicely.
 
         >>> cache = Chest() # Uses temporary file. Deletes on garbage collection
-        or
+
+    or
+
         >>> cache = Chest(path='/path/to/dir', available_memory=8e9)  # Use 8GB
 
     This chest object works just like a normal dictionary but, when available
@@ -80,7 +84,7 @@ Frequently Asked Questions
         >>> with dask.set_options(cache=cache):  # sets state within with block
         ...     y = x.dot(x.T).compute()
 
-        or
+    or
 
         >>> dask.set_options(cache=cache)  # sets global state
         >>> y = x.dot(x.T).compute()

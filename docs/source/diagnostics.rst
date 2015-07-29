@@ -20,13 +20,13 @@ dask execution. The callbacks are:
 
 2. ``pretask(key, dask, state)``
 
-    Run every time a new task is started. Receives the key of the task to be
-    run, the dask, and the scheduler state.
+   Run every time a new task is started. Receives the key of the task to be
+   run, the dask, and the scheduler state.
 
 3. ``posttask(key, dask, state, id)``
 
-    Run every time a task is finished. Receives the key of the task to be run,
-    the dask, the scheduler state, and the id of the worker that ran the task.
+   Run every time a task is finished. Receives the key of the task to be run,
+   the dask, the scheduler state, and the id of the worker that ran the task.
 
 4. ``finish(dask, state)``
 
@@ -89,7 +89,7 @@ These can be analyzed separately, or viewed in a bokeh plot using the provided
 
     <iframe src="_static/profile.html"
             marginwidth="0" marginheight="0" scrolling="no"
-            width="850" height="450" style="border:none"></iframe>
+            width="650" height="350" style="border:none"></iframe>
 
 
 Progress Bar
