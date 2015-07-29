@@ -194,12 +194,9 @@ def compute(*args, **kwargs):
     >>> compute(b, c)  # Compute both simultaneously
     (3, 4)
     """
-    if len(args) == 1:
-        return args[0].compute(**kwargs)
-    else:
-        dsk = merge(*[arg.dask for arg in args])
-        keys = [arg.key for arg in args]
-        return tuple(get(dsk, keys, **kwargs))
+    dsk = merge(*[arg.dask for arg in args])
+    keys = [arg.key for arg in args]
+    return tuple(get(dsk, keys, **kwargs))
 
 
 def right(method):
