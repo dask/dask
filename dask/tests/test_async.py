@@ -33,6 +33,13 @@ def test_start_state():
                                 'y': set(['w']),
                                 'z': set(['w'])}}
 
+def test_start_state_looks_at_cache():
+    dsk = {'b': (inc, 'a')}
+    cache = {'a': 1}
+    result = start_state_from_dask(dsk, cache)
+    assert result['dependencies']['b'] == set(['a'])
+    assert result['ready'] == ['b']
+
 
 def test_start_state_with_redirects():
     dsk = {'x': 1, 'y': 'x', 'z': (inc, 'y')}
