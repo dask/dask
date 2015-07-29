@@ -307,3 +307,19 @@ def test_monitor_workers():
         while w2.address in s.workers:  # wait to be removed
             sleep(1e-6)
         assert w2.address not in s.workers
+
+
+def test_scheduler_reuses_worker_state():
+    def inc(x):
+        return x + 1
+
+    with scheduler_and_workers() as (s, (a, b)):
+        assert s.schedule({'x': (inc, 1)}, 'x') == 2
+
+        s.send_data('x', 10, address=a.address)  # send x to a worker
+        assert a.data['x'] == 10
+        assert s.schedule({'x': (inc, 1)}, 'x') == 10  # recall, don't compute
+
+        s.send_data('x', 10, address=a.address)  # send x to a worker
+        assert a.data['x'] == 10
+        assert s.schedule({'x': (inc, 1), 'y': (lambda x: x, 'x')}, 'y') == 10

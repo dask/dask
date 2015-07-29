@@ -22,6 +22,7 @@ except ImportError:
     import pickle
 
 from ..core import get_dependencies, flatten
+from ..optimize import cull
 from .. import core
 from ..async import (sortkey, finish_task,
         start_state_from_dask as dag_state_from_dask)
@@ -293,8 +294,8 @@ class Scheduler(object):
         header['timestamp'] = datetime.utcnow()
 
         self.send_to_workers_queue.put([address,
-                                            pickle.dumps(header),
-                                            dumps(payload)])
+                                        pickle.dumps(header),
+                                        dumps(payload)])
         self.send_to_workers_send.send(b'')
 
     def send_to_client(self, address, header, result):
@@ -602,15 +603,25 @@ class Scheduler(object):
                 result_flat = set([result])
             results = set(result_flat)
 
-            cache = dict()
+            for k in self.who_has:  # remove keys that we already know about
+                if self.who_has[k]:
+                    del dsk[k]
+                    if k in results:
+                        results.remove(k)
+
+            dsk = cull(dsk, results)
+
+            cache = dict((k, None) for k, v in self.who_has.items() if v)
             dag_state = dag_state_from_dask(dsk, cache=cache)
-            if cache:
-                self.scatter(cache.items())  # send data in dask up to workers
+            del dag_state['cache']
+
+            new_data = dict((k, v) for k, v in cache.items()
+                                   if not (k in self.who_has and
+                                           self.who_has[k]))
+            if new_data:
+                self.scatter(new_data.items())  # send data in dask up to workers
 
             tick = [0]
-
-            if dag_state['waiting'] and not dag_state['ready']:
-                raise ValueError("Found no accessible jobs in dask graph")
 
             event_queue = Queue()
             qkey = str(uuid.uuid1())
