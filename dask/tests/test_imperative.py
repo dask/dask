@@ -2,7 +2,7 @@ from operator import add
 from collections import Iterator
 from random import random
 
-from dask.imperative import value, do, to_task_dasks
+from dask.imperative import value, do, to_task_dasks, compute
 from dask.utils import raises
 
 
@@ -79,6 +79,14 @@ def test_do():
     a = value(1)
     b = add2(add2(a, 2), 3)
     assert a.key in b.dask
+
+
+def test_compute():
+    a = value(1) + 5
+    b = a + 1
+    c = a + 2
+    assert compute(b, c) == (7, 8)
+    assert compute(b) == (7,)
 
 
 def test_named_value():

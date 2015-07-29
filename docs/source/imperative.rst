@@ -143,5 +143,6 @@ Definitions
 
 .. autofunction:: value
 .. autofunction:: do
+.. autofunction:: compute
 
 .. _`custom graphs`: custom-graphs.html#Example
