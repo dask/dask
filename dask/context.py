@@ -2,10 +2,10 @@
 Control global computation context
 """
 
-from contextlib import contextmanager
 from collections import defaultdict
 
 _globals = defaultdict(lambda: None)
+_globals['callbacks'] = set()
 
 
 class set_options(object):

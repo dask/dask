@@ -10,50 +10,53 @@ Scheduler Callbacks
 
 Schedulers based on ``dask.async.get_async`` (currently
 ``dask.async.get_sync``, ``dask.threaded.get``, and
-``dask.multiprocessing.get``) accept two callbacks, allowing for inspection of
+``dask.multiprocessing.get``) accept four callbacks, allowing for inspection of
 dask execution. The callbacks are:
 
-1. ``start_callback(self, key, dask, state)``
+1. ``start(dask, state)``
 
-    Callback run every time a new task is started. Receives the key of the task
-    to be run, the dask, and the scheduler state. At the end of computation
-    this will called a final time with ``None`` as the key, as no new tasks
-    were added at that tick.
+   Run at the beginning of execution, right after the state is initialized.
+   Receives the dask and the scheduler state.
 
-2. ``end_callback(self, key, dask, state, id)``
+2. ``pretask(key, dask, state)``
 
-    Callback run every time a task is finished. Receives the key of the task to
-    be run, the dask, the scheduler state, and the id of the worker that ran
-    the task.  At the end of computation this will called a final time with
-    ``None`` for both key and worker id, as no new tasks were finished at that
-    tick.
+    Run every time a new task is started. Receives the key of the task to be
+    run, the dask, and the scheduler state.
 
+3. ``posttask(key, dask, state, id)``
 
-Callbacks for common use cases are provided in ``dask.diagnostics``.
+    Run every time a task is finished. Receives the key of the task to be run,
+    the dask, the scheduler state, and the id of the worker that ran the task.
 
+4. ``finish(dask, state)``
+
+   Run at the end of execution, right before the result is returned.  Receives
+   the dask and the scheduler state.
+
+These are internally represented as tuples of length 4, stored in the order
+presented above.  Callbacks for common use cases are provided in
+``dask.diagnostics``.
 
 Profiler
 --------
 
 The ``Profiler`` class builds on the scheduler callbacks described above to
-profile dask execution at the task level. To use, create a profiler from a
-scheduler ``get`` function:
+profile dask execution at the task level. This can be used as a contextmanager
+around calls to ``get`` or ``compute`` to profile the computation.
+
 
 .. code-block:: python
 
-    >>> from dask.threaded import get
     >>> from dask.diagnostics import Profiler
-    >>> thread_prof = Profiler(get)
+    >>> import dask.array as da
+    >>> a = da.random.random(size=(10000,1000), chunks=(1000,1000))
+    >>> q, r = da.linalg.qr(a)
+    >>> a2 = q.dot(r)
 
-For convenience, profilers for the threaded and multiprocessing scheduler
-have already been created:
+    >>> with Profiler() as prof:    # doctest: +SKIP
+    ...     out = a2.compute()
 
-.. code-block:: python
-
-    >>> from dask.diagnostics import thread_prof, process_prof
-
-The ``get`` method of the profiler then works like a normal scheduler, but
-records the following information for each task during execution:
+During execution the profiler records the following information for each task:
 
 1. Key
 2. Task
@@ -61,22 +64,13 @@ records the following information for each task during execution:
 4. Finish time in seconds since the epoch
 5. Worker id
 
-.. code-block:: python
-
-    >>> import dask.array as da
-    >>> a = da.random.random(size=(10000,1000), chunks=(1000,1000))
-    >>> q, r = da.linalg.qr(a)
-    >>> a2 = q.dot(r)
-
-    >>> out = a2.compute(get=thread_prof.get)
-
-The results of the profiling can be accessed by the ``results`` method. This
-returns a list of ``namedtuple`` objects containing the data for each task.
+These results can then be accessed by the ``results`` method. This returns a
+list of ``namedtuple`` objects containing the data for each task.
 
 .. code-block:: python
 
-    >>> prof_data = thread_prof.results()
-    >>> prof_data[0]  # doctest: +SKIP
+    >>> data = prof.results()
+    >>> data[0]  # doctest: +SKIP
     TaskData(key=('tsqr_1_QR_st1', 9, 0),
              task=(qr, (_apply_random, 'random_sample', 1730327976, (1000, 1000), (), {})),
              start_time=1435613641.833878,
@@ -88,7 +82,7 @@ These can be analyzed separately, or viewed in a bokeh plot using the provided
 
 .. code-block:: python
 
-    >>> thread_prof.visualize()
+    >>> prof.visualize()    # doctest: +SKIP
 
 
 .. raw:: html
@@ -96,3 +90,63 @@ These can be analyzed separately, or viewed in a bokeh plot using the provided
     <iframe src="_static/profile.html"
             marginwidth="0" marginheight="0" scrolling="no"
             width="850" height="450" style="border:none"></iframe>
+
+
+Progress Bar
+------------
+
+The ``ProgressBar`` class displays a progress bar in the terminal or notebook
+during computation. This can be nice feedback during long running graph
+execution.
+
+As with ``Profiler``, this can be used as a contextmanager around calls to
+``compute``.
+
+.. code-block:: python
+
+    >>> from dask.diagnostics import ProgressBar
+    >>> a = da.random.normal(size=(10000, 10000), chunks=(1000, 1000))
+    >>> res = a.dot(a.T).mean(axis=0)
+
+    >>> with ProgressBar()      # doctest: +SKIP
+    ...     out = res.compute()
+    [########################################] | 100% Completed | 17.1 s
+
+Note that multiple diagnostic tools can be used concurrently by using multiple
+context managers:
+
+.. code-block:: python
+
+    >>> with ProgressBar(), Profiler() as prof:     # doctest: +SKIP
+    ...     out = res.compute()
+    [########################################] | 100% Completed | 17.1 s
+    >>> prof.visualize()                            # doctest: +SKIP
+
+
+Custom Callbacks
+----------------
+
+Custom diagnostics can be created using the callback mechanism described above.
+To add your own, it's recommended to subclass the ``Diagnostic`` class, and
+define your own methods. Below we create a class that prints the name of every
+key as it's computed.
+
+.. code-block:: python
+
+    from dask.diagnostics.core import Diagnostic
+    class PrintKeys(Diagnostic):
+        def _pretask(self, key, dask, state):
+            """Print the key of every task as it's started"""
+            print("Computing: {0}!".format(repr(key)))
+
+This can now be used as a contextmanager during computation:
+
+.. code-block:: python
+
+    >>> from operator import add, mul
+    >>> dsk = {'a': (add, 1, 2), 'b': (add, 3, 'a'), 'c': (mul, 'a', 'b')}
+    >>> with PrintKeys():
+    ...     get(dsk, 'c')
+    Computing 'a'!
+    Computing 'b'!
+    Computing 'c'!
