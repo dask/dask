@@ -984,6 +984,16 @@ def test_topk():
     assert eq(e, np.sort(x)[-1:-3:-1])
 
 
+def test_topk_k_bigger_than_chunk():
+    x = np.array([5, 2, 1, 6])
+    d = da.from_array(x, chunks=2)
+
+    e = da.topk(3, d)
+
+    assert e.chunks == ((3,),)
+    assert eq(e, np.array([6, 5, 2]))
+
+
 def test_bincount():
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
