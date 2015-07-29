@@ -10,7 +10,7 @@ from .context import _globals
 from .compatibility import apply
 from . import threaded
 
-__all__ = ['do', 'value', 'Value']
+__all__ = ['compute', 'do', 'value', 'Value']
 
 
 def flat_unique(ls):
@@ -183,6 +183,25 @@ def get(dsk, keys, get=None, **kwargs):
     return get(dsk2, keys, **kwargs)
 
 
+def compute(*args, **kwargs):
+    """Evaluate several ``Value``s at once.
+
+    Examples
+    --------
+    >>> a = value(1)
+    >>> b = a + 2
+    >>> c = a + 3
+    >>> compute(b, c)  # Compute both simultaneously
+    (3, 4)
+    """
+    if len(args) == 1:
+        return args[0].compute(**kwargs)
+    else:
+        dsk = merge(*[arg.dask for arg in args])
+        keys = [arg.key for arg in args]
+        return tuple(get(dsk, keys, **kwargs))
+
+
 def right(method):
     """Wrapper to create 'right' version of operator given left version"""
     def _inner(self, other):
@@ -203,8 +222,7 @@ class Value(object):
 
     def compute(self, **kwargs):
         """Compute the result."""
-        dask1 = cull(self.dask, self.key)
-        return get(dask1, self.key, **kwargs)
+        return get(self.dask, self.key, **kwargs)
 
     @property
     def dask(self):
