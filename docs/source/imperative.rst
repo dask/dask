@@ -15,6 +15,8 @@ Rebuilding the example from `custom graphs`_:
 
 .. code-block:: python
 
+    from dask.imperative import do, value
+
     @do
     def load(filename):
         ...
