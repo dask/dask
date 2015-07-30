@@ -58,7 +58,7 @@ from .core import repartition, tokens, DataFrame, Index
 from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
-from toolz import merge_sorted, unique, curry, partial
+from toolz import merge_sorted, unique, partial
 import toolz
 import pandas as pd
 

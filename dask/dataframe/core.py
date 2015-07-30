@@ -1,20 +1,15 @@
 from __future__ import division
 
 from itertools import count
-from math import ceil, sqrt
+from math import sqrt
 from functools import wraps
 import bisect
-import os
-from toolz import (merge, partial, accumulate, unique, first, dissoc, valmap,
-        first, partition)
-import toolz
+from toolz import merge, partial, first, partition
 from operator import getitem, setitem
 from datetime import datetime
 import pandas as pd
 import numpy as np
 import operator
-import gzip
-import bz2
 try:
     from chest import Chest as Cache
 except ImportError:
@@ -23,7 +18,6 @@ except ImportError:
 from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
-from .. import  async
 from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
@@ -219,7 +213,6 @@ class _Frame(object):
             return self._loc_element(ind)
 
     def _loc_series(self, ind):
-        name = 'loc-series' + next(tokens)
         if not self.divisions == ind.divisions:
             raise ValueError("Partitions of dataframe and index not the same")
         return map_partitions(lambda df, ind: df.loc[ind],
@@ -608,7 +601,8 @@ class DataFrame(_Frame):
                 raise e
 
     def __dir__(self):
-        return sorted(set(list(dir(type(self))) + list(self.columns)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      list(self.columns)))
 
     def __repr__(self):
         return ("dd.DataFrame<%s, divisions=%s>" %
@@ -925,7 +919,8 @@ class GroupBy(object):
             raise KeyError()
 
     def __dir__(self):
-        return sorted(set(list(dir(type(self))) + list(self.df.columns)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      list(self.df.columns)))
 
     def __getattr__(self, key):
         try:
@@ -1282,7 +1277,8 @@ class DatetimeAccessor(object):
         self._series = series
 
     def __dir__(self):
-        return sorted(set(dir(type(self)) + dir(pd.Series.dt)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      dir(pd.Series.dt)))
 
     def _property_map(self, key):
         return self._series.map_partitions(lambda s: getattr(s.dt, key))
@@ -1316,7 +1312,8 @@ class StringAccessor(object):
         self._series = series
 
     def __dir__(self):
-        return sorted(set(dir(type(self)) + dir(pd.Series.str)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      dir(pd.Series.str)))
 
     def _property_map(self, key):
         return self._series.map_partitions(lambda s: getattr(s.str, key))

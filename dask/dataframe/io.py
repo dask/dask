@@ -4,11 +4,9 @@ import pandas as pd
 import numpy as np
 from functools import wraps, partial
 import re
-import os
 from glob import glob
 from math import ceil
 from toolz import merge, dissoc, assoc
-from itertools import count
 from operator import getitem
 
 from ..compatibility import BytesIO, unicode, range, apply
@@ -223,7 +221,6 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
                                          dtype=dtypes)))
     categories = [d[c].drop_duplicates() for c in category_columns]
 
-    import dask
     if index:
         quantiles = d[index].quantile(np.linspace(0, 1, nchunks + 1))
         result = compute(quantiles, *categories)
@@ -526,7 +523,6 @@ def _link(token, result):
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
            complib=None, fletcher32=False, **kwargs):
     name = 'to-hdf' + next(tokens)
-    token = 'token' + next(tokens)
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
 
