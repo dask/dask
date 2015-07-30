@@ -326,3 +326,14 @@ def test_keep_results():
         assert s.schedule({'x': (inc, 1)}, 'x', keep_results=True) == 2
         sleep(0.1)
         assert a.data.get('x') == 2 or b.data.get('x') == 2
+
+
+def test_cull_redundant_data():
+    with scheduler_and_workers() as (s, (a, b)):
+        s.send_data('x', 10, address=a.address)  # send x to a worker
+        s.send_data('x', 10, address=b.address)  # send x to a worker
+
+        s.cull_redundant_data(1)
+
+        while 'x' in a.data and 'x' in b.data:
+            sleep(0.01)

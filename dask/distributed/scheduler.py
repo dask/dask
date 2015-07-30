@@ -774,3 +774,23 @@ class Scheduler(object):
                 header = {'function': 'worker-death'}
                 payload = {'removed': removed}
                 self.send_to_worker(w_address, header, payload)
+
+    def cull_redundant_data(self, k):
+        """ Remove highly redundant data from workers
+
+        Finds all keys that are replicated more than k times across all workers
+        and releases data from a randomly chosen subset until there are only k
+        workers left holding this data.
+
+        Operates asynchronously and returns quickly.  Scheduler metadata is
+        updated synchronously.
+        """
+        with logerrors():
+            for key, v in self.who_has.items():
+                while len(v) > k:
+                    worker = random.choice(list(v))
+                    header = {'function': 'delitem', 'jobid': key}
+                    payload = {'key': key}
+                    self.send_to_worker(worker, header, payload)
+                    self.who_has[key].remove(worker)
+                    self.worker_has[worker].remove(key)
