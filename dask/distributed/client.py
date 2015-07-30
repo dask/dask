@@ -37,10 +37,10 @@ class Client(object):
         self.socket.connect(self.address_to_scheduler)
         self.register_client()
 
-    def get(self, dsk, keys):
+    def get(self, dsk, keys, keep_results=False):
         header = {'function': 'schedule',
                   'jobid': next(jobids)}
-        payload = {'dask': dsk, 'keys': keys}
+        payload = {'dask': dsk, 'keys': keys, 'keep_results': keep_results}
 
         self.send_to_scheduler(header, payload)
         header2, payload2 = self.recv_from_scheduler()

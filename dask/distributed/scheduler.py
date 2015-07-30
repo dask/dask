@@ -683,11 +683,12 @@ class Scheduler(object):
             address = header['address']
             dsk = payload['dask']
             keys = payload['keys']
+            keep_results = payload.get('keep_results', False)
 
             header2 = {'jobid': header.get('jobid'),
                        'function': 'schedule-ack'}
             try:
-                result = self.schedule(dsk, keys)
+                result = self.schedule(dsk, keys, keep_results)
                 header2['status'] = 'OK'
             except Exception as e:
                 result = e
