@@ -13,6 +13,7 @@ from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
+from dask.utils import takes_multiple_arguments
 
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
@@ -1079,59 +1080,6 @@ def dictitems(d):
     [('x', 1)]
     """
     return list(d.items())
-
-
-ONE_ARITY_BUILTINS = {abs, all, any, ascii, bool, bytearray, bytes, callable, chr, 
-    classmethod, complex, dict, dir, enumerate, eval, exec, float, format, frozenset, 
-    hash, hex, id, int, iter, len, list, max, memoryview, min, next, oct, open, ord,
-    range, repr, reversed, round, set, slice, sorted, staticmethod, str, sum, tuple, 
-    type, vars, zip}
-MULTI_ARITY_BUILTINS = {compile, delattr, divmod, filter, getattr, hasattr, isinstance, 
-    issubclass, map, pow, setattr}
-
-def takes_multiple_arguments(func):
-    """
-
-    >>> def f(x, y): pass
-    >>> takes_multiple_arguments(f)
-    True
-
-    >>> def f(x): pass
-    >>> takes_multiple_arguments(f)
-    False
-
-    >>> def f(x, y=None): pass
-    >>> takes_multiple_arguments(f)
-    False
-
-    >>> def f(*args): pass
-    >>> takes_multiple_arguments(f)
-    True
-
-    >>> takes_multiple_arguments(map)  # default to False
-    False
-    """
-    if func in ONE_ARITY_BUILTINS:
-        return False
-    elif func in MULTI_ARITY_BUILTINS:
-        return True
-
-    try:
-        spec = inspect.getargspec(func)
-    except:
-        return False
-
-    try:
-        is_constructor = spec.args[0] == 'self' and isinstance(func, type)
-    except:
-        is_constructor = False
-
-    if spec.varargs:
-        return True
-
-    if spec.defaults is None:
-        return len(spec.args) - is_constructor != 1
-    return len(spec.args) - len(spec.defaults) - is_constructor > 1
 
 
 def concat(bags):

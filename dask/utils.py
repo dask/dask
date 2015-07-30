@@ -4,6 +4,7 @@ from collections import Iterator
 from contextlib import contextmanager
 from functools import partial
 import os
+import sys
 import shutil
 import struct
 import gzip
@@ -226,7 +227,10 @@ def getargspec(func):
     if isinstance(func, partial):
         return inspect.getargspec(func.func)
     else:
-        return inspect.getargspec(func)
+        if isinstance(func, type):
+            return inspect.getargspec(func.__init__)
+        else:
+            return inspect.getargspec(func)
 
 
 def is_integer(i):
@@ -261,3 +265,61 @@ def file_size(fn, compression=None):
     else:
         result = os.stat(fn).st_size
     return result
+
+
+ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr, 
+    classmethod, complex, dict, dir, enumerate, eval, float, format, frozenset, 
+    hash, hex, id, int, iter, len, list, max, min, next, oct, open, ord, range, 
+    repr, reversed, round, set, slice, sorted, staticmethod, str, sum, tuple, 
+    type, vars, zip])
+if sys.version_info[0] == 3: # Python 3
+    ONE_ARITY_BUILTINS |= set([ascii])
+if sys.version_info[:2] != (2, 6):
+    ONE_ARITY_BUILTINS |= set([memoryview])
+MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr, 
+    isinstance, issubclass, map, pow, setattr])
+
+def takes_multiple_arguments(func):
+    """
+
+    >>> def f(x, y): pass
+    >>> takes_multiple_arguments(f)
+    True
+
+    >>> def f(x): pass
+    >>> takes_multiple_arguments(f)
+    False
+
+    >>> def f(x, y=None): pass
+    >>> takes_multiple_arguments(f)
+    False
+
+    >>> def f(*args): pass
+    >>> takes_multiple_arguments(f)
+    True
+
+    >>> takes_multiple_arguments(map)  # default to False
+    False
+    """
+    if func in ONE_ARITY_BUILTINS:
+        return False
+    elif func in MULTI_ARITY_BUILTINS:
+        return True
+
+    try:
+        spec = getargspec(func)
+    except:
+        return False
+
+    try:
+        is_constructor = spec.args[0] == 'self' and isinstance(func, type)
+    except:
+        is_constructor = False
+
+    if spec.varargs:
+        return True
+
+    if spec.defaults is None:
+        return len(spec.args) - is_constructor != 1
+    return len(spec.args) - len(spec.defaults) - is_constructor > 1
+
