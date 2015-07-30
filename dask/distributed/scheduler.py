@@ -668,6 +668,9 @@ class Scheduler(object):
                 for key in flatten(result):
                     if key not in preexisting_data:
                         self.release_key(key)
+
+            self.cull_redundant_data(3)
+
         return result2
 
     def _schedule_from_client(self, header, payload):
