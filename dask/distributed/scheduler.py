@@ -571,7 +571,7 @@ class Scheduler(object):
         self.block()
         self.context.destroy(linger=3)
 
-    def schedule(self, dsk, result, **kwargs):
+    def schedule(self, dsk, result, keep_results=False, **kwargs):
         """ Execute dask graph against workers
 
         Parameters
@@ -664,9 +664,10 @@ class Scheduler(object):
                     fire_task()
 
             result2 = self.gather(result)
-            for key in flatten(result):  # release result data from workers
-                if key not in preexisting_data:
-                    self.release_key(key)
+            if not keep_results:  # release result data from workers
+                for key in flatten(result):
+                    if key not in preexisting_data:
+                        self.release_key(key)
         return result2
 
     def _schedule_from_client(self, header, payload):

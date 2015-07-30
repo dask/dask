@@ -310,9 +310,6 @@ def test_monitor_workers():
 
 
 def test_scheduler_reuses_worker_state():
-    def inc(x):
-        return x + 1
-
     with scheduler_and_workers() as (s, (a, b)):
         assert s.schedule({'x': (inc, 1)}, 'x') == 2
 
@@ -322,3 +319,10 @@ def test_scheduler_reuses_worker_state():
         sleep(0.1)
         assert a.data['x'] == 10
         assert s.schedule({'x': (inc, 1), 'y': (lambda x: x, 'x')}, 'y') == 10
+
+
+def test_keep_results():
+    with scheduler_and_workers() as (s, (a, b)):
+        assert s.schedule({'x': (inc, 1)}, 'x', keep_results=True) == 2
+        sleep(0.1)
+        assert a.data.get('x') == 2 or b.data.get('x') == 2
