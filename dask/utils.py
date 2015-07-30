@@ -298,8 +298,11 @@ def takes_multiple_arguments(func):
     >>> takes_multiple_arguments(f)
     True
 
-    >>> takes_multiple_arguments(map)  # default to False
+    >>> class Thing(object):
+    ...     def __init__(self, a):
+    >>> takes_multiple_arguments(Thing)
     False
+
     """
     if func in ONE_ARITY_BUILTINS:
         return False
