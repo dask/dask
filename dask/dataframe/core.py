@@ -608,7 +608,8 @@ class DataFrame(_Frame):
                 raise e
 
     def __dir__(self):
-        return sorted(set(list(dir(type(self))) + list(self.columns)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      list(self.columns)))
 
     def __repr__(self):
         return ("dd.DataFrame<%s, divisions=%s>" %
@@ -925,7 +926,8 @@ class GroupBy(object):
             raise KeyError()
 
     def __dir__(self):
-        return sorted(set(list(dir(type(self))) + list(self.df.columns)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      list(self.df.columns)))
 
     def __getattr__(self, key):
         try:
@@ -1282,7 +1284,8 @@ class DatetimeAccessor(object):
         self._series = series
 
     def __dir__(self):
-        return sorted(set(dir(type(self)) + dir(pd.Series.dt)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      dir(pd.Series.dt)))
 
     def _property_map(self, key):
         return self._series.map_partitions(lambda s: getattr(s.dt, key))
@@ -1316,7 +1319,8 @@ class StringAccessor(object):
         self._series = series
 
     def __dir__(self):
-        return sorted(set(dir(type(self)) + dir(pd.Series.str)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      dir(pd.Series.str)))
 
     def _property_map(self, key):
         return self._series.map_partitions(lambda s: getattr(s.str, key))
