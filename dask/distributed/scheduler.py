@@ -611,7 +611,8 @@ class Scheduler(object):
 
             dsk = cull(dsk, results)
 
-            cache = dict((k, None) for k, v in self.who_has.items() if v)
+            preexisting_data = set(k for k, v in self.who_has.items() if v)
+            cache = dict((k, None) for k in preexisting_data)
             dag_state = dag_state_from_dask(dsk, cache=cache)
             del dag_state['cache']
 
@@ -656,14 +657,16 @@ class Scheduler(object):
 
                 key = payload['key']
                 finish_task(dsk, key, dag_state, results, sortkey,
-                            release_data=self._release_data)
+                            release_data=self._release_data,
+                            delete=key not in preexisting_data)
 
                 while dag_state['ready'] and self.available_workers.qsize() > 0:
                     fire_task()
 
             result2 = self.gather(result)
             for key in flatten(result):  # release result data from workers
-                self.release_key(key)
+                if key not in preexisting_data:
+                    self.release_key(key)
         return result2
 
     def _schedule_from_client(self, header, payload):

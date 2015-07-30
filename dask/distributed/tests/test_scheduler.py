@@ -319,7 +319,6 @@ def test_scheduler_reuses_worker_state():
         s.send_data('x', 10, address=a.address)  # send x to a worker
         assert a.data['x'] == 10
         assert s.schedule({'x': (inc, 1)}, 'x') == 10  # recall, don't compute
-
-        s.send_data('x', 10, address=a.address)  # send x to a worker
+        sleep(0.1)
         assert a.data['x'] == 10
         assert s.schedule({'x': (inc, 1), 'y': (lambda x: x, 'x')}, 'y') == 10
