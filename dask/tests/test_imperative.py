@@ -87,6 +87,7 @@ def test_compute():
     c = a + 2
     assert compute(b, c) == (7, 8)
     assert compute(b) == (7,)
+    assert compute([a, b], c) == ([6, 7], 8)
 
 
 def test_named_value():

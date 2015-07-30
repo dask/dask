@@ -193,7 +193,10 @@ def compute(*args, **kwargs):
     >>> c = a + 3
     >>> compute(b, c)  # Compute both simultaneously
     (3, 4)
+    >>> compute(a, [b, c])
+    (1, [3, 4])
     """
+    args = [value(a) for a in args]
     dsk = merge(*[arg.dask for arg in args])
     keys = [arg.key for arg in args]
     return tuple(get(dsk, keys, **kwargs))
@@ -345,6 +348,8 @@ def value(val, name=None):
     AttributeError("'list' object has no attribute 'not_a_real_method'")
     """
 
+    if isinstance(val, Value):
+        return val
     name = name or tokenize(val, True)
     task, dasks = to_task_dasks(val)
     dasks.append({name: task})
