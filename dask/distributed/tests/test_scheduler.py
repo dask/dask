@@ -337,3 +337,6 @@ def test_cull_redundant_data():
 
         while 'x' in a.data and 'x' in b.data:
             sleep(0.01)
+
+        assert ('x' in a.data and 'x' not in b.data or
+                'x' in b.data and 'x' not in a.data)
