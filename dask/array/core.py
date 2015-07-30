@@ -379,6 +379,8 @@ def _concatenate2(arrays, axes=[]):
     """
     if isinstance(arrays, Iterator):
         arrays = list(arrays)
+    if not isinstance(arrays, (list, tuple)):
+        return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
     return np.concatenate(arrays, axis=axes[0])
