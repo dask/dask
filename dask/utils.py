@@ -299,7 +299,7 @@ def takes_multiple_arguments(func):
     True
 
     >>> class Thing(object):
-    ...     def __init__(self, a):
+    ...     def __init__(self, a): pass
     >>> takes_multiple_arguments(Thing)
     False
 
