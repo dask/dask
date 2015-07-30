@@ -1,19 +1,12 @@
-from itertools import count
 from collections import Iterator
-from math import ceil
-from toolz import merge, accumulate, merge_sorted
-import toolz
-from operator import getitem, setitem
+from toolz import merge
 import pandas as pd
 import numpy as np
 
-from .. import threaded
 from ..optimize import cull
 from .core import DataFrame, Series, get, _Frame, tokens
-from ..compatibility import unicode
-from ..utils import ignoring
-from .utils import (strip_categories, unique, shard_df_on_index, _categorize,
-        get_categories)
+from .utils import (strip_categories, shard_df_on_index, _categorize,
+                    get_categories)
 
 
 def set_index(df, index, npartitions=None, compute=True, **kwargs):
