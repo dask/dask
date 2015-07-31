@@ -1230,3 +1230,69 @@ def test_h5py_newaxis():
 
 def test_ellipsis_slicing():
     assert eq(da.ones(4, chunks=2)[...], np.ones(4))
+
+
+def test_point_slicing():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(3, 4))
+
+    result = d.vindex[[1, 2, 5, 5], [3, 1, 6, 1]]
+    assert eq(result, x[[1, 2, 5, 5], [3, 1, 6, 1]])
+
+    result = d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]]
+    assert eq(result, x[[0, 1, 6, 0], [0, 1, 0, 7]])
+
+
+def test_point_slicing_with_full_slice():
+    from dask.array.core import _vindex_transpose, _get_axis
+    x = np.arange(4*5*6*7).reshape((4, 5, 6, 7))
+    d = da.from_array(x, chunks=(2, 3, 3, 4))
+
+    inds = [
+            [[1, 2, 3], None, [3, 2, 1], [5, 3, 4]],
+            [[1, 2, 3], None, [4, 3, 2], None],
+            [[1, 2, 3], [3, 2, 1]],
+            [[1, 2, 3], [3, 2, 1], [3, 2, 1], [5, 3, 4]],
+            [[], [], [], None],
+            [np.array([1, 2, 3]), None, np.array([4, 3, 2]), None],
+            [None, None, [1, 2, 3], [4, 3, 2]],
+            [None, [0, 2, 3], None, [0, 3, 2]],
+            ]
+
+    for ind in inds:
+        slc = [i if isinstance(i, (np.ndarray, list)) else slice(None, None)
+                for i in ind]
+        result = d.vindex[tuple(slc)]
+
+        # Rotate the expected result accordingly
+        axis = _get_axis(ind)
+        expected = _vindex_transpose(x[tuple(slc)], axis)
+
+        assert eq(result, expected)
+
+        # Always have the first axis be the length of the points
+        k = len(next(i for i in ind if isinstance(i, (np.ndarray, list))))
+        assert result.shape[0] == k
+
+
+def test_vindex_errors():
+    d = da.ones((5, 5, 5), chunks=(3, 3, 3))
+    assert raises(IndexError, lambda: d.vindex[0])
+    assert raises(IndexError, lambda: d.vindex[[1, 2, 3]])
+    assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [1, 2, 3], 0])
+    assert raises(IndexError, lambda: d.vindex[[1], [1, 2, 3]])
+    assert raises(IndexError, lambda: d.vindex[[1, 2, 3], [[1], [2], [3]]])
+
+def test_vindex_merge():
+    from dask.array.core import _vindex_merge
+    locations = [1], [2, 0]
+    values = [np.array([[1, 2, 3]]),
+              np.array([[10, 20, 30], [40, 50, 60]])]
+
+    assert (_vindex_merge(locations, values) == np.array([[40, 50, 60],
+                                                          [1, 2, 3],
+                                                          [10, 20, 30]])).all()
+
+
+def test_empty_array():
+    assert eq(np.arange(0), da.arange(0, chunks=5))

@@ -19,7 +19,8 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer
+from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
+        IndexCallable)
 from ..compatibility import unicode, long
 from .. import threaded, core
 from ..context import _globals
@@ -836,6 +837,33 @@ class Array(object):
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
+
+    def _vindex(self, key):
+        if (not isinstance(key, tuple) or
+           not len([k for k in key if isinstance(k, (np.ndarray, list))]) >= 2 or
+           not all(isinstance(k, (np.ndarray, list)) or k == slice(None, None)
+                   for k in key)):
+            raise IndexError("vindex expects only lists and full slices\n"
+            "At least two entries must be a list\n"
+            "For other combinations try doing normal slicing first, followed\n"
+            "by vindex slicing.  Got: \n\t%s" % str(key))
+        if any((isinstance(k, np.ndarray) and k.ndim != 1) or
+               (isinstance(k, list) and k and isinstance(k[0], list))
+               for k in key):
+            raise IndexError("vindex does not support multi-dimensional keys\n"
+                    "Got: %s" % str(key))
+        if len(set(len(k) for k in key if isinstance(k, (list, np.ndarray)))) != 1:
+            raise IndexError("All indexers must have the same length, got\n"
+                    "\t%s" % str(key))
+        key = key + (slice(None, None),) * (self.ndim - len(key))
+        key = [i if isinstance(i, list) else
+               i.tolist() if isinstance(i, np.ndarray) else
+               None for i in key]
+        return _vindex(self, *key)
+
+    @property
+    def vindex(self):
+        return IndexCallable(self._vindex)
 
     @wraps(np.dot)
     def dot(self, other):
@@ -2107,6 +2135,8 @@ def chunks_from_arrays(arrays):
     >>> chunks_from_arrays([1, 1])
     ((1, 1),)
     """
+    if not arrays:
+        return ()
     result = []
     dim = 0
 
@@ -2138,6 +2168,8 @@ def deepfirst(seq):
 def ndimlist(seq):
     if not isinstance(seq, (list, tuple)):
         return 0
+    elif not seq:
+        return 1
     else:
         return 1 + ndimlist(seq[0])
 
@@ -2163,6 +2195,8 @@ def concatenate3(arrays):
     ndim = ndimlist(arrays)
     if not ndim:
         return arrays
+    if not arrays:
+        return np.empty(())
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
 
@@ -2224,3 +2258,163 @@ def to_hdf5(filename, *args, **kwargs):
                                         **kwargs)
                     for dp, x in data.items()]
         store(list(data.values()), dsets)
+
+
+def interleave_none(a, b):
+    """
+
+    >>> interleave_none([0, None, 2, None], [1, 3])
+    (0, 1, 2, 3)
+    """
+    result = []
+    i = j = 0
+    n = len(a) + len(b)
+    while i + j < n:
+        if a[i] is not None:
+            result.append(a[i])
+            i += 1
+        else:
+            result.append(b[j])
+            i += 1
+            j += 1
+    return tuple(result)
+
+
+def keyname(name, i, okey):
+    """
+
+    >>> keyname('x', 3, [None, None, 0, 2])
+    ('x', 3, 0, 2)
+    """
+    return (name, i) + tuple(k for k in okey if k is not None)
+
+
+def _vindex(x, *indexes):
+    """ Point wise slicing
+
+    This is equivalent to numpy slicing with multiple input lists
+
+    >>> x = np.arange(56).reshape((7, 8))
+    >>> x
+    array([[ 0,  1,  2,  3,  4,  5,  6,  7],
+           [ 8,  9, 10, 11, 12, 13, 14, 15],
+           [16, 17, 18, 19, 20, 21, 22, 23],
+           [24, 25, 26, 27, 28, 29, 30, 31],
+           [32, 33, 34, 35, 36, 37, 38, 39],
+           [40, 41, 42, 43, 44, 45, 46, 47],
+           [48, 49, 50, 51, 52, 53, 54, 55]])
+
+    >>> d = from_array(x, chunks=(3, 4))
+    >>> result = _vindex(d, [0, 1, 6, 0], [0, 1, 0, 7])
+    >>> result.compute()
+    array([ 0,  9, 48,  7])
+    """
+    indexes = [list(index) if index is not None else index for index in indexes]
+    bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
+    bounds2 = [b for i, b in zip(indexes, bounds) if i is not None]
+    axis = _get_axis(indexes)
+
+    points = list()
+    for i, idx in enumerate(zip(*[i for i in indexes if i is not None])):
+        block_idx = [np.searchsorted(b, ind, 'right') - 1
+                     for b, ind in zip(bounds2, idx)]
+        inblock_idx = [ind - bounds2[k][j]
+                    for k, (ind, j) in enumerate(zip(idx, block_idx))]
+        points.append((i, tuple(block_idx), tuple(inblock_idx)))
+
+    per_block = groupby(1, points)
+    per_block = dict((k, v) for k, v in per_block.items() if v)
+
+    other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
+                                for i, c in zip(indexes, x.chunks)]))
+
+    token = next(tokens)
+    name = 'vindex-slice' + token
+
+    full_slices = [slice(None, None) if i is None else None for i in indexes]
+
+    dsk = dict((keyname(name, i, okey),
+                (_vindex_transpose,
+                  (_vindex_slice, (x.name,) + interleave_none(okey, key),
+                     interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))),
+                  axis))
+                for i, key in enumerate(per_block)
+                for okey in other_blocks)
+
+    if per_block:
+        dsk2 = dict((keyname('vindex-merge' + token, 0, okey),
+                     (_vindex_merge,
+                       [list(pluck(0, per_block[key])) for key in per_block],
+                       [keyname(name, i, okey) for i in range(len(per_block))]))
+                     for okey in other_blocks)
+    else:
+        dsk2 = dict()
+
+    chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
+    chunks.insert(0, (len(points),) if points else ())
+    chunks = tuple(chunks)
+
+    return Array(merge(x.dask, dsk, dsk2), 'vindex-merge' + token, chunks, x.dtype)
+
+
+def _get_axis(indexes):
+    """ Get axis along which point-wise slicing results lie
+
+    This is mostly a hack because I can't figure out NumPy's rule on this and
+    can't be bothered to go reading.
+
+    >>> _get_axis([[1, 2], None, [1, 2], None])
+    0
+    >>> _get_axis([None, [1, 2], [1, 2], None])
+    1
+    >>> _get_axis([None, None, [1, 2], [1, 2]])
+    2
+    """
+    ndim = len(indexes)
+    indexes = [slice(None, None) if i is None else [0] for i in indexes]
+    x = np.empty((2,) * ndim)
+    x2 = x[tuple(indexes)]
+    return x2.shape.index(1)
+
+
+def _vindex_slice(block, points):
+    """ Pull out point-wise slices from block """
+    points = [p if isinstance(p, slice) else list(p) for p in points]
+    return block[tuple(points)]
+
+def _vindex_transpose(block, axis):
+    """ Rotate block so that points are on the first dimension """
+    axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
+    return block.transpose(axes)
+
+def _vindex_merge(locations, values):
+    """
+
+    >>> locations = [0], [2, 1]
+    >>> values = [np.array([[1, 2, 3]]),
+    ...           np.array([[10, 20, 30], [40, 50, 60]])]
+
+    >>> _vindex_merge(locations, values)
+    array([[ 1,  2,  3],
+           [40, 50, 60],
+           [10, 20, 30]])
+    """
+    locations = list(map(list, locations))
+    values = list(values)
+
+    n = sum(map(len, locations))
+
+    shape = list(values[0].shape)
+    shape[0] = n
+    shape = tuple(shape)
+
+    dtype = values[0].dtype
+
+    x = np.empty(shape, dtype=dtype)
+
+    ind = [slice(None, None) for i in range(x.ndim)]
+    for loc, val in zip(locations, values):
+        ind[0] = loc
+        x[tuple(ind)] = val
+
+    return x
