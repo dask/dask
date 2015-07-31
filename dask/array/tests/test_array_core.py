@@ -1241,6 +1241,7 @@ def test_point_slicing_with_full_slice():
     inds = [
             [[1, 2, 3], None, [3, 2, 1], [5, 3, 4]],
             [[1, 2, 3], None, [4, 3, 2], None],
+            [[1, 2, 3], [3, 2, 1]],
             [[1, 2, 3], [3, 2, 1], [3, 2, 1], [5, 3, 4]],
             [[], [], [], None],
             [np.array([1, 2, 3]), None, np.array([4, 3, 2]), None],
