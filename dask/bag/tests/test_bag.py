@@ -443,6 +443,13 @@ def test_concat():
     assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])
 
 
+def test_concat_after_map():
+    a = db.from_sequence([1, 2])
+    b = db.from_sequence([4, 5])
+    result = db.concat([a.map(inc), b])
+    assert list(result) == [2, 3, 4, 5]
+
+
 def test_args():
     c = b.map(lambda x: x + 1)
     d = Bag(*c._args)
