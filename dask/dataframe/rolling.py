@@ -1,19 +1,18 @@
 from functools import partial, wraps
-from itertools import count
 
 from toolz import merge
 import pandas as pd
 
-tokens = ('rolling-%d' % i for i in count(1))
+from .core import tokens
 
 
 def rolling_chunk(func, part1, part2, window, *args):
     if part1.shape[0] < window:
         raise NotImplementedError("Window larger than partition size")
     extra = window - 1
-    combined = pd.concat([part1[-extra:], part2])
+    combined = pd.concat([part1.iloc[-extra:], part2])
     applied = func(combined, window, *args)
-    return applied[extra:]
+    return applied.iloc[extra:]
 
 
 def wrap_rolling(func):
@@ -21,7 +20,7 @@ def wrap_rolling(func):
     @wraps(func)
     def rolling(arg, window, *args, **kwargs):
         old_name = arg._name
-        new_name = next(tokens)
+        new_name = 'rolling' + next(tokens)
         f = partial(func, **kwargs)
         dsk = {(new_name, 0): (f, (old_name, 0), window) + args}
         for i in range(1, arg.npartitions + 1):
