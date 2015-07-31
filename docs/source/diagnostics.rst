@@ -28,10 +28,11 @@ dask execution. The callbacks are:
    Run every time a task is finished. Receives the key of the task to be run,
    the dask, the scheduler state, and the id of the worker that ran the task.
 
-4. ``finish(dask, state)``
+4. ``finish(dask, state, errored)``
 
-   Run at the end of execution, right before the result is returned.  Receives
-   the dask and the scheduler state.
+   Run at the end of execution, right before the result is returned. Receives
+   the dask, the scheduler state, and a boolean indicating whether the exit was
+   due to an error or not.
 
 These are internally represented as tuples of length 4, stored in the order
 presented above.  Callbacks for common use cases are provided in

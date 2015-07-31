@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from collections import namedtuple
 
 from .context import _globals
@@ -18,8 +17,7 @@ def unpack_callbacks(cbs):
         return [(), (), (), ()]
 
 
-@contextmanager
-def add_callbacks(*args):
+class add_callbacks(object):
     """Context manager for callbacks.
 
     Takes several callback tuples and applies them only in the enclosed
@@ -33,7 +31,12 @@ def add_callbacks(*args):
     >>> with add_callbacks(callbacks):    # doctest: +SKIP
     ...     res.compute()
     """
-    old = _globals['callbacks'].copy()
-    _globals['callbacks'].update(args)
-    yield
-    _globals['callbacks'] = old
+    def __init__(self, *args):
+        self.old = _globals['callbacks'].copy()
+        _globals['callbacks'].update(args)
+
+    def __enter__(self):
+        return
+
+    def __exit__(self, type, value, traceback):
+        _globals['callbacks'] = self.old

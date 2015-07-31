@@ -55,7 +55,7 @@ class ProgressBar(Diagnostic):
     def _posttask(self, key, value, dsk, state, id):
         self._ndone += 1
 
-    def _finish(self, dsk, state):
+    def _finish(self, dsk, state, errored):
         self._running = False
         self._timer.join()
         self._finalize_bar()

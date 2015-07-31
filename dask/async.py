@@ -467,6 +467,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['waiting'] or state['ready'] or state['running']:
         key, res, tb, worker_id = queue.get()
         if isinstance(res, Exception):
+            for f in finish_cbs:
+                f(dsk, state, True)
             if rerun_exceptions_locally:
                 data = dict((dep, state['cache'][dep])
                             for dep in get_dependencies(dsk, key))
@@ -495,7 +497,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         key, res, tb, worker_id = queue.get()
 
     for f in finish_cbs:
-        f(dsk, state)
+        f(dsk, state, False)
 
     return nested_get(result, state['cache'])
 

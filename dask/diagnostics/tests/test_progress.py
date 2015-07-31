@@ -11,7 +11,7 @@ dsk = {'a': 1,
        'e': (mul, 'c', 'd')}
 
 
-def test_profiler(capsys):
+def test_progressbar(capsys):
     with ProgressBar():
         out = get(dsk, 'e')
     assert out == 6
@@ -25,6 +25,17 @@ def test_profiler(capsys):
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
     assert bar == "[####################]"
     assert percent == "100% Completed"
+
+
+def test_clean_exit():
+    dsk = {'a': (lambda: 1/0,)}
+    try:
+        with ProgressBar() as pbar:
+            get(dsk, 'a')
+    except:
+        pass
+    assert not pbar._running
+    assert not pbar._timer.is_alive()
 
 
 def test_format_time():
