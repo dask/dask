@@ -276,5 +276,6 @@ def topk(k, x):
     array([6, 5])
     """
     # http://stackoverflow.com/a/23734295/616616 by larsmans
+    k = np.minimum(k, len(x))
     ind = np.argpartition(x, -k)[-k:]
     return np.sort(x[ind])[::-1]

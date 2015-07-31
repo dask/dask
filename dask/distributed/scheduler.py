@@ -1,18 +1,20 @@
 from __future__ import print_function
 
-import zmq
 import socket
-import dill
 import uuid
-from collections import defaultdict
 import itertools
-from multiprocessing.pool import ThreadPool
-import random
-from datetime import datetime
-from threading import Thread, Lock
-from contextlib import contextmanager
 import traceback
 import sys
+import random
+from collections import defaultdict
+from multiprocessing.pool import ThreadPool
+from datetime import datetime
+from threading import Thread, Lock, Event
+from contextlib import contextmanager
+
+import dill
+import zmq
+
 from ..compatibility import Queue, unicode, Empty
 try:
     import cPickle as pickle
@@ -83,7 +85,7 @@ class Scheduler(object):
     """
     def __init__(self, port_to_workers=None, port_to_clients=None,
                  bind_to_workers='*', bind_to_clients='*',
-                 hostname=None, block=False):
+                 hostname=None, block=False, worker_timeout=20):
         self.context = zmq.Context()
         hostname = hostname or socket.gethostname()
 
@@ -130,8 +132,7 @@ class Scheduler(object):
         self._schedule_lock = Lock()
 
         # RPC functions that workers and clients can trigger
-        self.worker_functions = {'register': self._worker_registration,
-                                 'heartbeat': self._heartbeat,
+        self.worker_functions = {'heartbeat': self._heartbeat,
                                  'status': self._status_to_worker,
                                  'finished-task': self._worker_finished_task,
                                  'setitem-ack': self._setitem_ack,
@@ -150,6 +151,10 @@ class Scheduler(object):
         self._listen_to_workers_thread.start()
         self._listen_to_clients_thread = Thread(target=self._listen_to_clients)
         self._listen_to_clients_thread.start()
+        self._monitor_workers_event = Event()
+        self._monitor_workers_thread = Thread(target=self._monitor_workers,
+                                              kwargs={'timeout': worker_timeout})
+        self._monitor_workers_thread.start()
 
         if block:
             self.block()
@@ -163,7 +168,9 @@ class Scheduler(object):
                     continue
             except zmq.ZMQError:
                 break
-            if self.send_to_workers_recv in socks:
+            if (self.send_to_workers_recv in socks and
+                    not self.send_to_workers_recv.closed):
+
                 self.send_to_workers_recv.recv()
                 while not self.send_to_workers_queue.empty():
                     msg = self.send_to_workers_queue.get()
@@ -207,12 +214,20 @@ class Scheduler(object):
             else:
                 self.pool.apply_async(function, args=(header, payload))
 
+    def _monitor_workers(self, timeout=20):
+        """ Event loop: Monitor worker heartbeats """
+        while self.status != 'closed':
+            self._monitor_workers_event.wait(timeout)
+            self.prune_and_notify(timeout=timeout)
+            self._monitor_workers_event.clear()
+
     def block(self):
         """ Block until listener threads close
 
         Warning: If some other thread doesn't call `.close()` then, in the
         common case you can not easily escape from this.
         """
+        self._monitor_workers_thread.join()
         self._listen_to_workers_thread.join()
         self._listen_to_clients_thread.join()
 
@@ -224,13 +239,6 @@ class Scheduler(object):
         out_header = {}
         out_payload = {'workers': self.workers}
         self.send_to_client(header['address'], out_header, out_payload)
-
-    def _worker_registration(self, header, payload):
-        """ Worker came in, register them """
-        payload = pickle.loads(payload)
-        address = header['address']
-        self.workers[address] = payload
-        self.available_workers.put(address)
 
     def _worker_finished_task(self, header, payload):
         """ Worker reports back as having finished task, ready for more
@@ -540,9 +548,9 @@ class Scheduler(object):
 
     def close_workers(self):
         header = {'function': 'close'}
-        for w in self.workers:
+        while self.workers != {}:
+            w, v = self.workers.popitem()
             self.send_to_worker(w, header, {})
-        self.workers.clear()
         self.send_to_workers_queue.join()
 
     def _close(self, header, payload):
@@ -552,6 +560,7 @@ class Scheduler(object):
         """ Close Scheduler """
         self.close_workers()
         self.status = 'closed'
+        self._monitor_workers_event.set()
         self.to_workers.close(linger=1)
         self.to_clients.close(linger=1)
         self.send_to_workers_send.close(linger=1)
@@ -717,6 +726,35 @@ class Scheduler(object):
 
     def _heartbeat(self, header, payload):
         with logerrors():
-            log(self.address_to_clients, "Heartbeat", header)
+            # log(self.address_to_workers, "Heartbeat", header)
+            payload = pickle.loads(payload)
             address = header['address']
+
+            if address not in self.workers:
+                log(self.address_to_workers, "New Worker", header)
+                self.available_workers.put(address)
+
+            self.workers[address] = payload
             self.workers[address]['last-seen'] = datetime.utcnow()
+
+    def prune_workers(self, timeout=20):
+        """
+        Remove workers from scheduler that have not sent a heartbeat in
+        `timeout` seconds.
+        """
+        now = datetime.utcnow()
+        remove = []
+        for worker, data in self.workers.items():
+            if abs(data['last-seen'] - now).microseconds > (timeout * 1e6):
+                remove.append(worker)
+        for r in remove:
+            self.workers.pop(r)
+        return remove
+
+    def prune_and_notify(self, timeout=20):
+        removed = self.prune_workers(timeout=timeout)
+        if removed != []:
+            for w_address in self.workers:
+                header = {'function': 'worker-death'}
+                payload = {'removed': removed}
+                self.send_to_worker(w_address, header, payload)

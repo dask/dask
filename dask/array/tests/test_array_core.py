@@ -10,6 +10,7 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
+from dask.async import get_sync
 from dask.array.core import *
 from dask.utils import raises, ignoring, tmpfile
 
@@ -72,6 +73,10 @@ def test_concatenate3():
     x = np.array([[1, 2]])
     assert concatenate3([[x, x, x],
                             [x, x, x]]).shape == (2, 6)
+
+
+def test_concatenate3_on_scalars():
+    assert eq(concatenate3([1, 2]), np.array([1, 2]))
 
 
 def eq(a, b):
@@ -252,6 +257,14 @@ def test_short_stack():
     s = da.stack([d])
     assert s.shape == (1, 1)
     assert get(s.dask, s._keys())[0][0].shape == (1, 1)
+
+
+def test_stack_scalars():
+    d = da.arange(4, chunks=2)
+
+    s = da.stack([d.mean(), d.sum()])
+
+    assert s.compute().tolist() == [np.arange(4).mean(), np.arange(4).sum()]
 
 
 def test_concatenate():
@@ -899,6 +912,10 @@ def test_slicing_with_non_ndarrays():
 
 def test_getarray():
     assert type(getarray(np.matrix([[1]]), 0)) == np.ndarray
+    assert eq(getarray([1, 2, 3, 4, 5], slice(1, 4)), np.array([2, 3, 4]))
+
+    assert eq(getarray(np.arange(5), (None, slice(None, None))),
+              np.arange(5)[None, :])
 
 
 def test_squeeze():
@@ -948,6 +965,15 @@ def test_from_array_with_lock():
     assert eq(e + f, x + x)
 
 
+def test_from_func():
+    x = np.arange(10)
+    d = from_func(lambda n: n * x, (10,), x.dtype, kwargs={'n': 2})
+
+    assert d.shape == x.shape
+    assert d.dtype == x.dtype
+    assert eq(d.compute(), 2 * x)
+
+
 def test_topk():
     x = np.array([5, 2, 1, 6])
     d = da.from_array(x, chunks=2)
@@ -956,6 +982,16 @@ def test_topk():
 
     assert e.chunks == ((2,),)
     assert eq(e, np.sort(x)[-1:-3:-1])
+
+
+def test_topk_k_bigger_than_chunk():
+    x = np.array([5, 2, 1, 6])
+    d = da.from_array(x, chunks=2)
+
+    e = da.topk(3, d)
+
+    assert e.chunks == ((3,),)
+    assert eq(e, np.array([6, 5, 2]))
 
 
 def test_bincount():
@@ -984,6 +1020,63 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
         assert 'minlength' in str(e)
     else:
         assert False
+
+
+def test_histogram():
+    # Test for normal, flattened input
+    n = 100
+    v = da.random.random(n, chunks=10)
+    bins = np.arange(0, 1.01, 0.01)
+    (a1, b1) = da.histogram(v, bins=bins)
+    (a2, b2) = np.histogram(v, bins=bins)
+
+    # Check if the sum of the bins equals the number of samples
+    assert a2.sum(axis=0) == n
+    assert a1.sum(axis=0) == n
+    assert eq(a1, a2)
+
+
+def test_histogram_alternative_bins_range():
+    v = da.random.random(100, chunks=10)
+    bins = np.arange(0, 1.01, 0.01)
+    # Other input
+    (a1, b1) = da.histogram(v, bins=10, range=(0, 1))
+    (a2, b2) = np.histogram(v, bins=10, range=(0, 1))
+    assert eq(a1, a2)
+    assert eq(b1, b2)
+
+
+def test_histogram_return_type():
+    v = da.random.random(100, chunks=10)
+    bins = np.arange(0, 1.01, 0.01)
+    # Check if return type is same as hist
+    bins = np.arange(0, 11, 1, dtype='i4')
+    assert eq(da.histogram(v * 10, bins=bins)[0],
+              np.histogram(v * 10, bins=bins)[0])
+
+
+def test_histogram_extra_args_and_shapes():
+    # Check for extra args and shapes
+    bins = np.arange(0, 1.01, 0.01)
+    v = da.random.random(100, chunks=10)
+    data = [(v, bins, da.ones(100, chunks=v.chunks) * 5),
+            (da.random.random((50, 50), chunks=10), bins, da.ones((50, 50), chunks=10) * 5)]
+
+    for v, bins, w in data:
+        # density
+        assert eq(da.histogram(v, bins=bins, normed=True)[0],
+                  np.histogram(v, bins=bins, normed=True)[0])
+
+        # normed
+        assert eq(da.histogram(v, bins=bins, density=True)[0],
+                  np.histogram(v, bins=bins, density=True)[0])
+
+        # weights
+        assert eq(da.histogram(v, bins=bins, weights=w)[0],
+                  np.histogram(v, bins=bins, weights=w)[0])
+
+        assert eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
+                  da.histogram(v, bins=bins, weights=w, density=True)[0])
 
 
 def test_concatenate3():
@@ -1102,3 +1195,38 @@ def test_chunks_is_immutable():
         assert False
     except TypeError as e:
         assert 'rechunk(2)' in str(e)
+
+
+def test_raise_on_bad_kwargs():
+    x = da.ones(5, chunks=3)
+    try:
+        da.minimum(x, out=None)
+    except TypeError as e:
+        assert 'minimum' in str(e)
+        assert 'out' in str(e)
+
+
+def test_long_slice():
+    x = np.arange(10000)
+    d = da.from_array(x, chunks=1)
+
+    assert eq(d[8000:8200], x[8000:8200])
+
+
+def test_h5py_newaxis():
+    try:
+        import h5py
+    except ImportError:
+        return
+
+    with tmpfile('h5') as fn:
+        with h5py.File(fn) as f:
+            x = f.create_dataset('/x', shape=(10, 10), dtype='f8')
+            d = da.from_array(x, chunks=(5, 5))
+            assert d[None, :, :].compute(get=get_sync).shape == (1, 10, 10)
+            assert d[:, None, :].compute(get=get_sync).shape == (10, 1, 10)
+            assert d[:, :, None].compute(get=get_sync).shape == (10, 10, 1)
+
+
+def test_ellipsis_slicing():
+    assert eq(da.ones(4, chunks=2)[...], np.ones(4))

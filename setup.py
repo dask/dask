@@ -5,9 +5,9 @@ from setuptools import setup
 import dask
 
 extras_require = {
-  'array': ['numpy', 'toolz'],
-  'bag': ['dill', 'toolz', 'partd >= 0.3.2'],
-  'dataframe': ['numpy', 'pandas >= 0.16.0', 'toolz', 'partd >= 0.3.2'],
+  'array': ['numpy', 'toolz >= 0.7.2'],
+  'bag': ['dill', 'toolz >= 0.7.2', 'partd >= 0.3.2'],
+  'dataframe': ['numpy', 'pandas >= 0.16.0', 'toolz >= 0.7.2', 'partd >= 0.3.2'],
   'distributed': ['pyzmq', 'dill']
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))

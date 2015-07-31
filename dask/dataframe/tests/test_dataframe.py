@@ -222,7 +222,7 @@ def test_full_groupby():
     def func(df):
         df['b'] = df.b - df.b.mean()
         return df
-    # assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+    assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
 
 
 def test_groupby_on_index():
@@ -286,9 +286,11 @@ def test_cache():
 
 
 def test_value_counts():
-    result = d.b.value_counts().compute()
-    expected = full.b.value_counts()
-    assert eq(result.sort_index(), expected.sort_index())
+    df = pd.DataFrame({'x': [1, 2, 1, 3, 3, 1, 4]})
+    a = dd.from_pandas(df, npartitions=3)
+    result = a.x.value_counts()
+    expected = df.x.value_counts()
+    assert eq(result, expected)
 
 
 def test_isin():
@@ -299,16 +301,18 @@ def test_len():
     assert len(d) == len(full)
 
 
-def test_quantiles():
-    result = d.b.quantiles([30, 70]).compute()
+def test_quantile():
+    result = d.b.quantile([.3, .7]).compute()
     assert len(result) == 2
     assert result[0] == 0
     assert 3 < result[1] < 7
 
 
-def test_empty_quantiles():
-    assert d.b.quantiles([]).compute().tolist() == []
+def test_empty_quantile():
+    assert d.b.quantile([]).compute().tolist() == []
 
+def test_quantiles_raises():
+    assert raises(NotImplementedError, lambda: d.b.quantiles([30]))
 
 def test_index():
     assert eq(d.index, full.index)
@@ -324,6 +328,10 @@ def test_loc():
     assert eq(d.loc[3:8], full.loc[3:8])
     assert eq(d.loc[:8], full.loc[:8])
     assert eq(d.loc[3:], full.loc[3:])
+
+    assert raises(KeyError, lambda: d.loc[1000])
+    assert eq(d.loc[1000:], full.loc[1000:])
+    assert eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
 
 
 
@@ -641,3 +649,25 @@ def test_nlargest_series():
     ss = dd.from_pandas(s, npartitions=2)
 
     assert eq(ss.nlargest(2), s.nlargest(2))
+
+
+def test_categorical_set_index():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['a', 'b', 'b', 'c']})
+    df['y'] = df.y.astype('category')
+    a = dd.from_pandas(df, npartitions=2)
+
+    with dask.set_options(get=get_sync):
+        b = a.set_index('y')
+        df2 = df.set_index('y')
+
+        assert list(b.index.compute()), list(df2.index)
+
+        b = a.set_index(a.y)
+        df2 = df.set_index(df.y)
+        assert list(b.index.compute()), list(df2.index)
+
+
+def test_query():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+    assert eq(a.query('x**2 > y'), df.query('x**2 > y'))

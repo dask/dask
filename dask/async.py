@@ -122,12 +122,10 @@ from operator import add
 from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .context import _globals
 from .order import order
+from .callbacks import unpack_callbacks
 
 def inc(x):
     return x + 1
-
-def double(x):
-    return x * 2
 
 
 DEBUG = False
@@ -380,9 +378,7 @@ The main function of the scheduler.  Get is the main entry point.
 
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               queue=None, get_id=default_get_id, raise_on_exception=False,
-              start_callback=None, end_callback=None,
-              rerun_exceptions_locally=None,
-              **kwargs):
+              rerun_exceptions_locally=None, callbacks=None, **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -413,17 +409,10 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     rerun_exceptions_locally : bool, optional
         Whether to rerun failing tasks in local process to enable debugging
         (False by default)
-    start_callback : function, optional
-        Callback run every time a new task is started. Receives the key of the
-        task to be run, the dask, and the scheduler state. At the end of
-        computation this will called a final time with ``None`` as the key, as
-        no new tasks were added at that tick.
-    end_callback : function, optional
-        Callback run every time a task is finished. Receives the key of the
-        task just run, resulting value, dask, scheduler state, and id of the
-        worker that ran the task.  At the end of computation this will called a
-        final time with ``None`` for key, value and worker id, as no new tasks
-        were finished at that step.
+    callbacks : tuple or list of tuples, optional
+        Callbacks are passed in as tuples of length 4. Multiple sets of
+        callbacks may be passed in as a list of tuples. For more information,
+        see the dask.diagnostics documentation.
 
     See Also
     --------
@@ -431,6 +420,10 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     threaded.get
     """
     assert queue
+
+    if callbacks is None:
+        callbacks = _globals['callbacks']
+    start_cbs, pretask_cbs, posttask_cbs, finish_cbs = unpack_callbacks(callbacks)
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -441,6 +434,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     keyorder = order(dsk)
 
     state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
+    for f in start_cbs:
+        f(dsk, state)
 
     if rerun_exceptions_locally is None:
         rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
@@ -454,8 +449,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         key = state['ready'].pop()
         state['ready-set'].remove(key)
         state['running'].add(key)
-        if start_callback:
-            start_callback(key, dsk, state)
+        for f in pretask_cbs:
+            f(key, dsk, state)
 
         # Prep data to send
         data = dict((dep, state['cache'][dep])
@@ -472,6 +467,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['waiting'] or state['ready'] or state['running']:
         key, res, tb, worker_id = queue.get()
         if isinstance(res, Exception):
+            for f in finish_cbs:
+                f(dsk, state, True)
             if rerun_exceptions_locally:
                 data = dict((dep, state['cache'][dep])
                             for dep in get_dependencies(dsk, key))
@@ -490,8 +487,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                     + str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
         finish_task(dsk, key, state, results, keyorder.get)
-        if end_callback:
-            end_callback(key, res, dsk, state, worker_id)
+        for f in posttask_cbs:
+            f(key, res, dsk, state, worker_id)
         while state['ready'] and len(state['running']) < num_workers:
             fire_task()
 
@@ -499,11 +496,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
     while state['running'] or not queue.empty():
         key, res, tb, worker_id = queue.get()
 
-    # Run the callbacks one last time with the final state
-    if start_callback:
-        start_callback(None, dsk, state)
-    if end_callback:
-        end_callback(None, None, dsk, state, None)
+    for f in finish_cbs:
+        f(dsk, state, False)
 
     return nested_get(result, state['cache'])
 
@@ -525,58 +519,6 @@ def get_sync(dsk, keys, **kwargs):
     queue = Queue()
     return get_async(apply_sync, 1, dsk, keys, queue=queue,
                      raise_on_exception=True, **kwargs)
-
-
-'''
-Debugging
----------
-
-The threaded nature of this project presents challenging to normal unit-test
-and debug workflows.  Visualization of the execution state has value.
-
-Our main mechanism is a visualization of the execution state as colors on our
-normal dot graphs (see dot module).
-'''
-
-def visualize(dsk, state, filename='dask'):
-    """ Visualize state of compputation as dot graph """
-    from dask.dot import write_networkx_to_dot
-    g = state_to_networkx(dsk, state)
-    write_networkx_to_dot(g, filename=filename)
-
-
-def color_nodes(dsk, state):
-    data, func = dict(), dict()
-    for key in dsk:
-        func[key] = {'color': 'gray'}
-        data[key] = {'color': 'gray'}
-
-    for key in state['released']:
-        data[key] = {'color': 'blue'}
-
-    for key in state['cache']:
-        data[key] = {'color': 'red'}
-
-    for key in state['finished']:
-            func[key] = {'color': 'blue'}
-    for key in state['running']:
-            func[key] = {'color': 'red'}
-
-    for key in dsk:
-        func[key]['penwidth'] = 4
-        data[key]['penwidth'] = 4
-    return data, func
-
-
-def state_to_networkx(dsk, state):
-    """ Convert state to networkx for visualization
-
-    See Also:
-        visualize
-    """
-    from .dot import to_networkx
-    data, func = color_nodes(dsk, state)
-    return to_networkx(dsk, data_attributes=data, function_attributes=func)
 
 
 def sortkey(item):

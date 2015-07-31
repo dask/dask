@@ -4,41 +4,19 @@ import pandas as pd
 import numpy as np
 from functools import wraps, partial
 import re
-import struct
-import os
 from glob import glob
 from math import ceil
-from toolz import merge, dissoc
-from itertools import count
+from toolz import merge, dissoc, assoc
 from operator import getitem
 
-from ..compatibility import StringIO, unicode, range
-from ..utils import textblock
+from ..compatibility import BytesIO, unicode, range, apply
+from ..utils import textblock, file_size
 from .. import array as da
 
 from . import core
-from .core import DataFrame, Series, compute, concat, categorize_block, tokens
+from .core import (DataFrame, Series, compute, concat, categorize_block,
+        tokens, get)
 from .shuffle import set_partition
-
-
-def _StringIO(data):
-    if isinstance(data, bytes):
-        data = data.decode()
-    return StringIO(data)
-
-
-def file_size(fn, compression=None):
-    """ Size of a file on disk
-
-    If compressed then return the uncompressed file size
-    """
-    if compression == 'gzip':
-        with open(fn, 'rb') as f:
-            f.seek(-4, 2)
-            result = struct.unpack('I', f.read(4))[0]
-    else:
-        result = os.stat(fn).st_size
-    return result
 
 
 csv_defaults = {'compression': None}
@@ -85,7 +63,7 @@ def fill_kwargs(fn, args, kwargs):
             kwargs['header'] = 0
 
     try:
-        head = pd.read_csv(fn, *args, nrows=sample_nrows, **kwargs)
+        head = pd.read_csv(fn, *args, **assoc(kwargs, 'nrows', sample_nrows))
     except StopIteration:
         head = pd.read_csv(fn, *args, **kwargs)
 
@@ -115,31 +93,37 @@ def read_csv(fn, *args, **kwargs):
     if '*' in fn:
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
 
+    name = 'read-csv' + next(tokens)
+
     columns = kwargs.pop('columns')
-
-    # Chunk sizes and numbers
-    total_bytes = file_size(fn, kwargs['compression'])
-    nchunks = int(ceil(total_bytes / chunkbytes))
-    divisions = [None] * (nchunks + 1)
-
     header = kwargs.pop('header')
 
-    first_read_csv = partial(pd.read_csv, *args, header=header,
-                           **dissoc(kwargs, 'compression'))
-    rest_read_csv = partial(pd.read_csv, *args, header=None,
-                          **dissoc(kwargs, 'compression'))
+    if 'nrows' in kwargs:  # Just create single partition
+        dsk = {(name, 0): (apply, pd.read_csv, (fn,),
+                                  assoc(kwargs, 'header', header))},
+        result = DataFrame(dsk, name, columns, [None, None])
 
-    # Create dask graph
-    name = 'read-csv' + next(tokens)
-    dsk = dict(((name, i), (rest_read_csv, (_StringIO,
-                               (textblock, fn,
-                                   i*chunkbytes, (i+1) * chunkbytes,
-                                   kwargs['compression']))))
-               for i in range(1, nchunks))
-    dsk[(name, 0)] = (first_read_csv, (_StringIO,
-                       (textblock, fn, 0, chunkbytes, kwargs['compression'])))
+    else:
+        # Chunk sizes and numbers
+        total_bytes = file_size(fn, kwargs['compression'])
+        nchunks = int(ceil(total_bytes / chunkbytes))
+        divisions = [None] * (nchunks + 1)
 
-    result = DataFrame(dsk, name, columns, divisions)
+        first_read_csv = partial(pd.read_csv, *args, header=header,
+                               **dissoc(kwargs, 'compression'))
+        rest_read_csv = partial(pd.read_csv, *args, header=None,
+                              **dissoc(kwargs, 'compression'))
+
+        # Create dask graph
+        dsk = dict(((name, i), (rest_read_csv, (BytesIO,
+                                   (textblock, fn,
+                                       i*chunkbytes, (i+1) * chunkbytes,
+                                       kwargs['compression']))))
+                   for i in range(1, nchunks))
+        dsk[(name, 0)] = (first_read_csv, (BytesIO,
+                           (textblock, fn, 0, chunkbytes, kwargs['compression'])))
+
+        result = DataFrame(dsk, name, columns, divisions)
 
     if categorize or index:
         categories, quantiles = categories_and_quantiles(fn, args, kwargs,
@@ -177,9 +161,11 @@ def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
 def csv_names(fn, encoding='utf-8', compression=None, names=None,
                 parse_dates=None, usecols=None, dtype=None, **kwargs):
     try:
+        kwargs['nrows'] = 5
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, parse_dates=parse_dates, nrows=5, **kwargs)
+                names=names, parse_dates=parse_dates, **kwargs)
     except StopIteration:
+        kwargs['nrows'] = None
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
                 names=names, parse_dates=parse_dates, **kwargs)
     return list(df.columns)
@@ -235,11 +221,10 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
                                          dtype=dtypes)))
     categories = [d[c].drop_duplicates() for c in category_columns]
 
-    import dask
     if index:
-        quantiles = d[index].quantiles(np.linspace(0, 100, nchunks + 1))
+        quantiles = d[index].quantile(np.linspace(0, 1, nchunks + 1))
         result = compute(quantiles, *categories)
-        quantiles, categories = result[0], result[1:]
+        quantiles, categories = result[0].values, result[1:]
     else:
         categories = compute(*categories)
         quantiles = None
@@ -523,3 +508,114 @@ def from_dask_array(x, columns=None):
     else:
         raise ValueError("Array must have one or two dimensions.  Had %d" %
                          x.ndim)
+
+
+def _link(token, result):
+    """ A dummy function to link results together in a graph
+
+    We use this to enforce an artificial sequential ordering on tasks that
+    don't explicitly pass around a shared resource
+    """
+    return None
+
+
+@wraps(pd.DataFrame.to_hdf)
+def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
+           complib=None, fletcher32=False, **kwargs):
+    name = 'to-hdf' + next(tokens)
+
+    pd_to_hdf = getattr(df._partition_type, 'to_hdf')
+
+    dsk = dict()
+    dsk[(name, 0)] = (_link, None,
+                      (apply, pd_to_hdf,
+                          (tuple, [(df._name, 0), path_or_buf, key]),
+                          {'mode':  mode, 'format': 'table', 'append': append,
+                           'complevel': complevel, 'complib': complib,
+                           'fletcher32': fletcher32}))
+    for i in range(1, df.npartitions):
+        dsk[(name, i)] = (_link, (name, i - 1),
+                          (apply, pd_to_hdf,
+                           (tuple, [(df._name, i), path_or_buf, key]),
+                           {'mode': 'a', 'format': 'table', 'append': True,
+                            'complevel': complevel, 'complib': complib,
+                            'fletcher32': fletcher32}))
+
+    get(merge(df.dask, dsk), (name, i), **kwargs)
+
+
+dont_use_fixed_error_message = """
+This HDFStore is not partitionable and can only be use monolithically with
+pandas.  In the future when creating HDFStores use the ``format='table'``
+option to ensure that your dataset can be parallelized"""
+
+@wraps(pd.read_hdf)
+def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
+        chunksize=1000000):
+    with pd.HDFStore(path_or_buf) as hdf:
+        storer = hdf.get_storer(key)
+        if storer.format_type != 'table':
+            raise TypeError(dont_use_fixed_error_message)
+        if stop is None:
+            stop = storer.nrows
+
+    if columns is None:
+        columns = list(pd.read_hdf(path_or_buf, key, stop=0).columns)
+
+    name = 'read-hdf' + next(tokens)
+
+    dsk = dict(((name, i), (apply, pd.read_hdf,
+                             (path_or_buf, key),
+                             {'start': s, 'stop': s + chunksize,
+                              'columns': columns}))
+                for i, s in enumerate(range(start, stop, chunksize)))
+
+    divisions = [None] * (len(dsk) + 1)
+
+    return DataFrame(dsk, name, columns, divisions)
+
+
+def to_castra(df, fn=None, categories=None):
+    """ Write DataFrame to Castra on-disk store
+
+    See https://github.com/blosc/castra for details
+
+    See Also:
+        Castra.to_dask
+    """
+    from castra import Castra
+    if isinstance(categories, list):
+        categories = (list, categories)
+
+    name = 'to-castra' + next(tokens)
+
+    dsk = dict()
+    dsk[(name, -1)] = (Castra, fn, (df._name, 0), categories)
+    for i in range(0, df.npartitions):
+        dsk[(name, i)] = (_link, (name, i - 1),
+                          (Castra.extend, (name, -1), (df._name, i)))
+
+    c, _ = get(merge(dsk, df.dask), [(name, -1), list(dsk.keys())])
+    return c
+
+
+def to_csv(df, filename, **kwargs):
+    myget = kwargs.pop('get', None)
+    name = 'to-csv' + next(tokens)
+
+    dsk = dict()
+    dsk[(name, 0)] = (apply, pd.DataFrame.to_csv,
+                        (tuple, [(df._name, 0), filename]),
+                        kwargs)
+
+    kwargs2 = kwargs.copy()
+    kwargs2['mode'] = 'a'
+    kwargs2['header'] = False
+
+    for i in range(1, df.npartitions):
+        dsk[(name, i)] = (_link, (name, i - 1),
+                           (apply, pd.DataFrame.to_csv,
+                             (tuple, [(df._name, i), filename]),
+                             kwargs2))
+
+    get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)

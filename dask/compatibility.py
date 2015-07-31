@@ -15,8 +15,11 @@ if PY3:
     from urllib.parse import quote, unquote
     unicode = str
     long = int
-    def apply(func, args):
-        return func(*args)
+    def apply(func, args, kwargs=None):
+        if kwargs:
+            return func(*args, **kwargs)
+        else:
+            return func(*args)
     range = range
 else:
     import __builtin__ as builtins
@@ -24,10 +27,10 @@ else:
     import operator
     from itertools import izip_longest as zip_longest
     from StringIO import StringIO
+    from io import BytesIO
     from urllib2 import urlopen
     from urlparse import urlparse
     from urllib import quote, unquote
-    BytesIO = StringIO
     unicode = unicode
     long = long
     apply = apply

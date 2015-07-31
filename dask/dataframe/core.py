@@ -8,6 +8,10 @@ from operator import methodcaller
 from pprint import pformat
 from math import sqrt
 from functools import wraps
+from math import sqrt
+from functools import wraps
+import bisect
+from toolz import merge, partial, first, partition
 from operator import getitem, setitem
 from datetime import datetime
 
@@ -17,7 +21,6 @@ import pandas as pd
 
 import numpy as np
 import operator
-
 try:
     from chest import Chest as Cache
 except ImportError:
@@ -196,7 +199,7 @@ class _Frame(object):
                            self.divisions)
                 for i, dsk in enumerate(dsks)]
 
-    def head(self, n=10, compute=True):
+    def head(self, n=5, compute=True):
         """ First n rows of the dataset
 
         Caveat, the only checks the first n rows of the first partition.
@@ -221,7 +224,6 @@ class _Frame(object):
             return self._loc_element(ind)
 
     def _loc_series(self, ind):
-        name = 'loc-series' + next(tokens)
         if not self.divisions == ind.divisions:
             raise ValueError("Partitions of dataframe and index not the same")
         return map_partitions(lambda df, ind: df.loc[ind],
@@ -230,6 +232,8 @@ class _Frame(object):
     def _loc_element(self, ind):
         name = 'loc-element' + next(tokens)
         part = _partition_of_index_value(self.divisions, ind)
+        if ind < self.divisions[0] or ind > self.divisions[-1]:
+            raise KeyError('the label [%s] is not in the index' % str(ind))
         dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
         return type(self)(merge(self.dask, dsk), name,
                           self.column_info, [ind, ind])
@@ -307,6 +311,13 @@ class _Frame(object):
         func = getattr(self._partition_type, 'sample')
         return map_partitions(func, self.column_info, self, None, frac)
 
+    @wraps(pd.DataFrame.to_hdf)
+    def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
+               complib=None, fletcher32=False, **kwargs):
+        from .io import to_hdf
+        return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
+                fletcher32, **kwargs)
+
 
 class Series(_Frame):
     """ Out-of-core Series object
@@ -348,13 +359,20 @@ class Series(_Frame):
         return ("dd.Series<%s, divisions=%s>" %
                 (self._name, repr_long_list(self.divisions)))
 
-    def quantiles(self, q):
+    def quantile(self, q):
         """ Approximate quantiles of column
 
         q : list/array of floats
-            Iterable of numbers ranging from 0 to 100 for the desired quantiles
+            Iterable of numbers ranging from 0 to 1 for the desired quantiles
         """
-        return quantiles(self, q)
+        # pandas uses quantile in [0, 1]
+        # numpy / everyone else uses [0, 100]
+        return quantile(self, np.asarray(q) * 100)
+
+    def quantiles(self, *args, **kwargs):
+        raise NotImplementedError("This has moved to quantile to match the Pandas API\n"
+                                  "Also, quantiles will now be specified on the range "
+                                  "[0, 1], not [0, 100]")
 
     def resample(self, rule, how='mean', axis=0, fill_method=None, closed=None,
                  label=None, convention='start', kind=None, loffset=None,
@@ -547,7 +565,7 @@ class Series(_Frame):
     @wraps(pd.Series.value_counts)
     def value_counts(self):
         chunk = lambda s: s.value_counts()
-        agg = lambda s: s.groupby(level=0).sum()
+        agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
         return aca(self, chunk=chunk, aggregate=agg, columns=self.columns)
 
     @wraps(pd.Series.nlargest)
@@ -656,7 +674,8 @@ class DataFrame(_Frame):
                 raise e
 
     def __dir__(self):
-        return sorted(set(list(dir(type(self))) + list(self.columns)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      list(self.columns)))
 
     def __repr__(self):
         return ("dd.DataFrame<%s, divisions=%s>" %
@@ -699,6 +718,30 @@ class DataFrame(_Frame):
 
         return elemwise(_assign, self, *pairs, columns=list(df2.columns))
 
+    def query(self, expr, **kwargs):
+        """ Blocked version of pd.DataFrame.query
+
+        This is like the sequential version except that this will also happen
+        in many threads.  This may conflict with ``numexpr`` which will use
+        multiple threads itself.  We recommend that you set numexpr to use a
+        single thread
+
+            import numexpr
+            numexpr.set_nthreads(1)
+
+        The original docstring follows below:\n
+        """ + pd.DataFrame.query.__doc__
+        name = 'query' + next(tokens)
+        if kwargs:
+            dsk = dict(((name, i), (apply, pd.DataFrame.query,
+                                    ((self._name, i), (expr,), kwargs)))
+                       for i in range(self.npartitions))
+        else:
+            dsk = dict(((name, i), (pd.DataFrame.query, (self._name, i), expr))
+                       for i in range(self.npartitions))
+
+        return DataFrame(merge(dsk, self.dask), name, self.columns, self.divisions)
+
     def to_castra(self, fn=None, categories=None):
         """ Write DataFrame to Castra on-disk store
 
@@ -707,13 +750,13 @@ class DataFrame(_Frame):
         See Also:
             Castra.to_dask
         """
-        from castra import Castra
-        name = 'to-castra' + next(tokens)
-        dsk = {name: (Castra, fn, (self._name, 0), categories)}
-        dsk.update(dict(((name, i), (Castra.extend, name, (self._name, i)))
-                        for i in range(self.npartitions)))
-        c, _ = get(merge(dsk, self.dask), [name, list(dsk.keys())])
-        return c
+        from .io import to_castra
+        return to_castra(self, fn, categories)
+
+    @wraps(pd.DataFrame.to_csv)
+    def to_csv(self, filename, **kwargs):
+        from .io import to_csv
+        return to_csv(self, filename, **kwargs)
 
 
 def _assign(df, *pairs):
@@ -956,7 +999,8 @@ class GroupBy(object):
             raise KeyError()
 
     def __dir__(self):
-        return sorted(set(list(dir(type(self))) + list(self.df.columns)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      list(self.df.columns)))
 
     def __getattr__(self, key):
         try:
@@ -1141,7 +1185,7 @@ def categorize(df, columns=None, **kwargs):
     return df.map_partitions(func, columns=df.columns)
 
 
-def quantiles(df, q, **kwargs):
+def quantile(df, q, **kwargs):
     """ Approximate quantiles of column
 
     Parameters
@@ -1160,12 +1204,12 @@ def quantiles(df, q, **kwargs):
     len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
 
     name3 = 'quantiles-3' + next(tokens)
-    merge_dsk = {(name3, 0): (merge_percentiles, q, [q] * df.npartitions,
+    merge_dsk = {(name3, 0): (pd.Series, (merge_percentiles, q, [q] * df.npartitions,
                                                 sorted(val_dsk),
-                                                sorted(len_dsk))}
+                                                sorted(len_dsk)))}
 
     dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
-    return da.Array(dsk, name3, chunks=((len(q),),))
+    return Series(dsk, name3, df.name, [df.divisions[0], df.divisions[-1]])
 
 
 def get(dsk, keys, get=None, **kwargs):
@@ -1318,7 +1362,8 @@ class DatetimeAccessor(object):
         self._series = series
 
     def __dir__(self):
-        return sorted(set(dir(type(self)) + dir(pd.Series.dt)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      dir(pd.Series.dt)))
 
     def _property_map(self, key):
         return self._series.map_partitions(lambda s: getattr(s.dt, key))
@@ -1352,7 +1397,8 @@ class StringAccessor(object):
         self._series = series
 
     def __dir__(self):
-        return sorted(set(dir(type(self)) + dir(pd.Series.str)))
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      dir(pd.Series.str)))
 
     def _property_map(self, key):
         return self._series.map_partitions(lambda s: getattr(s.str, key))

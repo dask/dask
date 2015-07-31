@@ -12,9 +12,12 @@ dask array with from the following components
 
 *  A dask with a special set of keys designating blocks
    e.g. ``('x', 0, 0), ('x', 0, 1), ...``
-*  A sequence of block sizes along each dimension
+*  A sequence of chunk sizes along each dimension called ``chunks``
    e.g. ``((5, 5, 5, 5), (8, 8, 8))``
 *  A name to identify which keys in the dask refer to this array, e.g. ``'x'``
+
+Keys of the dask graph
+----------------------
 
 By special convention we refer to each block of the array with a tuple of the
 form ``(name, i, j, k)`` for ``i, j, k`` being the indices of the block,
@@ -33,6 +36,14 @@ key-value pairs required to eventually compute the desired values, e.g.
     ...
    }
 
+The name of an ``Array`` object can be found in the ``name`` attribute.  One
+can get a nested list of keys with the ``._keys()`` method.  One can flatten
+down this list with ``dask.array.core.flatten()``; this is sometimes useful
+when building new dictionaries.
+
+Chunks
+------
+
 We also store the size of each block along each axis.  This is a tuple of
 tuples such that the length of the outer tuple is equal to the dimension and
 the lengths of the inner tuples are equal to the number of blocks along each
@@ -45,6 +56,19 @@ regularly sized grids but blocks change shape after complex slicing.  Beware
 that some operations do expect certain symmetries in the block-shapes.  For
 example matrix multiplication requires that blocks on each side have
 anti-symmetric shapes.
+
+Some ways in which ``chunks`` reflects properties of our array
+
+1.  ``len(x.chunks) == x.ndims``: The length of chunks is the number of dimensions
+2.  ``map(sum, chunks) == shape``: The sum of each internal chunk, is the
+    length of that dimension.
+3.  The length of each internal chunk is the number of keys in that dimension,
+    e.g. for ``chunks == ((a, b), (d, e, f))`` and name == ``'x'``
+    our array has tasks with the following keys::
+
+       ('x', 0, 0), ('x', 0, 1), ('x', 0, 2)
+       ('x', 1, 0), ('x', 1, 1), ('x', 1, 2)
+
 
 Create an Array Object
 ----------------------
@@ -78,13 +102,11 @@ identity matrix
 
 .. code-block:: python
 
-   names = ('eye-%d' % i for i in itertools.count(1))  # sequence of names
-
    def eye(n, blocksize):
        chunks = ((blocksize,) * n // blocksize,
                  (blocksize,) * n // blocksize)
 
-       name = next(names)
+       name = 'eye' + next(tokens)  # unique identifier
 
        dsk = {(name, i, j): (np.eye, blocksize)
                             if i == j else
@@ -92,4 +114,7 @@ identity matrix
                 for i in range(n // blocksize)
                 for j in range(n // blocksize)}
 
-       return da.Array(dsk, name, chunks)
+
+       dtype = np.eye(0).dtype  # take dtype default from numpy
+
+       return Array(dsk, name, chunks, dtype)

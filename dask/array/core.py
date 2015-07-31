@@ -20,7 +20,7 @@ from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
 from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer
-from ..compatibility import unicode
+from ..compatibility import unicode, long
 from .. import threaded, core
 from ..context import _globals
 
@@ -35,6 +35,13 @@ def getarray(a, b, lock=None):
     >>> getarray([1, 2, 3, 4, 5], slice(1, 4))
     array([2, 3, 4])
     """
+    if isinstance(b, tuple) and any(x is None for x in b):
+        b2 = tuple(x for x in b if x is not None)
+        b3 = tuple(None if x is None else slice(None, None)
+                    for x in b
+                    if not isinstance(x, (int, long)))
+        return getarray(a, b2, lock)[b3]
+
     if lock:
         lock.acquire()
     try:
@@ -372,6 +379,8 @@ def _concatenate2(arrays, axes=[]):
     """
     if isinstance(arrays, Iterator):
         arrays = list(arrays)
+    if not isinstance(arrays, (list, tuple)):
+        return arrays
     if len(axes) > 1:
         arrays = [_concatenate2(a, axes=axes[1:]) for a in arrays]
     return np.concatenate(arrays, axis=axes[0])
@@ -1108,7 +1117,7 @@ def normalize_chunks(chunks, shape=None):
     return tuple(map(tuple, chunks))
 
 
-def from_array(x, chunks, name=None, lock=False, **kwargs):
+def from_array(x, chunks, name=None, lock=False):
     """ Create dask array from something that looks like an array
 
     Input must have a ``.shape`` and support numpy-style slicing.
@@ -1140,6 +1149,34 @@ def from_array(x, chunks, name=None, lock=False, **kwargs):
     if lock:
         dsk = dict((k, v + (lock,)) for k, v in dsk.items())
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
+
+
+def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
+    """ Create dask array in a single block by calling a function
+
+    Calling the provided function with func(*args, **kwargs) should return a
+    NumPy array of the indicated shape and dtype.
+
+    Example
+    -------
+
+    >>> a = from_func(np.arange, (3,), np.int64, args=(3,))
+    >>> a.compute()
+    array([0, 1, 2])
+
+    This works particularly well when coupled with dask.array functions like
+    concatenate and stack:
+
+    >>> arrays = [from_func(np.array, (), args=(n,)) for n in range(5)]
+    >>> stack(arrays).compute()
+    array([0, 1, 2, 3, 4])
+    """
+    if args or kwargs:
+        func = partial(func, *args, **kwargs)
+    name = name or next(names)
+    dsk = {(name,) + (0,) * len(shape): (func,)}
+    chunks = tuple((i,) for i in shape)
+    return Array(dsk, name, chunks, dtype)
 
 
 def atop(func, out_ind, *args, **kwargs):
@@ -1210,7 +1247,10 @@ def atop(func, out_ind, *args, **kwargs):
         top - dict formulation of this function, contains most logic
     """
     out = kwargs.pop('name', None) or next(names)
-    dtype = kwargs.get('dtype', None)
+    dtype = kwargs.pop('dtype', None)
+    if kwargs:
+        raise TypeError("%s does not take the following keyword arguments %s" %
+            (func.__name__, str(sorted(kwargs.keys()))))
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
@@ -1538,6 +1578,9 @@ def elemwise(op, *args, **kwargs):
     --------
     atop
     """
+    if not set(['name', 'dtype']).issuperset(kwargs):
+        raise TypeError("%s does not take the following keyword arguments %s" %
+            (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
     name = kwargs.get('name') or next(names)
     out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
                    for arg in args)
@@ -1972,6 +2015,79 @@ def bincount(x, weights=None, minlength=None):
 
     return Array(dsk, name, chunks, dtype)
 
+def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
+    """
+    Blocked variant of numpy.histogram.
+
+    Follows the signature of numpy.histogram exactly with the following
+    exceptions:
+
+    - either the ``bins`` or ``range`` argument is required as computing
+      ``min`` and ``max`` over blocked arrays is an expensive operation
+      that must be performed explicitly.
+
+    - ``weights`` must be a dask.array.Array with the same block structure
+       as ``a``.
+
+    Original signature follows below.
+    """ + np.histogram.__doc__
+    if bins is None or (range is None and bins is None):
+        raise ValueError('dask.array.histogram requires either bins '
+                         'or bins and range to be defined.')
+
+    if weights is not None and weights.chunks != a.chunks:
+        raise ValueError('Input array and weights must have the same '
+                         'chunked structure')
+
+    if not np.iterable(bins):
+        mn, mx = range
+        if mn == mx:
+            mn -= 0.5
+            mx += 0.5
+
+        bins = np.linspace(mn, mx, bins + 1, endpoint=True)
+
+    nchunks = len(list(core.flatten(a._keys())))
+    chunks = ((1,) * nchunks, (len(bins) - 1,))
+
+    name1 = 'histogram-sum' + next(tokens)
+
+
+    # Map the histogram to all bins
+    def block_hist(x, weights=None):
+        return np.histogram(x, bins, weights=weights)[0][np.newaxis]
+
+    if weights is None:
+        dsk = dict(((name1, i, 0), (block_hist, k))
+                    for i, k in enumerate(core.flatten(a._keys())))
+        dtype = int
+    else:
+        a_keys = core.flatten(a._keys())
+        w_keys = core.flatten(weights._keys())
+        dsk = dict(((name1, i, 0), (block_hist, k, w))
+                    for i, (k, w) in enumerate(zip(a_keys, w_keys)))
+        dsk.update(weights.dask)
+        dtype = weights.dtype
+
+    dsk.update(a.dask)
+
+    mapped = Array(dsk, name1, chunks, dtype=dtype)
+    n = mapped.sum(axis=0)
+
+    # We need to replicate normed and density options from numpy
+    if density is not None:
+        if density:
+            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
+            return n/db/n.sum(), bins
+        else:
+            return n, bins
+    else:
+        # deprecated, will be removed from Numpy 2.0
+        if normed:
+            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
+            return n/(n*db).sum(), bins
+        else:
+            return n, bins
 
 def chunks_from_arrays(arrays):
     """ Chunks tuple from nested list of arrays
@@ -1987,11 +2103,21 @@ def chunks_from_arrays(arrays):
     >>> x = np.array([[1, 2]])
     >>> chunks_from_arrays([[x, x]])
     ((1,), (2, 2))
+
+    >>> chunks_from_arrays([1, 1])
+    ((1, 1),)
     """
     result = []
     dim = 0
+
+    def shape(x):
+        try:
+            return x.shape
+        except AttributeError:
+            return (1,)
+
     while isinstance(arrays, (list, tuple)):
-        result.append(tuple(deepfirst(a).shape[dim] for a in arrays))
+        result.append(tuple(shape(deepfirst(a))[dim] for a in arrays))
         arrays = arrays[0]
         dim += 1
     return tuple(result)
@@ -2039,11 +2165,19 @@ def concatenate3(arrays):
         return arrays
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
-    result = np.empty(shape=shape, dtype=deepfirst(arrays).dtype)
+
+    def dtype(x):
+        try:
+            return x.dtype
+        except AttributeError:
+            return type(x)
+
+    result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
 
     for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
-        while arr.ndim < ndim:
-            arr = arr[None, ...]
+        if hasattr(arr, 'ndim'):
+            while arr.ndim < ndim:
+                arr = arr[None, ...]
         result[idx] = arr
 
     return result

@@ -4,13 +4,15 @@ from collections import namedtuple
 from itertools import starmap
 from timeit import default_timer
 
+from .core import Diagnostic
+
 
 # Stores execution data for each task
 TaskData = namedtuple('TaskData', ('key', 'task', 'start_time',
                                    'end_time', 'worker_id'))
 
 
-class Profiler(object):
+class Profiler(Diagnostic):
     """A profiler for dask execution at the task level.
 
     Records the following information for each task:
@@ -22,63 +24,38 @@ class Profiler(object):
 
     Examples
     --------
-    Create a profiler from a scheduler ``get`` function:
-
-    >>> from dask.threaded import get
-    >>> thread_prof = Profiler(get)
-
-    For convenience, profilers for the threaded and multiprocessing scheduler
-    have already been created:
-
-    >>> from dask.diagnostics import thread_prof, process_prof
-
-    The ``get`` method of the profiler then works like a normal scheduler:
 
     >>> from operator import add, mul
-
+    >>> from dask.threaded import get
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    >>> thread_prof.get(dsk, 'z')  # works like normal scheduler
+    >>> with Profiler() as prof:
+    ...     get(dsk, 'z')
     22
 
-    >>> thread_prof.results()  # doctest: +SKIP
+    >>> prof.results()  # doctest: +SKIP
     [('y', (add, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
      ('z', (mul, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
 
     These results can be visualized in a bokeh plot using the ``visualize``
     method. Note that this requires bokeh to be installed.
 
-    >>> thread_prof.visualize() # doctest: +SKIP
+    >>> prof.visualize() # doctest: +SKIP
     """
-    def __init__(self, get):
-        """Create a profiler
-
-        Parameters
-        ----------
-        get : callable
-            The scheduler get function to profile.
-        """
-        self._get = get
+    def __init__(self):
         self._results = {}
+        self._dsk = {}
 
-    def _start_callback(self, key, dask, state):
-        if key is not None:
-            start = default_timer()
-            self._results[key] = (key, dask[key], start)
-
-    def _end_callback(self, key, value, dask, state, id):
-        if key is not None:
-            end = default_timer()
-            self._results[key] += (end, id)
-
-    def get(self, dsk, result, **kwargs):
-        """Profiled get function.
-
-        Note that this clears the results from the last run before executing
-        the dask."""
-
+    def _start(self, dsk, state):
         self.clear()
-        return self._get(dsk, result, start_callback=self._start_callback,
-                         end_callback=self._end_callback, **kwargs)
+        self._dsk = dsk.copy()
+
+    def _pretask(self, key, dsk, state):
+        start = default_timer()
+        self._results[key] = (key, dsk[key], start)
+
+    def _posttask(self, key, value, dsk, state, id):
+        end = default_timer()
+        self._results[key] += (end, id)
 
     def results(self):
         """Returns a list containing namedtuples of:
@@ -95,8 +72,9 @@ class Profiler(object):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
-        return visualize(self.results(), **kwargs)
+        return visualize(self.results(), self._dsk, **kwargs)
 
     def clear(self):
         """Clear out old results from profiler"""
         self._results.clear()
+        self._dsk = {}

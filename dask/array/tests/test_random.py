@@ -110,3 +110,44 @@ def test_random_seed():
 
     assert (x.compute() == a.compute()).all()
     assert (y.compute() == b.compute()).all()
+
+
+def test_random_all():
+    da.random.beta(1, 2, size=5, chunks=3).compute()
+    da.random.binomial(10, 0.5, size=5, chunks=3).compute()
+    da.random.chisquare(1, size=5, chunks=3).compute()
+    da.random.exponential(1, size=5, chunks=3).compute()
+    da.random.f(1, 2, size=5, chunks=3).compute()
+    da.random.gamma(5, 1, chunks=3).compute()
+    da.random.geometric(1, size=5, chunks=3).compute()
+    da.random.gumbel(1, size=5, chunks=3).compute()
+    da.random.hypergeometric(1, 2, 3, size=5, chunks=3).compute()
+    da.random.laplace(size=5, chunks=3).compute()
+    da.random.logistic(size=5, chunks=3).compute()
+    da.random.lognormal(size=5, chunks=3).compute()
+    da.random.logseries(0.5, size=5, chunks=3).compute()
+    da.random.negative_binomial(5, 0.5, size=5, chunks=3).compute()
+    da.random.noncentral_chisquare(2, 2, size=5, chunks=3).compute()
+
+    da.random.noncentral_f(2, 2, 3, size=5, chunks=3).compute()
+    da.random.normal(2, 2, size=5, chunks=3).compute()
+    da.random.pareto(1, size=5, chunks=3).compute()
+    da.random.poisson(size=5, chunks=3).compute()
+
+    da.random.power(1, size=5, chunks=3).compute()
+    da.random.rayleigh(size=5, chunks=3).compute()
+    da.random.random_sample(size=5, chunks=3).compute()
+
+    da.random.triangular(1, 2, 3, size=5, chunks=3).compute()
+    da.random.uniform(size=5, chunks=3).compute()
+    da.random.vonmises(2, 3, size=5, chunks=3).compute()
+    da.random.wald(1, 2, size=5, chunks=3).compute()
+
+    da.random.weibull(2, size=5, chunks=3).compute()
+    da.random.zipf(2, size=5, chunks=3).compute()
+
+    da.random.standard_cauchy(size=5, chunks=3).compute()
+    da.random.standard_exponential(size=5, chunks=3).compute()
+    da.random.standard_gamma(2, size=5, chunks=3).compute()
+    da.random.standard_normal(size=5, chunks=3).compute()
+    da.random.standard_t(2, size=5, chunks=3).compute()

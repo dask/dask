@@ -17,7 +17,7 @@ from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
         from_dask_array)
 from dask.compatibility import StringIO
 
-from dask.utils import filetext, tmpfile
+from dask.utils import filetext, tmpfile, ignoring
 from dask.async import get_sync
 
 
@@ -105,8 +105,11 @@ def test_read_csv_categorize():
         assert len(f.compute().name.cat.categories) == 6
 
 
+def normalize_text(s):
+    return '\n'.join(map(str.strip, s.strip().split('\n')))
+
 def test_consistent_dtypes():
-    text = """
+    text = normalize_text("""
     name,amount
     Alice,100.5
     Bob,-200.5
@@ -114,7 +117,7 @@ def test_consistent_dtypes():
     Dennis,400
     Edith,-500
     Frank,600
-    """.strip()
+    """)
 
     with filetext(text) as fn:
         df = read_csv(fn, chunkbytes=30)
@@ -248,7 +251,7 @@ def test_from_bcolz_filename():
 
 
 def test_skipinitialspace():
-    text = """
+    text = normalize_text("""
     name, amount
     Alice,100
     Bob,-200
@@ -256,7 +259,7 @@ def test_skipinitialspace():
     Dennis,400
     Edith,-500
     Frank,600
-    """.strip()
+    """)
 
     with filetext(text) as fn:
         df = dd.read_csv(fn, skipinitialspace=True, chunkbytes=20)
@@ -266,19 +269,19 @@ def test_skipinitialspace():
 
 
 def test_consistent_dtypes():
-    text1 = """
+    text1 = normalize_text("""
     name,amount
     Alice,100
     Bob,-200
     Charlie,300
-    """.strip()
+    """)
 
-    text2 = """
+    text2 = normalize_text("""
     name,amount
     1,400
     2,-500
     Frank,600
-    """.strip()
+    """)
     try:
         with open('_foo.1.csv', 'w') as f:
             f.write(text1)
@@ -398,9 +401,84 @@ def test_from_dask_array_raises():
 
 def test_to_castra():
     pytest.importorskip('castra')
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D'],
-                       'y': [1, 2, 3, 4]})
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
     c = a.to_castra()
-    assert eq(a, c[:])
+    b = c.to_dask()
+    try:
+        tm.assert_frame_equal(df, c[:])
+        tm.assert_frame_equal(b.compute(), df)
+    finally:
+        c.drop()
+
+    c = a.to_castra(categories=['x'])
+    try:
+        assert c[:].dtypes['x'] == 'category'
+    finally:
+        c.drop()
+
+
+def test_to_hdf():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    a = dd.from_pandas(df, 2)
+
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data')
+        out = pd.read_hdf(fn, '/data')
+        tm.assert_frame_equal(df, out[:])
+
+    with tmpfile('h5') as fn:
+        a.x.to_hdf(fn, '/data')
+        out = pd.read_hdf(fn, '/data')
+        tm.assert_series_equal(df.x, out[:])
+
+
+def test_read_hdf():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data')
+        try:
+            dd.read_hdf(fn, '/data', chunksize=2)
+            assert False
+        except TypeError as e:
+            assert "format='table'" in str(e)
+
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+        a = dd.read_hdf(fn, '/data', chunksize=2)
+        assert a.npartitions == 2
+
+        tm.assert_frame_equal(a.compute(), df)
+
+        tm.assert_frame_equal(
+              dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
+              pd.read_hdf(fn, '/data', start=1, stop=3))
+
+
+def test_to_csv():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpfile('csv') as fn:
+            a.to_csv(fn)
+
+            result = pd.read_csv(fn, index_col=0)
+
+            tm.assert_frame_equal(result, df)
+
+
+def test_read_csv_with_nrows():
+    with filetext(text) as fn:
+        f = read_csv(fn, nrows=3)
+        assert list(f.columns) == ['name', 'amount']
+        assert f.npartitions == 1
+        assert eq(read_csv(fn, nrows=3), pd.read_csv(fn, nrows=3))

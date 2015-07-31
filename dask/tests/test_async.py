@@ -78,14 +78,6 @@ def test_finish_task():
                            'z': set(['w'])}}
 
 
-def test_state_to_networkx():
-    nx = pytest.importorskip("networkx")
-    dsk = {'x': 1, 'y': 1, 'a': (add, 'x', 'y'), 'b': (inc, 'x')}
-    state = start_state_from_dask(dsk)
-    g = state_to_networkx(dsk, state)
-    assert isinstance(g, nx.DiGraph)
-
-
 def test_get():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     assert get_sync(dsk, 'w') == 4

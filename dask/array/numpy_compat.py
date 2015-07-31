@@ -36,18 +36,7 @@ except TypeError:
 
         Temporary compatibility fix for a bug in numpy's version. See
         https://github.com/numpy/numpy/issues/3484 for the relevant issue."""
-
-        out_orig = out
-        if out is None:
-            out = np.asarray(x1, dtype=dtype)
-            if out is x1:
-                out = x1.copy()
-        else:
-            if out is not x1:
-                out[:] = x1
-        if dtype is not None and out.dtype != dtype:
-            out = out.astype(dtype)
-        out /= x2
-        if out_orig is None and np.isscalar(x1):
-            out = np.asscalar(out)
-        return out
+        x = np.divide(x1, x2, out)
+        if dtype is not None:
+            x = x.astype(dtype)
+        return x

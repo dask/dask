@@ -10,6 +10,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
         _parse_s3_URI, inline_singleton_lists, optimize)
 from dask.utils import filetexts, tmpfile, raises
+from dask.async import get_sync
 import dask
 import dask.bag as db
 import shutil
@@ -61,6 +62,42 @@ def test_map():
 def test_map_function_with_multiple_arguments():
     b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
     assert list(b.map(lambda x, y: x + y).compute(get=dask.get)) == [11, 22, 33]
+    assert list(b.map(list).compute()) == [[1, 10], [2, 20], [3, 30]]
+
+
+class A(object):
+    def __init__(self, a, b, c):
+        pass
+
+class B(object):
+    def __init__(self, a):
+        pass
+
+def test_map_with_constructors():
+    assert db.from_sequence([[1, 2, 3]]).map(A).compute()
+    assert db.from_sequence([1, 2, 3]).map(B).compute()
+    assert db.from_sequence([[1, 2, 3]]).map(B).compute()
+
+    failed = False
+    try:
+        db.from_sequence([[1,]]).map(A).compute()
+    except TypeError:
+        failed = True
+    assert failed
+
+
+def test_map_with_builtins():
+    b = db.from_sequence(range(3))
+    assert ' '.join(b.map(str)) == '0 1 2'
+    assert b.map(str).map(tuple).compute() == [('0',), ('1',), ('2',)]
+    assert b.map(str).map(tuple).map(any).compute() == [True, True, True]
+
+    b2 = b.map(lambda n: [(n, n+1), (2*(n-1), -n)])
+    assert b2.map(dict).compute() == [{0: 1, -2: 0}, {1: 2, 0: -1}, {2: -2}]
+    assert b.map(lambda n: (n, n+1)).map(pow).compute() == [0, 1, 8]
+    assert b.map(bool).compute() == [False, True, True]
+    assert db.from_sequence([(1, 'real'), ('1', 'real')]).map(hasattr).compute() == \
+        [True, False]
 
 
 def test_filter():
@@ -262,6 +299,31 @@ def test_from_filenames_bz2():
                  (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
 
 
+def test_from_filenames_large():
+    with tmpfile() as fn:
+        with open(fn, 'wb') as f:
+            f.write(('Hello, world!' + os.linesep).encode() * 100)
+        b = db.from_filenames(fn, chunkbytes=100)
+        c = db.from_filenames(fn)
+        assert len(b.dask) > 5
+        assert list(map(str, b)) == list(map(str, c))
+
+        d = db.from_filenames([fn], chunkbytes=100)
+        assert list(b) == list(d)
+
+
+def test_from_filenames_large_gzip():
+    with tmpfile('gz') as fn:
+        f = gzip.open(fn, 'wb')
+        f.write(b'Hello, world!\n' * 100)
+        f.close()
+
+        b = db.from_filenames(fn, chunkbytes=100)
+        c = db.from_filenames(fn)
+        assert len(b.dask) > 5
+        assert list(b) == [s.decode() for s in c]
+
+
 @pytest.mark.slow
 def test_from_s3():
     # note we don't test connection modes with aws_access_key and
@@ -379,6 +441,13 @@ def test_concat():
 
     b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
     assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])
+
+
+def test_concat_after_map():
+    a = db.from_sequence([1, 2])
+    b = db.from_sequence([4, 5])
+    result = db.concat([a.map(inc), b])
+    assert list(result) == [2, 3, 4, 5]
 
 
 def test_args():
@@ -520,3 +589,22 @@ def test_ensure_compute_output_is_concrete():
     b = db.from_sequence([1, 2, 3])
     result = b.map(lambda x: x + 1).compute()
     assert not isinstance(result, Iterator)
+
+
+class BagOfDicts(db.Bag):
+    def get(self, key, default=None):
+        return self.map(lambda d: d.get(key, default))
+
+    def set(self, key, value):
+        def setter(d):
+            d[key] = value
+            return d
+        return self.map(setter)
+
+def test_bag_class_extend():
+    dictbag = BagOfDicts(*db.from_sequence([{'a': {'b': 'c'}}])._args)
+    assert dictbag.get('a').get('b').compute()[0] == 'c'
+    assert dictbag.get('a').set('d', 'EXTENSIBILITY!!!').compute()[0] == \
+        {'b': 'c', 'd': 'EXTENSIBILITY!!!'}
+    assert isinstance(dictbag.get('a').get('b'), BagOfDicts)
+

@@ -10,7 +10,8 @@ from threading import Thread, Lock, Event
 from multiprocessing.pool import ThreadPool
 from contextlib import contextmanager
 from datetime import datetime
-from time import time, sleep
+from time import time
+from collections import defaultdict
 
 try:
     import cPickle as pickle
@@ -102,7 +103,7 @@ class Worker(object):
         if port_to_workers is None:
             port_to_workers = self.to_workers.bind_to_random_port('tcp://' + bind_to_workers)
         else:
-            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers, port))
+            self.to_workers.bind('tcp://%s:%d' % (bind_to_workers, port_to_workers))
         self.address = ('tcp://%s:%s' % (self.hostname, port_to_workers)).encode()
 
         self.dealers = dict()
@@ -110,18 +111,21 @@ class Worker(object):
         self.lock = Lock()
 
         self.queues = dict()
+        self.queues_by_worker = defaultdict(lambda: defaultdict(set))
+
+        self.pid = os.getpid()
 
         self.to_scheduler = self.context.socket(zmq.DEALER)
 
         self.to_scheduler.setsockopt(zmq.IDENTITY, self.address)
         self.to_scheduler.connect(scheduler)
-        self.send_to_scheduler({'function': 'register'}, {'pid': os.getpid()})
 
         self.scheduler_functions = {'status': self.status_to_scheduler,
                                     'compute': self.compute,
                                     'getitem': self.getitem_scheduler,
                                     'delitem': self.delitem,
                                     'setitem': self.setitem,
+                                    'worker-death': self.worker_death,
                                     'close': self.close_from_scheduler}
 
         self.worker_functions = {'getitem': self.getitem_worker,
@@ -186,10 +190,18 @@ class Worker(object):
             loads = header.get('loads', pickle.loads)
             payload = loads(payload)
             log(self.address, 'Getitem ack', payload)
-            assert header['status'] == 'OK'
+            if header['status'] == 'Bad key':
+                msg = {'status': 'failed',
+                       'key': payload['key'],
+                       'worker': header['address']}
 
-            self.data[payload['key']] = payload['value']
-            self.queues[payload['queue']].put(payload['key'])
+            elif header['status'] == 'OK':
+                self.data[payload['key']] = payload['value']
+                msg = {'status': 'success',
+                       'key': payload['key'],
+                       'worker': header['address']}
+
+            self.queues[payload['queue']].put(msg)
 
     def getitem_scheduler(self, header, payload):
         """ Send local data to scheduler
@@ -382,7 +394,7 @@ class Worker(object):
         self._listen_scheduler_thread.join()
         if self.heartbeat:
             self._heartbeat_thread.join()
-        log('Unblocked')
+        log(self.address, 'Unblocked')
 
     def collect(self, locations):
         """ Collect data from peers
@@ -427,16 +439,26 @@ class Worker(object):
         qkey = str(uuid.uuid1())
         queue = Queue()
         self.queues[qkey] = queue
+        locations = locations.copy()  # don't mutate global locations
 
         # Send out requests for data
         log(self.address, 'Collect data from peers', locations)
         start = time()
         counter = 0
         with logerrors():
-            for key, locs in locations.items():
+            for key, locs in list(locations.items()):
                 if key in self.data:  # already have this locally
+                    locations.pop(key)
                     continue
-                worker = random.choice(tuple(locs))  # randomly select one peer
+                try:
+                    worker = random.choice(tuple(locs))  # randomly select one peer
+                except IndexError:
+                    raise ValueError("%s could not be collected from any "
+                                     "locations." % (key))
+
+                # track keys and where they are comming from
+                self.queues_by_worker[worker][qkey].add(key)
+
                 header = {'jobid': key,
                           'function': 'getitem'}
                 payload = {'function': 'getitem',
@@ -445,10 +467,20 @@ class Worker(object):
                 self.send_to_worker(worker, header, payload)
                 counter += 1
 
-            for i in range(counter):
-                queue.get()
+            msgs = [queue.get() for i in range(counter)]
+            for m in msgs:
+                if m['status'] == 'failed':
+                    locations[m['key']].remove(m['worker'])
+                    log(self.address, 'Failed to get key: ', m['key'],
+                        ' from worker: ', m['worker'])
+                else:
+                    locations.pop(m['key'])
 
             del self.queues[qkey]
+            if locations != {}:
+                log(self.address, 'Retrying collect with keys and locations',
+                    locations)
+                self.collect(locations)
             log(self.address, 'Collect finishes', time() - start, 'seconds')
 
     def compute(self, header, payload):
@@ -530,13 +562,35 @@ class Worker(object):
     def __del__(self):
         self.close()
 
+    def __repr__(self):
+        s = '<dask.distributed.Worker address=%s, scheduler=%s>'
+        return s % (self.address.decode('utf-8')[6:],
+                    self.scheduler.decode('utf-8')[6:])
+
     def heart(self, pulse=5):
         """Send a message to scheduler at a given interval"""
         while self.status != 'closed':
             header = {'function': 'heartbeat'}
-            payload = {}
+            payload = {'pid': self.pid}
             self.send_to_scheduler(header, payload)
             self._heartbeat_thread.event.wait(pulse)
+
+    def worker_death(self, header, payload):
+        """
+        A worker died, check no queues are blocking waiting for data from the
+        worker.
+        """
+        with logerrors():
+            loads = header.get('loads', pickle.loads)
+            payload = loads(payload)
+            removed_workers = payload['removed']
+            for w in removed_workers:
+                for queue, keys in self.queues_by_worker[w].items():
+                    for k in keys:
+                        msg = {'status': 'failed',
+                               'key': k,
+                               'worker': w}
+                        self.queues[queue].put(msg)
 
 
 def status():

@@ -13,13 +13,14 @@ from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
+from dask.utils import takes_multiple_arguments
 
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
                    remove, pluck, groupby, topk)
 import toolz
-from ..utils import tmpfile, ignoring
+from ..utils import tmpfile, ignoring, file_size, textblock
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
@@ -28,7 +29,7 @@ from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
-        unquote)
+        unquote, StringIO)
 from ..context import _globals
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -246,7 +247,7 @@ class Bag(object):
             func = partial(apply, func)
         dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     @property
     def _args(self):
@@ -273,7 +274,7 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def remove(self, predicate):
         """ Remove elements in collection that match predicate
@@ -289,7 +290,7 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (reify, (remove, predicate, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def map_partitions(self, func):
         """ Apply function to every partition within collection
@@ -302,7 +303,7 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (func, (self.name, i)))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
@@ -323,7 +324,7 @@ class Bag(object):
         else:
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
                        for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     @classmethod
     def from_sequence(cls, *args, **kwargs):
@@ -379,7 +380,7 @@ class Bag(object):
                         for i in range(self.npartitions))
         dsk2 = {(b, 0): (dictitems,
                             (merge_with, sum, list(sorted(dsk.keys()))))}
-        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
 
     def topk(self, k, key=None):
@@ -405,7 +406,7 @@ class Bag(object):
         dsk = dict(((a, i), (list, (func, k, (self.name, i))))
                         for i in range(self.npartitions))
         dsk2 = {(b, 0): (list, (func, k, (toolz.concat, list(dsk.keys()))))}
-        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
     def distinct(self):
         """ Distinct elements of collection
@@ -421,7 +422,7 @@ class Bag(object):
         b = next(names)
         dsk2 = {(b, 0): (apply, set.union, (list2, list(dsk.keys())))}
 
-        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
     def reduction(self, perpartition, aggregate):
         """ Reduce collection with reduction operators
@@ -523,7 +524,7 @@ class Bag(object):
         dsk = dict(((name, i), (list, (join, on_other, other,
                                        on_self, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def product(self, other):
         """ Cartesian product between two bags """
@@ -534,7 +535,7 @@ class Bag(object):
                    (list, (itertools.product, (self.name, i),
                                               (other.name, j))))
                    for i in range(n) for j in range(m))
-        return Bag(merge(self.dask, other.dask, dsk), name, n*m)
+        return type(self)(merge(self.dask, other.dask, dsk), name, n*m)
 
     def foldby(self, key, binop, initial=no_default, combine=None,
                combine_initial=no_default):
@@ -633,7 +634,7 @@ class Bag(object):
                               (merge_with,
                                 (partial, reduce, combine),
                                 list(dsk.keys())))}
-        return Bag(merge(self.dask, dsk, dsk2), b, 1)
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
     def take(self, k, compute=True):
         """ Take the first k elements
@@ -678,7 +679,7 @@ class Bag(object):
         name = next(names)
         dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                         for i in range(self.npartitions))
-        return Bag(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def __iter__(self):
         return iter(self.compute())
@@ -726,7 +727,7 @@ class Bag(object):
                      (collect, grouper, i, p, barrier_token))
                     for i in range(npartitions))
 
-        return Bag(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
+        return type(self)(merge(self.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
 
     def to_dataframe(self, columns=None):
         """ Convert Bag to dask.dataframe
@@ -793,7 +794,7 @@ def collect(grouper, group, p, barrier_token):
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
-def from_filenames(filenames):
+def from_filenames(filenames, chunkbytes=None):
     """ Create dask by loading in lines from many files
 
     Provide list of filenames
@@ -803,6 +804,11 @@ def from_filenames(filenames):
     Or a globstring
 
     >>> b = from_filenames('myfiles.*.txt')  # doctest: +SKIP
+
+    Parallelize a large files by providing the number of uncompressed bytes to
+    load into each partition.
+
+    >>> b = from_filenames('largefile.txt', chunkbytes=1e7)  # doctest: +SKIP
 
     See also:
         from_sequence: A more generic bag creation function
@@ -815,12 +821,30 @@ def from_filenames(filenames):
 
     full_filenames = [os.path.abspath(f) for f in filenames]
 
-    extension = os.path.splitext(filenames[0])[1].strip('.')
-    myopen = opens.get(extension, open)
+    name = 'from-filename' + next(tokens)
 
-    d = dict((('load', i), (list, (myopen, fn)))
-             for i, fn in enumerate(full_filenames))
-    return Bag(d, 'load', len(d))
+    if chunkbytes:
+        chunkbytes = int(chunkbytes)
+        taskss = [_chunk_read_file(fn, chunkbytes) for fn in full_filenames]
+        d = dict(((name, i), task)
+                 for i, task in enumerate(toolz.concat(taskss)))
+    else:
+        extension = os.path.splitext(filenames[0])[1].strip('.')
+        myopen = opens.get(extension, open)
+
+        d = dict(((name, i), (list, (myopen, fn)))
+                 for i, fn in enumerate(full_filenames))
+
+    return Bag(d, name, len(d))
+
+
+def _chunk_read_file(filename, chunkbytes):
+    extension = os.path.splitext(filename)[1].strip('.')
+    compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
+
+    return [(list, (StringIO, (bytes.decode,
+                    (textblock, filename, i, i + chunkbytes, compression))))
+             for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
 def write(data, filename):
@@ -1058,39 +1082,6 @@ def dictitems(d):
     return list(d.items())
 
 
-def takes_multiple_arguments(func):
-    """
-
-    >>> def f(x, y): pass
-    >>> takes_multiple_arguments(f)
-    True
-
-    >>> def f(x): pass
-    >>> takes_multiple_arguments(f)
-    False
-
-    >>> def f(x, y=None): pass
-    >>> takes_multiple_arguments(f)
-    False
-
-    >>> def f(*args): pass
-    >>> takes_multiple_arguments(f)
-    True
-
-    >>> takes_multiple_arguments(map)  # default to False
-    False
-    """
-    try:
-        spec = inspect.getargspec(func)
-    except:
-        return False
-    if spec.varargs:
-        return True
-    if spec.defaults is None:
-        return len(spec.args) != 1
-    return len(spec.args) - len(spec.defaults) > 1
-
-
 def concat(bags):
     """ Concatenate many bags together, unioning all elements
 
@@ -1105,7 +1096,7 @@ def concat(bags):
     name = next(names)
     counter = itertools.count(0)
     dsk = dict(((name, next(counter)), key) for bag in bags
-                                            for key in sorted(bag.dask))
+                                            for key in sorted(bag._keys()))
     return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
 
 

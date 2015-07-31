@@ -33,6 +33,14 @@ def shard_df_on_index(df, divisions):
     >>> shards[2]
         a  b
     4  40  1
+
+    >>> list(shard_df_on_index(df, []))[0]  # empty case
+        a  b
+    0   0  5
+    1  10  4
+    2  20  3
+    3  30  2
+    4  40  1
     """
     if isinstance(divisions, Iterator):
         divisions = list(divisions)
@@ -41,7 +49,10 @@ def shard_df_on_index(df, divisions):
     else:
         divisions = np.array(divisions)
         df = df.sort_index()
-        indices = df.index.searchsorted(divisions)
+        index = df.index
+        if iscategorical(index.dtype):
+            index = index.as_ordered()
+        indices = index.searchsorted(divisions)
         yield df.iloc[:indices[0]]
         for i in range(len(indices) - 1):
             yield df.iloc[indices[i]: indices[i+1]]
@@ -81,22 +92,34 @@ def _categorize(categories, df):
     0  1  A
     1  2  c
     2  3  A
+
+    >>> _categorize(categories, df.y)
+    0    A
+    1    c
+    2    A
+    dtype: category
+    Categories (3, object): [A, B, c]
     """
+    if '.index' in categories:
+        index = pd.CategoricalIndex(
+                  pd.Categorical.from_codes(df.index.values, categories['.index']))
+    else:
+        index = df.index
     if isinstance(df, pd.Series):
         if df.name in categories:
             cat = pd.Categorical.from_codes(df.values, categories[df.name])
-            return pd.Series(cat, index=df.index)
+            return pd.Series(cat, index=index)
         else:
             return df
 
     else:
         return pd.DataFrame(
-                dict((col, pd.Categorical.from_codes(df[col], categories[col])
+                dict((col, pd.Categorical.from_codes(df[col].values, categories[col])
                            if col in categories
-                           else df[col])
+                           else df[col].values)
                     for col in df.columns),
                 columns=df.columns,
-                index=df.index)
+                index=index)
 
 
 def strip_categories(df):
@@ -109,14 +132,15 @@ def strip_categories(df):
     0  1  0
     1  2  1
     2  3  0
-
     """
-    return pd.DataFrame(dict((col, df[col].cat.codes
+    return pd.DataFrame(dict((col, df[col].cat.codes.values
                                    if iscategorical(df.dtypes[col])
-                                   else df[col])
+                                   else df[col].values)
                               for col in df.columns),
                         columns=df.columns,
-                        index=df.index)
+                        index=df.index.codes
+                              if iscategorical(df.index.dtype)
+                              else df.index)
 
 def iscategorical(dt):
     return isinstance(dt, pd.core.common.CategoricalDtype)
@@ -131,7 +155,8 @@ def get_categories(df):
     >>> get_categories(df)
     {'y': Index([u'A', u'B'], dtype='object')}
     """
-    return dict((col, df[col].cat.categories) for col in df.columns
-                if iscategorical(df.dtypes[col]))
-
-
+    result = dict((col, df[col].cat.categories) for col in df.columns
+                  if iscategorical(df.dtypes[col]))
+    if iscategorical(df.index.dtype):
+        result['.index'] = df.index.categories
+    return result
