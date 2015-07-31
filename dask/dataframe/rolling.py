@@ -26,8 +26,9 @@ def wrap_rolling(func):
             raise TypeError('Window must be an integer')
         if window < 0:
             raise ValueError('Window must be a positive integer')
-        if 'freq' in kwargs:
-            raise NotImplementedError('"freq" kwarg for rolling functions')
+        if 'freq' in kwargs or 'how' in kwargs:
+            raise NotImplementedError('Resampling before rolling computations '
+                                      'not supported')
         old_name = arg._name
         new_name = 'rolling' + next(tokens)
         f = partial(func, **kwargs)

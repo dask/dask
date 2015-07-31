@@ -4,6 +4,7 @@ import numpy as np
 
 import dask.dataframe as dd
 from dask.async import get_sync
+from dask.utils import raises
 
 
 def eq(p, d):
@@ -32,7 +33,6 @@ def rolling_tests(p, d):
     eq(pd.rolling_sum(p, 0), dd.rolling_sum(d, 0))
     eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
     # Test with kwargs
-    eq(pd.rolling_sum(p, 3, how='min'), dd.rolling_sum(d, 3, how='min'))
     eq(pd.rolling_sum(p, 3, min_periods=3), dd.rolling_sum(d, 3, min_periods=3))
 
 
@@ -47,3 +47,13 @@ def test_rolling_dataframe():
                        'b': np.random.randn(25).cumsum()})
     ddf = dd.from_pandas(df, 3)
     rolling_tests(df, ddf)
+
+
+def test_raises():
+    df = pd.DataFrame({'a': np.random.randn(25).cumsum(),
+                       'b': np.random.randn(25).cumsum()})
+    ddf = dd.from_pandas(df, 3)
+    assert raises(TypeError, lambda: dd.rolling_mean(ddf, 1.5))
+    assert raises(ValueError, lambda: dd.rolling_mean(ddf, -1))
+    assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, freq=2))
+    assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, how='min'))
