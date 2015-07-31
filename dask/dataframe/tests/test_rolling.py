@@ -28,6 +28,9 @@ def rolling_tests(p, d):
     mad = lambda x: np.fabs(x - x.mean()).mean()
     eq(pd.rolling_apply(p, 3, mad), dd.rolling_apply(d, 3, mad))
     eq(pd.rolling_window(p, 3, 'boxcar'), dd.rolling_window(d, 3, 'boxcar'))
+    # Test with edge-case window sizes
+    eq(pd.rolling_sum(p, 0), dd.rolling_sum(d, 0))
+    eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
     # Test with kwargs
     eq(pd.rolling_sum(p, 3, how='min'), dd.rolling_sum(d, 3, how='min'))
     eq(pd.rolling_sum(p, 3, min_periods=3), dd.rolling_sum(d, 3, min_periods=3))

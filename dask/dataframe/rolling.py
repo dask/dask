@@ -9,16 +9,25 @@ from .core import tokens
 def rolling_chunk(func, part1, part2, window, *args):
     if part1.shape[0] < window:
         raise NotImplementedError("Window larger than partition size")
-    extra = window - 1
-    combined = pd.concat([part1.iloc[-extra:], part2])
-    applied = func(combined, window, *args)
-    return applied.iloc[extra:]
+    if window > 1:
+        extra = window - 1
+        combined = pd.concat([part1.iloc[-extra:], part2])
+        applied = func(combined, window, *args)
+        return applied.iloc[extra:]
+    else:
+        return func(part2, window, *args)
 
 
 def wrap_rolling(func):
     """Create a chunked version of a pandas.rolling_* function"""
     @wraps(func)
     def rolling(arg, window, *args, **kwargs):
+        if not isinstance(window, int):
+            raise TypeError('Window must be an integer')
+        if window < 0:
+            raise ValueError('Window must be a positive integer')
+        if 'freq' in kwargs:
+            raise NotImplementedError('"freq" kwarg for rolling functions')
         old_name = arg._name
         new_name = 'rolling' + next(tokens)
         f = partial(func, **kwargs)
