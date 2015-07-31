@@ -13,6 +13,7 @@ from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
+from dask.utils import takes_multiple_arguments
 
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
@@ -1079,39 +1080,6 @@ def dictitems(d):
     [('x', 1)]
     """
     return list(d.items())
-
-
-def takes_multiple_arguments(func):
-    """
-
-    >>> def f(x, y): pass
-    >>> takes_multiple_arguments(f)
-    True
-
-    >>> def f(x): pass
-    >>> takes_multiple_arguments(f)
-    False
-
-    >>> def f(x, y=None): pass
-    >>> takes_multiple_arguments(f)
-    False
-
-    >>> def f(*args): pass
-    >>> takes_multiple_arguments(f)
-    True
-
-    >>> takes_multiple_arguments(map)  # default to False
-    False
-    """
-    try:
-        spec = inspect.getargspec(func)
-    except:
-        return False
-    if spec.varargs:
-        return True
-    if spec.defaults is None:
-        return len(spec.args) != 1
-    return len(spec.args) - len(spec.defaults) > 1
 
 
 def concat(bags):
