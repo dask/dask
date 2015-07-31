@@ -434,11 +434,12 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         result_flat = set([result])
     results = set(result_flat)
 
+    for f in start_cbs:
+        f(dsk)
+
     keyorder = order(dsk)
 
     state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
-    for f in start_cbs:
-        f(dsk, state)
 
     if rerun_exceptions_locally is None:
         rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
