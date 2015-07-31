@@ -6,6 +6,7 @@ import itertools
 import traceback
 import sys
 import random
+from functools import partial
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 from datetime import datetime
@@ -312,20 +313,19 @@ class Scheduler(object):
                                             pickle.dumps(header),
                                             dumps(result)])
 
-    def trigger_task(self, dsk, key, queue):
+    def trigger_task(self, key, task, deps, queue):
         """ Send a single task to the next available worker
 
         See also:
             Scheduler.schedule
             Scheduler.worker_finished_task
         """
-        deps = get_dependencies(dsk, key)
         worker = self.available_workers.get()
         locations = dict((dep, self.who_has[dep]) for dep in deps)
 
         header = {'function': 'compute', 'jobid': key,
                   'dumps': dill.dumps, 'loads': dill.loads}
-        payload = {'key': key, 'task': dsk[key], 'locations': locations,
+        payload = {'key': key, 'task': task, 'locations': locations,
                    'queue': queue}
         self.send_to_worker(worker, header, payload)
 
@@ -636,7 +636,8 @@ class Scheduler(object):
                 dag_state['ready-set'].remove(key)
                 dag_state['running'].add(key)
 
-                self.trigger_task(dsk, key, qkey)  # Fire
+                self.trigger_task(key, dsk[key],
+                        dag_state['dependencies'][key], qkey)  # Fire
 
             try:
                 worker = self.available_workers.get(timeout=20)
@@ -649,6 +650,7 @@ class Scheduler(object):
                 fire_task()
 
             # Main loop, wait on tasks to finish, insert new ones
+            release_data = partial(self._release_data, protected=preexisting_data)
             while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
                 payload = event_queue.get()
 
@@ -657,7 +659,7 @@ class Scheduler(object):
 
                 key = payload['key']
                 finish_task(dsk, key, dag_state, results, sortkey,
-                            release_data=self._release_data,
+                            release_data=release_data,
                             delete=key not in preexisting_data)
 
                 while dag_state['ready'] and self.available_workers.qsize() > 0:
@@ -700,7 +702,7 @@ class Scheduler(object):
             payload2 = {'keys': keys, 'result': result}
             self.send_to_client(address, header2, payload2)
 
-    def _release_data(self, key, state, delete=True):
+    def _release_data(self, key, state, delete=True, protected=()):
         """ Remove data from temporary storage during scheduling run
 
         See Also
@@ -713,7 +715,7 @@ class Scheduler(object):
 
         state['released'].add(key)
 
-        if delete:
+        if delete and key not in protected:
             self.release_key(key)
 
     def _set_collection(self, header, payload):
