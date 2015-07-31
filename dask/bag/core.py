@@ -1096,7 +1096,7 @@ def concat(bags):
     name = next(names)
     counter = itertools.count(0)
     dsk = dict(((name, next(counter)), key) for bag in bags
-                                            for key in sorted(bag.dask))
+                                            for key in sorted(bag._keys()))
     return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
 
 
