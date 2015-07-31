@@ -4,23 +4,17 @@ import bisect
 import operator
 
 from itertools import count
-from operator import methodcaller
+from operator import methodcaller, getitem, setitem
 from pprint import pformat
 from math import sqrt
 from functools import wraps
-from math import sqrt
-from functools import wraps
-import bisect
-from toolz import merge, partial, first, partition
-from operator import getitem, setitem
 from datetime import datetime
 
 from toolz import merge, partial, first, partition, unique
 
 import pandas as pd
-
 import numpy as np
-import operator
+
 try:
     from chest import Chest as Cache
 except ImportError:
