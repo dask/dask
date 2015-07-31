@@ -850,6 +850,9 @@ class Array(object):
                for k in key):
             raise IndexError("vindex does not support multi-dimensional keys\n"
                     "Got: %s" % str(key))
+        if len(set(len(k) for k in key if isinstance(k, (list, np.ndarray)))) != 1:
+            raise IndexError("All indexers must have the same length, got\n"
+                    "\t%s" % str(key))
         key = key + (slice(None, None),) * (self.ndim - len(key))
         key = [i if isinstance(i, list) else
                i.tolist() if isinstance(i, np.ndarray) else
