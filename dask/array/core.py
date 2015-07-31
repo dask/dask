@@ -19,8 +19,8 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
-        IndexCallable)
+from ..base import DaskBase
+from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer, IndexCallable
 from ..compatibility import unicode, long
 from .. import threaded, core
 from ..context import _globals
@@ -599,7 +599,7 @@ def blockdims_from_blockshape(shape, chunks):
                               for d, bd in zip(shape, chunks))
 
 
-class Array(object):
+class Array(DaskBase):
     """ Parallel Array
 
     Parameters
@@ -616,6 +616,7 @@ class Array(object):
     """
 
     __slots__ = 'dask', 'name', '_chunks', '_dtype'
+    _optimize = optimize
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
@@ -651,13 +652,6 @@ class Array(object):
 
     def __len__(self):
         return sum(self.chunks[0])
-
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
     @property
     @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].chunks))

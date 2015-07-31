@@ -31,6 +31,7 @@ from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
 from ..context import _globals
+from ..base import DaskBase
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
@@ -182,7 +183,8 @@ def to_textfiles(b, path, name_function=str):
     return Bag(merge(b.dask, dsk), name, b.npartitions)
 
 
-class Item(object):
+class Item(DaskBase):
+    _optimize = optimize
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
@@ -198,7 +200,7 @@ class Item(object):
     __int__ = __float__ = __complex__ = __bool__ = compute
 
 
-class Bag(object):
+class Bag(DaskBase):
     """ Parallel collection of Python objects
 
     Example
@@ -228,6 +230,7 @@ class Bag(object):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
+    _optimize = optimize
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name
@@ -252,13 +255,6 @@ class Bag(object):
     @property
     def _args(self):
         return (self.dask, self.name, self.npartitions)
-
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function

@@ -23,6 +23,7 @@ from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..context import _globals
+from ..base import DaskBase
 
 
 def _concat(args):
@@ -61,15 +62,17 @@ def compute(*args, **kwargs):
 tokens = ('-%d' % i for i in count(1))
 
 
-class Scalar(object):
+class Scalar(DaskBase):
     """ A Dask-thing to represent a scalar
 
     TODO: Clean up this abstraction
     """
     def __init__(self, dsk, _name):
+        from .optimize import optimize
         self.dask = dsk
         self._name = _name
         self.divisions = [None, None]
+        self._optimize = optimize
 
     @property
     def _args(self):
@@ -81,17 +84,13 @@ class Scalar(object):
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
 
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        from .optimize import optimize
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
-
-class _Frame(object):
+class _Frame(DaskBase):
     """ Superclass for DataFrame and Series """
+    def __init__(self):
+        from .optimize import optimize
+        self._optimize = optimize
+
     @property
     def npartitions(self):
         return len(self.divisions) - 1
@@ -101,14 +100,6 @@ class _Frame(object):
 
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
-
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        from .optimize import optimize
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
     @property
     def index(self):
@@ -395,6 +386,7 @@ class Series(_Frame):
         self.divisions = tuple(divisions)
         self.dt = DatetimeAccessor(self)
         self.str = StringAccessor(self)
+        super(Series, self).__init__()
 
     @property
     def _args(self):
@@ -565,6 +557,7 @@ class DataFrame(_Frame):
         self._name = name
         self.columns = tuple(columns)
         self.divisions = tuple(divisions)
+        super(DataFrame, self).__init__()
 
     @property
     def _args(self):
