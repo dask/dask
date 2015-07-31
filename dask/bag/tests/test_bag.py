@@ -91,7 +91,8 @@ def test_map_with_builtins():
     assert ' '.join(b.map(str)) == '0 1 2'
     assert b.map(str).map(tuple).compute() == [('0',), ('1',), ('2',)]
     assert b.map(str).map(tuple).map(any).compute() == [True, True, True]
-    b2 = db.from_sequence(map(lambda n: [(n, n+1), (2*(n-1), -n)], b))
+
+    b2 = b.map(lambda n: [(n, n+1), (2*(n-1), -n)])
     assert b2.map(dict).compute() == [{0: 1, -2: 0}, {1: 2, 0: -1}, {2: -2}]
     assert b.map(lambda n: (n, n+1)).map(pow).compute() == [0, 1, 8]
     assert b.map(bool).compute() == [False, True, True]

@@ -267,20 +267,20 @@ def file_size(fn, compression=None):
     return result
 
 
-ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr, 
-    classmethod, complex, dict, dir, enumerate, eval, float, format, frozenset, 
-    hash, hex, id, int, iter, len, list, max, min, next, oct, open, ord, range, 
-    repr, reversed, round, set, slice, sorted, staticmethod, str, sum, tuple, 
+ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr,
+    classmethod, complex, dict, dir, enumerate, eval, float, format, frozenset,
+    hash, hex, id, int, iter, len, list, max, min, next, oct, open, ord, range,
+    repr, reversed, round, set, slice, sorted, staticmethod, str, sum, tuple,
     type, vars, zip])
 if sys.version_info[0] == 3: # Python 3
     ONE_ARITY_BUILTINS |= set([ascii])
 if sys.version_info[:2] != (2, 6):
     ONE_ARITY_BUILTINS |= set([memoryview])
-MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr, 
+MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr,
     isinstance, issubclass, map, pow, setattr])
 
 def takes_multiple_arguments(func):
-    """
+    """ Does this function take multiple arguments?
 
     >>> def f(x, y): pass
     >>> takes_multiple_arguments(f)
@@ -325,4 +325,3 @@ def takes_multiple_arguments(func):
     if spec.defaults is None:
         return len(spec.args) - is_constructor != 1
     return len(spec.args) - len(spec.defaults) - is_constructor > 1
-
