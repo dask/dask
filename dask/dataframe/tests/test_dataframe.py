@@ -347,8 +347,55 @@ def test_loc_with_series():
     assert eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0])
 
 
-def test_iloc_raises():
-    assert raises(AttributeError, lambda: d.iloc[:5])
+def test_iloc_element_slice():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                       'y': list('abdabdbdab')},
+                  index=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+    a = dd.from_pandas(df, 2)
+    b = a.repartition(divisions=[10, 30, 50, 100])
+
+    # iloc_element
+    for i in range(len(df)):
+        assert(eq(df.iloc[i], a.iloc[i]))
+        assert(eq(df.iloc[i], b.iloc[i]))
+
+        # iloc slice
+        exp = df.iloc[i:]
+        tm.assert_frame_equal(exp, a.iloc[i:].compute())
+        tm.assert_frame_equal(exp, b.iloc[i:].compute())
+
+        exp = df.iloc[:i]
+        tm.assert_frame_equal(exp, a.iloc[:i].compute())
+        tm.assert_frame_equal(exp, b.iloc[:i].compute())
+
+        exp = df.iloc[-i:]
+        tm.assert_frame_equal(exp, a.iloc[-i:].compute())
+        tm.assert_frame_equal(exp, b.iloc[-i:].compute())
+
+        exp = df.iloc[:-i]
+        tm.assert_frame_equal(exp, a.iloc[:-i].compute())
+        tm.assert_frame_equal(exp, b.iloc[:-i].compute())
+
+    for span in [1, 2, 4, 5, 7, 10]:
+        for i in range(len(df) - span):
+            exp = df.iloc[i:i+span]
+            tm.assert_frame_equal(exp, a.iloc[i:i+span].compute())
+            tm.assert_frame_equal(exp, b.iloc[i:i+span].compute())
+
+    for i in range(6, len(df)):
+        exp = df.iloc[-i:-i+5]
+        tm.assert_frame_equal(exp, a.iloc[-i:-i+5].compute())
+        tm.assert_frame_equal(exp, b.iloc[-i:-i+5].compute())
+
+    for i in range(len(df) - 3):
+        exp = df.iloc[i:-2]
+        tm.assert_frame_equal(exp, a.iloc[i:-2].compute())
+        tm.assert_frame_equal(exp, b.iloc[i:-2].compute())
+
+    for i in range(4, len(df)):
+        exp = df.iloc[-8:i]
+        tm.assert_frame_equal(exp, a.iloc[-8:i].compute())
+        tm.assert_frame_equal(exp, b.iloc[-8:i].compute())
 
 
 def test_assign():
