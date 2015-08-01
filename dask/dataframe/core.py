@@ -809,6 +809,99 @@ class DataFrame(_Frame):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
+    @wraps(pd.DataFrame._get_numeric_data)
+    def _get_numeric_data(self, how='any', subset=None):
+        return self.map_partitions(pd.DataFrame._get_numeric_data)
+
+    def _validate_axis(self, axis=0):
+        if axis not in (0, 1, 'index', 'columns', None):
+            raise ValueError('No axis named {0}'.format(axis))
+        # convert to numeric axis
+        return {None: 0, 'index': 0, 'columns': 1}.get(axis, axis)
+
+    @wraps(pd.DataFrame.sum)
+    def sum(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.sum(axis=1)
+            return self.map_partitions(f, None)
+        else:
+            chunk = lambda df: df.sum()
+            agg = lambda df: df.groupby(level=0).sum()
+            return aca([self], chunk=chunk, aggregate=agg, columns=None)
+
+    @wraps(pd.DataFrame.max)
+    def max(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.max(axis=1)
+            return self.map_partitions(f, None)
+        else:
+            chunk = lambda df: df.max()
+            agg = lambda df: df.groupby(level=0).max()
+            return aca([self], chunk=chunk, aggregate=agg, columns=None)
+
+    @wraps(pd.DataFrame.min)
+    def min(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.min(axis=1)
+            return self.map_partitions(f, None)
+        else:
+            chunk = lambda df: df.min()
+            agg = lambda df: df.groupby(level=0).min()
+            return aca([self], chunk=chunk, aggregate=agg, columns=None)
+
+    @wraps(pd.DataFrame.count)
+    def count(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.count(axis=1)
+            return self.map_partitions(f, None)
+        else:
+            chunk = lambda df: df.count()
+            agg = lambda df: df.groupby(level=0).sum()
+            return aca([self], chunk=chunk, aggregate=agg, columns=None)
+
+    @wraps(pd.DataFrame.mean)
+    def mean(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.mean(axis=1)
+            return self.map_partitions(f, None)
+        else:
+            num = self._get_numeric_data()
+            return num.sum() / num.count()
+
+    @wraps(pd.DataFrame.var)
+    def var(self, axis=None, ddof=1):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x, ddof=ddof: x.var(axis=1, ddof=ddof)
+            return self.map_partitions(f, None)
+        else:
+            num = self._get_numeric_data()
+            x = 1.0 * num.sum()
+            x2 = 1.0 * (num ** 2).sum()
+            n = num.count()
+
+            result = (x2 / n) - (x / n)**2
+            if ddof:
+                result = result * n / (n - ddof)
+            return result
+
+    @wraps(pd.DataFrame.std)
+    def std(self, axis=None, ddof=1):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x, ddof=ddof: x.std(axis=1, ddof=ddof)
+            return self.map_partitions(f, None)
+        else:
+            v = self.var(ddof=ddof)
+            def apply_sqrt(s):
+                return s.apply(np.sqrt)
+            return map_partitions(apply_sqrt, None, v)
+
     @property
     def _elemwise_cols(self):
         return self.columns
@@ -1114,28 +1207,28 @@ class SeriesGroupBy(object):
         agg = lambda df: df.groupby(level=0).sum()
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-sum', return_type=Series)
+                   token='series-groupby-sum')
 
     def min(self):
         chunk = lambda df, index: df.groupby(index)[self.key].min()
         agg = lambda df: df.groupby(level=0).min()
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-min', return_type=Series)
+                   token='series-groupby-min')
 
     def max(self):
         chunk = lambda df, index: df.groupby(index)[self.key].max()
         agg = lambda df: df.groupby(level=0).max()
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-max', return_type=Series)
+                   token='series-groupby-max')
 
     def count(self):
         chunk = lambda df, index: df.groupby(index)[self.key].count()
         agg = lambda df: df.groupby(level=0).sum()
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-count', return_type=Series)
+                   token='series-groupby-count')
 
     def mean(self):
         def chunk(df, index):
@@ -1150,7 +1243,7 @@ class SeriesGroupBy(object):
             return result
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-mean', return_type=Series)
+                   token='series-groupby-mean')
 
     def nunique(self):
         def chunk(df, index):
@@ -1166,11 +1259,11 @@ class SeriesGroupBy(object):
 
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-nunique', return_type=Series)
+                   token='series-groupby-nunique')
 
 
-def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
-                       token=None, return_type=None):
+def apply_concat_apply(args, chunk=None, aggregate=None,
+                       columns=no_default, token=None):
     """ Apply a function to blocks, the concat, then apply again
 
     Parameters
@@ -1182,10 +1275,6 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
         Function to operate on each block of data
     aggregate: function concatenated-block -> block
         Function to operate on the concatenated result of chunk
-    return_type: class, default None
-        Specify the class of the result. Be sure to pass correct class
-        because it will not be validated by the function.
-        If None, class of 1st element of ``args`` will be used.
 
     >>> def chunk(a_block, b_block):
     ...     pass
@@ -1218,14 +1307,28 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
                       (_concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
 
-    if return_type is None:
+    if columns == no_default:
         return_type = type(args[0])
+        columns = None
+    else:
+        if isinstance(args[0], Index):
+            return_type = Index
+        else:
+            return_type = _get_return_type(columns)
 
     dasks = [a.dask for a in args if isinstance(a, _Frame)]
     return return_type(merge(dsk, dsk2, *dasks), b, columns, [None, None])
 
 
 aca = apply_concat_apply
+
+
+def _get_return_type(columns):
+    if (isinstance(columns, (str, unicode)) or not
+        isinstance(columns, Iterable)):
+        return Series
+    else:
+        return DataFrame
 
 
 def map_partitions(func, columns, *args, **kwargs):
@@ -1244,11 +1347,7 @@ def map_partitions(func, columns, *args, **kwargs):
     if kwargs:
         raise ValueError("Keyword arguments not yet supported in map_partitions")
 
-    if (isinstance(columns, (str, unicode)) or not
-        isinstance(columns, Iterable)):
-        return_type = Series
-    else:
-        return_type = DataFrame
+    return_type = _get_return_type(columns)
 
     token = ((token or func),
              columns,

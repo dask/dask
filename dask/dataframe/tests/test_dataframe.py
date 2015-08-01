@@ -1,3 +1,4 @@
+from datetime import datetime
 from operator import getitem
 
 import pandas as pd
@@ -367,9 +368,51 @@ def test_reductions():
         assert eq(dds.count(), pds.count())
         assert eq(dds.std(), pds.std())
         assert eq(dds.var(), pds.var())
+        assert eq(dds.std(ddof=0), pds.std(ddof=0))
+        assert eq(dds.var(ddof=0), pds.var(ddof=0))
         assert eq(dds.mean(), pds.mean())
         assert eq(dds.nunique(), pds.nunique())
 
+
+def test_reductions_frame():
+    assert eq(d.sum(), full.sum())
+    assert eq(d.min(), full.min())
+    assert eq(d.max(), full.max())
+    assert eq(d.count(), full.count())
+    assert eq(d.std(), full.std())
+    assert eq(d.var(), full.var())
+    assert eq(d.std(ddof=0), full.std(ddof=0))
+    assert eq(d.var(ddof=0), full.var(ddof=0))
+    assert eq(d.mean(), full.mean())
+
+    for axis in [0, 1, 'index', 'columns']:
+        assert eq(d.sum(axis=axis), full.sum(axis=axis))
+        assert eq(d.min(axis=axis), full.min(axis=axis))
+        assert eq(d.max(axis=axis), full.max(axis=axis))
+        assert eq(d.count(axis=axis), full.count(axis=axis))
+        assert eq(d.std(axis=axis), full.std(axis=axis))
+        assert eq(d.var(axis=axis), full.var(axis=axis))
+        assert eq(d.std(axis=axis, ddof=0), full.std(axis=axis, ddof=0))
+        assert eq(d.var(axis=axis, ddof=0), full.var(axis=axis, ddof=0))
+        assert eq(d.mean(axis=axis), full.mean(axis=axis))
+
+    assert raises(ValueError, lambda: d.sum(axis='incorrect').compute())
+
+def test_reductions_frame_dtypes():
+    df = pd.DataFrame({'int': [1, 2, 3, 4, 5, 6, 7, 8],
+                       'float': [1., 2., 3., 4., np.nan, 6., 7., 8.],
+                       'dt': [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+                       'str': list('abcdefgh')})
+    ddf = dd.from_pandas(df, 3)
+    assert eq(df.sum(), ddf.sum())
+    assert eq(df.min(), ddf.min())
+    assert eq(df.max(), ddf.max())
+    assert eq(df.count(), ddf.count())
+    assert eq(df.std(), ddf.std())
+    assert eq(df.var(), ddf.var())
+    assert eq(df.std(ddof=0), ddf.std(ddof=0))
+    assert eq(df.var(ddof=0), ddf.var(ddof=0))
+    assert eq(df.mean(), ddf.mean())
 
 def test_dropna():
     df = pd.DataFrame({'x': [np.nan, 2,      3, 4, np.nan,      6],
@@ -461,6 +504,7 @@ def test_map_partitions_method_names():
 def test_drop_duplicates():
     assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())
     assert eq(d.drop_duplicates(), full.drop_duplicates())
+    assert eq(d.index.drop_duplicates(), full.index.drop_duplicates())
 
 
 def test_full_groupby():
