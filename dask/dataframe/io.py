@@ -53,7 +53,10 @@ def fill_kwargs(fn, args, kwargs):
 
     # Let pandas infer on the first 100 rows
     if '*' in fn:
-        fn = sorted(glob(fn))[0]
+        filenames = sorted(glob(fn))
+        if not filenames:
+            raise ValueError("No files found matching name %s" % fn)
+        fn = filenames[0]
 
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)

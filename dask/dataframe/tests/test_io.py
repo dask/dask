@@ -482,3 +482,11 @@ def test_read_csv_with_nrows():
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions == 1
         assert eq(read_csv(fn, nrows=3), pd.read_csv(fn, nrows=3))
+
+
+def test_read_csv_raises_on_no_files():
+    try:
+        dd.read_csv('21hflkhfisfshf.*.csv')
+        assert False
+    except Exception as e:
+        assert "21hflkhfisfshf.*.csv" in str(e)
