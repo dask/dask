@@ -68,7 +68,8 @@ def test_Dataframe():
 def test_Series():
     assert isinstance(d.a, dd.Series)
     assert isinstance(d.a + 1, dd.Series)
-    assert raises(Exception, lambda: d + 1)
+
+    tm.assert_frame_equal((d + 1).compute(), full + 1)
 
 
 def test_attributes():
@@ -185,6 +186,120 @@ def test_arithmetic():
     assert eq(abs(d.a), abs(full.a))
     assert eq(~(d.a == d.b), ~(full.a == full.b))
     assert eq(~(d.a == d.b), ~(full.a == full.b))
+
+
+def test_arithmetic_frame():
+    tm.assert_frame_equal((d + d).compute(), full + full)
+    tm.assert_frame_equal((d * d).compute(), full * full)
+    tm.assert_frame_equal((d - d).compute(), full - full)
+    tm.assert_frame_equal((d / d).compute(), full / full)
+    tm.assert_frame_equal((d & d).compute(), full & full)
+    tm.assert_frame_equal((d | d).compute(), full | full)
+    tm.assert_frame_equal((d ^ d).compute(), full ^ full)
+    tm.assert_frame_equal((d // d).compute(), full // full)
+    tm.assert_frame_equal((d ** d).compute(), full ** full)
+    tm.assert_frame_equal((d % d).compute(), full % full)
+    tm.assert_frame_equal((d > d).compute(), full > full)
+    tm.assert_frame_equal((d < d).compute(), full < full)
+    tm.assert_frame_equal((d >= d).compute(), full >= full)
+    tm.assert_frame_equal((d <= d).compute(), full <= full)
+    tm.assert_frame_equal((d == d).compute(), full == full)
+    tm.assert_frame_equal((d != d).compute(), full != full)
+
+    tm.assert_frame_equal((d + 2).compute(), full + 2)
+    tm.assert_frame_equal((d * 2).compute(), full * 2)
+    tm.assert_frame_equal((d - 2).compute(), full - 2)
+    tm.assert_frame_equal((d / 2).compute(), full / 2)
+    tm.assert_frame_equal((d & True).compute(), full & True)
+    tm.assert_frame_equal((d | True).compute(), full | True)
+    tm.assert_frame_equal((d ^ True).compute(), full ^ True)
+    tm.assert_frame_equal((d // 2).compute(), full // 2)
+    tm.assert_frame_equal((d ** 2).compute(), full ** 2)
+    tm.assert_frame_equal((d % 2).compute(), full % 2)
+    tm.assert_frame_equal((d > 2).compute(), full > 2)
+    tm.assert_frame_equal((d < 2).compute(), full < 2)
+    tm.assert_frame_equal((d >= 2).compute(), full >= 2)
+    tm.assert_frame_equal((d <= 2).compute(), full <= 2)
+    tm.assert_frame_equal((d == 2).compute(), full == 2)
+    tm.assert_frame_equal((d != 2).compute(), full != 2)
+
+    tm.assert_frame_equal((2 + d).compute(), 2 + full)
+    tm.assert_frame_equal((2 * d).compute(), 2 * full)
+    tm.assert_frame_equal((2 - d).compute(), 2 - full)
+    tm.assert_frame_equal((2 / d).compute(), 2 / full)
+    tm.assert_frame_equal((True & d).compute(), True & full)
+    tm.assert_frame_equal((True | d).compute(), True | full)
+    tm.assert_frame_equal((True ^ d).compute(), True ^ full)
+    tm.assert_frame_equal((2 // d).compute(), 2 // full)
+    tm.assert_frame_equal((2 ** d).compute(), 2 ** full)
+    tm.assert_frame_equal((2 % d).compute(), 2 % full)
+    tm.assert_frame_equal((2 > d).compute(), 2 > full)
+    tm.assert_frame_equal((2 < d).compute(), 2 < full)
+    tm.assert_frame_equal((2 >= d).compute(), 2 >= full)
+    tm.assert_frame_equal((2 <= d).compute(), 2 <= full)
+    tm.assert_frame_equal((2 == d).compute(), 2 == full)
+    tm.assert_frame_equal((2 != d).compute(), 2 != full)
+
+    tm.assert_frame_equal((-d).compute(), -full)
+    tm.assert_frame_equal((abs(d)).compute(), abs(full))
+    tm.assert_frame_equal((~(d == d)).compute(), ~(full == full))
+
+    d2 = dd.from_pandas(pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]}), 3)
+    d3 = dd.from_pandas(pd.DataFrame({'x': [5, 6, 7, 8], 'y': [2, 4, 5, 3]}), 2)
+    full2 = d2.compute()
+    full3 = d3.compute()
+
+    tm.assert_frame_equal((d2 + d3).compute(), full2 + full3)
+    tm.assert_frame_equal((d2 * d3).compute(), full2 * full3)
+    tm.assert_frame_equal((d2 - d3).compute(), full2 - full3)
+    tm.assert_frame_equal((d2 / d3).compute(), full2 / full3)
+    tm.assert_frame_equal((d2 & d3).compute(), full2 & full3)
+    tm.assert_frame_equal((d2 | d3).compute(), full2 | full3)
+    tm.assert_frame_equal((d2 ^ d3).compute(), full2 ^ full3)
+    tm.assert_frame_equal((d2 // d3).compute(), full2 // full3)
+    tm.assert_frame_equal((d2 ** d3).compute(), full2 ** full3)
+    tm.assert_frame_equal((d2 % d3).compute(), full2 % full3)
+    tm.assert_frame_equal((d2 > d3).compute(), full2 > full3)
+    tm.assert_frame_equal((d2 < d3).compute(), full2 < full3)
+    tm.assert_frame_equal((d2 >= d3).compute(), full2 >= full3)
+    tm.assert_frame_equal((d2 <= d3).compute(), full2 <= full3)
+    tm.assert_frame_equal((d2 == d3).compute(), full2 == full3)
+    tm.assert_frame_equal((d2 != d3).compute(), full2 != full3)
+
+    dsk4 = {('y', 0): pd.DataFrame({'a': [3, 2, 1], 'b': [7, 8, 9]},
+                                   index=[0, 1, 3]),
+            ('y', 1): pd.DataFrame({'a': [5, 2, 8], 'b': [4, 2, 3]},
+                                   index=[5, 6, 8]),
+            ('y', 2): pd.DataFrame({'a': [1, 4, 10], 'b': [1, 0, 5]},
+                                   index=[9, 9, 9])}
+
+    d4 = dd.DataFrame(dsk4, 'y', ['a', 'b'], [0, 4, 9, 9])
+    full4 = d4.compute()
+    tm.assert_frame_equal((d + d4).compute(), full + full4)
+    tm.assert_frame_equal((d * d4).compute(), full * full4)
+    tm.assert_frame_equal((d - d4).compute(), full - full4)
+    tm.assert_frame_equal((d / d4).compute(), full / full4)
+    tm.assert_frame_equal((d & d4).compute(), full & full4)
+    tm.assert_frame_equal((d | d4).compute(), full | full4)
+    tm.assert_frame_equal((d ^ d4).compute(), full ^ full4)
+    tm.assert_frame_equal((d // d4).compute(), full // full4)
+    tm.assert_frame_equal((d ** d4).compute(), full ** full4)
+    tm.assert_frame_equal((d % d4).compute(), full % full4)
+    tm.assert_frame_equal((d > d4).compute(), full > full4)
+    tm.assert_frame_equal((d < d4).compute(), full < full4)
+    tm.assert_frame_equal((d >= d4).compute(), full >= full4)
+    tm.assert_frame_equal((d <= d4).compute(), full <= full4)
+    tm.assert_frame_equal((d == d4).compute(), full == full4)
+    tm.assert_frame_equal((d != d4).compute(), full != full4)
+
+    dsk5 = {('z', 0): pd.DataFrame({'a': [3, 2, 1], 'b': [7, 8, 9]},
+                                   index=[0, 1, 3]),
+            ('z', 1): pd.DataFrame({'a': [5, 2, 8], 'b': [4, 2, 3]},
+                                   index=[5, 6, 8]),
+            ('z', 2): pd.DataFrame({'a': [1, 4, 10], 'b': [1, 0, 5]},
+                                   index=[9, 9, 9])}
+    d5 = dd.DataFrame(dsk4, 'z', ['a', 'b'], [0, 3, 6, 9])
+    assert raises(ValueError, lambda: (d + d5).compute())
 
 
 def test_reductions():

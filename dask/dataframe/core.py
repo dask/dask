@@ -307,6 +307,74 @@ class _Frame(object):
         return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
                 fletcher32, **kwargs)
 
+    @property
+    def _elemwise_cols(self):
+        """passed to elemwise ops, None for Series, columns for DataFrame"""
+        return None
+
+    def __abs__(self):
+        return elemwise(operator.abs, self, columns=self._elemwise_cols)
+    def __add__(self, other):
+        return elemwise(operator.add, self, other, columns=self._elemwise_cols)
+    def __radd__(self, other):
+        return elemwise(operator.add, other, self, columns=self._elemwise_cols)
+    def __and__(self, other):
+        return elemwise(operator.and_, self, other, columns=self._elemwise_cols)
+    def __rand__(self, other):
+        return elemwise(operator.and_, other, self, columns=self._elemwise_cols)
+    def __div__(self, other):
+        return elemwise(operator.div, self, other, columns=self._elemwise_cols)
+    def __rdiv__(self, other):
+        return elemwise(operator.div, other, self, columns=self._elemwise_cols)
+    def __eq__(self, other):
+        return elemwise(operator.eq, self, other, columns=self._elemwise_cols)
+    def __gt__(self, other):
+        return elemwise(operator.gt, self, other, columns=self._elemwise_cols)
+    def __ge__(self, other):
+        return elemwise(operator.ge, self, other, columns=self._elemwise_cols)
+    def __invert__(self):
+        return elemwise(operator.inv, self, columns=self._elemwise_cols)
+    def __lt__(self, other):
+        return elemwise(operator.lt, self, other, columns=self._elemwise_cols)
+    def __le__(self, other):
+        return elemwise(operator.le, self, other, columns=self._elemwise_cols)
+    def __mod__(self, other):
+        return elemwise(operator.mod, self, other, columns=self._elemwise_cols)
+    def __rmod__(self, other):
+        return elemwise(operator.mod, other, self, columns=self._elemwise_cols)
+    def __mul__(self, other):
+        return elemwise(operator.mul, self, other, columns=self._elemwise_cols)
+    def __rmul__(self, other):
+        return elemwise(operator.mul, other, self, columns=self._elemwise_cols)
+    def __ne__(self, other):
+        return elemwise(operator.ne, self, other, columns=self._elemwise_cols)
+    def __neg__(self):
+        return elemwise(operator.neg, self, columns=self._elemwise_cols)
+    def __or__(self, other):
+        return elemwise(operator.or_, self, other, columns=self._elemwise_cols)
+    def __ror__(self, other):
+        return elemwise(operator.or_, other, self, columns=self._elemwise_cols)
+    def __pow__(self, other):
+        return elemwise(operator.pow, self, other, columns=self._elemwise_cols)
+    def __rpow__(self, other):
+        return elemwise(operator.pow, other, self, columns=self._elemwise_cols)
+    def __sub__(self, other):
+        return elemwise(operator.sub, self, other, columns=self._elemwise_cols)
+    def __rsub__(self, other):
+        return elemwise(operator.sub, other, self, columns=self._elemwise_cols)
+    def __truediv__(self, other):
+        return elemwise(operator.truediv, self, other, columns=self._elemwise_cols)
+    def __rtruediv__(self, other):
+        return elemwise(operator.truediv, other, self, columns=self._elemwise_cols)
+    def __floordiv__(self, other):
+        return elemwise(operator.floordiv, self, other, columns=self._elemwise_cols)
+    def __rfloordiv__(self, other):
+        return elemwise(operator.floordiv, other, self, columns=self._elemwise_cols)
+    def __xor__(self, other):
+        return elemwise(operator.xor, self, other, columns=self._elemwise_cols)
+    def __rxor__(self, other):
+        return elemwise(operator.xor, other, self, columns=self._elemwise_cols)
+
 
 class Series(_Frame):
     """ Out-of-core Series object
@@ -372,69 +440,6 @@ class Series(_Frame):
             return Series(merge(self.dask, key.dask, dsk), name,
                           self.name, self.divisions)
         raise NotImplementedError()
-
-    def __abs__(self):
-        return elemwise(operator.abs, self)
-    def __add__(self, other):
-        return elemwise(operator.add, self, other)
-    def __radd__(self, other):
-        return elemwise(operator.add, other, self)
-    def __and__(self, other):
-        return elemwise(operator.and_, self, other)
-    def __rand__(self, other):
-        return elemwise(operator.and_, other, self)
-    def __div__(self, other):
-        return elemwise(operator.div, self, other)
-    def __rdiv__(self, other):
-        return elemwise(operator.div, other, self)
-    def __eq__(self, other):
-        return elemwise(operator.eq, self, other)
-    def __gt__(self, other):
-        return elemwise(operator.gt, self, other)
-    def __ge__(self, other):
-        return elemwise(operator.ge, self, other)
-    def __invert__(self):
-        return elemwise(operator.inv, self)
-    def __lt__(self, other):
-        return elemwise(operator.lt, self, other)
-    def __le__(self, other):
-        return elemwise(operator.le, self, other)
-    def __mod__(self, other):
-        return elemwise(operator.mod, self, other)
-    def __rmod__(self, other):
-        return elemwise(operator.mod, other, self)
-    def __mul__(self, other):
-        return elemwise(operator.mul, self, other)
-    def __rmul__(self, other):
-        return elemwise(operator.mul, other, self)
-    def __ne__(self, other):
-        return elemwise(operator.ne, self, other)
-    def __neg__(self):
-        return elemwise(operator.neg, self)
-    def __or__(self, other):
-        return elemwise(operator.or_, self, other)
-    def __ror__(self, other):
-        return elemwise(operator.or_, other, self)
-    def __pow__(self, other):
-        return elemwise(operator.pow, self, other)
-    def __rpow__(self, other):
-        return elemwise(operator.pow, other, self)
-    def __sub__(self, other):
-        return elemwise(operator.sub, self, other)
-    def __rsub__(self, other):
-        return elemwise(operator.sub, other, self)
-    def __truediv__(self, other):
-        return elemwise(operator.truediv, self, other)
-    def __rtruediv__(self, other):
-        return elemwise(operator.truediv, other, self)
-    def __floordiv__(self, other):
-        return elemwise(operator.floordiv, self, other)
-    def __rfloordiv__(self, other):
-        return elemwise(operator.floordiv, other, self)
-    def __xor__(self, other):
-        return elemwise(operator.xor, self, other)
-    def __rxor__(self, other):
-        return elemwise(operator.xor, other, self)
 
     @wraps(pd.Series.sum)
     def sum(self):
@@ -685,6 +690,10 @@ class DataFrame(_Frame):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
+    @property
+    def _elemwise_cols(self):
+        return self.columns
+
 
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
@@ -794,18 +803,21 @@ def elemwise(op, *args, **kwargs):
     else:
         op2 = op
 
-    assert all(df.divisions == dfs[0].divisions for df in dfs)
-    assert all(df.npartitions == dfs[0].npartitions for df in dfs)
+    if not all(df.divisions == dfs[0].divisions for df in dfs):
+        msg = 'All dask.Dataframe and dask.Series must have same divisions'
+        raise ValueError(msg)
+    if not all(df.npartitions == dfs[0].npartitions for df in dfs):
+        msg = 'All dask.Dataframe and dask.Series must have same npartitions'
+        raise ValueError(msg)
 
     dsk = dict(((_name, i), (op2,) + frs)
                 for i, frs in enumerate(zip(*[df._keys() for df in dfs])))
-
     if columns is not None:
         return DataFrame(merge(dsk, *[df.dask for df in dfs]),
                          _name, columns, dfs[0].divisions)
     else:
         column_name = name or consistent_name(n for df in dfs
-                                                 for n in df.columns)
+                                              for n in df.columns)
         return Series(merge(dsk, *[df.dask for df in dfs]),
                       _name, column_name, dfs[0].divisions)
 
