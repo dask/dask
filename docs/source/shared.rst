@@ -1,7 +1,6 @@
 Shared Memory
 =============
 
-
 The asynchronous scheduler requires an ``apply_async`` function and a
 ``Queue``.  These determine the kind of worker and parallelism that we exploit.
 ``apply_async`` functions can be found in the following places
@@ -32,7 +31,10 @@ scalable to very many tasks on a single machine.
 To keep the memory footprint small we choose to keep ready-to-run tasks in a
 LIFO stack such that the most recently made available tasks get priority.  This
 encourages chains of related tasks to complete before starting new chains.
-This is also queryable in constant time.
+This is also queryable in constant time.  Read more about our `scheduling policy`_
+
+.. _`scheduling policy`: scheduling-policy.html
+
 
 
 Performance
