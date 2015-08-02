@@ -4,6 +4,7 @@ from itertools import count
 from math import sqrt
 from functools import wraps
 import bisect
+from md5 import md5
 from toolz import merge, partial, first, partition
 from operator import getitem, setitem
 from datetime import datetime
@@ -874,7 +875,7 @@ def concat(dfs):
         # For this to work we need to add a final division for "maximum element"
         raise NotImplementedError("Concat can't currently handle dataframes"
                 " with known divisions")
-    name = 'concat' + next(tokens)
+    name = 'concat-' + md5('--'.join(df._name for df in dfs)).hexdigest()
     dsk = dict()
     i = 0
     for df in dfs:

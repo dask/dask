@@ -10,6 +10,8 @@ from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.core import (concat, repartition_divisions, _loc,
         _coerce_loc_index)
+from dask.dataframe.core import (concat, repartition_divisions, _loc,
+        _coerce_loc_index, _concat)
 
 
 def eq(a, b):
@@ -496,8 +498,8 @@ def test_map():
 
 
 def test_concat():
-    x = concat([pd.DataFrame(columns=['a', 'b']),
-                pd.DataFrame(columns=['a', 'b'])])
+    x = _concat([pd.DataFrame(columns=['a', 'b']),
+                 pd.DataFrame(columns=['a', 'b'])])
     assert list(x.columns) == ['a', 'b']
     assert len(x) == 0
 
@@ -534,7 +536,7 @@ def test_unknown_divisions():
     assert raises(ValueError, lambda: d.loc[3])
 
 
-def test_concat():
+def test_concat2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
@@ -549,6 +551,8 @@ def test_concat():
     assert c.npartitions == a.npartitions + b.npartitions
 
     assert eq(pd.concat([a.compute(), b.compute()]), c)
+
+    assert dd.concat([a, b]).dask == dd.concat([a, b]).dask
 
 
 def test_dataframe_series_are_dillable():

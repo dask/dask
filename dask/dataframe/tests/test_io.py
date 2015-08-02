@@ -502,3 +502,16 @@ def test_read_csv_has_deterministic_name():
 
         c = read_csv(fn, skiprows=1, na_values=[0])
         assert a._name != c._name
+
+    try:
+        with open('_foo.1.csv', 'w') as f:
+            f.write(text)
+        with open('_foo.2.csv', 'w') as f:
+            f.write(text)
+        a = read_csv('_foo.*.csv')
+        b = read_csv('_foo.*.csv')
+
+        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
+    finally:
+        os.remove('_foo.1.csv')
+        os.remove('_foo.2.csv')
