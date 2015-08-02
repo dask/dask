@@ -197,6 +197,26 @@ def test_reductions():
     assert eq(d.b.mean(), full.b.mean())
 
 
+def test_dropna():
+    df = pd.DataFrame({'x': [np.nan, 2,      3, 4, np.nan,      6],
+                       'y': [1,      2, np.nan, 4, np.nan, np.nan],
+                       'z': [1,      2,      3, 4, np.nan, np.nan]},
+                      index=[10, 20, 30, 40, 50, 60])
+    ddf = dd.from_pandas(df, 3)
+
+    assert eq(ddf.x.dropna(), df.x.dropna())
+    assert eq(ddf.y.dropna(), df.y.dropna())
+    assert eq(ddf.z.dropna(), df.z.dropna())
+
+    tm.assert_frame_equal(ddf.dropna().compute(), df.dropna())
+    tm.assert_frame_equal(ddf.dropna(how='all').compute(), df.dropna(how='all'))
+    tm.assert_frame_equal(ddf.dropna(subset=['x']).compute(), df.dropna(subset=['x']))
+    tm.assert_frame_equal(ddf.dropna(subset=['y', 'z']).compute(),
+                          df.dropna(subset=['y', 'z']))
+    tm.assert_frame_equal(ddf.dropna(subset=['y', 'z'], how='all').compute(),
+                          df.dropna(subset=['y', 'z'], how='all'))
+
+
 def test_map_partitions_multi_argument():
     assert eq(dd.map_partitions(lambda a, b: a + b, 'c', d.a, d.b),
               full.a + full.b)

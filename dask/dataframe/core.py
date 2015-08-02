@@ -669,6 +669,12 @@ class DataFrame(_Frame):
 
         return DataFrame(merge(dsk, self.dask), name, self.columns, self.divisions)
 
+    @wraps(pd.DataFrame.dropna)
+    def dropna(self, how='any', subset=None):
+        def f(df, how=how, subset=subset):
+            return df.dropna(how=how, subset=subset)
+        return map_partitions(f, self.columns, self)
+
     def to_castra(self, fn=None, categories=None):
         """ Write DataFrame to Castra on-disk store
 
