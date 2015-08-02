@@ -490,3 +490,15 @@ def test_read_csv_raises_on_no_files():
         assert False
     except Exception as e:
         assert "21hflkhfisfshf.*.csv" in str(e)
+
+
+def test_read_csv_has_deterministic_name():
+    with filetext(text) as fn:
+        a = read_csv(fn)
+        b = read_csv(fn)
+        assert a._name == b._name
+        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
+        assert isinstance(a._name, str)
+
+        c = read_csv(fn, skiprows=1, na_values=[0])
+        assert a._name != c._name

@@ -8,6 +8,7 @@ from glob import glob
 from math import ceil
 from toolz import merge, dissoc, assoc
 from operator import getitem
+from md5 import md5
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
@@ -96,7 +97,8 @@ def read_csv(fn, *args, **kwargs):
     if '*' in fn:
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
 
-    name = 'read-csv' + next(tokens)
+    arg_token = (args, sorted(kwargs.items(), key=lambda kv: kv[0]))
+    name = 'read-csv-%s-%s' % (fn, md5(str(arg_token)).hexdigest())
 
     columns = kwargs.pop('columns')
     header = kwargs.pop('header')
