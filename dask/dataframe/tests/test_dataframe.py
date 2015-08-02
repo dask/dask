@@ -766,3 +766,15 @@ def test_deterministic_reduction_names():
     assert a.x.min()._name == a.x.min()._name
     assert a.x.max()._name == a.x.max()._name
     assert a.x.count()._name == a.x.count()._name
+
+
+def test_deterministic_apply_concat_apply_names():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+    assert sorted(a.x.nlargest(2).dask) == sorted(a.x.nlargest(2).dask)
+    assert sorted(a.x.nlargest(2).dask) != sorted(a.x.nlargest(3).dask)
+    assert sorted(a.x.drop_duplicates().dask) == \
+           sorted(a.x.drop_duplicates().dask)
+    assert sorted(a.groupby('x').y.mean().dask) == \
+           sorted(a.groupby('x').y.mean().dask)

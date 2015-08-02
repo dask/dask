@@ -129,7 +129,8 @@ class _Frame(Base):
     @wraps(pd.DataFrame.drop_duplicates)
     def drop_duplicates(self):
         chunk = lambda s: s.drop_duplicates()
-        return aca(self, chunk=chunk, aggregate=chunk, columns=self.columns)
+        return aca(self, chunk=chunk, aggregate=chunk, columns=self.columns,
+                   token='drop-duplicates')
 
     def __len__(self):
         return reduction(self, len, np.sum).compute()
@@ -483,12 +484,13 @@ class Series(_Frame):
     def value_counts(self):
         chunk = lambda s: s.value_counts()
         agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
-        return aca(self, chunk=chunk, aggregate=agg, columns=self.columns)
+        return aca(self, chunk=chunk, aggregate=agg, columns=self.columns,
+                   token='value-counts')
 
     @wraps(pd.Series.nlargest)
     def nlargest(self, n=5):
         f = lambda s: s.nlargest(n)
-        return aca(self, f, f, columns=self.columns)
+        return aca(self, f, f, columns=self.columns, token=('nlargest', n))
 
     @wraps(pd.Series.isin)
     def isin(self, other):
@@ -966,25 +968,29 @@ class SeriesGroupBy(object):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()
         agg = lambda df: df.groupby(level=0).sum()
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key])
+                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   token='series-groupby-sum')
 
     def min(self):
         chunk = lambda df, index: df.groupby(index)[self.key].min()
         agg = lambda df: df.groupby(level=0).min()
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key])
+                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   token='series-groupby-min')
 
     def max(self):
         chunk = lambda df, index: df.groupby(index)[self.key].max()
         agg = lambda df: df.groupby(level=0).max()
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key])
+                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   token='series-groupby-max')
 
     def count(self):
         chunk = lambda df, index: df.groupby(index)[self.key].count()
         agg = lambda df: df.groupby(level=0).sum()
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key])
+                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   token='series-groupby-count')
 
     def mean(self):
         def chunk(df, index):
@@ -998,7 +1004,8 @@ class SeriesGroupBy(object):
             result.name = self.key
             return result
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key])
+                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   token='series-groupby-mean')
 
     def nunique(self):
         def chunk(df, index):
@@ -1012,10 +1019,12 @@ class SeriesGroupBy(object):
             return df.groupby(level=0)[self.key].nunique()
 
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key])
+                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   token='series-groupby-nunique')
 
 
-def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
+def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
+                       token=None):
     """ Apply a function to blocks, the concat, then apply again
 
     Parameters
@@ -1041,13 +1050,19 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None):
     assert all(arg.npartitions == args[0].npartitions
                 for arg in args
                 if isinstance(arg, _Frame))
-    a = 'apply-concat-apply--first' + next(tokens)
+
+    token = ([arg._name if isinstance(arg, _Frame) else arg for arg in args],
+             (token or (chunk, aggregate)),
+             columns)
+    token = md5(str(token)).hexdigest()
+
+    a = 'apply-concat-apply--first' + token
     dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)
                                                 if isinstance(x, _Frame)
                                                 else x for x in args])))
                 for i in range(args[0].npartitions))
 
-    b = 'apply-concat-apply--second' + next(tokens)
+    b = 'apply-concat-apply--second' + token
     dsk2 = {(b, 0): (aggregate,
                       (pd.concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
