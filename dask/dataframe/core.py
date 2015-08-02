@@ -454,7 +454,7 @@ class Series(_Frame):
         def agg(seq):
             sums, counts = list(zip(*seq))
             return 1.0 * sum(sums) / sum(counts)
-        return reduction(self, chunk, agg)
+        return reduction(self, chunk, agg, 'mean')
 
     @wraps(pd.Series.var)
     def var(self, ddof=1):
@@ -470,7 +470,7 @@ class Series(_Frame):
             if ddof:
                 result = result * n / (n - ddof)
             return result
-        return reduction(self, chunk, agg)
+        return reduction(self, chunk, agg, 'var')
 
     @wraps(pd.Series.std)
     def std(self, ddof=1):
@@ -854,16 +854,18 @@ def empty_safe(func, arg):
         return func(arg)
 
 
-def reduction(x, chunk, aggregate):
+def reduction(x, chunk, aggregate, token=None):
     """ General version of reductions
 
     >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
     """
-    a = 'reduction-chunk' + next(tokens)
+    token = (x._name, (token or (chunk, aggregate)))
+    token = md5(str(token)).hexdigest()
+    a = 'reduction-chunk-' + token
     dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
                 for i in range(x.npartitions))
 
-    b = 'reduction-aggregation' + next(tokens)
+    b = 'reduction-aggregation-' + token
     dsk2 = {(b, 0): (aggregate, (remove_empties,
                         [(a,i) for i in range(x.npartitions)]))}
 
