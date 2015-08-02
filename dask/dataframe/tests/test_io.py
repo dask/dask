@@ -503,6 +503,8 @@ def test_read_csv_has_deterministic_name():
         c = read_csv(fn, skiprows=1, na_values=[0])
         assert a._name != c._name
 
+
+def test_multiple_read_csv_has_deterministic_name():
     try:
         with open('_foo.1.csv', 'w') as f:
             f.write(text)
@@ -515,3 +517,14 @@ def test_read_csv_has_deterministic_name():
     finally:
         os.remove('_foo.1.csv')
         os.remove('_foo.2.csv')
+
+
+def test_read_csv_of_modified_file_has_different_name():
+    with filetext(text) as fn:
+        a = read_csv(fn)
+        with open(fn, 'a') as f:
+            f.write('\nGeorge,700')
+            os.fsync(f)
+        b = read_csv(fn)
+
+        assert sorted(a.dask) != sorted(b.dask)
