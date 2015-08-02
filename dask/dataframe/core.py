@@ -783,7 +783,11 @@ def elemwise(op, *args, **kwargs):
     columns = kwargs.get('columns', None)
     name = kwargs.get('name', None)
 
-    _name = 'elemwise' + next(tokens)
+    token = (op,
+             [arg._name if isinstance(arg, _Frame) else arg for arg in args],
+             sorted(kwargs.items(), key=lambda kv: str(kv[0])))
+
+    _name = 'elemwise-' + md5(str(token)).hexdigest()
 
     dfs = [arg for arg in args if isinstance(arg, _Frame)]
     other = [(i, arg) for i, arg in enumerate(args)

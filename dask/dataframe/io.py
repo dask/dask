@@ -339,7 +339,9 @@ def from_pandas(data, npartitions):
     divisions = tuple(data.index[i]
                       for i in range(0, nrows, chunksize))
     divisions = divisions + (data.index[-1],)
-    name = 'from_pandas' + next(tokens)
+
+    token = (id(data), nrows, columns, chunksize) # this could be improved
+    name = 'from_pandas-' + md5(str(token)).hexdigest()
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))
     dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
