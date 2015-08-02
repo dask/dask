@@ -4,7 +4,7 @@ from itertools import count
 from math import sqrt
 from functools import wraps
 import bisect
-from md5 import md5
+from hashlib import md5
 from toolz import merge, partial, first, partition
 from operator import getitem, setitem
 from datetime import datetime
@@ -25,6 +25,17 @@ from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..base import Base, compute
 
+
+def tokenize(obj):
+    """ Deterministic token
+
+    >>> tokenize([1, 2, '3'])
+    'b9e8c0d38fb40e66dc4fd00adc3c6553'
+
+    >>> tokenize('Hello') == tokenize('Hello')
+    True
+    """
+    return md5(str(obj).encode()).hexdigest()
 
 def _concat(args):
     """ Generic concat operation """
@@ -789,7 +800,7 @@ def elemwise(op, *args, **kwargs):
              [arg._name if isinstance(arg, _Frame) else arg for arg in args],
              sorted(kwargs.items(), key=lambda kv: str(kv[0])))
 
-    _name = 'elemwise-' + md5(str(token)).hexdigest()
+    _name = 'elemwise-' + tokenize(token)
 
     dfs = [arg for arg in args if isinstance(arg, _Frame)]
     other = [(i, arg) for i, arg in enumerate(args)
@@ -862,7 +873,7 @@ def reduction(x, chunk, aggregate, token=None):
     >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
     """
     token = (x._name, (token or (chunk, aggregate)))
-    token = md5(str(token)).hexdigest()
+    token = tokenize(token)
     a = 'reduction-chunk-' + token
     dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
                 for i in range(x.npartitions))
@@ -883,7 +894,7 @@ def concat(dfs):
         # For this to work we need to add a final division for "maximum element"
         raise NotImplementedError("Concat can't currently handle dataframes"
                 " with known divisions")
-    name = 'concat-' + md5('--'.join(df._name for df in dfs)).hexdigest()
+    name = 'concat-' + tokenize('--'.join(df._name for df in dfs))
     dsk = dict()
     i = 0
     for df in dfs:
@@ -1054,7 +1065,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
     token = ([arg._name if isinstance(arg, _Frame) else arg for arg in args],
              (token or (chunk, aggregate)),
              columns)
-    token = md5(str(token)).hexdigest()
+    token = tokenize(token)
 
     a = 'apply-concat-apply--first' + token
     dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)

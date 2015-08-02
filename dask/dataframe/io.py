@@ -9,7 +9,7 @@ from glob import glob
 from math import ceil
 from toolz import merge, dissoc, assoc
 from operator import getitem
-from md5 import md5
+from hashlib import md5
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
@@ -17,7 +17,8 @@ from ..base import compute
 from .. import array as da
 
 from . import core
-from .core import DataFrame, Series, concat, categorize_block, tokens
+from .core import (DataFrame, Series, concat, categorize_block, tokens,
+        tokenize)
 from .shuffle import set_partition
 
 
@@ -101,7 +102,7 @@ def read_csv(fn, *args, **kwargs):
     arg_token = (os.path.getmtime(fn),
                  args,
                  sorted(kwargs.items(), key=lambda kv: kv[0]))
-    name = 'read-csv-%s-%s' % (fn, md5(str(arg_token)).hexdigest())
+    name = 'read-csv-%s-%s' % (fn, tokenize(arg_token))
 
     columns = kwargs.pop('columns')
     header = kwargs.pop('header')
@@ -341,7 +342,7 @@ def from_pandas(data, npartitions):
     divisions = divisions + (data.index[-1],)
 
     token = (id(data), nrows, columns, chunksize) # this could be improved
-    name = 'from_pandas-' + md5(str(token)).hexdigest()
+    name = 'from_pandas-' + tokenize(token)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))
     dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
