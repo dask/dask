@@ -1,14 +1,28 @@
 from .core import Diagnostic
 from timeit import default_timer
-from cachey import Cache, nbytes
+import cachey
+from numbers import Number
 
 
-class cache(Diagnostic):
+class Cache(Diagnostic):
     """ Use cache for computation
 
+    Example
+    -------
+
+    >>> cache = Cache(1e9)  # available bytes
+
+    >>> with cache:         # use as a context manager around get/compute calls
+    ...     result = x.compute()
+
+    >>> cache.register()    # or use globally
     """
 
-    def __init__(self, cache):
+    def __init__(self, cache, *args, **kwargs):
+        if isinstance(cache, Number):
+            cache = cachey.Cache(cache, *args, **kwargs)
+        else:
+            assert not args and not kwargs
         self.cache = cache
         self.starttimes = dict()
 
@@ -22,7 +36,7 @@ class cache(Diagnostic):
 
     def _posttask(self, key, value, dsk, state, id):
         duration = default_timer() - self.starttimes[key]
-        nb = nbytes(value)
+        nb = cachey.nbytes(value)
         self.cache.put(key, value, cost=duration / nb / 1e9, nbytes=nb)
 
     def _finish(self, dsk, state, errored):
