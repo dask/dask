@@ -16,6 +16,7 @@ class Cache(Diagnostic):
     ...     result = x.compute()  # doctest: +SKIP
 
     >>> cache.register()    # or use globally
+    >>> cache.unregister()
     """
 
     def __init__(self, cache, *args, **kwargs):

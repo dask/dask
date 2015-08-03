@@ -2,6 +2,7 @@ from dask.diagnostics.cache import Cache
 import cachey
 from dask.threaded import get
 from operator import add
+from dask.context import _globals
 
 
 flag = []
@@ -27,6 +28,8 @@ def test_cache():
         assert get(dsk, 'z') == 5
 
     assert flag == [2]  # no x present
+
+    assert not _globals['callbacks']
 
 
 def test_cache_with_number():
