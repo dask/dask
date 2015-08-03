@@ -1,4 +1,4 @@
-class DaskBase(object):
+class Base(object):
     """Base class for dask collections"""
 
     def visualize(self, optimize_graph=False):

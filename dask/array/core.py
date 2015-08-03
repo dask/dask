@@ -19,7 +19,7 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..base import DaskBase
+from ..base import Base
 from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer, IndexCallable
 from ..compatibility import unicode, long
 from .. import threaded, core
@@ -596,7 +596,7 @@ def blockdims_from_blockshape(shape, chunks):
                               for d, bd in zip(shape, chunks))
 
 
-class Array(DaskBase):
+class Array(Base):
     """ Parallel Array
 
     Parameters

@@ -23,7 +23,7 @@ from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..context import _globals
-from ..base import DaskBase
+from ..base import Base
 
 
 def _concat(args):
@@ -61,7 +61,7 @@ def compute(*args, **kwargs):
 tokens = ('-%d' % i for i in count(1))
 
 
-class Scalar(DaskBase):
+class Scalar(Base):
     """ A Dask-thing to represent a scalar
 
     TODO: Clean up this abstraction
@@ -87,7 +87,7 @@ class Scalar(DaskBase):
         return compute(self, **kwargs)[0]
 
 
-class _Frame(DaskBase):
+class _Frame(Base):
     """ Superclass for DataFrame and Series """
     def __init__(self):
         from .optimize import optimize

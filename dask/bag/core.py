@@ -31,7 +31,7 @@ from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
 from ..context import _globals
-from ..base import DaskBase
+from ..base import Base
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
@@ -183,7 +183,7 @@ def to_textfiles(b, path, name_function=str):
     return Bag(merge(b.dask, dsk), name, b.npartitions)
 
 
-class Item(DaskBase):
+class Item(Base):
     _optimize = optimize
     def __init__(self, dsk, key):
         self.dask = dsk
@@ -200,7 +200,7 @@ class Item(DaskBase):
     __int__ = __float__ = __complex__ = __bool__ = compute
 
 
-class Bag(DaskBase):
+class Bag(Base):
     """ Parallel collection of Python objects
 
     Example
