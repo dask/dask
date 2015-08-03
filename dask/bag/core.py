@@ -341,20 +341,25 @@ class Bag(object):
         return to_textfiles(self, path, name_function)
 
     def fold(self, binop, combine=None, initial=None):
-        """ Splittable reduction
+        """ Parallelizable reduction
 
-        Apply binary operator on each partition to perform reduce.  Follow by a
-        second binary operator to combine results
+        Apply binary operator (both inputs and output of same type) within, then on 
+        each partition to perform reduce.
 
         >>> b = from_sequence(range(5))
         >>> b.fold(lambda x, y: x + y).compute()  # doctest: +SKIP
         10
 
-        Optionally provide default arguments and special combine binary
-        operator
+        Initial reduce state may be provided, as well as an inter-partition combine 
+        binary operation.
 
         >>> b.fold(lambda x, y: x + y, lambda x, y: x + y, 0).compute()  # doctest: +SKIP
         10
+
+        See Also
+        --------
+
+        Bag.foldby
         """
         a = next(names)
         b = next(names)
@@ -585,14 +590,15 @@ class Bag(object):
 
         It can be tricky to construct the right binary operators to perform
         analytic queries.  The ``foldby`` method accepts two binary operators,
-        ``binop`` and ``combine``.
+        ``binop`` and ``combine``.  Binary operators two inputs and output must
+        have the same type.
 
-        Binop takes a running total and a new element and produces a new total
+        Binop takes a running total and a new element and produces a new total:
 
         >>> def binop(total, x):
         ...     return total + x['amount']
 
-        Combine takes two totals and combines them
+        Combine takes two totals and combines them:
 
         >>> def combine(total1, total2):
         ...     return total1 + total2
