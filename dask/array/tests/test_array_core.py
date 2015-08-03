@@ -604,17 +604,6 @@ def test_blockdims_from_blockshape():
     assert blockdims_from_blockshape((np.int8(10),), (5,)) == ((5, 5),)
 
 
-def test_compute():
-    d = da.ones((4, 4), chunks=(2, 2))
-    a, b = d + 1, d + 2
-    A, B = compute(a, b)
-    assert eq(A, d + 1)
-    assert eq(B, d + 2)
-
-    A, = compute(a)
-    assert eq(A, d + 1)
-
-
 def test_coerce():
     d = da.from_array(np.array([1]), chunks=(1,))
     with dask.set_options(get=dask.get):
