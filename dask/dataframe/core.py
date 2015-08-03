@@ -121,6 +121,12 @@ class _Frame(object):
     def known_divisions(self):
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
+    @property
+    def _idivisions(self):
+        """Return indices of partitions"""
+        idiv = reduction(self, len, np.cumsum).compute().tolist()
+        return tuple([0] + idiv)
+
     def cache(self, cache=Cache):
         """ Evaluate Dataframe and store in local cache
 
@@ -229,17 +235,13 @@ class _Frame(object):
 
     def _loc_slice(self, ind):
         name = 'loc-slice' + next(tokens)
-        assert ind.step in (None, 1)
-        if ind.start:
-            start = _partition_of_index_value(self.divisions, ind.start)
-        else:
-            start = 0
-        if ind.stop is not None:
-            stop = _partition_of_index_value(self.divisions, ind.stop)
-        else:
-            stop = self.npartitions - 1
+
+        start, stop = _partition_of_slice(self.divisions, ind)
+
+        # istart and istop will be the label
         istart = _coerce_loc_index(self.divisions, ind.start)
         istop = _coerce_loc_index(self.divisions, ind.stop)
+
         if stop == start:
             dsk = {(name, 0): (_loc, (self._name, start), ind.start, ind.stop)}
             divisions = [istart, istop]
@@ -269,7 +271,74 @@ class _Frame(object):
 
     @property
     def iloc(self):
-        raise AttributeError("Dask Dataframe does not support iloc")
+        return IndexCallable(self._iloc)
+
+    def _iloc(self, ind):
+        """ Helper function for the .iloc accessor """
+        if isinstance(ind, Series):
+            msg = "Dask Dataframe does not support iloc with Series"
+            raise NotImplementedError(msg)
+        elif isinstance(ind, slice):
+            return self._iloc_slice(ind)
+        else:
+            return self._iloc_element(ind)
+
+    def _iloc_element(self, ind):
+        name = 'iloc-element' + next(tokens)
+        part = _partition_of_index_value(self._idivisions, ind)
+        if ind < self._idivisions[0] or ind > self._idivisions[-1]:
+            raise KeyError('the label [%s] is not in the index' % str(ind))
+        # comupute iloc in the target partition
+        ind -= self._idivisions[part]
+        dsk = {(name, 0): (lambda df: df.iloc[ind], (self._name, part))}
+        return type(self)(merge(self.dask, dsk), name,
+                          self.column_info, [ind, ind])
+
+    def _iloc_slice(self, ind):
+        name = 'iloc-slice' + next(tokens)
+
+        assert isinstance(ind, slice)
+        length = len(self)
+        def f(pos):
+            if pos is not None and pos < 0:
+                pos = length + pos
+            return pos
+        ind = slice(f(ind.start), f(ind.stop))
+
+        start, stop = _partition_of_slice(self._idivisions, ind)
+
+        # rstart and rstop will be the iloc in the target partition
+        if ind.start is not None:
+            rstart = ind.start - self._idivisions[start]
+        else:
+            rstart = None
+        if ind.stop is not None:
+            rstop = ind.stop - self._idivisions[stop]
+        else:
+            rstop = None
+
+        if stop == start:
+            dsk = {(name, 0): (_iloc, (self._name, start), rstart, rstop)}
+            divisions = [start, stop]
+        else:
+            dsk = merge(
+              {(name, 0): (_iloc, (self._name, start), rstart, None)},
+              dict(((name, i), (self._name, start + i))
+                  for i in range(1, stop - start)),
+              {(name, stop - start): (_iloc, (self._name, stop), None, rstop)})
+
+            divisions = ((max(start, self._idivisions[start])
+                          if ind.start is not None
+                          else self._idivisions[0],) +
+                         self._idivisions[start+1:stop+1] +
+                         (min(stop, self._idivisions[stop+1])
+                          if ind.stop is not None
+                          else self._idivisions[-1],))
+
+        assert len(divisions) == len(dsk) + 1
+        return type(self)(merge(self.dask, dsk),
+                          name, self.column_info,
+                          divisions)
 
     def repartition(self, divisions):
         """ Repartition dataframe along new divisions
@@ -726,6 +795,25 @@ def _partition_of_index_value(divisions, val):
     return min(len(divisions) - 2, max(0, i - 1))
 
 
+def _partition_of_slice(divisions, ind):
+    """ From/to which partition does the slice lie?
+
+    >>> _partition_of_slice([0, 5, 10], slice(3, 5))
+    (0, 1)
+    >>> _partition_of_slice([0, 5, 10], slice(5, 8))
+    (1, 1)
+    """
+    if ind.start:
+        start = _partition_of_index_value(divisions, ind.start)
+    else:
+        start = 0
+    if ind.stop is not None:
+        stop = _partition_of_index_value(divisions, ind.stop)
+    else:
+        stop = len(divisions) - 2
+    return start, stop
+
+
 def _loc(df, start, stop, include_right_boundary=True):
     """
 
@@ -751,6 +839,14 @@ def _loc(df, start, stop, include_right_boundary=True):
     result = df.loc[slice(start, stop)]
     if not include_right_boundary:
         # result = df[df.index != stop]
+        result = result.iloc[:result.index.get_slice_bound(stop, 'left',
+                                                   result.index.inferred_type)]
+    return result
+
+
+def _iloc(df, start, stop, include_right_boundary=True):
+    result = df.iloc[slice(start, stop)]
+    if not include_right_boundary:
         result = result.iloc[:result.index.get_slice_bound(stop, 'left',
                                                    result.index.inferred_type)]
     return result
