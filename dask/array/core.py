@@ -518,13 +518,10 @@ def compute(*args, **kwargs):
     >>> b = d + 2
     >>> A, B = da.compute(a, b)  # Compute both simultaneously
     """
-    dsk = merge(*[arg.dask for arg in args])
-    keys = [arg._keys() for arg in args]
-    results = get(dsk, keys, **kwargs)
-
-    results2 = tuple(concatenate3(x) if arg.shape else unpack_singleton(x)
-                     for x, arg in zip(results, args))
-    return results2
+    keys = ['compute' + next(tokens) for i in args]
+    dsk = dict(zip(keys, (i._finalize() for i in args)))
+    dsk.update(merge(*[arg.dask for arg in args]))
+    return get(dsk, keys, **kwargs)
 
 
 def store(sources, targets, **kwargs):
@@ -649,6 +646,13 @@ class Array(DaskBase):
             "  x.rechunk(%s)" % str(chunks))
 
     chunks = property(_get_chunks, _set_chunks, "chunks property")
+
+    def _finalize(self):
+        """Return a task that finalizes the result"""
+        if self.shape:
+            return (concatenate3, self._keys())
+        else:
+            return (unpack_singleton, (list, self._keys()))
 
     def __len__(self):
         return sum(self.chunks[0])

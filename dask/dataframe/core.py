@@ -52,11 +52,10 @@ def compute(*args, **kwargs):
     """ Compute multiple dataframes at once """
     if len(args) == 1 and isinstance(args[0], (tuple, list)):
         args = args[0]
-    dsk = merge(*[arg.dask for arg in args])
-    keys = [arg._keys() for arg in args]
-    results = get(dsk, keys, **kwargs)
-
-    return list(map(_concat, results))
+    names = ['compute' + next(tokens) for i in args]
+    dsk = dict(zip(names, (i._finalize() for i in args)))
+    dsk.update(merge(*[arg.dask for arg in args]))
+    return get(dsk, names, **kwargs)
 
 
 tokens = ('-%d' % i for i in count(1))
@@ -74,6 +73,9 @@ class Scalar(DaskBase):
         self.divisions = [None, None]
         self._optimize = optimize
 
+    def _finalize(self):
+        return (_concat, (list, self._keys()))
+
     @property
     def _args(self):
         return (self.dask, self._name)
@@ -90,6 +92,9 @@ class _Frame(DaskBase):
     def __init__(self):
         from .optimize import optimize
         self._optimize = optimize
+
+    def _finalize(self):
+        return (_concat, (list, self._keys()))
 
     @property
     def npartitions(self):

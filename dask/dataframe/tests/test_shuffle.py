@@ -12,7 +12,7 @@ dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [1, 4, 7]},
        ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [3, 6, 9]},
                               index=[9, 9, 9])}
 d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
-full = d.compute()
+full = d.compute(get=get_sync)
 
 
 def test_shuffle():
