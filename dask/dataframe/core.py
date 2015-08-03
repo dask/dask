@@ -22,7 +22,6 @@ from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
-from ..context import _globals
 from ..base import Base, compute, Config
 
 

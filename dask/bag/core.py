@@ -30,7 +30,6 @@ from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
-from ..context import _globals
 from ..base import Base, Config
 
 names = ('bag-%d' % i for i in itertools.count(1))

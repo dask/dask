@@ -20,10 +20,10 @@ from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, compute, Config
-from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer, IndexCallable
+from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
+        IndexCallable)
 from ..compatibility import unicode, long
 from .. import threaded, core
-from ..context import _globals
 
 
 names = ('x_%d' % i for i in count(1))

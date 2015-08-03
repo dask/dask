@@ -11,11 +11,11 @@ from operator import getitem
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
+from ..base import compute
 from .. import array as da
 
 from . import core
-from .core import (DataFrame, Series, compute, concat, categorize_block,
-        tokens, get)
+from .core import DataFrame, Series, concat, categorize_block, tokens, get
 from .shuffle import set_partition
 
 
