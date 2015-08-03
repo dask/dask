@@ -653,15 +653,19 @@ class Bag(DaskBase):
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def _finalize(self):
-        return (finalize_bag, self._keys())
+    def _finalize(self, results):
+        if isinstance(results, Iterator):
+            results = list(results)
+        if isinstance(results[0], Iterable) and not isinstance(results[0], str):
+            results = toolz.concat(results)
+        if isinstance(results, Iterator):
+            results = list(results)
+        return results
 
     def compute(self, **kwargs):
         """ Force evaluation of bag """
-        dsk = self.dask.copy()
-        name = 'compute' + next(tokens)
-        dsk[name] = self._finalize()
-        return get(dsk, name, **kwargs)
+        results = get(self.dask, self._keys(), **kwargs)
+        return self._finalize(results)
 
     def concat(self):
         """ Concatenate nested lists into one long list
@@ -1158,16 +1162,6 @@ def robust_wraps(wrapper):
         wrapped.__doc__ = wrapper.__doc__
         return wrapped
     return _
-
-
-def finalize_bag(arg):
-    if isinstance(arg, Iterator):
-        arg = list(arg)
-    if isinstance(arg[0], Iterable) and not isinstance(arg[0], str):
-        arg = toolz.concat(arg)
-    if isinstance(arg, Iterator):
-        arg = list(arg)
-    return arg
 
 
 def reify(seq):

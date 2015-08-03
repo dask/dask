@@ -419,7 +419,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     threaded.get
     """
-    #import pdb;pdb.set_trace()
     assert queue
 
     if callbacks is None:
