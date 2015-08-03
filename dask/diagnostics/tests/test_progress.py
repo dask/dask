@@ -2,6 +2,7 @@ from operator import add, mul
 from dask.diagnostics import ProgressBar
 from dask.diagnostics.progress import format_time
 from dask.threaded import get
+from dask.context import _globals
 
 
 dsk = {'a': 1,
@@ -44,3 +45,23 @@ def test_format_time():
     assert format_time(100.4) == ' 1min 40.4s'
     assert format_time(1000.4) == '16min 40.4s'
     assert format_time(10000.4) == ' 2hr 46min 40.4s'
+
+
+def test_register(capsys):
+    try:
+        p = ProgressBar()
+        p.register()
+
+        assert _globals['callbacks']
+
+        get(dsk, 'e')
+        out, err = capsys.readouterr()
+        bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
+        assert bar == "[########################################]"
+        assert percent == "100% Completed"
+
+        p.unregister()
+
+        assert not _globals['callbacks']
+    finally:
+        _globals['callbacks'].clear()

@@ -1,4 +1,5 @@
 from ..callbacks import Callback, add_callbacks
+from ..context import _globals
 
 
 class Diagnostic(object):
@@ -17,3 +18,9 @@ class Diagnostic(object):
 
     def __exit__(self, *args):
         self._cm.__exit__(*args)
+
+    def register(self):
+        _globals['callbacks'].add(self._callback)
+
+    def unregister(self):
+        _globals['callbacks'].remove(self._callback)
