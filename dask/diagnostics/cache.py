@@ -1,8 +1,11 @@
 from .core import Diagnostic
 from timeit import default_timer
-import cachey
 from numbers import Number
 
+try:
+    import cachey
+except ImportError:
+    pass
 
 class Cache(Diagnostic):
     """ Use cache for computation

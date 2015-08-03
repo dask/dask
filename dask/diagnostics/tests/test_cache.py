@@ -1,8 +1,10 @@
 from dask.diagnostics.cache import Cache
-import cachey
 from dask.threaded import get
 from operator import add
 from dask.context import _globals
+import pytest
+
+cachey = pytest.importorskip('cachey')
 
 
 flag = []
