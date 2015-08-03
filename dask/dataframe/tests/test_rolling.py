@@ -57,3 +57,10 @@ def test_raises():
     assert raises(ValueError, lambda: dd.rolling_mean(ddf, -1))
     assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, freq=2))
     assert raises(NotImplementedError, lambda: dd.rolling_mean(ddf, 3, how='min'))
+
+
+def test_rolling_names():
+    df = pd.DataFrame({'a': [1, 2, 3],
+                       'b': [4, 5, 6]})
+    a = dd.from_pandas(df, npartitions=2)
+    assert sorted(dd.rolling_sum(a, 2).dask) == sorted(dd.rolling_sum(a, 2).dask)

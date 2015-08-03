@@ -3,7 +3,7 @@ from functools import partial, wraps
 from toolz import merge
 import pandas as pd
 
-from .core import tokens
+from .core import tokenize
 
 
 def rolling_chunk(func, part1, part2, window, *args):
@@ -30,7 +30,8 @@ def wrap_rolling(func):
             raise NotImplementedError('Resampling before rolling computations '
                                       'not supported')
         old_name = arg._name
-        new_name = 'rolling' + next(tokens)
+        token = tokenize((arg._name, window, args, sorted(kwargs.items())))
+        new_name = 'rolling-' + token
         f = partial(func, **kwargs)
         dsk = {(new_name, 0): (f, (old_name, 0), window) + args}
         for i in range(1, arg.npartitions + 1):
