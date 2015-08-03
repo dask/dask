@@ -138,6 +138,11 @@ def test_split_apply_combine_on_series():
     assert eq(d.groupby('a').b.mean(), full.groupby('a').b.mean())
     assert eq(d.groupby(d.a > 3).b.mean(), full.groupby(full.a > 3).b.mean())
 
+    assert sorted(d.groupby('b').a.sum().dask) == \
+           sorted(d.groupby('b').a.sum().dask)
+    assert sorted(d.groupby(d.a > 3).b.mean().dask) == \
+           sorted(d.groupby(d.a > 3).b.mean().dask)
+
 
 def test_arithmetic():
     assert eq(d.a + d.b, full.a + full.b)
@@ -352,6 +357,18 @@ def test_map_partitions():
     assert eq(d.map_partitions(lambda df: df, 'a'), full)
 
 
+def test_map_partitions_names():
+    func = lambda x: x
+    assert sorted(dd.map_partitions(func, d.columns, d).dask) == \
+           sorted(dd.map_partitions(func, d.columns, d).dask)
+    assert sorted(dd.map_partitions(lambda x: x, d.columns, d, token=1).dask) == \
+           sorted(dd.map_partitions(lambda x: x, d.columns, d, token=1).dask)
+
+    func = lambda x, y: x
+    assert sorted(dd.map_partitions(func, d.columns, d, d).dask) == \
+           sorted(dd.map_partitions(func, d.columns, d, d).dask)
+
+
 def test_drop_duplicates():
     assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())
 
@@ -364,6 +381,9 @@ def test_full_groupby():
         df['b'] = df.b - df.b.mean()
         return df
     assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+
+    assert sorted(d.groupby('a').apply(func).dask) == \
+           sorted(d.groupby('a').apply(func).dask)
 
 
 def test_groupby_on_index():

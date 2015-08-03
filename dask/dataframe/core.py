@@ -154,12 +154,7 @@ class _Frame(Base):
         """
         if columns is None:
             columns = self.column_info
-        name = 'map_partitions' + next(tokens)
-        dsk = dict(((name, i), (func, (self._name, i)))
-                    for i in range(self.npartitions))
-
-        return type(self)(merge(dsk, self.dask), name,
-                          columns, self.divisions)
+        return map_partitions(func, columns, self)
 
     def random_split(self, p, seed=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
@@ -214,7 +209,7 @@ class _Frame(Base):
         if not self.divisions == ind.divisions:
             raise ValueError("Partitions of dataframe and index not the same")
         return map_partitions(lambda df, ind: df.loc[ind],
-                              self.columns, self, ind)
+                              self.columns, self, ind, token='loc-series')
 
     def _loc_element(self, ind):
         name = 'loc-element-%s-%s' % (str(ind), self._name)
@@ -910,6 +905,19 @@ def concat(dfs):
                      dfs[0].columns, divisions)
 
 
+def _groupby_apply(df, ind, func):
+    return df.groupby(ind).apply(func)
+
+def _groupby_apply_level0(df, func):
+    return df.groupby(level=0).apply(func)
+
+def _groupby_getitem_apply(df, ind, key, func):
+    return df.groupby(ind)[key].apply(func)
+
+def _groupby_level0_getitem_apply(df, key, func):
+    return df.groupby(level=0)[key].apply(func)
+
+
 class GroupBy(object):
     def __init__(self, df, index=None, **kwargs):
         self.df = df
@@ -927,14 +935,15 @@ class GroupBy(object):
         if (isinstance(self.index, Series) and
             self.index._name == self.df.index._name):
             df = self.df
-            return df.map_partitions(lambda df: df.groupby(level=0).apply(func),
-                                    columns=columns)
+            return map_partitions(_groupby_apply_level0,
+                                  columns or self.df.columns,
+                                  self.df, func)
         else:
             # df = set_index(self.df, self.index, **self.kwargs)
             df = shuffle(self.df, self.index, **self.kwargs)
-            return map_partitions(lambda df, ind: df.groupby(ind).apply(func),
+            return map_partitions(_groupby_apply,
                                   columns or self.df.columns,
-                                  self.df, self.index)
+                                  self.df, self.index, func)
 
     def __getitem__(self, key):
         if key in self.df.columns:
@@ -967,15 +976,14 @@ class SeriesGroupBy(object):
         # df = set_index(self.df, self.index, **self.kwargs)
         if self.index._name == self.df.index._name:
             df = self.df
-            return df.map_partitions(
-                        lambda df: df.groupby(level=0)[self.key].apply(func),
-                        columns=columns)
+            return map_partitions(_groupby_level0_getitem_apply,
+                                  self.df, self.key, func,
+                                  columns=columns)
         else:
             df = shuffle(self.df, self.index, **self.kwargs)
-            return map_partitions(
-                        lambda df, index: df.groupby(index).apply(func),
-                        columns or self.df.columns,
-                        self.df, self.index)
+            return map_partitions(_groupby_apply,
+                                  columns or self.df.columns,
+                                  self.df, self.index, func)
 
     def sum(self):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()
@@ -1085,7 +1093,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
                                       if isinstance(a, _Frame)]),
             b, columns, [None, None])
 
-def map_partitions(func, columns, *args):
+def map_partitions(func, columns, *args, **kwargs):
     """ Apply Python function on each DataFrame block
 
     Provide columns of the output if they are not the same as the input.
@@ -1094,7 +1102,15 @@ def map_partitions(func, columns, *args):
                arg.divisions == args[0].divisions
                for arg in args)
 
-    name = 'map-partitions' + next(tokens)
+    token = kwargs.pop('token', None)
+    if kwargs:
+        raise ValueError("Keyword arguments not yet supported in map_partitions")
+
+    token = ((token or func),
+             columns,
+             [arg._name if isinstance(arg, _Frame) else arg for arg in args])
+
+    name = 'map-partitions' + tokenize(token)
     dsk = dict(((name, i), (apply, func,
                              (tuple, [(arg._name, i)
                                       if isinstance(arg, _Frame)
