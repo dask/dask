@@ -236,6 +236,20 @@ def test_from_bcolz():
     L = list(d.index.compute(get=get_sync))
     assert L == [1, 2, 3] or L == [1, 3, 2]
 
+    # Names
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) == \
+           sorted(dd.from_bcolz(t, chunksize=2).dask)
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
+           sorted(dd.from_bcolz(t, chunksize=3).dask)
+
+    dsk = dd.from_bcolz(t, chunksize=3).dask
+
+    t.append((4, 4., 'b'))
+    t.flush()
+
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
+           sorted(dsk)
+
 
 def test_from_bcolz_filename():
     bcolz = pytest.importorskip('bcolz')
@@ -460,6 +474,9 @@ def test_read_hdf():
         tm.assert_frame_equal(
               dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
               pd.read_hdf(fn, '/data', start=1, stop=3))
+
+        assert sorted(dd.read_hdf(fn, '/data').dask) == \
+               sorted(dd.read_hdf(fn, '/data').dask)
 
 
 def test_to_csv():
