@@ -19,7 +19,7 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..base import Base, compute
+from ..base import Base, compute, Config
 from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer, IndexCallable
 from ..compatibility import unicode, long
 from .. import threaded, core
@@ -575,6 +575,17 @@ def blockdims_from_blockshape(shape, chunks):
                               for d, bd in zip(shape, chunks))
 
 
+def finalize(arr, results):
+    if arr.shape:
+        return concatenate3(results)
+    else:
+        return unpack_singleton(results)
+
+
+config = Config(optimize, threaded.get, finalize)
+get = config.get
+
+
 class Array(Base):
     """ Parallel Array
 
@@ -592,8 +603,7 @@ class Array(Base):
     """
 
     __slots__ = 'dask', 'name', '_chunks', '_dtype'
-    _optimize = staticmethod(optimize)
-    _get = staticmethod(threaded.get)
+    _config = config
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
@@ -626,12 +636,6 @@ class Array(Base):
             "  x.rechunk(%s)" % str(chunks))
 
     chunks = property(_get_chunks, _set_chunks, "chunks property")
-
-    def _finalize(self, results):
-        if self.shape:
-            return concatenate3(results)
-        else:
-            return unpack_singleton(results)
 
     def __len__(self):
         return sum(self.chunks[0])
@@ -1269,17 +1273,6 @@ def atop(func, out_ind, *args, **kwargs):
 
     dsks = [a.dask for a, _ in arginds]
     return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)
-
-
-def get(dsk, keys, get=None, **kwargs):
-    """ Specialized get function
-
-    1. Handle inlining
-    2. Use custom score function
-    """
-    get = get or _globals['get'] or threaded.get
-    dsk2 = optimize(dsk, keys, **kwargs)
-    return get(dsk2, keys, **kwargs)
 
 
 def unpack_singleton(x):

@@ -31,7 +31,7 @@ from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
 from ..context import _globals
-from ..base import Base
+from ..base import Base, Config
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
@@ -98,16 +98,6 @@ def optimize(dsk, keys):
     dsk4 = inline_singleton_lists(dsk3)
     dsk5 = lazify(dsk4)
     return dsk5
-
-
-def get(dsk, keys, get=None, **kwargs):
-    """ Get function for dask.bag """
-    get = get or _globals['get'] or mpget
-
-    dsk2 = optimize(dsk, keys)
-
-    return get(dsk2, keys, **kwargs)
-_get = get
 
 
 def list2(seq):
@@ -183,15 +173,27 @@ def to_textfiles(b, path, name_function=str):
     return Bag(merge(b.dask, dsk), name, b.npartitions)
 
 
+def finalize(bag, results):
+    if isinstance(bag, Item):
+        return results
+    if isinstance(results, Iterator):
+        results = list(results)
+    if isinstance(results[0], Iterable) and not isinstance(results[0], str):
+        results = toolz.concat(results)
+    if isinstance(results, Iterator):
+        results = list(results)
+    return results
+
+
+config = Config(optimize, mpget, finalize)
+get = config.get
+
+
 class Item(Base):
-    _optimize = staticmethod(optimize)
-    _get = staticmethod(mpget)
+    _config = config
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
-
-    def _finalize(self, results):
-        return results
 
     def _keys(self):
         return self.key
@@ -234,8 +236,7 @@ class Bag(Base):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
-    _optimize = staticmethod(optimize)
-    _get = staticmethod(mpget)
+    _config = config
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name
@@ -657,15 +658,6 @@ class Bag(Base):
 
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
-
-    def _finalize(self, results):
-        if isinstance(results, Iterator):
-            results = list(results)
-        if isinstance(results[0], Iterable) and not isinstance(results[0], str):
-            results = toolz.concat(results)
-        if isinstance(results, Iterator):
-            results = list(results)
-        return results
 
     def concat(self):
         """ Concatenate nested lists into one long list

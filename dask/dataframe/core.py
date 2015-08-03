@@ -23,7 +23,7 @@ from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..context import _globals
-from ..base import Base, compute
+from ..base import Base, compute, Config
 
 
 def _concat(args):
@@ -51,24 +51,29 @@ def _concat(args):
 tokens = ('-%d' % i for i in count(1))
 
 
+def optimize(dsk, keys):
+    from .optimize import optimize
+    return optimize(dsk, keys)
+
+
+def finalize(self, results):
+    return _concat(results)
+
+
+config = Config(optimize, threaded.get, finalize)
+get = config.get
+
+
 class Scalar(Base):
     """ A Dask-thing to represent a scalar
 
     TODO: Clean up this abstraction
     """
-    _get = staticmethod(threaded.get)
+    _config = config
     def __init__(self, dsk, _name):
         self.dask = dsk
         self._name = _name
         self.divisions = [None, None]
-
-    def _finalize(self, results):
-        return _concat(results)
-
-    @staticmethod
-    def _optimize(dsk, keys):
-        from .optimize import optimize
-        return optimize(dsk, keys)
 
     @property
     def _args(self):
@@ -80,15 +85,7 @@ class Scalar(Base):
 
 class _Frame(Base):
     """ Superclass for DataFrame and Series """
-    _get = staticmethod(threaded.get)
-
-    def _finalize(self, results):
-        return _concat(results)
-
-    @staticmethod
-    def _optimize(dsk, keys):
-        from .optimize import optimize
-        return optimize(dsk, keys)
+    _config = config
 
     @property
     def npartitions(self):
@@ -1134,14 +1131,6 @@ def quantile(df, q, **kwargs):
 
     dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
     return Series(dsk, name3, df.name, [df.divisions[0], df.divisions[-1]])
-
-
-def get(dsk, keys, get=None, **kwargs):
-    """ Get function with optimizations specialized to dask.Dataframe """
-    from .optimize import optimize
-    dsk2 = optimize(dsk, keys, **kwargs)
-    get = get or _globals['get'] or threaded.get
-    return get(dsk2, keys, **kwargs)  # use synchronous scheduler for now
 
 
 def pd_split(df, p, seed=0):
