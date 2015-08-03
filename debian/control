@@ -9,7 +9,7 @@ X-Python3-Version: >= 3.2
 
 Package: python-dask
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, ${python3:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}
 Homepage: http://dask.pydata.org
 Description: Task scheduling and blocked algorithms for parallel processing.
  Dask provides multi-core execution on larger-than-memory datasets using

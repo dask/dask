@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-export PYBUILD_NAME = toolz
+export PYBUILD_NAME = dask
 %:
 	dh $@ --with python2,python3 --buildsystem=pybuild
 
