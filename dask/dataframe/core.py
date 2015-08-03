@@ -127,7 +127,7 @@ class _Frame(Base):
             cache = cache()
 
         # Evaluate and store in cache
-        name = 'cache' + uuid.uuid1().get_hex()
+        name = 'cache' + uuid.uuid1().hex
         dsk = dict(((name, i), (setitem, cache, (tuple, list(key)), key))
                     for i, key in enumerate(self._keys()))
         self._get(merge(dsk, self.dask), list(dsk.keys()))
