@@ -23,7 +23,7 @@ from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..context import _globals
-from ..base import Base
+from ..base import Base, compute
 
 
 def _concat(args):
@@ -48,16 +48,6 @@ def _concat(args):
     return args
 
 
-def compute(*args, **kwargs):
-    """ Compute multiple dataframes at once """
-    if len(args) == 1 and isinstance(args[0], (tuple, list)):
-        args = args[0]
-    keys = [arg._keys() for arg in args]
-    dsk = merge(*[arg.dask for arg in args])
-    results = get(dsk, keys, **kwargs)
-    return [arg._finalize(r) for r in results]
-
-
 tokens = ('-%d' % i for i in count(1))
 
 
@@ -66,15 +56,19 @@ class Scalar(Base):
 
     TODO: Clean up this abstraction
     """
+    _get = staticmethod(threaded.get)
     def __init__(self, dsk, _name):
-        from .optimize import optimize
         self.dask = dsk
         self._name = _name
         self.divisions = [None, None]
-        self._optimize = optimize
 
     def _finalize(self, results):
         return _concat(results)
+
+    @staticmethod
+    def _optimize(dsk, keys):
+        from .optimize import optimize
+        return optimize(dsk, keys)
 
     @property
     def _args(self):
@@ -83,25 +77,22 @@ class Scalar(Base):
     def _keys(self):
         return [(self._name, 0)]
 
-    def compute(self, **kwargs):
-        return compute(self, **kwargs)[0]
-
 
 class _Frame(Base):
     """ Superclass for DataFrame and Series """
-    def __init__(self):
-        from .optimize import optimize
-        self._optimize = optimize
+    _get = staticmethod(threaded.get)
 
     def _finalize(self, results):
         return _concat(results)
 
+    @staticmethod
+    def _optimize(dsk, keys):
+        from .optimize import optimize
+        return optimize(dsk, keys)
+
     @property
     def npartitions(self):
         return len(self.divisions) - 1
-
-    def compute(self, **kwargs):
-        return compute(self, **kwargs)[0]
 
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
@@ -391,7 +382,6 @@ class Series(_Frame):
         self.divisions = tuple(divisions)
         self.dt = DatetimeAccessor(self)
         self.str = StringAccessor(self)
-        super(Series, self).__init__()
 
     @property
     def _args(self):
@@ -562,7 +552,6 @@ class DataFrame(_Frame):
         self._name = name
         self.columns = tuple(columns)
         self.divisions = tuple(divisions)
-        super(DataFrame, self).__init__()
 
     @property
     def _args(self):
@@ -1114,7 +1103,7 @@ def categorize(df, columns=None, **kwargs):
         columns = [columns]
 
     distincts = [df[col].drop_duplicates() for col in columns]
-    values = compute(distincts, **kwargs)
+    values = compute(*distincts, **kwargs)
 
     func = partial(categorize_block, categories=dict(zip(columns, values)))
     return df.map_partitions(func, columns=df.columns)

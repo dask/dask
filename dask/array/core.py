@@ -19,7 +19,7 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..base import Base
+from ..base import Base, compute
 from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer, IndexCallable
 from ..compatibility import unicode, long
 from .. import threaded, core
@@ -503,27 +503,6 @@ def topk(k, x):
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
 
 
-def compute(*args, **kwargs):
-    """ Evaluate several dask arrays at once
-
-    The result of this function is always a tuple of numpy arrays. To evaluate
-    a single dask array into a numpy array, use ``myarray.compute()`` or simply
-    ``np.array(myarray)``.
-
-    Examples
-    --------
-    >>> import dask.array as da
-    >>> d = da.ones((4, 4), chunks=(2, 2))
-    >>> a = d + 1  # two different dask arrays
-    >>> b = d + 2
-    >>> A, B = da.compute(a, b)  # Compute both simultaneously
-    """
-    keys = [a._keys() for a in args]
-    dsk = merge(*[a.dask for a in args])
-    results = get(dsk, keys, **kwargs)
-    return [a._finalize(r) for r in results]
-
-
 def store(sources, targets, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
@@ -613,7 +592,8 @@ class Array(Base):
     """
 
     __slots__ = 'dask', 'name', '_chunks', '_dtype'
-    _optimize = optimize
+    _optimize = staticmethod(optimize)
+    _get = staticmethod(threaded.get)
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
@@ -723,11 +703,6 @@ class Array(Base):
         h5py.File.create_dataset
         """
         return to_hdf5(filename, datapath, self, **kwargs)
-
-    @wraps(compute)
-    def compute(self, **kwargs):
-        result, = compute(self, **kwargs)
-        return result
 
     def cache(self, store=None, **kwargs):
         """ Evaluate and cache array

@@ -100,7 +100,7 @@ def read_csv(fn, *args, **kwargs):
 
     if 'nrows' in kwargs:  # Just create single partition
         dsk = {(name, 0): (apply, pd.read_csv, (fn,),
-                                  assoc(kwargs, 'header', header))},
+                                  assoc(kwargs, 'header', header))}
         result = DataFrame(dsk, name, columns, [None, None])
 
     else:

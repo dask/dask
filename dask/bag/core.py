@@ -184,20 +184,24 @@ def to_textfiles(b, path, name_function=str):
 
 
 class Item(Base):
-    _optimize = optimize
+    _optimize = staticmethod(optimize)
+    _get = staticmethod(mpget)
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
 
-    def compute(self, **kwargs):
-        return get(self.dask, self.key, **kwargs)
+    def _finalize(self, results):
+        return results
+
+    def _keys(self):
+        return self.key
 
     def apply(self, func):
         name = next(names)
         dsk = {name: (func, self.key)}
         return Item(merge(self.dask, dsk), name)
 
-    __int__ = __float__ = __complex__ = __bool__ = compute
+    __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
 
 class Bag(Base):
@@ -230,7 +234,8 @@ class Bag(Base):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
-    _optimize = optimize
+    _optimize = staticmethod(optimize)
+    _get = staticmethod(mpget)
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name
@@ -661,11 +666,6 @@ class Bag(Base):
         if isinstance(results, Iterator):
             results = list(results)
         return results
-
-    def compute(self, **kwargs):
-        """ Force evaluation of bag """
-        results = get(self.dask, self._keys(), **kwargs)
-        return self._finalize(results)
 
     def concat(self):
         """ Concatenate nested lists into one long list
