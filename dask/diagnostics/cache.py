@@ -13,7 +13,7 @@ class Cache(Diagnostic):
     >>> cache = Cache(1e9)  # available bytes
 
     >>> with cache:         # use as a context manager around get/compute calls
-    ...     result = x.compute()
+    ...     result = x.compute()  # doctest: +SKIP
 
     >>> cache.register()    # or use globally
     """
