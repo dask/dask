@@ -19,7 +19,7 @@ def _thread_get_id():
     return current_thread().ident
 
 
-def get(dsk, result, cache=None, **kwargs):
+def get(dsk, result, cache=None, num_workers=None, **kwargs):
     """ Threaded cached implementation of dask.get
 
     Parameters
@@ -46,7 +46,10 @@ def get(dsk, result, cache=None, **kwargs):
     pool = _globals['pool']
 
     if pool is None:
-        pool = default_pool
+        if num_workers:
+            pool = ThreadPool(num_workers)
+        else:
+            pool = default_pool
 
     queue = Queue()
     results = get_async(pool.apply_async, len(pool._pool), dsk, result,
