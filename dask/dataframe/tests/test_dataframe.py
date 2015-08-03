@@ -494,6 +494,8 @@ def test_loc():
     assert eq(d.loc[1000:], full.loc[1000:])
     assert eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
 
+    assert sorted(d.loc[5].dask) == sorted(d.loc[5].dask)
+    assert sorted(d.loc[5].dask) != sorted(d.loc[6].dask)
 
 
 def test_loc_with_text_dates():
@@ -509,6 +511,9 @@ def test_loc_with_text_dates():
 
 def test_loc_with_series():
     assert eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0])
+
+    assert sorted(d.loc[d.a % 2].dask) == sorted(d.loc[d.a % 2].dask)
+    assert sorted(d.loc[d.a % 2].dask) != sorted(d.loc[d.a % 3].dask)
 
 
 def test_iloc_raises():
@@ -781,6 +786,8 @@ def test_deterministic_arithmetic_names():
     a = dd.from_pandas(df, npartitions=2)
 
     assert sorted((a.x + a.y ** 2).dask) == sorted((a.x + a.y ** 2).dask)
+    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x + a.y ** 3).dask)
+    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x - a.y ** 2).dask)
 
 
 def test_deterministic_reduction_names():
