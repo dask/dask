@@ -1,3 +1,5 @@
+import warnings
+
 from toolz import merge
 
 from .context import _globals
@@ -9,9 +11,15 @@ class Base(object):
     def visualize(self, optimize_graph=False):
         from dask.dot import dot_graph
         if optimize_graph:
-            return dot_graph(self._optimize(self.dask, self._keys()))
+            return dot_graph(self._config.optimize(self.dask, self._keys()))
         else:
             return dot_graph(self.dask)
+
+    def _visualize(self, optimize_graph=False):
+        warn = DeprecationWarning("``_visualize`` is deprecated, use "
+                                  "``visualize`` instead.")
+        warnings.warn(warn)
+        return self.visualize(optimize_graph)
 
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
