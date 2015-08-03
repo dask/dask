@@ -14,6 +14,7 @@ from hashlib import md5
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
 from ..base import compute
+from .utils import tokenize_dataframe
 from .. import array as da
 
 from . import core
@@ -341,7 +342,7 @@ def from_pandas(data, npartitions):
                       for i in range(0, nrows, chunksize))
     divisions = divisions + (data.index[-1],)
 
-    token = (id(data), nrows, columns, chunksize) # this could be improved
+    token = (tokenize_dataframe(data), chunksize) # this could be improved
     name = 'from_pandas-' + tokenize(token)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))

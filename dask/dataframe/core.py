@@ -4,6 +4,7 @@ from itertools import count
 from math import sqrt
 from functools import wraps
 import bisect
+import uuid
 from hashlib import md5
 from toolz import merge, partial, first, partition
 from operator import getitem, setitem
@@ -22,7 +23,7 @@ from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
-from .utils import shard_df_on_index
+from .utils import shard_df_on_index, tokenize_dataframe
 from ..base import Base, compute
 
 
@@ -126,13 +127,13 @@ class _Frame(Base):
             cache = cache()
 
         # Evaluate and store in cache
-        name = 'cache' + next(tokens)
+        name = 'cache' + uuid.uuid1().get_hex()
         dsk = dict(((name, i), (setitem, cache, (tuple, list(key)), key))
                     for i, key in enumerate(self._keys()))
         self._get(merge(dsk, self.dask), list(dsk.keys()))
 
         # Create new dataFrame pointing to that cache
-        name = 'from-cache' + next(tokens)
+        name = 'from-cache-' + self._name
         dsk2 = dict(((name, i), (getitem, cache, (tuple, list(key))))
                     for i, key in enumerate(self._keys()))
         return type(self)(dsk2, name, self.column_info, self.divisions)
@@ -190,7 +191,7 @@ class _Frame(Base):
 
         Caveat, the only checks the first n rows of the first partition.
         """
-        name = 'head' + next(tokens)
+        name = 'head-%d-%s' % (n, self._name)
         dsk = {(name, 0): (head, (self._name, 0), n)}
 
         result = type(self)(merge(self.dask, dsk), name,
@@ -216,7 +217,7 @@ class _Frame(Base):
                               self.columns, self, ind)
 
     def _loc_element(self, ind):
-        name = 'loc-element' + next(tokens)
+        name = 'loc-element-%s-%s' % (str(ind), self._name)
         part = _partition_of_index_value(self.divisions, ind)
         if ind < self.divisions[0] or ind > self.divisions[-1]:
             raise KeyError('the label [%s] is not in the index' % str(ind))
@@ -225,7 +226,7 @@ class _Frame(Base):
                           self.column_info, [ind, ind])
 
     def _loc_slice(self, ind):
-        name = 'loc-slice' + next(tokens)
+        name = 'loc-slice-%s-%s' % (str(ind), self._name)
         assert ind.step in (None, 1)
         if ind.start:
             start = _partition_of_index_value(self.divisions, ind.start)
@@ -429,8 +430,8 @@ class Series(_Frame):
                                   "[0, 1], not [0, 100]")
 
     def __getitem__(self, key):
-        name = 'getitem' + next(tokens)
         if isinstance(key, Series) and self.divisions == key.divisions:
+            name = 'series-index-%s[%s]' % (self._name, key._name)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
@@ -482,11 +483,11 @@ class Series(_Frame):
             if ddof:
                 result = result * n / (n - ddof)
             return result
-        return reduction(self, chunk, agg, 'var')
+        return reduction(self, chunk, agg, token=('var', ddof))
 
     @wraps(pd.Series.std)
     def std(self, ddof=1):
-        name = 'std' + next(tokens)
+        name = '%s.std(ddof=%d)' % (self._name, ddof)
         df = self.var(ddof=ddof)
         dsk = {(name, 0): (sqrt, (df._name, 0))}
         return Scalar(merge(df.dask, dsk), name)
@@ -586,7 +587,7 @@ class DataFrame(_Frame):
                 return DataFrame(merge(self.dask, dsk), name,
                                  key, self.divisions)
         if isinstance(key, Series) and self.divisions == key.divisions:
-            name = 'slice-with-series' + next(tokens)
+            name = 'series-slice-%s[%s]' % (self._name, key._name)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
@@ -661,8 +662,9 @@ class DataFrame(_Frame):
 
         The original docstring follows below:\n
         """ + pd.DataFrame.query.__doc__
-        name = 'query' + next(tokens)
+        name = '%s.query(%s)' % (self._name, expr)
         if kwargs:
+            name = name + '--' + tokenize(sorted(kwargs.items()))
             dsk = dict(((name, i), (apply, pd.DataFrame.query,
                                     ((self._name, i), (expr,), kwargs)))
                        for i in range(self.npartitions))
@@ -1139,7 +1141,7 @@ def categorize(df, columns=None, **kwargs):
     return df.map_partitions(func, columns=df.columns)
 
 
-def quantile(df, q, **kwargs):
+def quantile(df, q):
     """ Approximate quantiles of column
 
     Parameters
@@ -1151,13 +1153,14 @@ def quantile(df, q, **kwargs):
     if not len(q):
         return da.zeros((0,), chunks=((0,),))
     from dask.array.percentile import _percentile, merge_percentiles
-    name = 'quantiles-1' + next(tokens)
+    token = tokenize((df._name, q))
+    name = 'quantiles-1-' + token
     val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
                    for i, key in enumerate(df._keys()))
-    name2 = 'quantiles-2' + next(tokens)
+    name2 = 'quantiles-2-' + token
     len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
 
-    name3 = 'quantiles-3' + next(tokens)
+    name3 = 'quantiles-3-' + token
     merge_dsk = {(name3, 0): (pd.Series, (merge_percentiles, q, [q] * df.npartitions,
                                                 sorted(val_dsk),
                                                 sorted(len_dsk)))}
@@ -1276,14 +1279,16 @@ def repartition(df, divisions):
     >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
     """
     if isinstance(df, _Frame):
-        tmp = 'repartition-split' + next(tokens)
-        out = 'repartition-merge' + next(tokens)
+        token = tokenize((df._name, divisions))
+        tmp = 'repartition-split-' + token
+        out = 'repartition-merge-' + token
         dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
 
         return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
 
     elif isinstance(df, pd.core.generic.NDFrame):
-        name = 'repartition-dataframe' + next(tokens)
+        token = tokenize((tokenize_dataframe(df), divisions))
+        name = 'repartition-dataframe-' + token
         dfs = shard_df_on_index(df, divisions[1:-1])
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
         if isinstance(df, pd.DataFrame):

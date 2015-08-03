@@ -160,3 +160,11 @@ def get_categories(df):
     if iscategorical(df.index.dtype):
         result['.index'] = df.index.categories
     return result
+
+
+def tokenize_dataframe(df):
+    """ Provide unique identifier for a dataframe """
+    if isinstance(df, pd.DataFrame):
+        return (id(df), len(df), list(df.columns)) # this could be improved
+    else:
+        return (id(df), len(df), df.name) # this could be improved

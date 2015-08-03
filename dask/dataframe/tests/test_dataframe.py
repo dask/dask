@@ -51,8 +51,6 @@ def test_Dataframe():
 
     assert list(d.columns) == list(['a', 'b'])
 
-    assert eq(d.head(2), dsk[('x', 0)].head(2))
-    assert eq(d['a'].head(2), dsk[('x', 0)]['a'].head(2))
 
     full = d.compute()
     assert eq(d[d['b'] > 2], full[full['b'] > 2])
@@ -65,6 +63,15 @@ def test_Dataframe():
     assert d.index._name == d.index._name  # this is deterministic
 
     assert repr(d)
+
+
+def test_head():
+    assert eq(d.head(2), dsk[('x', 0)].head(2))
+    assert eq(d['a'].head(2), dsk[('x', 0)]['a'].head(2))
+    assert sorted(d.head(2, compute=False).dask) == \
+           sorted(d.head(2, compute=False).dask)
+    assert sorted(d.head(2, compute=False).dask) != \
+           sorted(d.head(3, compute=False).dask)
 
 
 def test_Series():
