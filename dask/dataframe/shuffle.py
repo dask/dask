@@ -2,9 +2,10 @@ from collections import Iterator
 from toolz import merge
 import pandas as pd
 import numpy as np
+import uuid
 
 from ..optimize import cull
-from .core import DataFrame, Series, _Frame, tokens
+from .core import DataFrame, Series, _Frame, tokenize
 from .utils import (strip_categories, shard_df_on_index, _categorize,
                     get_categories)
 
@@ -60,13 +61,17 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     if isinstance(index, _Frame):
         assert df.divisions == index.divisions
 
+    token = tokenize((df._name,
+                      (index._name if isinstance(index, _Frame) else  index),
+                      divisions))
+    always_new_token = uuid.uuid1().hex
     import partd
-    p = ('zpartd' + next(tokens),)
+
+    p = ('zpartd-' + always_new_token,)
 
     # Get Categories
-    token = next(tokens)
-    catname = 'set-partition--get-categories-old' + token
-    catname2 = 'set-partition--get-categories-new' + token
+    catname = 'set-partition--get-categories-old-' + always_new_token
+    catname2 = 'set-partition--get-categories-new-' + always_new_token
 
     dsk1 = {catname: (get_categories, df._keys()[0]),
             p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,))),
@@ -74,7 +79,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
                             index.name if isinstance(index, Series) else index)}
 
     # Partition data on disk
-    name = 'set-partition--partition' + next(tokens)
+    name = 'set-partition--partition-' + always_new_token
     if isinstance(index, _Frame):
         dsk2 = dict(((name, i),
                      (_set_partition, part, ind, divisions, p))
@@ -87,7 +92,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
                      in enumerate(df._keys()))
 
     # Barrier
-    barrier_token = 'barrier' + next(tokens)
+    barrier_token = 'barrier-' + always_new_token
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     if compute:
@@ -100,7 +105,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
         dsk4 = {}
 
     # Collect groups
-    name = 'set-partition--collect' + next(tokens)
+    name = 'set-partition--collect-' + token
     if compute and not categories:
         dsk4.update(dict(((name, i),
                      (_set_collect, i, p, barrier_token))
@@ -162,13 +167,18 @@ def shuffle(df, index, npartitions=None):
     if npartitions is None:
         npartitions = df.npartitions
 
+    token = tokenize((df._name,
+                      (index._name if isinstance(index, _Frame) else  index),
+                      npartitions))
+    always_new_token = uuid.uuid1().hex
+
     import partd
-    p = ('zpartd' + next(tokens),)
+    p = ('zpartd-' + always_new_token,)
     dsk1 = {p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,),
                                                    (partd.File,)))}
 
     # Partition data on disk
-    name = 'shuffle-partition' + next(tokens)
+    name = 'shuffle-partition-' + always_new_token
     if isinstance(index, _Frame):
         dsk2 = dict(((name, i),
                      (partition, part, ind, npartitions, p))
@@ -181,11 +191,11 @@ def shuffle(df, index, npartitions=None):
                      in enumerate(df._keys()))
 
     # Barrier
-    barrier_token = 'barrier' + next(tokens)
+    barrier_token = 'barrier-' + always_new_token
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name = 'shuffle-collect' + next(tokens)
+    name = 'shuffle-collect-' + token
     dsk4 = dict(((name, i),
                  (collect, i, p, barrier_token))
                 for i in range(npartitions))

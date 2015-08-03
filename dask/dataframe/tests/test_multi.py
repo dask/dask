@@ -101,10 +101,10 @@ def test_hash_join():
     assert sorted(result.fillna(100).values.tolist()) == \
            sorted(expected.fillna(100).values.tolist())
 
-    assert sorted(hash_join(a, 'y', b, 'y', 'inner').dask) == \
-           sorted(hash_join(a, 'y', b, 'y', 'inner').dask)
-    assert sorted(hash_join(a, 'y', b, 'y', 'inner').dask) != \
-           sorted(hash_join(a, 'y', b, 'y', 'outer').dask)
+    assert hash_join(a, 'y', b, 'y', 'inner')._name == \
+           hash_join(a, 'y', b, 'y', 'inner')._name
+    assert hash_join(a, 'y', b, 'y', 'inner')._name != \
+           hash_join(a, 'y', b, 'y', 'outer')._name
 
 
 def test_indexed_concat():
