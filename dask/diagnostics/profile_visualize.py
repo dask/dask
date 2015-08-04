@@ -29,7 +29,7 @@ def pprint_task(task, keys):
     >>> pprint_task(dsk['d'], dsk)
     'add(mul(_, _), _)'
     >>> pprint_task(dsk['e'], dsk)
-    'sum([_, _, 5])'
+    'sum([_, _, *])'
     """
     if istask(task):
         func = task[0]
@@ -50,10 +50,7 @@ def pprint_task(task, keys):
                 return '_'
         except TypeError:
             pass
-        res = str(task)
-        if len(res) < 10:
-            return res
-        return '<{0}>'.format(type(task).__name__)
+        return '*'
 
 
 def get_colors(palette, funcs):
@@ -148,11 +145,11 @@ def visualize(results, dsk, palette='GnBu', file_path="profile.html",
     hover.tooltips = """
     <div>
         <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
-        <span style="font-size: 12px;">@key</span>
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@key</span>
     </div>
     <div>
         <span style="font-size: 14px; font-weight: bold;">Task:</span>&nbsp;
-        <span style="font-size: 12px;">@function</span>
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@function</span>
     </div>
     """
     hover.point_policy = 'follow_mouse'
