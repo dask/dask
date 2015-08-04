@@ -6,6 +6,7 @@ from collections import Iterator
 from toolz import merge, unique, curry
 
 from .optimize import cull, fuse
+from .utils import concrete
 from . import base
 from .compatibility import apply
 from . import threaded
@@ -67,7 +68,7 @@ def to_task_dasks(expr):
         name = tokenize(str(expr), True)
         keys = expr._keys()
         dsk = expr._optimize(expr.dask, keys)
-        dsk[name] = (expr._finalize, expr, (list, keys))
+        dsk[name] = (expr._finalize, expr, (concrete, keys))
         return name, [dsk]
     elif isinstance(expr, (Iterator, list, tuple, set)):
         args, dasks = unzip(map(to_task_dasks, expr), 2)
