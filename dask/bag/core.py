@@ -174,7 +174,7 @@ def to_textfiles(b, path, name_function=str):
 
 def finalize(bag, results):
     if isinstance(bag, Item):
-        return results
+        return results[0]
     if isinstance(results, Iterator):
         results = list(results)
     if isinstance(results[0], Iterable) and not isinstance(results[0], str):
@@ -194,7 +194,7 @@ class Item(Base):
         self.key = key
 
     def _keys(self):
-        return self.key
+        return [self.key]
 
     def apply(self, func):
         name = next(names)

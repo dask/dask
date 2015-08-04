@@ -6,7 +6,8 @@ from collections import Iterator
 from toolz import merge, unique, curry
 
 from .optimize import cull, fuse
-from .context import _globals
+from .utils import concrete
+from . import base
 from .compatibility import apply
 from . import threaded
 
@@ -63,6 +64,12 @@ def to_task_dasks(expr):
     """
     if isinstance(expr, Value):
         return expr.key, expr._dasks
+    elif isinstance(expr, base.Base):
+        name = tokenize(str(expr), True)
+        keys = expr._keys()
+        dsk = expr._optimize(expr.dask, keys)
+        dsk[name] = (expr._finalize, expr, (concrete, keys))
+        return name, [dsk]
     elif isinstance(expr, (Iterator, list, tuple, set)):
         args, dasks = unzip(map(to_task_dasks, expr), 2)
         args = list(args)
@@ -176,15 +183,12 @@ def optimize(dsk, keys):
     return fuse(dsk2)
 
 
-def get(dsk, keys, get=None, **kwargs):
-    """Specialized get function"""
-    get = get or _globals['get'] or threaded.get
-    dsk2 = optimize(dsk, keys)
-    return get(dsk2, keys, **kwargs)
-
-
 def compute(*args, **kwargs):
     """Evaluate several ``Value``s at once.
+
+    Note that the only difference between this function and
+    ``dask.base.compute`` is that this implicitly converts python objects to
+    ``Value``s, allowing for collections of dask objects to be computed.
 
     Examples
     --------
@@ -193,13 +197,11 @@ def compute(*args, **kwargs):
     >>> c = a + 3
     >>> compute(b, c)  # Compute both simultaneously
     (3, 4)
-    >>> compute(a, [b, c])
+    >>> compute(a, [b, c])  # Works for lists of Values
     (1, [3, 4])
     """
     args = [value(a) for a in args]
-    dsk = merge(*[arg.dask for arg in args])
-    keys = [arg.key for arg in args]
-    return tuple(get(dsk, keys, **kwargs))
+    return base.compute(*args, **kwargs)
 
 
 def right(method):
@@ -209,20 +211,19 @@ def right(method):
     return _inner
 
 
-class Value(object):
+class Value(base.Base):
     """Represents a value to be computed by dask.
 
     Equivalent to the output from a single key in a dask graph.
     """
     __slots__ = ('_key', '_dasks')
+    _optimize = staticmethod(optimize)
+    _finalize = staticmethod(lambda a, r: r[0])
+    _default_get = staticmethod(threaded.get)
 
     def __init__(self, name, dasks):
         object.__setattr__(self, '_key', name)
         object.__setattr__(self, '_dasks', dasks)
-
-    def compute(self, **kwargs):
-        """Compute the result."""
-        return get(self.dask, self.key, **kwargs)
 
     @property
     def dask(self):
@@ -232,13 +233,8 @@ class Value(object):
     def key(self):
         return self._key
 
-    def visualize(self, optimize_graph=False, **kwargs):
-        """Visualize the dask as a graph"""
-        from dask.dot import dot_graph
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self.key), **kwargs)
-        else:
-            return dot_graph(self.dask, **kwargs)
+    def _keys(self):
+        return [self.key]
 
     def __repr__(self):
         return "Value({0})".format(repr(self.key))
