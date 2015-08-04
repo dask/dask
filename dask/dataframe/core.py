@@ -22,7 +22,7 @@ from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
-from ..context import _globals
+from ..base import Base, compute
 
 
 def _concat(args):
@@ -47,25 +47,27 @@ def _concat(args):
     return args
 
 
-def compute(*args, **kwargs):
-    """ Compute multiple dataframes at once """
-    if len(args) == 1 and isinstance(args[0], (tuple, list)):
-        args = args[0]
-    dsk = merge(*[arg.dask for arg in args])
-    keys = [arg._keys() for arg in args]
-    results = get(dsk, keys, **kwargs)
-
-    return list(map(_concat, results))
-
-
 tokens = ('-%d' % i for i in count(1))
 
 
-class Scalar(object):
+def optimize(dsk, keys):
+    from .optimize import optimize
+    return optimize(dsk, keys)
+
+
+def finalize(self, results):
+    return _concat(results)
+
+
+class Scalar(Base):
     """ A Dask-thing to represent a scalar
 
     TODO: Clean up this abstraction
     """
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(threaded.get)
+    _finalize = staticmethod(finalize)
+
     def __init__(self, dsk, _name):
         self.dask = dsk
         self._name = _name
@@ -78,37 +80,19 @@ class Scalar(object):
     def _keys(self):
         return [(self._name, 0)]
 
-    def compute(self, **kwargs):
-        return compute(self, **kwargs)[0]
 
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        from .optimize import optimize
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
-
-
-class _Frame(object):
+class _Frame(Base):
     """ Superclass for DataFrame and Series """
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(threaded.get)
+    _finalize = staticmethod(finalize)
+
     @property
     def npartitions(self):
         return len(self.divisions) - 1
 
-    def compute(self, **kwargs):
-        return compute(self, **kwargs)[0]
-
     def _keys(self):
         return [(self._name, i) for i in range(self.npartitions)]
-
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        from .optimize import optimize
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
     @property
     def index(self):
@@ -133,7 +117,7 @@ class _Frame(object):
         name = 'cache' + next(tokens)
         dsk = dict(((name, i), (setitem, cache, (tuple, list(key)), key))
                     for i, key in enumerate(self._keys()))
-        get(merge(dsk, self.dask), list(dsk.keys()))
+        self._get(merge(dsk, self.dask), list(dsk.keys()))
 
         # Create new dataFrame pointing to that cache
         name = 'from-cache' + next(tokens)
@@ -615,7 +599,7 @@ class DataFrame(_Frame):
 
     @property
     def dtypes(self):
-        return get(self.dask, self._keys()[0]).dtypes
+        return self._get(self.dask, self._keys()[0]).dtypes
 
     def set_index(self, other, **kwargs):
         return set_index(self, other, **kwargs)
@@ -1116,7 +1100,7 @@ def categorize(df, columns=None, **kwargs):
         columns = [columns]
 
     distincts = [df[col].drop_duplicates() for col in columns]
-    values = compute(distincts, **kwargs)
+    values = compute(*distincts, **kwargs)
 
     func = partial(categorize_block, categories=dict(zip(columns, values)))
     return df.map_partitions(func, columns=df.columns)
@@ -1147,14 +1131,6 @@ def quantile(df, q, **kwargs):
 
     dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
     return Series(dsk, name3, df.name, [df.divisions[0], df.divisions[-1]])
-
-
-def get(dsk, keys, get=None, **kwargs):
-    """ Get function with optimizations specialized to dask.Dataframe """
-    from .optimize import optimize
-    dsk2 = optimize(dsk, keys, **kwargs)
-    get = get or _globals['get'] or threaded.get
-    return get(dsk2, keys, **kwargs)  # use synchronous scheduler for now
 
 
 def pd_split(df, p, seed=0):

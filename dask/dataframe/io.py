@@ -11,11 +11,11 @@ from operator import getitem
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
+from ..base import compute
 from .. import array as da
 
 from . import core
-from .core import (DataFrame, Series, compute, concat, categorize_block,
-        tokens, get)
+from .core import DataFrame, Series, concat, categorize_block, tokens
 from .shuffle import set_partition
 
 
@@ -100,7 +100,7 @@ def read_csv(fn, *args, **kwargs):
 
     if 'nrows' in kwargs:  # Just create single partition
         dsk = {(name, 0): (apply, pd.read_csv, (fn,),
-                                  assoc(kwargs, 'header', header))},
+                                  assoc(kwargs, 'header', header))}
         result = DataFrame(dsk, name, columns, [None, None])
 
     else:
@@ -541,7 +541,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                             'complevel': complevel, 'complib': complib,
                             'fletcher32': fletcher32}))
 
-    get(merge(df.dask, dsk), (name, i), **kwargs)
+    DataFrame._get(merge(df.dask, dsk), (name, i), **kwargs)
 
 
 dont_use_fixed_error_message = """
@@ -595,7 +595,7 @@ def to_castra(df, fn=None, categories=None):
         dsk[(name, i)] = (_link, (name, i - 1),
                           (Castra.extend, (name, -1), (df._name, i)))
 
-    c, _ = get(merge(dsk, df.dask), [(name, -1), list(dsk.keys())])
+    c, _ = DataFrame._get(merge(dsk, df.dask), [(name, -1), list(dsk.keys())])
     return c
 
 
@@ -618,4 +618,4 @@ def to_csv(df, filename, **kwargs):
                              (tuple, [(df._name, i), filename]),
                              kwargs2))
 
-    get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)
+    DataFrame._get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)

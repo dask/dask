@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 from ..optimize import cull
-from .core import DataFrame, Series, get, _Frame, tokens
+from .core import DataFrame, Series, _Frame, tokens
 from .utils import (strip_categories, shard_df_on_index, _categorize,
                     get_categories)
 
@@ -94,7 +94,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
         dsk = merge(df.dask, dsk1, dsk2, dsk3)
         if isinstance(index, _Frame):
             dsk.update(index.dask)
-        p, barrier_token, categories = get(dsk, [p, barrier_token, catname], **kwargs)
+        p, barrier_token, categories = df._get(dsk, [p, barrier_token, catname], **kwargs)
         dsk4 = {catname2: categories}
     else:
         dsk4 = {}

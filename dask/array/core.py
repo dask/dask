@@ -19,11 +19,11 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
+from ..base import Base, compute
 from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
         IndexCallable)
 from ..compatibility import unicode, long
 from .. import threaded, core
-from ..context import _globals
 
 
 names = ('x_%d' % i for i in count(1))
@@ -503,30 +503,6 @@ def topk(k, x):
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
 
 
-def compute(*args, **kwargs):
-    """ Evaluate several dask arrays at once
-
-    The result of this function is always a tuple of numpy arrays. To evaluate
-    a single dask array into a numpy array, use ``myarray.compute()`` or simply
-    ``np.array(myarray)``.
-
-    Examples
-    --------
-    >>> import dask.array as da
-    >>> d = da.ones((4, 4), chunks=(2, 2))
-    >>> a = d + 1  # two different dask arrays
-    >>> b = d + 2
-    >>> A, B = da.compute(a, b)  # Compute both simultaneously
-    """
-    dsk = merge(*[arg.dask for arg in args])
-    keys = [arg._keys() for arg in args]
-    results = get(dsk, keys, **kwargs)
-
-    results2 = tuple(concatenate3(x) if arg.shape else unpack_singleton(x)
-                     for x, arg in zip(results, args))
-    return results2
-
-
 def store(sources, targets, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
@@ -576,7 +552,7 @@ def store(sources, targets, **kwargs):
     updates = [insert_to_ooc(tgt, src) for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
-    get(dsk, keys, **kwargs)
+    Array._get(dsk, keys, **kwargs)
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -599,7 +575,14 @@ def blockdims_from_blockshape(shape, chunks):
                               for d, bd in zip(shape, chunks))
 
 
-class Array(object):
+def finalize(arr, results):
+    if arr.shape:
+        return concatenate3(results)
+    else:
+        return unpack_singleton(results)
+
+
+class Array(Base):
     """ Parallel Array
 
     Parameters
@@ -616,6 +599,10 @@ class Array(object):
     """
 
     __slots__ = 'dask', 'name', '_chunks', '_dtype'
+
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(threaded.get)
+    _finalize = staticmethod(finalize)
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
@@ -651,13 +638,6 @@ class Array(object):
 
     def __len__(self):
         return sum(self.chunks[0])
-
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
     @property
     @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].chunks))
@@ -727,11 +707,6 @@ class Array(object):
         """
         return to_hdf5(filename, datapath, self, **kwargs)
 
-    @wraps(compute)
-    def compute(self, **kwargs):
-        result, = compute(self, **kwargs)
-        return result
-
     def cache(self, store=None, **kwargs):
         """ Evaluate and cache array
 
@@ -797,7 +772,7 @@ class Array(object):
             name = next(names)
             dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
                     for k in core.flatten(self._keys()))
-            get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
+            Array._get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
 
             dsk2 = dict((k, (operator.getitem, store, (tuple, list(k))))
                         for k in store)
@@ -1297,17 +1272,6 @@ def atop(func, out_ind, *args, **kwargs):
 
     dsks = [a.dask for a, _ in arginds]
     return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)
-
-
-def get(dsk, keys, get=None, **kwargs):
-    """ Specialized get function
-
-    1. Handle inlining
-    2. Use custom score function
-    """
-    get = get or _globals['get'] or threaded.get
-    dsk2 = optimize(dsk, keys, **kwargs)
-    return get(dsk2, keys, **kwargs)
 
 
 def unpack_singleton(x):
@@ -2006,7 +1970,7 @@ def fromfunction(func, chunks=None, shape=None, dtype=None):
 def unique(x):
     name = next(names)
     dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
-    parts = get(merge(dsk, x.dask), list(dsk.keys()))
+    parts = Array._get(merge(dsk, x.dask), list(dsk.keys()))
     return np.unique(np.concatenate(parts))
 
 

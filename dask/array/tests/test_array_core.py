@@ -256,7 +256,7 @@ def test_short_stack():
     d = da.from_array(x, chunks=(1,))
     s = da.stack([d])
     assert s.shape == (1, 1)
-    assert get(s.dask, s._keys())[0][0].shape == (1, 1)
+    assert Array._get(s.dask, s._keys())[0][0].shape == (1, 1)
 
 
 def test_stack_scalars():
@@ -602,17 +602,6 @@ def test_blockdims_from_blockshape():
     assert raises(TypeError, lambda: blockdims_from_blockshape((10,), None))
     assert blockdims_from_blockshape((1e2, 3), [1e1, 3]) == ((10,)*10, (3,))
     assert blockdims_from_blockshape((np.int8(10),), (5,)) == ((5, 5),)
-
-
-def test_compute():
-    d = da.ones((4, 4), chunks=(2, 2))
-    a, b = d + 1, d + 2
-    A, B = compute(a, b)
-    assert eq(A, d + 1)
-    assert eq(B, d + 2)
-
-    A, = compute(a)
-    assert eq(A, d + 1)
 
 
 def test_coerce():

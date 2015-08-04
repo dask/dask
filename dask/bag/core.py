@@ -30,7 +30,7 @@ from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
-from ..context import _globals
+from ..base import Base
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
@@ -97,16 +97,6 @@ def optimize(dsk, keys):
     dsk4 = inline_singleton_lists(dsk3)
     dsk5 = lazify(dsk4)
     return dsk5
-
-
-def get(dsk, keys, get=None, **kwargs):
-    """ Get function for dask.bag """
-    get = get or _globals['get'] or mpget
-
-    dsk2 = optimize(dsk, keys)
-
-    return get(dsk2, keys, **kwargs)
-_get = get
 
 
 def list2(seq):
@@ -182,23 +172,39 @@ def to_textfiles(b, path, name_function=str):
     return Bag(merge(b.dask, dsk), name, b.npartitions)
 
 
-class Item(object):
+def finalize(bag, results):
+    if isinstance(bag, Item):
+        return results
+    if isinstance(results, Iterator):
+        results = list(results)
+    if isinstance(results[0], Iterable) and not isinstance(results[0], str):
+        results = toolz.concat(results)
+    if isinstance(results, Iterator):
+        results = list(results)
+    return results
+
+
+class Item(Base):
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(mpget)
+    _finalize = staticmethod(finalize)
+
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
 
-    def compute(self, **kwargs):
-        return get(self.dask, self.key, **kwargs)
+    def _keys(self):
+        return self.key
 
     def apply(self, func):
         name = next(names)
         dsk = {name: (func, self.key)}
         return Item(merge(self.dask, dsk), name)
 
-    __int__ = __float__ = __complex__ = __bool__ = compute
+    __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
 
-class Bag(object):
+class Bag(Base):
     """ Parallel collection of Python objects
 
     Example
@@ -228,6 +234,10 @@ class Bag(object):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(mpget)
+    _finalize = staticmethod(finalize)
+
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name
@@ -252,13 +262,6 @@ class Bag(object):
     @property
     def _args(self):
         return (self.dask, self.name, self.npartitions)
-
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
@@ -656,15 +659,6 @@ class Bag(object):
 
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
-
-    def compute(self, **kwargs):
-        """ Force evaluation of bag """
-        results = get(self.dask, self._keys(), **kwargs)
-        if isinstance(results[0], Iterable) and not isinstance(results[0], str):
-            results = toolz.concat(results)
-        if isinstance(results, Iterator):
-            results = list(results)
-        return results
 
     def concat(self):
         """ Concatenate nested lists into one long list

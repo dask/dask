@@ -167,7 +167,7 @@ def test_read_csv_categorize_and_index():
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
-        blocks = dd.core.get(f.dask, f._keys(), get=get_sync)
+        blocks = dd.DataFrame._get(f.dask, f._keys(), get=get_sync)
         for i, block in enumerate(blocks):
             if i < len(f.divisions):
                 assert (block.index <= f.divisions[i + 1]).all()
