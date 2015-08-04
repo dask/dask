@@ -5,7 +5,6 @@ from functools import wraps, reduce
 from collections import Iterable
 import bisect
 import uuid
-from hashlib import md5
 from toolz import merge, partial, first, partition
 from operator import getitem, setitem
 from datetime import datetime
@@ -24,25 +23,12 @@ from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index, tokenize_dataframe
-from ..base import Base, compute
+from ..base import Base, compute, tokenize
 
 
 no_default = '__no_default__'
 
-
 pd.computation.expressions.set_use_numexpr(False)
-
-
-def tokenize(obj):
-    """ Deterministic token
-
-    >>> tokenize([1, 2, '3'])
-    'b9e8c0d38fb40e66dc4fd00adc3c6553'
-
-    >>> tokenize('Hello') == tokenize('Hello')
-    True
-    """
-    return md5(str(obj).encode()).hexdigest()
 
 def _concat(args):
     """ Generic concat operation """

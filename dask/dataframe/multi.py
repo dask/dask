@@ -54,7 +54,8 @@ We proceed with hash joins in the following stages:
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
 
-from .core import repartition, DataFrame, Index, tokenize
+from ..base import tokenize
+from .core import repartition, DataFrame, Index
 from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right

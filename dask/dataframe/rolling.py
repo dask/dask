@@ -3,7 +3,7 @@ from functools import partial, wraps
 from toolz import merge
 import pandas as pd
 
-from .core import tokenize
+from ..base import tokenize
 
 
 def rolling_chunk(func, part1, part2, window, *args):

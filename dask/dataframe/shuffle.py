@@ -5,7 +5,8 @@ import numpy as np
 import uuid
 
 from ..optimize import cull
-from .core import DataFrame, Series, _Frame, tokenize
+from ..base import tokenize
+from .core import DataFrame, Series, _Frame
 from .utils import (strip_categories, shard_df_on_index, _categorize,
                     get_categories)
 

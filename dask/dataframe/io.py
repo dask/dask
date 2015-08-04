@@ -14,14 +14,13 @@ import uuid
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
-from ..base import compute
+from ..base import compute, tokenize
 from .utils import tokenize_dataframe
 from .. import array as da
 from ..async import get_sync
 
 from . import core
-from .core import (DataFrame, Series, concat, categorize_block, tokens,
-        tokenize)
+from .core import (DataFrame, Series, concat, categorize_block, tokens)
 from .shuffle import set_partition
 
 

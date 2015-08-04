@@ -1,5 +1,6 @@
 import warnings
 from operator import attrgetter
+from hashlib import md5
 
 from toolz import merge, groupby
 
@@ -60,3 +61,15 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
     return tuple(a._finalize(a, r) for a, r in zip(args, results))
+
+
+def tokenize(obj):
+    """ Deterministic token
+
+    >>> tokenize([1, 2, '3'])
+    'b9e8c0d38fb40e66dc4fd00adc3c6553'
+
+    >>> tokenize('Hello') == tokenize('Hello')
+    True
+    """
+    return md5(str(obj).encode()).hexdigest()
