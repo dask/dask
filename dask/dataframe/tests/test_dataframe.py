@@ -10,6 +10,8 @@ from dask.utils import raises
 import dask.dataframe as dd
 from dask.dataframe.core import (concat, repartition_divisions, _loc,
         _coerce_loc_index)
+from dask.dataframe.core import (concat, repartition_divisions, _loc,
+        _coerce_loc_index, _concat)
 
 
 def eq(a, b):
@@ -49,8 +51,6 @@ def test_Dataframe():
 
     assert list(d.columns) == list(['a', 'b'])
 
-    assert eq(d.head(2), dsk[('x', 0)].head(2))
-    assert eq(d['a'].head(2), dsk[('x', 0)]['a'].head(2))
 
     full = d.compute()
     assert eq(d[d['b'] > 2], full[full['b'] > 2])
@@ -63,6 +63,15 @@ def test_Dataframe():
     assert d.index._name == d.index._name  # this is deterministic
 
     assert repr(d)
+
+
+def test_head():
+    assert eq(d.head(2), dsk[('x', 0)].head(2))
+    assert eq(d['a'].head(2), dsk[('x', 0)]['a'].head(2))
+    assert sorted(d.head(2, compute=False).dask) == \
+           sorted(d.head(2, compute=False).dask)
+    assert sorted(d.head(2, compute=False).dask) != \
+           sorted(d.head(3, compute=False).dask)
 
 
 def test_Series():
@@ -128,6 +137,11 @@ def test_split_apply_combine_on_series():
 
     assert eq(d.groupby('a').b.mean(), full.groupby('a').b.mean())
     assert eq(d.groupby(d.a > 3).b.mean(), full.groupby(full.a > 3).b.mean())
+
+    assert sorted(d.groupby('b').a.sum().dask) == \
+           sorted(d.groupby('b').a.sum().dask)
+    assert sorted(d.groupby(d.a > 3).b.mean().dask) == \
+           sorted(d.groupby(d.a > 3).b.mean().dask)
 
 
 def test_arithmetic():
@@ -343,6 +357,18 @@ def test_map_partitions():
     assert eq(d.map_partitions(lambda df: df, 'a'), full)
 
 
+def test_map_partitions_names():
+    func = lambda x: x
+    assert sorted(dd.map_partitions(func, d.columns, d).dask) == \
+           sorted(dd.map_partitions(func, d.columns, d).dask)
+    assert sorted(dd.map_partitions(lambda x: x, d.columns, d, token=1).dask) == \
+           sorted(dd.map_partitions(lambda x: x, d.columns, d, token=1).dask)
+
+    func = lambda x, y: x
+    assert sorted(dd.map_partitions(func, d.columns, d, d).dask) == \
+           sorted(dd.map_partitions(func, d.columns, d, d).dask)
+
+
 def test_drop_duplicates():
     assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())
 
@@ -355,6 +381,9 @@ def test_full_groupby():
         df['b'] = df.b - df.b.mean()
         return df
     assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+
+    assert sorted(d.groupby('a').apply(func).dask) == \
+           sorted(d.groupby('a').apply(func).dask)
 
 
 def test_groupby_on_index():
@@ -465,6 +494,8 @@ def test_loc():
     assert eq(d.loc[1000:], full.loc[1000:])
     assert eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
 
+    assert sorted(d.loc[5].dask) == sorted(d.loc[5].dask)
+    assert sorted(d.loc[5].dask) != sorted(d.loc[6].dask)
 
 
 def test_loc_with_text_dates():
@@ -481,6 +512,9 @@ def test_loc_with_text_dates():
 def test_loc_with_series():
     assert eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0])
 
+    assert sorted(d.loc[d.a % 2].dask) == sorted(d.loc[d.a % 2].dask)
+    assert sorted(d.loc[d.a % 2].dask) != sorted(d.loc[d.a % 3].dask)
+
 
 def test_iloc_raises():
     assert raises(AttributeError, lambda: d.iloc[:5])
@@ -496,8 +530,8 @@ def test_map():
 
 
 def test_concat():
-    x = concat([pd.DataFrame(columns=['a', 'b']),
-                pd.DataFrame(columns=['a', 'b'])])
+    x = _concat([pd.DataFrame(columns=['a', 'b']),
+                 pd.DataFrame(columns=['a', 'b'])])
     assert list(x.columns) == ['a', 'b']
     assert len(x) == 0
 
@@ -534,7 +568,7 @@ def test_unknown_divisions():
     assert raises(ValueError, lambda: d.loc[3])
 
 
-def test_concat():
+def test_concat2():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
            ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
@@ -549,6 +583,8 @@ def test_concat():
     assert c.npartitions == a.npartitions + b.npartitions
 
     assert eq(pd.concat([a.compute(), b.compute()]), c)
+
+    assert dd.concat([a, b]).dask == dd.concat([a, b]).dask
 
 
 def test_dataframe_series_are_dillable():
@@ -743,3 +779,36 @@ def test_query():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
     assert eq(a.query('x**2 > y'), df.query('x**2 > y'))
+
+
+def test_deterministic_arithmetic_names():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+    assert sorted((a.x + a.y ** 2).dask) == sorted((a.x + a.y ** 2).dask)
+    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x + a.y ** 3).dask)
+    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x - a.y ** 2).dask)
+
+
+def test_deterministic_reduction_names():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+    assert a.x.sum()._name == a.x.sum()._name
+    assert a.x.mean()._name == a.x.mean()._name
+    assert a.x.var()._name == a.x.var()._name
+    assert a.x.min()._name == a.x.min()._name
+    assert a.x.max()._name == a.x.max()._name
+    assert a.x.count()._name == a.x.count()._name
+
+
+def test_deterministic_apply_concat_apply_names():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+    assert sorted(a.x.nlargest(2).dask) == sorted(a.x.nlargest(2).dask)
+    assert sorted(a.x.nlargest(2).dask) != sorted(a.x.nlargest(3).dask)
+    assert sorted(a.x.drop_duplicates().dask) == \
+           sorted(a.x.drop_duplicates().dask)
+    assert sorted(a.groupby('x').y.mean().dask) == \
+           sorted(a.groupby('x').y.mean().dask)

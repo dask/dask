@@ -4,18 +4,23 @@ import pandas as pd
 import numpy as np
 from functools import wraps, partial
 import re
+import os
 from glob import glob
 from math import ceil
 from toolz import merge, dissoc, assoc
 from operator import getitem
+from hashlib import md5
+import uuid
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
 from ..base import compute
+from .utils import tokenize_dataframe
 from .. import array as da
 
 from . import core
-from .core import DataFrame, Series, concat, categorize_block, tokens
+from .core import (DataFrame, Series, concat, categorize_block, tokens,
+        tokenize)
 from .shuffle import set_partition
 
 
@@ -53,7 +58,10 @@ def fill_kwargs(fn, args, kwargs):
 
     # Let pandas infer on the first 100 rows
     if '*' in fn:
-        fn = sorted(glob(fn))[0]
+        filenames = sorted(glob(fn))
+        if not filenames:
+            raise ValueError("No files found matching name %s" % fn)
+        fn = filenames[0]
 
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)
@@ -93,7 +101,10 @@ def read_csv(fn, *args, **kwargs):
     if '*' in fn:
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
 
-    name = 'read-csv' + next(tokens)
+    arg_token = (os.path.getmtime(fn),
+                 args,
+                 sorted(kwargs.items(), key=lambda kv: kv[0]))
+    name = 'read-csv-%s-%s' % (fn, tokenize(arg_token))
 
     columns = kwargs.pop('columns')
     header = kwargs.pop('header')
@@ -265,7 +276,8 @@ def from_array(x, chunksize=50000, columns=None):
     divisions = tuple(range(0, len(x), chunksize))
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
-    name = 'from_array' + next(tokens)
+    token = tokenize((id(x), x.dtype, x.shape, chunksize, columns))
+    name = 'from_array-' + token
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
                               slice(i * chunksize, (i + 1) * chunksize))))
@@ -331,7 +343,9 @@ def from_pandas(data, npartitions):
     divisions = tuple(data.index[i]
                       for i in range(0, nrows, chunksize))
     divisions = divisions + (data.index[-1],)
-    name = 'from_pandas' + next(tokens)
+
+    token = (tokenize_dataframe(data), chunksize) # this could be improved
+    name = 'from_pandas-' + tokenize(token)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))
     dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
@@ -380,7 +394,13 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     divisions = (0,) + tuple(range(-1, len(x), chunksize))[1:]
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
-    new_name = 'from_bcolz' + next(tokens)
+    if x.rootdir:
+        token = tokenize((x.rootdir, os.path.getmtime(x.rootdir), chunksize,
+                          categorize, index, sorted(kwargs.items())))
+    else:
+        token = tokenize((id(x), x.shape, x.dtype, chunksize, categorize,
+                         index, sorted(kwargs.items())))
+    new_name = 'from_bcolz-' + token
     dsk = dict(((new_name, i),
                 (dataframe_from_ctable,
                  x,
@@ -434,8 +454,6 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
             columns = list(columns)
         x = x[columns]
 
-    name = 'from-bcolz' + next(tokens)
-
     if isinstance(x, bcolz.ctable):
         chunks = [x[name][slc] for name in x.names]
         if categories is not None:
@@ -479,7 +497,7 @@ def from_dask_array(x, columns=None):
     2  1  1
     3  1  1
     """
-    name = 'from-dask-array' + next(tokens)
+    name = 'from-dask-array' + tokenize((x.name, columns))
     divisions = [0]
     for c in x.chunks[0]:
         divisions.append(divisions[-1] + c)
@@ -522,7 +540,7 @@ def _link(token, result):
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
            complib=None, fletcher32=False, **kwargs):
-    name = 'to-hdf' + next(tokens)
+    name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
 
@@ -562,7 +580,9 @@ def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
     if columns is None:
         columns = list(pd.read_hdf(path_or_buf, key, stop=0).columns)
 
-    name = 'read-hdf' + next(tokens)
+    token = tokenize((path_or_buf, os.path.getmtime(path_or_buf), key, start,
+                      stop, columns, chunksize))
+    name = 'read-hdf-' + token
 
     dsk = dict(((name, i), (apply, pd.read_hdf,
                              (path_or_buf, key),
@@ -587,7 +607,7 @@ def to_castra(df, fn=None, categories=None):
     if isinstance(categories, list):
         categories = (list, categories)
 
-    name = 'to-castra' + next(tokens)
+    name = 'to-castra-' + uuid.uuid1().hex
 
     dsk = dict()
     dsk[(name, -1)] = (Castra, fn, (df._name, 0), categories)
@@ -601,7 +621,7 @@ def to_castra(df, fn=None, categories=None):
 
 def to_csv(df, filename, **kwargs):
     myget = kwargs.pop('get', None)
-    name = 'to-csv' + next(tokens)
+    name = 'to-csv-' + uuid.uuid1().hex
 
     dsk = dict()
     dsk[(name, 0)] = (apply, pd.DataFrame.to_csv,

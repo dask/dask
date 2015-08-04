@@ -56,6 +56,11 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
     assert c.divisions[-1] == 8
     tm.assert_frame_equal(c.compute(), A.join(B, how='outer'))
 
+    assert sorted(join_indexed_dataframes(a, b, how='inner').dask) == \
+           sorted(join_indexed_dataframes(a, b, how='inner').dask)
+    assert sorted(join_indexed_dataframes(a, b, how='inner').dask) != \
+           sorted(join_indexed_dataframes(a, b, how='outer').dask)
+
 
 def list_eq(a, b):
     if isinstance(a, dd.DataFrame):
@@ -96,6 +101,11 @@ def test_hash_join():
     assert sorted(result.fillna(100).values.tolist()) == \
            sorted(expected.fillna(100).values.tolist())
 
+    assert hash_join(a, 'y', b, 'y', 'inner')._name == \
+           hash_join(a, 'y', b, 'y', 'inner')._name
+    assert hash_join(a, 'y', b, 'y', 'inner')._name != \
+           hash_join(a, 'y', b, 'y', 'outer')._name
+
 
 def test_indexed_concat():
     A = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7], 'y': list('abcdef')},
@@ -116,6 +126,11 @@ def test_indexed_concat():
 
         assert sorted(zip(result.values.tolist(), result.index.values.tolist())) == \
                sorted(zip(expected.values.tolist(), expected.index.values.tolist()))
+
+    assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) == \
+           sorted(concat_indexed_dataframes([a, b], join='inner').dask)
+    assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) != \
+           sorted(concat_indexed_dataframes([a, b], join='outer').dask)
 
 
 def test_merge():

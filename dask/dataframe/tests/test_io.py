@@ -236,6 +236,20 @@ def test_from_bcolz():
     L = list(d.index.compute(get=get_sync))
     assert L == [1, 2, 3] or L == [1, 3, 2]
 
+    # Names
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) == \
+           sorted(dd.from_bcolz(t, chunksize=2).dask)
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
+           sorted(dd.from_bcolz(t, chunksize=3).dask)
+
+    dsk = dd.from_bcolz(t, chunksize=3).dask
+
+    t.append((4, 4., 'b'))
+    t.flush()
+
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
+           sorted(dsk)
+
 
 def test_from_bcolz_filename():
     bcolz = pytest.importorskip('bcolz')
@@ -461,6 +475,9 @@ def test_read_hdf():
               dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
               pd.read_hdf(fn, '/data', start=1, stop=3))
 
+        assert sorted(dd.read_hdf(fn, '/data').dask) == \
+               sorted(dd.read_hdf(fn, '/data').dask)
+
 
 def test_to_csv():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
@@ -482,3 +499,49 @@ def test_read_csv_with_nrows():
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions == 1
         assert eq(read_csv(fn, nrows=3), pd.read_csv(fn, nrows=3))
+
+
+def test_read_csv_raises_on_no_files():
+    try:
+        dd.read_csv('21hflkhfisfshf.*.csv')
+        assert False
+    except Exception as e:
+        assert "21hflkhfisfshf.*.csv" in str(e)
+
+
+def test_read_csv_has_deterministic_name():
+    with filetext(text) as fn:
+        a = read_csv(fn)
+        b = read_csv(fn)
+        assert a._name == b._name
+        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
+        assert isinstance(a._name, str)
+
+        c = read_csv(fn, skiprows=1, na_values=[0])
+        assert a._name != c._name
+
+
+def test_multiple_read_csv_has_deterministic_name():
+    try:
+        with open('_foo.1.csv', 'w') as f:
+            f.write(text)
+        with open('_foo.2.csv', 'w') as f:
+            f.write(text)
+        a = read_csv('_foo.*.csv')
+        b = read_csv('_foo.*.csv')
+
+        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
+    finally:
+        os.remove('_foo.1.csv')
+        os.remove('_foo.2.csv')
+
+
+def test_read_csv_of_modified_file_has_different_name():
+    with filetext(text) as fn:
+        a = read_csv(fn)
+        with open(fn, 'a') as f:
+            f.write('\nGeorge,700')
+            os.fsync(f)
+        b = read_csv(fn)
+
+        assert sorted(a.dask) != sorted(b.dask)
