@@ -18,6 +18,8 @@ Description: Task scheduling and blocked algorithms for parallel processing.
  datasets. It then executes these graphs in parallel on a single machine. Dask
  lets us use traditional NumPy, Pandas, and list programming while operating on
  inconveniently large data in a small amount of space.
+ .
+ This is the python 2 version of the package.
 
 Package: python3-dask
 Architecture: all
@@ -30,3 +32,5 @@ Description: Task scheduling and blocked algorithms for parallel processing.
  datasets. It then executes these graphs in parallel on a single machine. Dask
  lets us use traditional NumPy, Pandas, and list programming while operating on
  inconveniently large data in a small amount of space.
+ .
+ This is the python 3 version of the package.
