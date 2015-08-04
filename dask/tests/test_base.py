@@ -1,9 +1,11 @@
-import pytest
-import dask
 import tempfile
 import os
 import shutil
+import pytest
+
+import dask
 from dask.base import compute
+from dask.utils import raises
 
 da = pytest.importorskip('dask.array')
 import numpy as np
@@ -34,7 +36,7 @@ def test_compute_dataframe():
     assert_series_equal(out2, df.a + df.b)
 
 
-def test_compute_both():
+def test_compute_array_dataframe():
     arr = np.arange(100).reshape((10, 10))
     darr = da.from_array(arr, chunks=(5, 5)) + 1
     df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 5, 3, 3]})
@@ -47,16 +49,15 @@ def test_compute_both():
 db = pytest.importorskip('dask.bag')
 
 
-def test_bag_array():
+def test_compute_array_bag():
     x = da.arange(5, chunks=2)
     b = db.from_sequence([1, 2, 3])
 
-    try:
-        xx, bb = compute(x, b)
-    except Exception as e:
-        assert 'get' in str(e)
+    assert raises(ValueError, lambda: compute(x, b))
 
     xx, bb = compute(x, b, get=dask.async.get_sync)
+    assert np.allclose(xx, np.arange(5))
+    assert bb == [1, 2, 3]
 
 
 def test_visualize():

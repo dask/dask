@@ -1,7 +1,7 @@
 import warnings
 from operator import attrgetter
 
-from toolz import merge, groupby, unique, first
+from toolz import merge, groupby
 
 from .context import _globals
 
@@ -44,22 +44,19 @@ def compute(*args, **kwargs):
     >>> compute(a, b)
     (45, 4.5)
     """
-    groups = groupby(type, args)
+    groups = groupby(attrgetter('_optimize'), args)
     get = kwargs.pop('get', None) or _globals['get']
 
     if not get:
-        get = first(first(groups.values()))._default_get
-        if not all(val[0]._default_get == get for val in groups.values()):
+        get = args[0]._default_get
+        if not all(a._default_get == get for a in args):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler `get` function using either "
                              "the `get` kwarg or globally with `set_options`.")
 
-    dsk = merge(*[typ._optimize(merge([v.dask for v in val]),
-                                [v._keys() for v in val])
-                  for typ, val in groups.items()])
-
+    dsk = merge([opt(merge([v.dask for v in val]), [v._keys() for v in val])
+                for opt, val in groups.items()])
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
-
     return tuple(a._finalize(a, r) for a, r in zip(args, results))
