@@ -138,3 +138,12 @@ def test_get_workers():
 
         s.close_workers()
         assert c.get_registered_workers() == {}
+
+
+def test_keep_results():
+    with scheduler_and_workers() as (s, (a, b)):
+        c = Client(s.address_to_clients)
+
+        assert c.get({'x': (inc, 1)}, 'x', keep_results=True) == 2
+
+        assert 'x' in a.data or 'x' in b.data

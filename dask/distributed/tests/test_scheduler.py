@@ -110,7 +110,7 @@ def test_compute_cycle():
         assert s.available_workers.qsize() == 2
 
         dsk = {'a': (add, 1, 2), 'b': (inc, 'a')}
-        s.trigger_task(dsk, 'a', 'queue-key')
+        s.trigger_task('a', dsk['a'], set([]), 'queue-key')
         sleep(0.1)
 
         assert 'a' in s.who_has
@@ -119,7 +119,7 @@ def test_compute_cycle():
         assert a.address in s.worker_has or b.address in s.worker_has
         assert s.available_workers.qsize() == 2
 
-        s.trigger_task(dsk, 'b', 'queue-key')
+        s.trigger_task('b', dsk['b'], set(['a']), 'queue-key')
         sleep(0.1)
 
         assert 'b' in s.who_has
@@ -307,3 +307,44 @@ def test_monitor_workers():
         while w2.address in s.workers:  # wait to be removed
             sleep(1e-6)
         assert w2.address not in s.workers
+
+
+def test_scheduler_reuses_worker_state():
+    with scheduler_and_workers() as (s, (a, b)):
+        assert s.schedule({'x': (inc, 1)}, 'x') == 2
+
+        s.send_data('x', 10, address=a.address)  # send x to a worker
+        assert a.data['x'] == 10
+        assert s.schedule({'x': (inc, 1)}, 'x') == 10  # recall, don't compute
+        sleep(0.1)
+        assert a.data['x'] == 10
+        assert s.schedule({'x': (inc, 1), 'y': (lambda x: x, 'x')}, 'y') == 10
+
+def test_scheduler_keeps_preexisting_data():
+    with scheduler_and_workers() as (s, (a, b)):
+        s.send_data('x', 10, address=a.address)
+        dsk = {'x': (inc, 1), 'y': (lambda x: x, 'x')}
+        assert s.schedule(dsk, 'y') == 10
+        sleep(0.01)
+        assert a.data['x'] == 10
+
+
+def test_keep_results():
+    with scheduler_and_workers() as (s, (a, b)):
+        assert s.schedule({'x': (inc, 1)}, 'x', keep_results=True) == 2
+        sleep(0.1)
+        assert a.data.get('x') == 2 or b.data.get('x') == 2
+
+
+def test_cull_redundant_data():
+    with scheduler_and_workers() as (s, (a, b)):
+        s.send_data('x', 10, address=a.address)  # send x to a worker
+        s.send_data('x', 10, address=b.address)  # send x to a worker
+
+        s.cull_redundant_data(1)
+
+        while 'x' in a.data and 'x' in b.data:
+            sleep(0.01)
+
+        assert ('x' in a.data and 'x' not in b.data or
+                'x' in b.data and 'x' not in a.data)

@@ -6,6 +6,7 @@ import itertools
 import traceback
 import sys
 import random
+from functools import partial
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 from datetime import datetime
@@ -22,6 +23,7 @@ except ImportError:
     import pickle
 
 from ..core import get_dependencies, flatten
+from ..optimize import cull
 from .. import core
 from ..async import (sortkey, finish_task,
         start_state_from_dask as dag_state_from_dask)
@@ -293,8 +295,8 @@ class Scheduler(object):
         header['timestamp'] = datetime.utcnow()
 
         self.send_to_workers_queue.put([address,
-                                            pickle.dumps(header),
-                                            dumps(payload)])
+                                        pickle.dumps(header),
+                                        dumps(payload)])
         self.send_to_workers_send.send(b'')
 
     def send_to_client(self, address, header, result):
@@ -311,20 +313,19 @@ class Scheduler(object):
                                             pickle.dumps(header),
                                             dumps(result)])
 
-    def trigger_task(self, dsk, key, queue):
+    def trigger_task(self, key, task, deps, queue):
         """ Send a single task to the next available worker
 
         See also:
             Scheduler.schedule
             Scheduler.worker_finished_task
         """
-        deps = get_dependencies(dsk, key)
         worker = self.available_workers.get()
         locations = dict((dep, self.who_has[dep]) for dep in deps)
 
         header = {'function': 'compute', 'jobid': key,
                   'dumps': dill.dumps, 'loads': dill.loads}
-        payload = {'key': key, 'task': dsk[key], 'locations': locations,
+        payload = {'key': key, 'task': task, 'locations': locations,
                    'queue': queue}
         self.send_to_worker(worker, header, payload)
 
@@ -570,7 +571,7 @@ class Scheduler(object):
         self.block()
         self.context.destroy(linger=3)
 
-    def schedule(self, dsk, result, **kwargs):
+    def schedule(self, dsk, result, keep_results=False, **kwargs):
         """ Execute dask graph against workers
 
         Parameters
@@ -602,15 +603,26 @@ class Scheduler(object):
                 result_flat = set([result])
             results = set(result_flat)
 
-            cache = dict()
+            for k in self.who_has:  # remove keys that we already know about
+                if self.who_has[k]:
+                    del dsk[k]
+                    if k in results:
+                        results.remove(k)
+
+            dsk = cull(dsk, results)
+
+            preexisting_data = set(k for k, v in self.who_has.items() if v)
+            cache = dict((k, None) for k in preexisting_data)
             dag_state = dag_state_from_dask(dsk, cache=cache)
-            if cache:
-                self.scatter(cache.items())  # send data in dask up to workers
+            del dag_state['cache']
+
+            new_data = dict((k, v) for k, v in cache.items()
+                                   if not (k in self.who_has and
+                                           self.who_has[k]))
+            if new_data:
+                self.scatter(new_data.items())  # send data in dask up to workers
 
             tick = [0]
-
-            if dag_state['waiting'] and not dag_state['ready']:
-                raise ValueError("Found no accessible jobs in dask graph")
 
             event_queue = Queue()
             qkey = str(uuid.uuid1())
@@ -624,7 +636,8 @@ class Scheduler(object):
                 dag_state['ready-set'].remove(key)
                 dag_state['running'].add(key)
 
-                self.trigger_task(dsk, key, qkey)  # Fire
+                self.trigger_task(key, dsk[key],
+                        dag_state['dependencies'][key], qkey)  # Fire
 
             try:
                 worker = self.available_workers.get(timeout=20)
@@ -637,6 +650,7 @@ class Scheduler(object):
                 fire_task()
 
             # Main loop, wait on tasks to finish, insert new ones
+            release_data = partial(self._release_data, protected=preexisting_data)
             while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
                 payload = event_queue.get()
 
@@ -645,14 +659,20 @@ class Scheduler(object):
 
                 key = payload['key']
                 finish_task(dsk, key, dag_state, results, sortkey,
-                            release_data=self._release_data)
+                            release_data=release_data,
+                            delete=key not in preexisting_data)
 
                 while dag_state['ready'] and self.available_workers.qsize() > 0:
                     fire_task()
 
             result2 = self.gather(result)
-            for key in flatten(result):  # release result data from workers
-                self.release_key(key)
+            if not keep_results:  # release result data from workers
+                for key in flatten(result):
+                    if key not in preexisting_data:
+                        self.release_key(key)
+
+            self.cull_redundant_data(3)
+
         return result2
 
     def _schedule_from_client(self, header, payload):
@@ -668,11 +688,12 @@ class Scheduler(object):
             address = header['address']
             dsk = payload['dask']
             keys = payload['keys']
+            keep_results = payload.get('keep_results', False)
 
             header2 = {'jobid': header.get('jobid'),
                        'function': 'schedule-ack'}
             try:
-                result = self.schedule(dsk, keys)
+                result = self.schedule(dsk, keys, keep_results)
                 header2['status'] = 'OK'
             except Exception as e:
                 result = e
@@ -681,7 +702,7 @@ class Scheduler(object):
             payload2 = {'keys': keys, 'result': result}
             self.send_to_client(address, header2, payload2)
 
-    def _release_data(self, key, state, delete=True):
+    def _release_data(self, key, state, delete=True, protected=()):
         """ Remove data from temporary storage during scheduling run
 
         See Also
@@ -694,7 +715,7 @@ class Scheduler(object):
 
         state['released'].add(key)
 
-        if delete:
+        if delete and key not in protected:
             self.release_key(key)
 
     def _set_collection(self, header, payload):
@@ -758,3 +779,23 @@ class Scheduler(object):
                 header = {'function': 'worker-death'}
                 payload = {'removed': removed}
                 self.send_to_worker(w_address, header, payload)
+
+    def cull_redundant_data(self, k):
+        """ Remove highly redundant data from workers
+
+        Finds all keys that are replicated more than k times across all workers
+        and releases data from a randomly chosen subset until there are only k
+        workers left holding this data.
+
+        Operates asynchronously and returns quickly.  Scheduler metadata is
+        updated synchronously.
+        """
+        with logerrors():
+            for key, v in self.who_has.items():
+                while len(v) > k:
+                    worker = random.choice(list(v))
+                    header = {'function': 'delitem', 'jobid': key}
+                    payload = {'key': key}
+                    self.send_to_worker(worker, header, payload)
+                    self.who_has[key].remove(worker)
+                    self.worker_has[worker].remove(key)
