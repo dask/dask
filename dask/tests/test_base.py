@@ -1,4 +1,8 @@
 import pytest
+import dask
+import tempfile
+import os
+import shutil
 from dask.base import compute
 
 da = pytest.importorskip('dask.array')
@@ -18,8 +22,8 @@ def test_compute_array():
 dd = pytest.importorskip('dask.dataframe')
 import pandas as pd
 from pandas.util.testing import assert_series_equal
-    
-    
+
+
 def test_compute_dataframe():
     df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 5, 3, 3]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -38,3 +42,29 @@ def test_compute_both():
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
     assert_series_equal(df_out, df.a + 2)
+
+
+db = pytest.importorskip('dask.bag')
+
+
+def test_bag_array():
+    x = da.arange(5, chunks=2)
+    b = db.from_sequence([1, 2, 3])
+
+    try:
+        xx, bb = compute(x, b)
+    except Exception as e:
+        assert 'get' in str(e)
+
+    xx, bb = compute(x, b, get=dask.async.get_sync)
+
+
+def test_visualize():
+    pytest.importorskip('graphviz')
+    try:
+        d = tempfile.mkdtemp()
+        x = da.arange(5, chunks=2)
+        x.visualize(filename=os.path.join(d, 'mydask'))
+        assert os.path.exists(os.path.join(d, 'mydask.png'))
+    finally:
+        shutil.rmtree(d)
