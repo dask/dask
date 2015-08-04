@@ -1,7 +1,7 @@
 import warnings
 from operator import attrgetter
 
-from toolz import merge, groupby, unique
+from toolz import merge, groupby, unique, first
 
 from .context import _globals
 
@@ -47,7 +47,7 @@ def compute(*args, **kwargs):
     get = kwargs.pop('get', None) or _globals['get']
 
     if not get:
-        get = groups.values()[0][0]._default_get
+        get = first(first(groups.values()))._default_get
         if not all(val[0]._default_get == get for val in groups.values()):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
