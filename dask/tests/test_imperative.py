@@ -2,7 +2,9 @@ from operator import add
 from collections import Iterator
 from random import random
 
-from dask.imperative import value, do, to_task_dasks, compute
+import pytest
+
+from dask.imperative import value, do, to_task_dasks, compute, Value
 from dask.utils import raises
 
 
@@ -154,3 +156,39 @@ def test_pure():
 
     myrand = do(random)
     assert myrand().key != myrand().key
+
+
+da = pytest.importorskip('dask.array')
+import numpy as np
+
+
+def test_array_imperative():
+    arr = np.arange(100).reshape((10, 10))
+    darr = da.from_array(arr, chunks=(5, 5))
+    val = do(sum)([arr, darr, 1])
+    assert isinstance(val, Value)
+    assert np.allclose(val.compute(), arr + arr + 1)
+    assert val.sum().compute() == (arr + arr + 1).sum()
+    assert val[0, 0].compute() == (arr + arr + 1)[0, 0]
+
+    task, dasks = to_task_dasks(darr)
+    assert len(dasks) == 1
+    orig = set(darr.dask)
+    final = set(dasks[0])
+    assert orig.issubset(final)
+    diff = final.difference(orig)
+    assert len(diff) == 1
+
+
+db = pytest.importorskip('dask.bag')
+
+
+def test_array_bag_imperative():
+    arr1 = np.arange(100).reshape((10, 10))
+    arr2 = arr1.dot(arr1.T)
+    darr1 = da.from_array(arr1, chunks=(5, 5))
+    darr2 = da.from_array(arr2, chunks=(5, 5))
+    b = db.from_sequence([1, 2, 3])
+    seq = [arr1, arr2, darr1, darr2, b]
+    out = do(sum)([i.sum() for i in seq])
+    assert out.compute() == 2*arr1.sum() + 2*arr2.sum() + sum([1, 2, 3])
