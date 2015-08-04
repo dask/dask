@@ -31,6 +31,7 @@ class Cache(Diagnostic):
         self.starttimes = dict()
 
     def _start(self, dsk):
+        self.durations = dict()
         overlap = set(dsk) & set(self.cache.data)
         for key in overlap:
             dsk[key] = self.cache.data[key]
@@ -40,6 +41,10 @@ class Cache(Diagnostic):
 
     def _posttask(self, key, value, dsk, state, id):
         duration = default_timer() - self.starttimes[key]
+        deps = state['dependencies'][key]
+        if deps:
+            duration += max(self.durations.get(k, 0) for k in deps)
+        self.durations[key] = duration
         nb = cachey.nbytes(value)
         self.cache.put(key, value, cost=duration / nb / 1e9, nbytes=nb)
 

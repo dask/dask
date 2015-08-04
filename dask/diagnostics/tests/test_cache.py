@@ -1,7 +1,9 @@
 from dask.diagnostics.cache import Cache
+from dask.async import get_sync
 from dask.threaded import get
 from operator import add
 from dask.context import _globals
+from time import sleep
 import pytest
 
 cachey = pytest.importorskip('cachey')
@@ -39,3 +41,16 @@ def test_cache_with_number():
     assert isinstance(c.cache, cachey.Cache)
     assert c.cache.available_bytes == 10000
     assert c.cache.limit == 1
+
+
+def f(duration, size, *args):
+    sleep(duration)
+    return [0] * size
+
+def test_prefer_cheap_dependent():
+    dsk = {'x': (f, 0.01, 10), 'y': (f, 0.000001, 1, 'x')}
+    c = Cache(10000)
+    with c:
+        get_sync(dsk, 'y')
+
+    assert c.cache.scorer.cost['x'] < c.cache.scorer.cost['y']
