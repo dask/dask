@@ -8,7 +8,7 @@ import dask
 from dask.async import get_sync
 from dask.utils import raises
 import dask.dataframe as dd
-from dask.dataframe.core import (get, concat, repartition_divisions, _loc,
+from dask.dataframe.core import (concat, repartition_divisions, _loc,
         _coerce_loc_index)
 
 
@@ -401,7 +401,7 @@ def test_categorize():
 
     assert list(cfull.a.astype('O')) == list(full.a)
 
-    assert (get(c.dask, c._keys()[:1])[0].dtypes == cfull.dtypes).all()
+    assert (d._get(c.dask, c._keys()[:1])[0].dtypes == cfull.dtypes).all()
 
     assert (d.categorize().compute().dtypes == 'category').all()
 
@@ -613,7 +613,7 @@ def test_repartition():
     b = a.repartition(divisions=[10, 20, 50, 60])
     assert b.divisions == (10, 20, 50, 60)
     assert eq(a, b)
-    assert eq(get(b.dask, (b._name, 0)), df.iloc[:1])
+    assert eq(a._get(b.dask, (b._name, 0)), df.iloc[:1])
 
 
 def test_repartition_divisions():

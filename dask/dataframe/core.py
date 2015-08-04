@@ -22,7 +22,7 @@ from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
-from ..base import Base, compute, Config
+from ..base import Base, compute
 
 
 def _concat(args):
@@ -59,16 +59,15 @@ def finalize(self, results):
     return _concat(results)
 
 
-config = Config(optimize, threaded.get, finalize)
-get = config.get
-
-
 class Scalar(Base):
     """ A Dask-thing to represent a scalar
 
     TODO: Clean up this abstraction
     """
-    _config = config
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(threaded.get)
+    _finalize = staticmethod(finalize)
+
     def __init__(self, dsk, _name):
         self.dask = dsk
         self._name = _name
@@ -84,7 +83,9 @@ class Scalar(Base):
 
 class _Frame(Base):
     """ Superclass for DataFrame and Series """
-    _config = config
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(threaded.get)
+    _finalize = staticmethod(finalize)
 
     @property
     def npartitions(self):
@@ -116,7 +117,7 @@ class _Frame(Base):
         name = 'cache' + next(tokens)
         dsk = dict(((name, i), (setitem, cache, (tuple, list(key)), key))
                     for i, key in enumerate(self._keys()))
-        get(merge(dsk, self.dask), list(dsk.keys()))
+        self._get(merge(dsk, self.dask), list(dsk.keys()))
 
         # Create new dataFrame pointing to that cache
         name = 'from-cache' + next(tokens)
@@ -598,7 +599,7 @@ class DataFrame(_Frame):
 
     @property
     def dtypes(self):
-        return get(self.dask, self._keys()[0]).dtypes
+        return self._get(self.dask, self._keys()[0]).dtypes
 
     def set_index(self, other, **kwargs):
         return set_index(self, other, **kwargs)

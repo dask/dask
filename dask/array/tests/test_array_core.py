@@ -256,7 +256,7 @@ def test_short_stack():
     d = da.from_array(x, chunks=(1,))
     s = da.stack([d])
     assert s.shape == (1, 1)
-    assert get(s.dask, s._keys())[0][0].shape == (1, 1)
+    assert Array._get(s.dask, s._keys())[0][0].shape == (1, 1)
 
 
 def test_stack_scalars():
