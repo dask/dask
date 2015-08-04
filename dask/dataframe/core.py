@@ -1069,12 +1069,6 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
     if not isinstance(args, (tuple, list)):
         args = [args]
 
-    def concat(args):
-        if isinstance(args[0], pd.Index):
-            concat = lambda a: reduce(lambda b, c: b.append(c), a)
-        else:
-            concat = pd.concat
-        return concat(args)
     assert all(arg.npartitions == args[0].npartitions
                 for arg in args
                 if isinstance(arg, _Frame))
@@ -1092,7 +1086,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
 
     b = 'apply-concat-apply--second' + token
     dsk2 = {(b, 0): (aggregate,
-                      (concat,
+                      (_concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
 
     return type(args[0])(
