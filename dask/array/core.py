@@ -19,7 +19,7 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..base import Base, compute, Config
+from ..base import Base, compute
 from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
         IndexCallable)
 from ..compatibility import unicode, long
@@ -552,7 +552,7 @@ def store(sources, targets, **kwargs):
     updates = [insert_to_ooc(tgt, src) for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
-    get(dsk, keys, **kwargs)
+    Array._get(dsk, keys, **kwargs)
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -582,10 +582,6 @@ def finalize(arr, results):
         return unpack_singleton(results)
 
 
-config = Config(optimize, threaded.get, finalize)
-get = config.get
-
-
 class Array(Base):
     """ Parallel Array
 
@@ -603,7 +599,10 @@ class Array(Base):
     """
 
     __slots__ = 'dask', 'name', '_chunks', '_dtype'
-    _config = config
+
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(threaded.get)
+    _finalize = staticmethod(finalize)
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
@@ -773,7 +772,7 @@ class Array(Base):
             name = next(names)
             dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
                     for k in core.flatten(self._keys()))
-            get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
+            Array._get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
 
             dsk2 = dict((k, (operator.getitem, store, (tuple, list(k))))
                         for k in store)
@@ -1971,7 +1970,7 @@ def fromfunction(func, chunks=None, shape=None, dtype=None):
 def unique(x):
     name = next(names)
     dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
-    parts = get(merge(dsk, x.dask), list(dsk.keys()))
+    parts = Array._get(merge(dsk, x.dask), list(dsk.keys()))
     return np.unique(np.concatenate(parts))
 
 

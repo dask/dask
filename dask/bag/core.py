@@ -30,7 +30,7 @@ from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
-from ..base import Base, Config
+from ..base import Base
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
@@ -184,12 +184,11 @@ def finalize(bag, results):
     return results
 
 
-config = Config(optimize, mpget, finalize)
-get = config.get
-
-
 class Item(Base):
-    _config = config
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(mpget)
+    _finalize = staticmethod(finalize)
+
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
@@ -235,7 +234,10 @@ class Bag(Base):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
-    _config = config
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(mpget)
+    _finalize = staticmethod(finalize)
+
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name

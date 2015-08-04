@@ -25,31 +25,10 @@ class Base(object):
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
 
-
-class Config(object):
-    """Specifies a configuration for a dask collection.
-
-    This holds functions that are used to specialize dask schedulers for a
-    specific collection.
-
-    Parameters
-    ----------
-    optimize : callable
-        Takes a dask and iterable of keys, and returns an optimized dask.
-    default_get : callable
-        The default scheduler to use (e.g. ``dask.threaded.get``)
-    finalize : callable
-        Takes a dask collection and an iterable of results, and converts them
-        into the desired python type.
-    """
-    def __init__(self, optimize, default_get, finalize):
-        self.optimize = optimize
-        self.default_get = default_get
-        self.finalize = finalize
-
-    def get(self, dsk, keys, get=None, **kwargs):
-        get = get or _globals['get'] or self.default_get
-        dsk2 = self.optimize(dsk, keys)
+    @classmethod
+    def _get(cls, dsk, keys, get=None, **kwargs):
+        get = get or _globals['get'] or cls._default_get
+        dsk2 = cls._optimize(dsk, keys)
         return get(dsk2, keys, **kwargs)
 
 
@@ -64,22 +43,22 @@ def compute(*args, **kwargs):
     >>> compute(a, b)
     (45, 4.5)
     """
-    groups = groupby(attrgetter('_config'), args)
-    if len(list(unique(groups, attrgetter('default_get')))) > 1:
-        raise ValueError("Compute called on multiple collections with "
-                         "differing default schedulers. Please specify a "
-                         "scheduler `get` function using either "
-                         "the `get` kwarg or globally with `set_options`.")
+    groups = groupby(type, args)
     get = kwargs.pop('get', None) or _globals['get']
+
     if not get:
-        get = args[0]._config.default_get
-    keys = [a._keys() for a in args]
-    dsk = merge(*[_combine(k, v) for k, v in groups.items()])
+        get = groups.values()[0][0]._default_get
+        if not all(val[0]._default_get == get for val in groups.values()):
+            raise ValueError("Compute called on multiple collections with "
+                             "differing default schedulers. Please specify a "
+                             "scheduler `get` function using either "
+                             "the `get` kwarg or globally with `set_options`.")
+
+    dsk = merge(*[typ._optimize(merge([v.dask for v in val]),
+                                [v._keys() for v in val])
+                  for typ, val in groups.items()])
+
+    keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
-    return tuple(a._config.finalize(a, r) for a, r in zip(args, results))
 
-
-def _combine(config, args):
-    keys = [a._keys() for a in args]
-    dsk = merge(*[a.dask for a in args])
-    return config.optimize(dsk, keys)
+    return tuple(a._finalize(a, r) for a, r in zip(args, results))
