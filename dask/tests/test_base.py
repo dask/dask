@@ -1,5 +1,8 @@
 import pytest
 import dask
+import tempfile
+import os
+import shutil
 from dask.base import compute
 
 da = pytest.importorskip('dask.array')
@@ -54,3 +57,14 @@ def test_bag_array():
         assert 'get' in str(e)
 
     xx, bb = compute(x, b, get=dask.async.get_sync)
+
+
+def test_visualize():
+    pytest.importorskip('graphviz')
+    try:
+        d = tempfile.mkdtemp()
+        x = da.arange(5, chunks=2)
+        x.visualize(filename=os.path.join(d, 'mydask'))
+        assert os.path.exists(os.path.join(d, 'mydask.png'))
+    finally:
+        shutil.rmtree(d)
