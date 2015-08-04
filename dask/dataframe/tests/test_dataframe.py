@@ -22,7 +22,7 @@ def check_dask(dsk):
         elif isinstance(dsk, dd.DataFrame):
             assert isinstance(result, pd.DataFrame), type(result)
             columns = pd.Index(dsk.columns)
-        elif isinstance(dsk, dd.Scalar):
+        elif isinstance(dsk, dd.core.Scalar):
             assert np.isscalar(result)
         else:
             msg = 'Unsupported dask instance {0} found'.format(type(dsk))
