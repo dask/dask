@@ -39,96 +39,68 @@ def eq(a, b):
 
 
 class TestFFT(unittest.TestCase):
+    nparr = np.arange(100).reshape(10, 10)
+    darr = da.from_array(nparr, chunks=(1, 10))
+    darr2 = da.from_array(nparr, chunks=(10, 1))
+
     def test_cant_fft_chunked_axis(self):
-        nparr = np.arange(100).reshape(10, 10)
-        darr = da.from_array(nparr, chunks=(5, 5))
-        assert raises(ValueError, lambda: fft(darr))
-        assert raises(ValueError, lambda: fft(darr, axis=0))
+        bad_darr = da.from_array(self.nparr, chunks=(5, 5))
+
+        assert raises(ValueError, lambda: fft(bad_darr))
+        assert raises(ValueError, lambda: fft(bad_darr, axis=0))
 
     def test_fft(self):
-        nparr = np.arange(100).reshape(10, 10)
-        darr = da.from_array(nparr, chunks=(1, 10))
-
-        res = fft(darr)
-        expected = npfft.fft(nparr)
+        res = fft(self.darr)
+        expected = npfft.fft(self.nparr)
         assert eq(res, expected)
 
-    def test_fft_axis(self):
-        nparr = np.arange(100).reshape(10, 10)
-        darr = da.from_array(nparr, chunks=(10, 1))
-
-        res = fft(darr, axis=0)
-        expected = npfft.fft(nparr, axis=0)
-        assert eq(res, expected)
+        res2 = fft(self.darr2, axis=0)
+        expected2 = npfft.fft(self.nparr, axis=0)
+        assert eq(res2, expected2)
 
     def test_ifft(self):
-        nparr = np.arange(100).reshape(10, 10)
-        darr = da.from_array(nparr, chunks=(1, 10))
-
-        res = ifft(darr)
-        expected = npfft.ifft(nparr)
+        res = ifft(self.darr)
+        expected = npfft.ifft(self.nparr)
         assert eq(res, expected)
 
-        darr2 = da.from_array(nparr, chunks=(10, 1))
-
-        res2 = ifft(darr2, axis=0)
-        expected2 = npfft.ifft(nparr, axis=0)
+        res2 = ifft(self.darr2, axis=0)
+        expected2 = npfft.ifft(self.nparr, axis=0)
         assert eq(res2, expected2)
 
     def test_rfft(self):
-        nparr = np.arange(100).reshape(10, 10)
-        darr = da.from_array(nparr, chunks=(1, 10))
-
-        res = rfft(darr)
-        expected = npfft.rfft(nparr)
+        res = rfft(self.darr)
+        expected = npfft.rfft(self.nparr)
         assert eq(res, expected)
 
-        darr2 = da.from_array(nparr, chunks=(10, 1))
-
-        res2 = rfft(darr2, axis=0)
-        expected2 = npfft.rfft(nparr, axis=0)
+        res2 = rfft(self.darr2, axis=0)
+        expected2 = npfft.rfft(self.nparr, axis=0)
         assert eq(res2, expected2)
 
     def test_irfft(self):
-        nparr = np.arange(100).reshape(10, 10)
-        darr = da.from_array(nparr, chunks=(1, 10))
-
-        res = irfft(darr)
-        expected = npfft.irfft(nparr)
+        res = irfft(self.darr)
+        expected = npfft.irfft(self.nparr)
         assert eq(res, expected)
 
-        darr2 = da.from_array(nparr, chunks=(10, 1))
-
-        res2 = irfft(darr2, axis=0)
-        expected2 = npfft.irfft(nparr, axis=0)
+        res2 = irfft(self.darr2, axis=0)
+        expected2 = npfft.irfft(self.nparr, axis=0)
         assert eq(res2, expected2)
 
     def test_hfft(self):
-        nparr = np.arange(100).reshape(10, 10)
-        darr = da.from_array(nparr, chunks=(1, 10))
-
-        res = hfft(darr)
-        expected = npfft.hfft(nparr)
+        res = hfft(self.darr)
+        expected = npfft.hfft(self.nparr)
         assert eq(res, expected)
 
-        darr2 = da.from_array(nparr, chunks=(10, 1))
-
-        res2 = hfft(darr2, axis=0)
-        expected2 = npfft.hfft(nparr, axis=0)
+        res2 = hfft(self.darr2, axis=0)
+        expected2 = npfft.hfft(self.nparr, axis=0)
         assert eq(res2, expected2)
 
     def test_ihfft(self):
-        nparr = np.arange(100).reshape(10, 10)
-        darr = da.from_array(nparr, chunks=(1, 10))
-
-        res = ihfft(darr)
-        expected = npfft.ihfft(nparr)
+        res = ihfft(self.darr)
+        expected = npfft.ihfft(self.nparr)
         assert eq(res, expected)
 
-        darr2 = da.from_array(nparr, chunks=(10, 1))
-
-        res2 = ihfft(darr2, axis=0)
-        expected2 = npfft.ihfft(nparr, axis=0)
+        res2 = ihfft(self.darr2, axis=0)
+        expected2 = npfft.ihfft(self.nparr, axis=0)
         assert eq(res2, expected2)
 
 
