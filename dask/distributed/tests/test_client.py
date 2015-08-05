@@ -24,9 +24,9 @@ def scheduler_and_workers(n=2):
     try:
         yield s, workers
     finally:
-        s.close()
         for w in workers:
             w.close()
+        s.close()
 
 
 def test_get():
