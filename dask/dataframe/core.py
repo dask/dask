@@ -1314,12 +1314,12 @@ def repartition(df, divisions):
 
 
 class DatetimeAccessor(object):
-    """ Datetime functions
+    """ Accessor object for datetimelike properties of the Series values.
 
     Examples
     --------
 
-    >>> df.mydatetime.dt.microsecond  # doctest: +SKIP
+    >>> s.dt.microsecond  # doctest: +SKIP
     """
     def __init__(self, series):
         self._series = series
@@ -1349,12 +1349,12 @@ class DatetimeAccessor(object):
 
 
 class StringAccessor(object):
-    """ String functions
+    """ Accessor object for string properties of the Series values.
 
     Examples
     --------
 
-    >>> df.name.lower()  # doctest: +SKIP
+    >>> s.str.lower()  # doctest: +SKIP
     """
     def __init__(self, series):
         self._series = series
