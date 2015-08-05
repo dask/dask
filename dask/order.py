@@ -139,9 +139,8 @@ def child_max(dependencies, dependents, scores):
     >>> sorted(child_max(dependencies, dependents, scores).items())
     [('a', 3), ('b', 2), ('c', 2.5), ('d', 2.0)]
     """
-    result = dict()
-
     leaves = [k for k, v in dependencies.items() if not v]
+    result = dict.fromkeys(leaves)
 
     for leaf in leaves:
         result[leaf] = scores[leaf]
@@ -149,18 +148,28 @@ def child_max(dependencies, dependents, scores):
     roots = [k for k, v in dependents.items() if not v]
 
     for root in roots:
-        _child_max(root, scores, result, dependencies, dependents)
+        _child_max(root, result, dependencies)
 
     return result
 
 
-def _child_max(key, scores, result, dependencies, dependents):
+def _child_max(key, result, dependencies):
     """ Recursive helper function for child_max """
-    if key not in result:
+    # base case
+    stack = [(key, max(result.values()) - 0.5)]
+    while stack:
+        # current dependency on the stack and its dependencies value
+        key, value = stack.pop()
+
+        # get each dependency's score, or set to `value` if not seen
         deps = dependencies[key]
-        result[key] = max([_child_max(k, scores, result, dependencies,
-                                      dependents) for k in deps]) - 0.5
-    return result[key]
+        for dep in deps:
+            stack.append((dep, result.setdefault(dep, value)))
+
+        # if key has deps, then its value is the max of all the values of its
+        # deps - 0.5
+        if deps:
+            result.setdefault(key, max(y for _, y in stack) - 0.5)
 
 
 def dfs(dependencies, dependents, key=lambda x: x):
