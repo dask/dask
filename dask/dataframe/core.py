@@ -566,10 +566,16 @@ class Series(_Frame):
 
 
 class Index(Series):
-
     @property
     def _constructor(self):
         return Index
+
+    def nunique(self):
+        return self.drop_duplicates().count()
+
+    def count(self):
+        f = lambda x: pd.notnull(x).sum()
+        return reduction(self, f, np.sum)
 
 
 class DataFrame(_Frame):
