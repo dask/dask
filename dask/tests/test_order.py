@@ -1,4 +1,7 @@
-from dask.order import dfs, child_max, ndependents, order, inc
+from itertools import chain
+
+from dask.order import ndependents, order
+from dask.order import get_deps
 
 
 def issorted(L, reverse=False):
@@ -55,3 +58,16 @@ def test_ordering_prefers_tasks_that_release_data():
     o = order(d)
 
     assert o[(a, 1)] < o[(a, 0)]
+
+
+def test_ndependents():
+    from operator import add
+    a, b, c = 'abc'
+    dsk = dict(chain((((a, i), i * 2) for i in range(5)),
+                     (((b, i), (add, i, (a, i))) for i in range(5)),
+                     (((c, i), (add, i, (b, i))) for i in range(5))))
+    result = ndependents(*get_deps(dsk))
+    expected = dict(chain((((a, i), 3) for i in range(5)),
+                          (((b, i), 2) for i in range(5)),
+                          (((c, i), 1) for i in range(5))))
+    assert result == expected
