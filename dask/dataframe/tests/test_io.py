@@ -434,6 +434,10 @@ def test_to_castra():
     finally:
         c.drop()
 
+    dsk, keys = a.to_castra(compute=False)
+    assert isinstance(dsk, dict)
+    assert isinstance(keys, list)
+
 
 def test_to_hdf():
     pytest.importorskip('tables')

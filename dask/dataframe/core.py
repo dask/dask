@@ -2,7 +2,7 @@ from __future__ import division
 
 from itertools import count
 from math import sqrt
-from functools import wraps
+from functools import wraps, reduce
 import bisect
 import uuid
 from hashlib import md5
@@ -77,14 +77,18 @@ class Scalar(Base):
 
     TODO: Clean up this abstraction
     """
+
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
 
-    def __init__(self, dsk, _name):
+    def __init__(self, dsk, _name, name=None, divisions=None):
         self.dask = dsk
         self._name = _name
         self.divisions = [None, None]
+
+        # name and divisions are ignored.
+        # There are dummies to be compat with Series and DataFrame
 
     @property
     def _args(self):
@@ -96,9 +100,23 @@ class Scalar(Base):
 
 class _Frame(Base):
     """ Superclass for DataFrame and Series """
+
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
+
+    # constructor properties
+    # http://pandas.pydata.org/pandas-docs/stable/internals.html#override-constructor-properties
+
+    @property
+    def _constructor_sliced(self):
+        """Constructor used when a result has one lower dimension(s) as the original"""
+        raise NotImplementedError
+
+    @property
+    def _constructor(self):
+        """Constructor used when a result has the same dimension(s) as the original"""
+        raise NotImplementedError
 
     @property
     def npartitions(self):
@@ -136,7 +154,7 @@ class _Frame(Base):
         name = 'from-cache-' + self._name
         dsk2 = dict(((name, i), (getitem, cache, (tuple, list(key))))
                     for i, key in enumerate(self._keys()))
-        return type(self)(dsk2, name, self.column_info, self.divisions)
+        return self._constructor(dsk2, name, self.column_info, self.divisions)
 
     @wraps(pd.DataFrame.drop_duplicates)
     def drop_duplicates(self):
@@ -147,14 +165,22 @@ class _Frame(Base):
     def __len__(self):
         return reduction(self, len, np.sum).compute()
 
-    def map_partitions(self, func, columns=None):
+    def map_partitions(self, func, columns=None, return_type=None):
         """ Apply Python function on each DataFrame block
 
-        Provide columns of the output if they are not the same as the input.
+        Parameters
+        ----------
+
+        columns: tuple
+            Provide columns of the output if they are not the same as the input.
+        return_type: class, default None
+            Specify the class of the result. Be sure to pass correct class
+            because it will not be validated by the function.
+            If None, class of 1st element of ``args`` will be used.
         """
         if columns is None:
             columns = self.column_info
-        return map_partitions(func, columns, self)
+        return map_partitions(func, columns, self, return_type=return_type)
 
     def random_split(self, p, seed=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
@@ -189,8 +215,8 @@ class _Frame(Base):
         name = 'head-%d-%s' % (n, self._name)
         dsk = {(name, 0): (head, (self._name, 0), n)}
 
-        result = type(self)(merge(self.dask, dsk), name,
-                            self.column_info, self.divisions[:2])
+        result = self._constructor(merge(self.dask, dsk), name,
+                                   self.column_info, self.divisions[:2])
 
         if compute:
             result = result.compute()
@@ -217,8 +243,8 @@ class _Frame(Base):
         if ind < self.divisions[0] or ind > self.divisions[-1]:
             raise KeyError('the label [%s] is not in the index' % str(ind))
         dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
-        return type(self)(merge(self.dask, dsk), name,
-                          self.column_info, [ind, ind])
+        return self._constructor_sliced(merge(self.dask, dsk), name,
+                                        self.column_info, [ind, ind])
 
     def _loc_slice(self, ind):
         name = 'loc-slice-%s-%s' % (str(ind), self._name)
@@ -252,9 +278,8 @@ class _Frame(Base):
                           else self.divisions[-1],))
 
         assert len(divisions) == len(dsk) + 1
-        return type(self)(merge(self.dask, dsk),
-                          name, self.column_info,
-                          divisions)
+        return self._constructor(merge(self.dask, dsk), name,
+                                       self.column_info, divisions)
 
     @property
     def loc(self):
@@ -262,6 +287,8 @@ class _Frame(Base):
 
     @property
     def iloc(self):
+        # not implemented because of performance concerns.
+        # see https://github.com/ContinuumIO/dask/pull/507
         raise AttributeError("Dask Dataframe does not support iloc")
 
     def repartition(self, divisions):
@@ -379,6 +406,7 @@ class Series(_Frame):
 
     dask.dataframe.DataFrame
     """
+
     _partition_type = pd.Series
 
     def __init__(self, dsk, _name, name, divisions):
@@ -392,6 +420,14 @@ class Series(_Frame):
     @property
     def _args(self):
         return (self.dask, self._name, self.name, self.divisions)
+
+    @property
+    def _constructor_sliced(self):
+        return Scalar
+
+    @property
+    def _constructor(self):
+        return Series
 
     @property
     def dtype(self):
@@ -530,7 +566,16 @@ class Series(_Frame):
 
 
 class Index(Series):
-    pass
+    @property
+    def _constructor(self):
+        return Index
+
+    def nunique(self):
+        return self.drop_duplicates().count()
+
+    def count(self):
+        f = lambda x: pd.notnull(x).sum()
+        return reduction(self, f, np.sum)
 
 
 class DataFrame(_Frame):
@@ -553,7 +598,9 @@ class DataFrame(_Frame):
     divisions: tuple of index values
         Values along which we partition our blocks on the index
     """
+
     _partition_type = pd.DataFrame
+
     def __init__(self, dask, name, columns, divisions):
         self.dask = dask
         self._name = name
@@ -564,14 +611,22 @@ class DataFrame(_Frame):
     def _args(self):
         return (self.dask, self._name, self.columns, self.divisions)
 
+    @property
+    def _constructor_sliced(self):
+        return Series
+
+    @property
+    def _constructor(self):
+        return DataFrame
+
     def __getitem__(self, key):
         if isinstance(key, (str, unicode)):
             name = self._name + '.' + key
             if key in self.columns:
                 dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                             for i in range(self.npartitions))
-                return Series(merge(self.dask, dsk), name,
-                              key, self.divisions)
+                return self._constructor_sliced(merge(self.dask, dsk), name,
+                                                      key, self.divisions)
         if isinstance(key, list):
             name = '%s[%s]' % (self._name, str(key))
             if all(k in self.columns for k in key):
@@ -579,15 +634,15 @@ class DataFrame(_Frame):
                                          (self._name, i),
                                          (list, key)))
                             for i in range(self.npartitions))
-                return DataFrame(merge(self.dask, dsk), name,
-                                 key, self.divisions)
+                return self._constructor(merge(self.dask, dsk), name,
+                                               key, self.divisions)
         if isinstance(key, Series) and self.divisions == key.divisions:
             name = 'series-slice-%s[%s]' % (self._name, key._name)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                                        (key._name, i)))
                         for i in range(self.npartitions))
-            return DataFrame(merge(self.dask, key.dask, dsk), name,
-                             self.columns, self.divisions)
+            return self._constructor(merge(self.dask, key.dask, dsk), name,
+                                           self.columns, self.divisions)
         raise NotImplementedError()
 
     def __getattr__(self, key):
@@ -667,7 +722,8 @@ class DataFrame(_Frame):
             dsk = dict(((name, i), (pd.DataFrame.query, (self._name, i), expr))
                        for i in range(self.npartitions))
 
-        return DataFrame(merge(dsk, self.dask), name, self.columns, self.divisions)
+        return self._constructor(merge(dsk, self.dask), name,
+                                       self.columns, self.divisions)
 
     @wraps(pd.DataFrame.dropna)
     def dropna(self, how='any', subset=None):
@@ -675,7 +731,7 @@ class DataFrame(_Frame):
             return df.dropna(how=how, subset=subset)
         return map_partitions(f, self.columns, self)
 
-    def to_castra(self, fn=None, categories=None):
+    def to_castra(self, fn=None, categories=None, compute=True):
         """ Write DataFrame to Castra on-disk store
 
         See https://github.com/blosc/castra for details
@@ -684,7 +740,7 @@ class DataFrame(_Frame):
             Castra.to_dask
         """
         from .io import to_castra
-        return to_castra(self, fn, categories)
+        return to_castra(self, fn, categories, compute=compute)
 
     @wraps(pd.DataFrame.to_csv)
     def to_csv(self, filename, **kwargs):
@@ -990,28 +1046,28 @@ class SeriesGroupBy(object):
         agg = lambda df: df.groupby(level=0).sum()
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key],
-                   token='series-groupby-sum')
+                   token='series-groupby-sum', return_type=Series)
 
     def min(self):
         chunk = lambda df, index: df.groupby(index)[self.key].min()
         agg = lambda df: df.groupby(level=0).min()
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key],
-                   token='series-groupby-min')
+                   token='series-groupby-min', return_type=Series)
 
     def max(self):
         chunk = lambda df, index: df.groupby(index)[self.key].max()
         agg = lambda df: df.groupby(level=0).max()
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key],
-                   token='series-groupby-max')
+                   token='series-groupby-max', return_type=Series)
 
     def count(self):
         chunk = lambda df, index: df.groupby(index)[self.key].count()
         agg = lambda df: df.groupby(level=0).sum()
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key],
-                   token='series-groupby-count')
+                   token='series-groupby-count', return_type=Series)
 
     def mean(self):
         def chunk(df, index):
@@ -1026,7 +1082,7 @@ class SeriesGroupBy(object):
             return result
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key],
-                   token='series-groupby-mean')
+                   token='series-groupby-mean', return_type=Series)
 
     def nunique(self):
         def chunk(df, index):
@@ -1041,11 +1097,11 @@ class SeriesGroupBy(object):
 
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=[self.key],
-                   token='series-groupby-nunique')
+                   token='series-groupby-nunique', return_type=Series)
 
 
 def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
-                       token=None):
+                       token=None, return_type=None):
     """ Apply a function to blocks, the concat, then apply again
 
     Parameters
@@ -1057,6 +1113,10 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
         Function to operate on each block of data
     aggregate: function concatenated-block -> block
         Function to operate on the concatenated result of chunk
+    return_type: class, default None
+        Specify the class of the result. Be sure to pass correct class
+        because it will not be validated by the function.
+        If None, class of 1st element of ``args`` will be used.
 
     >>> def chunk(a_block, b_block):
     ...     pass
@@ -1068,6 +1128,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
     """
     if not isinstance(args, (tuple, list)):
         args = [args]
+
     assert all(arg.npartitions == args[0].npartitions
                 for arg in args
                 if isinstance(arg, _Frame))
@@ -1085,24 +1146,37 @@ def apply_concat_apply(args, chunk=None, aggregate=None, columns=None,
 
     b = 'apply-concat-apply--second' + token
     dsk2 = {(b, 0): (aggregate,
-                      (pd.concat,
+                      (_concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
 
-    return type(args[0])(
-            merge(dsk, dsk2, *[a.dask for a in args
-                                      if isinstance(a, _Frame)]),
-            b, columns, [None, None])
+    if return_type is None:
+        return_type = type(args[0])
+
+    dasks = [a.dask for a in args if isinstance(a, _Frame)]
+    return return_type(merge(dsk, dsk2, *dasks), b, columns, [None, None])
 
 def map_partitions(func, columns, *args, **kwargs):
     """ Apply Python function on each DataFrame block
 
-    Provide columns of the output if they are not the same as the input.
+    columns: tuple
+        Provide columns of the output if they are not the same as the input.
+    targets: list
+        List of target DataFrame / Series.
+    return_type: class, default None
+        Specify the class of the result. Be sure to pass correct class
+        because it will not be validated by the function.
+        If None, class of 1st element of ``args`` will be used.
     """
     assert all(not isinstance(arg, _Frame) or
-               arg.divisions == args[0].divisions
-               for arg in args)
+               arg.divisions == args[0].divisions for arg in args)
 
     token = kwargs.pop('token', None)
+
+    return_type = kwargs.pop('return_type', None)
+    if return_type is None:
+        # return_type can be None if _Frame.map_partition is used
+        return_type = type(args[0])
+
     if kwargs:
         raise ValueError("Keyword arguments not yet supported in map_partitions")
 
@@ -1118,9 +1192,8 @@ def map_partitions(func, columns, *args, **kwargs):
                                       for arg in args])))
                 for i in range(args[0].npartitions))
 
-    return type(args[0])(merge(dsk, *[arg.dask for arg in args
-                                               if isinstance(arg, _Frame)]),
-                      name, columns, args[0].divisions)
+    dasks = [arg.dask for arg in args if isinstance(arg, _Frame)]
+    return return_type(merge(dsk, *dasks), name, columns, args[0].divisions)
 
 aca = apply_concat_apply
 
@@ -1322,6 +1395,8 @@ class DatetimeAccessor(object):
     >>> s.dt.microsecond  # doctest: +SKIP
     """
     def __init__(self, series):
+        if not isinstance(series, Series):
+            raise ValueError('DatetimeAccessor cannot be initialized')
         self._series = series
 
     def __dir__(self):
@@ -1357,6 +1432,8 @@ class StringAccessor(object):
     >>> s.str.lower()  # doctest: +SKIP
     """
     def __init__(self, series):
+        if not isinstance(series, Series):
+            raise ValueError('DatetimeAccessor cannot be initialized')
         self._series = series
 
     def __dir__(self):
