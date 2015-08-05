@@ -169,7 +169,7 @@ def _child_max(key, result, dependencies):
         # if key has deps, then its value is the max of all the values of its
         # deps - 0.5
         if deps:
-            result.setdefault(key, max(y for _, y in stack) - 0.5)
+            result.setdefault(key, max(value for _, value in stack) - 0.5)
 
 
 def dfs(dependencies, dependents, key=lambda x: x):
