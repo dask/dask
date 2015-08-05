@@ -103,19 +103,24 @@ def ndependents(dependencies, dependents):
     leaves = [k for k, v in dependencies.items() if not v]
 
     for leaf in leaves:
-        _ndependents(leaf, result, dependencies, dependents)
+        _ndependents(leaf, result, dependents)
 
     return result
 
 
-def _ndependents(key, result, dependencies, dependents):
+def _ndependents(key, result, dependents):
     """ Helper function for ndependents """
-    if key not in result:
+    stack = [(key, sum(result.values()) + 1)]
+    while stack:
+        key, value = stack.pop()
         deps = dependents[key]
-        result[key] = sum(
-            [_ndependents(k, result, dependencies, dependents)
-             for k in deps]) + 1
-    return result[key]
+        ndeps = 0
+        for dep in deps:
+            val = result.setdefault(dep, value)
+            stack.append((dep, val))
+            ndeps += val
+        if deps and key not in result:
+            result[key] = ndeps + 1
 
 
 def child_max(dependencies, dependents, scores):
