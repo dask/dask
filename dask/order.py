@@ -158,7 +158,7 @@ def _child_max(key, result, dependencies):
     # base case
     stack = [(key, max(result.values()) - 0.5)]
     while stack:
-        # current dependency on the stack and its dependencies value
+        # current dependency its dependencies value
         key, value = stack.pop()
 
         # get each dependency's score, or set to `value` if not seen
