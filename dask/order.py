@@ -27,12 +27,12 @@ Breaking Ties
 -------------
 
 And so we create a total ordering over all nodes to serve as a tie breaker.  We
-represent this ordering with a dictionary.  Larger scores have higher priority.
+represent this ordering with a dictionary.  Lower scores have higher priority.
 
-    {'a': 3,
-     'c': 2,
-     'd': 1,
-     'b': 1}
+    {'d': 0,
+     'c': 1,
+     'a': 2,
+     'b': 3}
 
 There are several ways in which we might order our keys.  In practice we have
 found the following objectives important:
@@ -159,7 +159,7 @@ def _child_max(key, scores, result, dependencies, dependents):
     if key not in result:
         deps = dependencies[key]
         result[key] = max([_child_max(k, scores, result, dependencies,
-                                      dependents) for k in deps]) - 0.5
+                                      dependents) for k in deps]) + scores[key]
     return result[key]
 
 
@@ -186,19 +186,21 @@ def dfs(dependencies, dependents, key=lambda x: x):
     i = 0
 
     roots = [k for k, v in dependents.items() if not v]
-    stack = sorted(roots, key=key, reverse=True)
+    stack = sorted(roots, key=key)
     seen = set()
 
     while stack:
         item = stack.pop()
+        if item in seen:
+            continue
         seen.add(item)
 
         result[item] = i
         deps = dependencies[item]
-        deps = deps - seen
-        seen |= deps
-        deps = sorted(deps, key=key, reverse=True)
-        stack.extend(deps)
+        if deps:
+            deps = deps - seen
+            deps = sorted(deps, key=key)
+            stack.extend(deps)
         i += 1
 
     return result
