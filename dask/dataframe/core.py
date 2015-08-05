@@ -530,7 +530,12 @@ class Series(_Frame):
 
 
 class Index(Series):
-    pass
+    def nunique(self):
+        return self.drop_duplicates().count()
+
+    def count(self):
+        f = lambda x: pd.notnull(x).sum()
+        return reduction(self, f, np.sum)
 
 
 class DataFrame(_Frame):
