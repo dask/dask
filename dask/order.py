@@ -55,8 +55,8 @@ concern (2) we prefer to traverse down children in the order of which child has
 the descendent on whose result the most tasks depend.
 """
 from __future__ import absolute_import, division, print_function
-from operator import add
 from .core import get_deps
+from operator import add
 
 
 def order(dsk):
@@ -76,6 +76,7 @@ def order(dsk):
     ndeps = ndependents(dependencies, dependents)
     maxes = child_max(dependencies, dependents, ndeps)
     return dfs(dependencies, dependents, key=maxes.get)
+
 
 def ndependents(dependencies, dependents):
     """ Number of total data elements that depend on key
