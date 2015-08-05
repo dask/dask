@@ -160,17 +160,19 @@ def _child_max(key, result, dependencies):
     stack = [(key, max(result.values()) - 0.5)]
     while stack:
         # current dependency its dependencies value
-        key, value = stack.pop()
+        key, value = _, keyval = stack.pop()
 
         # get each dependency's score, or set to `value` if not seen
         deps = dependencies[key]
         for dep in deps:
-            stack.append((dep, result.setdefault(dep, value)))
+            depval = result.setdefault(dep, value)
+            stack.append((dep, depval))
+            keyval = max(depval, keyval)
 
         # if key has deps, then its value is the max of all the values of its
         # deps - 0.5
-        if deps:
-            result.setdefault(key, max(value for _, value in stack) - 0.5)
+        if deps and key not in result:
+            result[key] = keyval - 0.5
 
 
 def dfs(dependencies, dependents, key=lambda x: x):
