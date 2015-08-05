@@ -812,3 +812,13 @@ def test_deterministic_apply_concat_apply_names():
            sorted(a.x.drop_duplicates().dask)
     assert sorted(a.groupby('x').y.mean().dask) == \
            sorted(a.groupby('x').y.mean().dask)
+
+
+def test_gh_517():
+    arr = np.random.randn(100, 2)
+    df = pd.DataFrame(arr, columns=['a', 'b'])
+    ddf = dd.from_pandas(df, 2)
+    assert ddf.index.nunique().compute() == 100
+
+    ddf2 = dd.from_pandas(pd.concat([df, df]), 5)
+    assert ddf2.index.nunique().compute() == 100
