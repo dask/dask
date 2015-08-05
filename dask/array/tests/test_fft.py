@@ -7,7 +7,7 @@ import dask
 from dask.array.core import Array
 from dask.utils import raises
 import dask.array as da
-from dask.array.fft import fft, ifft
+from dask.array.fft import fft, ifft, rfft, irfft, hfft, ihfft
 
 
 def eq(a, b):
@@ -73,6 +73,62 @@ class TestFFT(unittest.TestCase):
 
         res2 = ifft(darr2, axis=0)
         expected2 = npfft.ifft(nparr, axis=0)
+        assert eq(res2, expected2)
+
+    def test_rfft(self):
+        nparr = np.arange(100).reshape(10, 10)
+        darr = da.from_array(nparr, chunks=(1, 10))
+
+        res = rfft(darr)
+        expected = npfft.rfft(nparr)
+        assert eq(res, expected)
+
+        darr2 = da.from_array(nparr, chunks=(10, 1))
+
+        res2 = rfft(darr2, axis=0)
+        expected2 = npfft.rfft(nparr, axis=0)
+        assert eq(res2, expected2)
+
+    def test_irfft(self):
+        nparr = np.arange(100).reshape(10, 10)
+        darr = da.from_array(nparr, chunks=(1, 10))
+
+        res = irfft(darr)
+        expected = npfft.irfft(nparr)
+        assert eq(res, expected)
+
+        darr2 = da.from_array(nparr, chunks=(10, 1))
+
+        res2 = irfft(darr2, axis=0)
+        expected2 = npfft.irfft(nparr, axis=0)
+        assert eq(res2, expected2)
+
+    def test_hfft(self):
+        nparr = np.arange(100).reshape(10, 10)
+        darr = da.from_array(nparr, chunks=(1, 10))
+
+        res = hfft(darr)
+        expected = npfft.hfft(nparr)
+        assert eq(res, expected)
+
+        darr2 = da.from_array(nparr, chunks=(10, 1))
+
+        res2 = hfft(darr2, axis=0)
+        expected2 = npfft.hfft(nparr, axis=0)
+        assert eq(res2, expected2)
+
+    def test_ihfft(self):
+        nparr = np.arange(100).reshape(10, 10)
+        darr = da.from_array(nparr, chunks=(1, 10))
+
+        res = ihfft(darr)
+        expected = npfft.ihfft(nparr)
+        assert eq(res, expected)
+
+        darr2 = da.from_array(nparr, chunks=(10, 1))
+
+        res2 = ihfft(darr2, axis=0)
+        expected2 = npfft.ihfft(nparr, axis=0)
         assert eq(res2, expected2)
 
 
