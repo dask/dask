@@ -595,7 +595,7 @@ def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
     return DataFrame(dsk, name, columns, divisions)
 
 
-def to_castra(df, fn=None, categories=None):
+def to_castra(df, fn=None, categories=None, compute=True):
     """ Write DataFrame to Castra on-disk store
 
     See https://github.com/blosc/castra for details
@@ -615,8 +615,13 @@ def to_castra(df, fn=None, categories=None):
         dsk[(name, i)] = (_link, (name, i - 1),
                           (Castra.extend, (name, -1), (df._name, i)))
 
-    c, _ = DataFrame._get(merge(dsk, df.dask), [(name, -1), list(dsk.keys())])
-    return c
+    dsk = merge(dsk, df.dask)
+    keys = [(name, -1), list(dsk.keys())]
+    if compute:
+        c, _ = DataFrame._get(dsk, keys)
+        return c
+    else:
+        return dsk, keys
 
 
 def to_csv(df, filename, **kwargs):
