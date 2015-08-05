@@ -50,181 +50,72 @@ class TestFFT(unittest.TestCase):
 
     def test_cant_fft_chunked_axis(self):
         bad_darr = da.from_array(self.nparr, chunks=(5, 5))
-
         assert raises(ValueError, lambda: fft(bad_darr))
         assert raises(ValueError, lambda: fft(bad_darr, axis=0))
 
     def test_fft(self):
-        res = fft(self.darr)
-        expected = npfft.fft(self.nparr)
-        assert eq(res, expected)
-
-        res2 = fft(self.darr2, axis=0)
-        expected2 = npfft.fft(self.nparr, axis=0)
-        assert eq(res2, expected2)
+        assert eq(fft(self.darr), npfft.fft(self.nparr))
+        assert eq(fft(self.darr2, axis=0), npfft.fft(self.nparr, axis=0))
 
     def test_fft_n_kwarg(self):
-        res = fft(self.darr, 5)
-        expected = npfft.fft(self.nparr, 5)
-        assert eq(res, expected)
-
-        res2 = fft(self.darr, 13)
-        expected2 = npfft.fft(self.nparr, 13)
-        assert eq(res2, expected2)
-
-        res3 = fft(self.darr2, 5, axis=0)
-        expected3 = npfft.fft(self.nparr, 5, axis=0)
-        assert eq(res3, expected3)
-
-        res4 = fft(self.darr2, 13, axis=0)
-        expected4 = npfft.fft(self.nparr, 13, axis=0)
-        assert eq(res4, expected4)
+        assert eq(fft(self.darr, 5), npfft.fft(self.nparr, 5))
+        assert eq(fft(self.darr, 13), npfft.fft(self.nparr, 13))
+        assert eq(fft(self.darr2, 5, axis=0), npfft.fft(self.nparr, 5, axis=0))
+        assert eq(fft(self.darr2, 13, axis=0), npfft.fft(self.nparr, 13, axis=0))
 
     def test_ifft(self):
-        res = ifft(self.darr)
-        expected = npfft.ifft(self.nparr)
-        assert eq(res, expected)
-
-        res2 = ifft(self.darr2, axis=0)
-        expected2 = npfft.ifft(self.nparr, axis=0)
-        assert eq(res2, expected2)
+        assert eq(ifft(self.darr), npfft.ifft(self.nparr))
+        assert eq(ifft(self.darr2, axis=0), npfft.ifft(self.nparr, axis=0))
 
     def test_ifft_n_kwarg(self):
-        res = ifft(self.darr, 5)
-        expected = npfft.ifft(self.nparr, 5)
-        assert eq(res, expected)
-
-        res2 = ifft(self.darr, 13)
-        expected2 = npfft.ifft(self.nparr, 13)
-        assert eq(res2, expected2)
-
-        res3 = ifft(self.darr2, 5, axis=0)
-        expected3 = npfft.ifft(self.nparr, 5, axis=0)
-        assert eq(res3, expected3)
-
-        res4 = ifft(self.darr2, 13, axis=0)
-        expected4 = npfft.ifft(self.nparr, 13, axis=0)
-        assert eq(res4, expected4)
+        assert eq(ifft(self.darr, 5), npfft.ifft(self.nparr, 5))
+        assert eq(ifft(self.darr, 13), npfft.ifft(self.nparr, 13))
+        assert eq(ifft(self.darr2, 5, axis=0), npfft.ifft(self.nparr, 5, axis=0))
+        assert eq(ifft(self.darr2, 13, axis=0), npfft.ifft(self.nparr, 13, axis=0))
 
     def test_rfft(self):
-        res0 = rfft(self.darr)
-        expected0 = npfft.rfft(self.nparr)
-        assert eq(res0, expected0)
-
-        res1 = rfft(self.darr2, axis=0)
-        expected1 = npfft.rfft(self.nparr, axis=0)
-        assert eq(res1, expected1)
+        assert eq(rfft(self.darr), npfft.rfft(self.nparr))
+        assert eq(rfft(self.darr2, axis=0), npfft.rfft(self.nparr, axis=0))
 
     def test_rfft_n_kwarg(self):
-        res = rfft(self.darr, 5)
-        expected = npfft.rfft(self.nparr, 5)
-        assert eq(res, expected)
-
-        res2 = rfft(self.darr, 13)
-        expected2 = npfft.rfft(self.nparr, 13)
-        assert eq(res2, expected2)
-
-        res3 = rfft(self.darr2, 5, axis=0)
-        expected3 = npfft.rfft(self.nparr, 5, axis=0)
-        assert eq(res3, expected3)
-
-        res4 = rfft(self.darr2, 13, axis=0)
-        expected4 = npfft.rfft(self.nparr, 13, axis=0)
-        assert eq(res4, expected4)
-
-        res5 = rfft(self.darr2, 12, axis=0)  # even n
-        expected5 = npfft.rfft(self.nparr, 12, axis=0)
-        assert eq(res5, expected5)
+        assert eq(rfft(self.darr, 5), npfft.rfft(self.nparr, 5))
+        assert eq(rfft(self.darr, 13), npfft.rfft(self.nparr, 13))
+        assert eq(rfft(self.darr2, 5, axis=0), npfft.rfft(self.nparr, 5, axis=0))
+        assert eq(rfft(self.darr2, 13, axis=0), npfft.rfft(self.nparr, 13, axis=0))
+        assert eq(rfft(self.darr2, 12, axis=0), npfft.rfft(self.nparr, 12, axis=0))
 
     def test_irfft(self):
-        res = irfft(self.darr)
-        expected = npfft.irfft(self.nparr)
-        assert eq(res, expected)
-
-        res2 = irfft(self.darr2, axis=0)
-        expected2 = npfft.irfft(self.nparr, axis=0)
-        assert eq(res2, expected2)
+        assert eq(irfft(self.darr), npfft.irfft(self.nparr))
+        assert eq(irfft(self.darr2, axis=0), npfft.irfft(self.nparr, axis=0))
 
     def test_irfft_n_kwarg(self):
-        res = irfft(self.darr, 5)
-        expected = npfft.irfft(self.nparr, 5)
-        assert eq(res, expected)
-
-        res2 = irfft(self.darr, 13)
-        expected2 = npfft.irfft(self.nparr, 13)
-        assert eq(res2, expected2)
-
-        res3 = irfft(self.darr2, 5, axis=0)
-        expected3 = npfft.irfft(self.nparr, 5, axis=0)
-        assert eq(res3, expected3)
-
-        res4 = irfft(self.darr2, 13, axis=0)
-        expected4 = npfft.irfft(self.nparr, 13, axis=0)
-        assert eq(res4, expected4)
-
-        res5 = irfft(self.darr2, 12, axis=0)  # even n
-        expected5 = npfft.irfft(self.nparr, 12, axis=0)
-        assert eq(res5, expected5)
+        assert eq(irfft(self.darr, 5), npfft.irfft(self.nparr, 5))
+        assert eq(irfft(self.darr, 13), npfft.irfft(self.nparr, 13))
+        assert eq(irfft(self.darr2, 5, axis=0), npfft.irfft(self.nparr, 5, axis=0))
+        assert eq(irfft(self.darr2, 13, axis=0), npfft.irfft(self.nparr, 13, axis=0))
+        assert eq(irfft(self.darr2, 12, axis=0), npfft.irfft(self.nparr, 12, axis=0))
 
     def test_hfft(self):
-        res = hfft(self.darr)
-        expected = npfft.hfft(self.nparr)
-        assert eq(res, expected)
-
-        res2 = hfft(self.darr2, axis=0)
-        expected2 = npfft.hfft(self.nparr, axis=0)
-        assert eq(res2, expected2)
+        assert eq(hfft(self.darr), npfft.hfft(self.nparr))
+        assert eq(hfft(self.darr2, axis=0), npfft.hfft(self.nparr, axis=0))
 
     def test_hfft_nkwarg(self):
-        res = hfft(self.darr, 5)
-        expected = npfft.hfft(self.nparr, 5)
-        assert eq(res, expected)
-
-        res2 = hfft(self.darr, 13)
-        expected2 = npfft.hfft(self.nparr, 13)
-        assert eq(res2, expected2)
-
-        res3 = hfft(self.darr2, 5, axis=0)
-        expected3 = npfft.hfft(self.nparr, 5, axis=0)
-        assert eq(res3, expected3)
-
-        res4 = hfft(self.darr2, 13, axis=0)
-        expected4 = npfft.hfft(self.nparr, 13, axis=0)
-        assert eq(res4, expected4)
-
-        res5 = hfft(self.darr2, 12, axis=0)  # even n
-        expected5 = npfft.hfft(self.nparr, 12, axis=0)
-        assert eq(res5, expected5)
+        assert eq(hfft(self.darr, 5), npfft.hfft(self.nparr, 5))
+        assert eq(hfft(self.darr, 13), npfft.hfft(self.nparr, 13))
+        assert eq(hfft(self.darr2, 5, axis=0), npfft.hfft(self.nparr, 5, axis=0))
+        assert eq(hfft(self.darr2, 13, axis=0), npfft.hfft(self.nparr, 13, axis=0))
+        assert eq(hfft(self.darr2, 12, axis=0), npfft.hfft(self.nparr, 12, axis=0))
 
     def test_ihfft(self):
-        res = ihfft(self.darr)
-        expected = npfft.ihfft(self.nparr)
-        assert eq(res, expected)
-
-        res2 = ihfft(self.darr2, axis=0)
-        expected2 = npfft.ihfft(self.nparr, axis=0)
-        assert eq(res2, expected2)
+        assert eq(ihfft(self.darr), npfft.ihfft(self.nparr))
+        assert eq(ihfft(self.darr2, axis=0), npfft.ihfft(self.nparr, axis=0))
 
     def test_ihfft_n_kwarg(self):
-        res = ihfft(self.darr, 5)
-        expected = npfft.ihfft(self.nparr, 5)
-        assert eq(res, expected)
-
-        res2 = ihfft(self.darr, 13)
-        expected2 = npfft.ihfft(self.nparr, 13)
-        assert eq(res2, expected2)
-
-        res3 = ihfft(self.darr2, 5, axis=0)
-        expected3 = npfft.ihfft(self.nparr, 5, axis=0)
-        assert eq(res3, expected3)
-
-        res4 = ihfft(self.darr2, 13, axis=0)
-        expected4 = npfft.ihfft(self.nparr, 13, axis=0)
-        assert eq(res4, expected4)
-
-        res5 = ihfft(self.darr2, 12, axis=0)  # even n
-        expected5 = npfft.ihfft(self.nparr, 12, axis=0)
-        assert eq(res5, expected5)
+        assert eq(ihfft(self.darr, 5), npfft.ihfft(self.nparr, 5))
+        assert eq(ihfft(self.darr, 13), npfft.ihfft(self.nparr, 13))
+        assert eq(ihfft(self.darr2, 5, axis=0), npfft.ihfft(self.nparr, 5, axis=0))
+        assert eq(ihfft(self.darr2, 13, axis=0), npfft.ihfft(self.nparr, 13, axis=0))
+        assert eq(ihfft(self.darr2, 12, axis=0), npfft.ihfft(self.nparr, 12, axis=0))
 
 if __name__ == '__main__':
     unittest.main()
