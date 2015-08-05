@@ -162,13 +162,18 @@ def test_split_apply_combine_on_series():
         assert eq(d.groupby(ddkey).a.max(), full.groupby(pdkey).a.max())
         assert eq(d.groupby(ddkey).a.count(), full.groupby(pdkey).a.count())
 
-    for ddkey, pdkey in [(d.b > 3, full.b > 3)]:
-        # temp
-        assert eq(d.groupby(ddkey).a.sum(), full.groupby(pdkey).a.sum())
-        assert eq(d.groupby(ddkey).a.min(), full.groupby(pdkey).a.min())
-        assert eq(d.groupby(ddkey).a.max(), full.groupby(pdkey).a.max())
-        assert eq(d.groupby(ddkey).a.count(), full.groupby(pdkey).a.count())
-        # assert eq(d.groupby(ddkey).a.nunique(), full.groupby(pdkey).a.nunique())
+    for i in range(8):
+        assert eq(d.groupby(d.b > i).a.sum(), full.groupby(full.b > i).a.sum())
+        assert eq(d.groupby(d.b > i).a.min(), full.groupby(full.b > i).a.min())
+        assert eq(d.groupby(d.b > i).a.max(), full.groupby(full.b > i).a.max())
+        assert eq(d.groupby(d.b > i).a.count(), full.groupby(full.b > i).a.count())
+        assert eq(d.groupby(d.b > i).a.nunique(), full.groupby(full.b > i).a.nunique())
+
+        assert eq(d.groupby(d.a > i).b.sum(), full.groupby(full.a > i).b.sum())
+        assert eq(d.groupby(d.a > i).b.min(), full.groupby(full.a > i).b.min())
+        assert eq(d.groupby(d.a > i).b.max(), full.groupby(full.a > i).b.max())
+        assert eq(d.groupby(d.a > i).b.count(), full.groupby(full.a > i).b.count())
+        assert eq(d.groupby(d.a > i).b.nunique(), full.groupby(full.a > i).b.nunique())
 
     for ddkey, pdkey in [('a', 'a'), (d.a, full.a),
                           (d.a + 1, full.a + 1), (d.a > 3, full.a > 3)]:

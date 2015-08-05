@@ -1088,9 +1088,10 @@ class SeriesGroupBy(object):
         def chunk(df, index):
             # we call set_index here to force a possibly duplicate index
             # for our reduce step
-            return (df.groupby(index)
-                      .apply(pd.DataFrame.drop_duplicates, subset=self.key)
-                      .set_index(index))
+            grouped = (df.groupby(index)
+                .apply(pd.DataFrame.drop_duplicates, subset=self.key))
+            grouped.index = grouped.index.get_level_values(level=0)
+            return grouped
 
         def agg(df):
             return df.groupby(level=0)[self.key].nunique()
