@@ -437,6 +437,8 @@ def test_to_castra():
     dsk, keys = a.to_castra(compute=False)
     assert isinstance(dsk, dict)
     assert isinstance(keys, list)
+    c, last = keys
+    assert last[1] == a.npartitions - 1
 
 
 def test_to_hdf():

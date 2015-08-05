@@ -616,7 +616,7 @@ def to_castra(df, fn=None, categories=None, compute=True):
                           (Castra.extend, (name, -1), (df._name, i)))
 
     dsk = merge(dsk, df.dask)
-    keys = [(name, -1), list(dsk.keys())]
+    keys = [(name, -1), (name, df.npartitions - 1)]
     if compute:
         c, _ = DataFrame._get(dsk, keys)
         return c
