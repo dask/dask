@@ -128,14 +128,14 @@ Custom Callbacks
 ----------------
 
 Custom diagnostics can be created using the callback mechanism described above.
-To add your own, it's recommended to subclass the ``Diagnostic`` class, and
+To add your own, it's recommended to subclass the ``Callback`` class, and
 define your own methods. Below we create a class that prints the name of every
 key as it's computed.
 
 .. code-block:: python
 
-    from dask.diagnostics.core import Diagnostic
-    class PrintKeys(Diagnostic):
+    from dask.callbacks import Callback
+    class PrintKeys(Callback):
         def _pretask(self, key, dask, state):
             """Print the key of every task as it's started"""
             print("Computing: {0}!".format(repr(key)))
@@ -147,6 +147,18 @@ This can now be used as a contextmanager during computation:
     >>> from operator import add, mul
     >>> dsk = {'a': (add, 1, 2), 'b': (add, 3, 'a'), 'c': (mul, 'a', 'b')}
     >>> with PrintKeys():
+    ...     get(dsk, 'c')
+    Computing 'a'!
+    Computing 'b'!
+    Computing 'c'!
+
+Alternatively, functions can be passed in as keyword arguments to ``Callback``:
+
+.. code-block:: python
+
+    >>> def printkeys(key, dask, state):
+    ...    print("Computing: {0}!".format(repr(key)))
+    >>> with Callback(pretask=printkeys):
     ...     get(dsk, 'c')
     Computing 'a'!
     Computing 'b'!
