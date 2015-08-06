@@ -5,7 +5,7 @@ import time
 from timeit import default_timer
 
 from ..core import istask
-from .core import Diagnostic
+from ..callbacks import Callback
 
 
 def format_time(t):
@@ -26,7 +26,7 @@ def format_time(t):
         return '{0:4.1f}s'.format(s)
 
 
-class ProgressBar(Diagnostic):
+class ProgressBar(Callback):
     """A progress bar for dask.
 
     Can be used as a context manager around dask computations.
