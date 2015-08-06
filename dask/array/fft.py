@@ -11,9 +11,18 @@ chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
                "which has chunks %s. To change the array's chunks use "
                "dask.Array.rechunk.")
 
+fft_preamble = """
+    Wrapping of numpy.fft.%s
 
-def _fft_wrap(fft_func, dtype, out_chunk_fn, doc_preamble,
-              func_name):
+    The axis along which the FFT is applied must have a one chunk. To change
+    the array's chunking use dask.Array.rechunk.
+
+    The numpy.fft.%s docstring follows below:
+
+    """
+
+
+def _fft_wrap(fft_func, dtype, out_chunk_fn):
     def func(a, n=None, axis=-1):
         if len(a.chunks[axis]) != 1:
             raise ValueError(chunk_error % (axis, a.chunks[axis]))
@@ -23,8 +32,9 @@ def _fft_wrap(fft_func, dtype, out_chunk_fn, doc_preamble,
         return map_blocks(lambda x: fft_func(x, n=n, axis=axis), a, dtype=dtype,
                           chunks=chunks)
 
-    func.__doc__ = doc_preamble + fft_func.__doc__
-    func.__name__ = func_name
+    np_name = fft_func.__name__
+    func.__doc__ = (fft_preamble % (np_name, np_name)) + fft_func.__doc__
+    func.__name__ = np_name
     return func
 
 
@@ -73,62 +83,19 @@ def _ihfft_out_chunks(a, n, axis):
     return chunks
 
 
-fft_preamble = """
-    Compute the one-dimensional discrete Fourier Transform along an axis that
-    only has one chunk.
-
-    The numpy.fft.fft docstring follows below:
-
-    """
-
-fft = _fft_wrap(npfft.fft, np.complex_, _fft_out_chunks, fft_preamble, 'fft')
+fft = _fft_wrap(npfft.fft, np.complex_, _fft_out_chunks)
 
 
-ifft_preamble = """
-    Compute the one-dimensional inverse discrete Fourier Transform along an
-    axis that only has one chunk.
-
-    The numpy.fft.ifft docstring follows below:
-
-    """
-ifft = _fft_wrap(npfft.ifft, np.complex_, _fft_out_chunks, ifft_preamble, 'ifft')
+ifft = _fft_wrap(npfft.ifft, np.complex_, _fft_out_chunks)
 
 
-rfft_preamble = """
-    Compute the one-dimensional discrete Fourier Transform for real input,
-    along an axis that has only one chunk.
-
-    The numpy.fft.rfft docstring follows below:
-
-    """
-rfft = _fft_wrap(npfft.rfft, np.complex_, _rfft_out_chunks, rfft_preamble, 'rfft')
+rfft = _fft_wrap(npfft.rfft, np.complex_, _rfft_out_chunks)
 
 
-irfft_preamble = """
-    Compute the inverse of the n-point DFT for real input, along an axis that
-    has only one chunk.
-
-    The numpy.fft.irfft docstring follows below:
-
-    """
-irfft = _fft_wrap(npfft.irfft, np.float_, _irfft_out_chunks, irfft_preamble, 'irfft')
+irfft = _fft_wrap(npfft.irfft, np.float_, _irfft_out_chunks)
 
 
-hfft_preamble = """
-    Compute the FFT of a signal which has Hermitian symmetry (real spectrum),
-    along an axis that has only one chunk.
-
-    The numpy.fft.hfft docstring follows below:
-
-    """
-hfft = _fft_wrap(npfft.hfft, np.float_, _hfft_out_chunks, hfft_preamble, 'hfft')
+hfft = _fft_wrap(npfft.hfft, np.float_, _hfft_out_chunks)
 
 
-ihfft_preamble = """
-    Compute the inverse FFT of a signal which has Hermitian symmetry, along
-    an axis that has only one chunk.
-
-    The numpy.fft.ihfft docstring follows below:
-
-    """
-ihfft = _fft_wrap(npfft.ihfft, np.complex_, _ihfft_out_chunks, ihfft_preamble, 'ihfft')
+ihfft = _fft_wrap(npfft.ihfft, np.complex_, _ihfft_out_chunks)
