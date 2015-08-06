@@ -70,7 +70,7 @@ def order(dsk):
 
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
-    {'a': 3, 'c': 2, 'b': 1, 'd': 0}
+    {'a': 2, 'c': 1, 'b': 3, 'd': 0}
     """
     dependencies, dependents = get_deps(dsk)
     ndeps = ndependents(dependencies, dependents)
@@ -121,13 +121,11 @@ def child_max(dependencies, dependents, scores):
     """ Maximum-ish of scores of children
 
     This takes a dictionary of scores per key and returns a new set of scores
-    per key that is the maximum of the scores of all children of that node
-    minus a half.  In some sense this ranks each node by the maximum importance
-    of their children but then subtracts a little bit to ensure that the parent
-    node is slightly less important.  This half-score stops us from losing
-    information about depth, otherwise things tend to flatten out.
+    per key that is the maximum of the scores of all children of that node plus
+    its own score.  In some sense this ranks each node by the maximum
+    importance of their children plus their own value.
 
-    This is generally fed in the result from ``ndependents``
+    This is generally fed the result from ``ndependents``
 
     Examples
     --------
@@ -137,7 +135,7 @@ def child_max(dependencies, dependents, scores):
     >>> dependencies, dependents = get_deps(dsk)
 
     >>> sorted(child_max(dependencies, dependents, scores).items())
-    [('a', 3), ('b', 2), ('c', 2.5), ('d', 2.0)]
+    [('a', 3), ('b', 2), ('c', 5), ('d', 6)]
     """
     result = dict()
 
@@ -180,7 +178,7 @@ def dfs(dependencies, dependents, key=lambda x: x):
     >>> dependencies, dependents = get_deps(dsk)
 
     >>> sorted(dfs(dependencies, dependents).items())
-    [('a', 3), ('b', 1), ('c', 2), ('d', 0)]
+    [('a', 2), ('b', 3), ('c', 1), ('d', 0)]
     """
     result = dict()
     i = 0
