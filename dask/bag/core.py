@@ -343,7 +343,7 @@ class Bag(Base):
     def to_textfiles(self, path, name_function=str):
         return to_textfiles(self, path, name_function)
 
-    def fold(self, binop, combine=None, initial=None):
+    def fold(self, binop, combine=None, initial=no_default):
         """ Splittable reduction
 
         Apply binary operator on each partition to perform reduce.  Follow by a
@@ -361,7 +361,7 @@ class Bag(Base):
         """
         a = next(names)
         b = next(names)
-        if initial:
+        if initial is not no_default:
             dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
                             for i in range(self.npartitions))
         else:
