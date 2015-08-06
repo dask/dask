@@ -6,7 +6,7 @@ from functools import partial
 from toolz import curry
 import numpy as np
 
-from .core import Array, normalize_chunks, tokens
+from .core import Array, normalize_chunks
 from .numpy_compat import full
 
 names = ('wrapped_%d' % i for i in count(1))

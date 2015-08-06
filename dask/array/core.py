@@ -26,7 +26,9 @@ from ..compatibility import unicode, long
 from .. import threaded, core
 
 
-tokens = ('-%d' % i for i in count(1))
+def tokenize_array(arr):
+    #TODO: This could be improved...
+    return (id(arr), arr.dtype, arr.shape)
 
 
 def getarray(a, b, lock=None):
@@ -1145,7 +1147,7 @@ def from_array(x, chunks, name=None, lock=False):
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
-    name = name or 'from-array' + next(tokens)
+    name = name or 'from-array-' + tokenize((tokenize_array(x), chunks))
     dsk = getem(name, chunks)
     if lock is True:
         lock = Lock()
@@ -1997,7 +1999,9 @@ def bincount(x, weights=None, minlength=None):
         assert weights.chunks == x.chunks
 
     # Call np.bincount on each block, possibly with weights
-    name = 'bincount' + next(tokens)
+    token = tokenize((x.name, weights.name if weights is not None else None,
+                      minlength))
+    name = 'bincount-' + token
     if weights is not None:
         dsk = dict(((name, i),
                     (np.bincount, (x.name, i), (weights.name, i), minlength))
@@ -2010,7 +2014,7 @@ def bincount(x, weights=None, minlength=None):
         dtype = 'i8'
 
     # Sum up all of the intermediate bincounts per block
-    name = 'bincount-sum' + next(tokens)
+    name = 'bincount-sum-' + token
     dsk[(name, 0)] = (np.sum, (list, list(dsk)), 0)
 
     chunks = ((minlength,),)
@@ -2046,17 +2050,22 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                          'chunked structure')
 
     if not np.iterable(bins):
+        bin_token = bins
         mn, mx = range
         if mn == mx:
             mn -= 0.5
             mx += 0.5
 
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
+    else:
+        bin_token = tokenize_array(bins)
+    token = tokenize((tokenize_array(a), bin_token, range, normed,
+                      weights.name if weights is not None else None, density))
 
     nchunks = len(list(core.flatten(a._keys())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
 
-    name1 = 'histogram-sum' + next(tokens)
+    name = 'histogram-sum-' + token
 
 
     # Map the histogram to all bins
@@ -2064,20 +2073,20 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return np.histogram(x, bins, weights=weights)[0][np.newaxis]
 
     if weights is None:
-        dsk = dict(((name1, i, 0), (block_hist, k))
+        dsk = dict(((name, i, 0), (block_hist, k))
                     for i, k in enumerate(core.flatten(a._keys())))
         dtype = int
     else:
         a_keys = core.flatten(a._keys())
         w_keys = core.flatten(weights._keys())
-        dsk = dict(((name1, i, 0), (block_hist, k, w))
+        dsk = dict(((name, i, 0), (block_hist, k, w))
                     for i, (k, w) in enumerate(zip(a_keys, w_keys)))
         dsk.update(weights.dask)
         dtype = weights.dtype
 
     dsk.update(a.dask)
 
-    mapped = Array(dsk, name1, chunks, dtype=dtype)
+    mapped = Array(dsk, name, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
 
     # We need to replicate normed and density options from numpy
@@ -2306,8 +2315,8 @@ def _vindex(x, *indexes):
     other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
                                 for i, c in zip(indexes, x.chunks)]))
 
-    token = next(tokens)
-    name = 'vindex-slice' + token
+    token = tokenize((x.name, indexes))
+    name = 'vindex-slice-' + token
 
     full_slices = [slice(None, None) if i is None else None for i in indexes]
 
@@ -2320,7 +2329,7 @@ def _vindex(x, *indexes):
                 for okey in other_blocks)
 
     if per_block:
-        dsk2 = dict((keyname('vindex-merge' + token, 0, okey),
+        dsk2 = dict((keyname('vindex-merge-' + token, 0, okey),
                      (_vindex_merge,
                        [list(pluck(0, per_block[key])) for key in per_block],
                        [keyname(name, i, okey) for i in range(len(per_block))]))
@@ -2332,7 +2341,7 @@ def _vindex(x, *indexes):
     chunks.insert(0, (len(points),) if points else ())
     chunks = tuple(chunks)
 
-    return Array(merge(x.dask, dsk, dsk2), 'vindex-merge' + token, chunks, x.dtype)
+    return Array(merge(x.dask, dsk, dsk2), 'vindex-merge-' + token, chunks, x.dtype)
 
 
 def _get_axis(indexes):
