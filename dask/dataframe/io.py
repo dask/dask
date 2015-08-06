@@ -17,6 +17,7 @@ from ..utils import textblock, file_size
 from ..base import compute
 from .utils import tokenize_dataframe
 from .. import array as da
+from ..async import get_sync
 
 from . import core
 from .core import (DataFrame, Series, concat, categorize_block, tokens,
@@ -616,9 +617,9 @@ def to_castra(df, fn=None, categories=None, compute=True):
                           (Castra.extend, (name, -1), (df._name, i)))
 
     dsk = merge(dsk, df.dask)
-    keys = [(name, -1), list(dsk.keys())]
+    keys = [(name, -1), (name, df.npartitions - 1)]
     if compute:
-        c, _ = DataFrame._get(dsk, keys)
+        c, _ = DataFrame._get(dsk, keys, get=get_sync)
         return c
     else:
         return dsk, keys
