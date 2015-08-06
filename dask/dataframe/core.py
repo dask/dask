@@ -213,10 +213,26 @@ class _Frame(Base):
         Caveat, the only checks the first n rows of the first partition.
         """
         name = 'head-%d-%s' % (n, self._name)
-        dsk = {(name, 0): (head, (self._name, 0), n)}
+        dsk = {(name, 0): (lambda x, n: x.head(n=n), (self._name, 0), n)}
 
         result = self._constructor(merge(self.dask, dsk), name,
                                    self.column_info, self.divisions[:2])
+
+        if compute:
+            result = result.compute()
+        return result
+
+    def tail(self, n=5, compute=True):
+        """ Last n rows of the dataset
+
+        Caveat, the only checks the last n rows of the last partition.
+        """
+        name = 'tail-%d-%s' % (n, self._name)
+        dsk = {(name, 0): (lambda x, n: x.tail(n=n),
+                (self._name, self.npartitions - 1), n)}
+
+        result = self._constructor(merge(self.dask, dsk), name,
+                                   self.column_info, self.divisions[-2:])
 
         if compute:
             result = result.compute()
@@ -824,11 +840,6 @@ def _coerce_loc_index(divisions, o):
     if divisions and isinstance(divisions[0], np.datetime64):
         return np.datetime64(o)
     return o
-
-
-def head(x, n):
-    """ First n elements of dask.Dataframe or dask.Series """
-    return x.head(n)
 
 
 def consistent_name(names):

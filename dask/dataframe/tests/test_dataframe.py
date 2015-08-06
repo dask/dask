@@ -83,13 +83,28 @@ def test_Dataframe():
     assert repr(d)
 
 
-def test_head():
+def test_head_tail():
+    assert eq(d.head(2), full.head(2))
+    assert eq(d.head(3), full.head(3))
     assert eq(d.head(2), dsk[('x', 0)].head(2))
+    assert eq(d['a'].head(2), full['a'].head(2))
+    assert eq(d['a'].head(3), full['a'].head(3))
     assert eq(d['a'].head(2), dsk[('x', 0)]['a'].head(2))
     assert sorted(d.head(2, compute=False).dask) == \
            sorted(d.head(2, compute=False).dask)
     assert sorted(d.head(2, compute=False).dask) != \
            sorted(d.head(3, compute=False).dask)
+
+    assert eq(d.tail(2), full.tail(2))
+    assert eq(d.tail(3), full.tail(3))
+    assert eq(d.tail(2), dsk[('x', 2)].tail(2))
+    assert eq(d['a'].tail(2), full['a'].tail(2))
+    assert eq(d['a'].tail(3), full['a'].tail(3))
+    assert eq(d['a'].tail(2), dsk[('x', 2)]['a'].tail(2))
+    assert sorted(d.tail(2, compute=False).dask) == \
+           sorted(d.tail(2, compute=False).dask)
+    assert sorted(d.tail(2, compute=False).dask) != \
+           sorted(d.tail(3, compute=False).dask)
 
 
 def test_Series():
