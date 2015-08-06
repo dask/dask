@@ -2,7 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 from itertools import product
-from .core import normalize_chunks, Array, names
+from .core import normalize_chunks, Array
+from ..base import tokenize
 
 def doc_wraps(func):
     """ Copy docstring from one function to another """
@@ -47,7 +48,6 @@ class RandomState(object):
             size = (size,)
 
         chunks = normalize_chunks(chunks, size)
-        name = next(names)
 
         # Get dtype
         kw = kwargs.copy()
@@ -55,13 +55,13 @@ class RandomState(object):
         dtype = func(np.random.RandomState(), *args, **kw).dtype
 
         # Build graph
+        sizes = list(product(*chunks))
+        seeds = [self._numpy_state.randint(np.iinfo(np.int32).max) for i in sizes]
+        token = (seeds, size, chunks, args, kwargs)
+        name = 'da.random.{0}-{1}'.format(func.__name__, tokenize(token))
         keys = product([name], *[range(len(bd)) for bd in chunks])
-        sizes = product(*chunks)
-        vals = ((_apply_random,
-                  func.__name__,
-                  self._numpy_state.randint(np.iinfo(np.int32).max),
-                  size, args, kwargs)
-                for size in sizes)
+        vals = ((_apply_random, func.__name__, seed, size, args, kwargs)
+                for seed, size in zip(seeds, sizes))
         dsk = dict(zip(keys, vals))
 
         return Array(dsk, name, chunks, dtype=dtype)

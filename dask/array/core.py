@@ -19,14 +19,13 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..base import Base, compute
+from ..base import Base, compute, tokenize
 from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
         IndexCallable)
 from ..compatibility import unicode, long
 from .. import threaded, core
 
 
-names = ('x_%d' % i for i in count(1))
 tokens = ('-%d' % i for i in count(1))
 
 
@@ -491,10 +490,11 @@ def topk(k, x):
     if x.ndim != 1:
         raise ValueError("Topk only works on arrays of one dimension")
 
-    name = next(names)
+    token = tokenize((k, x.name))
+    name = 'chunk.topk-' + token
     dsk = dict(((name, i), (chunk.topk, k, key))
                 for i, key in enumerate(x._keys()))
-    name2 = next(names)
+    name2 = 'topk-' + token
     dsk[(name2, 0)] = (getitem,
                         (np.sort, (np.concatenate, (list, list(dsk)))),
                         slice(-1, -k - 1, -1))
@@ -769,7 +769,7 @@ class Array(Base):
                         "1. Install ``chest``, an out-of-core dictionary\n"
                         "2. Provide an on-disk array like an h5py.Dataset") # pragma: no cover
         if isinstance(store, MutableMapping):
-            name = next(names)
+            name = 'cache-' + tokenize((self.name, store))
             dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
                     for k in core.flatten(self._keys()))
             Array._get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
@@ -802,13 +802,13 @@ class Array(Base):
             return elemwise(getarray, self, index, dtype=dt)
 
         # Slicing
-        out = next(names)
         if not isinstance(index, tuple):
             index = (index,)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
+        out = 'getitem-' + tokenize((self.name, index))
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
@@ -1176,7 +1176,7 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     """
     if args or kwargs:
         func = partial(func, *args, **kwargs)
-    name = name or next(names)
+    name = name or 'from_func-' + tokenize((func, shape, dtype, args, kwargs))
     dsk = {(name,) + (0,) * len(shape): (func,)}
     chunks = tuple((i,) for i in shape)
     return Array(dsk, name, chunks, dtype)
@@ -1249,7 +1249,7 @@ def atop(func, out_ind, *args, **kwargs):
     See also:
         top - dict formulation of this function, contains most logic
     """
-    out = kwargs.pop('name', None) or next(names)
+    out = kwargs.pop('name', None)      # May be None at this point
     dtype = kwargs.pop('dtype', None)
     if kwargs:
         raise TypeError("%s does not take the following keyword arguments %s" %
@@ -1257,6 +1257,9 @@ def atop(func, out_ind, *args, **kwargs):
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
+    # Finish up the name
+    if not out:
+        out = 'atop-' + tokenize((func, out_ind, argindsstr, dtype))
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
 
@@ -1583,7 +1586,6 @@ def elemwise(op, *args, **kwargs):
     if not set(['name', 'dtype']).issuperset(kwargs):
         raise TypeError("%s does not take the following keyword arguments %s" %
             (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
-    name = kwargs.get('name') or next(names)
     out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
                    for arg in args)
     expr_inds = tuple(range(out_ndim))[::-1]
@@ -1606,6 +1608,8 @@ def elemwise(op, *args, **kwargs):
             dt = op(*vals).dtype
         except AttributeError:
             dt = None
+
+    name = kwargs.get('name') or 'elemwise-' + tokenize((op, args, dt))
 
     if other:
         op2 = partial_by_order(op, other)
@@ -1705,8 +1709,8 @@ sign = wrap_elemwise(np.fabs)
 
 def frexp(x):
     tmp = elemwise(np.frexp, x)
-    left = next(names)
-    right = next(names)
+    left = 'mantissa-' + tmp.name
+    right = 'exponent-' + tmp.name
     ldsk = dict(((left,) + key[1:], (getitem, key, 0))
                 for key in core.flatten(tmp._keys()))
     rdsk = dict(((right,) + key[1:], (getitem, key, 1))
@@ -1734,8 +1738,8 @@ frexp.__doc__ = np.frexp
 
 def modf(x):
     tmp = elemwise(np.modf, x)
-    left = next(names)
-    right = next(names)
+    left = 'modf1-' + tmp.name
+    right = 'modf2-' + tmp.name
     ldsk = dict(((left,) + key[1:], (getitem, key, 0))
                 for key in core.flatten(tmp._keys()))
     rdsk = dict(((right,) + key[1:], (getitem, key, 1))
@@ -1834,7 +1838,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
     if 'dask' in inspect.getfile(reduction):
         reduction = getattr(np, reduction.__name__)
 
-    name = next(names)
+    name = 'coarsen-' + tokenize((x.name, axes, trim_excess))
     dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes,
                                         trim_excess))
                 for key in core.flatten(x._keys()))
@@ -1887,7 +1891,7 @@ def insert(arr, obj, values, axis):
 
     if getattr(values, 'ndim', 0) == 0:
         # we need to turn values into a dask array
-        name = next(names)
+        name = 'values-' + tokenize(values)
         dtype = getattr(values, 'dtype', type(values))
         values = Array({(name,): values}, name, chunks=(), dtype=dtype)
 
@@ -1922,7 +1926,7 @@ def broadcast_to(x, shape):
         raise ValueError('cannot broadcast shape %s to shape %s'
                          % (x.shape, shape))
 
-    name = next(names)
+    name = 'broadcast_to-' + tokenize((x.name, shape))
     chunks = (tuple((s,) for s in shape[:ndim_new])
                + tuple(bd if old > 1 else (new,)
                        for bd, old, new in zip(x.chunks, x.shape,
@@ -1978,7 +1982,7 @@ def fromfunction(func, chunks=None, shape=None, dtype=None):
 
 @wraps(np.unique)
 def unique(x):
-    name = next(names)
+    name = 'unique-' + x.name
     dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
     parts = Array._get(merge(dsk, x.dask), list(dsk.keys()))
     return np.unique(np.concatenate(parts))

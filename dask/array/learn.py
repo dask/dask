@@ -1,4 +1,4 @@
-from .core import names
+from ..base import tokenize
 from .. import threaded
 from toolz import merge, partial
 
@@ -68,7 +68,7 @@ def fit(model, x, y, get=threaded.get, **kwargs):
 
     nblocks = len(x.chunks[0])
 
-    name = next(names)
+    name = 'fit-' + tokenize((model, x.name, y.name, kwargs))
     dsk = {(name, -1): model}
     dsk.update(dict(((name, i), (_partial_fit, (name, i - 1),
                                           (x.name, i, 0),
