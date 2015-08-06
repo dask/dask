@@ -4,7 +4,33 @@ __all__ = ['Callback', 'add_callbacks']
 
 
 class Callback(object):
-    """Base class for using the callback mechanism."""
+    """ Base class for using the callback mechanism
+
+    Create a callback with functions of the following signatures:
+
+    >>> def start(dsk, state):
+    ...     pass
+    >>> def pretask(key, dsk, state):
+    ...     pass
+    >>> def posttask(key, result, dsk, state, worker_id):
+    ...     pass
+    >>> def finish(dsk, state, failed):
+    ...     pass
+
+    You may then construct a callback object with any number of them
+
+    >>> cb = Callback(pretask=pretask, finish=finish)  # doctest: +SKIP
+
+    And use it either as a context mangager over a compute/get call
+
+    >>> with cb:  # doctest: +SKIP
+    ...     x.compute()  # doctest: +SKIP
+
+    Or globally with the ``register`` method
+
+    >>> cb.register()  # doctest: +SKIP
+    >>> cb.unregister()  # doctest: +SKIP
+    """
 
     def __init__(self, start=None, pretask=None, posttask=None, finish=None):
         self._start = start
