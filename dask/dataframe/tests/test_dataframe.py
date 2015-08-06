@@ -437,6 +437,19 @@ def test_map_partitions_method_names():
     assert b.name == 'x'
 
 
+def test_map_partitions_return_type_and_names_agree():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+    try:
+        a.map_partitions(lambda x: x, columns='zzzz', return_type=dd.DataFrame)
+    except ValueError as e:
+        assert 'zzzz' in str(e)
+    try:
+        a.map_partitions(lambda x: x, columns=['zzzz'], return_type=dd.Series)
+    except ValueError as e:
+        assert 'zzzz' in str(e)
+
+
 def test_drop_duplicates():
     assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())
     assert eq(d.drop_duplicates(), full.drop_duplicates())

@@ -1209,6 +1209,12 @@ def map_partitions(func, column_info, *args, **kwargs):
         else:
             return_type = type(args[0])
 
+    if (return_type == DataFrame and isinstance(column_info, (str, unicode)) or
+        return_type == Series and isinstance(column_info, (tuple, list, pd.Index))):
+        raise ValueError("Arguments to map_partitions are not consistent.\n"
+                "Received columns=%s and return_type=%s" %
+                (str(column_info), str(return_type)))
+
     if kwargs:
         raise ValueError("Keyword arguments not yet supported in map_partitions")
 
