@@ -90,7 +90,7 @@ def test_base_of_reduce_preferred():
                  ('b', 2): 7,
                  ('b', 3): 8}
 
-    # ('b', 1) is the most important out of ('b', i)
+    # ('b', 0) is the most important out of ('b', i)
     assert min([('b', i) for i in [0, 1, 2, 3]], key=o.get) == ('b', 0)
 
 
