@@ -169,8 +169,7 @@ class _Frame(Base):
     def __len__(self):
         return reduction(self, len, np.sum).compute()
 
-    def map_partitions(self, func, column_info=no_default, return_type=None,
-                             name=no_default, columns=no_default):
+    def map_partitions(self, func, columns=no_default, return_type=None):
         """ Apply Python function on each DataFrame block
 
         When using ``map_partitions`` you should provide both column
@@ -196,12 +195,9 @@ class _Frame(Base):
             If None, class will be inferred from column names or default to
             the class of the input.
         """
-        try:
-            column_info = next(x for x in [column_info, columns, name]
-                                 if x != no_default)
-        except StopIteration:
-            column_info = self.column_info
-        return map_partitions(func, column_info, self, return_type=return_type)
+        if columns == no_default:
+            columns = self.column_info
+        return map_partitions(func, columns, self, return_type=return_type)
 
     def random_split(self, p, seed=None):
         """ Pseudorandomly split dataframe into different pieces row-wise

@@ -428,11 +428,11 @@ def test_map_partitions_method_names():
     assert isinstance(b, dd.DataFrame)
     assert b.columns == a.columns
 
-    b = a.map_partitions(lambda df: df.x + 1, name=None)
+    b = a.map_partitions(lambda df: df.x + 1, columns=None)
     assert isinstance(b, dd.Series)
     assert b.name == None
 
-    b = a.map_partitions(lambda df: df.x + 1, name='x')
+    b = a.map_partitions(lambda df: df.x + 1, columns='x')
     assert isinstance(b, dd.Series)
     assert b.name == 'x'
 
