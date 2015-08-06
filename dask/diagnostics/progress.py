@@ -54,6 +54,7 @@ class ProgressBar(Diagnostic):
 
     def _posttask(self, key, value, dsk, state, id):
         self._ndone += 1
+        sys.stdout.flush()
 
     def _finish(self, dsk, state, errored):
         self._running = False
