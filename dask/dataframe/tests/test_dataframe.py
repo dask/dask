@@ -736,6 +736,23 @@ def test_embarrassingly_parallel_operations():
     assert len(a.sample(0.5).compute()) < len(df)
 
 
+def test_sample():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+
+    b = a.sample(0.5)
+
+    assert eq(b, b)
+
+    c = a.sample(0.5, random_state=1234)
+    d = a.sample(0.5, random_state=1234)
+
+    assert eq(c, d)
+
+    assert a.sample(0.5)._name != a.sample(0.5)._name
+
+
 def test_datetime_accessor():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     df['x'] = df.x.astype('M8[us]')
