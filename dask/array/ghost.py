@@ -1,17 +1,14 @@
-from operator import getitem
-from ..core import flatten
-from ..utils import concrete
-from .core import (Array, map_blocks, concatenate,
-        slices_from_chunks, concatenate3)
-from . import chunk, core, wrap
-import numpy as np
-from collections import Iterator, Iterable
+from operator import getitem, itemgetter
+from itertools import product
+
 from toolz import merge, pipe, concat, partition, partial
 from toolz.curried import map
-from itertools import product, count
 
-
-ghost_names = ('ghost-%d' % i for i in count(1))
+from ..base import tokenize
+from ..core import flatten
+from ..utils import concrete
+from .core import Array, map_blocks, concatenate, concatenate3
+from . import chunk, wrap
 
 
 def fractional_slice(task, axes):
@@ -115,7 +112,8 @@ def ghost_internal(x, axes):
     interior_keys = pipe(x._keys(), flatten, map(expand_key2), map(flatten),
                          concat, list)
 
-    name = next(ghost_names)
+    token = tokenize((x.name, tuple(sorted(axes.items(), key=itemgetter(0)))))
+    name = 'ghost-' + token
     interior_slices = {}
     ghost_blocks = {}
     for k in interior_keys:
@@ -301,6 +299,7 @@ def ghost(x, depth, boundary):
     Example
     -------
 
+    >>> import numpy as np
     >>> import dask.array as da
 
     >>> x = np.arange(64).reshape((8, 8))
