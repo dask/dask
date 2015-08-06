@@ -6,7 +6,7 @@ import inspect
 from numbers import Number
 from collections import Iterable, MutableMapping
 from bisect import bisect
-from itertools import product, count
+from itertools import product
 from collections import Iterator
 from functools import partial, wraps
 
@@ -1295,9 +1295,6 @@ def unpack_singleton(x):
     return x
 
 
-stacked_names = ('stack-%d' % i for i in count(1))
-
-
 def stack(seq, axis=0):
     """
     Stack arrays along a new axis
@@ -1346,10 +1343,10 @@ def stack(seq, axis=0):
               + ((1,) * n,)
               + seq[0].chunks[axis:])
 
-    name = next(stacked_names)
+    names = [a.name for a in seq]
+    name = 'stack-' + tokenize(names)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
-    names = [a.name for a in seq]
     inputs = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
                 for key in keys]
     values = [(getarray, inp, (slice(None, None, None),) * axis
@@ -1366,9 +1363,6 @@ def stack(seq, axis=0):
         dt = None
 
     return Array(dsk2, name, chunks, dtype=dt)
-
-
-concatenate_names = ('concatenate-%d' % i for i in count(1))
 
 
 def concatenate(seq, axis=0):
@@ -1423,11 +1417,12 @@ def concatenate(seq, axis=0):
               + (sum([bd[axis] for bd in bds], ()),)
               + seq[0].chunks[axis + 1:])
 
-    name = next(concatenate_names)
-    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
-
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
     names = [a.name for a in seq]
+
+    name = 'concatenate-' + tokenize((names, axis))
+    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
+
     values = [(names[bisect(cum_dims, key[axis + 1]) - 1],)
                 + key[1:axis + 1]
                 + (key[axis + 1] - cum_dims[bisect(cum_dims, key[axis+1]) - 1],)
@@ -1961,11 +1956,9 @@ def offset_func(func, offset, *args):
     return _offset
 
 
-fromfunction_names = ('fromfunction-%d' % i for i in count(1))
-
 @wraps(np.fromfunction)
 def fromfunction(func, chunks=None, shape=None, dtype=None):
-    name = next(fromfunction_names)
+    name = 'fromfunction-' + tokenize((func, chunks, shape, dtype))
     if chunks:
         chunks = normalize_chunks(chunks, shape)
 
