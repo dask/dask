@@ -376,10 +376,11 @@ def test_map_partitions_multi_argument():
 
 
 def test_map_partitions():
-    assert eq(d.map_partitions(lambda df: df, 'a'), full)
+    assert eq(d.map_partitions(lambda df: df, columns=d.columns), full)
 
     result = d.map_partitions(lambda df: df.sum(axis=1), 'a', return_type=dd.Series)
     assert eq(result,full.sum(axis=1))
+
 
 def test_map_partitions_names():
     func = lambda x: x
@@ -393,9 +394,53 @@ def test_map_partitions_names():
            sorted(dd.map_partitions(func, d.columns, d, d).dask)
 
 
+def test_map_partitions_column_info():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+    b = dd.map_partitions(lambda x: x, a.columns, a)
+    assert b.columns == a.columns
+    assert eq(df, b)
+
+    b = dd.map_partitions(lambda x: x, a.x.name, a.x)
+    assert b.name == a.x.name
+    assert eq(df.x, b)
+
+    b = dd.map_partitions(lambda x: x, a.x.name, a.x)
+    assert b.name == a.x.name
+    assert eq(df.x, b)
+
+    b = dd.map_partitions(lambda df: df.x + df.y, None, a,
+                          return_type=dd.Series)
+    assert b.name == None
+    assert isinstance(b, dd.Series)
+
+    b = dd.map_partitions(lambda df: df.x + 1, 'x', a)
+    assert isinstance(b, dd.Series)
+    assert b.name == 'x'
+
+
+def test_map_partitions_method_names():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+    b = a.map_partitions(lambda x: x)
+    assert isinstance(b, dd.DataFrame)
+    assert b.columns == a.columns
+
+    b = a.map_partitions(lambda df: df.x + 1, name=None)
+    assert isinstance(b, dd.Series)
+    assert b.name == None
+
+    b = a.map_partitions(lambda df: df.x + 1, name='x')
+    assert isinstance(b, dd.Series)
+    assert b.name == 'x'
+
+
 def test_drop_duplicates():
     assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())
     assert eq(d.drop_duplicates(), full.drop_duplicates())
+
 
 def test_full_groupby():
     assert raises(Exception, lambda: d.groupby('does_not_exist'))
