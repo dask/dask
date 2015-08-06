@@ -95,8 +95,8 @@ def test_head():
 def test_Series():
     assert isinstance(d.a, dd.Series)
     assert isinstance(d.a + 1, dd.Series)
-
     assert eq((d + 1), full + 1)
+    assert repr(d.a).startswith('dd.Series')
 
 
 def test_Index():
@@ -105,6 +105,8 @@ def test_Index():
                     index=pd.date_range('2011-01-01', freq='D', periods=10))]:
         ddf = dd.from_pandas(case, 3)
         assert eq(ddf.index, case.index)
+        assert repr(ddf.index).startswith('dd.Index')
+        assert raises(AttributeError, lambda: ddf.index.index)
 
 
 def test_attributes():

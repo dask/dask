@@ -442,8 +442,9 @@ class Series(_Frame):
         return (self.name,)
 
     def __repr__(self):
-        return ("dd.Series<%s, divisions=%s>" %
-                (self._name, repr_long_list(self.divisions)))
+        return ("dd.%s<%s, divisions=%s>" %
+                (self.__class__.__name__, self._name,
+                 repr_long_list(self.divisions)))
 
     def quantile(self, q):
         """ Approximate quantiles of column
@@ -566,6 +567,12 @@ class Series(_Frame):
 
 
 class Index(Series):
+
+    @property
+    def index(self):
+        msg = "'{0}' object has no attribute 'index'"
+        raise AttributeError(msg.format(self.__class__.__name__))
+
     @property
     def _constructor(self):
         return Index
