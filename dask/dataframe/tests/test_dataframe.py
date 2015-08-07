@@ -858,3 +858,10 @@ def test_gh_517():
 
     ddf2 = dd.from_pandas(pd.concat([df, df]), 5)
     assert ddf2.index.nunique().compute() == 100
+
+
+def test_drop_axis_1():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+    assert eq(a.drop('y', axis=1), df.drop('y', axis=1))
