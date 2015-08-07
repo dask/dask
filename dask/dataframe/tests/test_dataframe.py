@@ -186,27 +186,56 @@ def test_split_apply_combine_on_series():
         assert eq(d.groupby(ddkey).a.min(), full.groupby(pdkey).a.min())
         assert eq(d.groupby(ddkey).a.max(), full.groupby(pdkey).a.max())
         assert eq(d.groupby(ddkey).a.count(), full.groupby(pdkey).a.count())
+        assert eq(d.groupby(ddkey).a.mean(), full.groupby(pdkey).a.mean())
+        assert eq(d.groupby(ddkey).a.nunique(), full.groupby(pdkey).a.nunique())
+
+        assert eq(d.groupby(ddkey).sum(), full.groupby(pdkey).sum())
+        assert eq(d.groupby(ddkey).min(), full.groupby(pdkey).min())
+        assert eq(d.groupby(ddkey).max(), full.groupby(pdkey).max())
+        assert eq(d.groupby(ddkey).count(), full.groupby(pdkey).count())
+        assert eq(d.groupby(ddkey).mean(), full.groupby(pdkey).mean())
 
     for i in range(8):
         assert eq(d.groupby(d.b > i).a.sum(), full.groupby(full.b > i).a.sum())
         assert eq(d.groupby(d.b > i).a.min(), full.groupby(full.b > i).a.min())
         assert eq(d.groupby(d.b > i).a.max(), full.groupby(full.b > i).a.max())
         assert eq(d.groupby(d.b > i).a.count(), full.groupby(full.b > i).a.count())
+        assert eq(d.groupby(d.b > i).a.mean(), full.groupby(full.b > i).a.mean())
         assert eq(d.groupby(d.b > i).a.nunique(), full.groupby(full.b > i).a.nunique())
 
         assert eq(d.groupby(d.a > i).b.sum(), full.groupby(full.a > i).b.sum())
         assert eq(d.groupby(d.a > i).b.min(), full.groupby(full.a > i).b.min())
         assert eq(d.groupby(d.a > i).b.max(), full.groupby(full.a > i).b.max())
         assert eq(d.groupby(d.a > i).b.count(), full.groupby(full.a > i).b.count())
+        assert eq(d.groupby(d.a > i).b.mean(), full.groupby(full.a > i).b.mean())
         assert eq(d.groupby(d.a > i).b.nunique(), full.groupby(full.a > i).b.nunique())
 
+        assert eq(d.groupby(d.b > i).sum(), full.groupby(full.b > i).sum())
+        assert eq(d.groupby(d.b > i).min(), full.groupby(full.b > i).min())
+        assert eq(d.groupby(d.b > i).max(), full.groupby(full.b > i).max())
+        assert eq(d.groupby(d.b > i).count(), full.groupby(full.b > i).count())
+        assert eq(d.groupby(d.b > i).mean(), full.groupby(full.b > i).mean())
+
+        assert eq(d.groupby(d.a > i).sum(), full.groupby(full.a > i).sum())
+        assert eq(d.groupby(d.a > i).min(), full.groupby(full.a > i).min())
+        assert eq(d.groupby(d.a > i).max(), full.groupby(full.a > i).max())
+        assert eq(d.groupby(d.a > i).count(), full.groupby(full.a > i).count())
+        assert eq(d.groupby(d.a > i).mean(), full.groupby(full.a > i).mean())
+
     for ddkey, pdkey in [('a', 'a'), (d.a, full.a),
-                          (d.a + 1, full.a + 1), (d.a > 3, full.a > 3)]:
+                         (d.a + 1, full.a + 1), (d.a > 3, full.a > 3)]:
         assert eq(d.groupby(ddkey).b.sum(), full.groupby(pdkey).b.sum())
         assert eq(d.groupby(ddkey).b.min(), full.groupby(pdkey).b.min())
         assert eq(d.groupby(ddkey).b.max(), full.groupby(pdkey).b.max())
         assert eq(d.groupby(ddkey).b.count(), full.groupby(pdkey).b.count())
+        assert eq(d.groupby(ddkey).b.mean(), full.groupby(pdkey).b.mean())
         assert eq(d.groupby(ddkey).b.nunique(), full.groupby(pdkey).b.nunique())
+
+        assert eq(d.groupby(ddkey).sum(), full.groupby(pdkey).sum())
+        assert eq(d.groupby(ddkey).min(), full.groupby(pdkey).min())
+        assert eq(d.groupby(ddkey).max(), full.groupby(pdkey).max())
+        assert eq(d.groupby(ddkey).count(), full.groupby(pdkey).count())
+        assert eq(d.groupby(ddkey).mean(), full.groupby(pdkey).mean().astype(float))
 
     assert sorted(d.groupby('b').a.sum().dask) == \
            sorted(d.groupby('b').a.sum().dask)
