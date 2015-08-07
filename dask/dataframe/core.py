@@ -774,6 +774,16 @@ class DataFrame(_Frame):
     def _elemwise_cols(self):
         return self.columns
 
+    @wraps(pd.DataFrame.drop)
+    def drop(self, labels, axis=0):
+        if axis != 1:
+            raise NotImplementedError("Drop currently only works for axis=1")
+
+        columns = list(pd.DataFrame(columns=self.columns)
+                         .drop(labels, axis=axis)
+                         .columns)
+        return elemwise(pd.DataFrame.drop, self, labels, axis, columns=columns)
+
 
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
