@@ -342,7 +342,7 @@ class _Frame(Base):
         func = getattr(self._partition_type, 'fillna')
         return map_partitions(func, self.column_info, self, value)
 
-    def sample(self, frac):
+    def sample(self, frac, random_state=None):
         """ Random sample of items
 
         This only implements the ``frac`` option from pandas.
@@ -350,8 +350,24 @@ class _Frame(Base):
         See Also:
             pd.DataFrame.sample
         """
+        if random_state is None:
+            random_state = np.random.randint(np.iinfo(np.int32).max)
+
+        name = 'sample-' + tokenize((self._name, frac, random_state))
         func = getattr(self._partition_type, 'sample')
-        return map_partitions(func, self.column_info, self, None, frac)
+
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
+        seeds = random_state.randint(np.iinfo(np.int32).max,
+                                     size=self.npartitions)
+
+        dsk = dict(((name, i),
+                   (apply, func, (tuple, [(self._name, i)]),
+                       {'frac': frac, 'random_state': seed}))
+                   for i, seed in zip(range(self.npartitions), seeds))
+
+        return self._constructor(merge(self.dask, dsk), name,
+                                       self.column_info, self.divisions)
 
     @wraps(pd.DataFrame.to_hdf)
     def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
