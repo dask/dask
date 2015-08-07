@@ -280,10 +280,8 @@ def test_collect_retry():
             sleep(1e-6)
         result = w1.pool.apply_async(w1.collect,
                                      args=({'x': [w2.address, w3.address]},))
-        # sometimes the above^ call to w1.collect will get called *after*,
-        # prune_and_notify below. Causing a hang. I'm not sure what to do
-        # about this, so here is a sleep.
-        sleep(0.1)
+        while not w1.queues_by_worker:
+            sleep(0.1)
         while w2.address in s.workers:
             s.prune_and_notify(timeout=0.1)
 
