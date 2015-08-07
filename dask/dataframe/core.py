@@ -1373,8 +1373,7 @@ def categorize_block(df, categories):
     """
     df = df.copy()
     for col, vals in categories.items():
-        df[col] = pd.Categorical(df[col], categories=vals,
-                                    ordered=False, name=col)
+        df[col] = pd.Categorical(df[col], categories=vals, ordered=False)
     return df
 
 
