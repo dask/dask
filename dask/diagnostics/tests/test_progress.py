@@ -65,3 +65,13 @@ def test_register(capsys):
         assert not _globals['callbacks']
     finally:
         _globals['callbacks'].clear()
+
+
+def test_no_tasks(capsys):
+    with ProgressBar():
+        get({'x': 1}, 'x')
+
+    out, err = capsys.readouterr()
+    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
+    assert bar == "[########################################]"
+    assert percent == "100% Completed"

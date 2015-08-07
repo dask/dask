@@ -68,9 +68,13 @@ class ProgressBar(Callback):
             time.sleep(self._dt)
 
     def _update_bar(self):
-        tics = int(self._ndone * self._width / self._ntasks)
+        if self._ntasks:
+            tics = int(self._ndone * self._width / self._ntasks)
+            percent = (100 * self._ndone) // self._ntasks
+        else:
+            tics = self._width
+            percent = 100
         bar = '#' * tics
-        percent = (100 * self._ndone) // self._ntasks
         elapsed = format_time(default_timer() - self._start_time)
         msg = '\r[{0:<{1}}] | {2}% Completed | {3}'.format(bar, self._width,
                                                            percent, elapsed)
