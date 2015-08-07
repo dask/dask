@@ -325,3 +325,19 @@ def takes_multiple_arguments(func):
     if spec.defaults is None:
         return len(spec.args) - is_constructor != 1
     return len(spec.args) - len(spec.defaults) - is_constructor > 1
+
+
+class Dispatch(object):
+    """Simple single dispatch."""
+    def __init__(self):
+        self._lookup = {}
+
+    def register(self, type, func):
+        """Register dispatch of `func` on arguments of type `type`"""
+        self._lookup[type] = func
+
+    def __call__(self, arg):
+        for typ in type(arg).mro():
+            if typ in self._lookup:
+                return self._lookup[typ](arg)
+        raise TypeError("No dispatch for {0} type".format(type(arg)))
