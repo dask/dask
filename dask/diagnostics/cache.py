@@ -1,4 +1,4 @@
-from .core import Diagnostic
+from ..callbacks import Callback
 from timeit import default_timer
 from numbers import Number
 
@@ -7,7 +7,7 @@ try:
 except ImportError:
     pass
 
-class Cache(Diagnostic):
+class Cache(Callback):
     """ Use cache for computation
 
     Example
