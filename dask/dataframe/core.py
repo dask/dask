@@ -163,7 +163,7 @@ class _Frame(Base):
     @wraps(pd.DataFrame.drop_duplicates)
     def drop_duplicates(self):
         chunk = lambda s: s.drop_duplicates()
-        return aca(self, chunk=chunk, aggregate=chunk, columns=self.columns,
+        return aca(self, chunk=chunk, aggregate=chunk, columns=self.column_info,
                    token='drop-duplicates')
 
     def __len__(self):
@@ -269,8 +269,13 @@ class _Frame(Base):
         if ind < self.divisions[0] or ind > self.divisions[-1]:
             raise KeyError('the label [%s] is not in the index' % str(ind))
         dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
+
+        if self.ndim == 1:
+            columns = self.column_info
+        else:
+            columns = ind
         return self._constructor_sliced(merge(self.dask, dsk), name,
-                                        self.column_info, [ind, ind])
+                                        columns, [ind, ind])
 
     def _loc_slice(self, ind):
         name = 'loc-slice-%s-%s' % (str(ind), self._name)
@@ -472,6 +477,10 @@ class Series(_Frame):
         return Series
 
     @property
+    def ndim(self):
+        return 1
+
+    @property
     def dtype(self):
         return self.head().dtype
 
@@ -570,13 +579,13 @@ class Series(_Frame):
     def value_counts(self):
         chunk = lambda s: s.value_counts()
         agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
-        return aca(self, chunk=chunk, aggregate=agg, columns=self.columns,
+        return aca(self, chunk=chunk, aggregate=agg, columns=self.name,
                    token='value-counts')
 
     @wraps(pd.Series.nlargest)
     def nlargest(self, n=5):
         f = lambda s: s.nlargest(n)
-        return aca(self, f, f, columns=self.columns, token=('nlargest', n))
+        return aca(self, f, f, columns=self.name, token=('nlargest', n))
 
     @wraps(pd.Series.isin)
     def isin(self, other):
@@ -710,6 +719,10 @@ class DataFrame(_Frame):
     def __repr__(self):
         return ("dd.DataFrame<%s, divisions=%s>" %
                 (self._name, repr_long_list(self.divisions)))
+
+    @property
+    def ndim(self):
+        return 2
 
     @property
     def dtypes(self):
@@ -1029,6 +1042,7 @@ def _groupby_level0_getitem_apply(df, key, func):
 
 
 class GroupBy(object):
+
     def __init__(self, df, index=None, **kwargs):
         self.df = df
         self.index = index
@@ -1099,28 +1113,28 @@ class SeriesGroupBy(object):
         chunk = lambda df, index: df.groupby(index)[self.key].sum()
         agg = lambda df: df.groupby(level=0).sum()
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   chunk=chunk, aggregate=agg, columns=self.key,
                    token='series-groupby-sum', return_type=Series)
 
     def min(self):
         chunk = lambda df, index: df.groupby(index)[self.key].min()
         agg = lambda df: df.groupby(level=0).min()
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   chunk=chunk, aggregate=agg, columns=self.key,
                    token='series-groupby-min', return_type=Series)
 
     def max(self):
         chunk = lambda df, index: df.groupby(index)[self.key].max()
         agg = lambda df: df.groupby(level=0).max()
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   chunk=chunk, aggregate=agg, columns=self.key,
                    token='series-groupby-max', return_type=Series)
 
     def count(self):
         chunk = lambda df, index: df.groupby(index)[self.key].count()
         agg = lambda df: df.groupby(level=0).sum()
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   chunk=chunk, aggregate=agg, columns=self.key,
                    token='series-groupby-count', return_type=Series)
 
     def mean(self):
@@ -1135,7 +1149,7 @@ class SeriesGroupBy(object):
             result.name = self.key
             return result
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   chunk=chunk, aggregate=agg, columns=self.key,
                    token='series-groupby-mean', return_type=Series)
 
     def nunique(self):
@@ -1151,7 +1165,7 @@ class SeriesGroupBy(object):
             return df.groupby(level=0)[self.key].nunique()
 
         return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=[self.key],
+                   chunk=chunk, aggregate=agg, columns=self.key,
                    token='series-groupby-nunique', return_type=Series)
 
 

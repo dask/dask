@@ -60,6 +60,9 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     """
     if isinstance(index, _Frame):
         assert df.divisions == index.divisions
+        columns = df.columns
+    else:
+        columns = tuple([c for c in df.columns if c != index])
 
     token = tokenize((df._name,
                       (index._name if isinstance(index, _Frame) else  index),
@@ -122,7 +125,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     if compute:
         dsk = cull(dsk, list(dsk4.keys()))
 
-    return DataFrame(dsk, name, df.columns, divisions)
+    return DataFrame(dsk, name, columns, divisions)
 
 
 def barrier(args):

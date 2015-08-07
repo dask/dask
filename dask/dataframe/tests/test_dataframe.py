@@ -14,16 +14,23 @@ from dask.dataframe.core import (concat, repartition_divisions, _loc,
         _coerce_loc_index, _concat)
 
 
-def check_dask(dsk):
+def check_dask(dsk, check_names=True):
     if hasattr(dsk, 'dask'):
         result = dsk.compute(get=get_sync)
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index)
         elif isinstance(dsk, dd.Series):
             assert isinstance(result, pd.Series)
+            assert isinstance(dsk.columns, tuple)
+            assert len(dsk.columns) == 1
+            if check_names:
+                assert dsk.name == result.name, (dsk.name, result.name)
         elif isinstance(dsk, dd.DataFrame):
             assert isinstance(result, pd.DataFrame), type(result)
-            columns = pd.Index(dsk.columns)
+            assert isinstance(dsk.columns, tuple)
+            if check_names:
+                columns = pd.Index(dsk.columns)
+                tm.assert_index_equal(columns, result.columns)
         elif isinstance(dsk, dd.core.Scalar):
             assert np.isscalar(result)
         else:
@@ -33,9 +40,9 @@ def check_dask(dsk):
     return dsk
 
 
-def eq(a, b):
-    a = check_dask(a)
-    b = check_dask(b)
+def eq(a, b, check_names=True):
+    a = check_dask(a, check_names=check_names)
+    b = check_dask(b, check_names=check_names)
     if isinstance(a, pd.DataFrame):
         a = a.sort_index()
         b = b.sort_index()
@@ -158,8 +165,8 @@ def test_set_index():
     # assert eq(d3, full.set_index(full.b).sort())
     assert str(d3.compute().sort(['a'])) == str(full.set_index(full.b).sort(['a']))
 
-    d2 = d.set_index('b')
-    assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
+    d4 = d.set_index('b')
+    assert str(d4.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
 
 
 def test_split_apply_combine_on_series():
@@ -384,17 +391,17 @@ def test_dropna():
 
 
 def test_map_partitions_multi_argument():
-    assert eq(dd.map_partitions(lambda a, b: a + b, 'c', d.a, d.b),
+    assert eq(dd.map_partitions(lambda a, b: a + b, None, d.a, d.b),
               full.a + full.b)
-    assert eq(dd.map_partitions(lambda a, b, c: a + b + c, 'c', d.a, d.b, 1),
+    assert eq(dd.map_partitions(lambda a, b, c: a + b + c, None, d.a, d.b, 1),
               full.a + full.b + 1)
 
 
 def test_map_partitions():
     assert eq(d.map_partitions(lambda df: df, columns=d.columns), full)
-
-    result = d.map_partitions(lambda df: df.sum(axis=1), 'a')
-    assert eq(result,full.sum(axis=1))
+    assert eq(d.map_partitions(lambda df: df), full)
+    result = d.map_partitions(lambda df: df.sum(axis=1), None)
+    assert eq(result, full.sum(axis=1))
 
 
 def test_map_partitions_names():
@@ -463,6 +470,7 @@ def test_full_groupby():
     def func(df):
         df['b'] = df.b - df.b.mean()
         return df
+
     assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
 
     assert sorted(d.groupby('a').apply(func).dask) == \
@@ -471,6 +479,7 @@ def test_full_groupby():
 
 def test_groupby_on_index():
     e = d.set_index('a')
+    efull = full.set_index('a')
     assert eq(d.groupby('a').b.mean(), e.groupby(e.index).b.mean())
 
     def func(df):
@@ -478,6 +487,11 @@ def test_groupby_on_index():
         return df
 
     assert eq(d.groupby('a').apply(func).set_index('a'),
+              e.groupby(e.index).apply(func))
+    assert eq(d.groupby('a').apply(func), full.groupby('a').apply(func))
+    assert eq(d.groupby('a').apply(func).set_index('a'),
+              full.groupby('a').apply(func).set_index('a'))
+    assert eq(efull.groupby(efull.index).apply(func),
               e.groupby(e.index).apply(func))
 
 
@@ -493,7 +507,18 @@ def test_set_partition_compute():
     d3 = d.set_partition('b', [0, 2, 9], compute=True)
 
     assert eq(d2, d3)
+    assert eq(d2, full.set_index('b'))
+    assert eq(d3, full.set_index('b'))
     assert len(d2.dask) > len(d3.dask)
+
+    d4 = d.set_partition(d.b, [0, 2, 9])
+    d5 = d.set_partition(d.b, [0, 2, 9], compute=True)
+    exp = full.copy()
+    exp.index = exp.b
+    assert eq(d4, d5)
+    assert eq(d4, exp)
+    assert eq(d5, exp)
+    assert len(d4.dask) > len(d5.dask)
 
 
 def test_categorize():
@@ -517,6 +542,10 @@ def test_categorize():
 
     assert (d.categorize().compute().dtypes == 'category').all()
 
+def test_ndim():
+    assert (d.ndim == 2)
+    assert (d.a.ndim == 1)
+    assert (d.index.ndim == 1)
 
 def test_dtype():
     assert (d.dtypes == full.dtypes).all()
@@ -534,7 +563,9 @@ def test_value_counts():
     a = dd.from_pandas(df, npartitions=3)
     result = a.x.value_counts()
     expected = df.x.value_counts()
-    assert eq(result, expected)
+    # because of pandas bug, value_counts doesn't hold name (fixed in 0.17)
+    # https://github.com/pydata/pandas/pull/10419
+    assert eq(result, expected, check_names=False)
 
 
 def test_isin():
@@ -572,6 +603,11 @@ def test_loc():
     assert eq(d.loc[3:8], full.loc[3:8])
     assert eq(d.loc[:8], full.loc[:8])
     assert eq(d.loc[3:], full.loc[3:])
+
+    assert eq(d.a.loc[5], full.a.loc[5])
+    assert eq(d.a.loc[3:8], full.a.loc[3:8])
+    assert eq(d.a.loc[:8], full.a.loc[:8])
+    assert eq(d.a.loc[3:], full.a.loc[3:])
 
     assert raises(KeyError, lambda: d.loc[1000])
     assert eq(d.loc[1000:], full.loc[1000:])
@@ -805,7 +841,9 @@ def test_datetime_accessor():
 
     assert 'date' in dir(a.x.dt)
 
-    assert eq(a.x.dt.date, df.x.dt.date)
+    # pandas loses Series.name via datetime accessor
+    # see https://github.com/pydata/pandas/issues/10712
+    assert eq(a.x.dt.date, df.x.dt.date, check_names=False)
     assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
 
 
