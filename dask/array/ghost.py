@@ -1,4 +1,4 @@
-from operator import getitem, itemgetter
+from operator import getitem
 from itertools import product
 
 from toolz import merge, pipe, concat, partition, partial
@@ -112,7 +112,7 @@ def ghost_internal(x, axes):
     interior_keys = pipe(x._keys(), flatten, map(expand_key2), map(flatten),
                          concat, list)
 
-    token = tokenize((x.name, tuple(sorted(axes.items(), key=itemgetter(0)))))
+    token = tokenize(x.name, axes)
     name = 'ghost-' + token
     interior_slices = {}
     ghost_blocks = {}

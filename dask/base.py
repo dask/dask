@@ -5,6 +5,7 @@ from hashlib import md5
 from toolz import merge, groupby
 
 from .context import _globals
+from .utils import Dispatch, ignoring
 
 
 class Base(object):
@@ -63,7 +64,19 @@ def compute(*args, **kwargs):
     return tuple(a._finalize(a, r) for a, r in zip(args, results))
 
 
-def tokenize(obj):
+normalize = Dispatch()
+normalize.register(object, lambda a: a)
+normalize.register(dict, lambda a: tuple(sorted(a.items())))
+with ignoring(ImportError):
+    import pandas as pd
+    normalize.register(pd.DataFrame, lambda a: (id(a), len(a), list(a.columns)))
+    normalize.register(pd.Series, lambda a: (id(a), len(a), a.name))
+with ignoring(ImportError):
+    import numpy as np
+    normalize.register(np.ndarray, lambda a: (id(a), a.dtype, a.shape))
+
+
+def tokenize(*args):
     """ Deterministic token
 
     >>> tokenize([1, 2, '3'])
@@ -72,4 +85,4 @@ def tokenize(obj):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
-    return md5(str(obj).encode()).hexdigest()
+    return md5(str(tuple(normalize(a) for a in args)).encode()).hexdigest()

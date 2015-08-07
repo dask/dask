@@ -26,11 +26,6 @@ from ..compatibility import unicode, long
 from .. import threaded, core
 
 
-def tokenize_array(arr):
-    #TODO: This could be improved...
-    return (id(arr), arr.dtype, arr.shape)
-
-
 def getarray(a, b, lock=None):
     """ Mimics getitem but includes call to np.asarray
 
@@ -771,7 +766,7 @@ class Array(Base):
                         "1. Install ``chest``, an out-of-core dictionary\n"
                         "2. Provide an on-disk array like an h5py.Dataset") # pragma: no cover
         if isinstance(store, MutableMapping):
-            name = 'cache-' + tokenize((self.name, store))
+            name = 'cache-' + tokenize(self.name)
             dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
                     for k in core.flatten(self._keys()))
             Array._get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
@@ -810,7 +805,7 @@ class Array(Base):
         if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
-        out = 'getitem-' + tokenize((self.name, index))
+        out = 'getitem-' + tokenize(self.name, index)
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
@@ -1147,7 +1142,7 @@ def from_array(x, chunks, name=None, lock=False):
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
-    name = name or 'from-array-' + tokenize((tokenize_array(x), chunks))
+    name = name or 'from-array-' + tokenize(x, chunks)
     dsk = getem(name, chunks)
     if lock is True:
         lock = Lock()
@@ -1176,9 +1171,9 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     >>> stack(arrays).compute()
     array([0, 1, 2, 3, 4])
     """
+    name = name or 'from_func-' + tokenize(func, shape, dtype, args, kwargs)
     if args or kwargs:
         func = partial(func, *args, **kwargs)
-    name = name or 'from_func-' + tokenize((func, shape, dtype, args, kwargs))
     dsk = {(name,) + (0,) * len(shape): (func,)}
     chunks = tuple((i,) for i in shape)
     return Array(dsk, name, chunks, dtype)
@@ -1344,7 +1339,7 @@ def stack(seq, axis=0):
               + seq[0].chunks[axis:])
 
     names = [a.name for a in seq]
-    name = 'stack-' + tokenize(names)
+    name = 'stack-' + tokenize((names, axis))
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
     inputs = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
@@ -1835,7 +1830,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
     if 'dask' in inspect.getfile(reduction):
         reduction = getattr(np, reduction.__name__)
 
-    name = 'coarsen-' + tokenize((x.name, axes, trim_excess))
+    name = 'coarsen-' + tokenize((reduction, x.name, axes, trim_excess))
     dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes,
                                         trim_excess))
                 for key in core.flatten(x._keys()))
@@ -2051,9 +2046,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
     else:
-        bin_token = tokenize_array(bins)
-    token = tokenize((tokenize_array(a), bin_token, range, normed,
-                      weights.name if weights is not None else None, density))
+        bin_token = bins
+    token = tokenize(a, bin_token, range, normed,
+                      weights.name if weights is not None else None, density)
 
     nchunks = len(list(core.flatten(a._keys())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))

@@ -68,7 +68,7 @@ def fit(model, x, y, get=threaded.get, **kwargs):
 
     nblocks = len(x.chunks[0])
 
-    name = 'fit-' + tokenize((model, x.name, y.name, kwargs))
+    name = 'fit-' + tokenize(model, x.name, y.name, kwargs)
     dsk = {(name, -1): model}
     dsk.update(dict(((name, i), (_partial_fit, (name, i - 1),
                                           (x.name, i, 0),

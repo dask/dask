@@ -57,8 +57,8 @@ class RandomState(object):
         # Build graph
         sizes = list(product(*chunks))
         seeds = [self._numpy_state.randint(np.iinfo(np.int32).max) for i in sizes]
-        token = (seeds, size, chunks, args, kwargs)
-        name = 'da.random.{0}-{1}'.format(func.__name__, tokenize(token))
+        token = tokenize(seeds, size, chunks, args, kwargs)
+        name = 'da.random.{0}-{1}'.format(func.__name__, token)
         keys = product([name], *[range(len(bd)) for bd in chunks])
         vals = ((_apply_random, func.__name__, seed, size, args, kwargs)
                 for seed, size in zip(seeds, sizes))

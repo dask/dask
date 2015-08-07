@@ -337,7 +337,7 @@ class Dispatch(object):
         self._lookup[type] = func
 
     def __call__(self, arg):
-        for typ in type(arg).mro():
+        for typ in type.mro(type(arg)):
             if typ in self._lookup:
                 return self._lookup[typ](arg)
         raise TypeError("No dispatch for {0} type".format(type(arg)))

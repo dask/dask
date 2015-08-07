@@ -43,7 +43,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     if dtype is None:
         dtype = func(shape, *args, **kwargs).dtype
 
-    name = name or 'wrapped-' + tokenize((func, shape, dtype, args, kwargs))
+    name = name or 'wrapped-' + tokenize(func, shape, chunks, dtype, args, kwargs)
 
     keys = product([name], *[range(len(bd)) for bd in chunks])
     shapes = product(*chunks)

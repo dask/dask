@@ -5,7 +5,7 @@ from collections import Iterator
 import numpy as np
 
 from ..base import tokenize
-from .core import Array, tokenize_array
+from .core import Array
 
 
 @wraps(np.percentile)
@@ -38,7 +38,7 @@ def percentile(a, q, interpolation='linear'):
         raise NotImplementedError(
             "Percentiles only implemented for 1-d arrays")
     q = np.array(q)
-    token = tokenize((a.name, tokenize_array(q), interpolation))
+    token = tokenize(a.name, q, interpolation)
     name = 'percentile_chunk-' + token
     dsk = dict(((name, i), (_percentile, (key), q, interpolation))
             for i, key in enumerate(a._keys()))

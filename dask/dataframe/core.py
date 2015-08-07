@@ -1,6 +1,5 @@
 from __future__ import division
 
-from itertools import count
 from functools import wraps, reduce
 from collections import Iterable
 import bisect
@@ -22,7 +21,7 @@ from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
-from .utils import shard_df_on_index, tokenize_dataframe
+from .utils import shard_df_on_index
 from ..base import Base, compute, tokenize
 
 
@@ -50,9 +49,6 @@ def _concat(args):
         result.name = args[0].name
         return result
     return args
-
-
-tokens = ('-%d' % i for i in count(1))
 
 
 def optimize(dsk, keys):
@@ -784,7 +780,7 @@ class DataFrame(_Frame):
         """ + pd.DataFrame.query.__doc__
         name = '%s.query(%s)' % (self._name, expr)
         if kwargs:
-            name = name + '--' + tokenize(sorted(kwargs.items()))
+            name = name + '--' + tokenize(kwargs)
             dsk = dict(((name, i), (apply, pd.DataFrame.query,
                                     ((self._name, i), (expr,), kwargs)))
                        for i in range(self.npartitions))
@@ -1025,9 +1021,9 @@ def elemwise(op, *args, **kwargs):
 
     token = (op,
              [arg._name if isinstance(arg, _Frame) else arg for arg in args],
-             sorted(kwargs.items(), key=lambda kv: str(kv[0])))
+             kwargs)
 
-    _name = 'elemwise-' + tokenize(token)
+    _name = 'elemwise-' + tokenize(*token)
 
     dfs = [arg for arg in args if isinstance(arg, _Frame)]
     other = [(i, arg) for i, arg in enumerate(args)
@@ -1616,7 +1612,7 @@ def repartition(df, divisions):
     >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
     """
     if isinstance(df, _Frame):
-        token = tokenize((df._name, divisions))
+        token = tokenize(df._name, divisions)
         tmp = 'repartition-split-' + token
         out = 'repartition-merge-' + token
         dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
@@ -1624,7 +1620,7 @@ def repartition(df, divisions):
         return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
 
     elif isinstance(df, pd.core.generic.NDFrame):
-        token = tokenize((tokenize_dataframe(df), divisions))
+        token = tokenize(df, divisions)
         name = 'repartition-dataframe-' + token
         dfs = shard_df_on_index(df, divisions[1:-1])
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))

@@ -30,7 +30,7 @@ def wrap_rolling(func):
             raise NotImplementedError('Resampling before rolling computations '
                                       'not supported')
         old_name = arg._name
-        token = tokenize((arg._name, window, args, sorted(kwargs.items())))
+        token = tokenize(func, arg._name, window, args, kwargs)
         new_name = 'rolling-' + token
         f = partial(func, **kwargs)
         dsk = {(new_name, 0): (f, (old_name, 0), window) + args}
