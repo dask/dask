@@ -80,7 +80,7 @@ def tokenize(*args):
     """ Deterministic token
 
     >>> tokenize([1, 2, '3'])
-    'b9e8c0d38fb40e66dc4fd00adc3c6553'
+    '9d71491b50023b06fc76928e6eddb952'
 
     >>> tokenize('Hello') == tokenize('Hello')
     True
