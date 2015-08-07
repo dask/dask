@@ -393,7 +393,7 @@ def test_map_partitions_multi_argument():
 def test_map_partitions():
     assert eq(d.map_partitions(lambda df: df, columns=d.columns), full)
 
-    result = d.map_partitions(lambda df: df.sum(axis=1), 'a', return_type=dd.Series)
+    result = d.map_partitions(lambda df: df.sum(axis=1), 'a')
     assert eq(result,full.sum(axis=1))
 
 
@@ -425,8 +425,7 @@ def test_map_partitions_column_info():
     assert b.name == a.x.name
     assert eq(df.x, b)
 
-    b = dd.map_partitions(lambda df: df.x + df.y, None, a,
-                          return_type=dd.Series)
+    b = dd.map_partitions(lambda df: df.x + df.y, None, a)
     assert b.name == None
     assert isinstance(b, dd.Series)
 
@@ -450,19 +449,6 @@ def test_map_partitions_method_names():
     b = a.map_partitions(lambda df: df.x + 1, columns='x')
     assert isinstance(b, dd.Series)
     assert b.name == 'x'
-
-
-def test_map_partitions_return_type_and_names_agree():
-    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
-    a = dd.from_pandas(df, npartitions=2)
-    try:
-        a.map_partitions(lambda x: x, columns='zzzz', return_type=dd.DataFrame)
-    except ValueError as e:
-        assert 'zzzz' in str(e)
-    try:
-        a.map_partitions(lambda x: x, columns=['zzzz'], return_type=dd.Series)
-    except ValueError as e:
-        assert 'zzzz' in str(e)
 
 
 def test_drop_duplicates():
