@@ -452,10 +452,15 @@ class Scheduler(object):
             counter += 1
 
         if block:
-            for i in range(counter):
-                queue.get()
-
-            del self.queues[qkey]
+            with self.queue_context(qkey):
+                for i in range(counter):
+                    msg = queue.get()
+                    key = msg['key']
+                    status = msg['status']
+                    worker = msg['worker']
+                    if status == 'failed':
+                        err = 'worker: %s died!, key: %s not collected' % (worker, key)
+                        raise RuntimeError(err)
 
     def gather(self, keys):
         """ Gather data from workers
@@ -547,7 +552,10 @@ class Scheduler(object):
         self.worker_has[address].add(key)
         queue = payload.get('queue')
         if queue:
-            self.queues[queue].put(key)
+            msg = {'status': 'success',
+                   'key': key,
+                   'worker': address}
+            self.queues[queue].put(msg)
 
     def close_workers(self):
         header = {'function': 'close'}
@@ -816,3 +824,17 @@ class Scheduler(object):
                                'key': k,
                                'worker': w}
                         self.queues[queue].put(msg)
+
+    @contextmanager
+    def queue_context(self, qkey):
+        try:
+            yield
+        except RuntimeError as e:
+            del self.queues[qkey]
+            for w in self.queues_by_worker:
+                self.queues_by_worker[w].pop(qkey, None)
+            raise e
+        else:
+            del self.queues[qkey]
+            for w in self.queues_by_worker:
+                self.queues_by_worker[w].pop(qkey, None)
