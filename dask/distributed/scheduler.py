@@ -830,11 +830,8 @@ class Scheduler(object):
         try:
             yield
         except RuntimeError as e:
-            del self.queues[qkey]
-            for w in self.queues_by_worker:
-                self.queues_by_worker[w].pop(qkey, None)
             raise e
-        else:
+        finally:
             del self.queues[qkey]
             for w in self.queues_by_worker:
                 self.queues_by_worker[w].pop(qkey, None)
