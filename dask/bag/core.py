@@ -361,6 +361,8 @@ class Bag(Base):
         """
         a = next(names)
         b = next(names)
+        if isinstance(initial, list):
+            initial = (list2, initial)
         if initial is not no_default:
             dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
                             for i in range(self.npartitions))

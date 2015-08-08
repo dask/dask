@@ -147,6 +147,10 @@ def test_fold():
     d = db.from_sequence('hello')
     assert set(d.fold(lambda a, b: ''.join([a, b]), initial='').compute()) == set('hello')
 
+    e = db.from_sequence([[1], [2], [3]], npartitions=2)
+    with dask.set_options(get=get_sync):
+        assert set(e.fold(add, initial=[]).compute()) == set([1, 2, 3])
+
 
 def test_distinct():
     assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
