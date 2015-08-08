@@ -1134,7 +1134,41 @@ def _groupby_level0_getitem_apply(df, key, func):
     return df.groupby(level=0)[key].apply(func)
 
 
-class GroupBy(object):
+class _GroupBy(object):
+
+    def _aca_agg(self, token, func, aggfunc=None):
+        if aggfunc is None:
+            aggfunc = func
+
+        def chunk(df, index, func=func, key=self.key):
+            return func(df.groupby(index)[key])
+
+        agg = lambda df: aggfunc(df.groupby(level=0))
+        token = self._token_prefix + token
+
+        return aca([self.df, self.index], chunk=chunk, aggregate=agg,
+                   columns=self.key, token=token)
+
+    def sum(self):
+        return self._aca_agg(token='sum', func=lambda x: x.sum())
+
+    def min(self):
+        return self._aca_agg(token='min', func=lambda x: x.min())
+
+    def max(self):
+        return self._aca_agg(token='max', func=lambda x: x.max())
+
+    def count(self):
+        return self._aca_agg(token='count', func=lambda x: x.count(),
+                             aggfunc=lambda x: x.sum())
+
+    def mean(self):
+        return 1.0 * self.sum() / self.count()
+
+
+class GroupBy(_GroupBy):
+
+    _token_prefix = 'groupby-'
 
     def __init__(self, df, index=None, **kwargs):
         self.df = df
@@ -1143,10 +1177,22 @@ class GroupBy(object):
 
         if isinstance(index, list):
             assert all(i in df.columns for i in index)
+            self.key = [c for c in df.columns if c not in index]
+
         elif isinstance(index, Series):
             assert index.divisions == df.divisions
+            # check whether given Series is taken from given df and unchanged.
+            # If any operations are performed, _name will be changed to
+            # e.g. "elemwise-xxxx"
+            if (index.name is not None and
+                index._name == self.df._name + '.' + index.name):
+                self.key = [c for c in df.columns if c != index.name]
+            else:
+                self.key = list(df.columns)
         else:
             assert index in df.columns
+            self.key = [c for c in df.columns if c != index]
+
 
     def apply(self, func, columns=None):
         if (isinstance(self.index, Series) and
@@ -1182,7 +1228,10 @@ class GroupBy(object):
                 raise AttributeError()
 
 
-class SeriesGroupBy(object):
+class SeriesGroupBy(_GroupBy):
+
+    _token_prefix = 'series-groupby-'
+
     def __init__(self, df, index, key, **kwargs):
         self.df = df
         self.index = index
@@ -1201,49 +1250,6 @@ class SeriesGroupBy(object):
             return map_partitions(_groupby_apply,
                                   columns or self.df.columns,
                                   self.df, self.index, func)
-
-    def sum(self):
-        chunk = lambda df, index: df.groupby(index)[self.key].sum()
-        agg = lambda df: df.groupby(level=0).sum()
-        return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-sum')
-
-    def min(self):
-        chunk = lambda df, index: df.groupby(index)[self.key].min()
-        agg = lambda df: df.groupby(level=0).min()
-        return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-min')
-
-    def max(self):
-        chunk = lambda df, index: df.groupby(index)[self.key].max()
-        agg = lambda df: df.groupby(level=0).max()
-        return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-max')
-
-    def count(self):
-        chunk = lambda df, index: df.groupby(index)[self.key].count()
-        agg = lambda df: df.groupby(level=0).sum()
-        return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-count')
-
-    def mean(self):
-        def chunk(df, index):
-            g = df.groupby(index)
-            return g.agg({self.key: ['sum', 'count']})
-        def agg(df):
-            g = df.groupby(level=0)
-            x = g.agg({(self.key, 'sum'): 'sum',
-                       (self.key, 'count'): 'sum'})
-            result = x[self.key]['sum'] / x[self.key]['count']
-            result.name = self.key
-            return result
-        return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-mean')
 
     def nunique(self):
         def chunk(df, index):
