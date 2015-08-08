@@ -346,3 +346,14 @@ def test_cull_redundant_data():
 
         assert ('x' in a.data and 'x' not in b.data or
                 'x' in b.data and 'x' not in a.data)
+
+
+def test_scatter_block():
+    with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
+                               worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
+
+        data = {'x': 1, 'y': 2, 'z': 3}
+        w2.close()
+        while w2.status != 'closed':
+            sleep(1e-6)
+        s.scatter(data)
