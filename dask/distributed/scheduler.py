@@ -272,7 +272,9 @@ class Scheduler(object):
                 self.who_has[key].add(address)
                 self.worker_has[address].add(key)
 
-                self.queues[payload['queue']].put(payload)
+                qkey = payload['queue']
+                self.queues_by_worker[address][qkey].remove(key)
+                self.queues[qkey].put(payload)
 
     def _status_to_client(self, header, payload):
         with logerrors():
@@ -319,7 +321,7 @@ class Scheduler(object):
 
         See also:
             Scheduler.schedule
-            Scheduler.worker_finished_task
+            Scheduler._worker_finished_task
         """
         worker = self.available_workers.get()
         locations = dict((dep, self.who_has[dep]) for dep in deps)
@@ -328,6 +330,8 @@ class Scheduler(object):
                   'dumps': dill.dumps, 'loads': dill.loads}
         payload = {'key': key, 'task': task, 'locations': locations,
                    'queue': queue}
+
+        self.queues_by_worker[worker][queue].add(key)
         self.send_to_worker(worker, header, payload)
 
     def release_key(self, key):
@@ -666,6 +670,8 @@ class Scheduler(object):
 
                 if isinstance(payload['status'], Exception):
                     raise payload['status']
+                elif payload['status'] == 'failed':
+                    raise RuntimeError('A worker has died interuppting scheduling')
 
                 key = payload['key']
                 finish_task(dsk, key, dag_state, results, sortkey,
