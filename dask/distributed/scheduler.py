@@ -653,43 +653,44 @@ class Scheduler(object):
                 self.trigger_task(key, dsk[key],
                         dag_state['dependencies'][key], qkey)  # Fire
 
-            try:
-                worker = self.available_workers.get(timeout=20)
-                self.available_workers.put(worker)  # put him back in
-            except Empty:
-                raise ValueError("Waited 20 seconds. No workers found")
+            with self.queue_context(qkey):
+                try:
+                    worker = self.available_workers.get(timeout=20)
+                    self.available_workers.put(worker)  # put him back in
+                except Empty:
+                    raise ValueError("Waited 20 seconds. No workers found")
 
-            # Seed initial tasks
-            while dag_state['ready'] and self.available_workers.qsize() > 0:
-                fire_task()
-
-            # Main loop, wait on tasks to finish, insert new ones
-            release_data = partial(self._release_data, protected=preexisting_data)
-            while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
-                payload = event_queue.get()
-
-                if isinstance(payload['status'], Exception):
-                    raise payload['status']
-                elif payload['status'] == 'failed':
-                    raise RuntimeError('A worker has died interuppting scheduling')
-
-                key = payload['key']
-                finish_task(dsk, key, dag_state, results, sortkey,
-                            release_data=release_data,
-                            delete=key not in preexisting_data)
-
+                # Seed initial tasks
                 while dag_state['ready'] and self.available_workers.qsize() > 0:
                     fire_task()
 
-            result2 = self.gather(result)
-            if not keep_results:  # release result data from workers
-                for key in flatten(result):
-                    if key not in preexisting_data:
-                        self.release_key(key)
+                # Main loop, wait on tasks to finish, insert new ones
+                release_data = partial(self._release_data, protected=preexisting_data)
+                while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
+                    payload = event_queue.get()
 
-            self.cull_redundant_data(3)
+                    if isinstance(payload['status'], Exception):
+                        raise payload['status']
+                    elif payload['status'] == 'failed':
+                        raise RuntimeError('A worker has died interuppting scheduling')
 
-        return result2
+                    key = payload['key']
+                    finish_task(dsk, key, dag_state, results, sortkey,
+                                release_data=release_data,
+                                delete=key not in preexisting_data)
+
+                    while dag_state['ready'] and self.available_workers.qsize() > 0:
+                        fire_task()
+
+                result2 = self.gather(result)
+                if not keep_results:  # release result data from workers
+                    for key in flatten(result):
+                        if key not in preexisting_data:
+                            self.release_key(key)
+
+                self.cull_redundant_data(3)
+
+            return result2
 
     def _schedule_from_client(self, header, payload):
         """
