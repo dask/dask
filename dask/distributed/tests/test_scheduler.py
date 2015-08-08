@@ -356,7 +356,7 @@ def test_scatter_block():
         w2.close()
         while w2.status != 'closed':
             sleep(1e-6)
-        s.scatter(data)
+        assert raises(RuntimeError, lambda: s.scatter(data))
         while len(s.queues_by_worker[w1.address]) != 0:
             sleep(1e-6)
         assert len(s.queues_by_worker[w1.address]) == 0
