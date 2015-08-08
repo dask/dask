@@ -14,6 +14,7 @@ import dill
 
 from dask.distributed.scheduler import Scheduler
 from dask.distributed.worker import Worker
+from dask.utils import raises
 
 context = zmq.Context()
 
@@ -357,7 +358,15 @@ def test_scatter_block():
         while w2.status != 'closed':
             sleep(1e-6)
         assert raises(RuntimeError, lambda: s.scatter(data))
-        while len(s.queues_by_worker[w1.address]) != 0:
-            sleep(1e-6)
         assert len(s.queues_by_worker[w1.address]) == 0
         assert len(s.queues_by_worker[w2.address]) == 0
+
+
+def test_schedule_block():
+    with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
+                               worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
+        dsk = {'x': (add, 1, 2), 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
+        w2.close()
+        while w2.status != 'closed':
+            sleep(1e-6)
+        assert raises(RuntimeError, lambda: s.schedule(dsk, ['y']))
