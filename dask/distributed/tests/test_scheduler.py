@@ -370,3 +370,5 @@ def test_schedule_block():
         while w2.status != 'closed':
             sleep(1e-6)
         assert raises(RuntimeError, lambda: s.schedule(dsk, ['y']))
+        assert len(s.queues_by_worker[w1.address]) == 0
+        assert len(s.queues_by_worker[w2.address]) == 0
