@@ -256,6 +256,14 @@ def test_split_apply_combine_on_series():
     assert sorted(d.groupby(d.a > 3).b.mean().dask) == \
            sorted(d.groupby(d.a > 3).b.mean().dask)
 
+    # test raises with incorrect key
+    assert raises(KeyError, lambda: d.groupby('x'))
+    assert raises(KeyError, lambda: d.groupby(['a', 'x']))
+    assert raises(KeyError, lambda: d.groupby('a')['x'])
+    assert raises(KeyError, lambda: d.groupby('a')['b', 'x'])
+    assert raises(KeyError, lambda: d.groupby('a')[['b', 'x']])
+
+    # test graph node labels
     assert_dask_graph(d.groupby('b').a.sum(), 'series-groupby-sum')
     assert_dask_graph(d.groupby('b').a.min(), 'series-groupby-min')
     assert_dask_graph(d.groupby('b').a.max(), 'series-groupby-max')
@@ -272,6 +280,29 @@ def test_split_apply_combine_on_series():
     # mean consists from sum and count operations
     assert_dask_graph(d.groupby('b').mean(), 'dataframe-groupby-sum')
     assert_dask_graph(d.groupby('b').mean(), 'dataframe-groupby-count')
+
+
+def test_groupby_multilevel_getitem():
+    df = pd.DataFrame({'a': [1, 2, 3, 1, 2, 3],
+                       'b': [1, 2, 1, 4, 2, 1],
+                       'c': [1, 3, 2, 1, 1, 2],
+                       'd': [1, 2, 1, 1, 2, 2]})
+    ddf = dd.from_pandas(df, 2)
+
+    cases = [(ddf.groupby('a')['b'], df.groupby('a')['b']),
+             (ddf.groupby(['a', 'b']), df.groupby(['a', 'b'])),
+             (ddf.groupby(['a', 'b'])['c'], df.groupby(['a', 'b'])['c']),
+             (ddf.groupby('a')[['b', 'c']], df.groupby('a')[['b', 'c']]),
+             (ddf.groupby('a')[['b']], df.groupby('a')[['b']])]
+
+    for d, p in cases:
+        assert isinstance(d, dd.core._GroupBy)
+        assert isinstance(p, pd.core.groupby.GroupBy)
+        assert eq(d.sum(), p.sum())
+        assert eq(d.min(), p.min())
+        assert eq(d.max(), p.max())
+        assert eq(d.count(), p.count())
+        assert eq(d.mean(), p.mean().astype(float))
 
 
 def test_arithmetic():
