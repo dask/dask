@@ -175,6 +175,7 @@ def test_schedule():
             else:
                 break
         assert not a.data and not b.data
+        assert len(s.queues) == 0
 
 
 def test_gather():
@@ -372,3 +373,4 @@ def test_schedule_block():
         assert raises(RuntimeError, lambda: s.schedule(dsk, ['y']))
         assert len(s.queues_by_worker[w1.address]) == 0
         assert len(s.queues_by_worker[w2.address]) == 0
+        assert len(s.queues) == 0
