@@ -836,7 +836,7 @@ class Scheduler(object):
     def queue_context(self, qkey):
         try:
             yield
-        except RuntimeError as e:
+        except Exception as e:
             raise e
         finally:
             del self.queues[qkey]
