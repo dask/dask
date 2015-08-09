@@ -642,9 +642,6 @@ class DataFrame(_Frame):
     """
     Implements out-of-core DataFrame as a sequence of pandas DataFrames
 
-    This is a work in progress.  It is buggy and far from complete.
-    Please do not use it yet.
-
     Parameters
     ----------
 
