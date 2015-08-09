@@ -1,7 +1,6 @@
 from __future__ import division
 
 from itertools import count
-from math import sqrt
 from functools import wraps, reduce
 from collections import Iterable
 import bisect
@@ -524,19 +523,19 @@ class Series(_Frame):
 
     @wraps(pd.Series.sum)
     def sum(self):
-        return reduction(self, pd.Series.sum, np.sum, token='series-sum')
+        return reduction(self, pd.Series.sum, pdsum, token='series-sum')
 
     @wraps(pd.Series.max)
     def max(self):
-        return reduction(self, pd.Series.max, np.max, token='series-max')
+        return reduction(self, pd.Series.max, pdmax, token='series-max')
 
     @wraps(pd.Series.min)
     def min(self):
-        return reduction(self, pd.Series.min, np.min, token='series-min')
+        return reduction(self, pd.Series.min, pdmin, token='series-min')
 
     @wraps(pd.Series.count)
     def count(self):
-        return reduction(self, pd.Series.count, np.sum, token='series-count')
+        return reduction(self, pd.Series.count, pdsum, token='series-count')
 
     @wraps(pd.Series.nunique)
     def nunique(self):
@@ -549,7 +548,7 @@ class Series(_Frame):
 
         def agg(seq):
             sums, counts = list(zip(*seq))
-            return 1.0 * sum(sums) / sum(counts)
+            return 1.0 * np.nansum(sums) / np.nansum(counts)
         return reduction(self, chunk, agg, token='series-mean')
 
     @wraps(pd.Series.var)
@@ -559,13 +558,16 @@ class Series(_Frame):
 
         def agg(seq):
             x, x2, n = list(zip(*seq))
-            x = float(sum(x))
-            x2 = float(sum(x2))
-            n = sum(n)
-            result = (x2 / n) - (x / n)**2
-            if ddof:
-                result = result * n / (n - ddof)
-            return result
+            x = float(np.nansum(x))
+            x2 = float(np.nansum(x2))
+            n = np.nansum(n)
+            try:
+                result = (x2 / n) - (x / n) ** 2
+                if ddof:
+                    result = result * n / (n - ddof)
+                return result
+            except ZeroDivisionError:
+                return np.nan
         token = 'series-var(ddof={0})'.format(ddof)
         return reduction(self, chunk, agg, token=token)
 
@@ -573,7 +575,7 @@ class Series(_Frame):
     def std(self, ddof=1):
         name = 'series-std(ddof={0})-{1}'.format(ddof, tokenize(self._name))
         df = self.var(ddof=ddof)
-        dsk = {(name, 0): (sqrt, (df._name, 0))}
+        dsk = {(name, 0): (np.sqrt, (df._name, 0))}
         return Scalar(merge(df.dask, dsk), name)
 
     @wraps(pd.Series.value_counts)
@@ -1082,6 +1084,16 @@ def empty_safe(func, arg):
     else:
         return func(arg)
 
+def pdsum(x):
+    # define local to assign static name to Series.sum
+    # to support string and other types, once convert to series
+    return pd.Series(x).sum()
+
+def pdmax(x):
+    return pd.Series(x).max()
+
+def pdmin(x):
+    return pd.Series(x).min()
 
 def reduction(x, chunk, aggregate, token='reduction'):
     """ General version of reductions

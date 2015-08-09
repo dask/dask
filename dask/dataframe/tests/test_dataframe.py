@@ -33,7 +33,8 @@ def check_dask(dsk, check_names=True):
                 columns = pd.Index(dsk.columns)
                 tm.assert_index_equal(columns, result.columns)
         elif isinstance(dsk, dd.core.Scalar):
-            assert np.isscalar(result)
+            assert (np.isscalar(result) or
+                    isinstance(result, (pd.Timestamp, pd.Timedelta)))
         else:
             msg = 'Unsupported dask instance {0} found'.format(type(dsk))
             raise AssertionError(msg)
@@ -53,7 +54,13 @@ def eq(a, b, check_names=True):
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b)
     else:
-        assert np.allclose(a, b)
+        if a == b:
+            return True
+        else:
+            if np.isnan(a):
+                assert np.isnan(b)
+            else:
+                assert np.allclose(a, b)
     return True
 
 
@@ -451,8 +458,22 @@ def test_arithmetic_frame():
 
 
 def test_reductions():
+    nans1 = pd.Series([1] + [np.nan] * 4 + [2] + [np.nan] * 3)
+    nands1 = dd.from_pandas(nans1, 2)
+    nans2 = pd.Series([1] + [np.nan] * 8)
+    nands2 = dd.from_pandas(nans2, 2)
+    nans3 = pd.Series([np.nan] * 9)
+    nands3 = dd.from_pandas(nans3, 2)
+
+    bools = pd.Series([True, False, True, False, True], dtype=bool)
+    boolds = dd.from_pandas(bools, 2)
+
     for dds, pds in [(d.b, full.b), (d.a, full.a),
-                   (d['a'], full['a']), (d['b'], full['b'])]:
+                     (d['a'], full['a']), (d['b'], full['b']),
+                     (nands1, nans1), (nands2, nans2), (nands3, nans3),
+                     (boolds, bools)]:
+        assert isinstance(dds, dd.Series)
+        assert isinstance(pds, pd.Series)
         assert eq(dds.sum(), pds.sum())
         assert eq(dds.min(), pds.min())
         assert eq(dds.max(), pds.max())
@@ -475,6 +496,59 @@ def test_reductions():
     assert_dask_graph(d.b.mean(), 'series-mean')
     # nunique is performed using drop-duplicates
     assert_dask_graph(d.b.nunique(), 'drop-duplicates')
+
+
+def test_reductions_non_numeric_dtypes():
+    # test non-numric blocks
+
+    def check_raises(d, p, func):
+        assert raises(TypeError, lambda: getattr(d, func)().compute())
+        assert raises(TypeError, lambda: getattr(p, func)())
+
+    pds = pd.Series(['a', 'b', 'c', 'd', 'e'])
+    dds = dd.from_pandas(pds, 2)
+    assert eq(dds.sum(), pds.sum())
+    assert eq(dds.min(), pds.min())
+    assert eq(dds.max(), pds.max())
+    assert eq(dds.count(), pds.count())
+    check_raises(dds, pds, 'std')
+    check_raises(dds, pds, 'var')
+    check_raises(dds, pds, 'mean')
+    assert eq(dds.nunique(), pds.nunique())
+
+    for pds in [pd.Series(pd.Categorical([1, 2, 3, 4, 5], ordered=True)),
+                pd.Series(pd.Categorical(list('abcde'), ordered=True)),
+                pd.Series(pd.date_range('2011-01-01', freq='D', periods=5))]:
+        dds = dd.from_pandas(pds, 2)
+
+        check_raises(dds, pds, 'sum')
+        assert eq(dds.min(), pds.min())
+        assert eq(dds.max(), pds.max())
+        assert eq(dds.count(), pds.count())
+        check_raises(dds, pds, 'std')
+        check_raises(dds, pds, 'var')
+        check_raises(dds, pds, 'mean')
+        assert eq(dds.nunique(), pds.nunique())
+
+
+    pds= pd.Series(pd.timedelta_range('1 days', freq='D', periods=5))
+    dds = dd.from_pandas(pds, 2)
+    assert eq(dds.sum(), pds.sum())
+    assert eq(dds.min(), pds.min())
+    assert eq(dds.max(), pds.max())
+    assert eq(dds.count(), pds.count())
+
+    # ToDo: pandas supports timedelta std, otherwise dask raises:
+    # incompatible type for a datetime/timedelta operation [__pow__]
+    # assert eq(dds.std(), pds.std())
+
+    check_raises(dds, pds, 'var')
+
+    # ToDo: pandas supports timedelta std, otherwise dask raises:
+    # TypeError: unsupported operand type(s) for *: 'float' and 'Timedelta'
+    # assert eq(dds.mean(), pds.mean())
+
+    assert eq(dds.nunique(), pds.nunique())
 
 
 def test_reductions_frame():
