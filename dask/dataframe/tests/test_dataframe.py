@@ -57,6 +57,20 @@ def eq(a, b, check_names=True):
     return True
 
 
+def assert_dask_graph(dask, label):
+    if hasattr(dask, 'dask'):
+        dask = dask.dask
+    assert isinstance(dask, dict)
+    for k in dask:
+        if isinstance(k, tuple):
+            k = k[0]
+        if k.startswith(label):
+            return True
+    else:
+        msg = "given dask graph doesn't contan label: {0}"
+        raise AssertionError(msg.format(label))
+
+
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
                               index=[0, 1, 3]),
        ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]},
@@ -242,6 +256,23 @@ def test_split_apply_combine_on_series():
     assert sorted(d.groupby(d.a > 3).b.mean().dask) == \
            sorted(d.groupby(d.a > 3).b.mean().dask)
 
+    assert_dask_graph(d.groupby('b').a.sum(), 'series-groupby-sum')
+    assert_dask_graph(d.groupby('b').a.min(), 'series-groupby-min')
+    assert_dask_graph(d.groupby('b').a.max(), 'series-groupby-max')
+    assert_dask_graph(d.groupby('b').a.count(), 'series-groupby-count')
+    # mean consists from sum and count operations
+    assert_dask_graph(d.groupby('b').a.mean(), 'series-groupby-sum')
+    assert_dask_graph(d.groupby('b').a.mean(), 'series-groupby-count')
+    assert_dask_graph(d.groupby('b').a.nunique(), 'series-groupby-nunique')
+
+    assert_dask_graph(d.groupby('b').sum(), 'dataframe-groupby-sum')
+    assert_dask_graph(d.groupby('b').min(), 'dataframe-groupby-min')
+    assert_dask_graph(d.groupby('b').max(), 'dataframe-groupby-max')
+    assert_dask_graph(d.groupby('b').count(), 'dataframe-groupby-count')
+    # mean consists from sum and count operations
+    assert_dask_graph(d.groupby('b').mean(), 'dataframe-groupby-sum')
+    assert_dask_graph(d.groupby('b').mean(), 'dataframe-groupby-count')
+
 
 def test_arithmetic():
     assert eq(d.a + d.b, full.a + full.b)
@@ -402,6 +433,18 @@ def test_reductions():
         assert eq(dds.mean(), pds.mean())
         assert eq(dds.nunique(), pds.nunique())
 
+    assert_dask_graph(d.b.sum(), 'series-sum')
+    assert_dask_graph(d.b.min(), 'series-min')
+    assert_dask_graph(d.b.max(), 'series-max')
+    assert_dask_graph(d.b.count(), 'series-count')
+    assert_dask_graph(d.b.std(), 'series-std(ddof=1)')
+    assert_dask_graph(d.b.var(), 'series-var(ddof=1)')
+    assert_dask_graph(d.b.std(ddof=0), 'series-std(ddof=0)')
+    assert_dask_graph(d.b.var(ddof=0), 'series-var(ddof=0)')
+    assert_dask_graph(d.b.mean(), 'series-mean')
+    # nunique is performed using drop-duplicates
+    assert_dask_graph(d.b.nunique(), 'drop-duplicates')
+
 
 def test_reductions_frame():
     assert eq(d.sum(), full.sum())
@@ -426,6 +469,18 @@ def test_reductions_frame():
         assert eq(d.mean(axis=axis), full.mean(axis=axis))
 
     assert raises(ValueError, lambda: d.sum(axis='incorrect').compute())
+
+    assert_dask_graph(d.sum(), 'dataframe-sum')
+    assert_dask_graph(d.min(), 'dataframe-min')
+    assert_dask_graph(d.max(), 'dataframe-max')
+    assert_dask_graph(d.count(), 'dataframe-count')
+    # std, var, mean consists from sum and count operations
+    assert_dask_graph(d.std(), 'dataframe-sum')
+    assert_dask_graph(d.std(), 'dataframe-count')
+    assert_dask_graph(d.var(), 'dataframe-sum')
+    assert_dask_graph(d.var(), 'dataframe-count')
+    assert_dask_graph(d.mean(), 'dataframe-sum')
+    assert_dask_graph(d.mean(), 'dataframe-count')
 
 def test_reductions_frame_dtypes():
     df = pd.DataFrame({'int': [1, 2, 3, 4, 5, 6, 7, 8],

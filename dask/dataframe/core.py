@@ -524,19 +524,19 @@ class Series(_Frame):
 
     @wraps(pd.Series.sum)
     def sum(self):
-        return reduction(self, pd.Series.sum, np.sum)
+        return reduction(self, pd.Series.sum, np.sum, token='series-sum')
 
     @wraps(pd.Series.max)
     def max(self):
-        return reduction(self, pd.Series.max, np.max)
+        return reduction(self, pd.Series.max, np.max, token='series-max')
 
     @wraps(pd.Series.min)
     def min(self):
-        return reduction(self, pd.Series.min, np.min)
+        return reduction(self, pd.Series.min, np.min, token='series-min')
 
     @wraps(pd.Series.count)
     def count(self):
-        return reduction(self, pd.Series.count, np.sum)
+        return reduction(self, pd.Series.count, np.sum, token='series-count')
 
     @wraps(pd.Series.nunique)
     def nunique(self):
@@ -550,7 +550,7 @@ class Series(_Frame):
         def agg(seq):
             sums, counts = list(zip(*seq))
             return 1.0 * sum(sums) / sum(counts)
-        return reduction(self, chunk, agg, 'mean')
+        return reduction(self, chunk, agg, token='series-mean')
 
     @wraps(pd.Series.var)
     def var(self, ddof=1):
@@ -566,11 +566,12 @@ class Series(_Frame):
             if ddof:
                 result = result * n / (n - ddof)
             return result
-        return reduction(self, chunk, agg, token=('var', ddof))
+        token = 'series-var(ddof={0})'.format(ddof)
+        return reduction(self, chunk, agg, token=token)
 
     @wraps(pd.Series.std)
     def std(self, ddof=1):
-        name = '%s.std(ddof=%d)' % (self._name, ddof)
+        name = 'series-std(ddof={0})-{1}'.format(ddof, tokenize(self._name))
         df = self.var(ddof=ddof)
         dsk = {(name, 0): (sqrt, (df._name, 0))}
         return Scalar(merge(df.dask, dsk), name)
@@ -585,7 +586,8 @@ class Series(_Frame):
     @wraps(pd.Series.nlargest)
     def nlargest(self, n=5):
         f = lambda s: s.nlargest(n)
-        return aca(self, f, f, columns=self.name, token=('nlargest', n))
+        token = 'series-nlargest-n={0}'.format(n)
+        return aca(self, f, f, columns=self.name, token=token)
 
     @wraps(pd.Series.isin)
     def isin(self, other):
@@ -828,7 +830,8 @@ class DataFrame(_Frame):
         else:
             chunk = lambda df: df.sum()
             agg = lambda df: df.groupby(level=0).sum()
-            return aca([self], chunk=chunk, aggregate=agg, columns=None)
+            return aca([self], chunk=chunk, aggregate=agg, columns=None,
+                       token='dataframe-sum')
 
     @wraps(pd.DataFrame.max)
     def max(self, axis=None):
@@ -839,7 +842,8 @@ class DataFrame(_Frame):
         else:
             chunk = lambda df: df.max()
             agg = lambda df: df.groupby(level=0).max()
-            return aca([self], chunk=chunk, aggregate=agg, columns=None)
+            return aca([self], chunk=chunk, aggregate=agg, columns=None,
+                       token='dataframe-max')
 
     @wraps(pd.DataFrame.min)
     def min(self, axis=None):
@@ -850,7 +854,8 @@ class DataFrame(_Frame):
         else:
             chunk = lambda df: df.min()
             agg = lambda df: df.groupby(level=0).min()
-            return aca([self], chunk=chunk, aggregate=agg, columns=None)
+            return aca([self], chunk=chunk, aggregate=agg, columns=None,
+                       token='dataframe-min')
 
     @wraps(pd.DataFrame.count)
     def count(self, axis=None):
@@ -861,7 +866,8 @@ class DataFrame(_Frame):
         else:
             chunk = lambda df: df.count()
             agg = lambda df: df.groupby(level=0).sum()
-            return aca([self], chunk=chunk, aggregate=agg, columns=None)
+            return aca([self], chunk=chunk, aggregate=agg, columns=None,
+                       token='dataframe-count')
 
     @wraps(pd.DataFrame.mean)
     def mean(self, axis=None):
@@ -1080,18 +1086,18 @@ def empty_safe(func, arg):
         return func(arg)
 
 
-def reduction(x, chunk, aggregate, token=None):
+def reduction(x, chunk, aggregate, token='reduction'):
     """ General version of reductions
 
     >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
     """
-    token = (x._name, (token or (chunk, aggregate)))
-    token = tokenize(token)
-    a = 'reduction-chunk-' + token
+    token_seed = (x._name, (token or (chunk, aggregate)))
+    token_key = tokenize(token_seed)
+    a = '{0}--chunk-{1}'.format(token, token_key)
     dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
                 for i in range(x.npartitions))
 
-    b = 'reduction-aggregation-' + token
+    b = '{0}--aggregation-{1}'.format(token, token_key)
     dsk2 = {(b, 0): (aggregate, (remove_empties,
                         [(a,i) for i in range(x.npartitions)]))}
 
@@ -1168,7 +1174,7 @@ class _GroupBy(object):
 
 class GroupBy(_GroupBy):
 
-    _token_prefix = 'groupby-'
+    _token_prefix = 'dataframe-groupby-'
 
     def __init__(self, df, index=None, **kwargs):
         self.df = df
@@ -1269,7 +1275,7 @@ class SeriesGroupBy(_GroupBy):
 
 
 def apply_concat_apply(args, chunk=None, aggregate=None,
-                       columns=no_default, token=None):
+                       columns=no_default, token='apply-concat-apply'):
     """ Apply a function to blocks, the concat, then apply again
 
     Parameters
@@ -1297,18 +1303,17 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
                 for arg in args
                 if isinstance(arg, _Frame))
 
-    token = ([arg._name if isinstance(arg, _Frame) else arg for arg in args],
-             (token or (chunk, aggregate)),
-             columns)
-    token = tokenize(token)
+    token_seed = ([arg._name if isinstance(arg, _Frame) else arg
+                   for arg in args], (token or (chunk, aggregate)), columns)
+    token_key = tokenize(token_seed)
 
-    a = 'apply-concat-apply--first' + token
+    a = '{0}--first-{1}'.format(token, token_key)
     dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)
                                                 if isinstance(x, _Frame)
                                                 else x for x in args])))
                 for i in range(args[0].npartitions))
 
-    b = 'apply-concat-apply--second' + token
+    b = '{0}--second-{1}'.format(token, token_key)
     dsk2 = {(b, 0): (aggregate,
                       (_concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
