@@ -350,7 +350,7 @@ def test_cull_redundant_data():
                 'x' in b.data and 'x' not in a.data)
 
 
-def test_scatter_block():
+def test_scatter_hang():
     with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
                                worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
 
@@ -363,7 +363,7 @@ def test_scatter_block():
         assert len(s.queues_by_worker[w2.address]) == 0
 
 
-def test_schedule_block():
+def test_schedule_hang():
     with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
                                worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
         dsk = {'x': (add, 1, 2), 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
@@ -376,7 +376,7 @@ def test_schedule_block():
         assert len(s.queues) == 0
 
 
-def test_gather_block():
+def test_gather_hang():
     with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
                                worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
         s.send_data('x', 1, w1.address)
