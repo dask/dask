@@ -508,13 +508,16 @@ class Scheduler(object):
 
         # Wait for replies
         cache = dict()
-        for i in flatten(keys):
-            k, v = queue.get()
-            cache[k] = v
-        del self.queues[qkey]
+        with self.queue_context(qkey):
+            for i in flatten(keys):
+                msg = queue.get()
+                if msg['status'] == 'failed':
+                    raise RuntimeError('Failed to gather a key')
+                cache[msg['key']] = msg['value']
+            del self.queues[qkey]
 
-        # Reshape to keys
-        return core.get(cache, keys)
+            # Reshape to keys
+            return core.get(cache, keys)
 
     def _gather_send(self, qkey, key):
         if isinstance(key, list):
@@ -525,6 +528,7 @@ class Scheduler(object):
             payload = {'key': key, 'queue': qkey}
             seq = list(self.who_has[key])
             worker = random.choice(seq)
+            self.queues_by_worker[worker][qkey].add(key)
             self.send_to_worker(worker, header, payload)
 
     def _getitem_ack(self, header, payload):
@@ -535,12 +539,11 @@ class Scheduler(object):
             Worker.getitem
         """
         payload = pickle.loads(payload)
-        log(self.address_to_workers, 'Getitem ack', payload['key'],
-                                                    payload['queue'])
+        log(self.address_to_workers, 'Getitem ack', payload['key'], payload['queue'])
         with logerrors():
             assert header['status'] == 'OK'
-            self.queues[payload['queue']].put((payload['key'],
-                                               payload['value']))
+            payload['status'] = 'success'
+            self.queues[payload['queue']].put(payload)
 
     def _setitem_ack(self, header, payload):
         """ Receive acknowledgement from worker about a setitem request
