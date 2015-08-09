@@ -1143,14 +1143,29 @@ class _GroupBy(object):
         if aggfunc is None:
             aggfunc = func
 
-        def chunk(df, index, func=func, key=self.key):
-            return func(df.groupby(index)[key])
+        if isinstance(self.index, Series):
 
-        agg = lambda df: aggfunc(df.groupby(level=0))
-        token = self._token_prefix + token
+            def chunk(df, index, func=func, key=self.key):
+                return func(df.groupby(index)[key])
 
-        return aca([self.df, self.index], chunk=chunk, aggregate=agg,
-                   columns=self.key, token=token)
+            agg = lambda df: aggfunc(df.groupby(level=0))
+            token = self._token_prefix + token
+
+            return aca([self.df, self.index], chunk=chunk, aggregate=agg,
+                       columns=self.key, token=token)
+        else:
+            def chunk(df, index=self.index, func=func, key=self.key):
+                return func(df.groupby(index)[key])
+
+            if isinstance(self.index, list):
+                levels = list(range(len(self.index)))
+            else:
+                levels = 0
+            agg = lambda df: aggfunc(df.groupby(level=levels))
+            token = self._token_prefix + token
+
+            return aca(self.df, chunk=chunk, aggregate=agg,
+                       columns=self.key, token=token)
 
     def sum(self):
         return self._aca_agg(token='sum', func=lambda x: x.sum())
@@ -1173,14 +1188,16 @@ class GroupBy(_GroupBy):
 
     _token_prefix = 'dataframe-groupby-'
 
-    def __init__(self, df, index=None, **kwargs):
+    def __init__(self, df, index=None, key=None, **kwargs):
         self.df = df
         self.index = index
         self.kwargs = kwargs
 
         if isinstance(index, list):
-            assert all(i in df.columns for i in index)
-            self.key = [c for c in df.columns if c not in index]
+            for i in index:
+                if i not in df.columns:
+                    raise KeyError("Columns not found: '{0}'".format(i))
+            _key = [c for c in df.columns if c not in index]
 
         elif isinstance(index, Series):
             assert index.divisions == df.divisions
@@ -1189,13 +1206,15 @@ class GroupBy(_GroupBy):
             # e.g. "elemwise-xxxx"
             if (index.name is not None and
                 index._name == self.df._name + '.' + index.name):
-                self.key = [c for c in df.columns if c != index.name]
+                _key = [c for c in df.columns if c != index.name]
             else:
-                self.key = list(df.columns)
+                _key = list(df.columns)
         else:
-            assert index in df.columns
-            self.key = [c for c in df.columns if c != index]
+            if index not in df.columns:
+                raise KeyError("Columns not found: '{0}'".format(index))
+            _key = [c for c in df.columns if c != index]
 
+        self.key = key or _key
 
     def apply(self, func, columns=None):
         if (isinstance(self.index, Series) and
@@ -1212,10 +1231,15 @@ class GroupBy(_GroupBy):
                                   self.df, self.index, func)
 
     def __getitem__(self, key):
-        if key in self.df.columns:
-            return SeriesGroupBy(self.df, self.index, key)
+        if isinstance(key, list):
+            for k in key:
+                if k not in self.df.columns:
+                    raise KeyError("Columns not found: '{0}'".format(k))
+            return GroupBy(self.df, index=self.index, key=key, **self.kwargs)
         else:
-            raise KeyError()
+            if key not in self.df.columns:
+                raise KeyError("Columns not found: '{0}'".format(key))
+            return SeriesGroupBy(self.df, self.index, key)
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
