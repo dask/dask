@@ -374,3 +374,17 @@ def test_schedule_block():
         assert len(s.queues_by_worker[w1.address]) == 0
         assert len(s.queues_by_worker[w2.address]) == 0
         assert len(s.queues) == 0
+
+
+def test_gather_block():
+    with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
+                               worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
+        s.send_data('x', 1, w1.address)
+        s.send_data('y', 2, w2.address)
+        w2.close()
+        while w2.status != 'closed':
+            sleep(1e-6)
+        assert raises(RuntimeError, lambda: s.gather(['x', 'y']))
+        assert len(s.queues_by_worker[w1.address]) == 0
+        assert len(s.queues_by_worker[w2.address]) == 0
+        assert len(s.queues) == 0
