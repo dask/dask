@@ -376,6 +376,14 @@ class Bag(Base):
         >>> b.fold(binop=add, combine=add, initial=0).compute()  # doctest: +SKIP
         10
 
+        More complex binary operators are also doable
+
+        >>> def add_to_set(acc, x):
+        ...     ''' Add new element x to set acc '''
+        ...     return acc | set([x])
+        >>> b.fold(add_to_set, set.union, initial=set()).compute()  # doctest: +SKIP
+        {1, 2, 3, 4, 5}
+
         See Also
         --------
 
