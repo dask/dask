@@ -4,8 +4,21 @@ import shutil
 import pytest
 
 import dask
-from dask.base import compute
+from dask.base import compute, tokenize, normalize
 from dask.utils import raises
+
+
+def test_normalize():
+    assert normalize((1, 2, 3)) == (1, 2, 3)
+    assert normalize('a') == 'a'
+    assert normalize({'a': 1, 'b': 2, 'c': 3}) == (('a', 1), ('b', 2), ('c', 3))
+
+
+def test_tokenize():
+    a = (1, 2, 3)
+    b = {'a': 1, 'b': 2, 'c': 3}
+    assert tokenize(a) == '4889c6ccd7099fc2fd19f4be468fcfa0'
+    assert tokenize(a, b) == tokenize(normalize(a), normalize(b))
 
 da = pytest.importorskip('dask.array')
 import numpy as np

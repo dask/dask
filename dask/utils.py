@@ -334,10 +334,21 @@ class Dispatch(object):
 
     def register(self, type, func):
         """Register dispatch of `func` on arguments of type `type`"""
-        self._lookup[type] = func
+        if isinstance(type, tuple):
+            for t in type:
+                self.register(t, func)
+        else:
+            self._lookup[type] = func
 
     def __call__(self, arg):
-        for typ in type.mro(type(arg)):
-            if typ in self._lookup:
-                return self._lookup[typ](arg)
-        raise TypeError("No dispatch for {0} type".format(type(arg)))
+        # We dispatch first on type(arg), and fall back to iterating through
+        # the mro. This is significantly faster in the common case where
+        # type(arg) is in the lookup, with only a small penalty on fall back.
+        lk = self._lookup
+        typ = type(arg)
+        if typ in lk:
+            return lk[typ](arg)
+        for cls in inspect.getmro(typ)[1:]:
+            if cls in lk:
+                return lk[cls](arg)
+        raise TypeError("No dispatch for {0} type".format(typ))

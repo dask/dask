@@ -65,7 +65,7 @@ def compute(*args, **kwargs):
 
 
 normalize = Dispatch()
-normalize.register(object, lambda a: a)
+normalize.register((int, float, str, tuple, list, object), lambda a: a)
 normalize.register(dict, lambda a: tuple(sorted(a.items())))
 with ignoring(ImportError):
     import pandas as pd
