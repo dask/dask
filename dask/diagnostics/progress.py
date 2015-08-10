@@ -6,6 +6,7 @@ from timeit import default_timer
 
 from ..core import istask
 from ..callbacks import Callback
+from ..utils import ignoring
 
 
 def format_time(t):
@@ -78,8 +79,9 @@ class ProgressBar(Callback):
         elapsed = format_time(default_timer() - self._start_time)
         msg = '\r[{0:<{1}}] | {2}% Completed | {3}'.format(bar, self._width,
                                                            percent, elapsed)
-        sys.stdout.write(msg)
-        sys.stdout.flush()
+        with ignoring(ValueError):
+            sys.stdout.write(msg)
+            sys.stdout.flush()
 
     def _finalize_bar(self):
         self._update_bar()
