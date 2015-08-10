@@ -9,7 +9,7 @@ from .context import _globals
 class Base(object):
     """Base class for dask collections"""
 
-    def visualize(self, filename=None, optimize_graph=False):
+    def visualize(self, filename='mydask', optimize_graph=False):
         from dask.dot import dot_graph
         if optimize_graph:
             dsk = self._optimize(self.dask, self._keys())
@@ -17,7 +17,7 @@ class Base(object):
             dsk = self.dask
         return dot_graph(dsk, filename=filename)
 
-    def _visualize(self, filename=None, optimize_graph=False):
+    def _visualize(self, filename='mydask', optimize_graph=False):
         warn = DeprecationWarning("``_visualize`` is deprecated, use "
                                   "``visualize`` instead.")
         warnings.warn(warn)

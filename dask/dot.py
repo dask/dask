@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 from subprocess import check_call
 
 from graphviz import Digraph
@@ -55,6 +56,27 @@ def name(x):
     except TypeError:
         return str(hash(str(x)))
 
+def label(x):
+    """
+
+    >>> label('x')
+    'x'
+
+    >>> label(('x', 1))
+    "('x', 1)"
+
+    >>> from hashlib import md5
+    >>> x = 'x-%s-hello' % md5(b'1234').hexdigest()
+    >>> x
+    'x-81dc9bdb52d04dc20036dbd8313ed055-hello'
+
+    >>> label(x)
+    'x-#-hello'
+    """
+    s = str(x)
+    s = re.sub('[0-9a-z]{32}', '#', s)
+    return s
+
 
 def to_graphviz(dsk, data_attributes=None, function_attributes=None):
     if data_attributes is None:
@@ -70,7 +92,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
         k_name = name(k)
         if k_name not in seen:
             seen.add(k_name)
-            g.node(k_name, label=str(k), shape='box',
+            g.node(k_name, label=label(k), shape='box',
                    **data_attributes.get(k, {}))
 
         if istask(v):
@@ -85,7 +107,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
-                    g.node(dep_name, label=str(dep), shape='box',
+                    g.node(dep_name, label=label(dep), shape='box',
                            **data_attributes.get(dep, {}))
                 g.edge(dep_name, func_name)
         elif ishashable(v) and v in dsk:
