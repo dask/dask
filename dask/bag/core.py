@@ -346,17 +346,34 @@ class Bag(Base):
     def fold(self, binop, combine=None, initial=no_default):
         """ Parallelizable reduction
 
-        Apply binary operator (both inputs and output of same type) within, then on
-        each partition to perform reduce.
+        Fold is like the builtin function ``reduce`` except that it works in
+        parallel.  Fold takes two binary operator functions, one to reduce each
+        partition of our dataset and another to combine results between
+        partitions
+
+        1.  ``binop``: Binary operator to reduce within each partition
+        2.  ``combine``:  Binary operator to combine results from binop
+
+        Sequentially this would look like the following:
+
+        >>> intermediates = [reduce(binop, part) for part in partitions]  # doctest: +SKIP
+        >>> final = reduce(combine, intermediates)  # doctest: +SKIP
+
+        If only one function is given then it is used for both functions
+        ``binop`` and ``combine`` as in the following example to compute the
+        sum:
+
+        >>> def add(x, y):
+        ...     return x + y
 
         >>> b = from_sequence(range(5))
-        >>> b.fold(lambda x, y: x + y).compute()  # doctest: +SKIP
+        >>> b.fold(add).compute()  # doctest: +SKIP
         10
 
-        Initial reduce state may be provided, as well as an inter-partition combine
-        binary operation.
+        In full form we provide both binary operators as well as their default
+        arguments
 
-        >>> b.fold(lambda x, y: x + y, lambda x, y: x + y, 0).compute()  # doctest: +SKIP
+        >>> b.fold(binop=add, combine=add, initial=0).compute()  # doctest: +SKIP
         10
 
         See Also
