@@ -56,7 +56,11 @@ def name(x):
     except TypeError:
         return str(hash(str(x)))
 
-def label(x):
+
+_HASHPAT = re.compile('([0-9a-z]{32})')
+
+
+def label(x, cache=None):
     """
 
     >>> label('x')
@@ -74,7 +78,17 @@ def label(x):
     'x-#-hello'
     """
     s = str(x)
-    s = re.sub('[0-9a-z]{32}', '#', s)
+    m = re.search(_HASHPAT, s)
+    if m is not None:
+        for h in m.groups():
+            if cache is not None:
+                n = cache.get(h, len(cache))
+                label = '#{0}'.format(n)
+                # cache will be overwritten destructively
+                cache[h] = n
+            else:
+                label = '#'
+            s = s.replace(h, label)
     return s
 
 
@@ -87,12 +101,13 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
     g = Digraph(graph_attr={'rankdir': 'BT'})
 
     seen = set()
+    cache = {}
 
     for k, v in dsk.items():
         k_name = name(k)
         if k_name not in seen:
             seen.add(k_name)
-            g.node(k_name, label=label(k), shape='box',
+            g.node(k_name, label=label(k, cache=cache), shape='box',
                    **data_attributes.get(k, {}))
 
         if istask(v):
@@ -107,7 +122,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
-                    g.node(dep_name, label=label(dep), shape='box',
+                    g.node(dep_name, label=label(dep, cache=cache), shape='box',
                            **data_attributes.get(dep, {}))
                 g.edge(dep_name, func_name)
         elif ishashable(v) and v in dsk:
