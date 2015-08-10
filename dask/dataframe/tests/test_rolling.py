@@ -4,7 +4,7 @@ import numpy as np
 
 import dask.dataframe as dd
 from dask.async import get_sync
-from dask.utils import raises
+from dask.utils import raises, ignoring
 
 
 def eq(p, d):
@@ -28,7 +28,8 @@ def rolling_tests(p, d):
     eq(pd.rolling_quantile(p, 3, 0.5), dd.rolling_quantile(d, 3, 0.5))
     mad = lambda x: np.fabs(x - x.mean()).mean()
     eq(pd.rolling_apply(p, 3, mad), dd.rolling_apply(d, 3, mad))
-    eq(pd.rolling_window(p, 3, 'boxcar'), dd.rolling_window(d, 3, 'boxcar'))
+    with ignoring(ImportError):
+        eq(pd.rolling_window(p, 3, 'boxcar'), dd.rolling_window(d, 3, 'boxcar'))
     # Test with edge-case window sizes
     eq(pd.rolling_sum(p, 0), dd.rolling_sum(d, 0))
     eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
