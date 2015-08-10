@@ -9,6 +9,7 @@ import pytest
 from toolz import valmap
 import tempfile
 import shutil
+from time import sleep
 
 import dask.array as da
 import dask.dataframe as dd
