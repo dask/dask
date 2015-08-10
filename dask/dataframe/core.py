@@ -1519,15 +1519,28 @@ def repartition_divisions(a, b, name, out1, out2):
      ('c', 1): ('b', 2),
      ('c', 2): ('b', 3)}
     """
-    assert a[0] == b[0]
-    assert a[-1] == b[-1]
+    if a[0] != b[0]:
+        raise ValueError('left side of old and new divisions are different')
+    if a[-1] != b[-1]:
+        raise ValueError('right side of old and new divisions are different')
+
+    def _is_single_last_div(x):
+        """Whether last division only contains single label"""
+        return len(x) >= 2 and x[-1] == x[-2]
+
     c = [a[0]]
     d = dict()
     low = a[0]
-    i, j = 1, 1
-    k = 0
+
+    i, j = 1, 1     # indices for old/new divisions
+    k = 0           # index for temp divisions
+
+    last_elem = _is_single_last_div(a)
+
     while (i < len(a) and j < len(b)):
         if a[i] < b[j]:
+            # tuple is something like:
+            # (_loc, ('from_pandas-#', 0), 3, 4, False))
             d[(out1, k)] = (_loc, (name, i - 1), low, a[i], False)
             low = a[i]
             i += 1
@@ -1541,24 +1554,34 @@ def repartition_divisions(a, b, name, out1, out2):
             i += 1
             j += 1
         c.append(low)
-        k = k + 1
-    tup = d[(out1, k - 1)]
-    d[(out1, k - 1)] = tup[:-1] + (True,)
+        k += 1
+    if last_elem and i < len(a):
+        d[(out1, k)] = (_loc, (name, i - 1), a[i], a[i], False)
+        k += 1
+    # replace last element of tuple with True
+    d[(out1, k - 1)] = d[(out1, k - 1)][:-1] + (True,)
     c.append(a[-1])
 
     i, j = 0, 1
+
+    last_elem = _is_single_last_div(c)
+
     while j < len(b):
         tmp = []
         while c[i] < b[j]:
             tmp.append((out1, i))
             i += 1
-        if len(tmp) == 1:
+        if last_elem and c[i] == b[-1] and i < k:
+            # append if last split is not included
+            tmp.append((out1, i))
+            i += 1
+        if len(tmp) == 0:
+            d[(out2, j - 1)] = pd.DataFrame([])
+        elif len(tmp) == 1:
             d[(out2, j - 1)] = tmp[0]
         else:
             d[(out2, j - 1)] = (pd.concat, (list, tmp))
-
         j += 1
-
     return d
 
 
