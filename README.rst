@@ -151,6 +151,12 @@ a light weight dependency.
 ``dask.bag`` depends on ``toolz`` and ``dill``.
 
 
+Notebooks
+---------
+
+Check example notebooks using dask at https://notebooks.anaconda.org/dask/.
+
+
 LICENSE
 -------
 
