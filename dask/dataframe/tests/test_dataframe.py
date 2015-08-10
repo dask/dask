@@ -7,7 +7,7 @@ import numpy as np
 
 import dask
 from dask.async import get_sync
-from dask.utils import raises
+from dask.utils import raises, ignoring
 import dask.dataframe as dd
 from dask.dataframe.core import (concat, repartition_divisions, _loc,
         _coerce_loc_index)
@@ -1182,7 +1182,9 @@ def test_categorical_set_index():
 def test_query():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
-    assert eq(a.query('x**2 > y'), df.query('x**2 > y'))
+    q = a.query('x**2 > y')
+    with ignoring(ImportError):
+        assert eq(q, df.query('x**2 > y'))
 
 
 def test_deterministic_arithmetic_names():
