@@ -281,7 +281,7 @@ def test_collect_retry():
         result = w1.pool.apply_async(w1.collect,
                                      args=({'x': [w2.address, w3.address]},))
         while not w1.queues_by_worker:
-            sleep(0.1)
+            sleep(0.01)
         while w2.address in s.workers:
             s.prune_and_notify(timeout=0.1)
 
