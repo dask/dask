@@ -25,8 +25,11 @@ def test_percentile():
 
     x = np.array([0, 0, 5, 5, 5, 5, 20, 20])
     d = da.from_array(x, chunks=(3,))
-
     assert eq(da.percentile(d, [0, 50, 100]), [0, 5, 20])
+    assert sorted(da.percentile(d, [0, 50, 100]).dask) ==\
+           sorted(da.percentile(d, [0, 50, 100]).dask)
+    assert sorted(da.percentile(d, [0, 50, 100]).dask) !=\
+           sorted(da.percentile(d, [0, 50]).dask)
 
     x = np.array(['a', 'a', 'd', 'd', 'd', 'e'])
     d = da.from_array(x, chunks=(3,))
@@ -49,6 +52,8 @@ def test_percentile_with_categoricals():
     p = da.percentile(x, [50])
     assert (p.compute().categories == x0.categories).all()
     assert (p.compute().codes == [0]).all()
+    assert sorted(da.percentile(x, [50]).dask) ==\
+           sorted(da.percentile(x, [50]).dask)
 
 
 def test_percentiles_with_empty_arrays():

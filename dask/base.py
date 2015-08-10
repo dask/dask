@@ -1,11 +1,15 @@
 import warnings
 from operator import attrgetter
 from hashlib import md5
+from functools import partial
 
-from toolz import merge, groupby
+from toolz import merge, groupby, curry
+from toolz.functoolz import Compose
 
 from .context import _globals
 from .utils import Dispatch, ignoring
+
+__all__ = ("Base", "compute", "normalize", "tokenize")
 
 
 class Base(object):
@@ -64,8 +68,23 @@ def compute(*args, **kwargs):
     return tuple(a._finalize(a, r) for a, r in zip(args, results))
 
 
+def normalize_function(func):
+    if isinstance(func, curry):
+        func = func._partial
+    if isinstance(func, Compose):
+        return tuple(normalize_function(f) for f in func.funcs)
+    elif isinstance(func, partial):
+        return (normalize_function(func.func), func.args,
+                tuple(sorted(func.keywords.items())))
+    elif getattr(func, '__name__', '<lambda>') != '<lambda>':
+        return func.__module__ + '.' + func.__name__
+    else:
+        return str(func)
+
+
 normalize = Dispatch()
-normalize.register((int, float, str, tuple, list, object), lambda a: a)
+normalize.register((int, float, str, tuple, list), lambda a: a)
+normalize.register(object, lambda a: normalize_function(a) if callable(a) else a)
 normalize.register(dict, lambda a: tuple(sorted(a.items())))
 with ignoring(ImportError):
     import pandas as pd

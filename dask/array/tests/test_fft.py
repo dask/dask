@@ -126,3 +126,9 @@ def test_ihfft_n_kwarg():
     assert eq(ihfft(darr2, 5, axis=0), npfft.ihfft(nparr, 5, axis=0))
     assert eq(ihfft(darr2, 13, axis=0), npfft.ihfft(nparr, 13, axis=0))
     assert eq(ihfft(darr2, 12, axis=0), npfft.ihfft(nparr, 12, axis=0))
+
+
+def test_fft_consistent_names():
+    assert sorted(fft(darr, 5).dask) == sorted(fft(darr, 5).dask)
+    assert sorted(fft(darr2, 5, axis=0).dask) == sorted(fft(darr2, 5, axis=0).dask)
+    assert sorted(fft(darr, 5).dask) != sorted(fft(darr, 13).dask)

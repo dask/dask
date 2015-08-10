@@ -450,3 +450,11 @@ def test_uneven_chunks():
 
 def test_new_blockdim():
     assert new_blockdim(20, [5, 5, 5, 5], slice(0, None, 2)) == [3, 2, 3, 2]
+
+
+def test_slicing_consistent_names():
+    x = np.arange(100).reshape((10, 10))
+    a = da.from_array(x, chunks=(5, 5))
+    assert sorted(a[0].dask) == sorted(a[0].dask)
+    assert sorted(a[:, [1, 2, 3]].dask) == sorted(a[:, [1, 2, 3]].dask)
+    assert sorted(a[:, 5:2:-1].dask) == sorted(a[:, 5:2:-1].dask)

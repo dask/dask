@@ -3,8 +3,11 @@ import os
 import shutil
 import pytest
 
+pytest.importorskip('toolz')
+from toolz import compose, partial, curry
+
 import dask
-from dask.base import compute, tokenize, normalize
+from dask.base import compute, tokenize, normalize, normalize_function
 from dask.utils import raises
 
 
@@ -14,11 +17,31 @@ def test_normalize():
     assert normalize({'a': 1, 'b': 2, 'c': 3}) == (('a', 1), ('b', 2), ('c', 3))
 
 
+def test_normalize_function():
+    @curry
+    def f1(a, b, c=1):
+        pass
+    def f2(a, b=1, c=2):
+        pass
+    def f3(a):
+        pass
+    assert normalize_function(f2) == 'test_base.f2'
+    lam_out = normalize_function(lambda a: a)
+    assert '<function' in lam_out and '0x' in lam_out   # lambdas contain hash
+    comp = compose(partial(f2, b=2), f3)
+    assert normalize_function(comp) ==\
+            (('test_base.f2', (), (('b', 2),)), 'test_base.f3')
+    assert normalize_function(f1) == ('test_base.f1', (), ())
+    assert normalize_function(f1(2, c=2)) == ('test_base.f1', (2,), (('c', 2),))
+    assert normalize(f1) == normalize_function(f1)
+
+
 def test_tokenize():
     a = (1, 2, 3)
     b = {'a': 1, 'b': 2, 'c': 3}
     assert tokenize(a) == '4889c6ccd7099fc2fd19f4be468fcfa0'
     assert tokenize(a, b) == tokenize(normalize(a), normalize(b))
+
 
 da = pytest.importorskip('dask.array')
 import numpy as np

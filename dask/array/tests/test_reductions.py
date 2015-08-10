@@ -30,9 +30,12 @@ def test_arg_reduction():
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True):
     assert eq(da_func(darr), np_func(narr))
     assert eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
+    assert sorted(da_func(darr).dask) == sorted(da_func(darr).dask)
+    assert sorted(da_func(darr, keepdims=True).dask) == sorted(da_func(darr, keepdims=True).dask)
     if use_dtype:
         assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
         assert eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
+        assert sorted(da_func(darr, dtype='i8').dask) == sorted(da_func(darr, dtype='i8').dask)
 
 
 def test_reductions_1D_float():
@@ -101,6 +104,9 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True):
     assert eq(da_func(darr, axis=1, keepdims=True),
               np_func(narr, axis=1, keepdims=True))
     assert eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
+
+    assert sorted(da_func(darr, axis=1).dask) == sorted(da_func(darr, axis=1).dask)
+    assert sorted(da_func(darr, axis=(1, 0)).dask) == sorted(da_func(darr, axis=(1, 0)).dask)
 
     if use_dtype:
         assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))

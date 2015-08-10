@@ -855,7 +855,9 @@ class Array(Base):
 
     def astype(self, dtype, **kwargs):
         """ Copy of the array, cast to a specified type """
-        return elemwise(lambda x: x.astype(dtype, **kwargs), self, dtype=dtype)
+        name = tokenize('astype', self.name, dtype, kwargs)
+        return elemwise(lambda x: x.astype(dtype, **kwargs), self,
+                        dtype=dtype, name=name)
 
     def __abs__(self):
         return elemwise(operator.abs, self)
@@ -1256,7 +1258,7 @@ def atop(func, out_ind, *args, **kwargs):
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     # Finish up the name
     if not out:
-        out = 'atop-' + tokenize((func, out_ind, argindsstr, dtype))
+        out = 'atop-' + tokenize(func, out_ind, argindsstr, dtype)
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
 
@@ -1601,7 +1603,10 @@ def elemwise(op, *args, **kwargs):
         except AttributeError:
             dt = None
 
-    name = kwargs.get('name') or 'elemwise-' + tokenize((op, args, dt))
+    name = kwargs.get('name')
+    if not name:
+        token = (op, [a.name if isinstance(a, Array) else a for a in args], dt)
+        name = 'elemwise-' + tokenize(token)
 
     if other:
         op2 = partial_by_order(op, other)
@@ -1953,10 +1958,9 @@ def offset_func(func, offset, *args):
 
 @wraps(np.fromfunction)
 def fromfunction(func, chunks=None, shape=None, dtype=None):
-    name = 'fromfunction-' + tokenize((func, chunks, shape, dtype))
     if chunks:
         chunks = normalize_chunks(chunks, shape)
-
+    name = 'fromfunction-' + tokenize(func, chunks, shape, dtype)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
     offsets = list(product(*aggdims))
@@ -2012,6 +2016,7 @@ def bincount(x, weights=None, minlength=None):
         dsk.update(weights.dask)
 
     return Array(dsk, name, chunks, dtype)
+
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
@@ -2091,6 +2096,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             return n/(n*db).sum(), bins
         else:
             return n, bins
+
 
 def chunks_from_arrays(arrays):
     """ Chunks tuple from nested list of arrays

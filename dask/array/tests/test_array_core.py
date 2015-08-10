@@ -147,6 +147,7 @@ def test_transpose():
 
     assert eq(d.transpose((2, 0, 1)),
               x.transpose((2, 0, 1)))
+    assert sorted(d.transpose((2, 0, 1)).dask) == sorted(d.transpose((2, 0, 1)).dask)
 
 
 def test_broadcast_dimensions_works_with_singleton_dimensions():
@@ -226,6 +227,7 @@ def test_stack():
                                           (None, colon, colon))
     assert s.dask[(s.name, 2, 1, 0)] == (getarray, ('C', 1, 0),
                                           (None, colon, colon))
+    assert sorted(s.dask) == sorted(stack([a, b, c], axis=0).dask)
 
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
@@ -234,6 +236,7 @@ def test_stack():
                                             (colon, None, colon))
     assert s2.dask[(s2.name, 1, 1, 0)] == (getarray, ('B', 1, 0),
                                             (colon, None, colon))
+    assert sorted(s2.dask) == sorted(stack([a, b, c], axis=1).dask)
 
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
@@ -242,6 +245,7 @@ def test_stack():
                                             (colon, colon, None))
     assert s2.dask[(s2.name, 1, 1, 2)] == (getarray, ('C', 1, 1),
                                             (colon, colon, None))
+    assert sorted(s2.dask) == sorted(stack([a, b, c], axis=2).dask)
 
     assert raises(ValueError, lambda: stack([a, b, c], axis=3))
 
@@ -278,6 +282,7 @@ def test_concatenate():
     assert x.chunks == ((2, 2, 2, 2, 2, 2), (3, 3))
     assert x.dask[(x.name, 0, 1)] == ('A', 0, 1)
     assert x.dask[(x.name, 5, 0)] == ('C', 1, 0)
+    assert sorted(x.dask) == sorted(concatenate([a, b, c], axis=0).dask)
 
     y = concatenate([a, b, c], axis=1)
 
@@ -285,6 +290,7 @@ def test_concatenate():
     assert y.chunks == ((2, 2), (3, 3, 3, 3, 3, 3))
     assert y.dask[(y.name, 1, 0)] == ('A', 1, 0)
     assert y.dask[(y.name, 1, 5)] == ('C', 1, 1)
+    assert sorted(y.dask) == sorted(concatenate([a, b, c], axis=1).dask)
 
     assert set(b.dask.keys()).issubset(y.dask.keys())
 
@@ -301,6 +307,8 @@ def test_take():
     assert eq(np.take(x, 3, axis=0), take(a, 3, axis=0))
     assert eq(np.take(x, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
     assert raises(ValueError, lambda: take(a, 3, axis=2))
+    assert sorted(take(a, [3, 4, 5], axis=-1).dask) ==\
+           sorted(take(a, [3, 4, 5], axis=-1).dask)
 
 
 def test_binops():
@@ -388,6 +396,7 @@ def test_field_access():
     y = from_array(x, chunks=(1,))
     assert eq(y['a'], x['a'])
     assert eq(y[['b', 'a']], x[['b', 'a']])
+    assert sorted(y[['b', 'a']].dask) == sorted(y[['b', 'a']].dask)
 
 
 def test_tensordot():
@@ -398,6 +407,10 @@ def test_tensordot():
 
     assert eq(tensordot(a, b, axes=1), np.tensordot(x, y, axes=1))
     assert eq(tensordot(a, b, axes=(1, 0)), np.tensordot(x, y, axes=(1, 0)))
+    assert sorted(tensordot(a, b, axes=(1, 0)).dask) ==\
+           sorted(tensordot(a, b, axes=(1, 0)).dask)
+    assert sorted(tensordot(a, b, axes=1).dask) !=\
+           sorted(tensordot(a, b, axes=0).dask)
 
     # assert (tensordot(a, a).chunks
     #      == tensordot(a, a, axes=((1, 0), (0, 1))).chunks)
@@ -498,6 +511,8 @@ def test_insert():
     assert raises(NotImplementedError, lambda: insert(a, [4, 2], -1, axis=0))
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=2))
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=-3))
+    assert sorted(insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0).dask) ==\
+           sorted(insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0).dask)
 
 
 def test_multi_insert():
@@ -556,10 +571,11 @@ def test_map_blocks2():
     def func(block, block_id=None):
         return np.ones_like(block) * sum(block_id)
 
-    d = d.map_blocks(func, dtype='i8')
+    out = d.map_blocks(func, dtype='i8')
     expected = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4], dtype='i8')
 
-    assert eq(d, expected)
+    assert eq(out, expected)
+    assert sorted(d.map_blocks(func, dtype='i8').dask) == sorted(out.dask)
 
 
 def test_fromfunction():
@@ -568,6 +584,8 @@ def test_fromfunction():
     d = fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
 
     assert eq(d, np.fromfunction(f, shape=(5, 5)))
+    assert sorted(fromfunction(f, shape=(5, 5), chunks=(2, 2),
+                  dtype='f8').dask) == sorted(d.dask)
 
 
 def test_from_function_requires_block_args():
@@ -731,6 +749,7 @@ def test_astype():
 
     assert d.astype('i8')._dtype == 'i8'
     assert eq(d.astype('i8'), x.astype('i8'))
+    assert sorted(d.astype('i8').dask) == sorted(d.astype('i8').dask)
 
 
 def test_arithmetic():
@@ -874,6 +893,16 @@ def test_arithmetic():
     assert eq(da.around(a, -1), np.around(x, -1))
 
 
+def test_elemwise_consistent_names():
+    a = da.from_array(np.arange(5, dtype='f4'), chunks=(2,))
+    b = da.from_array(np.arange(5, dtype='f4'), chunks=(2,))
+    assert sorted((a + b).dask) == sorted((a + b).dask)
+    assert sorted((a + 2).dask) == sorted((a + 2).dask)
+    assert sorted(da.exp(a).dask) == sorted(da.exp(a).dask)
+    assert sorted(da.exp(a, dtype='f8').dask) == sorted(da.exp(a, dtype='f8').dask)
+    assert sorted(da.maximum(a, b).dask) == sorted(da.maximum(a, b).dask)
+
+
 def test_optimize():
     x = np.arange(5).astype('f4')
     a = da.from_array(x, chunks=(2,))
@@ -925,6 +954,7 @@ def test_squeeze():
     assert eq(x.squeeze(), x.compute().squeeze())
 
     assert x.squeeze().chunks == ((3, 3, 3, 1),)
+    assert sorted(x.squeeze().dask) == sorted(x.squeeze().dask)
 
 
 def test_size():
@@ -968,11 +998,14 @@ def test_from_array_with_lock():
 
 def test_from_func():
     x = np.arange(10)
-    d = from_func(lambda n: n * x, (10,), x.dtype, kwargs={'n': 2})
+    f = lambda n: n * x
+    d = from_func(f, (10,), x.dtype, kwargs={'n': 2})
 
     assert d.shape == x.shape
     assert d.dtype == x.dtype
     assert eq(d.compute(), 2 * x)
+    assert sorted(from_func(f, (10,), x.dtype,
+                  kwargs={'n': 2}).dask) == sorted(d.dask)
 
 
 def test_topk():
@@ -983,6 +1016,7 @@ def test_topk():
 
     assert e.chunks == ((2,),)
     assert eq(e, np.sort(x)[-1:-3:-1])
+    assert sorted(da.topk(2, d).dask) == sorted(e.dask)
 
 
 def test_topk_k_bigger_than_chunk():
@@ -998,8 +1032,9 @@ def test_topk_k_bigger_than_chunk():
 def test_bincount():
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
-
-    assert eq(da.bincount(d, minlength=6), np.bincount(x, minlength=6))
+    e = da.bincount(d, minlength=6)
+    assert eq(e, np.bincount(x, minlength=6))
+    assert sorted(da.bincount(d, minlength=6).dask) == sorted(e.dask)
 
 
 def test_bincount_with_weights():
@@ -1008,8 +1043,10 @@ def test_bincount_with_weights():
     weights = np.array([1, 2, 1, 0.5, 1])
 
     dweights = da.from_array(weights, chunks=2)
-    assert eq(da.bincount(d, weights=dweights, minlength=6),
-              np.bincount(x, weights=dweights, minlength=6))
+    e = da.bincount(d, weights=dweights, minlength=6)
+    assert eq(e, np.bincount(x, weights=dweights, minlength=6))
+    assert sorted(da.bincount(d, weights=dweights,
+                  minlength=6).dask) == sorted(e.dask)
 
 
 def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
@@ -1035,6 +1072,7 @@ def test_histogram():
     assert a2.sum(axis=0) == n
     assert a1.sum(axis=0) == n
     assert eq(a1, a2)
+    assert sorted(da.histogram(v, bins=bins)[0].dask) == sorted(a1.dask)
 
 
 def test_histogram_alternative_bins_range():
@@ -1134,8 +1172,11 @@ def test_map_blocks3():
     z = np.arange(100).reshape((10, 10))
     f = da.from_array(z, chunks=5)
 
-    assert eq(da.core.map_blocks(lambda a, b: a+2*b, d, f, dtype=d.dtype),
-              x + 2*z)
+    func = lambda a, b: a + 2*b
+    res = da.core.map_blocks(func, d, f, dtype=d.dtype)
+    assert eq(res, x + 2*z)
+    assert sorted(da.core.map_blocks(func, d, f,
+                  dtype=d.dtype).dask) == sorted(res.dask)
 
 
 def test_from_array_with_missing_chunks():
@@ -1227,6 +1268,7 @@ def test_h5py_newaxis():
             assert d[None, :, :].compute(get=get_sync).shape == (1, 10, 10)
             assert d[:, None, :].compute(get=get_sync).shape == (10, 1, 10)
             assert d[:, :, None].compute(get=get_sync).shape == (10, 10, 1)
+            assert sorted(d[:, :, None].dask) == sorted(d[:, :, None].dask)
 
 
 def test_ellipsis_slicing():
@@ -1242,6 +1284,7 @@ def test_point_slicing():
 
     result = d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]]
     assert eq(result, x[[0, 1, 6, 0], [0, 1, 0, 7]])
+    assert sorted(result.dask) == sorted(d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]].dask)
 
 
 def test_point_slicing_with_full_slice():

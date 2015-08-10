@@ -58,6 +58,7 @@ def test_ghost_internal():
         [56, 57, 58, 59, 60,   59, 60, 61, 62, 63]])
 
     assert eq(result, expected)
+    assert sorted(ghost_internal(d, {0: 2, 1: 1}).dask) == sorted(g.dask)
 
 
 def test_trim_internal():
@@ -162,6 +163,8 @@ def test_ghost():
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     assert eq(g, expected)
+    assert sorted(ghost(d, depth={0: 2, 1: 1},
+                  boundary={0: 100, 1: 'reflect'}).dask) == sorted(g.dask)
 
     g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
     assert g.chunks == ((8, 8), (5, 5))

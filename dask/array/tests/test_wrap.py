@@ -35,3 +35,14 @@ def test_full():
 def test_can_make_really_big_array_of_ones():
     a = ones((1000000, 1000000), chunks=(100000, 100000))
     a = ones(shape=(1000000, 1000000), chunks=(100000, 100000))
+
+
+def test_wrap_consistent_names():
+    assert sorted(ones(10, dtype='i4', chunks=(4,)).dask) ==\
+           sorted(ones(10, dtype='i4', chunks=(4,)).dask)
+    assert sorted(ones(10, dtype='i4', chunks=(4,)).dask) !=\
+           sorted(ones(10, chunks=(4,)).dask)
+    assert sorted(da.full((3, 3), 100, chunks=(2, 2), dtype='f8').dask) ==\
+           sorted(da.full((3, 3), 100, chunks=(2, 2), dtype='f8').dask)
+    assert sorted(da.full((3, 3), 100, chunks=(2, 2), dtype='f8').dask) !=\
+           sorted(da.full((3, 3), 100, chunks=(2, 2)).dask)
