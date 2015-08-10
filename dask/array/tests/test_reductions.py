@@ -20,6 +20,15 @@ def eq(a, b):
         return a == b
 
 
+def cmp_dsks(a, b):
+    def key(k):
+        if isinstance(k, str):
+            return (k, -1, -1, -1)
+        else:
+            return k
+    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+
+
 def test_arg_reduction():
     pairs = [([4, 3, 5], [10, 11, 12]),
              ([3, 5, 1], [1, 2, 3])]
@@ -30,12 +39,12 @@ def test_arg_reduction():
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True):
     assert eq(da_func(darr), np_func(narr))
     assert eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
-    assert sorted(da_func(darr).dask) == sorted(da_func(darr).dask)
-    assert sorted(da_func(darr, keepdims=True).dask) == sorted(da_func(darr, keepdims=True).dask)
+    assert cmp_dsks(da_func(darr), da_func(darr))
+    assert cmp_dsks(da_func(darr, keepdims=True), da_func(darr, keepdims=True))
     if use_dtype:
         assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
         assert eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
-        assert sorted(da_func(darr, dtype='i8').dask) == sorted(da_func(darr, dtype='i8').dask)
+        assert cmp_dsks(da_func(darr, dtype='i8'), da_func(darr, dtype='i8'))
 
 
 def test_reductions_1D_float():
@@ -105,8 +114,8 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True):
               np_func(narr, axis=1, keepdims=True))
     assert eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
 
-    assert sorted(da_func(darr, axis=1).dask) == sorted(da_func(darr, axis=1).dask)
-    assert sorted(da_func(darr, axis=(1, 0)).dask) == sorted(da_func(darr, axis=(1, 0)).dask)
+    assert cmp_dsks(da_func(darr, axis=1), da_func(darr, axis=1))
+    assert cmp_dsks(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
 
     if use_dtype:
         assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))

@@ -41,6 +41,15 @@ def eq(a, b):
         return c
 
 
+def cmp_dsks(a, b):
+    def key(k):
+        if isinstance(k, str):
+            return (k, -1, -1, -1)
+        else:
+            return k
+    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+
+
 nparr = np.arange(100).reshape(10, 10)
 darr = da.from_array(nparr, chunks=(1, 10))
 darr2 = da.from_array(nparr, chunks=(10, 1))
@@ -129,6 +138,6 @@ def test_ihfft_n_kwarg():
 
 
 def test_fft_consistent_names():
-    assert sorted(fft(darr, 5).dask) == sorted(fft(darr, 5).dask)
-    assert sorted(fft(darr2, 5, axis=0).dask) == sorted(fft(darr2, 5, axis=0).dask)
-    assert sorted(fft(darr, 5).dask) != sorted(fft(darr, 13).dask)
+    assert cmp_dsks(fft(darr, 5), fft(darr, 5))
+    assert cmp_dsks(fft(darr2, 5, axis=0), fft(darr2, 5, axis=0))
+    assert not cmp_dsks(fft(darr, 5), fft(darr, 13))

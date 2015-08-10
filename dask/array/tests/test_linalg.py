@@ -8,6 +8,15 @@ from dask.array import from_array
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
 
 
+def cmp_dsks(a, b):
+    def key(k):
+        if isinstance(k, str):
+            return (k, -1, -1, -1)
+        else:
+            return k
+    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+
+
 def test_tsqr_regular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
@@ -83,14 +92,14 @@ def test_linalg_consistent_names():
 
     q1, r1 = qr(data)
     q2, r2 = qr(data)
-    assert sorted(q1.dask) == sorted(q2.dask)
-    assert sorted(r2.dask) == sorted(r2.dask)
+    assert cmp_dsks(q1, q2)
+    assert cmp_dsks(r1, r2)
 
     u1, s1, v1 = svd(data)
     u2, s2, v2 = svd(data)
-    assert sorted(u1.dask) == sorted(u2.dask)
-    assert sorted(s1.dask) == sorted(s2.dask)
-    assert sorted(v1.dask) == sorted(v2.dask)
+    assert cmp_dsks(u1, u2)
+    assert cmp_dsks(s1, s2)
+    assert cmp_dsks(v1, v2)
 
 
 def test_svd_compressed():
