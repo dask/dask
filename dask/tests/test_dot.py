@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("graphviz")
 
-from dask.dot import dot_graph, task_label, to_graphviz
+from dask.dot import dot_graph, task_label, label, to_graphviz
 
 # Since graphviz doesn't store a graph, we need to parse the output
 label_re = re.compile('.*\[label=(.*?) shape=.*\]')
@@ -29,6 +29,30 @@ def test_task_label():
     assert task_label((partial(add, 1), 1)) == 'add'
     assert task_label((add, 1)) == 'add'
     assert task_label((add, (add, 1, 2))) == 'add(...)'
+
+
+def test_label():
+    assert label('x') == 'x'
+    assert label('elemwise-ffcd9aa2231d466b5aa91e8bfa9e9487') == 'elemwise-#'
+
+    cache = {}
+    result = label('elemwise-ffcd9aa2231d466b5aa91e8bfa9e9487', cache=cache)
+    assert result == 'elemwise-#0'
+    # cached
+    result = label('elemwise-ffcd9aa2231d466b5aa91e8bfa9e9487', cache=cache)
+    assert result == 'elemwise-#0'
+    assert len(cache) == 1
+
+    result = label('elemwise-e890b510984f344edea9a5e5fe05c0db', cache=cache)
+    assert result == 'elemwise-#1'
+    assert len(cache) == 2
+
+    result = label('elemwise-ffcd9aa2231d466b5aa91e8bfa9e9487', cache=cache)
+    assert result == 'elemwise-#0'
+    assert len(cache) == 2
+
+    assert label('x', cache=cache) == 'x'
+    assert len(cache) == 2
 
 
 def test_to_graphviz():
