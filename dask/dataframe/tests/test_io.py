@@ -556,6 +556,7 @@ def test_read_csv_of_modified_file_has_different_name():
         mtime = os.path.getmtime(fn)
         sleep(1)
         a = read_csv(fn)
+        sleep(1)
         with open(fn, 'a') as f:
             f.write('\nGeorge,700')
             os.fsync(f)
