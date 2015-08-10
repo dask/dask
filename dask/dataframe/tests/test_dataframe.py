@@ -992,6 +992,14 @@ def test_set_partition_2():
 
 
 def test_repartition():
+
+    def _check_split_data(orig, d):
+        """Check data is split properly"""
+        keys = [k for k in d.dask if k[0].startswith('repartition-split')]
+        sp = pd.concat([d._get(d.dask, k) for k in keys])
+        assert eq(orig, sp)
+        assert eq(orig, d)
+
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
     a = dd.from_pandas(df, 2)
@@ -1000,6 +1008,35 @@ def test_repartition():
     assert b.divisions == (10, 20, 50, 60)
     assert eq(a, b)
     assert eq(a._get(b.dask, (b._name, 0)), df.iloc[:1])
+
+    assert raises(ValueError, lambda: a.repartition(divisions=[20, 60]))
+    assert raises(ValueError, lambda: a.repartition(divisions=[10, 50]))
+
+    pdf = pd.DataFrame(np.random.randn(7, 5))
+    for p in range(1, 7):
+        ddf = dd.from_pandas(pdf, p)
+        assert eq(ddf, pdf)
+        for div in [[0, 6], [0, 6, 6], [0, 5, 6], [0, 4, 6, 6],
+                    [0, 2, 6], [0, 2, 6, 6],
+                    [0, 2, 3, 6, 6], [0, 1, 2, 3, 4, 5, 6, 6]]:
+            rddf = ddf.repartition(divisions=div)
+            _check_split_data(ddf, rddf)
+            assert rddf.divisions == tuple(div)
+            assert eq(pdf, rddf)
+
+    pdf = pd.DataFrame({'x': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                        'y': [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]},
+                       index=list('abcdefghij'))
+    for p in range(1, 7):
+        ddf = dd.from_pandas(pdf, p)
+        assert eq(ddf, pdf)
+        for div in [list('aj'), list('ajj'), list('adj'),
+                    list('abfj'), list('ahjj'), list('acdj'), list('adfij'),
+                    list('abdefgij'), list('abcdefghij')]:
+            rddf = ddf.repartition(divisions=div)
+            _check_split_data(ddf, rddf)
+            assert rddf.divisions == tuple(div)
+            assert eq(pdf, rddf)
 
 
 def test_repartition_divisions():
@@ -1011,7 +1048,6 @@ def test_repartition_divisions():
                       ('c', 0): (pd.concat, (list, [('b', 0), ('b', 1)])),
                       ('c', 1): ('b', 2),
                       ('c', 2): ('b', 3)}
-
 
 def test_repartition_on_pandas_dataframe():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
@@ -1197,3 +1233,4 @@ def test_drop_axis_1():
     a = dd.from_pandas(df, npartitions=2)
 
     assert eq(a.drop('y', axis=1), df.drop('y', axis=1))
+
