@@ -1045,12 +1045,16 @@ def elemwise(op, *args, **kwargs):
     else:
         op2 = op
 
+    if not all(df.divisions[0] == dfs[0].divisions[0] for df in dfs):
+        msg = 'All divisions must have the same left edge'
+        raise ValueError(msg)
+    if not all(df.divisions[-1] == dfs[0].divisions[-1] for df in dfs):
+        msg = 'All divisions must have the same right edge'
+        raise ValueError(msg)
+
     if not all(df.divisions == dfs[0].divisions for df in dfs):
-        msg = 'All dask.Dataframe and dask.Series must have same divisions'
-        raise ValueError(msg)
-    if not all(df.npartitions == dfs[0].npartitions for df in dfs):
-        msg = 'All dask.Dataframe and dask.Series must have same npartitions'
-        raise ValueError(msg)
+        from .multi import align_partitions
+        dfs, divisions, parts = align_partitions(*dfs)
 
     dsk = dict(((_name, i), (op2,) + frs)
                 for i, frs in enumerate(zip(*[df._keys() for df in dfs])))

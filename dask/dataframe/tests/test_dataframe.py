@@ -310,69 +310,13 @@ def test_groupby_multilevel_getitem():
         assert eq(d.mean(), p.mean().astype(float))
 
 
-def test_arithmetic():
-    assert eq(d.a + d.b, full.a + full.b)
-    assert eq(d.a * d.b, full.a * full.b)
-    assert eq(d.a - d.b, full.a - full.b)
-    assert eq(d.a / d.b, full.a / full.b)
-    assert eq(d.a & d.b, full.a & full.b)
-    assert eq(d.a | d.b, full.a | full.b)
-    assert eq(d.a ^ d.b, full.a ^ full.b)
-    assert eq(d.a // d.b, full.a // full.b)
-    assert eq(d.a ** d.b, full.a ** full.b)
-    assert eq(d.a % d.b, full.a % full.b)
-    assert eq(d.a > d.b, full.a > full.b)
-    assert eq(d.a < d.b, full.a < full.b)
-    assert eq(d.a >= d.b, full.a >= full.b)
-    assert eq(d.a <= d.b, full.a <= full.b)
-    assert eq(d.a == d.b, full.a == full.b)
-    assert eq(d.a != d.b, full.a != full.b)
-
-    assert eq(d.a + 2, full.a + 2)
-    assert eq(d.a * 2, full.a * 2)
-    assert eq(d.a - 2, full.a - 2)
-    assert eq(d.a / 2, full.a / 2)
-    assert eq(d.a & True, full.a & True)
-    assert eq(d.a | True, full.a | True)
-    assert eq(d.a ^ True, full.a ^ True)
-    assert eq(d.a // 2, full.a // 2)
-    assert eq(d.a ** 2, full.a ** 2)
-    assert eq(d.a % 2, full.a % 2)
-    assert eq(d.a > 2, full.a > 2)
-    assert eq(d.a < 2, full.a < 2)
-    assert eq(d.a >= 2, full.a >= 2)
-    assert eq(d.a <= 2, full.a <= 2)
-    assert eq(d.a == 2, full.a == 2)
-    assert eq(d.a != 2, full.a != 2)
-
-    assert eq(2 + d.b, 2 + full.b)
-    assert eq(2 * d.b, 2 * full.b)
-    assert eq(2 - d.b, 2 - full.b)
-    assert eq(2 / d.b, 2 / full.b)
-    assert eq(True & d.b, True & full.b)
-    assert eq(True | d.b, True | full.b)
-    assert eq(True ^ d.b, True ^ full.b)
-    assert eq(2 // d.b, 2 // full.b)
-    assert eq(2 ** d.b, 2 ** full.b)
-    assert eq(2 % d.b, 2 % full.b)
-    assert eq(2 > d.b, 2 > full.b)
-    assert eq(2 < d.b, 2 < full.b)
-    assert eq(2 >= d.b, 2 >= full.b)
-    assert eq(2 <= d.b, 2 <= full.b)
-    assert eq(2 == d.b, 2 == full.b)
-    assert eq(2 != d.b, 2 != full.b)
-
-    assert eq(-d.a, -full.a)
-    assert eq(abs(d.a), abs(full.a))
-    assert eq(~(d.a == d.b), ~(full.a == full.b))
-    assert eq(~(d.a == d.b), ~(full.a == full.b))
-
-
-def test_arithmetic_frame():
-    d2 = dd.from_pandas(pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]}), 3)
-    d3 = dd.from_pandas(pd.DataFrame({'x': [5, 6, 7, 8], 'y': [2, 4, 5, 3]}), 2)
-    full2 = d2.compute()
-    full3 = d3.compute()
+def test_arithmetics():
+    pdf2 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
+                         'b': [5, 6, 7, 8, 1, 2, 3, 4]})
+    pdf3 = pd.DataFrame({'a': [5, 6, 7, 8, 4, 3, 2, 1],
+                         'b': [2, 4, 5, 3, 4, 2, 1, 0]})
+    ddf2 = dd.from_pandas(pdf2, 3)
+    ddf3 = dd.from_pandas(pdf3, 2)
 
     dsk4 = {('y', 0): pd.DataFrame({'a': [3, 2, 1], 'b': [7, 8, 9]},
                                    index=[0, 1, 3]),
@@ -380,25 +324,111 @@ def test_arithmetic_frame():
                                    index=[5, 6, 8]),
             ('y', 2): pd.DataFrame({'a': [1, 4, 10], 'b': [1, 0, 5]},
                                    index=[9, 9, 9])}
+    ddf4 = dd.DataFrame(dsk4, 'y', ['a', 'b'], [0, 4, 9, 9])
+    pdf4 =ddf4.compute()
 
-    d4 = dd.DataFrame(dsk4, 'y', ['a', 'b'], [0, 4, 9, 9])
-    full4 = d4.compute()
-
+    # Arithmetics
     cases = [(d, d, full, full),
-             (d2, d3, full2, full3),
-             (d, d4, full, full4)]
-    for (l, r, el, er) in cases:
+             (d, d.repartition([0, 1, 3, 6, 9]), full, full),
+             (ddf2, ddf3, pdf2, pdf3),
+             (ddf2.repartition([0, 3, 6, 7]), ddf3.repartition([0, 7]),
+              pdf2, pdf3),
+             (ddf2.repartition([0, 7]), ddf3.repartition([0, 2, 4, 5, 7]),
+              pdf2, pdf3),
+             (d, ddf4, full, pdf4),
+             (d, ddf4.repartition([0, 9]), full, pdf4),
+             (d.repartition([0, 3, 9]), ddf4.repartition([0, 5, 9]),
+              full, pdf4)]
 
-        assert eq(l + r, el + er)
-        assert eq(l * r, el * er)
-        assert eq(l - r, el - er)
-        assert eq(l / r, el / er)
+    for (l, r, el, er) in cases:
+        check_series_arithmetics(l.a, r.b, el.a, er.b)
+        check_frame_arithmetics(l, r, el, er)
+
+    # different index, pandas raises ValueError in comparison ops
+
+    pdf5 = pd.DataFrame({'a': [3, 2, 1, 5, 2, 8, 1, 4, 10],
+                         'b': [7, 8, 9, 4, 2, 3, 1, 0, 5]},
+                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf5 = dd.from_pandas(pdf5, 2)
+
+    pdf6 = pd.DataFrame({'a': [3, 2, 1, 5, 2 ,8, 1, 4, 10],
+                         'b': [7, 8, 9, 5, 7, 8, 4, 2, 5]},
+                        index=[0, 1, 2, 3, 4, 5, 6, 7, 9])
+    ddf6 = dd.from_pandas(pdf6, 4)
+
+    pdf7 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
+                         'b': [5, 6, 7, 8, 1, 2, 3, 4]},
+                        index=list('aaabcdeh'))
+    pdf8 = pd.DataFrame({'a': [5, 6, 7, 8, 4, 3, 2, 1],
+                         'b': [2, 4, 5, 3, 4, 2, 1, 0]},
+                        index=list('abcdefgh'))
+    ddf7 = dd.from_pandas(pdf7, 3)
+    ddf8 = dd.from_pandas(pdf8, 4)
+
+    # Arithmetics with different index
+    cases = [(ddf5, ddf6, pdf5, pdf6),
+             (ddf5.repartition([0, 9]), ddf6, pdf5, pdf6),
+             (ddf5.repartition([0, 5, 9]), ddf6.repartition([0, 7, 9]),
+              pdf5, pdf6),
+             (ddf7, ddf8, pdf7, pdf8),
+             (ddf7.repartition(['a', 'c', 'h']), ddf8.repartition(['a', 'h']),
+              pdf7, pdf8),
+             (ddf7.repartition(['a', 'b', 'e', 'h']),
+              ddf8.repartition(['a', 'e', 'h']), pdf7, pdf8)]
+
+    for (l, r, el, er) in cases:
+        check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
+        check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
+
+    # Not (yet) supported iff left/right edge of divisions are different
+    pdf7 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
+                          'b': [5, 6, 7, 8, 1, 2, 3, 4]},
+                         index=[0, 2, 4, 8, 9, 10, 11, 13])
+    pdf8 = pd.DataFrame({'a': [5, 6, 7, 8, 4, 3, 2, 1],
+                          'b': [2, 4, 5, 3, 4, 2, 1, 0]},
+                         index=[1, 3, 4, 8, 9, 11, 12, 13])
+    ddf7 = dd.from_pandas(pdf7, 3)
+    ddf8 = dd.from_pandas(pdf8, 2)
+
+    pdf9 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
+                         'b': [5, 6, 7, 8, 1, 2, 3, 4]},
+                        index=[0, 2, 4, 8, 9, 10, 11, 13])
+    pdf10 = pd.DataFrame({'a': [5, 6, 7, 8, 4, 3, 2, 1],
+                          'b': [2, 4, 5, 3, 4, 2, 1, 0]},
+                         index=[0, 3, 4, 8, 9, 11, 12, 12])
+    ddf9 = dd.from_pandas(pdf9, 3)
+    ddf10 = dd.from_pandas(pdf10, 2)
+
+    assert raises(ValueError, lambda: ddf7 + ddf8)
+    assert raises(ValueError, lambda: ddf7.a + ddf8.b)
+    assert raises(ValueError, lambda: ddf9 + ddf10)
+    assert raises(ValueError, lambda: ddf9.a + ddf10.b)
+
+
+def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
+    assert isinstance(l, dd.Series)
+    assert isinstance(r, dd.Series)
+    assert isinstance(el, pd.Series)
+    assert isinstance(er, pd.Series)
+
+    # l, r may be repartitioned, test whether repartition keeps original data
+    assert eq(l, el)
+    assert eq(r, er)
+    # print((l + r).compute())
+
+    assert eq(l + r, el + er)
+    assert eq(l * r, el * er)
+    assert eq(l - r, el - er)
+    assert eq(l / r, el / er)
+    assert eq(l // r, el // er)
+    assert eq(l ** r, el ** er)
+    assert eq(l % r, el % er)
+
+    if allow_comparison_ops:
+        # comparison is allowed if data have same index
         assert eq(l & r, el & er)
         assert eq(l | r, el | er)
         assert eq(l ^ r, el ^ er)
-        assert eq(l // r, el // er)
-        assert eq(l ** r, el ** er)
-        assert eq(l % r, el % er)
         assert eq(l > r, el > er)
         assert eq(l < r, el < er)
         assert eq(l >= r, el >= er)
@@ -406,53 +436,117 @@ def test_arithmetic_frame():
         assert eq(l == r, el == er)
         assert eq(l != r, el != er)
 
-        assert eq(l + 2, el + 2)
-        assert eq(l * 2, el * 2)
-        assert eq(l - 2, el - 2)
-        assert eq(l / 2, el / 2)
-        assert eq(l & True, el & True)
-        assert eq(l | True, el | True)
-        assert eq(l ^ True, el ^ True)
-        assert eq(l // 2, el // 2)
-        assert eq(l ** 2, el ** 2)
-        assert eq(l % 2, el % 2)
-        assert eq(l > 2, el > 2)
-        assert eq(l < 2, el < 2)
-        assert eq(l >= 2, el >= 2)
-        assert eq(l <= 2, el <= 2)
-        assert eq(l == 2, el == 2)
-        assert eq(l != 2, el != 2)
+    assert eq(l + 2, el + 2)
+    assert eq(l * 2, el * 2)
+    assert eq(l - 2, el - 2)
+    assert eq(l / 2, el / 2)
+    assert eq(l & True, el & True)
+    assert eq(l | True, el | True)
+    assert eq(l ^ True, el ^ True)
+    assert eq(l // 2, el // 2)
+    assert eq(l ** 2, el ** 2)
+    assert eq(l % 2, el % 2)
+    assert eq(l > 2, el > 2)
+    assert eq(l < 2, el < 2)
+    assert eq(l >= 2, el >= 2)
+    assert eq(l <= 2, el <= 2)
+    assert eq(l == 2, el == 2)
+    assert eq(l != 2, el != 2)
 
-        assert eq(2 + l, 2 + el)
-        assert eq(2 * l, 2 * el)
-        assert eq(2 - l, 2 - el)
-        assert eq(2 / l, 2 / el)
-        assert eq(True & l, True & el)
-        assert eq(True | l, True | el)
-        assert eq(True ^ l, True ^ el)
-        assert eq(2 // l, 2 // el)
-        assert eq(2 ** l, 2 ** el)
-        assert eq(2 % l, 2 % el)
-        assert eq(2 > l, 2 > el)
-        assert eq(2 < l, 2 < el)
-        assert eq(2 >= l, 2 >= el)
-        assert eq(2 <= l, 2 <= el)
-        assert eq(2 == l, 2 == el)
-        assert eq(2 != l, 2 != el)
+    assert eq(2 + r, 2 + er)
+    assert eq(2 * r, 2 * er)
+    assert eq(2 - r, 2 - er)
+    assert eq(2 / r, 2 / er)
+    assert eq(True & r, True & er)
+    assert eq(True | r, True | er)
+    assert eq(True ^ r, True ^ er)
+    assert eq(2 // r, 2 // er)
+    assert eq(2 ** r, 2 ** er)
+    assert eq(2 % r, 2 % er)
+    assert eq(2 > r, 2 > er)
+    assert eq(2 < r, 2 < er)
+    assert eq(2 >= r, 2 >= er)
+    assert eq(2 <= r, 2 <= er)
+    assert eq(2 == r, 2 == er)
+    assert eq(2 != r, 2 != er)
 
-        assert eq(-l, -el)
-        assert eq(abs(l), abs(el))
+    assert eq(-l, -el)
+    assert eq(abs(l), abs(el))
+
+    if allow_comparison_ops:
+        # comparison is allowed if data have same index
         assert eq(~(l == r), ~(el == er))
 
 
-    dsk5 = {('z', 0): pd.DataFrame({'a': [3, 2, 1], 'b': [7, 8, 9]},
-                                   index=[0, 1, 3]),
-            ('z', 1): pd.DataFrame({'a': [5, 2, 8], 'b': [4, 2, 3]},
-                                   index=[5, 6, 8]),
-            ('z', 2): pd.DataFrame({'a': [1, 4, 10], 'b': [1, 0, 5]},
-                                   index=[9, 9, 9])}
-    d5 = dd.DataFrame(dsk4, 'z', ['a', 'b'], [0, 3, 6, 9])
-    assert raises(ValueError, lambda: (d + d5).compute())
+def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
+    assert isinstance(l, dd.DataFrame)
+    assert isinstance(r, dd.DataFrame)
+    assert isinstance(el, pd.DataFrame)
+    assert isinstance(er, pd.DataFrame)
+    # l, r may be repartitioned, test whether repartition keeps original data
+    assert eq(l, el)
+    assert eq(r, er)
+
+    assert eq(l + r, el + er)
+    assert eq(l * r, el * er)
+    assert eq(l - r, el - er)
+    assert eq(l / r, el / er)
+    assert eq(l // r, el // er)
+    assert eq(l ** r, el ** er)
+    assert eq(l % r, el % er)
+
+    if allow_comparison_ops:
+        # comparison is allowed if data have same index
+        assert eq(l & r, el & er)
+        assert eq(l | r, el | er)
+        assert eq(l ^ r, el ^ er)
+        assert eq(l > r, el > er)
+        assert eq(l < r, el < er)
+        assert eq(l >= r, el >= er)
+        assert eq(l <= r, el <= er)
+        assert eq(l == r, el == er)
+        assert eq(l != r, el != er)
+
+    assert eq(l + 2, el + 2)
+    assert eq(l * 2, el * 2)
+    assert eq(l - 2, el - 2)
+    assert eq(l / 2, el / 2)
+    assert eq(l & True, el & True)
+    assert eq(l | True, el | True)
+    assert eq(l ^ True, el ^ True)
+    assert eq(l // 2, el // 2)
+    assert eq(l ** 2, el ** 2)
+    assert eq(l % 2, el % 2)
+    assert eq(l > 2, el > 2)
+    assert eq(l < 2, el < 2)
+    assert eq(l >= 2, el >= 2)
+    assert eq(l <= 2, el <= 2)
+    assert eq(l == 2, el == 2)
+    assert eq(l != 2, el != 2)
+
+    assert eq(2 + l, 2 + el)
+    assert eq(2 * l, 2 * el)
+    assert eq(2 - l, 2 - el)
+    assert eq(2 / l, 2 / el)
+    assert eq(True & l, True & el)
+    assert eq(True | l, True | el)
+    assert eq(True ^ l, True ^ el)
+    assert eq(2 // l, 2 // el)
+    assert eq(2 ** l, 2 ** el)
+    assert eq(2 % l, 2 % el)
+    assert eq(2 > l, 2 > el)
+    assert eq(2 < l, 2 < el)
+    assert eq(2 >= l, 2 >= el)
+    assert eq(2 <= l, 2 <= el)
+    assert eq(2 == l, 2 == el)
+    assert eq(2 != l, 2 != el)
+
+    assert eq(-l, -el)
+    assert eq(abs(l), abs(el))
+
+    if allow_comparison_ops:
+        # comparison is allowed if data have same index
+        assert eq(~(l == r), ~(el == er))
 
 
 def test_reductions():
