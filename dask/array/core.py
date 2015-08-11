@@ -1548,11 +1548,21 @@ def partial_by_order(op, other):
     >>> f(5)
     15
     """
+    if (not isinstance(other, list) or
+        not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
+        raise ValueError('input must be list of tuples')
+
     def f(*args):
         args2 = list(args)
         for i, arg in other:
             args2.insert(i, arg)
         return op(*args2)
+
+    if len(other) == 1:
+        other_arg = other[0][1]
+    else:
+        other_arg = '...'
+    f.__name__ = '{0}({1})'.format(op.__name__, other_arg)
     return f
 
 
