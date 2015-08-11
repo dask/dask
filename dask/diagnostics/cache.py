@@ -1,11 +1,15 @@
 from ..callbacks import Callback
 from timeit import default_timer
 from numbers import Number
+import sys
 
 try:
     import cachey
 except ImportError:
     pass
+
+overhead = sys.getsizeof(1.23) * 4 + sys.getsizeof(()) * 4
+
 
 class Cache(Callback):
     """ Use cache for computation
@@ -45,7 +49,7 @@ class Cache(Callback):
         if deps:
             duration += max(self.durations.get(k, 0) for k in deps)
         self.durations[key] = duration
-        nb = cachey.nbytes(value)
+        nb = cachey.nbytes(value) + overhead + sys.getsizeof(key) * 4
         self.cache.put(key, value, cost=duration / nb / 1e9, nbytes=nb)
 
     def _finish(self, dsk, state, errored):
