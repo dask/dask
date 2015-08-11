@@ -18,17 +18,21 @@ def inc(x):
 
 def test_cache():
     c = cachey.Cache(10000)
+    cc = Cache(c)
 
-    with Cache(c):
+    with cc:
         assert get({'x': (inc, 1)}, 'x') == 2
 
     assert flag == [1]
     assert c.data['x'] == 2
 
+    assert not cc.starttimes
+    assert not cc.durations
+
     while flag:
         flag.pop()
     dsk = {'x': (inc, 1), 'y': (inc, 2), 'z': (add, 'x', 'y')}
-    with Cache(c):
+    with cc:
         assert get(dsk, 'z') == 5
 
     assert flag == [2]  # no x present

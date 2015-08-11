@@ -53,4 +53,5 @@ class Cache(Callback):
         self.cache.put(key, value, cost=duration / nb / 1e9, nbytes=nb)
 
     def _finish(self, dsk, state, errored):
-        pass
+        self.starttimes.clear()
+        self.durations.clear()
