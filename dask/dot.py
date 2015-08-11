@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import re
-from subprocess import check_call
+from subprocess import check_call, CalledProcessError
 
 from graphviz import Digraph
 
@@ -134,8 +134,15 @@ def dot_graph(dsk, filename='mydask', **kwargs):
     g = to_graphviz(dsk, **kwargs)
     g.save(filename + '.dot')
 
-    check_call('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename), shell=True)
-    check_call('dot -Tpng {0}.dot -o {0}.png'.format(filename), shell=True)
+    try:
+        check_call('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename), shell=True)
+        check_call('dot -Tpng {0}.dot -o {0}.png'.format(filename), shell=True)
+    except CalledProcessError:
+        raise RuntimeError(
+            "Please install The `dot` utility from graphviz:\n"
+            "  Debian:  sudo apt-get install graphviz\n"
+            "  Mac OSX: brew install graphviz\n"
+            "  Windows: http://www.graphviz.org/Download..php")  # pragma: no cover
     try:
         from IPython.display import Image
         return Image(filename + '.png')
