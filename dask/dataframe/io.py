@@ -446,7 +446,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     >>> dataframe_from_ctable(x, slice(1, 3), columns='b')
     0    20
     1    30
-    Name: b, dtype: int64
+    Name: b, dtype: int...
 
     """
     import bcolz
