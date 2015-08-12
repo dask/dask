@@ -27,24 +27,14 @@ def test_column_optimizations_with_bcolz_and_rewrite():
                           for i in [1, 2, 3]),
                      dict((('y', i),
                           (getitem, ('x', i), (list, ['a', 'b'])))
-                          for i in [1, 2, 3]),
-                     dict((('z', i), (func, ('y', i)))
                           for i in [1, 2, 3]))
 
-        expected = dict((('z', i), (func, (dataframe_from_ctable,
-                                     bc, slice(0, 2), (list, ['a', 'b']), {})))
+        expected = dict((('y', i), (dataframe_from_ctable,
+                                     bc, slice(0, 2), (list, ['a', 'b']), {}))
                           for i in [1, 2, 3])
 
-        result = dd.optimize(dsk2, [('z', i) for i in [1, 2, 3]])
+        result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
         assert result == expected
-
-
-def test_fast_functions():
-    df = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
-    e = df.a + df.b
-    assert len(e.dask) > 6
-
-    assert len(dd.optimize(e.dask, e._keys())) == 6
 
 
 def test_castra_column_store():

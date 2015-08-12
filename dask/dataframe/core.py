@@ -30,6 +30,9 @@ from ..base import Base, compute
 no_default = '__no_default__'
 
 
+pd.computation.expressions.set_use_numexpr(False)
+
+
 def tokenize(obj):
     """ Deterministic token
 

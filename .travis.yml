@@ -26,6 +26,7 @@ install:
   - if [[ $TRAVIS_PYTHON_VERSION != '2.6' ]]; then conda install bokeh; fi
   - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then conda install unittest2; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
+  - pip install git+https://github.com/mrocklin/cachey --upgrade
   - pip install blosc --upgrade
   - pip install graphviz
   - if [[ $TRAVIS_PYTHON_VERSION < '3' ]]; then pip install git+https://github.com/Blosc/castra; fi

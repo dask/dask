@@ -43,7 +43,7 @@ class ProgressBar(Callback):
         self._width = width
         self._dt = dt
 
-    def _start(self, dsk, state):
+    def _start(self, dsk):
         self._ntasks = len([k for (k, v) in dsk.items() if istask(v)])
         self._ndone = 0
         self._update_rate = max(1, self._ntasks // self._width)

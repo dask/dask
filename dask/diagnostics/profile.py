@@ -45,7 +45,7 @@ class Profiler(Callback):
         self._results = {}
         self._dsk = {}
 
-    def _start(self, dsk, state):
+    def _start(self, dsk):
         self.clear()
         self._dsk = dsk.copy()
 
