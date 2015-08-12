@@ -478,6 +478,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         except KeyboardInterrupt:
             for f in finish_cbs:
                 f(dsk, state, True)
+            raise
         if isinstance(res, Exception):
             for f in finish_cbs:
                 f(dsk, state, True)
