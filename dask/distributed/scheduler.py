@@ -842,6 +842,6 @@ class Scheduler(object):
         except Exception as e:
             raise e
         finally:
-            del self.queues[qkey]
+            self.queues.pop(qkey, None)
             for w in self.queues_by_worker:
                 self.queues_by_worker[w].pop(qkey, None)
