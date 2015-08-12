@@ -473,7 +473,11 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     # Main loop, wait on tasks to finish, insert new ones
     while state['waiting'] or state['ready'] or state['running']:
-        key, res, tb, worker_id = queue.get()
+        try:
+            key, res, tb, worker_id = queue.get()
+        except KeyboardInterrupt:
+            for f in finish_cbs:
+                f(dsk, state, True)
         if isinstance(res, Exception):
             for f in finish_cbs:
                 f(dsk, state, True)
