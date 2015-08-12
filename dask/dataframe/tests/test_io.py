@@ -311,6 +311,7 @@ def test_consistent_dtypes():
         os.remove('_foo.2.csv')
 
 
+@pytest.mark.slow
 def test_compression_multiple_files():
     tdir = tempfile.mkdtemp()
     try:
