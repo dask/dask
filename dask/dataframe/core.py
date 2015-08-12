@@ -794,7 +794,8 @@ class DataFrame(_Frame):
             return df.dropna(how=how, subset=subset)
         return map_partitions(f, self.columns, self)
 
-    def to_castra(self, fn=None, categories=None, compute=True):
+    def to_castra(self, fn=None, categories=None, sorted_index_column=None,
+                  compute=True):
         """ Write DataFrame to Castra on-disk store
 
         See https://github.com/blosc/castra for details
@@ -803,7 +804,8 @@ class DataFrame(_Frame):
             Castra.to_dask
         """
         from .io import to_castra
-        return to_castra(self, fn, categories, compute=compute)
+        return to_castra(self, fn, categories, sorted_index_column,
+                         compute=compute)
 
     @wraps(pd.DataFrame.to_csv)
     def to_csv(self, filename, **kwargs):
