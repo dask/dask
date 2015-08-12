@@ -311,6 +311,7 @@ def test_consistent_dtypes():
         os.remove('_foo.2.csv')
 
 
+@pytest.mark.slow
 def test_compression_multiple_files():
     tdir = tempfile.mkdtemp()
     try:
@@ -549,15 +550,15 @@ def test_multiple_read_csv_has_deterministic_name():
         os.remove('_foo.2.csv')
 
 
+@pytest.mark.slow
 def test_read_csv_of_modified_file_has_different_name():
     with filetext(text) as fn:
         mtime = os.path.getmtime(fn)
+        sleep(1)
         a = read_csv(fn)
         with open(fn, 'a') as f:
             f.write('\nGeorge,700')
             os.fsync(f)
-        while mtime == os.path.getmtime(fn):
-            sleep(0.01)
         b = read_csv(fn)
 
         assert sorted(a.dask) != sorted(b.dask)
