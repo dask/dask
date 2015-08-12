@@ -596,7 +596,8 @@ def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
     return DataFrame(dsk, name, columns, divisions)
 
 
-def to_castra(df, fn=None, categories=None, compute=True):
+def to_castra(df, fn=None, categories=None, sorted_index_column=None,
+              compute=True):
     """ Write DataFrame to Castra on-disk store
 
     See https://github.com/blosc/castra for details
@@ -610,11 +611,17 @@ def to_castra(df, fn=None, categories=None, compute=True):
 
     name = 'to-castra-' + uuid.uuid1().hex
 
+    if sorted_index_column:
+        set_index = lambda x: x.set_index(sorted_index_column)
+        func = lambda part: (set_index, part)
+    else:
+        func = lambda part: part
+
     dsk = dict()
-    dsk[(name, -1)] = (Castra, fn, (df._name, 0), categories)
+    dsk[(name, -1)] = (Castra, fn, func((df._name, 0)), categories)
     for i in range(0, df.npartitions):
         dsk[(name, i)] = (_link, (name, i - 1),
-                          (Castra.extend, (name, -1), (df._name, i)))
+                          (Castra.extend, (name, -1), func((df._name, i))))
 
     dsk = merge(dsk, df.dask)
     keys = [(name, -1), (name, df.npartitions - 1)]

@@ -417,7 +417,7 @@ def test_from_dask_array_raises():
 def test_to_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]},
+                       'y': [2, 3, 4, 5]},
                        index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
@@ -432,6 +432,12 @@ def test_to_castra():
     c = a.to_castra(categories=['x'])
     try:
         assert c[:].dtypes['x'] == 'category'
+    finally:
+        c.drop()
+
+    c = a.to_castra(sorted_index_column='y')
+    try:
+        tm.assert_frame_equal(c[:], df.set_index('y'))
     finally:
         c.drop()
 
