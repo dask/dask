@@ -24,13 +24,11 @@ def test_align_partitions():
     assert divisions == (10, 30, 40, 60, 80, 100)
     assert isinstance(L, list)
     assert len(divisions) == 1 + len(L)
-    """
-    assert L == [[(aa._name, 0), None],
-                 [(aa._name, 1), (bb._name, 0)],
-                 [(aa._name, 2), (bb._name, 1)],
-                 [None, (bb._name, 2)],
-                 [None, (bb._name, 3)]]
-    """
+    assert L == [[(aa._name, 0), (bb._name, 0)],
+                 [(aa._name, 1), (bb._name, 1)],
+                 [(aa._name, 2), (bb._name, 2)],
+                 [(aa._name, 3), (bb._name, 3)],
+                 [(aa._name, 4), (bb._name, 4)]]
 
     ldf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                         'b': [7, 6, 5, 4, 3, 2, 1]})
@@ -73,7 +71,7 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
 
     c = join_indexed_dataframes(a, b, how='left')
     assert c.divisions[0] == a.divisions[0]
-    # assert c.divisions[-1] == a.divisions[-1]
+    assert c.divisions[-1] == max(a.divisions + b.divisions)
     tm.assert_frame_equal(c.compute(), A.join(B))
 
     c = join_indexed_dataframes(a, b, how='right')
@@ -83,7 +81,7 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
 
     c = join_indexed_dataframes(a, b, how='inner')
     assert c.divisions[0] == 1
-    # assert c.divisions[-1] == 7
+    assert c.divisions[-1] == max(a.divisions + b.divisions)
     tm.assert_frame_equal(c.compute(), A.join(B, how='inner'))
 
     c = join_indexed_dataframes(a, b, how='outer')

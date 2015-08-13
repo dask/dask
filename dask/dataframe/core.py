@@ -327,23 +327,22 @@ class _Frame(Base):
         # see https://github.com/ContinuumIO/dask/pull/507
         raise AttributeError("Dask Dataframe does not support iloc")
 
-    def get_division(self, n):
-        if 0 <= n < self.npartitions:
-            name = 'get-division-%s-%s' % (str(n), self._name)
-            dsk = {(name, 0): (self._name, n)}
-            divisions = self.divisions[n:n+2]
-            return self._constructor(merge(self.dask, dsk), name,
-                                     self.column_info, divisions)
-        else:
-            msg = "n must be 0 <= n < {0}".format(self.npartitions)
-            raise KeyError(msg)
-
-    def repartition(self, divisions):
+    def repartition(self, divisions, force=False):
         """ Repartition dataframe along new divisions
+
+        Parameters
+        ----------
+
+        divisions: list
+            List of partitions to be used
+        force: bool, default False
+            Allows the expansion of the existing divisions.
+            If False then the new divisions lower and upper bounds must be
+            the same as the old divisions.
 
         >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
         """
-        return repartition(self, divisions)
+        return repartition(self, divisions, force=force)
 
     def __getstate__(self):
         return self.__dict__
@@ -1518,7 +1517,7 @@ def pd_split(df, p, seed=0):
     return [df.iloc[index == i] for i in range(len(p))]
 
 
-def repartition_divisions(a, b, name, out1, out2):
+def repartition_divisions(a, b, name, out1, out2, force=False):
     """ dask graph to repartition dataframe by new divisions
 
     Parameters
@@ -1533,6 +1532,10 @@ def repartition_divisions(a, b, name, out1, out2):
         name of temporary splits
     out2: str
         name of new dataframe
+    force: bool, default False
+        Allows the expansion of the existing divisions.
+        If False then the new divisions lower and upper bounds must be
+        the same as the old divisions.
 
     >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
     {('b', 0): (<function _loc at ...>, ('a', 0), 1, 3, False),
@@ -1545,18 +1548,29 @@ def repartition_divisions(a, b, name, out1, out2):
      ('c', 2): ('b', 3)}
     """
 
+    if not isinstance(b, (list, tuple)):
+        raise ValueError('New division must be list or tuple')
     if len(b) < 2:
         # minimum division is 2 elements, like [0, 0]
         raise ValueError('New division must be longer than 2 elements')
 
-    if a[0] < b[0]:
-        msg = ('left side of the new division must be equal or smaller '
-               'than old division')
-        raise ValueError(msg)
-    if a[-1] > b[-1]:
-        msg = ('right side of the new division must be equal or larger '
-               'than old division')
-        raise ValueError('right side of old and new divisions are different')
+    if force:
+        if a[0] < b[0]:
+            msg = ('left side of the new division must be equal or smaller '
+                   'than old division')
+            raise ValueError(msg)
+        if a[-1] > b[-1]:
+            msg = ('right side of the new division must be equal or larger '
+                   'than old division')
+            raise ValueError(msg)
+    else:
+        if a[0] != b[0]:
+            msg = 'left side of old and new divisions are different'
+            raise ValueError(msg)
+        if a[-1] != b[-1]:
+            msg = 'right side of old and new divisions are different'
+            raise ValueError(msg)
+
     def _is_single_last_div(x):
         """Whether last division only contains single label"""
         return len(x) >= 2 and x[-1] == x[-2]
@@ -1637,7 +1651,7 @@ def repartition_divisions(a, b, name, out1, out2):
     return d
 
 
-def repartition(df, divisions):
+def repartition(df, divisions, force=False):
     """ Repartition dataframe along new divisions
 
     Dask.DataFrame objects are partitioned along their index.  Often when
@@ -1646,6 +1660,16 @@ def repartition(df, divisions):
     data but partitioned on different values.  It does this by performing a
     sequence of ``loc`` and ``concat`` calls to split and merge the previous
     generation of partitions.
+
+    Parameters
+    ----------
+
+    divisions: list
+        List of partitions to be used
+    force: bool, default False
+        Allows the expansion of the existing divisions.
+        If False then the new divisions lower and upper bounds must be
+        the same as the old divisions.
 
     >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
 
@@ -1657,10 +1681,10 @@ def repartition(df, divisions):
     if isinstance(df, _Frame):
         tmp = 'repartition-split-' + token
         out = 'repartition-merge-' + token
-        dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
-
-        return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
-
+        dsk = repartition_divisions(df.divisions, divisions,
+                                    df._name, tmp, out, force=force)
+        return df._constructor(merge(df.dask, dsk), out,
+                               df.column_info, divisions)
     elif isinstance(df, pd.core.generic.NDFrame):
         name = 'repartition-dataframe-' + token
         dfs = shard_df_on_index(df, divisions[1:-1])
@@ -1669,6 +1693,7 @@ def repartition(df, divisions):
             return DataFrame(dsk, name, df.columns, divisions)
         if isinstance(df, pd.Series):
             return Series(dsk, name, df.name, divisions)
+    raise ValueError('Data must be DataFrame or Series')
 
 
 class DatetimeAccessor(object):

@@ -377,8 +377,10 @@ def test_arithmetics():
               ddf8.repartition(['a', 'e', 'h']), pdf7, pdf8)]
 
     for (l, r, el, er) in cases:
-        check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
-        check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
+        check_series_arithmetics(l.a, r.b, el.a, er.b,
+                                 allow_comparison_ops=False)
+        check_frame_arithmetics(l, r, el, er,
+                                allow_comparison_ops=False)
 
 def test_arithmetics_different_index():
 
@@ -426,8 +428,10 @@ def test_arithmetics_different_index():
               pdf6, pdf5)]
 
     for (l, r, el, er) in cases:
-        check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
-        check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
+        check_series_arithmetics(l.a, r.b, el.a, er.b,
+                                 allow_comparison_ops=False)
+        check_frame_arithmetics(l, r, el, er,
+                                allow_comparison_ops=False)
 
     pdf7 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
                           'b': [5, 6, 7, 8, 1, 2, 3, 4]},
@@ -449,22 +453,24 @@ def test_arithmetics_different_index():
 
     cases = [(ddf7, ddf8, pdf7, pdf8),
              (ddf8, ddf7, pdf8, pdf7),
-             (ddf7.repartition([0, 13]), ddf8.repartition([0, 4, 11, 14]),
+             (ddf7.repartition([0, 13]),
+              ddf8.repartition([0, 4, 11, 14], force=True),
               pdf7, pdf8),
-             (ddf8.repartition([-5, 10, 15]),
-              ddf7.repartition([-1, 4, 11, 14]), pdf8, pdf7),
+             (ddf8.repartition([-5, 10, 15], force=True),
+              ddf7.repartition([-1, 4, 11, 14], force=True), pdf8, pdf7),
              (ddf7.repartition([0, 8, 12, 13]),
-              ddf8.repartition([0, 2, 8, 12, 13]), pdf7, pdf8),
-             (ddf8.repartition([-5, 0, 10, 20]),
-              ddf7.repartition([-1, 4, 11, 13]), pdf8, pdf7),
+              ddf8.repartition([0, 2, 8, 12, 13], force=True), pdf7, pdf8),
+             (ddf8.repartition([-5, 0, 10, 20], force=True),
+              ddf7.repartition([-1, 4, 11, 13], force=True), pdf8, pdf7),
              (ddf9, ddf10, pdf9, pdf10),
              (ddf10, ddf9, pdf10, pdf9)
              ]
 
     for (l, r, el, er) in cases:
-        print(l)
-        check_series_arithmetics(l.a, r.b, el.a, er.b, allow_comparison_ops=False)
-        check_frame_arithmetics(l, r, el, er, allow_comparison_ops=False)
+        check_series_arithmetics(l.a, r.b, el.a, er.b,
+                                 allow_comparison_ops=False)
+        check_frame_arithmetics(l, r, el, er,
+                                allow_comparison_ops=False)
 
 
 def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
@@ -1193,6 +1199,11 @@ def test_repartition():
 
     assert raises(ValueError, lambda: a.repartition(divisions=[20, 60]))
     assert raises(ValueError, lambda: a.repartition(divisions=[10, 50]))
+    assert raises(ValueError, lambda: a.repartition(divisions=[1]))
+
+    # do not allow to expand divisions by default
+    assert raises(ValueError, lambda: a.repartition(divisions=[0, 60]))
+    assert raises(ValueError, lambda: a.repartition(divisions=[10, 70]))
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list('abxyz'))
     for p in range(1, 7):
@@ -1200,15 +1211,25 @@ def test_repartition():
         assert eq(ddf, pdf)
         for div in [[0, 6], [0, 6, 6], [0, 5, 6], [0, 4, 6, 6],
                     [0, 2, 6], [0, 2, 6, 6],
-                    [0, 2, 3, 6, 6], [0, 1, 2, 3, 4, 5, 6, 6],
-                    # expand divisions
-                    [-5, 10], [-2, 3, 5, 6], [0, 4, 5, 9, 10]]:
+                    [0, 2, 3, 6, 6], [0, 1, 2, 3, 4, 5, 6, 6]]:
             rddf = ddf.repartition(divisions=div)
             _check_split_data(ddf, rddf)
             assert rddf.divisions == tuple(div)
             assert eq(pdf, rddf)
 
             rds = ddf.x.repartition(divisions=div)
+            _check_split_data(ddf.x, rds)
+            assert rds.divisions == tuple(div)
+            assert eq(pdf.x, rds)
+
+        # expand divisions
+        for div in [[-5, 10], [-2, 3, 5, 6], [0, 4, 5, 9, 10]]:
+            rddf = ddf.repartition(divisions=div, force=True)
+            _check_split_data(ddf, rddf)
+            assert rddf.divisions == tuple(div)
+            assert eq(pdf, rddf)
+
+            rds = ddf.x.repartition(divisions=div, force=True)
             _check_split_data(ddf.x, rds)
             assert rds.divisions == tuple(div)
             assert eq(pdf.x, rds)
@@ -1221,9 +1242,7 @@ def test_repartition():
         assert eq(ddf, pdf)
         for div in [list('aj'), list('ajj'), list('adj'),
                     list('abfj'), list('ahjj'), list('acdj'), list('adfij'),
-                    list('abdefgij'), list('abcdefghij'),
-                    # expand divisions
-                    list('Yadijm'), list('acmrxz'), list('Yajz')]:
+                    list('abdefgij'), list('abcdefghij')]:
             rddf = ddf.repartition(divisions=div)
             _check_split_data(ddf, rddf)
             assert rddf.divisions == tuple(div)
@@ -1234,6 +1253,17 @@ def test_repartition():
             assert rds.divisions == tuple(div)
             assert eq(pdf.x, rds)
 
+        # expand divisions
+        for div in [list('Yadijm'), list('acmrxz'), list('Yajz')]:
+            rddf = ddf.repartition(divisions=div, force=True)
+            _check_split_data(ddf, rddf)
+            assert rddf.divisions == tuple(div)
+            assert eq(pdf, rddf)
+
+            rds = ddf.x.repartition(divisions=div, force=True)
+            _check_split_data(ddf.x, rds)
+            assert rds.divisions == tuple(div)
+            assert eq(pdf.x, rds)
 
 def test_repartition_divisions():
     result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP

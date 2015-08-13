@@ -84,6 +84,7 @@ def align_partitions(*dfs):
     dfs: sequence of dd.DataFrames
         Sequence of dataframes to be aligned on their index
 
+
     Returns
     -------
     dfs: sequence of dd.DataFrames
@@ -96,7 +97,8 @@ def align_partitions(*dfs):
     """
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
     divisionss = [tuple(divisions) for df in dfs]
-    dfs2 = list(map(repartition, dfs, divisionss))
+    dfs2 = [df.repartition(div, force=True) for df, div
+            in zip(dfs, divisionss)]
 
     result = list()
     inds = [0 for df in dfs]
