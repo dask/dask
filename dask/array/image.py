@@ -27,9 +27,9 @@ def imread(filename):
     Example
     -------
 
-    >>> import dask.array as da
-    >>> im = da.imread('2015-*-*.png')
-    >>> im.shape
+    >>> from dask.array.image import imread
+    >>> im = imread('2015-*-*.png')  # doctest: +SKIP
+    >>> im.shape  # doctest: +SKIP
     (365, 1000, 1000, 3)
 
     Returns
