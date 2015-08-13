@@ -1,4 +1,5 @@
 from operator import add, mul
+import pytest
 from dask.diagnostics import ProgressBar
 from dask.diagnostics.progress import format_time
 from dask.threaded import get
@@ -71,6 +72,28 @@ def test_no_tasks(capsys):
     with ProgressBar():
         get({'x': 1}, 'x')
 
+    out, err = capsys.readouterr()
+    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
+    assert bar == "[########################################]"
+    assert percent == "100% Completed"
+
+
+def test_with_cache(capsys):
+    cachey = pytest.importorskip('cachey')
+    from dask.diagnostics import Cache
+    c = cachey.Cache(10000)
+    cc = Cache(c)
+
+    with cc, ProgressBar():
+        assert get({'x': (mul, 1, 2)}, 'x') == 2
+    out, err = capsys.readouterr()
+    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
+    assert bar == "[########################################]"
+    assert percent == "100% Completed"
+    assert c.data['x'] == 2
+
+    with cc, ProgressBar():
+        assert get({'x': (mul, 1, 2), 'y': (mul, 'x', 3)}, 'y') == 6
     out, err = capsys.readouterr()
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
     assert bar == "[########################################]"
