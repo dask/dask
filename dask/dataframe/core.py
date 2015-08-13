@@ -309,7 +309,7 @@ class _Frame(Base):
 
         assert len(divisions) == len(dsk) + 1
         return self._constructor(merge(self.dask, dsk), name,
-                                       self.column_info, divisions)
+                                 self.column_info, divisions)
 
     @property
     def loc(self):
@@ -326,6 +326,17 @@ class _Frame(Base):
         # not implemented because of performance concerns.
         # see https://github.com/ContinuumIO/dask/pull/507
         raise AttributeError("Dask Dataframe does not support iloc")
+
+    def get_division(self, n):
+        if 0 <= n < self.npartitions:
+            name = 'get-division-%s-%s' % (str(n), self._name)
+            dsk = {(name, 0): (self._name, n)}
+            divisions = self.divisions[n:n+2]
+            return self._constructor(merge(self.dask, dsk), name,
+                                     self.column_info, divisions)
+        else:
+            msg = "n must be 0 <= n < {0}".format(self.npartitions)
+            raise KeyError(msg)
 
     def repartition(self, divisions):
         """ Repartition dataframe along new divisions
@@ -1045,14 +1056,8 @@ def elemwise(op, *args, **kwargs):
     else:
         op2 = op
 
-    if not all(df.divisions[0] == dfs[0].divisions[0] for df in dfs):
-        msg = 'All divisions must have the same left edge'
-        raise ValueError(msg)
-    if not all(df.divisions[-1] == dfs[0].divisions[-1] for df in dfs):
-        msg = 'All divisions must have the same right edge'
-        raise ValueError(msg)
-
-    if not all(df.divisions == dfs[0].divisions for df in dfs):
+    divisions = dfs[0].divisions
+    if not all(df.divisions == divisions for df in dfs):
         from .multi import align_partitions
         dfs, divisions, parts = align_partitions(*dfs)
 
@@ -1060,12 +1065,12 @@ def elemwise(op, *args, **kwargs):
                 for i, frs in enumerate(zip(*[df._keys() for df in dfs])))
     if columns is not None:
         return DataFrame(merge(dsk, *[df.dask for df in dfs]),
-                         _name, columns, dfs[0].divisions)
+                         _name, columns, divisions)
     else:
         column_name = name or consistent_name(n for df in dfs
                                               for n in df.columns)
         return Series(merge(dsk, *[df.dask for df in dfs]),
-                      _name, column_name, dfs[0].divisions)
+                      _name, column_name, divisions)
 
 
 def remove_empties(seq):
@@ -1539,11 +1544,19 @@ def repartition_divisions(a, b, name, out1, out2):
      ('c', 1): ('b', 2),
      ('c', 2): ('b', 3)}
     """
-    if a[0] != b[0]:
-        raise ValueError('left side of old and new divisions are different')
-    if a[-1] != b[-1]:
-        raise ValueError('right side of old and new divisions are different')
 
+    if len(b) < 2:
+        # minimum division is 2 elements, like [0, 0]
+        raise ValueError('New division must be longer than 2 elements')
+
+    if a[0] < b[0]:
+        msg = ('left side of the new division must be equal or smaller '
+               'than old division')
+        raise ValueError(msg)
+    if a[-1] > b[-1]:
+        msg = ('right side of the new division must be equal or larger '
+               'than old division')
+        raise ValueError('right side of old and new divisions are different')
     def _is_single_last_div(x):
         """Whether last division only contains single label"""
         return len(x) >= 2 and x[-1] == x[-2]
@@ -1557,6 +1570,8 @@ def repartition_divisions(a, b, name, out1, out2):
 
     last_elem = _is_single_last_div(a)
 
+    # process through old division
+    # left part of new division can be processed in this loop
     while (i < len(a) and j < len(b)):
         if a[i] < b[j]:
             # tuple is something like:
@@ -1575,12 +1590,27 @@ def repartition_divisions(a, b, name, out1, out2):
             j += 1
         c.append(low)
         k += 1
-    if last_elem and i < len(a):
-        d[(out1, k)] = (_loc, (name, i - 1), a[i], a[i], False)
-        k += 1
+
+    # right part of new division can remain
+    if a[-1] < b[-1]:
+        for _j in range(j, len(b)):
+            # always use right-most of old division
+            # because it may contain last element
+            m = len(a) - 2
+            d[(out1, k)] = (_loc, (name, m), low, b[_j], False)
+            low = b[_j]
+            c.append(low)
+            k += 1
+    else:
+        # even if new division is processed through,
+        # right-most element of old division can remain
+        if last_elem and i < len(a):
+            d[(out1, k)] = (_loc, (name, i - 1), a[i], a[i], False)
+            k += 1
+        c.append(a[-1])
+
     # replace last element of tuple with True
     d[(out1, k - 1)] = d[(out1, k - 1)][:-1] + (True,)
-    c.append(a[-1])
 
     i, j = 0, 1
 
@@ -1596,7 +1626,9 @@ def repartition_divisions(a, b, name, out1, out2):
             tmp.append((out1, i))
             i += 1
         if len(tmp) == 0:
-            d[(out2, j - 1)] = pd.DataFrame([])
+            # dumy slice to return empty DataFrame or Series,
+            # which retain original data attributes (columns / name)
+            d[(out2, j - 1)] = (_loc, (name, 0), a[0], a[0], False)
         elif len(tmp) == 1:
             d[(out2, j - 1)] = tmp[0]
         else:

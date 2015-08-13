@@ -95,8 +95,7 @@ def align_partitions(*dfs):
         divisions
     """
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
-    divisionss = [bound(divisions, df.divisions[0], df.divisions[-1])
-                  for df in dfs]
+    divisionss = [tuple(divisions) for df in dfs]
     dfs2 = list(map(repartition, dfs, divisionss))
 
     result = list()
