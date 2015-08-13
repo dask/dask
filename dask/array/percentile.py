@@ -38,7 +38,7 @@ def percentile(a, q, interpolation='linear'):
         raise NotImplementedError(
             "Percentiles only implemented for 1-d arrays")
     q = np.array(q)
-    token = tokenize(a.name, list(q), interpolation)
+    token = tokenize(a, list(q), interpolation)
     name = 'percentile_chunk-' + token
     dsk = dict(((name, i), (_percentile, (key), q, interpolation))
             for i, key in enumerate(a._keys()))

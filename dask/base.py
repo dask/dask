@@ -78,8 +78,6 @@ def normalize_function(func):
     elif isinstance(func, partial):
         kws = tuple(sorted(func.keywords.items())) if func.keywords else ()
         return (normalize_function(func.func), func.args, kws)
-    elif getattr(func, '__name__', '<lambda>') != '<lambda>':
-        return func.__module__ + '.' + func.__name__
     else:
         return str(func)
 

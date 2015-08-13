@@ -53,7 +53,7 @@ def tsqr(data, name=None, compute_svd=False):
             "  1. Have two dimensions\n"
             "  2. Have only one column of blocks")
 
-    prefix = name or 'tsqr-' + tokenize((data.name, compute_svd))
+    prefix = name or 'tsqr-' + tokenize(data, compute_svd)
     prefix += '_'
 
     m, n = data.shape

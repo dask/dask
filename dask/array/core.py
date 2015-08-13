@@ -19,7 +19,7 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..base import Base, compute, tokenize
+from ..base import Base, compute, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
         IndexCallable)
 from ..compatibility import unicode, long
@@ -487,7 +487,7 @@ def topk(k, x):
     if x.ndim != 1:
         raise ValueError("Topk only works on arrays of one dimension")
 
-    token = tokenize((k, x.name))
+    token = tokenize(k, x)
     name = 'chunk.topk-' + token
     dsk = dict(((name, i), (chunk.topk, k, key))
                 for i, key in enumerate(x._keys()))
@@ -766,7 +766,7 @@ class Array(Base):
                         "1. Install ``chest``, an out-of-core dictionary\n"
                         "2. Provide an on-disk array like an h5py.Dataset") # pragma: no cover
         if isinstance(store, MutableMapping):
-            name = 'cache-' + tokenize(self.name)
+            name = 'cache-' + tokenize(self)
             dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
                     for k in core.flatten(self._keys()))
             Array._get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
@@ -805,7 +805,7 @@ class Array(Base):
         if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
-        out = 'getitem-' + tokenize(self.name, index)
+        out = 'getitem-' + tokenize(self, index)
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
@@ -855,7 +855,7 @@ class Array(Base):
 
     def astype(self, dtype, **kwargs):
         """ Copy of the array, cast to a specified type """
-        name = tokenize('astype', self.name, dtype, kwargs)
+        name = tokenize('astype', self, dtype, kwargs)
         return elemwise(lambda x: x.astype(dtype, **kwargs), self,
                         dtype=dtype, name=name)
 
@@ -1079,6 +1079,9 @@ class Array(Base):
     def rechunk(self, chunks):
         from .rechunk import rechunk
         return rechunk(self, chunks)
+
+
+normalize_token.register(Array, lambda a: a.name)
 
 
 def normalize_chunks(chunks, shape=None):
@@ -1341,7 +1344,7 @@ def stack(seq, axis=0):
               + seq[0].chunks[axis:])
 
     names = [a.name for a in seq]
-    name = 'stack-' + tokenize((names, axis))
+    name = 'stack-' + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
     inputs = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
@@ -1417,7 +1420,7 @@ def concatenate(seq, axis=0):
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
     names = [a.name for a in seq]
 
-    name = 'concatenate-' + tokenize((names, axis))
+    name = 'concatenate-' + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
     values = [(names[bisect(cum_dims, key[axis + 1]) - 1],)
@@ -1603,10 +1606,7 @@ def elemwise(op, *args, **kwargs):
         except AttributeError:
             dt = None
 
-    name = kwargs.get('name')
-    if not name:
-        token = (op, [a.name if isinstance(a, Array) else a for a in args], dt)
-        name = 'elemwise-' + tokenize(token)
+    name = kwargs.get('name', None) or 'elemwise-' + tokenize(op, dt, *args)
 
     if other:
         op2 = partial_by_order(op, other)
@@ -1835,7 +1835,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
     if 'dask' in inspect.getfile(reduction):
         reduction = getattr(np, reduction.__name__)
 
-    name = 'coarsen-' + tokenize((reduction, x.name, axes, trim_excess))
+    name = 'coarsen-' + tokenize(reduction, x, axes, trim_excess)
     dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes,
                                         trim_excess))
                 for key in core.flatten(x._keys()))
@@ -1923,7 +1923,7 @@ def broadcast_to(x, shape):
         raise ValueError('cannot broadcast shape %s to shape %s'
                          % (x.shape, shape))
 
-    name = 'broadcast_to-' + tokenize((x.name, shape))
+    name = 'broadcast_to-' + tokenize(x, shape)
     chunks = (tuple((s,) for s in shape[:ndim_new])
                + tuple(bd if old > 1 else (new,)
                        for bd, old, new in zip(x.chunks, x.shape,
@@ -1991,8 +1991,7 @@ def bincount(x, weights=None, minlength=None):
         assert weights.chunks == x.chunks
 
     # Call np.bincount on each block, possibly with weights
-    token = tokenize((x.name, weights.name if weights is not None else None,
-                      minlength))
+    token = tokenize(x, weights, minlength)
     name = 'bincount-' + token
     if weights is not None:
         dsk = dict(((name, i),
@@ -2052,8 +2051,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
     else:
         bin_token = bins
-    token = tokenize(a, bin_token, range, normed,
-                      weights.name if weights is not None else None, density)
+    token = tokenize(a, bin_token, range, normed, weights, density)
 
     nchunks = len(list(core.flatten(a._keys())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
@@ -2309,7 +2307,7 @@ def _vindex(x, *indexes):
     other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
                                 for i, c in zip(indexes, x.chunks)]))
 
-    token = tokenize((x.name, indexes))
+    token = tokenize(x, indexes)
     name = 'vindex-slice-' + token
 
     full_slices = [slice(None, None) if i is None else None for i in indexes]

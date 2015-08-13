@@ -203,7 +203,7 @@ def rechunk(x, chunks):
 
     crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
-    temp_name = 'rechunk-' + tokenize((x.name, chunks))
+    temp_name = 'rechunk-' + tokenize(x, chunks)
     new_index = tuple(product(*(tuple(range(len(n))) for n in chunks)))
     for flat_idx, cross1 in enumerate(crossed):
         new_idx = new_index[flat_idx]

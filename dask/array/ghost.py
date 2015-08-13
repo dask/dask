@@ -112,7 +112,7 @@ def ghost_internal(x, axes):
     interior_keys = pipe(x._keys(), flatten, map(expand_key2), map(flatten),
                          concat, list)
 
-    token = tokenize(x.name, axes)
+    token = tokenize(x, axes)
     name = 'ghost-' + token
     interior_slices = {}
     ghost_blocks = {}

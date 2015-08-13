@@ -19,22 +19,21 @@ def test_normalize():
 
 
 def test_normalize_function():
-    @curry
     def f1(a, b, c=1):
         pass
+    cf1 = curry(f1)
     def f2(a, b=1, c=2):
         pass
     def f3(a):
         pass
-    assert normalize_function(f2) == 'test_base.f2'
-    lam_out = normalize_function(lambda a: a)
-    assert '<function' in lam_out and '0x' in lam_out   # lambdas contain hash
+    assert normalize_function(f2) == str(f2)
+    f = lambda a: a
+    assert normalize_function(f) == str(f)
     comp = compose(partial(f2, b=2), f3)
-    assert normalize_function(comp) ==\
-            (('test_base.f2', (), (('b', 2),)), 'test_base.f3')
-    assert normalize_function(f1) == ('test_base.f1', (), ())
-    assert normalize_function(f1(2, c=2)) == ('test_base.f1', (2,), (('c', 2),))
-    assert normalize_token(f1) == normalize_function(f1)
+    assert normalize_function(comp) == ((str(f2), (), (('b', 2),)), str(f3))
+    assert normalize_function(cf1) == (str(f1), (), ())
+    assert normalize_function(cf1(2, c=2)) == (str(f1), (2,), (('c', 2),))
+    assert normalize_token(cf1) == normalize_function(cf1)
 
 
 def test_tokenize():
