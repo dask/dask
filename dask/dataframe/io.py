@@ -493,7 +493,7 @@ def from_dask_array(x, columns=None):
     2  1  1
     3  1  1
     """
-    name = 'from-dask-array' + tokenize((x.name, columns))
+    name = 'from-dask-array' + tokenize(x, columns)
     divisions = [0]
     for c in x.chunks[0]:
         divisions.append(divisions[-1] + c)

@@ -10,9 +10,7 @@ from dask.async import get_sync
 from dask.utils import raises, ignoring
 import dask.dataframe as dd
 from dask.dataframe.core import (concat, repartition_divisions, _loc,
-        _coerce_loc_index)
-from dask.dataframe.core import (concat, repartition_divisions, _loc,
-        _coerce_loc_index, _concat)
+        _coerce_loc_index, aca, reduction, _concat)
 
 
 def check_dask(dsk, check_names=True):
@@ -1206,6 +1204,11 @@ def test_deterministic_reduction_names():
     assert a.x.min()._name == a.x.min()._name
     assert a.x.max()._name == a.x.max()._name
     assert a.x.count()._name == a.x.count()._name
+    # Test reduction without token string
+    assert sorted(reduction(a.x, len, np.sum).dask) !=\
+           sorted(reduction(a.x, np.sum, np.sum).dask)
+    assert sorted(reduction(a.x, len, np.sum).dask) ==\
+           sorted(reduction(a.x, len, np.sum).dask)
 
 
 def test_deterministic_apply_concat_apply_names():
@@ -1218,6 +1221,13 @@ def test_deterministic_apply_concat_apply_names():
            sorted(a.x.drop_duplicates().dask)
     assert sorted(a.groupby('x').y.mean().dask) == \
            sorted(a.groupby('x').y.mean().dask)
+    # Test aca without passing in token string
+    f = lambda a: a.nlargest(5)
+    f2 = lambda a: a.nlargest(3)
+    assert sorted(aca(a.x, f, f, a.x.name).dask) !=\
+           sorted(aca(a.x, f2, f2, a.x.name).dask)
+    assert sorted(aca(a.x, f, f, a.x.name).dask) ==\
+           sorted(aca(a.x, f, f, a.x.name).dask)
 
 
 def test_gh_517():

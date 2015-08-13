@@ -65,9 +65,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     else:
         columns = tuple([c for c in df.columns if c != index])
 
-    token = tokenize((df._name,
-                      (index._name if isinstance(index, _Frame) else  index),
-                      divisions))
+    token = tokenize(df, index, divisions)
     always_new_token = uuid.uuid1().hex
     import partd
 
@@ -171,9 +169,7 @@ def shuffle(df, index, npartitions=None):
     if npartitions is None:
         npartitions = df.npartitions
 
-    token = tokenize((df._name,
-                      (index._name if isinstance(index, _Frame) else  index),
-                      npartitions))
+    token = tokenize(df, index, npartitions)
     always_new_token = uuid.uuid1().hex
 
     import partd
