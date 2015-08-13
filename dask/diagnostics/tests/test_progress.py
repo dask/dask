@@ -80,7 +80,7 @@ def test_no_tasks(capsys):
 
 def test_with_cache(capsys):
     cachey = pytest.importorskip('cachey')
-    from dask.diagnostics import Cache
+    from dask.cache import Cache
     c = cachey.Cache(10000)
     cc = Cache(c)
 

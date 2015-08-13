@@ -1,4 +1,4 @@
-from ..callbacks import Callback
+from .callbacks import Callback
 from timeit import default_timer
 from numbers import Number
 import sys
