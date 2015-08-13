@@ -521,9 +521,6 @@ class Series(_Frame):
     def __array_wrap__(self, array, context=None):
         return pd.Series(array, name=self.name)
 
-    def __array_prepare__(self, array, context=None):
-        return array
-
     def quantile(self, q):
         """ Approximate quantiles of column
 
