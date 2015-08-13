@@ -19,18 +19,25 @@ DataFrame Methods
 
 .. autoclass:: DataFrame
    :members:
+   :inherited-members:
 
 Series Methods
 ~~~~~~~~~~~~~~
 
 .. autoclass:: Series
    :members:
+   :inherited-members:
 
 GroupBy Methods
 ~~~~~~~~~~~~~~~
 
+.. autoclass:: GroupBy
+   :members:
+   :inherited-members:
+
 .. autoclass:: SeriesGroupBy
    :members:
+   :inherited-members:
 
 Other functions
 ~~~~~~~~~~~~~~~
