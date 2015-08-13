@@ -145,6 +145,18 @@ class _Frame(Base):
         """Whether divisions are already known"""
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
+    def get_division(self, n):
+        """ Get nth division of the data """
+        if 0 <= n < self.npartitions:
+            name = 'get-division-%s-%s' % (str(n), self._name)
+            dsk = {(name, 0): (self._name, n)}
+            divisions = self.divisions[n:n+2]
+            return self._constructor(merge(self.dask, dsk), name,
+                                     self.column_info, divisions)
+        else:
+            msg = "n must be 0 <= n < {0}".format(self.npartitions)
+            raise ValueError(msg)
+
     def cache(self, cache=Cache):
         """ Evaluate Dataframe and store in local cache
 
