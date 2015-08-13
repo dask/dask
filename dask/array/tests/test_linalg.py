@@ -5,7 +5,16 @@ pytest.importorskip('numpy')
 
 import numpy as np
 from dask.array import from_array
-from dask.array.linalg import tsqr, svd_compressed
+from dask.array.linalg import tsqr, svd_compressed, qr, svd
+
+
+def same_keys(a, b):
+    def key(k):
+        if isinstance(k, str):
+            return (k, -1, -1, -1)
+        else:
+            return k
+    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
 def test_tsqr_regular_blocks():
@@ -74,6 +83,23 @@ def test_tsqr_svd_irregular_blocks():
     assert np.allclose(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
     assert np.allclose(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
     assert np.allclose(s, s_exact)  # s must contain the singular values
+
+
+def test_linalg_consistent_names():
+    m, n = 20, 10
+    mat = np.random.rand(m, n)
+    data = from_array(mat, chunks=(10, n), name='A')
+
+    q1, r1 = qr(data)
+    q2, r2 = qr(data)
+    assert same_keys(q1, q2)
+    assert same_keys(r1, r2)
+
+    u1, s1, v1 = svd(data)
+    u2, s2, v2 = svd(data)
+    assert same_keys(u1, u2)
+    assert same_keys(s1, s2)
+    assert same_keys(v1, v2)
 
 
 def test_svd_compressed():

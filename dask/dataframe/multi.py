@@ -54,7 +54,8 @@ We proceed with hash joins in the following stages:
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
 
-from .core import repartition, DataFrame, Index, tokenize
+from ..base import tokenize
+from .core import repartition, DataFrame, Index
 from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
@@ -170,8 +171,7 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     left_empty = pd.DataFrame([], columns=lhs.columns)
     right_empty = pd.DataFrame([], columns=rhs.columns)
 
-    token = tokenize((lhs._name, rhs._name, how, lsuffix, rsuffix))
-    name = 'join-indexed-' + token
+    name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
     dsk = dict(((name, i),
                 (pd.DataFrame.join, a, b, None, how, lsuffix, rsuffix)
                 if a is not None and b is not None else
@@ -235,8 +235,7 @@ def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffix
                        left_columns=list(lhs.columns),
                        right_columns=list(rhs.columns))
 
-    token = tokenize((lhs._name, on_left, rhs._name, on_right, how,
-                      npartitions, suffixes))
+    token = tokenize(lhs, on_left, rhs, on_right, how, npartitions, suffixes)
     name = 'hash-join-' + token
     dsk = dict(((name, i), (pdmerge2, (lhs2._name, i), (rhs2._name, i),
                              how, None, on_left, on_right))
@@ -261,8 +260,7 @@ def concat_indexed_dataframes(dfs, join='outer'):
                for df, empty in zip(part, empties)]
               for part in parts]
 
-    token = tokenize(([df._name for df in dfs], join))
-    name = 'concat-indexed-' + token
+    name = 'concat-indexed-' + tokenize(join, *dfs)
     dsk = dict(((name, i), (pd.concat, part, 0, join))
                 for i, part in enumerate(parts2))
 

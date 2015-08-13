@@ -1,5 +1,7 @@
 from __future__ import absolute_import
 
+from functools import partial
+
 import numpy as np
 import numpy.fft as npfft
 
@@ -29,7 +31,7 @@ def _fft_wrap(fft_func, dtype, out_chunk_fn):
 
         chunks = out_chunk_fn(a, n, axis)
 
-        return map_blocks(lambda x: fft_func(x, n=n, axis=axis), a, dtype=dtype,
+        return map_blocks(partial(fft_func, n=n, axis=axis), a, dtype=dtype,
                           chunks=chunks)
 
     np_name = fft_func.__name__

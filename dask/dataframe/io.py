@@ -14,14 +14,12 @@ import uuid
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
-from ..base import compute
-from .utils import tokenize_dataframe
+from ..base import compute, tokenize
 from .. import array as da
 from ..async import get_sync
 
 from . import core
-from .core import (DataFrame, Series, concat, categorize_block, tokens,
-        tokenize)
+from .core import DataFrame, Series, concat, categorize_block
 from .shuffle import set_partition
 
 
@@ -102,10 +100,8 @@ def read_csv(fn, *args, **kwargs):
     if '*' in fn:
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
 
-    arg_token = (os.path.getmtime(fn),
-                 args,
-                 sorted(kwargs.items(), key=lambda kv: kv[0]))
-    name = 'read-csv-%s-%s' % (fn, tokenize(arg_token))
+    token = tokenize(os.path.getmtime(fn), args, kwargs)
+    name = 'read-csv-%s-%s' % (fn, token)
 
     columns = kwargs.pop('columns')
     header = kwargs.pop('header')
@@ -277,7 +273,7 @@ def from_array(x, chunksize=50000, columns=None):
     divisions = tuple(range(0, len(x), chunksize))
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
-    token = tokenize((id(x), x.dtype, x.shape, chunksize, columns))
+    token = tokenize(x, chunksize, columns)
     name = 'from_array-' + token
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
@@ -345,8 +341,7 @@ def from_pandas(data, npartitions):
                       for i in range(0, nrows, chunksize))
     divisions = divisions + (data.index[-1],)
 
-    token = (tokenize_dataframe(data), chunksize) # this could be improved
-    name = 'from_pandas-' + tokenize(token)
+    name = 'from_pandas-' + tokenize(data, chunksize)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))
     dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
@@ -396,11 +391,11 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
     if x.rootdir:
-        token = tokenize((x.rootdir, os.path.getmtime(x.rootdir), chunksize,
-                          categorize, index, sorted(kwargs.items())))
+        token = tokenize((x.rootdir, os.path.getmtime(x.rootdir)), chunksize,
+                         categorize, index, kwargs)
     else:
-        token = tokenize((id(x), x.shape, x.dtype, chunksize, categorize,
-                         index, sorted(kwargs.items())))
+        token = tokenize((id(x), x.shape, x.dtype), chunksize, categorize,
+                         index, kwargs)
     new_name = 'from_bcolz-' + token
     dsk = dict(((new_name, i),
                 (dataframe_from_ctable,
@@ -498,7 +493,7 @@ def from_dask_array(x, columns=None):
     2  1  1
     3  1  1
     """
-    name = 'from-dask-array' + tokenize((x.name, columns))
+    name = 'from-dask-array' + tokenize(x, columns)
     divisions = [0]
     for c in x.chunks[0]:
         divisions.append(divisions[-1] + c)

@@ -1,11 +1,9 @@
 from __future__ import division
 
-from itertools import count
 from functools import wraps, reduce
 from collections import Iterable
 import bisect
 import uuid
-from hashlib import md5
 from toolz import merge, partial, first, partition
 from operator import getitem, setitem
 from datetime import datetime
@@ -23,26 +21,13 @@ from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import unicode, apply
 from ..utils import repr_long_list, IndexCallable, pseudorandom
-from .utils import shard_df_on_index, tokenize_dataframe
-from ..base import Base, compute
+from .utils import shard_df_on_index
+from ..base import Base, compute, tokenize, normalize_token
 
 
 no_default = '__no_default__'
 
-
 pd.computation.expressions.set_use_numexpr(False)
-
-
-def tokenize(obj):
-    """ Deterministic token
-
-    >>> tokenize([1, 2, '3'])
-    'b9e8c0d38fb40e66dc4fd00adc3c6553'
-
-    >>> tokenize('Hello') == tokenize('Hello')
-    True
-    """
-    return md5(str(obj).encode()).hexdigest()
 
 def _concat(args):
     """ Generic concat operation """
@@ -64,9 +49,6 @@ def _concat(args):
         result.name = args[0].name
         return result
     return args
-
-
-tokens = ('-%d' % i for i in count(1))
 
 
 def optimize(dsk, keys):
@@ -184,7 +166,7 @@ class _Frame(Base):
                    token='drop-duplicates')
 
     def __len__(self):
-        return reduction(self, len, np.sum).compute()
+        return reduction(self, len, np.sum, token='len').compute()
 
     def map_partitions(self, func, columns=no_default):
         """ Apply Python function on each DataFrame block
@@ -374,7 +356,7 @@ class _Frame(Base):
         if random_state is None:
             random_state = np.random.randint(np.iinfo(np.int32).max)
 
-        name = 'sample-' + tokenize((self._name, frac, random_state))
+        name = 'sample-' + tokenize(self, frac, random_state)
         func = getattr(self._partition_type, 'sample')
 
         if not isinstance(random_state, np.random.RandomState):
@@ -464,6 +446,9 @@ class _Frame(Base):
         return elemwise(operator.xor, self, other, columns=self._elemwise_cols)
     def __rxor__(self, other):
         return elemwise(operator.xor, other, self, columns=self._elemwise_cols)
+
+
+normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
 
 class Series(_Frame):
@@ -601,7 +586,7 @@ class Series(_Frame):
 
     @wraps(pd.Series.std)
     def std(self, ddof=1):
-        name = 'series-std(ddof={0})-{1}'.format(ddof, tokenize(self._name))
+        name = 'series-std(ddof={0})-{1}'.format(ddof, tokenize(self))
         df = self.var(ddof=ddof)
         dsk = {(name, 0): (np.sqrt, (df._name, 0))}
         return Scalar(merge(df.dask, dsk), name)
@@ -665,7 +650,7 @@ class Index(Series):
 
     def count(self):
         f = lambda x: pd.notnull(x).sum()
-        return reduction(self, f, np.sum)
+        return reduction(self, f, np.sum, token='index-count')
 
 
 class DataFrame(_Frame):
@@ -810,7 +795,7 @@ class DataFrame(_Frame):
         """ + pd.DataFrame.query.__doc__
         name = '%s.query(%s)' % (self._name, expr)
         if kwargs:
-            name = name + '--' + tokenize(sorted(kwargs.items()))
+            name = name + '--' + tokenize(kwargs)
             dsk = dict(((name, i), (apply, pd.DataFrame.query,
                                     ((self._name, i), (expr,), kwargs)))
                        for i in range(self.npartitions))
@@ -1049,11 +1034,7 @@ def elemwise(op, *args, **kwargs):
     columns = kwargs.get('columns', None)
     name = kwargs.get('name', None)
 
-    token = (op,
-             [arg._name if isinstance(arg, _Frame) else arg for arg in args],
-             sorted(kwargs.items(), key=lambda kv: str(kv[0])))
-
-    _name = 'elemwise-' + tokenize(token)
+    _name = 'elemwise-' + tokenize(op, kwargs, *args)
 
     dfs = [arg for arg in args if isinstance(arg, _Frame)]
     other = [(i, arg) for i, arg in enumerate(args)
@@ -1130,13 +1111,13 @@ def pdmax(x):
 def pdmin(x):
     return pd.Series(x).min()
 
-def reduction(x, chunk, aggregate, token='reduction'):
+def reduction(x, chunk, aggregate, token=None):
     """ General version of reductions
 
     >>> reduction(my_frame, np.sum, np.sum)  # doctest: +SKIP
     """
-    token_seed = (x._name, (token or (chunk, aggregate)))
-    token_key = tokenize(token_seed)
+    token_key = tokenize(x, token or (chunk, aggregate))
+    token = token or 'reduction'
     a = '{0}--chunk-{1}'.format(token, token_key)
     dsk = dict(((a, i), (empty_safe, chunk, (x._name, i)))
                 for i in range(x.npartitions))
@@ -1157,7 +1138,7 @@ def concat(dfs):
         # For this to work we need to add a final division for "maximum element"
         raise NotImplementedError("Concat can't currently handle dataframes"
                 " with known divisions")
-    name = 'concat-' + tokenize('--'.join(df._name for df in dfs))
+    name = 'concat-' + tokenize(*dfs)
     dsk = dict()
     i = 0
     for df in dfs:
@@ -1348,7 +1329,7 @@ class SeriesGroupBy(_GroupBy):
 
 
 def apply_concat_apply(args, chunk=None, aggregate=None,
-                       columns=no_default, token='apply-concat-apply'):
+                       columns=no_default, token=None):
     """ Apply a function to blocks, the concat, then apply again
 
     Parameters
@@ -1376,9 +1357,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
                 for arg in args
                 if isinstance(arg, _Frame))
 
-    token_seed = ([arg._name if isinstance(arg, _Frame) else arg
-                   for arg in args], (token or (chunk, aggregate)), columns)
-    token_key = tokenize(token_seed)
+    token_key = tokenize(token or (chunk, aggregate), columns, *args)
+    token = token or 'apply-concat-apply'
 
     a = '{0}--first-{1}'.format(token, token_key)
     dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)
@@ -1433,11 +1413,7 @@ def map_partitions(func, columns, *args, **kwargs):
 
     return_type = _get_return_type(columns)
 
-    token = ((token or func),
-             columns,
-             [arg._name if isinstance(arg, _Frame) else arg for arg in args])
-
-    name = 'map-partitions' + tokenize(token)
+    name = 'map-partitions' + tokenize(token or func, columns, *args)
     dsk = dict(((name, i), (apply, func,
                              (tuple, [(arg._name, i)
                                       if isinstance(arg, _Frame)
@@ -1493,7 +1469,7 @@ def quantile(df, q):
     if not len(q):
         return da.zeros((0,), chunks=((0,),))
     from dask.array.percentile import _percentile, merge_percentiles
-    token = tokenize((df._name, q))
+    token = tokenize(df, q)
     name = 'quantiles-1-' + token
     val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
                    for i, key in enumerate(df._keys()))
@@ -1641,8 +1617,8 @@ def repartition(df, divisions):
 
     >>> ddf = dd.repartition(df, [0, 5, 10, 20])  # doctest: +SKIP
     """
+    token = tokenize(df, divisions)
     if isinstance(df, _Frame):
-        token = tokenize((df._name, divisions))
         tmp = 'repartition-split-' + token
         out = 'repartition-merge-' + token
         dsk = repartition_divisions(df.divisions, divisions, df._name, tmp, out)
@@ -1650,7 +1626,6 @@ def repartition(df, divisions):
         return type(df)(merge(df.dask, dsk), out, df.column_info, divisions)
 
     elif isinstance(df, pd.core.generic.NDFrame):
-        token = tokenize((tokenize_dataframe(df), divisions))
         name = 'repartition-dataframe-' + token
         dfs = shard_df_on_index(df, divisions[1:-1])
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))

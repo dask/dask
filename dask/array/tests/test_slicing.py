@@ -23,6 +23,15 @@ def eq(a, b):
     return c
 
 
+def same_keys(a, b):
+    def key(k):
+        if isinstance(k, str):
+            return (k, -1, -1, -1)
+        else:
+            return k
+    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+
+
 def test_slice_1d():
     expected = {0: slice(10, 25, 1), 1: slice(None, None, None), 2: slice(0, 1, 1)}
     result = _slice_1d(100, [25]*4, slice(10, 51, None))
@@ -450,3 +459,11 @@ def test_uneven_chunks():
 
 def test_new_blockdim():
     assert new_blockdim(20, [5, 5, 5, 5], slice(0, None, 2)) == [3, 2, 3, 2]
+
+
+def test_slicing_consistent_names():
+    x = np.arange(100).reshape((10, 10))
+    a = da.from_array(x, chunks=(5, 5))
+    assert same_keys(a[0], a[0])
+    assert same_keys(a[:, [1, 2, 3]], a[:, [1, 2, 3]])
+    assert same_keys(a[:, 5:2:-1], a[:, 5:2:-1])

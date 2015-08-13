@@ -1,11 +1,13 @@
 from __future__ import absolute_import
-import numpy as np
-from itertools import count
-from .core import top, dotmany, Array
-from .random import standard_normal
+
 import operator
 
-names = ('tsqr_%d' % i for i in count(1))
+import numpy as np
+
+from ..base import tokenize
+from .core import top, dotmany, Array
+from .random import standard_normal
+
 
 def _cumsum_blocks(it):
     total = 0
@@ -51,7 +53,7 @@ def tsqr(data, name=None, compute_svd=False):
             "  1. Have two dimensions\n"
             "  2. Have only one column of blocks")
 
-    prefix = name or next(names)
+    prefix = name or 'tsqr-' + tokenize(data, compute_svd)
     prefix += '_'
 
     m, n = data.shape
