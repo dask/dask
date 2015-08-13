@@ -754,6 +754,34 @@ def test_set_partition_compute():
     assert len(d4.dask) > len(d5.dask)
 
 
+def test_get_division():
+    pdf = pd.DataFrame(np.random.randn(10, 5), columns=list('abcde'))
+    ddf = dd.from_pandas(pdf, 3)
+    assert ddf.divisions == (0, 4, 8, 9)
+
+    # DataFrame
+    div1 = ddf.get_division(0)
+    assert isinstance(div1, dd.DataFrame)
+    eq(div1, pdf.loc[0:3])
+    div2 = ddf.get_division(1)
+    eq(div2, pdf.loc[4:7])
+    div3 = ddf.get_division(2)
+    eq(div3, pdf.loc[8:9])
+    assert len(div1) + len(div2) + len(div3) == len(pdf)
+
+    # Series
+    div1 = ddf.a.get_division(0)
+    assert isinstance(div1, dd.Series)
+    eq(div1, pdf.a.loc[0:3])
+    div2 = ddf.a.get_division(1)
+    eq(div2, pdf.a.loc[4:7])
+    div3 = ddf.a.get_division(2)
+    eq(div3, pdf.a.loc[8:9])
+    assert len(div1) + len(div2) + len(div3) == len(pdf.a)
+
+    assert raises(ValueError, lambda: ddf.get_division(-1))
+    assert raises(ValueError, lambda: ddf.get_division(3))
+
 def test_categorize():
     dsk = {('x', 0): pd.DataFrame({'a': ['Alice', 'Bob', 'Alice'],
                                    'b': ['C', 'D', 'E']},
