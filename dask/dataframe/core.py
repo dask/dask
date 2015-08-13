@@ -126,6 +126,7 @@ class _Frame(Base):
 
     @property
     def npartitions(self):
+        """Return number of partitions"""
         return len(self.divisions) - 1
 
     def _keys(self):
@@ -133,6 +134,7 @@ class _Frame(Base):
 
     @property
     def index(self):
+        """Return dask Index instance"""
         name = self._name + '-index'
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
@@ -140,6 +142,7 @@ class _Frame(Base):
 
     @property
     def known_divisions(self):
+        """Whether divisions are already known"""
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
     def cache(self, cache=Cache):
@@ -316,10 +319,16 @@ class _Frame(Base):
 
     @property
     def loc(self):
+        """ Purely label-location based indexer for selection by label.
+
+        >>> df.loc["b"]  # doctest: +SKIP
+        >>> df.loc["b":"d"]  # doctest: +SKIP"""
         return IndexCallable(self._loc)
 
     @property
     def iloc(self):
+        """ Not implemented """
+
         # not implemented because of performance concerns.
         # see https://github.com/ContinuumIO/dask/pull/507
         raise AttributeError("Dask Dataframe does not support iloc")
@@ -480,18 +489,22 @@ class Series(_Frame):
 
     @property
     def ndim(self):
+        """ Return dimensionality """
         return 1
 
     @property
     def dtype(self):
+        """ Return data type """
         return self.head().dtype
 
     @property
     def column_info(self):
+        """ Return Series.name """
         return self.name
 
     @property
     def columns(self):
+        """ Return 1 element tuple containing the name """
         return (self.name,)
 
     def __repr__(self):
@@ -726,12 +739,15 @@ class DataFrame(_Frame):
 
     @property
     def ndim(self):
+        """ Return dimensionality """
         return 2
 
     @property
     def dtypes(self):
+        """ Return data types """
         return self._get(self.dask, self._keys()[0]).dtypes
 
+    @wraps(pd.DataFrame.set_index)
     def set_index(self, other, **kwargs):
         return set_index(self, other, **kwargs)
 
@@ -747,8 +763,10 @@ class DataFrame(_Frame):
 
     @property
     def column_info(self):
+        """ Return DataFrame.columns """
         return self.columns
 
+    @wraps(pd.DataFrame.groupby)
     def groupby(self, key, **kwargs):
         return GroupBy(self, key, **kwargs)
 
@@ -1184,19 +1202,24 @@ class _GroupBy(object):
             return aca(self.df, chunk=chunk, aggregate=agg,
                        columns=self.key, token=token)
 
+    @wraps(pd.core.groupby.GroupBy.sum)
     def sum(self):
         return self._aca_agg(token='sum', func=lambda x: x.sum())
 
+    @wraps(pd.core.groupby.GroupBy.min)
     def min(self):
         return self._aca_agg(token='min', func=lambda x: x.min())
 
+    @wraps(pd.core.groupby.GroupBy.max)
     def max(self):
         return self._aca_agg(token='max', func=lambda x: x.max())
 
+    @wraps(pd.core.groupby.GroupBy.count)
     def count(self):
         return self._aca_agg(token='count', func=lambda x: x.count(),
                              aggfunc=lambda x: x.sum())
 
+    @wraps(pd.core.groupby.GroupBy.mean)
     def mean(self):
         return 1.0 * self.sum() / self.count()
 

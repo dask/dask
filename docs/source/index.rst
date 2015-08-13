@@ -37,7 +37,7 @@ parallel in a variety of contexts.
 **Collections:**
 
 Dask collections are the main interaction point for users.  They look like
-NumPy and Pandas but generate dask graphs internally.  If you are a dask *user*
+NumPy and pandas but generate dask graphs internally.  If you are a dask *user*
 then you should start here.
 
 .. toctree::
