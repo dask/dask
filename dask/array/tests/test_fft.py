@@ -41,7 +41,7 @@ def eq(a, b):
         return c
 
 
-def cmp_dsks(a, b):
+def same_keys(a, b):
     def key(k):
         if isinstance(k, str):
             return (k, -1, -1, -1)
@@ -138,6 +138,6 @@ def test_ihfft_n_kwarg():
 
 
 def test_fft_consistent_names():
-    assert cmp_dsks(fft(darr, 5), fft(darr, 5))
-    assert cmp_dsks(fft(darr2, 5, axis=0), fft(darr2, 5, axis=0))
-    assert not cmp_dsks(fft(darr, 5), fft(darr, 13))
+    assert same_keys(fft(darr, 5), fft(darr, 5))
+    assert same_keys(fft(darr2, 5, axis=0), fft(darr2, 5, axis=0))
+    assert not same_keys(fft(darr, 5), fft(darr, 13))

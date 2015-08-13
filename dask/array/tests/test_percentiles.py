@@ -19,7 +19,7 @@ def eq(a, b):
     return c
 
 
-def cmp_dsks(a, b):
+def same_keys(a, b):
     def key(k):
         if isinstance(k, str):
             return (k, -1, -1, -1)
@@ -35,9 +35,9 @@ def test_percentile():
     x = np.array([0, 0, 5, 5, 5, 5, 20, 20])
     d = da.from_array(x, chunks=(3,))
     assert eq(da.percentile(d, [0, 50, 100]), [0, 5, 20])
-    assert cmp_dsks(da.percentile(d, [0, 50, 100]),
+    assert same_keys(da.percentile(d, [0, 50, 100]),
                     da.percentile(d, [0, 50, 100]))
-    assert not cmp_dsks(da.percentile(d, [0, 50, 100]),
+    assert not same_keys(da.percentile(d, [0, 50, 100]),
                         da.percentile(d, [0, 50]))
 
     x = np.array(['a', 'a', 'd', 'd', 'd', 'e'])
@@ -61,7 +61,7 @@ def test_percentile_with_categoricals():
     p = da.percentile(x, [50])
     assert (p.compute().categories == x0.categories).all()
     assert (p.compute().codes == [0]).all()
-    assert cmp_dsks(da.percentile(x, [50]),
+    assert same_keys(da.percentile(x, [50]),
                     da.percentile(x, [50]))
 
 

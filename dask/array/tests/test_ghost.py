@@ -23,7 +23,7 @@ def eq(a, b):
     return c
 
 
-def cmp_dsks(a, b):
+def same_keys(a, b):
     def key(k):
         if isinstance(k, str):
             return (k, -1, -1, -1)
@@ -67,7 +67,7 @@ def test_ghost_internal():
         [56, 57, 58, 59, 60,   59, 60, 61, 62, 63]])
 
     assert eq(result, expected)
-    assert cmp_dsks(ghost_internal(d, {0: 2, 1: 1}), g)
+    assert same_keys(ghost_internal(d, {0: 2, 1: 1}), g)
 
 
 def test_trim_internal():
@@ -172,7 +172,7 @@ def test_ghost():
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     assert eq(g, expected)
-    assert cmp_dsks(g, ghost(d, depth={0: 2, 1: 1},
+    assert same_keys(g, ghost(d, depth={0: 2, 1: 1},
                              boundary={0: 100, 1: 'reflect'}))
 
     g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})

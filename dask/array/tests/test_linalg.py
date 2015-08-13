@@ -8,7 +8,7 @@ from dask.array import from_array
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
 
 
-def cmp_dsks(a, b):
+def same_keys(a, b):
     def key(k):
         if isinstance(k, str):
             return (k, -1, -1, -1)
@@ -92,14 +92,14 @@ def test_linalg_consistent_names():
 
     q1, r1 = qr(data)
     q2, r2 = qr(data)
-    assert cmp_dsks(q1, q2)
-    assert cmp_dsks(r1, r2)
+    assert same_keys(q1, q2)
+    assert same_keys(r1, r2)
 
     u1, s1, v1 = svd(data)
     u2, s2, v2 = svd(data)
-    assert cmp_dsks(u1, u2)
-    assert cmp_dsks(s1, s2)
-    assert cmp_dsks(v1, v2)
+    assert same_keys(u1, u2)
+    assert same_keys(s1, s2)
+    assert same_keys(v1, v2)
 
 
 def test_svd_compressed():

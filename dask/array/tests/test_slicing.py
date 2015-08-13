@@ -23,7 +23,7 @@ def eq(a, b):
     return c
 
 
-def cmp_dsks(a, b):
+def same_keys(a, b):
     def key(k):
         if isinstance(k, str):
             return (k, -1, -1, -1)
@@ -464,6 +464,6 @@ def test_new_blockdim():
 def test_slicing_consistent_names():
     x = np.arange(100).reshape((10, 10))
     a = da.from_array(x, chunks=(5, 5))
-    assert cmp_dsks(a[0], a[0])
-    assert cmp_dsks(a[:, [1, 2, 3]], a[:, [1, 2, 3]])
-    assert cmp_dsks(a[:, 5:2:-1], a[:, 5:2:-1])
+    assert same_keys(a[0], a[0])
+    assert same_keys(a[:, [1, 2, 3]], a[:, [1, 2, 3]])
+    assert same_keys(a[:, 5:2:-1], a[:, 5:2:-1])
