@@ -9,7 +9,7 @@ from toolz.functoolz import Compose
 from .context import _globals
 from .utils import Dispatch, ignoring
 
-__all__ = ("Base", "compute", "normalize", "tokenize")
+__all__ = ("Base", "compute", "normalize_token", "tokenize")
 
 
 class Base(object):
@@ -72,7 +72,9 @@ def normalize_function(func):
     if isinstance(func, curry):
         func = func._partial
     if isinstance(func, Compose):
-        return tuple(normalize_function(f) for f in func.funcs)
+        first = getattr(func, 'first', None)
+        funcs = reversed((first,) + func.funcs) if first else func.funcs
+        return tuple(normalize_function(f) for f in funcs)
     elif isinstance(func, partial):
         kws = tuple(sorted(func.keywords.items())) if func.keywords else ()
         return (normalize_function(func.func), func.args, kws)
@@ -82,17 +84,19 @@ def normalize_function(func):
         return str(func)
 
 
-normalize = Dispatch()
-normalize.register((int, float, str, tuple, list), lambda a: a)
-normalize.register(object, lambda a: normalize_function(a) if callable(a) else a)
-normalize.register(dict, lambda a: tuple(sorted(a.items())))
+normalize_token = Dispatch()
+normalize_token.register((int, float, str, tuple, list), lambda a: a)
+normalize_token.register(object,
+        lambda a: normalize_function(a) if callable(a) else a)
+normalize_token.register(dict, lambda a: tuple(sorted(a.items())))
 with ignoring(ImportError):
     import pandas as pd
-    normalize.register(pd.DataFrame, lambda a: (id(a), len(a), list(a.columns)))
-    normalize.register(pd.Series, lambda a: (id(a), len(a), a.name))
+    normalize_token.register(pd.DataFrame,
+            lambda a: (id(a), len(a), list(a.columns)))
+    normalize_token.register(pd.Series, lambda a: (id(a), len(a), a.name))
 with ignoring(ImportError):
     import numpy as np
-    normalize.register(np.ndarray, lambda a: (id(a), a.dtype, a.shape))
+    normalize_token.register(np.ndarray, lambda a: (id(a), a.dtype, a.shape))
 
 
 def tokenize(*args):
@@ -104,4 +108,4 @@ def tokenize(*args):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
-    return md5(str(tuple(normalize(a) for a in args)).encode()).hexdigest()
+    return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()

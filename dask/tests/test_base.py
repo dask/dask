@@ -7,14 +7,15 @@ pytest.importorskip('toolz')
 from toolz import compose, partial, curry
 
 import dask
-from dask.base import compute, tokenize, normalize, normalize_function
+from dask.base import compute, tokenize, normalize_token, normalize_function
 from dask.utils import raises
 
 
 def test_normalize():
-    assert normalize((1, 2, 3)) == (1, 2, 3)
-    assert normalize('a') == 'a'
-    assert normalize({'a': 1, 'b': 2, 'c': 3}) == (('a', 1), ('b', 2), ('c', 3))
+    assert normalize_token((1, 2, 3)) == (1, 2, 3)
+    assert normalize_token('a') == 'a'
+    assert normalize_token({'a': 1, 'b': 2, 'c': 3}) ==\
+            (('a', 1), ('b', 2), ('c', 3))
 
 
 def test_normalize_function():
@@ -33,14 +34,14 @@ def test_normalize_function():
             (('test_base.f2', (), (('b', 2),)), 'test_base.f3')
     assert normalize_function(f1) == ('test_base.f1', (), ())
     assert normalize_function(f1(2, c=2)) == ('test_base.f1', (2,), (('c', 2),))
-    assert normalize(f1) == normalize_function(f1)
+    assert normalize_token(f1) == normalize_function(f1)
 
 
 def test_tokenize():
     a = (1, 2, 3)
     b = {'a': 1, 'b': 2, 'c': 3}
     assert tokenize(a) == '4889c6ccd7099fc2fd19f4be468fcfa0'
-    assert tokenize(a, b) == tokenize(normalize(a), normalize(b))
+    assert tokenize(a, b) == tokenize(normalize_token(a), normalize_token(b))
 
 
 da = pytest.importorskip('dask.array')
