@@ -1236,3 +1236,9 @@ def test_drop_axis_1():
 
     assert eq(a.drop('y', axis=1), df.drop('y', axis=1))
 
+
+def test_gh580():
+    df = pd.DataFrame({'x': np.arange(10, dtype=float)})
+    ddf = dd.from_pandas(df, 2)
+    assert eq(np.cos(df['x']), np.cos(ddf['x']))
+    assert eq(np.cos(df['x']), np.cos(ddf['x']))
