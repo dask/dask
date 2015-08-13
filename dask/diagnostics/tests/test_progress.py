@@ -84,16 +84,18 @@ def test_with_cache(capsys):
     c = cachey.Cache(10000)
     cc = Cache(c)
 
-    with cc, ProgressBar():
-        assert get({'x': (mul, 1, 2)}, 'x') == 2
+    with cc:
+        with ProgressBar():
+            assert get({'x': (mul, 1, 2)}, 'x') == 2
     out, err = capsys.readouterr()
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
     assert bar == "[########################################]"
     assert percent == "100% Completed"
     assert c.data['x'] == 2
 
-    with cc, ProgressBar():
-        assert get({'x': (mul, 1, 2), 'y': (mul, 'x', 3)}, 'y') == 6
+    with cc:
+        with ProgressBar():
+            assert get({'x': (mul, 1, 2), 'y': (mul, 'x', 3)}, 'y') == 6
     out, err = capsys.readouterr()
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
     assert bar == "[########################################]"
