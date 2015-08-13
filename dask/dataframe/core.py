@@ -519,7 +519,7 @@ class Series(_Frame):
         return x
 
     def __array_wrap__(self, array, context=None):
-        return pd.Series(array)
+        return pd.Series(array, name=self.name)
 
     def __array_prepare__(self, array, context=None):
         return array
