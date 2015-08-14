@@ -449,6 +449,27 @@ def test_to_castra():
     assert last[1] == a.npartitions - 1
 
 
+def test_from_castra():
+    pytest.importorskip('castra')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+    a = dd.from_pandas(df, 2)
+
+    c = a.to_castra()
+    with_castra = dd.from_castra(c)
+    with_fn = dd.from_castra(c.path)
+    with_columns = dd.from_castra(c, 'x')
+    try:
+        tm.assert_frame_equal(df, with_castra.compute())
+        tm.assert_frame_equal(df, with_fn.compute())
+        tm.assert_series_equal(df.x, with_columns.compute())
+    finally:
+        # Calling c.drop() is a race condition on drop from `with_fn.__del__`
+        # and c.drop. Manually `del`ing gets around this.
+        del with_fn, c
+
+
 def test_to_hdf():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
