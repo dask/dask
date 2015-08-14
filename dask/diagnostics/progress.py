@@ -4,7 +4,6 @@ import threading
 import time
 from timeit import default_timer
 
-from ..core import istask
 from ..callbacks import Callback
 from ..utils import ignoring
 
@@ -44,23 +43,26 @@ class ProgressBar(Callback):
         self._dt = dt
 
     def _start(self, dsk):
-        self._ntasks = len([k for (k, v) in dsk.items() if istask(v)])
-        self._ndone = 0
-        self._update_rate = max(1, self._ntasks // self._width)
+        self._state = None
         self._start_time = default_timer()
         # Start background thread
         self._running = True
         self._timer = threading.Thread(target=self._timer_func)
         self._timer.start()
 
-    def _posttask(self, key, value, dsk, state, id):
-        self._ndone += 1
+    def _pretask(self, key, dsk, state):
+        self._state = state
         sys.stdout.flush()
 
     def _finish(self, dsk, state, errored):
         self._running = False
         self._timer.join()
-        self._finalize_bar()
+        if not errored:
+            self._draw_bar(1)
+        else:
+            self._update_bar()
+        sys.stdout.write('\n')
+        sys.stdout.flush()
 
     def _timer_func(self):
         """Background thread for updating the progress bar"""
@@ -69,21 +71,20 @@ class ProgressBar(Callback):
             time.sleep(self._dt)
 
     def _update_bar(self):
-        if self._ntasks:
-            tics = int(self._ndone * self._width / self._ntasks)
-            percent = (100 * self._ndone) // self._ntasks
-        else:
-            tics = self._width
-            percent = 100
-        bar = '#' * tics
+        s = self._state
+        if not s:
+            self._draw_bar(0)
+            return
+        ndone = len(s['finished'])
+        ntasks = sum(len(s[k]) for k in ['ready', 'waiting', 'running']) + ndone
+        self._draw_bar(ndone / ntasks if ntasks else 0)
+
+    def _draw_bar(self, frac):
+        bar = '#' * int(self._width * frac)
+        percent = int(100 * frac)
         elapsed = format_time(default_timer() - self._start_time)
         msg = '\r[{0:<{1}}] | {2}% Completed | {3}'.format(bar, self._width,
                                                            percent, elapsed)
         with ignoring(ValueError):
             sys.stdout.write(msg)
             sys.stdout.flush()
-
-    def _finalize_bar(self):
-        self._update_bar()
-        sys.stdout.write('\n')
-        sys.stdout.flush()

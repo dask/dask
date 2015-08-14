@@ -1,4 +1,4 @@
-from dask.diagnostics.cache import Cache
+from dask.cache import Cache
 from dask.async import get_sync
 from dask.threaded import get
 from operator import add
