@@ -192,33 +192,42 @@ def test_merge():
     B = pd.DataFrame({'y': [1, 3, 4, 4, 5, 6], 'z': [6, 5, 4, 3, 2, 1]})
     b = dd.repartition(B, [0, 2, 5])
 
-    list_eq(dd.merge(a, b, left_index=True, right_index=True),
-            pd.merge(A, B, left_index=True, right_index=True))
+    eq(dd.merge(a, b, left_index=True, right_index=True),
+       pd.merge(A, B, left_index=True, right_index=True))
 
-    list_eq(dd.merge(a, b, on='y'),
-            pd.merge(A, B, on='y'))
+    for how in ['inner', 'outer', 'left', 'right']:
 
-    list_eq(dd.merge(a, b, left_on='x', right_on='z'),
-            pd.merge(A, B, left_on='x', right_on='z'))
+        result = dd.merge(a, b, on='y', how=how)
+        list_eq(result, pd.merge(A, B, on='y', how=how))
+        assert all(d is None for d in result.divisions)
 
-    list_eq(dd.merge(a, b),
-            pd.merge(A, B))
+        list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how),
+                pd.merge(A, B, left_on='x', right_on='z', how=how))
+        list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how,
+                         suffixes=('1', '2')),
+                pd.merge(A, B, left_on='x', right_on='z', how=how,
+                         suffixes=('1', '2')))
 
-    list_eq(dd.merge(a, B),
-            pd.merge(A, B))
+        list_eq(dd.merge(a, b, how=how), pd.merge(A, B, how=how))
+        list_eq(dd.merge(a, B, how=how), pd.merge(A, B, how=how))
+        list_eq(dd.merge(A, b, how=how), pd.merge(A, B, how=how))
+        list_eq(dd.merge(A, B, how=how), pd.merge(A, B, how=how))
 
-    list_eq(dd.merge(A, b),
-            pd.merge(A, B))
+        list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how),
+                pd.merge(A, B, left_index=True, right_index=True, how=how))
+        list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how,
+                         suffixes=('1', '2')),
+                pd.merge(A, B, left_index=True, right_index=True, how=how,
+                         suffixes=('1', '2')))
 
-    list_eq(dd.merge(A, B),
-            pd.merge(A, B))
+        list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how),
+                pd.merge(A, B, left_on='x', right_index=True, how=how))
+        list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how,
+                         suffixes=('1', '2')),
+                pd.merge(A, B, left_on='x', right_index=True, how=how,
+                         suffixes=('1', '2')))
 
-    list_eq(dd.merge(a, b, left_index=True, right_index=True),
-            pd.merge(A, B, left_index=True, right_index=True))
-
-    # list_eq(dd.merge(a, b, left_on='x', right_index=True),
-    #         pd.merge(A, B, left_on='x', right_index=True))
-
+    # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
@@ -233,69 +242,86 @@ def test_merge_by_index_patterns():
     pdf2l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
                           index=list('abcdefg'))
-    pdf2r = pd.DataFrame({'c': [1, 2, 3, 4, 5, 6, 7],
+    pdf2r = pd.DataFrame({'c': [7, 6, 5, 4, 3, 2, 1],
                           'd': [7, 6, 5, 4, 3, 2, 1]},
                           index=list('abcdefg'))
 
     pdf3l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
                           index=list('abcdefg'))
-    pdf3r = pd.DataFrame({'c': [1, 2, 3, 4],
+    pdf3r = pd.DataFrame({'c': [6, 7, 8, 9],
                           'd': [5, 4, 3, 2]},
                           index=list('abdg'))
 
-    pdf4r = pd.DataFrame({'c': [1, 2, 3, 4],
-                          'd': [5, 4, 3, 2]},
-                          index=list('abdg'))
     pdf4l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
                           index=list('abcdefg'))
+    pdf4r = pd.DataFrame({'c': [9, 10, 11, 12],
+                          'd': [5, 4, 3, 2]},
+                          index=list('abdg'))
 
     # completely different index
-    pdf5r = pd.DataFrame({'c': [1, 2, 3, 4],
-                          'd': [5, 4, 3, 2]},
-                          index=list('abcd'))
-    pdf5l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+    pdf5l = pd.DataFrame({'a': [1, 1, 2, 2, 3, 3, 4],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
                           index=list('lmnopqr'))
-
-    pdf6r = pd.DataFrame({'c': [1, 2, 3, 4],
+    pdf5r = pd.DataFrame({'c': [1, 1, 1, 1],
                           'd': [5, 4, 3, 2]},
                           index=list('abcd'))
-    pdf6l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+
+    pdf6l = pd.DataFrame({'a': [1, 1, 2, 2, 3, 3, 4],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
                           index=list('cdefghi'))
-
-    pdf7r = pd.DataFrame({'c': [1, 2, 3, 4],
+    pdf6r = pd.DataFrame({'c': [1, 2, 1, 2],
                           'd': [5, 4, 3, 2]},
-                          index=list('fghi'))
-    pdf7l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                          index=list('abcd'))
+
+    pdf7l = pd.DataFrame({'a': [1, 1, 2, 2, 3, 3, 4],
                           'b': [7, 6, 5, 4, 3, 2, 1]},
                           index=list('abcdefg'))
+    pdf7r = pd.DataFrame({'c': [5, 6, 7, 8],
+                          'd': [5, 4, 3, 2]},
+                          index=list('fghi'))
+
 
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
-                     (pdf4l, pdf4r), (pdf5r, pdf5l), (pdf6r, pdf6l),
-                     (pdf7r, pdf7l)]:
-        # same partition
-        ddl = dd.from_pandas(pdl, 2)
-        ddr = dd.from_pandas(pdr, 2)
+                     (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
+                     (pdf7l, pdf7r)]:
 
-        for how in ['inner', 'outer', 'left', 'right']:
-            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
-               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
+        for lpart, rpart in [(2, 2),  # same partition
+                             (3, 2),  # left npartition > right npartition
+                             (2, 3)]: # left npartition < right npartition
 
-        # different partition (left npartition > right npartition)
-        ddl = dd.from_pandas(pdl, 3)
-        ddr = dd.from_pandas(pdr, 2)
+            ddl = dd.from_pandas(pdl, lpart)
+            ddr = dd.from_pandas(pdr, rpart)
 
-        for how in ['inner', 'outer', 'left', 'right']:
-            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
-               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
+            for how in ['inner', 'outer', 'left', 'right']:
+                eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
+                   pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
+                eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True),
+                   pd.merge(pdr, pdl, how=how, left_index=True, right_index=True))
 
-        # different partition (left npartition < right npartition)
-        ddl = dd.from_pandas(pdl, 2)
-        ddr = dd.from_pandas(pdr, 3)
+                eq(ddr.merge(ddl, how=how, left_index=True, right_index=True),
+                   pdr.merge(pdl, how=how, left_index=True, right_index=True))
+                eq(ddl.merge(ddr, how=how, left_index=True, right_index=True),
+                   pdl.merge(pdr, how=how, left_index=True, right_index=True))
 
-        for how in ['inner', 'outer', 'left', 'right']:
-            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
-               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
+                # hash join
+                list_eq(dd.merge(ddl, ddr, how=how, left_index='a', right_index='c'),
+                        pd.merge(pdl, pdr, how=how, left_index='a', right_index='c'))
+                list_eq(dd.merge(ddl, ddr, how=how, left_index='b', right_index='d'),
+                        pd.merge(pdl, pdr, how=how, left_index='b', right_index='d'))
+
+                list_eq(dd.merge(ddr, ddl, how=how, left_index='a', right_index='c'),
+                        pd.merge(pdr, pdl, how=how, left_index='a', right_index='c'))
+                list_eq(dd.merge(ddr, ddl, how=how, left_index='b', right_index='d'),
+                        pd.merge(pdr, pdl, how=how, left_index='b', right_index='d'))
+
+                list_eq(ddl.merge(ddr, how=how, left_on='a', right_on='c'),
+                        pdl.merge(pdr, how=how, left_on='a', right_on='c'))
+                list_eq(ddl.merge(ddr, how=how, left_index='b', right_index='d'),
+                        pdl.merge(pdr, how=how, left_index='b', right_index='d'))
+
+                list_eq(ddr.merge(ddl, how=how, left_index='a', right_index='c'),
+                        pdr.merge(pdl, how=how, left_index='a', right_index='c'))
+                list_eq(ddr.merge(ddl, how=how, left_index='b', right_index='d'),
+                        pdr.merge(pdl, how=how, left_index='b', right_index='d'))
