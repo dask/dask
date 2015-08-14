@@ -51,6 +51,8 @@ def imread(filename, imread=None, preprocess=None):
     name = 'imread-%s' % tokenize(filenames, map(os.path.getmtime, filenames))
 
     sample = imread(filenames[0])
+    if preprocess:
+        sample = preprocess(sample)
 
     keys = [(name, i) + (0,) * len(sample.shape) for i in range(len(filenames))]
     if preprocess:
