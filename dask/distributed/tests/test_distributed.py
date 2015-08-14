@@ -2,16 +2,20 @@
 
 import time
 from subprocess import Popen, PIPE
+from distutils.version import StrictVersion
 
 import pytest
 
 np = pytest.importorskip('numpy')
-pytest.importorskip('IPython.parallel')
+IPython = pytest.importorskip('IPython')
+if StrictVersion(IPython.__version__) < '4.0':
+    import IPython.parallel as ipp
+else:
+    ipp = pytest.importorskip('ipyparallel')
 
 import numpy as np
 from numpy.testing import assert_array_almost_equal
 
-from IPython.parallel import Client
 from contextlib import contextmanager
 
 from dask.distributed import dask_client_from_ipclient
@@ -51,7 +55,7 @@ def teardown_cluster():
 def ipcluster():
     setup_cluster()
     try:
-        c = Client()
+        c = ipp.Client()
         yield c
     finally:
         teardown_cluster()
