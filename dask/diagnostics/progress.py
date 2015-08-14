@@ -4,7 +4,6 @@ import threading
 import time
 from timeit import default_timer
 
-from ..core import istask
 from ..callbacks import Callback
 from ..utils import ignoring
 
@@ -44,18 +43,15 @@ class ProgressBar(Callback):
         self._dt = dt
 
     def _start(self, dsk):
-        self._ndone = 0
-        self._ntasks = None
+        self._state = None
         self._start_time = default_timer()
         # Start background thread
         self._running = True
         self._timer = threading.Thread(target=self._timer_func)
         self._timer.start()
 
-    def _posttask(self, key, value, dsk, state, id):
-        if self._ntasks is None:
-            self._ntasks = len([1 for v in dsk.values() if istask(v)])
-        self._ndone += 1
+    def _pretask(self, key, dsk, state):
+        self._state = state
         sys.stdout.flush()
 
     def _finish(self, dsk, state, errored):
@@ -75,7 +71,13 @@ class ProgressBar(Callback):
             time.sleep(self._dt)
 
     def _update_bar(self):
-        self._draw_bar(self._ndone / self._ntasks if self._ntasks else 0)
+        s = self._state
+        if not s:
+            self._draw_bar(0)
+            return
+        ndone = len(s['finished'])
+        ntasks = sum(len(s[k]) for k in ['ready', 'waiting', 'running']) + ndone
+        self._draw_bar(ndone / ntasks if ntasks else 0)
 
     def _draw_bar(self, frac):
         bar = '#' * int(self._width * frac)

@@ -13,20 +13,21 @@ dsk = {'a': 1,
        'e': (mul, 'c', 'd')}
 
 
+def check_bar_completed(capsys, width=40):
+    out, err = capsys.readouterr()
+    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
+    assert bar == '[' + '#'*width + ']'
+    assert percent == '100% Completed'
+
+
 def test_progressbar(capsys):
     with ProgressBar():
         out = get(dsk, 'e')
     assert out == 6
-    out, err = capsys.readouterr()
-    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-    assert bar == "[########################################]"
-    assert percent == "100% Completed"
+    check_bar_completed(capsys)
     with ProgressBar(width=20):
         out = get(dsk, 'e')
-    out, err = capsys.readouterr()
-    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-    assert bar == "[####################]"
-    assert percent == "100% Completed"
+    check_bar_completed(capsys, 20)
 
 
 def test_clean_exit():
@@ -56,10 +57,7 @@ def test_register(capsys):
         assert _globals['callbacks']
 
         get(dsk, 'e')
-        out, err = capsys.readouterr()
-        bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-        assert bar == "[########################################]"
-        assert percent == "100% Completed"
+        check_bar_completed(capsys)
 
         p.unregister()
 
@@ -71,11 +69,7 @@ def test_register(capsys):
 def test_no_tasks(capsys):
     with ProgressBar():
         get({'x': 1}, 'x')
-
-    out, err = capsys.readouterr()
-    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-    assert bar == "[########################################]"
-    assert percent == "100% Completed"
+    check_bar_completed(capsys)
 
 
 def test_with_cache(capsys):
@@ -87,16 +81,22 @@ def test_with_cache(capsys):
     with cc:
         with ProgressBar():
             assert get({'x': (mul, 1, 2)}, 'x') == 2
-    out, err = capsys.readouterr()
-    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-    assert bar == "[########################################]"
-    assert percent == "100% Completed"
+    check_bar_completed(capsys)
     assert c.data['x'] == 2
 
     with cc:
         with ProgressBar():
             assert get({'x': (mul, 1, 2), 'y': (mul, 'x', 3)}, 'y') == 6
-    out, err = capsys.readouterr()
-    bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
-    assert bar == "[########################################]"
-    assert percent == "100% Completed"
+    check_bar_completed(capsys)
+
+
+def test_with_alias(capsys):
+    dsk = {'a': 1,
+           'b': 2,
+           'c': (add, 'a', 'b'),
+           'd': (add, 1, 2),
+           'e': 'd',
+           'f': (mul, 'e', 'c')}
+    with ProgressBar():
+        get(dsk, 'f')
+    check_bar_completed(capsys)
