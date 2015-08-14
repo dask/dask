@@ -41,3 +41,12 @@ def test_imread_with_custom_function():
     with random_images(4, (5, 6, 3)) as globstring:
         im = da_imread(globstring, imread=imread2)
         assert (im.compute() == np.ones((4, 2, 3, 4), dtype='i1')).all()
+
+
+def test_preprocess():
+    def preprocess(x):
+        x[:] = 1
+        return x
+    with random_images(4, (2, 3, 4)) as globstring:
+        im = da_imread(globstring, preprocess=preprocess)
+        assert (im.compute() == np.ones((4, 2, 3, 4), dtype='i1')).all()

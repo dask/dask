@@ -13,7 +13,7 @@ def add_leading_dimension(x):
     return x[None, ...]
 
 
-def imread(filename, imread=None):
+def imread(filename, imread=None, preprocess=None):
     """ Read a stack of images into a dask array
 
     Parameters
@@ -23,8 +23,11 @@ def imread(filename, imread=None):
         A globstring like 'myfile.*.png'
     imread: function (optional)
         Optionally provide custom imread function.
-        Takes a filename and produces a numpy array.
+        Function should expect a filename and produce a numpy array.
         Defaults to ``skimage.io.imread``.
+    preprocess: function (optional)
+        Optionally provide custom function to preprocess the image.
+        Function should expect a numpy array for a single image.
 
     Example
     -------
@@ -49,9 +52,14 @@ def imread(filename, imread=None):
 
     sample = imread(filenames[0])
 
-    dsk = dict(((name, i) + (0,) * len(sample.shape),
-                (add_leading_dimension, (imread, filename)))
-                for i, filename in enumerate(filenames))
+    keys = [(name, i) + (0,) * len(sample.shape) for i in range(len(filenames))]
+    if preprocess:
+        values = [(add_leading_dimension, (preprocess, (imread, filename)))
+                  for filename in filenames]
+    else:
+        values = [(add_leading_dimension, (imread, filename))
+                  for filename in filenames]
+    dsk = dict(zip(keys, values))
 
     chunks = ((1,) * len(filenames),) + tuple((d,) for d in sample.shape)
 
