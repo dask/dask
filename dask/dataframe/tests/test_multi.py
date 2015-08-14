@@ -246,16 +246,12 @@ def test_merge_by_index_patterns():
                           'd': [7, 6, 5, 4, 3, 2, 1]},
                           index=list('abcdefg'))
 
-    pdf3l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
-                          'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('abcdefg'))
+    pdf3l = pdf2l
     pdf3r = pd.DataFrame({'c': [6, 7, 8, 9],
                           'd': [5, 4, 3, 2]},
                           index=list('abdg'))
 
-    pdf4l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
-                          'b': [7, 6, 5, 4, 3, 2, 1]},
-                          index=list('abcdefg'))
+    pdf4l = pdf2l
     pdf4r = pd.DataFrame({'c': [9, 10, 11, 12],
                           'd': [5, 4, 3, 2]},
                           index=list('abdg'))
@@ -282,7 +278,6 @@ def test_merge_by_index_patterns():
                           'd': [5, 4, 3, 2]},
                           index=list('fghi'))
 
-
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
                      (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
                      (pdf7l, pdf7r)]:
@@ -306,22 +301,105 @@ def test_merge_by_index_patterns():
                    pdl.merge(pdr, how=how, left_index=True, right_index=True))
 
                 # hash join
-                list_eq(dd.merge(ddl, ddr, how=how, left_index='a', right_index='c'),
-                        pd.merge(pdl, pdr, how=how, left_index='a', right_index='c'))
-                list_eq(dd.merge(ddl, ddr, how=how, left_index='b', right_index='d'),
-                        pd.merge(pdl, pdr, how=how, left_index='b', right_index='d'))
+                list_eq(dd.merge(ddl, ddr, how=how, left_on='a', right_on='c'),
+                        pd.merge(pdl, pdr, how=how, left_on='a', right_on='c'))
+                list_eq(dd.merge(ddl, ddr, how=how, left_on='b', right_on='d'),
+                        pd.merge(pdl, pdr, how=how, left_on='b', right_on='d'))
 
-                list_eq(dd.merge(ddr, ddl, how=how, left_index='a', right_index='c'),
-                        pd.merge(pdr, pdl, how=how, left_index='a', right_index='c'))
-                list_eq(dd.merge(ddr, ddl, how=how, left_index='b', right_index='d'),
-                        pd.merge(pdr, pdl, how=how, left_index='b', right_index='d'))
+                list_eq(dd.merge(ddr, ddl, how=how, left_on='c', right_on='a'),
+                        pd.merge(pdr, pdl, how=how, left_on='c', right_on='a'))
+                list_eq(dd.merge(ddr, ddl, how=how, left_on='d', right_on='b'),
+                        pd.merge(pdr, pdl, how=how, left_on='d', right_on='b'))
 
                 list_eq(ddl.merge(ddr, how=how, left_on='a', right_on='c'),
                         pdl.merge(pdr, how=how, left_on='a', right_on='c'))
-                list_eq(ddl.merge(ddr, how=how, left_index='b', right_index='d'),
-                        pdl.merge(pdr, how=how, left_index='b', right_index='d'))
+                list_eq(ddl.merge(ddr, how=how, left_on='b', right_on='d'),
+                        pdl.merge(pdr, how=how, left_on='b', right_on='d'))
 
-                list_eq(ddr.merge(ddl, how=how, left_index='a', right_index='c'),
-                        pdr.merge(pdl, how=how, left_index='a', right_index='c'))
-                list_eq(ddr.merge(ddl, how=how, left_index='b', right_index='d'),
-                        pdr.merge(pdl, how=how, left_index='b', right_index='d'))
+                list_eq(ddr.merge(ddl, how=how, left_on='c', right_on='a'),
+                        pdr.merge(pdl, how=how, left_on='c', right_on='a'))
+                list_eq(ddr.merge(ddl, how=how, left_on='d', right_on='b'),
+                        pdr.merge(pdl, how=how, left_on='d', right_on='b'))
+
+def test_join_by_index_patterns():
+
+    # Similar test cases as test_merge_by_index_patterns,
+    # but columns / index for join have same dtype
+
+    pdf1l = pd.DataFrame({'a': list('abcdefg'),
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                         index=list('abcdefg'))
+    pdf1r = pd.DataFrame({'c': list('abcdefg'),
+                          'd': [7, 6, 5, 4, 3, 2, 1]},
+                         index=list('abcdefg'))
+
+    pdf2l = pdf1l
+    pdf2r = pd.DataFrame({'c': list('gfedcba'),
+                          'd': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('abcdefg'))
+
+    pdf3l = pdf1l
+    pdf3r = pd.DataFrame({'c': list('abdg'),
+                          'd': [5, 4, 3, 2]},
+                          index=list('abdg'))
+
+    pdf4l = pd.DataFrame({'a': list('abcabce'),
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('abcdefg'))
+    pdf4r = pd.DataFrame({'c': list('abda'),
+                          'd': [5, 4, 3, 2]},
+                          index=list('abdg'))
+
+    # completely different index
+    pdf5l = pd.DataFrame({'a': list('lmnopqr'),
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('lmnopqr'))
+    pdf5r = pd.DataFrame({'c': list('abcd'),
+                          'd': [5, 4, 3, 2]},
+                          index=list('abcd'))
+
+    pdf6l = pd.DataFrame({'a': list('cdefghi'),
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('cdefghi'))
+    pdf6r = pd.DataFrame({'c': list('abab'),
+                          'd': [5, 4, 3, 2]},
+                          index=list('abcd'))
+
+    pdf7l = pd.DataFrame({'a': list('aabbccd'),
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('abcdefg'))
+    pdf7r = pd.DataFrame({'c': list('ABCD'),
+                          'd': [5, 4, 3, 2]},
+                          index=list('fghi'))
+
+    for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
+                     (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
+                     (pdf7l, pdf7r)]:
+        for lpart, rpart in [(2, 2), (3, 2), (2, 3)]:
+
+            ddl = dd.from_pandas(pdl, lpart)
+            ddr = dd.from_pandas(pdr, rpart)
+
+            for how in ['inner', 'outer', 'left', 'right']:
+                eq(ddl.join(ddr, how=how), pdl.join(pdr, how=how))
+                eq(ddr.join(ddl, how=how), pdr.join(pdl, how=how))
+
+                eq(ddl.join(ddr, how=how, lsuffix='l', rsuffix='r'),
+                   pdl.join(pdr, how=how, lsuffix='l', rsuffix='r'))
+                eq(ddr.join(ddl, how=how, lsuffix='l', rsuffix='r'),
+                   pdr.join(pdl, how=how, lsuffix='l', rsuffix='r'))
+
+                list_eq(ddl.join(ddr, how=how, on='a', lsuffix='l', rsuffix='r'),
+                        pdl.join(pdr, how=how, on='a', lsuffix='l', rsuffix='r'))
+                list_eq(ddr.join(ddl, how=how, on='c', lsuffix='l', rsuffix='r'),
+                        pdr.join(pdl, how=how, on='c', lsuffix='l', rsuffix='r'))
+
+                # merge with index and columns
+                list_eq(ddl.merge(ddr, how=how, left_on='a', right_index=True),
+                        pdl.merge(pdr, how=how, left_on='a', right_index=True))
+                list_eq(ddr.merge(ddl, how=how, left_on='c', right_index=True),
+                        pdr.merge(pdl, how=how, left_on='c', right_index=True))
+                list_eq(ddl.merge(ddr, how=how, left_index=True, right_on='c'),
+                        pdl.merge(pdr, how=how, left_index=True, right_on='c'))
+                list_eq(ddr.merge(ddl, how=how, left_index=True, right_on='a'),
+                        pdr.merge(pdl, how=how, left_index=True, right_on='a'))

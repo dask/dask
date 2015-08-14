@@ -1004,6 +1004,19 @@ class DataFrame(_Frame):
                      left_index=left_index, right_index=right_index,
                      suffixes=suffixes, npartitions=npartitions)
 
+    @wraps(pd.DataFrame.join)
+    def join(self, other, on=None, how='left',
+             lsuffix='', rsuffix='', npartitions=None):
+
+        if not isinstance(other, (DataFrame, pd.DataFrame)):
+            raise ValueError('other must be DataFrame')
+
+        from .multi import merge
+        return merge(self, other, how=how,
+                     left_index=on is None, right_index=True,
+                     left_on=on, suffixes=[lsuffix, rsuffix],
+                     npartitions=npartitions)
+
 
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))

@@ -197,10 +197,17 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
 def pdmerge(left, right, how, left_on, right_on,
             left_index, right_index, suffixes,
             default_left_columns, default_right_columns):
-
+    # print(left)
+    # print(right)
     if not len(left):
+        # print(left.columns.tolist())
+        # print(default_left_columns)
+        # assert left.columns.tolist() == default_left_columns
         left = pd.DataFrame([], columns=default_left_columns)
     if not len(right):
+        # print(right.columns.tolist())
+        # print(default_right_columns)
+        # assert right.columns.tolist() == default_right_columns
         right = pd.DataFrame([], columns=default_right_columns)
 
     result = pd.merge(left, right, how=how,
@@ -210,7 +217,8 @@ def pdmerge(left, right, how, left_on, right_on,
     return result
 
 
-def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffixes=('_x', '_y')):
+def hash_join(lhs, left_on, rhs, right_on, how='inner',
+              npartitions=None, suffixes=('_x', '_y'), join=False):
     """ Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
@@ -221,47 +229,45 @@ def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffix
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle(lhs, on_left, npartitions)
-    rhs2 = shuffle(rhs, on_right, npartitions)
+    lhs2 = shuffle(lhs, left_on, npartitions)
+    rhs2 = shuffle(rhs, right_on, npartitions)
 
-    if isinstance(on_left, Index):
-        left_on, left_index = None
+    if isinstance(left_on, Index):
+        left_on = None
         left_index = True
     else:
-        left_on = on_left
         left_index = False
 
-    if isinstance(on_right, Index):
+    if isinstance(right_on, Index):
         right_on = None
         right_index = True
     else:
-        right_on = on_right
         right_index = False
 
     # fake column names
     left_empty = pd.DataFrame([], columns=lhs.columns)
     right_empty = pd.DataFrame([], columns=rhs.columns)
-
     j = pd.merge(left_empty, right_empty, how, None,
                  left_on=left_on, right_on=right_on,
                  left_index=left_index, right_index=right_index,
                  suffixes=suffixes)
 
-    if isinstance(on_left, list):
-        on_left = (list, tuple(on_left))
-    if isinstance(on_right, list):
-        on_right = (list, tuple(on_right))
+    merger = partial(pdmerge, suffixes=suffixes,
+                     default_left_columns=list(lhs.columns),
+                     default_right_columns=list(rhs.columns))
 
-    pdmerge2 = partial(pdmerge, suffixes=suffixes,
-                       default_left_columns=list(lhs.columns),
-                       default_right_columns=list(rhs.columns))
+    if isinstance(left_on, list):
+        left_on = (list, tuple(left_on))
+    if isinstance(right_on, list):
+        right_on = (list, tuple(right_on))
 
-    token = tokenize(lhs, on_left, rhs, on_right, how, npartitions, suffixes)
+    token = tokenize(lhs, left_on, rhs, right_on, left_index, right_index,
+                     how, npartitions, suffixes)
     name = 'hash-join-' + token
 
-    dsk = dict(((name, i), (pdmerge2, (lhs2._name, i), (rhs2._name, i),
-                             how, on_left, on_right,
-                             left_index, right_index))
+    dsk = dict(((name, i), (merger, (lhs2._name, i), (rhs2._name, i),
+                            how, left_on, right_on,
+                            left_index, right_index))
                 for i in range(npartitions))
 
     divisions = [None] * (npartitions + 1)
@@ -331,6 +337,9 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                                        lsuffix=suffixes[0], rsuffix=suffixes[1])
 
     else:                           # Do hash join
+
+        # DataFrame.join can have different column order from merge
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
                          how, npartitions, suffixes)
+
