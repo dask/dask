@@ -151,10 +151,12 @@ a light weight dependency.
 ``dask.bag`` depends on ``toolz`` and ``dill``.
 
 
-Notebooks
----------
+Examples
+--------
 
-Check example notebooks using dask at https://notebooks.anaconda.org/dask/.
+Dask examples are available in the following repository: https://github.com/blaze/dask-examples.
+
+You can also find them in Anaconda.org: https://notebooks.anaconda.org/dask/.
 
 
 LICENSE
