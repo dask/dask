@@ -519,6 +519,15 @@ class Series(_Frame):
                 (self.__class__.__name__, self._name,
                  repr_long_list(self.divisions)))
 
+    def __array__(self, dtype=None, **kwargs):
+        x = np.array(self.compute())
+        if dtype and x.dtype != dtype:
+            x = x.astype(dtype)
+        return x
+
+    def __array_wrap__(self, array, context=None):
+        return pd.Series(array, name=self.name)
+
     def quantile(self, q):
         """ Approximate quantiles of column
 
