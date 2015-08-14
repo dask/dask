@@ -25,6 +25,7 @@ install:
   - conda install pytest numpy pip coverage toolz pandas scikit-learn cytoolz dill pyzmq ipython bcolz chest blosc cython pytables h5py
   - if [[ $TRAVIS_PYTHON_VERSION != '2.6' ]]; then conda install bokeh; fi
   - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then conda install unittest2; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then conda install ipyparallel; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade
   - pip install git+https://github.com/mrocklin/cachey --upgrade
   - pip install blosc --upgrade
