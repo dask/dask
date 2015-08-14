@@ -9,7 +9,7 @@ import pytest
 np = pytest.importorskip('numpy')
 IPython = pytest.importorskip('IPython')
 if StrictVersion(IPython.__version__) < '4.0':
-    import IPython.parallel as ipp
+    ipp = pytest.importorskip('IPython.parallel')
 else:
     ipp = pytest.importorskip('ipyparallel')
 
