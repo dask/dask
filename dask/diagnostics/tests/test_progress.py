@@ -30,6 +30,13 @@ def test_progressbar(capsys):
     check_bar_completed(capsys, 20)
 
 
+def test_minimum_time(capsys):
+    with ProgressBar(1.0):
+        out = get(dsk, 'e')
+    out, err = capsys.readouterr()
+    assert out == '' and err == ''
+
+
 def test_clean_exit():
     dsk = {'a': (lambda: 1/0,)}
     try:
