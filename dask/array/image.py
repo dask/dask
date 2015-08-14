@@ -1,15 +1,13 @@
-from .core import Array
 from glob import glob
 import os
+
 try:
     from skimage.io import imread as sk_imread
 except ImportError:
     pass
 
-
-def tokenize(*args):
-    from hashlib import md5
-    return md5(str(args).encode()).hexdigest()
+from .core import Array
+from ..base import tokenize
 
 def add_leading_dimension(x):
     return x[None, ...]
