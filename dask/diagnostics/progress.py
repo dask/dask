@@ -29,12 +29,37 @@ def format_time(t):
 class ProgressBar(Callback):
     """A progress bar for dask.
 
-    Can be used as a context manager around dask computations.
+    Parameters
+    ----------
+    minimum : int, optional
+        Minimum time threshold in seconds before displaying a progress bar.
+        Default is 0 (always display)
+    width : int, optional
+        Width of the bar
+    dt : float, optional
+        Update resolution in seconds, default is 0.1 seconds
 
     Examples
     --------
-    >>> with ProgressBar():    # doctest: +SKIP
-    ...     out = res.compute()
+
+    Below we create a progress bar with a minimum threshold of 1 second before
+    displaying. For cheap computations nothing is shown:
+
+    >>> with ProgressBar(minimum=1.0):      # doctest: +SKIP
+    ...     out = some_fast_computation.compute()
+
+    But for expensive computations a full progress bar is displayed:
+
+    >>> with ProgressBar(minimum=1.0):      # doctest: +SKIP
+    ...     out = some_slow_computation.compute()
+    [########################################] | 100% Completed | 10.4 s
+
+    You can also register a progress bar so that it displays for all
+    computations:
+
+    >>> pbar = ProgressBar()                # doctest: +SKIP
+    >>> pbar.register()                     # doctest: +SKIP
+    >>> some_slow_computation.compute()     # doctest: +SKIP
     [########################################] | 100% Completed | 10.4 s
     """
 
