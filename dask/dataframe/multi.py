@@ -197,17 +197,11 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
 def pdmerge(left, right, how, left_on, right_on,
             left_index, right_index, suffixes,
             default_left_columns, default_right_columns):
-    # print(left)
-    # print(right)
+
     if not len(left):
-        # print(left.columns.tolist())
-        # print(default_left_columns)
-        # assert left.columns.tolist() == default_left_columns
         left = pd.DataFrame([], columns=default_left_columns)
+
     if not len(right):
-        # print(right.columns.tolist())
-        # print(default_right_columns)
-        # assert right.columns.tolist() == default_right_columns
         right = pd.DataFrame([], columns=default_right_columns)
 
     result = pd.merge(left, right, how=how,
@@ -218,7 +212,7 @@ def pdmerge(left, right, how, left_on, right_on,
 
 
 def hash_join(lhs, left_on, rhs, right_on, how='inner',
-              npartitions=None, suffixes=('_x', '_y'), join=False):
+              npartitions=None, suffixes=('_x', '_y')):
     """ Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
@@ -337,8 +331,6 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                                        lsuffix=suffixes[0], rsuffix=suffixes[1])
 
     else:                           # Do hash join
-
-        # DataFrame.join can have different column order from merge
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
                          how, npartitions, suffixes)
