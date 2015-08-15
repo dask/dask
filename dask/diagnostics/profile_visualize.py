@@ -5,6 +5,7 @@ from operator import itemgetter
 
 from toolz import unique, groupby
 import bokeh.plotting as bp
+from bokeh.io import _state
 from bokeh.palettes import brewer
 from bokeh.models import HoverTool
 
@@ -78,7 +79,7 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(results, dsk, palette='GnBu', file_path="profile.html",
+def visualize(results, dsk, palette='GnBu', file_path=None,
               show=True, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
@@ -103,7 +104,9 @@ def visualize(results, dsk, palette='GnBu', file_path="profile.html",
     The completed bokeh plot object.
     """
 
-    bp.output_file(file_path)
+    if not _state._notebook:
+        file_path = file_path or "profile.html"
+        bp.output_file(file_path)
     keys, tasks, starts, ends, ids = zip(*results)
 
     id_group = groupby(itemgetter(4), results)
