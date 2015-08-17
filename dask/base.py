@@ -9,19 +9,14 @@ from toolz.functoolz import Compose
 from .context import _globals
 from .utils import Dispatch, ignoring
 
-__all__ = ("Base", "compute", "normalize_token", "tokenize")
+__all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
 
 
 class Base(object):
     """Base class for dask collections"""
 
     def visualize(self, filename='mydask', optimize_graph=False):
-        from dask.dot import dot_graph
-        if optimize_graph:
-            dsk = self._optimize(self.dask, self._keys())
-        else:
-            dsk = self.dask
-        return dot_graph(dsk, filename=filename)
+        return visualize(self, filename=filename, optimize_graph=optimize_graph)
 
     def _visualize(self, filename='mydask', optimize_graph=False):
         warn = DeprecationWarning("``_visualize`` is deprecated, use "
@@ -66,6 +61,19 @@ def compute(*args, **kwargs):
     keys = [arg._keys() for arg in args]
     results = get(dsk, keys, **kwargs)
     return tuple(a._finalize(a, r) for a, r in zip(args, results))
+
+
+def visualize(*args, **kwargs):
+    filename = kwargs.get('filename', 'mydask')
+    optimize_graph = kwargs.get('optimize_graph', False)
+    from dask.dot import dot_graph
+    if optimize_graph:
+        dsks = [arg._optimize(arg.dask, arg._keys()) for arg in args]
+    else:
+        dsks = [arg.dask for arg in args]
+    dsk = merge(dsks)
+
+    return dot_graph(dsk, filename=filename)
 
 
 def normalize_function(func):
