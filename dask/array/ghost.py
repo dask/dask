@@ -330,20 +330,11 @@ def ghost(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
-    if isinstance(depth, int):
-        depth = (depth,) * x.ndim
-    if isinstance(depth, tuple):
-        depth = dict(zip(range(x.ndim), depth))
-
-    if boundary is None:
-        boundary = 'reflect'
-    if not isinstance(boundary, (tuple, dict)):
-        boundary = (boundary,) * x.ndim
-    if isinstance(boundary, tuple):
-        boundary = dict(zip(range(x.ndim), boundary))
+    depth2 = coerce_depth(x.ndim, depth)
+    boundary2 = coerce_boundary(x.ndim, boundary)
 
     # is depth larger than chunk size?
-    depth_values = [depth.get(i, 0) for i in range(x.ndim)]
+    depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
     for d, c in zip(depth_values, x.chunks):
         if d > min(c):
             raise ValueError("The overlapping depth %d is larger than your\n"
@@ -351,30 +342,39 @@ def ghost(x, depth, boundary):
                              "with a larger chunk size or a chunk size that\n"
                              "more evenly divides the shape of your array." %
                              (d, min(c)))
-    x2 = boundaries(x, depth, boundary)
-    x3 = ghost_internal(x2, depth)
-    trim = dict((k, v*2 if boundary.get(k, None) is not None else 0)
-                for k, v in depth.items())
+    x2 = boundaries(x, depth2, boundary2)
+    x3 = ghost_internal(x2, depth2)
+    trim = dict((k, v*2 if boundary2.get(k, None) is not None else 0)
+                for k, v in depth2.items())
     x4 = chunk.trim(x3, trim)
     return x4
 
 
 def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
-    if isinstance(depth, int):
-        depth = (depth,) * x.ndim
-    if isinstance(depth, tuple):
-        depth = dict(zip(range(x.ndim), depth))
+    depth2 = coerce_depth(x.ndim, depth)
+    boundary2 = coerce_boundary(x.ndim, boundary)
 
+    g = ghost(x, depth=depth2, boundary=boundary2)
+    g2 = g.map_blocks(func, **kwargs)
+    if trim:
+        return trim_internal(g2, depth2)
+    else:
+        return g2
+
+
+def coerce_depth(ndim, depth):
+    if isinstance(depth, int):
+        depth = (depth,) * ndim
+    if isinstance(depth, tuple):
+        depth = dict(zip(range(ndim), depth))
+    return depth
+
+
+def coerce_boundary(ndim, boundary):
     if boundary is None:
         boundary = 'reflect'
     if not isinstance(boundary, (tuple, dict)):
-        boundary = (boundary,) * x.ndim
+        boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):
-        boundary = dict(zip(range(x.ndim), boundary))
-
-    g = ghost(x, depth=depth, boundary=boundary)
-    g2 = g.map_blocks(func, **kwargs)
-    if trim:
-        return trim_internal(g2, depth)
-    else:
-        return g2
+        boundary = dict(zip(range(ndim), boundary))
+    return boundary
