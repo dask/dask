@@ -14,6 +14,7 @@ from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 from dask.utils import takes_multiple_arguments
+from sys import getdefaultencoding
 
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
@@ -821,7 +822,7 @@ def collect(grouper, group, p, barrier_token):
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
-def from_filenames(filenames, chunkbytes=None, encoding='utf-8'):
+def from_filenames(filenames, chunkbytes=None, encoding=getdefaultencoding()):
     """ Create dask by loading in lines from many files
 
     Provide list of filenames
