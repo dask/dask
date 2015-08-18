@@ -145,6 +145,4 @@ will be disappointed.  Notably dask.array has the following failings:
     difficult to do in parallel and are of somewhat diminished value on very
     large data (you rarely actually need a full sort).
     Often we include parallel-friendly alternatives like ``topk``.
-4.  Dask development is driven by immediate need, and so many lesser used
-    functions, like ``np.full_like`` have not been implemented purely out of
-    laziness.  These would make excellent community contributions.
+4.  Dask development is driven by immediate need, and so many lesser used functions have not been implemented. Community contributions are encouraged.
