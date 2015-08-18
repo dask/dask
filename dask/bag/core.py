@@ -821,7 +821,7 @@ def collect(grouper, group, p, barrier_token):
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
-def from_filenames(filenames, chunkbytes=None):
+def from_filenames(filenames, chunkbytes=None, encoding='utf-8'):
     """ Create dask by loading in lines from many files
 
     Provide list of filenames
@@ -852,7 +852,7 @@ def from_filenames(filenames, chunkbytes=None):
 
     if chunkbytes:
         chunkbytes = int(chunkbytes)
-        taskss = [_chunk_read_file(fn, chunkbytes) for fn in full_filenames]
+        taskss = [_chunk_read_file(fn, chunkbytes, encoding) for fn in full_filenames]
         d = dict(((name, i), task)
                  for i, task in enumerate(toolz.concat(taskss)))
     else:
@@ -865,11 +865,11 @@ def from_filenames(filenames, chunkbytes=None):
     return Bag(d, name, len(d))
 
 
-def _chunk_read_file(filename, chunkbytes):
+def _chunk_read_file(filename, chunkbytes, encoding):
     extension = os.path.splitext(filename)[1].strip('.')
     compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
 
-    return [(list, (StringIO, (bytes.decode,
+    return [(list, (StringIO, (bytes.decode(encoding),
                     (textblock, filename, i, i + chunkbytes, compression))))
              for i in range(0, file_size(filename, compression), chunkbytes)]
 
