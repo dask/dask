@@ -524,6 +524,21 @@ def from_dask_array(x, columns=None):
                          x.ndim)
 
 
+def from_castra(x, columns=None):
+    """Load a dask DataFrame from a Castra.
+
+    Parameters
+    ----------
+    x : filename or Castra
+    columns: list or string, optional
+        The columns to load. Default is all columns.
+    """
+    from castra import Castra
+    if not isinstance(x, Castra):
+        x = Castra(x)
+    return x.to_dask(columns)
+
+
 def _link(token, result):
     """ A dummy function to link results together in a graph
 
