@@ -584,3 +584,16 @@ def test_read_csv_of_modified_file_has_different_name():
         b = read_csv(fn)
 
         assert sorted(a.dask) != sorted(b.dask)
+
+
+def test_to_bag():
+    pytest.importorskip('dask.bag')
+    a = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                      'y': [2, 3, 4, 5]},
+                     index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(a, 2)
+
+    assert ddf.to_bag().compute(get=get_sync) == list(a.itertuples(False))
+    assert ddf.to_bag(True).compute(get=get_sync) == list(a.itertuples(True))
+    assert ddf.x.to_bag(True).compute(get=get_sync) == list(a.x.iteritems())
+    assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)
