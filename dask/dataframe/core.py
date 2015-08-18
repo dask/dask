@@ -652,6 +652,18 @@ class Series(_Frame):
     def notnull(self):
         return map_partitions(pd.Series.notnull, self.name, self)
 
+    def to_bag(self, index=False):
+        """Convert to a dask Bag.
+
+        Parameters
+        ----------
+        index : bool, optional
+            If True, the elements are tuples of ``(index, value)``, otherwise
+            they're just the ``value``.  Default is False.
+        """
+        from .io import to_bag
+        return to_bag(self, index)
+
 
 class Index(Series):
 
@@ -848,6 +860,18 @@ class DataFrame(_Frame):
     def to_csv(self, filename, **kwargs):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
+
+    def to_bag(self, index=False):
+        """Convert to a dask Bag of tuples of each row.
+
+        Parameters
+        ----------
+        index : bool, optional
+            If True, the index is included as the first element of each tuple.
+            Default is False.
+        """
+        from .io import to_bag
+        return to_bag(self, index)
 
     @wraps(pd.DataFrame._get_numeric_data)
     def _get_numeric_data(self, how='any', subset=None):

@@ -662,3 +662,17 @@ def to_csv(df, filename, **kwargs):
                              kwargs2))
 
     DataFrame._get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)
+
+
+def to_bag(df, index=False):
+    from ..bag.core import Bag
+    if isinstance(df, DataFrame):
+        func = lambda df: list(df.itertuples(index))
+    elif isinstance(df, Series):
+        func = (lambda df: list(df.iteritems())) if index else list
+    else:
+        raise TypeError("df must be either DataFrame or Series")
+    name = 'to_bag-' + tokenize(df, index)
+    dsk = dict(((name, i), (func, block)) for (i, block) in enumerate(df._keys()))
+    dsk.update(df._optimize(df.dask, df._keys()))
+    return Bag(dsk, name, df.npartitions)
