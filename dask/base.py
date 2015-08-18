@@ -22,7 +22,7 @@ class Base(object):
         warn = DeprecationWarning("``_visualize`` is deprecated, use "
                                   "``visualize`` instead.")
         warnings.warn(warn)
-        return self.visualize(optimize_graph)
+        return self.visualize(filename=filename, optimize_graph=optimize_graph)
 
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
