@@ -1197,13 +1197,13 @@ def test_repartition():
     assert eq(a, b)
     assert eq(a._get(b.dask, (b._name, 0)), df.iloc[:1])
 
-    assert raises(ValueError, lambda: a.repartition(divisions=[20, 60]))
-    assert raises(ValueError, lambda: a.repartition(divisions=[10, 50]))
-    assert raises(ValueError, lambda: a.repartition(divisions=[1]))
 
-    # do not allow to expand divisions by default
-    assert raises(ValueError, lambda: a.repartition(divisions=[0, 60]))
-    assert raises(ValueError, lambda: a.repartition(divisions=[10, 70]))
+    for div in [[20, 60], [10, 50], [1], # first / last element mismatch
+                [0, 60], [10, 70], # do not allow to expand divisions by default
+                [10, 50, 20, 60],  # not sorted
+                [10, 10, 20, 60]]: # not unique (last element can be duplicated)
+
+        assert raises(ValueError, lambda: a.repartition(divisions=div))
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list('abxyz'))
     for p in range(1, 7):
@@ -1264,6 +1264,7 @@ def test_repartition():
             _check_split_data(ddf.x, rds)
             assert rds.divisions == tuple(div)
             assert eq(pdf.x, rds)
+
 
 def test_repartition_divisions():
     result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
