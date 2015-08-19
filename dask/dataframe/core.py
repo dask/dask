@@ -4,7 +4,7 @@ from functools import wraps, reduce
 from collections import Iterable
 import bisect
 import uuid
-from toolz import merge, partial, first, partition
+from toolz import merge, partial, first, partition, unique
 from operator import getitem, setitem
 from datetime import datetime
 import pandas as pd
@@ -1557,7 +1557,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     ----------
     a: tuple
         old divisions
-    b: tuple
+    b: tuple, list
         new divisions
     name: str
         name of old dataframe
@@ -1583,9 +1583,17 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
     if not isinstance(b, (list, tuple)):
         raise ValueError('New division must be list or tuple')
+    b = list(b)
+
     if len(b) < 2:
         # minimum division is 2 elements, like [0, 0]
         raise ValueError('New division must be longer than 2 elements')
+
+    if b != sorted(b):
+        raise ValueError('New division must be sorted')
+    if len(b[:-1]) != len(list(unique(b[:-1]))):
+        msg = 'New division must be unique, except for the last element'
+        raise ValueError(msg)
 
     if force:
         if a[0] < b[0]:
