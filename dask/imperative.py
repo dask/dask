@@ -65,7 +65,7 @@ def to_task_dasks(expr):
     if isinstance(expr, Value):
         return expr.key, expr._dasks
     elif isinstance(expr, base.Base):
-        name = tokenize(str(expr), True)
+        name = tokenize(expr, True)
         keys = expr._keys()
         dsk = expr._optimize(expr.dask, keys)
         dsk[name] = (expr._finalize, expr, (concrete, keys))
@@ -89,24 +89,20 @@ def to_task_dasks(expr):
 tokens = ('_{0}'.format(i) for i in count(1))
 
 
-def tokenize(v, pure=False):
+def tokenize(*args, **kwargs):
     """Mapping function from task -> consistent name.
 
     Parameters
     ----------
-    v : object
-        Any python object (or tuple of objects) that summarize the task.
+    args : object
+        Python objects that summarize the task.
     pure : boolean, optional
         If True, a consistent hash function is tried on the input. If this
         fails, then a unique identifier is used. If False (default), then a
         unique identifier is always used.
     """
-    # TODO: May have hash collisions...
-    if pure:
-        try:
-            return str(hash(v))
-        except TypeError:
-            pass
+    if kwargs.pop('pure', False):
+        return base.tokenize(*args)
     return next(tokens)
 
 
@@ -118,9 +114,9 @@ def applyfunc(func, args, kwargs, pure=False):
 
     args, dasks = unzip(map(to_task_dasks, args), 2)
     dasks = flat_unique(dasks)
-    name = tokenize((func, args, frozenset(kwargs.items())), pure)
     if kwargs:
         func = partial(func, **kwargs)
+    name = tokenize(func, *args, pure=pure)
     dasks.append({name: (func,) + args})
     return Value(name, dasks)
 
@@ -306,6 +302,9 @@ class Value(base.Base):
     __sub__ = do(operator.sub, True)
     __truediv__ = do(operator.truediv, True)
     __xor__ = do(operator.xor, True)
+
+
+base.normalize_token.register(Value, lambda a: a.key)
 
 
 def value(val, name=None):

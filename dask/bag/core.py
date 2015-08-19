@@ -30,7 +30,7 @@ from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
-from ..base import Base
+from ..base import Base, normalize_token
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
@@ -799,6 +799,10 @@ class Bag(Base):
 
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
                             name, columns, divisions)
+
+
+normalize_token.register(Item, lambda a: a.key)
+normalize_token.register(Bag, lambda a: a.name)
 
 
 def partition(grouper, sequence, npartitions, p, nelements=2**20):
