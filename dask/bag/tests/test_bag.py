@@ -1,3 +1,4 @@
+# coding=utf-8
 from __future__ import absolute_import, division, print_function
 
 import pytest
@@ -325,6 +326,19 @@ def test_from_filenames_large():
         assert list(map(str, b)) == list(map(str, c))
 
         d = db.from_filenames([fn], chunkbytes=100)
+        assert list(b) == list(d)
+
+
+def test_from_filenames_encoding():
+    with tmpfile() as fn:
+        with open(fn, 'wb') as f:
+            f.write((u'你好！' + os.linesep).encode('gb18030') * 100)
+        b = db.from_filenames(fn, chunkbytes=100, encoding='gb18030')
+        c = db.from_filenames(fn, encoding='gb18030')
+        assert len(b.dask) > 5
+        assert list(map(str, b)) == list(map(str, c))
+
+        d = db.from_filenames([fn], chunkbytes=100, encoding='gb18030')
         assert list(b) == list(d)
 
 
