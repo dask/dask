@@ -890,10 +890,10 @@ def write(data, filename, encoding):
     ext = os.path.splitext(filename)[1][1:]
     if ext == 'gz':
         f = gzip.open(filename, 'wb')
-        data = (line.encode(encoding=encoding) for line in data)
+        data = (line.encode(encoding) for line in data)
     elif ext == 'bz2':
         f = bz2.BZ2File(filename, 'wb')
-        data = (line.encode(encoding=encoding) for line in data)
+        data = (line.encode(encoding) for line in data)
     else:
         f = open(filename, 'w')
     try:
