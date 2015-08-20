@@ -1,5 +1,6 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
+from sys import getdefaultencoding
 
 import pytest
 pytest.importorskip('dill')
@@ -22,6 +23,8 @@ import partd
 from tempfile import mkdtemp
 
 from collections import Iterator
+
+system_encoding = getdefaultencoding()
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -304,16 +307,16 @@ def test_from_filenames_gzip():
     b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (decode_sequence, 'ascii', (gzip.open, os.path.abspath('foo.json.gz')))),
-                 (list, (decode_sequence, 'ascii', (gzip.open, os.path.abspath('bar.json.gz'))))]))
+            set([(list, (decode_sequence, system_encoding, (gzip.open, os.path.abspath('foo.json.gz')))),
+                 (list, (decode_sequence, system_encoding, (gzip.open, os.path.abspath('bar.json.gz'))))]))
 
 
 def test_from_filenames_bz2():
     b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (decode_sequence, 'ascii', (bz2.BZ2File, os.path.abspath('foo.json.bz2')))),
-                 (list, (decode_sequence, 'ascii', (bz2.BZ2File, os.path.abspath('bar.json.bz2'))))]))
+            set([(list, (decode_sequence, system_encoding, (bz2.BZ2File, os.path.abspath('foo.json.bz2')))),
+                 (list, (decode_sequence, system_encoding, (bz2.BZ2File, os.path.abspath('bar.json.bz2'))))]))
 
 
 def test_from_filenames_large():
