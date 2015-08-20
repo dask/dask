@@ -8,12 +8,14 @@ import gzip
 import zlib
 import bz2
 import os
+import codecs
 
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 from dask.utils import takes_multiple_arguments
+from sys import getdefaultencoding
 
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
@@ -35,6 +37,8 @@ from ..base import Base, normalize_token
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
+
+system_encoding = getdefaultencoding()
 
 no_default = '__no__default__'
 
@@ -104,7 +108,7 @@ def list2(seq):
     return list(seq)
 
 
-def to_textfiles(b, path, name_function=str):
+def to_textfiles(b, path, name_function=str, encoding=system_encoding):
     """ Write bag to disk, one filename per partition, one line per element
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -166,7 +170,7 @@ def to_textfiles(b, path, name_function=str):
                 "3.  A path with a * in it -- 'foo.*.json'")
 
     name = next(names)
-    dsk = dict(((name, i), (write, (b.name, i), path))
+    dsk = dict(((name, i), (write, (b.name, i), path, encoding))
             for i, path in enumerate(paths))
 
     return Bag(merge(b.dask, dsk), name, b.npartitions)
@@ -340,8 +344,8 @@ class Bag(Base):
                              "Use db.from_filenames instead.")
 
     @wraps(to_textfiles)
-    def to_textfiles(self, path, name_function=str):
-        return to_textfiles(self, path, name_function)
+    def to_textfiles(self, path, name_function=str, encoding=system_encoding):
+        return to_textfiles(self, path, name_function, encoding)
 
     def fold(self, binop, combine=None, initial=no_default):
         """ Parallelizable reduction
@@ -822,10 +826,14 @@ def collect(grouper, group, p, barrier_token):
     return list(d.items())
 
 
+def decode_sequence(encoding, seq):
+    for item in seq:
+        yield item.decode(encoding)
+
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
-def from_filenames(filenames, chunkbytes=None):
+def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
     """ Create dask by loading in lines from many files
 
     Provide list of filenames
@@ -856,29 +864,29 @@ def from_filenames(filenames, chunkbytes=None):
 
     if chunkbytes:
         chunkbytes = int(chunkbytes)
-        taskss = [_chunk_read_file(fn, chunkbytes) for fn in full_filenames]
+        taskss = [_chunk_read_file(fn, chunkbytes, encoding) for fn in full_filenames]
         d = dict(((name, i), task)
                  for i, task in enumerate(toolz.concat(taskss)))
     else:
         extension = os.path.splitext(filenames[0])[1].strip('.')
         myopen = opens.get(extension, open)
 
-        d = dict(((name, i), (list, (myopen, fn)))
+        d = dict(((name, i), (list, (decode_sequence, encoding, (myopen, fn, 'rb'))))
                  for i, fn in enumerate(full_filenames))
 
     return Bag(d, name, len(d))
 
 
-def _chunk_read_file(filename, chunkbytes):
+def _chunk_read_file(filename, chunkbytes, encoding):
     extension = os.path.splitext(filename)[1].strip('.')
     compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
 
     return [(list, (StringIO, (bytes.decode,
-                    (textblock, filename, i, i + chunkbytes, compression))))
+                    (textblock, filename, i, i + chunkbytes, compression), encoding)))
              for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
-def write(data, filename):
+def write(data, filename, encoding):
     dirname = os.path.dirname(filename)
     if not os.path.exists(dirname):
         with ignoring(OSError):
@@ -887,12 +895,12 @@ def write(data, filename):
     ext = os.path.splitext(filename)[1][1:]
     if ext == 'gz':
         f = gzip.open(filename, 'wb')
-        data = (line.encode() for line in data)
+        data = (line.encode(encoding) for line in data)
     elif ext == 'bz2':
         f = bz2.BZ2File(filename, 'wb')
-        data = (line.encode() for line in data)
+        data = (line.encode(encoding) for line in data)
     else:
-        f = open(filename, 'w')
+        f = codecs.open(filename, 'wb', encoding=encoding)
     try:
         for item in data:
             f.write(item)
