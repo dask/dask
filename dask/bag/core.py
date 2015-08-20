@@ -821,6 +821,10 @@ def collect(grouper, group, p, barrier_token):
     return list(d.items())
 
 
+def decode_sequence(encoding, seq):
+    for item in seq:
+        yield item.decode(encoding)
+
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
@@ -862,7 +866,7 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
         extension = os.path.splitext(filenames[0])[1].strip('.')
         myopen = opens.get(extension, open)
 
-        d = dict(((name, i), (list, (myopen, fn)))
+        d = dict(((name, i), (list, (decode_sequence, encoding, (myopen, fn))))
                  for i, fn in enumerate(full_filenames))
 
     return Bag(d, name, len(d))

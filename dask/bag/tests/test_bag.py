@@ -9,7 +9,7 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI, inline_singleton_lists, optimize)
+        _parse_s3_URI, inline_singleton_lists, optimize, decode_sequence)
 from dask.utils import filetexts, tmpfile, raises
 from dask.async import get_sync
 import dask
@@ -304,16 +304,16 @@ def test_from_filenames_gzip():
     b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (gzip.open, os.path.abspath('foo.json.gz'))),
-                 (list, (gzip.open, os.path.abspath('bar.json.gz')))]))
+            set([(list, (decode_sequence, 'ascii', (gzip.open, os.path.abspath('foo.json.gz')))),
+                 (list, (decode_sequence, 'ascii', (gzip.open, os.path.abspath('bar.json.gz'))))]))
 
 
 def test_from_filenames_bz2():
     b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (bz2.BZ2File, os.path.abspath('foo.json.bz2'))),
-                 (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
+            set([(list, (decode_sequence, 'ascii', (bz2.BZ2File, os.path.abspath('foo.json.bz2')))),
+                 (list, (decode_sequence, 'ascii', (bz2.BZ2File, os.path.abspath('bar.json.bz2'))))]))
 
 
 def test_from_filenames_large():
@@ -336,7 +336,7 @@ def test_from_filenames_encoding():
         b = db.from_filenames(fn, chunkbytes=100, encoding='gb18030')
         c = db.from_filenames(fn, encoding='gb18030')
         assert len(b.dask) > 5
-        assert list(map(str, b)) == list(map(str, c))
+        assert list(map(lambda x: x.encode('utf-8'), b)) == list(map(lambda x: x.encode('utf-8'), c))
 
         d = db.from_filenames([fn], chunkbytes=100, encoding='gb18030')
         assert list(b) == list(d)
