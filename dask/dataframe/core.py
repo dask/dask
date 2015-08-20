@@ -575,8 +575,9 @@ class Series(_Frame):
         --------
         pandas.Series.resample
         """
-        start = self.divisions[0]
-        end = self.divisions[-1]
+        # TODO: Probably a better way to do this
+        start, end = pd.tseries.resample._get_range_edges(self.divisions[0],
+                self.divisions[-1], rule)
         index = pd.date_range(start=start, end=end, freq=rule)
         newdivs = [start]
         rule = pd.datetools.to_offset(rule)
@@ -586,13 +587,14 @@ class Series(_Frame):
             actual_pos = min(len(index) - 1, pos)
             newdiv = index[actual_pos]
             assert newdiv.offset == rule
-            newdivs.append(index[actual_pos])
-        newdivs.append(end)
+            newdivs.append(newdiv)
 
         # unique because our searchsorted algo above can return the same
         # div multiple times and repartition will generate an empty list, which
         # pandas concat does not accept
-        newdivs = tuple(unique(newdivs))
+        newdivs = list(unique(newdivs))
+        if newdivs[-1] < self.divisions[-1]:
+            newdivs.append(self.divisions[-1])
 
         func = methodcaller('resample', rule=rule, how=how, axis=axis,
                             fill_method=fill_method, closed=closed,
@@ -608,7 +610,7 @@ class Series(_Frame):
                                           'implemented' % rule)
             return func(df)
 
-        return self.repartition(newdivs).map_partitions(block_func)
+        return self.repartition(newdivs, force=True).map_partitions(block_func)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
@@ -1112,7 +1114,7 @@ def _loc(df, start, stop, include_right_boundary=True):
     # values that don't exist in the index and fill that with NaNs
     try:
         freq = pd.infer_freq(df.index)
-    except TypeError:
+    except (TypeError, pd.tseries.tools.DateParseError):
         return result
     else:
         return pd.Series([np.nan], index=pd.date_range(start, stop, freq=freq))
