@@ -32,6 +32,6 @@ test:
     - pytest
 
 about:
-  home: https://github.com/ContinuumIO/dask
+  home: https://github.com/blaze/dask
   summary: Task scheduling and blocked algorithms for parallel processing.
   license: BSD

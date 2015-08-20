@@ -100,4 +100,4 @@ Frequently Asked Questions
 
 .. _`inspect docs`: inspect.html
 .. _`Chest`: https://github.com/ContinuumIO/chest
-.. _`issue tracker`: https://github.com/ContinuumIO/dask/issues/new
+.. _`issue tracker`: https://github.com/blaze/dask/issues/new

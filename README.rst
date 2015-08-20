@@ -162,7 +162,7 @@ You can also find them in Anaconda.org: https://notebooks.anaconda.org/dask/.
 LICENSE
 -------
 
-New BSD. See `License File <https://github.com/ContinuumIO/dask/blob/master/LICENSE.txt>`__.
+New BSD. See `License File <https://github.com/blaze/dask/blob/master/LICENSE.txt>`__.
 
 
 Related Work
@@ -231,8 +231,8 @@ includes the following projects:
 .. _Swiftlang: http://swift-lang.org/main/
 .. _PaRSEC: http://icl.eecs.utk.edu/parsec/index.html
 .. _blogposts: http://matthewrocklin.com/blog/tags.html#dask-ref
-.. |Build Status| image:: https://travis-ci.org/ContinuumIO/dask.svg
-   :target: https://travis-ci.org/ContinuumIO/dask
+.. |Build Status| image:: https://travis-ci.org/blaze/dask.svg
+   :target: https://travis-ci.org/blaze/dask
 .. |Version Status| image:: https://img.shields.io/pypi/v/dask.svg
    :target: https://pypi.python.org/pypi/dask/
 .. |Doc Status| image:: https://readthedocs.org/projects/dask/badge/?version=latest
@@ -242,7 +242,7 @@ includes the following projects:
    :target: https://coveralls.io/r/mrocklin/dask
    :alt: Coverage status
 .. |Gitter| image:: https://badges.gitter.im/Join%20Chat.svg
-   :alt: Join the chat at https://gitter.im/ContinuumIO/dask
-   :target: https://gitter.im/ContinuumIO/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
+   :alt: Join the chat at https://gitter.im/blaze/dask
+   :target: https://gitter.im/blaze/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 .. |Downloads| image:: https://img.shields.io/pypi/dm/dask.svg
    :target: https://pypi.python.org/pypi/dask/
