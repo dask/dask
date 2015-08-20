@@ -527,11 +527,32 @@ def test_to_textfiles():
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
-            f = myopen(os.path.join(dir, '1.' + ext), 'r')
+            f = myopen(os.path.join(dir, '1.' + ext), 'rb')
             text = f.read()
             if hasattr(text, 'decode'):
                 text = text.decode()
             assert 'xyz' in text
+            f.close()
+        finally:
+            if os.path.exists(dir):
+                shutil.rmtree(dir)
+
+
+def test_to_textfiles_encoding():
+    b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
+    dir = mkdtemp()
+    for ext, myopen in [('gz', gzip.open), ('bz2', bz2.BZ2File), ('', open)]:
+        c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030')
+        assert c.npartitions == b.npartitions
+        try:
+            c.compute(get=dask.get)
+            assert os.path.exists(os.path.join(dir, '1.' + ext))
+
+            f = myopen(os.path.join(dir, '1.' + ext), 'rb')
+            text = f.read()
+            if hasattr(text, 'decode'):
+                text = text.decode('gb18030')
+            assert u'天气' in text
             f.close()
         finally:
             if os.path.exists(dir):

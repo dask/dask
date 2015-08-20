@@ -8,6 +8,7 @@ import gzip
 import zlib
 import bz2
 import os
+import codecs
 
 from fnmatch import fnmatchcase
 from glob import glob
@@ -343,8 +344,8 @@ class Bag(Base):
                              "Use db.from_filenames instead.")
 
     @wraps(to_textfiles)
-    def to_textfiles(self, path, name_function=str):
-        return to_textfiles(self, path, name_function)
+    def to_textfiles(self, path, name_function=str, encoding=system_encoding):
+        return to_textfiles(self, path, name_function, encoding)
 
     def fold(self, binop, combine=None, initial=no_default):
         """ Parallelizable reduction
@@ -895,7 +896,7 @@ def write(data, filename, encoding):
         f = bz2.BZ2File(filename, 'wb')
         data = (line.encode(encoding) for line in data)
     else:
-        f = open(filename, 'w')
+        f = codecs.open(filename, 'wb', encoding=encoding)
     try:
         for item in data:
             f.write(item)
