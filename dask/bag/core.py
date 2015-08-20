@@ -866,7 +866,7 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
         extension = os.path.splitext(filenames[0])[1].strip('.')
         myopen = opens.get(extension, open)
 
-        d = dict(((name, i), (list, (decode_sequence, encoding, (myopen, fn))))
+        d = dict(((name, i), (list, (decode_sequence, encoding, (myopen, fn, 'rb'))))
                  for i, fn in enumerate(full_filenames))
 
     return Bag(d, name, len(d))

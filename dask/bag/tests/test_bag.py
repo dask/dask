@@ -307,16 +307,16 @@ def test_from_filenames_gzip():
     b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (decode_sequence, system_encoding, (gzip.open, os.path.abspath('foo.json.gz')))),
-                 (list, (decode_sequence, system_encoding, (gzip.open, os.path.abspath('bar.json.gz'))))]))
+            set([(list, (decode_sequence, system_encoding, (gzip.open, os.path.abspath('foo.json.gz'), 'rb'))),
+                 (list, (decode_sequence, system_encoding, (gzip.open, os.path.abspath('bar.json.gz'), 'rb')))]))
 
 
 def test_from_filenames_bz2():
     b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (decode_sequence, system_encoding, (bz2.BZ2File, os.path.abspath('foo.json.bz2')))),
-                 (list, (decode_sequence, system_encoding, (bz2.BZ2File, os.path.abspath('bar.json.bz2'))))]))
+            set([(list, (decode_sequence, system_encoding, (bz2.BZ2File, os.path.abspath('foo.json.bz2'), 'rb'))),
+                 (list, (decode_sequence, system_encoding, (bz2.BZ2File, os.path.abspath('bar.json.bz2'), 'rb')))]))
 
 
 def test_from_filenames_large():
@@ -354,7 +354,7 @@ def test_from_filenames_large_gzip():
         b = db.from_filenames(fn, chunkbytes=100)
         c = db.from_filenames(fn)
         assert len(b.dask) > 5
-        assert list(b) == [s.decode() for s in c]
+        assert list(b) == list(c)
 
 
 @pytest.mark.slow
