@@ -9,6 +9,7 @@ import pytest
 from toolz import valmap
 import tempfile
 import shutil
+from time import sleep
 
 import dask.array as da
 import dask.dataframe as dd
@@ -167,7 +168,7 @@ def test_read_csv_categorize_and_index():
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
-        blocks = dd.core.get(f.dask, f._keys(), get=get_sync)
+        blocks = dd.DataFrame._get(f.dask, f._keys(), get=get_sync)
         for i, block in enumerate(blocks):
             if i < len(f.divisions):
                 assert (block.index <= f.divisions[i + 1]).all()
@@ -236,6 +237,20 @@ def test_from_bcolz():
     L = list(d.index.compute(get=get_sync))
     assert L == [1, 2, 3] or L == [1, 3, 2]
 
+    # Names
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) == \
+           sorted(dd.from_bcolz(t, chunksize=2).dask)
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
+           sorted(dd.from_bcolz(t, chunksize=3).dask)
+
+    dsk = dd.from_bcolz(t, chunksize=3).dask
+
+    t.append((4, 4., 'b'))
+    t.flush()
+
+    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
+           sorted(dsk)
+
 
 def test_from_bcolz_filename():
     bcolz = pytest.importorskip('bcolz')
@@ -296,6 +311,7 @@ def test_consistent_dtypes():
         os.remove('_foo.2.csv')
 
 
+@pytest.mark.slow
 def test_compression_multiple_files():
     tdir = tempfile.mkdtemp()
     try:
@@ -402,7 +418,7 @@ def test_from_dask_array_raises():
 def test_to_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]},
+                       'y': [2, 3, 4, 5]},
                        index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
@@ -419,6 +435,39 @@ def test_to_castra():
         assert c[:].dtypes['x'] == 'category'
     finally:
         c.drop()
+
+    c = a.to_castra(sorted_index_column='y')
+    try:
+        tm.assert_frame_equal(c[:], df.set_index('y'))
+    finally:
+        c.drop()
+
+    dsk, keys = a.to_castra(compute=False)
+    assert isinstance(dsk, dict)
+    assert isinstance(keys, list)
+    c, last = keys
+    assert last[1] == a.npartitions - 1
+
+
+def test_from_castra():
+    pytest.importorskip('castra')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+    a = dd.from_pandas(df, 2)
+
+    c = a.to_castra()
+    with_castra = dd.from_castra(c)
+    with_fn = dd.from_castra(c.path)
+    with_columns = dd.from_castra(c, 'x')
+    try:
+        tm.assert_frame_equal(df, with_castra.compute())
+        tm.assert_frame_equal(df, with_fn.compute())
+        tm.assert_series_equal(df.x, with_columns.compute())
+    finally:
+        # Calling c.drop() is a race condition on drop from `with_fn.__del__`
+        # and c.drop. Manually `del`ing gets around this.
+        del with_fn, c
 
 
 def test_to_hdf():
@@ -461,6 +510,9 @@ def test_read_hdf():
               dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
               pd.read_hdf(fn, '/data', start=1, stop=3))
 
+        assert sorted(dd.read_hdf(fn, '/data').dask) == \
+               sorted(dd.read_hdf(fn, '/data').dask)
+
 
 def test_to_csv():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
@@ -482,3 +534,66 @@ def test_read_csv_with_nrows():
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions == 1
         assert eq(read_csv(fn, nrows=3), pd.read_csv(fn, nrows=3))
+
+
+def test_read_csv_raises_on_no_files():
+    try:
+        dd.read_csv('21hflkhfisfshf.*.csv')
+        assert False
+    except Exception as e:
+        assert "21hflkhfisfshf.*.csv" in str(e)
+
+
+def test_read_csv_has_deterministic_name():
+    with filetext(text) as fn:
+        a = read_csv(fn)
+        b = read_csv(fn)
+        assert a._name == b._name
+        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
+        assert isinstance(a._name, str)
+
+        c = read_csv(fn, skiprows=1, na_values=[0])
+        assert a._name != c._name
+
+
+def test_multiple_read_csv_has_deterministic_name():
+    try:
+        with open('_foo.1.csv', 'w') as f:
+            f.write(text)
+        with open('_foo.2.csv', 'w') as f:
+            f.write(text)
+        a = read_csv('_foo.*.csv')
+        b = read_csv('_foo.*.csv')
+
+        assert sorted(a.dask.keys()) == sorted(b.dask.keys())
+    finally:
+        os.remove('_foo.1.csv')
+        os.remove('_foo.2.csv')
+
+
+@pytest.mark.slow
+def test_read_csv_of_modified_file_has_different_name():
+    with filetext(text) as fn:
+        mtime = os.path.getmtime(fn)
+        sleep(1)
+        a = read_csv(fn)
+        sleep(1)
+        with open(fn, 'a') as f:
+            f.write('\nGeorge,700')
+            os.fsync(f)
+        b = read_csv(fn)
+
+        assert sorted(a.dask) != sorted(b.dask)
+
+
+def test_to_bag():
+    pytest.importorskip('dask.bag')
+    a = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                      'y': [2, 3, 4, 5]},
+                     index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(a, 2)
+
+    assert ddf.to_bag().compute(get=get_sync) == list(a.itertuples(False))
+    assert ddf.to_bag(True).compute(get=get_sync) == list(a.itertuples(True))
+    assert ddf.x.to_bag(True).compute(get=get_sync) == list(a.x.iteritems())
+    assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)

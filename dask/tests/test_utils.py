@@ -1,7 +1,6 @@
-from dask.utils import textblock
-from dask.utils import filetext
-from dask.utils import takes_multiple_arguments
 import os
+
+from dask.utils import textblock, filetext, takes_multiple_arguments, Dispatch
 
 def test_textblock():
     text = b'123 456 789 abc def ghi'.replace(b' ', os.linesep.encode())
@@ -35,3 +34,19 @@ def test_takes_multiple_arguments():
     assert takes_multiple_arguments(multi)
     assert not takes_multiple_arguments(Singular)
     assert takes_multiple_arguments(Multi)
+
+
+def test_dispatch():
+    foo = Dispatch()
+    foo.register(int, lambda a: a + 1)
+    foo.register(float, lambda a: a - 1)
+    foo.register(tuple, lambda a: tuple(foo(i) for i in a))
+    foo.register(object, lambda a: a)
+
+    class Bar(object):
+        pass
+    b = Bar()
+    assert foo(1) == 2
+    assert foo(1.0) == 0.0
+    assert foo(b) == b
+    assert foo((1, 2.0, b)) == (2, 1.0, b)

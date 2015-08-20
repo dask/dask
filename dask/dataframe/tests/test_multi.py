@@ -5,6 +5,10 @@ from dask.dataframe.multi import (align_partitions, join_indexed_dataframes,
 import pandas.util.testing as tm
 from dask.async import get_sync
 
+
+from test_dataframe import eq
+
+
 def test_align_partitions():
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
                      index=[10, 20, 30, 40, 50, 60])
@@ -20,11 +24,40 @@ def test_align_partitions():
     assert divisions == (10, 30, 40, 60, 80, 100)
     assert isinstance(L, list)
     assert len(divisions) == 1 + len(L)
-    assert L == [[(aa._name, 0), None],
-                 [(aa._name, 1), (bb._name, 0)],
-                 [(aa._name, 2), (bb._name, 1)],
-                 [None, (bb._name, 2)],
-                 [None, (bb._name, 3)]]
+    assert L == [[(aa._name, 0), (bb._name, 0)],
+                 [(aa._name, 1), (bb._name, 1)],
+                 [(aa._name, 2), (bb._name, 2)],
+                 [(aa._name, 3), (bb._name, 3)],
+                 [(aa._name, 4), (bb._name, 4)]]
+
+    ldf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                        'b': [7, 6, 5, 4, 3, 2, 1]})
+    rdf = pd.DataFrame({'c': [1, 2, 3, 4, 5, 6, 7],
+                        'd': [7, 6, 5, 4, 3, 2, 1]})
+
+    for lhs, rhs in [(dd.from_pandas(ldf, 1), dd.from_pandas(rdf, 1)),
+                     (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 2)),
+                     (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 3)),
+                     (dd.from_pandas(ldf, 3), dd.from_pandas(rdf, 2))]:
+        (lresult, rresult), div, parts = dd.multi.align_partitions(lhs, rhs)
+        assert eq(lresult, ldf)
+        assert eq(rresult, rdf)
+
+    # different index
+    ldf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                        'b': [7, 6, 5, 4, 3, 2, 1]},
+                       index=list('abcdefg'))
+    rdf = pd.DataFrame({'c': [1, 2, 3, 4, 5, 6, 7],
+                        'd': [7, 6, 5, 4, 3, 2, 1]},
+                       index=list('fghijkl'))
+
+    for lhs, rhs in [(dd.from_pandas(ldf, 1), dd.from_pandas(rdf, 1)),
+                     (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 2)),
+                     (dd.from_pandas(ldf, 2), dd.from_pandas(rdf, 3)),
+                     (dd.from_pandas(ldf, 3), dd.from_pandas(rdf, 2))]:
+        (lresult, rresult), div, parts = dd.multi.align_partitions(lhs, rhs)
+        assert eq(lresult, ldf)
+        assert eq(rresult, rdf)
 
 
 def test_join_indexed_dataframe_to_indexed_dataframe():
@@ -38,7 +71,7 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
 
     c = join_indexed_dataframes(a, b, how='left')
     assert c.divisions[0] == a.divisions[0]
-    assert c.divisions[-1] == a.divisions[-1]
+    assert c.divisions[-1] == max(a.divisions + b.divisions)
     tm.assert_frame_equal(c.compute(), A.join(B))
 
     c = join_indexed_dataframes(a, b, how='right')
@@ -48,13 +81,18 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
 
     c = join_indexed_dataframes(a, b, how='inner')
     assert c.divisions[0] == 1
-    assert c.divisions[-1] == 7
+    assert c.divisions[-1] == max(a.divisions + b.divisions)
     tm.assert_frame_equal(c.compute(), A.join(B, how='inner'))
 
     c = join_indexed_dataframes(a, b, how='outer')
     assert c.divisions[0] == 1
     assert c.divisions[-1] == 8
     tm.assert_frame_equal(c.compute(), A.join(B, how='outer'))
+
+    assert sorted(join_indexed_dataframes(a, b, how='inner').dask) == \
+           sorted(join_indexed_dataframes(a, b, how='inner').dask)
+    assert sorted(join_indexed_dataframes(a, b, how='inner').dask) != \
+           sorted(join_indexed_dataframes(a, b, how='outer').dask)
 
 
 def list_eq(a, b):
@@ -96,6 +134,11 @@ def test_hash_join():
     assert sorted(result.fillna(100).values.tolist()) == \
            sorted(expected.fillna(100).values.tolist())
 
+    assert hash_join(a, 'y', b, 'y', 'inner')._name == \
+           hash_join(a, 'y', b, 'y', 'inner')._name
+    assert hash_join(a, 'y', b, 'y', 'inner')._name != \
+           hash_join(a, 'y', b, 'y', 'outer')._name
+
 
 def test_indexed_concat():
     A = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7], 'y': list('abcdef')},
@@ -116,6 +159,11 @@ def test_indexed_concat():
 
         assert sorted(zip(result.values.tolist(), result.index.values.tolist())) == \
                sorted(zip(expected.values.tolist(), expected.index.values.tolist()))
+
+    assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) == \
+           sorted(concat_indexed_dataframes([a, b], join='inner').dask)
+    assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) != \
+           sorted(concat_indexed_dataframes([a, b], join='outer').dask)
 
 
 def test_merge():
@@ -154,3 +202,81 @@ def test_merge():
 
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
+
+
+def test_merge_by_index_patterns():
+
+    pdf1l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                          'b': [7, 6, 5, 4, 3, 2, 1]})
+    pdf1r = pd.DataFrame({'c': [1, 2, 3, 4, 5, 6, 7],
+                          'd': [7, 6, 5, 4, 3, 2, 1]})
+
+    pdf2l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('abcdefg'))
+    pdf2r = pd.DataFrame({'c': [1, 2, 3, 4, 5, 6, 7],
+                          'd': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('abcdefg'))
+
+    pdf3l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('abcdefg'))
+    pdf3r = pd.DataFrame({'c': [1, 2, 3, 4],
+                          'd': [5, 4, 3, 2]},
+                          index=list('abdg'))
+
+    pdf4r = pd.DataFrame({'c': [1, 2, 3, 4],
+                          'd': [5, 4, 3, 2]},
+                          index=list('abdg'))
+    pdf4l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('abcdefg'))
+
+    # completely different index
+    pdf5r = pd.DataFrame({'c': [1, 2, 3, 4],
+                          'd': [5, 4, 3, 2]},
+                          index=list('abcd'))
+    pdf5l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('lmnopqr'))
+
+    pdf6r = pd.DataFrame({'c': [1, 2, 3, 4],
+                          'd': [5, 4, 3, 2]},
+                          index=list('abcd'))
+    pdf6l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('cdefghi'))
+
+    pdf7r = pd.DataFrame({'c': [1, 2, 3, 4],
+                          'd': [5, 4, 3, 2]},
+                          index=list('fghi'))
+    pdf7l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                          'b': [7, 6, 5, 4, 3, 2, 1]},
+                          index=list('abcdefg'))
+
+    for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
+                     (pdf4l, pdf4r), (pdf5r, pdf5l), (pdf6r, pdf6l),
+                     (pdf7r, pdf7l)]:
+        # same partition
+        ddl = dd.from_pandas(pdl, 2)
+        ddr = dd.from_pandas(pdr, 2)
+
+        for how in ['inner', 'outer', 'left', 'right']:
+            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
+               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
+
+        # different partition (left npartition > right npartition)
+        ddl = dd.from_pandas(pdl, 3)
+        ddr = dd.from_pandas(pdr, 2)
+
+        for how in ['inner', 'outer', 'left', 'right']:
+            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
+               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
+
+        # different partition (left npartition < right npartition)
+        ddl = dd.from_pandas(pdl, 2)
+        ddr = dd.from_pandas(pdr, 3)
+
+        for how in ['inner', 'outer', 'left', 'right']:
+            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
+               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))

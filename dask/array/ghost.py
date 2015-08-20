@@ -1,17 +1,14 @@
 from operator import getitem
-from ..core import flatten
-from ..utils import concrete
-from .core import (Array, map_blocks, concatenate,
-        slices_from_chunks, concatenate3)
-from . import chunk, core, wrap
-import numpy as np
-from collections import Iterator, Iterable
+from itertools import product
+
 from toolz import merge, pipe, concat, partition, partial
 from toolz.curried import map
-from itertools import product, count
 
-
-ghost_names = ('ghost-%d' % i for i in count(1))
+from ..base import tokenize
+from ..core import flatten
+from ..utils import concrete
+from .core import Array, map_blocks, concatenate, concatenate3
+from . import chunk, wrap
 
 
 def fractional_slice(task, axes):
@@ -115,7 +112,8 @@ def ghost_internal(x, axes):
     interior_keys = pipe(x._keys(), flatten, map(expand_key2), map(flatten),
                          concat, list)
 
-    name = next(ghost_names)
+    token = tokenize(x, axes)
+    name = 'ghost-' + token
     interior_slices = {}
     ghost_blocks = {}
     for k in interior_keys:
@@ -293,7 +291,7 @@ def ghost(x, depth, boundary):
     depth: dict
         The size of the shared boundary per axis
     boundary: dict
-        The boundary of boundary condition on each axis
+        The boundary condition on each axis
 
     The axes dict informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
@@ -301,6 +299,7 @@ def ghost(x, depth, boundary):
     Example
     -------
 
+    >>> import numpy as np
     >>> import dask.array as da
 
     >>> x = np.arange(64).reshape((8, 8))

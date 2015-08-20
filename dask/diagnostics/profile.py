@@ -4,7 +4,7 @@ from collections import namedtuple
 from itertools import starmap
 from timeit import default_timer
 
-from .core import Diagnostic
+from ..callbacks import Callback
 
 
 # Stores execution data for each task
@@ -12,7 +12,7 @@ TaskData = namedtuple('TaskData', ('key', 'task', 'start_time',
                                    'end_time', 'worker_id'))
 
 
-class Profiler(Diagnostic):
+class Profiler(Callback):
     """A profiler for dask execution at the task level.
 
     Records the following information for each task:
@@ -45,7 +45,7 @@ class Profiler(Diagnostic):
         self._results = {}
         self._dsk = {}
 
-    def _start(self, dsk, state):
+    def _start(self, dsk):
         self.clear()
         self._dsk = dsk.copy()
 

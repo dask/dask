@@ -35,11 +35,11 @@ def test_profiler():
 def test_pprint_task():
     from dask.diagnostics.profile_visualize import pprint_task
     keys = set(['a', 'b', 'c', 'd', 'e'])
-    assert pprint_task((add, 'a', 1), keys) == 'add(_, 1)'
-    assert pprint_task((add, (add, 'a', 1)), keys) == 'add(add(_, 1))'
-    res = 'sum([1, _, add(_, 1)])'
+    assert pprint_task((add, 'a', 1), keys) == 'add(_, *)'
+    assert pprint_task((add, (add, 'a', 1)), keys) == 'add(add(_, *))'
+    res = 'sum([*, _, add(_, *)])'
     assert pprint_task((sum, [1, 'b', (add, 'a', 1)]), keys) == res
-    assert pprint_task((sum, (1, 2, 3, 4, 5, 6, 7)), keys) == 'sum(<tuple>)'
+    assert pprint_task((sum, (1, 2, 3, 4, 5, 6, 7)), keys) == 'sum(*)'
 
 
 @pytest.mark.skipif("not bokeh")

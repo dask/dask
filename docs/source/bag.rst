@@ -246,7 +246,7 @@ comes at cost.  Bags have the following known limitations
 1.  By default they rely on the multiprocessing scheduler, which has its own
     set of known limitations (see shared_)
 2.  Bag operations tend to be slower than array/dataframe computations in the
-    same way that Python tends to be slower than NumPy/Pandas
+    same way that Python tends to be slower than NumPy/pandas
 3.  ``Bag.groupby`` is slow.  You should try to use ``Bag.foldby`` if possible.
     Using ``Bag.foldby`` requires more thought.
 4.  The implementation backing ``Bag.groupby`` is under heavy churn.

@@ -4,18 +4,22 @@ import pandas as pd
 import numpy as np
 from functools import wraps, partial
 import re
+import os
 from glob import glob
 from math import ceil
 from toolz import merge, dissoc, assoc
 from operator import getitem
+from hashlib import md5
+import uuid
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
+from ..base import compute, tokenize
 from .. import array as da
+from ..async import get_sync
 
 from . import core
-from .core import (DataFrame, Series, compute, concat, categorize_block,
-        tokens, get)
+from .core import DataFrame, Series, concat, categorize_block
 from .shuffle import set_partition
 
 
@@ -53,7 +57,10 @@ def fill_kwargs(fn, args, kwargs):
 
     # Let pandas infer on the first 100 rows
     if '*' in fn:
-        fn = sorted(glob(fn))[0]
+        filenames = sorted(glob(fn))
+        if not filenames:
+            raise ValueError("No files found matching name %s" % fn)
+        fn = filenames[0]
 
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)
@@ -93,14 +100,15 @@ def read_csv(fn, *args, **kwargs):
     if '*' in fn:
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
 
-    name = 'read-csv' + next(tokens)
+    token = tokenize(os.path.getmtime(fn), args, kwargs)
+    name = 'read-csv-%s-%s' % (fn, token)
 
     columns = kwargs.pop('columns')
     header = kwargs.pop('header')
 
     if 'nrows' in kwargs:  # Just create single partition
         dsk = {(name, 0): (apply, pd.read_csv, (fn,),
-                                  assoc(kwargs, 'header', header))},
+                                  assoc(kwargs, 'header', header))}
         result = DataFrame(dsk, name, columns, [None, None])
 
     else:
@@ -265,7 +273,8 @@ def from_array(x, chunksize=50000, columns=None):
     divisions = tuple(range(0, len(x), chunksize))
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
-    name = 'from_array' + next(tokens)
+    token = tokenize(x, chunksize, columns)
+    name = 'from_array-' + token
     dsk = dict(((name, i), (pd.DataFrame,
                              (getitem, x,
                               slice(i * chunksize, (i + 1) * chunksize))))
@@ -331,7 +340,8 @@ def from_pandas(data, npartitions):
     divisions = tuple(data.index[i]
                       for i in range(0, nrows, chunksize))
     divisions = divisions + (data.index[-1],)
-    name = 'from_pandas' + next(tokens)
+
+    name = 'from_pandas-' + tokenize(data, chunksize)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))
     dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
@@ -380,7 +390,13 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     divisions = (0,) + tuple(range(-1, len(x), chunksize))[1:]
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
-    new_name = 'from_bcolz' + next(tokens)
+    if x.rootdir:
+        token = tokenize((x.rootdir, os.path.getmtime(x.rootdir)), chunksize,
+                         categorize, index, kwargs)
+    else:
+        token = tokenize((id(x), x.shape, x.dtype), chunksize, categorize,
+                         index, kwargs)
+    new_name = 'from_bcolz-' + token
     dsk = dict(((new_name, i),
                 (dataframe_from_ctable,
                  x,
@@ -425,7 +441,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     >>> dataframe_from_ctable(x, slice(1, 3), columns='b')
     0    20
     1    30
-    Name: b, dtype: int64
+    Name: b, dtype: int...
 
     """
     import bcolz
@@ -433,8 +449,6 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
         if isinstance(columns, tuple):
             columns = list(columns)
         x = x[columns]
-
-    name = 'from-bcolz' + next(tokens)
 
     if isinstance(x, bcolz.ctable):
         chunks = [x[name][slc] for name in x.names]
@@ -479,7 +493,7 @@ def from_dask_array(x, columns=None):
     2  1  1
     3  1  1
     """
-    name = 'from-dask-array' + next(tokens)
+    name = 'from-dask-array' + tokenize(x, columns)
     divisions = [0]
     for c in x.chunks[0]:
         divisions.append(divisions[-1] + c)
@@ -510,6 +524,21 @@ def from_dask_array(x, columns=None):
                          x.ndim)
 
 
+def from_castra(x, columns=None):
+    """Load a dask DataFrame from a Castra.
+
+    Parameters
+    ----------
+    x : filename or Castra
+    columns: list or string, optional
+        The columns to load. Default is all columns.
+    """
+    from castra import Castra
+    if not isinstance(x, Castra):
+        x = Castra(x)
+    return x.to_dask(columns)
+
+
 def _link(token, result):
     """ A dummy function to link results together in a graph
 
@@ -522,7 +551,7 @@ def _link(token, result):
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
            complib=None, fletcher32=False, **kwargs):
-    name = 'to-hdf' + next(tokens)
+    name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
 
@@ -541,7 +570,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                             'complevel': complevel, 'complib': complib,
                             'fletcher32': fletcher32}))
 
-    get(merge(df.dask, dsk), (name, i), **kwargs)
+    DataFrame._get(merge(df.dask, dsk), (name, i), **kwargs)
 
 
 dont_use_fixed_error_message = """
@@ -562,7 +591,9 @@ def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
     if columns is None:
         columns = list(pd.read_hdf(path_or_buf, key, stop=0).columns)
 
-    name = 'read-hdf' + next(tokens)
+    token = tokenize((path_or_buf, os.path.getmtime(path_or_buf), key, start,
+                      stop, columns, chunksize))
+    name = 'read-hdf-' + token
 
     dsk = dict(((name, i), (apply, pd.read_hdf,
                              (path_or_buf, key),
@@ -575,7 +606,8 @@ def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
     return DataFrame(dsk, name, columns, divisions)
 
 
-def to_castra(df, fn=None, categories=None):
+def to_castra(df, fn=None, categories=None, sorted_index_column=None,
+              compute=True):
     """ Write DataFrame to Castra on-disk store
 
     See https://github.com/blosc/castra for details
@@ -587,21 +619,32 @@ def to_castra(df, fn=None, categories=None):
     if isinstance(categories, list):
         categories = (list, categories)
 
-    name = 'to-castra' + next(tokens)
+    name = 'to-castra-' + uuid.uuid1().hex
+
+    if sorted_index_column:
+        set_index = lambda x: x.set_index(sorted_index_column)
+        func = lambda part: (set_index, part)
+    else:
+        func = lambda part: part
 
     dsk = dict()
-    dsk[(name, -1)] = (Castra, fn, (df._name, 0), categories)
+    dsk[(name, -1)] = (Castra, fn, func((df._name, 0)), categories)
     for i in range(0, df.npartitions):
         dsk[(name, i)] = (_link, (name, i - 1),
-                          (Castra.extend, (name, -1), (df._name, i)))
+                          (Castra.extend, (name, -1), func((df._name, i))))
 
-    c, _ = get(merge(dsk, df.dask), [(name, -1), list(dsk.keys())])
-    return c
+    dsk = merge(dsk, df.dask)
+    keys = [(name, -1), (name, df.npartitions - 1)]
+    if compute:
+        c, _ = DataFrame._get(dsk, keys, get=get_sync)
+        return c
+    else:
+        return dsk, keys
 
 
 def to_csv(df, filename, **kwargs):
     myget = kwargs.pop('get', None)
-    name = 'to-csv' + next(tokens)
+    name = 'to-csv-' + uuid.uuid1().hex
 
     dsk = dict()
     dsk[(name, 0)] = (apply, pd.DataFrame.to_csv,
@@ -618,4 +661,18 @@ def to_csv(df, filename, **kwargs):
                              (tuple, [(df._name, i), filename]),
                              kwargs2))
 
-    get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)
+    DataFrame._get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)
+
+
+def to_bag(df, index=False):
+    from ..bag.core import Bag
+    if isinstance(df, DataFrame):
+        func = lambda df: list(df.itertuples(index))
+    elif isinstance(df, Series):
+        func = (lambda df: list(df.iteritems())) if index else list
+    else:
+        raise TypeError("df must be either DataFrame or Series")
+    name = 'to_bag-' + tokenize(df, index)
+    dsk = dict(((name, i), (func, block)) for (i, block) in enumerate(df._keys()))
+    dsk.update(df._optimize(df.dask, df._keys()))
+    return Bag(dsk, name, df.npartitions)

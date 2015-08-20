@@ -9,7 +9,7 @@ not users.
    :align: right
    :alt: A dask dataframe
 
-Dask dataframe implements a blocked DataFrame as a sequence of in-memory Pandas
+Dask dataframe implements a blocked DataFrame as a sequence of in-memory pandas
 DataFrames, partitioned along the index.
 
 Partitioning along the index is good because it tells us which blocks hold
@@ -130,7 +130,7 @@ databases.
 Supported API
 -------------
 
-Dask dataframe supports the following API from Pandas
+Dask dataframe supports the following API from pandas
 
 * Trivially parallelizable (fast):
     *  Elementwise operations:  ``df.x + df.y``
@@ -227,14 +227,14 @@ Additionally it has the following constraints
 
 1.  Is uses the multiprocessing scheduler and so inherits those limitations
     (see shared_)
-2.  The Pandas API is large and dask.dataframe does not attempt to fill it.
+2.  The pandas API is large and dask.dataframe does not attempt to fill it.
     Many holes exist
 3.  Operations like groupby and join may take some time, as they are much more
     challenging to do in parallel
 4.  Some operations like ``iloc`` cease to make sense
 
 Generally speakings users familiar with the mature and excellent functionality
-of Pandas should expect disappointment if they do not deeply understand the
+of pandas should expect disappointment if they do not deeply understand the
 current design and limitations of dask.dataframe.
 
 

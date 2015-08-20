@@ -1,9 +1,9 @@
 from itertools import count
-from operator import add, mul
+from operator import add, mul, getitem
 from toolz import partial, identity
 from dask.utils import raises
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
-        dealias, equivalent, sync_keys, merge_sync)
+        dealias, equivalent, sync_keys, merge_sync, fuse_getitem)
 
 
 def inc(x):
@@ -312,3 +312,13 @@ def test_merge_sync():
                        'g2': (add, 'conflict', 3),
                        'h2': (add, 'merge_1', 3)}
     assert key_map == {'h1': 'g1', 'conflict': 'merge_1', 'h2': 'h2'}
+
+
+def test_fuse_getitem():
+    def load(*args):
+        pass
+    dsk = {'x': (load, 'store', 'part', ['a', 'b']),
+           'y': (getitem, 'x', 'a')}
+    dsk2 = fuse_getitem(dsk, load, 3)
+    dsk2 = cull(dsk2, 'y')
+    assert dsk2 == {'y': (load, 'store', 'part', 'a')}

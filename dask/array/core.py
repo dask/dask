@@ -6,7 +6,7 @@ import inspect
 from numbers import Number
 from collections import Iterable, MutableMapping
 from bisect import bisect
-from itertools import product, count
+from itertools import product
 from collections import Iterator
 from functools import partial, wraps
 
@@ -19,14 +19,11 @@ from threading import Lock
 from . import chunk
 from .slicing import slice_array
 from . import numpy_compat
-from ..utils import deepmap, ignoring, repr_long_list, concrete, is_integer
+from ..base import Base, compute, tokenize, normalize_token
+from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
+        IndexCallable)
 from ..compatibility import unicode, long
 from .. import threaded, core
-from ..context import _globals
-
-
-names = ('x_%d' % i for i in count(1))
-tokens = ('-%d' % i for i in count(1))
 
 
 def getarray(a, b, lock=None):
@@ -490,40 +487,17 @@ def topk(k, x):
     if x.ndim != 1:
         raise ValueError("Topk only works on arrays of one dimension")
 
-    name = next(names)
+    token = tokenize(k, x)
+    name = 'chunk.topk-' + token
     dsk = dict(((name, i), (chunk.topk, k, key))
                 for i, key in enumerate(x._keys()))
-    name2 = next(names)
+    name2 = 'topk-' + token
     dsk[(name2, 0)] = (getitem,
                         (np.sort, (np.concatenate, (list, list(dsk)))),
                         slice(-1, -k - 1, -1))
     chunks = ((k,),)
 
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
-
-
-def compute(*args, **kwargs):
-    """ Evaluate several dask arrays at once
-
-    The result of this function is always a tuple of numpy arrays. To evaluate
-    a single dask array into a numpy array, use ``myarray.compute()`` or simply
-    ``np.array(myarray)``.
-
-    Examples
-    --------
-    >>> import dask.array as da
-    >>> d = da.ones((4, 4), chunks=(2, 2))
-    >>> a = d + 1  # two different dask arrays
-    >>> b = d + 2
-    >>> A, B = da.compute(a, b)  # Compute both simultaneously
-    """
-    dsk = merge(*[arg.dask for arg in args])
-    keys = [arg._keys() for arg in args]
-    results = get(dsk, keys, **kwargs)
-
-    results2 = tuple(concatenate3(x) if arg.shape else unpack_singleton(x)
-                     for x, arg in zip(results, args))
-    return results2
 
 
 def store(sources, targets, **kwargs):
@@ -575,7 +549,7 @@ def store(sources, targets, **kwargs):
     updates = [insert_to_ooc(tgt, src) for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
-    get(dsk, keys, **kwargs)
+    Array._get(dsk, keys, **kwargs)
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -598,7 +572,14 @@ def blockdims_from_blockshape(shape, chunks):
                               for d, bd in zip(shape, chunks))
 
 
-class Array(object):
+def finalize(arr, results):
+    if arr.shape:
+        return concatenate3(results)
+    else:
+        return unpack_singleton(results)
+
+
+class Array(Base):
     """ Parallel Array
 
     Parameters
@@ -615,6 +596,10 @@ class Array(object):
     """
 
     __slots__ = 'dask', 'name', '_chunks', '_dtype'
+
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(threaded.get)
+    _finalize = staticmethod(finalize)
 
     def __init__(self, dask, name, chunks, dtype=None, shape=None):
         self.dask = dask
@@ -650,13 +635,6 @@ class Array(object):
 
     def __len__(self):
         return sum(self.chunks[0])
-
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
     @property
     @memoize(key=lambda args, kwargs: (id(args[0]), args[0].name, args[0].chunks))
@@ -726,11 +704,6 @@ class Array(object):
         """
         return to_hdf5(filename, datapath, self, **kwargs)
 
-    @wraps(compute)
-    def compute(self, **kwargs):
-        result, = compute(self, **kwargs)
-        return result
-
     def cache(self, store=None, **kwargs):
         """ Evaluate and cache array
 
@@ -793,10 +766,10 @@ class Array(object):
                         "1. Install ``chest``, an out-of-core dictionary\n"
                         "2. Provide an on-disk array like an h5py.Dataset") # pragma: no cover
         if isinstance(store, MutableMapping):
-            name = next(names)
+            name = 'cache-' + tokenize(self)
             dsk = dict(((name, k[1:]), (operator.setitem, store, (tuple, list(k)), k))
                     for k in core.flatten(self._keys()))
-            get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
+            Array._get(merge(dsk, self.dask), list(dsk.keys()), **kwargs)
 
             dsk2 = dict((k, (operator.getitem, store, (tuple, list(k))))
                         for k in store)
@@ -826,16 +799,43 @@ class Array(object):
             return elemwise(getarray, self, index, dtype=dt)
 
         # Slicing
-        out = next(names)
         if not isinstance(index, tuple):
             index = (index,)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
+        out = 'getitem-' + tokenize(self, index)
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
+
+    def _vindex(self, key):
+        if (not isinstance(key, tuple) or
+           not len([k for k in key if isinstance(k, (np.ndarray, list))]) >= 2 or
+           not all(isinstance(k, (np.ndarray, list)) or k == slice(None, None)
+                   for k in key)):
+            raise IndexError("vindex expects only lists and full slices\n"
+            "At least two entries must be a list\n"
+            "For other combinations try doing normal slicing first, followed\n"
+            "by vindex slicing.  Got: \n\t%s" % str(key))
+        if any((isinstance(k, np.ndarray) and k.ndim != 1) or
+               (isinstance(k, list) and k and isinstance(k[0], list))
+               for k in key):
+            raise IndexError("vindex does not support multi-dimensional keys\n"
+                    "Got: %s" % str(key))
+        if len(set(len(k) for k in key if isinstance(k, (list, np.ndarray)))) != 1:
+            raise IndexError("All indexers must have the same length, got\n"
+                    "\t%s" % str(key))
+        key = key + (slice(None, None),) * (self.ndim - len(key))
+        key = [i if isinstance(i, list) else
+               i.tolist() if isinstance(i, np.ndarray) else
+               None for i in key]
+        return _vindex(self, *key)
+
+    @property
+    def vindex(self):
+        return IndexCallable(self._vindex)
 
     @wraps(np.dot)
     def dot(self, other):
@@ -855,7 +855,9 @@ class Array(object):
 
     def astype(self, dtype, **kwargs):
         """ Copy of the array, cast to a specified type """
-        return elemwise(lambda x: x.astype(dtype, **kwargs), self, dtype=dtype)
+        name = tokenize('astype', self, dtype, kwargs)
+        return elemwise(lambda x: x.astype(dtype, **kwargs), self,
+                        dtype=dtype, name=name)
 
     def __abs__(self):
         return elemwise(operator.abs, self)
@@ -1079,6 +1081,9 @@ class Array(object):
         return rechunk(self, chunks)
 
 
+normalize_token.register(Array, lambda a: a.name)
+
+
 def normalize_chunks(chunks, shape=None):
     """ Normalize chunks to tuple of tuples
 
@@ -1142,7 +1147,7 @@ def from_array(x, chunks, name=None, lock=False):
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
-    name = name or 'from-array' + next(tokens)
+    name = name or 'from-array-' + tokenize(x, chunks)
     dsk = getem(name, chunks)
     if lock is True:
         lock = Lock()
@@ -1171,9 +1176,9 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     >>> stack(arrays).compute()
     array([0, 1, 2, 3, 4])
     """
+    name = name or 'from_func-' + tokenize(func, shape, dtype, args, kwargs)
     if args or kwargs:
         func = partial(func, *args, **kwargs)
-    name = name or next(names)
     dsk = {(name,) + (0,) * len(shape): (func,)}
     chunks = tuple((i,) for i in shape)
     return Array(dsk, name, chunks, dtype)
@@ -1246,7 +1251,7 @@ def atop(func, out_ind, *args, **kwargs):
     See also:
         top - dict formulation of this function, contains most logic
     """
-    out = kwargs.pop('name', None) or next(names)
+    out = kwargs.pop('name', None)      # May be None at this point
     dtype = kwargs.pop('dtype', None)
     if kwargs:
         raise TypeError("%s does not take the following keyword arguments %s" %
@@ -1254,6 +1259,9 @@ def atop(func, out_ind, *args, **kwargs):
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
+    # Finish up the name
+    if not out:
+        out = 'atop-' + tokenize(func, out_ind, argindsstr, dtype)
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
 
@@ -1271,17 +1279,6 @@ def atop(func, out_ind, *args, **kwargs):
     return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)
 
 
-def get(dsk, keys, get=None, **kwargs):
-    """ Specialized get function
-
-    1. Handle inlining
-    2. Use custom score function
-    """
-    get = get or _globals['get'] or threaded.get
-    dsk2 = optimize(dsk, keys, **kwargs)
-    return get(dsk2, keys, **kwargs)
-
-
 def unpack_singleton(x):
     """
 
@@ -1296,9 +1293,6 @@ def unpack_singleton(x):
         except (IndexError, TypeError, KeyError):
             break
     return x
-
-
-stacked_names = ('stack-%d' % i for i in count(1))
 
 
 def stack(seq, axis=0):
@@ -1349,10 +1343,10 @@ def stack(seq, axis=0):
               + ((1,) * n,)
               + seq[0].chunks[axis:])
 
-    name = next(stacked_names)
+    names = [a.name for a in seq]
+    name = 'stack-' + tokenize(names, axis)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
 
-    names = [a.name for a in seq]
     inputs = [(names[key[axis+1]],) + key[1:axis + 1] + key[axis + 2:]
                 for key in keys]
     values = [(getarray, inp, (slice(None, None, None),) * axis
@@ -1369,9 +1363,6 @@ def stack(seq, axis=0):
         dt = None
 
     return Array(dsk2, name, chunks, dtype=dt)
-
-
-concatenate_names = ('concatenate-%d' % i for i in count(1))
 
 
 def concatenate(seq, axis=0):
@@ -1426,11 +1417,12 @@ def concatenate(seq, axis=0):
               + (sum([bd[axis] for bd in bds], ()),)
               + seq[0].chunks[axis + 1:])
 
-    name = next(concatenate_names)
-    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
-
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
     names = [a.name for a in seq]
+
+    name = 'concatenate-' + tokenize(names, axis)
+    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
+
     values = [(names[bisect(cum_dims, key[axis + 1]) - 1],)
                 + key[1:axis + 1]
                 + (key[axis + 1] - cum_dims[bisect(cum_dims, key[axis+1]) - 1],)
@@ -1556,11 +1548,21 @@ def partial_by_order(op, other):
     >>> f(5)
     15
     """
+    if (not isinstance(other, list) or
+        not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
+        raise ValueError('input must be list of tuples')
+
     def f(*args):
         args2 = list(args)
         for i, arg in other:
             args2.insert(i, arg)
         return op(*args2)
+
+    if len(other) == 1:
+        other_arg = other[0][1]
+    else:
+        other_arg = '...'
+    f.__name__ = '{0}({1})'.format(op.__name__, other_arg)
     return f
 
 
@@ -1581,7 +1583,6 @@ def elemwise(op, *args, **kwargs):
     if not set(['name', 'dtype']).issuperset(kwargs):
         raise TypeError("%s does not take the following keyword arguments %s" %
             (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
-    name = kwargs.get('name') or next(names)
     out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
                    for arg in args)
     expr_inds = tuple(range(out_ndim))[::-1]
@@ -1604,6 +1605,8 @@ def elemwise(op, *args, **kwargs):
             dt = op(*vals).dtype
         except AttributeError:
             dt = None
+
+    name = kwargs.get('name', None) or 'elemwise-' + tokenize(op, dt, *args)
 
     if other:
         op2 = partial_by_order(op, other)
@@ -1703,8 +1706,8 @@ sign = wrap_elemwise(np.fabs)
 
 def frexp(x):
     tmp = elemwise(np.frexp, x)
-    left = next(names)
-    right = next(names)
+    left = 'mantissa-' + tmp.name
+    right = 'exponent-' + tmp.name
     ldsk = dict(((left,) + key[1:], (getitem, key, 0))
                 for key in core.flatten(tmp._keys()))
     rdsk = dict(((right,) + key[1:], (getitem, key, 1))
@@ -1732,8 +1735,8 @@ frexp.__doc__ = np.frexp
 
 def modf(x):
     tmp = elemwise(np.modf, x)
-    left = next(names)
-    right = next(names)
+    left = 'modf1-' + tmp.name
+    right = 'modf2-' + tmp.name
     ldsk = dict(((left,) + key[1:], (getitem, key, 0))
                 for key in core.flatten(tmp._keys()))
     rdsk = dict(((right,) + key[1:], (getitem, key, 1))
@@ -1832,7 +1835,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
     if 'dask' in inspect.getfile(reduction):
         reduction = getattr(np, reduction.__name__)
 
-    name = next(names)
+    name = 'coarsen-' + tokenize(reduction, x, axes, trim_excess)
     dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes,
                                         trim_excess))
                 for key in core.flatten(x._keys()))
@@ -1885,7 +1888,7 @@ def insert(arr, obj, values, axis):
 
     if getattr(values, 'ndim', 0) == 0:
         # we need to turn values into a dask array
-        name = next(names)
+        name = 'values-' + tokenize(values)
         dtype = getattr(values, 'dtype', type(values))
         values = Array({(name,): values}, name, chunks=(), dtype=dtype)
 
@@ -1920,7 +1923,7 @@ def broadcast_to(x, shape):
         raise ValueError('cannot broadcast shape %s to shape %s'
                          % (x.shape, shape))
 
-    name = next(names)
+    name = 'broadcast_to-' + tokenize(x, shape)
     chunks = (tuple((s,) for s in shape[:ndim_new])
                + tuple(bd if old > 1 else (new,)
                        for bd, old, new in zip(x.chunks, x.shape,
@@ -1953,14 +1956,11 @@ def offset_func(func, offset, *args):
     return _offset
 
 
-fromfunction_names = ('fromfunction-%d' % i for i in count(1))
-
 @wraps(np.fromfunction)
 def fromfunction(func, chunks=None, shape=None, dtype=None):
-    name = next(fromfunction_names)
     if chunks:
         chunks = normalize_chunks(chunks, shape)
-
+    name = 'fromfunction-' + tokenize(func, chunks, shape, dtype)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
     offsets = list(product(*aggdims))
@@ -1976,9 +1976,9 @@ def fromfunction(func, chunks=None, shape=None, dtype=None):
 
 @wraps(np.unique)
 def unique(x):
-    name = next(names)
+    name = 'unique-' + x.name
     dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
-    parts = get(merge(dsk, x.dask), list(dsk.keys()))
+    parts = Array._get(merge(dsk, x.dask), list(dsk.keys()))
     return np.unique(np.concatenate(parts))
 
 
@@ -1991,7 +1991,8 @@ def bincount(x, weights=None, minlength=None):
         assert weights.chunks == x.chunks
 
     # Call np.bincount on each block, possibly with weights
-    name = 'bincount' + next(tokens)
+    token = tokenize(x, weights, minlength)
+    name = 'bincount-' + token
     if weights is not None:
         dsk = dict(((name, i),
                     (np.bincount, (x.name, i), (weights.name, i), minlength))
@@ -2004,7 +2005,7 @@ def bincount(x, weights=None, minlength=None):
         dtype = 'i8'
 
     # Sum up all of the intermediate bincounts per block
-    name = 'bincount-sum' + next(tokens)
+    name = 'bincount-sum-' + token
     dsk[(name, 0)] = (np.sum, (list, list(dsk)), 0)
 
     chunks = ((minlength,),)
@@ -2014,6 +2015,7 @@ def bincount(x, weights=None, minlength=None):
         dsk.update(weights.dask)
 
     return Array(dsk, name, chunks, dtype)
+
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
@@ -2040,17 +2042,21 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                          'chunked structure')
 
     if not np.iterable(bins):
+        bin_token = bins
         mn, mx = range
         if mn == mx:
             mn -= 0.5
             mx += 0.5
 
         bins = np.linspace(mn, mx, bins + 1, endpoint=True)
+    else:
+        bin_token = bins
+    token = tokenize(a, bin_token, range, normed, weights, density)
 
     nchunks = len(list(core.flatten(a._keys())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
 
-    name1 = 'histogram-sum' + next(tokens)
+    name = 'histogram-sum-' + token
 
 
     # Map the histogram to all bins
@@ -2058,20 +2064,20 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return np.histogram(x, bins, weights=weights)[0][np.newaxis]
 
     if weights is None:
-        dsk = dict(((name1, i, 0), (block_hist, k))
+        dsk = dict(((name, i, 0), (block_hist, k))
                     for i, k in enumerate(core.flatten(a._keys())))
         dtype = int
     else:
         a_keys = core.flatten(a._keys())
         w_keys = core.flatten(weights._keys())
-        dsk = dict(((name1, i, 0), (block_hist, k, w))
+        dsk = dict(((name, i, 0), (block_hist, k, w))
                     for i, (k, w) in enumerate(zip(a_keys, w_keys)))
         dsk.update(weights.dask)
         dtype = weights.dtype
 
     dsk.update(a.dask)
 
-    mapped = Array(dsk, name1, chunks, dtype=dtype)
+    mapped = Array(dsk, name, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
 
     # We need to replicate normed and density options from numpy
@@ -2088,6 +2094,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             return n/(n*db).sum(), bins
         else:
             return n, bins
+
 
 def chunks_from_arrays(arrays):
     """ Chunks tuple from nested list of arrays
@@ -2107,6 +2114,8 @@ def chunks_from_arrays(arrays):
     >>> chunks_from_arrays([1, 1])
     ((1, 1),)
     """
+    if not arrays:
+        return ()
     result = []
     dim = 0
 
@@ -2138,6 +2147,8 @@ def deepfirst(seq):
 def ndimlist(seq):
     if not isinstance(seq, (list, tuple)):
         return 0
+    elif not seq:
+        return 1
     else:
         return 1 + ndimlist(seq[0])
 
@@ -2163,6 +2174,8 @@ def concatenate3(arrays):
     ndim = ndimlist(arrays)
     if not ndim:
         return arrays
+    if not arrays:
+        return np.empty(())
     chunks = chunks_from_arrays(arrays)
     shape = tuple(map(sum, chunks))
 
@@ -2224,3 +2237,163 @@ def to_hdf5(filename, *args, **kwargs):
                                         **kwargs)
                     for dp, x in data.items()]
         store(list(data.values()), dsets)
+
+
+def interleave_none(a, b):
+    """
+
+    >>> interleave_none([0, None, 2, None], [1, 3])
+    (0, 1, 2, 3)
+    """
+    result = []
+    i = j = 0
+    n = len(a) + len(b)
+    while i + j < n:
+        if a[i] is not None:
+            result.append(a[i])
+            i += 1
+        else:
+            result.append(b[j])
+            i += 1
+            j += 1
+    return tuple(result)
+
+
+def keyname(name, i, okey):
+    """
+
+    >>> keyname('x', 3, [None, None, 0, 2])
+    ('x', 3, 0, 2)
+    """
+    return (name, i) + tuple(k for k in okey if k is not None)
+
+
+def _vindex(x, *indexes):
+    """ Point wise slicing
+
+    This is equivalent to numpy slicing with multiple input lists
+
+    >>> x = np.arange(56).reshape((7, 8))
+    >>> x
+    array([[ 0,  1,  2,  3,  4,  5,  6,  7],
+           [ 8,  9, 10, 11, 12, 13, 14, 15],
+           [16, 17, 18, 19, 20, 21, 22, 23],
+           [24, 25, 26, 27, 28, 29, 30, 31],
+           [32, 33, 34, 35, 36, 37, 38, 39],
+           [40, 41, 42, 43, 44, 45, 46, 47],
+           [48, 49, 50, 51, 52, 53, 54, 55]])
+
+    >>> d = from_array(x, chunks=(3, 4))
+    >>> result = _vindex(d, [0, 1, 6, 0], [0, 1, 0, 7])
+    >>> result.compute()
+    array([ 0,  9, 48,  7])
+    """
+    indexes = [list(index) if index is not None else index for index in indexes]
+    bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
+    bounds2 = [b for i, b in zip(indexes, bounds) if i is not None]
+    axis = _get_axis(indexes)
+
+    points = list()
+    for i, idx in enumerate(zip(*[i for i in indexes if i is not None])):
+        block_idx = [np.searchsorted(b, ind, 'right') - 1
+                     for b, ind in zip(bounds2, idx)]
+        inblock_idx = [ind - bounds2[k][j]
+                    for k, (ind, j) in enumerate(zip(idx, block_idx))]
+        points.append((i, tuple(block_idx), tuple(inblock_idx)))
+
+    per_block = groupby(1, points)
+    per_block = dict((k, v) for k, v in per_block.items() if v)
+
+    other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
+                                for i, c in zip(indexes, x.chunks)]))
+
+    token = tokenize(x, indexes)
+    name = 'vindex-slice-' + token
+
+    full_slices = [slice(None, None) if i is None else None for i in indexes]
+
+    dsk = dict((keyname(name, i, okey),
+                (_vindex_transpose,
+                  (_vindex_slice, (x.name,) + interleave_none(okey, key),
+                     interleave_none(full_slices, list(zip(*pluck(2, per_block[key]))))),
+                  axis))
+                for i, key in enumerate(per_block)
+                for okey in other_blocks)
+
+    if per_block:
+        dsk2 = dict((keyname('vindex-merge-' + token, 0, okey),
+                     (_vindex_merge,
+                       [list(pluck(0, per_block[key])) for key in per_block],
+                       [keyname(name, i, okey) for i in range(len(per_block))]))
+                     for okey in other_blocks)
+    else:
+        dsk2 = dict()
+
+    chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
+    chunks.insert(0, (len(points),) if points else ())
+    chunks = tuple(chunks)
+
+    return Array(merge(x.dask, dsk, dsk2), 'vindex-merge-' + token, chunks, x.dtype)
+
+
+def _get_axis(indexes):
+    """ Get axis along which point-wise slicing results lie
+
+    This is mostly a hack because I can't figure out NumPy's rule on this and
+    can't be bothered to go reading.
+
+    >>> _get_axis([[1, 2], None, [1, 2], None])
+    0
+    >>> _get_axis([None, [1, 2], [1, 2], None])
+    1
+    >>> _get_axis([None, None, [1, 2], [1, 2]])
+    2
+    """
+    ndim = len(indexes)
+    indexes = [slice(None, None) if i is None else [0] for i in indexes]
+    x = np.empty((2,) * ndim)
+    x2 = x[tuple(indexes)]
+    return x2.shape.index(1)
+
+
+def _vindex_slice(block, points):
+    """ Pull out point-wise slices from block """
+    points = [p if isinstance(p, slice) else list(p) for p in points]
+    return block[tuple(points)]
+
+def _vindex_transpose(block, axis):
+    """ Rotate block so that points are on the first dimension """
+    axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
+    return block.transpose(axes)
+
+def _vindex_merge(locations, values):
+    """
+
+    >>> locations = [0], [2, 1]
+    >>> values = [np.array([[1, 2, 3]]),
+    ...           np.array([[10, 20, 30], [40, 50, 60]])]
+
+    >>> _vindex_merge(locations, values)
+    array([[ 1,  2,  3],
+           [40, 50, 60],
+           [10, 20, 30]])
+    """
+    locations = list(map(list, locations))
+    values = list(values)
+
+    n = sum(map(len, locations))
+
+    shape = list(values[0].shape)
+    shape[0] = n
+    shape = tuple(shape)
+
+    dtype = values[0].dtype
+
+    x = np.empty(shape, dtype=dtype)
+
+    ind = [slice(None, None) for i in range(x.ndim)]
+    for loc, val in zip(locations, values):
+        ind[0] = loc
+        x[tuple(ind)] = val
+
+    return x

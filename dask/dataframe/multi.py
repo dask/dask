@@ -54,7 +54,8 @@ We proceed with hash joins in the following stages:
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
 
-from .core import repartition, tokens, DataFrame, Index
+from ..base import tokenize
+from .core import repartition, DataFrame, Index
 from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
@@ -83,6 +84,7 @@ def align_partitions(*dfs):
     dfs: sequence of dd.DataFrames
         Sequence of dataframes to be aligned on their index
 
+
     Returns
     -------
     dfs: sequence of dd.DataFrames
@@ -94,9 +96,9 @@ def align_partitions(*dfs):
         divisions
     """
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
-    divisionss = [bound(divisions, df.divisions[0], df.divisions[-1])
-                  for df in dfs]
-    dfs2 = list(map(repartition, dfs, divisionss))
+    divisionss = [tuple(divisions) for df in dfs]
+    dfs2 = [df.repartition(div, force=True) for df, div
+            in zip(dfs, divisionss)]
 
     result = list()
     inds = [0 for df in dfs]
@@ -170,7 +172,7 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     left_empty = pd.DataFrame([], columns=lhs.columns)
     right_empty = pd.DataFrame([], columns=rhs.columns)
 
-    name = 'join-indexed' + next(tokens)
+    name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
     dsk = dict(((name, i),
                 (pd.DataFrame.join, a, b, None, how, lsuffix, rsuffix)
                 if a is not None and b is not None else
@@ -234,7 +236,8 @@ def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffix
                        left_columns=list(lhs.columns),
                        right_columns=list(rhs.columns))
 
-    name = 'hash-join' + next(tokens)
+    token = tokenize(lhs, on_left, rhs, on_right, how, npartitions, suffixes)
+    name = 'hash-join-' + token
     dsk = dict(((name, i), (pdmerge2, (lhs2._name, i), (rhs2._name, i),
                              how, None, on_left, on_right))
                 for i in range(npartitions))
@@ -258,7 +261,7 @@ def concat_indexed_dataframes(dfs, join='outer'):
                for df, empty in zip(part, empties)]
               for part in parts]
 
-    name = 'concat-indexed' + next(tokens)
+    name = 'concat-indexed-' + tokenize(join, *dfs)
     dsk = dict(((name, i), (pd.concat, part, 0, join))
                 for i, part in enumerate(parts2))
 

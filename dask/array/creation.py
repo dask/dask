@@ -1,10 +1,9 @@
 from __future__ import absolute_import
-from itertools import count
-
 import numpy as np
 from functools import partial
 
-from .core import Array, normalize_chunks, tokens
+from .core import Array, normalize_chunks
+from ..base import tokenize
 
 
 def linspace(start, stop, num=50, chunks=None, dtype=None):
@@ -43,7 +42,7 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
 
     space = float(range_) / (num - 1)
 
-    name = 'linspace' + next(tokens)
+    name = 'linspace-' + tokenize((start, stop, num, chunks, dtype))
 
     dsk = {}
     blockstart = start
@@ -119,7 +118,7 @@ def arange(*args, **kwargs):
 
     chunks = normalize_chunks(chunks, (num,))
 
-    name = 'arange' + next(tokens)
+    name = 'arange-' + tokenize((start, stop, step, chunks, num))
     dsk = {}
     elem_count = 0
 
@@ -162,7 +161,7 @@ def diag(v):
         raise NotImplementedError("Extracting diagonals with `diag` is not "
                                   "implemented.")
     chunks_1d = v.chunks[0]
-    name = 'diag' + next(tokens)
+    name = 'diag-' + tokenize(v)
 
     blocks = v._keys()
     dsk = v.dask.copy()

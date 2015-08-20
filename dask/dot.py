@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from subprocess import check_call
+import re
+from subprocess import check_call, CalledProcessError
 
 from graphviz import Digraph
 
@@ -56,6 +57,41 @@ def name(x):
         return str(hash(str(x)))
 
 
+_HASHPAT = re.compile('([0-9a-z]{32})')
+
+
+def label(x, cache=None):
+    """
+
+    >>> label('x')
+    'x'
+
+    >>> label(('x', 1))
+    "('x', 1)"
+
+    >>> from hashlib import md5
+    >>> x = 'x-%s-hello' % md5(b'1234').hexdigest()
+    >>> x
+    'x-81dc9bdb52d04dc20036dbd8313ed055-hello'
+
+    >>> label(x)
+    'x-#-hello'
+    """
+    s = str(x)
+    m = re.search(_HASHPAT, s)
+    if m is not None:
+        for h in m.groups():
+            if cache is not None:
+                n = cache.get(h, len(cache))
+                label = '#{0}'.format(n)
+                # cache will be overwritten destructively
+                cache[h] = n
+            else:
+                label = '#'
+            s = s.replace(h, label)
+    return s
+
+
 def to_graphviz(dsk, data_attributes=None, function_attributes=None):
     if data_attributes is None:
         data_attributes = {}
@@ -65,12 +101,13 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
     g = Digraph(graph_attr={'rankdir': 'BT'})
 
     seen = set()
+    cache = {}
 
     for k, v in dsk.items():
         k_name = name(k)
         if k_name not in seen:
             seen.add(k_name)
-            g.node(k_name, label=str(k), shape='box',
+            g.node(k_name, label=label(k, cache=cache), shape='box',
                    **data_attributes.get(k, {}))
 
         if istask(v):
@@ -85,7 +122,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
-                    g.node(dep_name, label=str(dep), shape='box',
+                    g.node(dep_name, label=label(dep, cache=cache), shape='box',
                            **data_attributes.get(dep, {}))
                 g.edge(dep_name, func_name)
         elif ishashable(v) and v in dsk:
@@ -97,8 +134,15 @@ def dot_graph(dsk, filename='mydask', **kwargs):
     g = to_graphviz(dsk, **kwargs)
     g.save(filename + '.dot')
 
-    check_call('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename), shell=True)
-    check_call('dot -Tpng {0}.dot -o {0}.png'.format(filename), shell=True)
+    try:
+        check_call('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename), shell=True)
+        check_call('dot -Tpng {0}.dot -o {0}.png'.format(filename), shell=True)
+    except CalledProcessError:
+        raise RuntimeError(
+            "Please install The `dot` utility from graphviz:\n"
+            "  Debian:  sudo apt-get install graphviz\n"
+            "  Mac OSX: brew install graphviz\n"
+            "  Windows: http://www.graphviz.org/Download..php")  # pragma: no cover
     try:
         from IPython.display import Image
         return Image(filename + '.png')

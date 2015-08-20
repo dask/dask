@@ -325,3 +325,30 @@ def takes_multiple_arguments(func):
     if spec.defaults is None:
         return len(spec.args) - is_constructor != 1
     return len(spec.args) - len(spec.defaults) - is_constructor > 1
+
+
+class Dispatch(object):
+    """Simple single dispatch."""
+    def __init__(self):
+        self._lookup = {}
+
+    def register(self, type, func):
+        """Register dispatch of `func` on arguments of type `type`"""
+        if isinstance(type, tuple):
+            for t in type:
+                self.register(t, func)
+        else:
+            self._lookup[type] = func
+
+    def __call__(self, arg):
+        # We dispatch first on type(arg), and fall back to iterating through
+        # the mro. This is significantly faster in the common case where
+        # type(arg) is in the lookup, with only a small penalty on fall back.
+        lk = self._lookup
+        typ = type(arg)
+        if typ in lk:
+            return lk[typ](arg)
+        for cls in inspect.getmro(typ)[1:]:
+            if cls in lk:
+                return lk[cls](arg)
+        raise TypeError("No dispatch for {0} type".format(typ))

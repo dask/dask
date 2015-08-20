@@ -132,8 +132,24 @@ def test_pluck_with_default():
     assert list(b.pluck(0, None)) == ['H', None, 'W']
 
 
-def test_fold_computation():
-    assert int(b.fold(add)) == sum(L)
+def test_fold():
+    assert b.fold(add).compute() == sum(L)
+    assert b.fold(add, initial=10).compute() == sum(L) + 10 * b.npartitions
+
+    c = db.from_sequence(range(5), npartitions=3)
+    def binop(acc, x):
+        acc = acc.copy()
+        acc.add(x)
+        return acc
+
+    assert c.fold(binop, set.union, initial=set()).compute() == set(c)
+
+    d = db.from_sequence('hello')
+    assert set(d.fold(lambda a, b: ''.join([a, b]), initial='').compute()) == set('hello')
+
+    e = db.from_sequence([[1], [2], [3]], npartitions=2)
+    with dask.set_options(get=get_sync):
+        assert set(e.fold(add, initial=[]).compute()) == set([1, 2, 3])
 
 
 def test_distinct():

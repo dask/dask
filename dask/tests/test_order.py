@@ -1,27 +1,16 @@
-from dask.order import dfs, child_max, ndependents, order, inc
+from dask.order import dfs, child_max, ndependents, order, inc, get_deps
 
 
 def issorted(L, reverse=False):
     return sorted(L, reverse=reverse) == L
 
 
-def test_ordering_prefers_depth_first():
-    a, b, c = 'abc'
-    f = lambda *args: None
-    d = {(a, 0): (f,), (b, 0): 0, (c, 0): (f,),
-         (a, 1): (f,), (b, 1): (f, (a, 0), (b, 0), (c, 0)), (c, 1): (f,),
-         (a, 2): (f,), (b, 2): (f, (a, 1), (b, 1), (c, 1)), (c, 2): (f,),
-         (a, 3): (f,), (b, 3): (f, (a, 2), (b, 2), (c, 2)), (c, 3): (f,)}
-
-    o = order(d)
-
-    assert issorted(list(map(o.get, [(a, i) for i in range(4)])), reverse=True)
-    assert issorted(list(map(o.get, [(c, i) for i in range(4)])), reverse=True)
+def f(*args):
+    pass
 
 
 def test_ordering_keeps_groups_together():
     a, b, c = 'abc'
-    f = lambda *args: None
     d = dict(((a, i), (f,)) for i in range(4))
     d.update({(b, 0): (f, (a, 0), (a, 1)),
               (b, 1): (f, (a, 2), (a, 3))})
@@ -39,19 +28,106 @@ def test_ordering_keeps_groups_together():
     assert abs(o[(a, 1)] - o[(a, 3)]) == 1
 
 
-def test_ordering_prefers_tasks_that_release_data():
-    a, b, c = 'abc'
-    f = lambda *args: None
-    d = {(a, 0): (f,), (a, 1): (f,),
-         (b, 0): (f, (a, 0)), (b, 1): (f, (a, 1)), (b, 2): (f, (a, 1))}
+def test_prefer_broker_nodes():
+    """
 
-    o = order(d)
+    b0    b1  b2
+    |      \  /
+    a0      a1
+
+    a1 should be run before a0
+    """
+    a, b, c = 'abc'
+    dsk = {(a, 0): (f,), (a, 1): (f,),
+           (b, 0): (f, (a, 0)), (b, 1): (f, (a, 1)), (b, 2): (f, (a, 1))}
+
+    dependencies, dependents = get_deps(dsk)
+    nd = ndependents(dependencies, dependents)
+    cm = child_max(dependencies, dependents, nd)
+    o = order(dsk)
+
+    assert o[(a, 1)] < o[(a, 0)]
+
+    # Switch name of 0, 1 to ensure that this isn't due to string comparison
+    dsk = {(a, 0): (f,), (a, 1): (f,),
+           (b, 0): (f, (a, 0)), (b, 1): (f, (a, 1)), (b, 2): (f, (a, 0))}
+
+    o = order(dsk)
 
     assert o[(a, 1)] > o[(a, 0)]
 
-    d = {(a, 0): (f,), (a, 1): (f,),
-         (b, 0): (f, (a, 0)), (b, 1): (f, (a, 1)), (b, 2): (f, (a, 0))}
 
-    o = order(d)
+def test_base_of_reduce_preferred():
+    """
+               a3
+              /|
+            a2 |
+           /|  |
+         a1 |  |
+        /|  |  |
+      a0 |  |  |
+      |  |  |  |
+      b0 b1 b2 b3
+        \ \ / /
+           c
 
-    assert o[(a, 1)] < o[(a, 0)]
+    We really want to run b0 quickly
+    """
+    dsk = dict((('a', i), (f, ('a', i - 1), ('b', i))) for i in [1, 2, 3])
+    dsk[('a', 0)] = (f, ('b', 0))
+    dsk.update(dict((('b', i), (f, 'c', 1)) for i in [0, 1, 2, 3]))
+    dsk['c'] = 1
+
+    o = order(dsk)
+
+    assert o == {('a', 3): 0,
+                 ('a', 2): 1,
+                 ('a', 1): 2,
+                 ('a', 0): 3,
+                 ('b', 0): 4,
+                  'c':     5,
+                 ('b', 1): 6,
+                 ('b', 2): 7,
+                 ('b', 3): 8}
+
+    # ('b', 0) is the most important out of ('b', i)
+    assert min([('b', i) for i in [0, 1, 2, 3]], key=o.get) == ('b', 0)
+
+
+def test_deep_bases_win_over_dependents():
+    """
+    d should come before e and probably before one of b and c
+
+            a
+          / | \   .
+         b  c |
+        / \ | /
+       e    d
+    """
+    dsk = {'a': (f, 'b', 'c', 'd'), 'b': (f, 'd', 'e'), 'c': (f, 'd'), 'd': 1,
+            'e': 2}
+
+    dependencies, dependents = get_deps(dsk)
+    nd = ndependents(dependencies, dependents)
+    cm = child_max(dependencies, dependents, nd)
+
+    o = order(dsk)
+    assert o['d'] < o['e']
+    assert o['d'] < o['b'] or o['d'] < o['c']
+
+
+def test_prefer_deep():
+    """
+        c
+        |
+    y   b
+    |   |
+    x   a
+
+    Prefer longer chains first so we should start with c
+    """
+    dsk = {'a': 1, 'b': (f, 'a'), 'c': (f, 'b'),
+           'x': 1, 'y': (f, 'x')}
+
+    o = order(dsk)
+    assert o == {'c': 0, 'b': 1, 'a': 2, 'y': 3, 'x': 4}

@@ -34,6 +34,10 @@ def test_linspace():
     darr = da.linspace(1.4, 4.9, chunks=5, num=13, dtype=int)
     nparr = np.linspace(1.4, 4.9, num=13, dtype=int)
     eq(darr, nparr)
+    assert sorted(da.linspace(1.4, 4.9, chunks=5, num=13).dask) ==\
+           sorted(da.linspace(1.4, 4.9, chunks=5, num=13).dask)
+    assert sorted(da.linspace(6, 49, chunks=5, dtype=float).dask) ==\
+           sorted(da.linspace(6, 49, chunks=5, dtype=float).dask)
 
 
 def test_arange():
@@ -61,6 +65,10 @@ def test_arange():
     darr = da.arange(2, 13, chunks=5, dtype=int)
     nparr = np.arange(2, 13, dtype=int)
     eq(darr, nparr)
+    assert sorted(da.arange(2, 13, chunks=5).dask) ==\
+           sorted(da.arange(2, 13, chunks=5).dask)
+    assert sorted(da.arange(77, chunks=13, dtype=float).dask) ==\
+           sorted(da.arange(77, chunks=13, dtype=float).dask)
 
 
 def test_arange_has_dtype():
@@ -101,6 +109,7 @@ def test_diag():
     darr = da.diag(v)
     nparr = np.diag(v)
     eq(darr, nparr)
+    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
 
     v = v + v + 3
     darr = da.diag(v)
@@ -111,3 +120,4 @@ def test_diag():
     darr = da.diag(v)
     nparr = np.diag(v)
     eq(darr, nparr)
+    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)

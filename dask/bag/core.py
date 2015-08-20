@@ -30,7 +30,7 @@ from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
-from ..context import _globals
+from ..base import Base, normalize_token
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
@@ -97,16 +97,6 @@ def optimize(dsk, keys):
     dsk4 = inline_singleton_lists(dsk3)
     dsk5 = lazify(dsk4)
     return dsk5
-
-
-def get(dsk, keys, get=None, **kwargs):
-    """ Get function for dask.bag """
-    get = get or _globals['get'] or mpget
-
-    dsk2 = optimize(dsk, keys)
-
-    return get(dsk2, keys, **kwargs)
-_get = get
 
 
 def list2(seq):
@@ -182,23 +172,39 @@ def to_textfiles(b, path, name_function=str):
     return Bag(merge(b.dask, dsk), name, b.npartitions)
 
 
-class Item(object):
+def finalize(bag, results):
+    if isinstance(bag, Item):
+        return results[0]
+    if isinstance(results, Iterator):
+        results = list(results)
+    if isinstance(results[0], Iterable) and not isinstance(results[0], str):
+        results = toolz.concat(results)
+    if isinstance(results, Iterator):
+        results = list(results)
+    return results
+
+
+class Item(Base):
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(mpget)
+    _finalize = staticmethod(finalize)
+
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
 
-    def compute(self, **kwargs):
-        return get(self.dask, self.key, **kwargs)
+    def _keys(self):
+        return [self.key]
 
     def apply(self, func):
         name = next(names)
         dsk = {name: (func, self.key)}
         return Item(merge(self.dask, dsk), name)
 
-    __int__ = __float__ = __complex__ = __bool__ = compute
+    __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
 
-class Bag(object):
+class Bag(Base):
     """ Parallel collection of Python objects
 
     Example
@@ -228,6 +234,10 @@ class Bag(object):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
+    _optimize = staticmethod(optimize)
+    _default_get = staticmethod(mpget)
+    _finalize = staticmethod(finalize)
+
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name
@@ -252,13 +262,6 @@ class Bag(object):
     @property
     def _args(self):
         return (self.dask, self.name, self.npartitions)
-
-    def _visualize(self, optimize_graph=False):
-        from dask.dot import dot_graph
-        if optimize_graph:
-            return dot_graph(optimize(self.dask, self._keys()))
-        else:
-            return dot_graph(self.dask)
 
     def filter(self, predicate):
         """ Filter elements in collection by a predicate function
@@ -340,25 +343,57 @@ class Bag(object):
     def to_textfiles(self, path, name_function=str):
         return to_textfiles(self, path, name_function)
 
-    def fold(self, binop, combine=None, initial=None):
-        """ Splittable reduction
+    def fold(self, binop, combine=None, initial=no_default):
+        """ Parallelizable reduction
 
-        Apply binary operator on each partition to perform reduce.  Follow by a
-        second binary operator to combine results
+        Fold is like the builtin function ``reduce`` except that it works in
+        parallel.  Fold takes two binary operator functions, one to reduce each
+        partition of our dataset and another to combine results between
+        partitions
+
+        1.  ``binop``: Binary operator to reduce within each partition
+        2.  ``combine``:  Binary operator to combine results from binop
+
+        Sequentially this would look like the following:
+
+        >>> intermediates = [reduce(binop, part) for part in partitions]  # doctest: +SKIP
+        >>> final = reduce(combine, intermediates)  # doctest: +SKIP
+
+        If only one function is given then it is used for both functions
+        ``binop`` and ``combine`` as in the following example to compute the
+        sum:
+
+        >>> def add(x, y):
+        ...     return x + y
 
         >>> b = from_sequence(range(5))
-        >>> b.fold(lambda x, y: x + y).compute()  # doctest: +SKIP
+        >>> b.fold(add).compute()  # doctest: +SKIP
         10
 
-        Optionally provide default arguments and special combine binary
-        operator
+        In full form we provide both binary operators as well as their default
+        arguments
 
-        >>> b.fold(lambda x, y: x + y, lambda x, y: x + y, 0).compute()  # doctest: +SKIP
+        >>> b.fold(binop=add, combine=add, initial=0).compute()  # doctest: +SKIP
         10
+
+        More complex binary operators are also doable
+
+        >>> def add_to_set(acc, x):
+        ...     ''' Add new element x to set acc '''
+        ...     return acc | set([x])
+        >>> b.fold(add_to_set, set.union, initial=set()).compute()  # doctest: +SKIP
+        {1, 2, 3, 4, 5}
+
+        See Also
+        --------
+
+        Bag.foldby
         """
         a = next(names)
         b = next(names)
-        if initial:
+        if isinstance(initial, list):
+            initial = (list2, initial)
+        if initial is not no_default:
             dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
                             for i in range(self.npartitions))
         else:
@@ -585,14 +620,15 @@ class Bag(object):
 
         It can be tricky to construct the right binary operators to perform
         analytic queries.  The ``foldby`` method accepts two binary operators,
-        ``binop`` and ``combine``.
+        ``binop`` and ``combine``.  Binary operators two inputs and output must
+        have the same type.
 
-        Binop takes a running total and a new element and produces a new total
+        Binop takes a running total and a new element and produces a new total:
 
         >>> def binop(total, x):
         ...     return total + x['amount']
 
-        Combine takes two totals and combines them
+        Combine takes two totals and combines them:
 
         >>> def combine(total1, total2):
         ...     return total1 + total2
@@ -656,15 +692,6 @@ class Bag(object):
 
     def _keys(self):
         return [(self.name, i) for i in range(self.npartitions)]
-
-    def compute(self, **kwargs):
-        """ Force evaluation of bag """
-        results = get(self.dask, self._keys(), **kwargs)
-        if isinstance(results[0], Iterable) and not isinstance(results[0], str):
-            results = toolz.concat(results)
-        if isinstance(results, Iterator):
-            results = list(results)
-        return results
 
     def concat(self):
         """ Concatenate nested lists into one long list
@@ -772,6 +799,10 @@ class Bag(object):
 
         return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
                             name, columns, divisions)
+
+
+normalize_token.register(Item, lambda a: a.key)
+normalize_token.register(Bag, lambda a: a.name)
 
 
 def partition(grouper, sequence, npartitions, p, nelements=2**20):

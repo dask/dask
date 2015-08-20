@@ -51,6 +51,7 @@ def logerrors():
         log('Traceback', str(tb))
         raise
 
+
 class Worker(object):
     """ Asynchronous worker in a distributed dask computation pool
 
@@ -120,13 +121,14 @@ class Worker(object):
         self.to_scheduler.setsockopt(zmq.IDENTITY, self.address)
         self.to_scheduler.connect(scheduler)
 
+        self.immediate_functions = {'close': self.close_from_scheduler}
+
         self.scheduler_functions = {'status': self.status_to_scheduler,
                                     'compute': self.compute,
                                     'getitem': self.getitem_scheduler,
                                     'delitem': self.delitem,
                                     'setitem': self.setitem,
-                                    'worker-death': self.worker_death,
-                                    'close': self.close_from_scheduler}
+                                    'worker-death': self.worker_death}
 
         self.worker_functions = {'getitem': self.getitem_worker,
                                  'getitem-ack': self.getitem_ack,
@@ -350,12 +352,14 @@ class Worker(object):
                     header, payload = self.to_scheduler.recv_multipart()
                 header = pickle.loads(header)
                 log(self.address, 'Receive job from scheduler', header)
-                try:
+                if header['function'] in self.immediate_functions:
+                    function = self.immediate_functions[header['function']]
+                    function(header, payload)
+                elif header['function'] in self.scheduler_functions:
                     function = self.scheduler_functions[header['function']]
-                except KeyError:
-                    log(self.address, 'Unknown function', header)
-                else:
                     future = self.pool.apply_async(function, args=(header, payload))
+                else:
+                    log(self.address, 'Unknown function', header)
 
     def listen_to_workers(self):
         """ Listen to communications from workers
@@ -556,6 +560,7 @@ class Worker(object):
             self.to_scheduler.close(linger=1)
             self.pool.close()
             self.pool.join()
+            log(self.address, 'Close pool')
             self.block()
             self.context.destroy(linger=3)
 
