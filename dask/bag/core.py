@@ -1085,7 +1085,7 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 def from_url(urls):
     """Create a dask.bag from a url
 
-    >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')  # doctest: +SKIP
+    >>> a = from_url('http://raw.githubusercontent.com/blaze/dask/master/README.rst')  # doctest: +SKIP
     >>> a.npartitions  # doctest: +SKIP
     1
 

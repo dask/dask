@@ -143,4 +143,4 @@ The shared memory scheduler has notable limitations:
 
 
 
-.. _`Script available here`: https://github.com/ContinuumIO/dask/tree/master/docs/source/scripts/scheduling.py
+.. _`Script available here`: https://github.com/blaze/dask/tree/master/docs/source/scripts/scheduling.py

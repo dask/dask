@@ -97,5 +97,5 @@ Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 .. _`Continuum Analytics`: http://continuum.io
 
 .. _`#dask tag`: http://stackoverflow.com/questions/tagged/dask
-.. _`GitHub issue tracker`: https://github.com/ContinuumIO/dask/issues
+.. _`GitHub issue tracker`: https://github.com/blaze/dask/issues
 .. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
