@@ -288,7 +288,7 @@ def test_from_url():
     a = db.from_url(['http://google.com', 'http://github.com'])
     assert a.npartitions == 2
 
-    b = db.from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
+    b = db.from_url('http://raw.githubusercontent.com/blaze/dask/master/README.rst')
     assert b.npartitions == 1
     assert b'Dask\n' in b.take(10)
 

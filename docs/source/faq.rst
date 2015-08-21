@@ -99,5 +99,5 @@ Frequently Asked Questions
         work with the dask development team to improve our scheduling policies.
 
 .. _`inspect docs`: inspect.html
-.. _`Chest`: https://github.com/ContinuumIO/chest
-.. _`issue tracker`: https://github.com/ContinuumIO/dask/issues/new
+.. _`Chest`: https://github.com/blaze/chest
+.. _`issue tracker`: https://github.com/blaze/dask/issues/new

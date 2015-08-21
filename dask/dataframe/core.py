@@ -324,7 +324,7 @@ class _Frame(Base):
         """ Not implemented """
 
         # not implemented because of performance concerns.
-        # see https://github.com/ContinuumIO/dask/pull/507
+        # see https://github.com/blaze/dask/pull/507
         raise AttributeError("Dask Dataframe does not support iloc")
 
     def repartition(self, divisions, force=False):
