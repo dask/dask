@@ -175,4 +175,4 @@ What are some bite-sized tasks?
 
 
 .. _`External sorts`: http://en.wikipedia.org/wiki/External_sorting
-.. _`Issue 52`: https://github.com/ContinuumIO/dask/issues/52
+.. _`Issue 52`: https://github.com/blaze/dask/issues/52
