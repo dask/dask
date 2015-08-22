@@ -534,14 +534,7 @@ class Series(_Frame):
         q : list/array of floats
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
         """
-        # pandas uses quantile in [0, 1]
-        # numpy / everyone else uses [0, 100]
-        return quantile(self, np.asarray(q) * 100)
-
-    def quantiles(self, *args, **kwargs):
-        raise NotImplementedError("This has moved to quantile to match the Pandas API\n"
-                                  "Also, quantiles will now be specified on the range "
-                                  "[0, 1], not [0, 100]")
+        return quantile(self, q)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
@@ -1507,23 +1500,43 @@ def quantile(df, q):
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
     assert len(df.columns) == 1
-    if not len(q):
-        return da.zeros((0,), chunks=((0,),))
     from dask.array.percentile import _percentile, merge_percentiles
-    token = tokenize(df, q)
+
+    # currently, only Series has quantile method
+    if isinstance(q, (list, tuple, np.ndarray)):
+        # make Series
+        merge_type = lambda v: df._partition_type(v, index=q, name=df.name)
+        return_type = df._constructor
+        if issubclass(return_type, Index):
+            return_type = Series
+    else:
+        merge_type = lambda v: df._partition_type(v).item()
+        return_type = df._constructor_sliced
+        q = [q]
+
+    # pandas uses quantile in [0, 1]
+    # numpy / everyone else uses [0, 100]
+    qs = np.asarray(q) * 100
+    token = tokenize(df, qs)
+
+    if len(qs) == 0:
+        name = 'quantiles-' + token
+        return Series({(name, 0): pd.Series([], name=df.name)},
+                      name, df.name, [None, None])
+    else:
+        new_divisions = [np.min(q), np.max(q)]
+
     name = 'quantiles-1-' + token
-    val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), q))
+    val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), qs))
                    for i, key in enumerate(df._keys()))
     name2 = 'quantiles-2-' + token
     len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
 
     name3 = 'quantiles-3-' + token
-    merge_dsk = {(name3, 0): (pd.Series, (merge_percentiles, q, [q] * df.npartitions,
-                                                sorted(val_dsk),
-                                                sorted(len_dsk)))}
-
+    merge_dsk = {(name3, 0): (merge_type, (merge_percentiles, qs, [qs] * df.npartitions,
+                                          sorted(val_dsk), sorted(len_dsk)))}
     dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
-    return Series(dsk, name3, df.name, [df.divisions[0], df.divisions[-1]])
+    return return_type(dsk, name3, df.name, new_divisions)
 
 
 def pd_split(df, p, seed=0):

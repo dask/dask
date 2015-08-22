@@ -48,7 +48,7 @@ def eq(a, b, check_names=True):
         b = b.sort_index()
         tm.assert_frame_equal(a, b)
     elif isinstance(a, pd.Series):
-        tm.assert_series_equal(a, b)
+        tm.assert_series_equal(a, b, check_names=check_names)
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b)
     else:
@@ -997,17 +997,53 @@ def test_len():
     assert len(d.a) == len(full.a)
 
 def test_quantile():
-    result = d.b.quantile([.3, .7]).compute()
+    # series / multiple
+    result = d.b.quantile([.3, .7])
+    exp = full.b.quantile([.3, .7]) # result may different
     assert len(result) == 2
-    assert result[0] == 0
-    assert 3 < result[1] < 7
+    assert result.divisions == (.3, .7)
+    assert eq(result.index, exp.index)
+    assert isinstance(result, dd.Series)
 
+    result = result.compute()
+    assert isinstance(result, pd.Series)
+    assert result.iloc[0] == 0
+    assert 5 < result.iloc[1] < 6
+
+    # index
+    s = pd.Series(np.arange(10), index=np.arange(10))
+    ds = dd.from_pandas(s, 2)
+
+    result = ds.index.quantile([.3, .7])
+    exp = s.quantile([.3, .7])
+    assert len(result) == 2
+    assert result.divisions == (.3, .7)
+    assert eq(result.index, exp.index)
+    assert isinstance(result, dd.Series)
+
+    result = result.compute()
+    assert isinstance(result, pd.Series)
+    assert 1 < result.iloc[0] < 2
+    assert 7 < result.iloc[1] < 8
+
+    # series / single
+    result = d.b.quantile(.5)
+    exp = full.b.quantile(.5) # result may different
+    assert isinstance(result, dd.core.Scalar)
+    result = result.compute()
+    assert 4 < result < 6
 
 def test_empty_quantile():
-    assert d.b.quantile([]).compute().tolist() == []
+    result = d.b.quantile([])
+    exp = full.b.quantile([])
+    assert result.divisions == (None, None)
 
-def test_quantiles_raises():
-    assert raises(NotImplementedError, lambda: d.b.quantiles([30]))
+    # because of a pandas bug, name is not preserved
+    # https://github.com/pydata/pandas/pull/10881
+    assert result.name == 'b'
+    assert result.compute().name == 'b'
+    assert eq(result, exp, check_names=False)
+
 
 def test_index():
     assert eq(d.index, full.index)
