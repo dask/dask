@@ -26,6 +26,7 @@ from ..base import Base, compute, tokenize, normalize_token
 
 
 no_default = '__no_default__'
+return_scalar = '__return_scalar__'
 
 pd.computation.expressions.set_use_numexpr(False)
 
@@ -210,7 +211,7 @@ class _Frame(Base):
     def __len__(self):
         return reduction(self, len, np.sum, token='len').compute()
 
-    def map_partitions(self, func, columns=no_default):
+    def map_partitions(self, func, columns=no_default, *args, **kwargs):
         """ Apply Python function on each DataFrame block
 
         When using ``map_partitions`` you should provide either the column
@@ -225,13 +226,16 @@ class _Frame(Base):
         Parameters
         ----------
 
-        column_info: tuple or string
-            Column names or name of the output.
-            Defaults to names of the input.
+        func: function
+            Function applied to each blocks
+        columns: tuple or scalar
+            Column names or name of the output. Defaults to names of data itself.
+            When tuple is passed, DataFrame is returned. When scalar is passed,
+            Series is returned.
         """
         if columns == no_default:
             columns = self.column_info
-        return map_partitions(func, columns, self)
+        return map_partitions(func, columns, self, *args, **kwargs)
 
     def random_split(self, p, seed=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
@@ -450,6 +454,108 @@ class _Frame(Base):
                                                 columns=self._elemwise_cols)
 
 
+    def _aca_agg(self, token, func, aggfunc=None):
+        """ Wrapper for aggregations """
+        raise NotImplementedError
+
+    @wraps(pd.DataFrame.sum)
+    def sum(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.sum(axis=1)
+            name = '{0}sum(axis=1)'.format(self._token_prefix)
+            return map_partitions(f, None, self, token=name)
+        else:
+            return self._aca_agg(token='sum', func=lambda x: x.sum())
+
+    @wraps(pd.DataFrame.max)
+    def max(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.max(axis=1)
+            name = '{0}max(axis=1)'.format(self._token_prefix)
+            return map_partitions(f, None, self, token=name)
+        else:
+            return self._aca_agg(token='max', func=lambda x: x.max())
+
+    @wraps(pd.DataFrame.min)
+    def min(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.min(axis=1)
+            name = '{0}min(axis=1)'.format(self._token_prefix)
+            return map_partitions(f, None, self, token=name)
+        else:
+            return self._aca_agg(token='min', func=lambda x: x.min())
+
+    @wraps(pd.DataFrame.count)
+    def count(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.count(axis=1)
+            name = '{0}count(axis=1)'.format(self._token_prefix)
+            return map_partitions(f, None, self, token=name)
+        else:
+            return self._aca_agg(token='count', func=lambda x: x.count(),
+                                 aggfunc=lambda x: x.sum())
+
+    @wraps(pd.DataFrame.mean)
+    def mean(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x: x.mean(axis=1)
+            name = '{0}mean(axis=1)'.format(self._token_prefix)
+            return map_partitions(f, None, self, token=name)
+        else:
+            num = self._get_numeric_data()
+            s = num.sum()
+            n = num.count()
+
+            def f(s, n):
+                try:
+                    return s / n
+                except ZeroDivisionError:
+                    return np.nan
+            name = '{0}mean-{1}'.format(self._token_prefix, tokenize(s))
+            return map_partitions(f, None, s, n, token=name)
+
+    @wraps(pd.DataFrame.var)
+    def var(self, axis=None, ddof=1):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x, ddof=ddof: x.var(axis=1, ddof=ddof)
+            name = '{0}var(axis=1, ddof={1})'.format(self._token_prefix, ddof)
+            return map_partitions(f, None, self, token=name)
+        else:
+            num = self._get_numeric_data()
+            x = 1.0 * num.sum()
+            x2 = 1.0 * (num ** 2).sum()
+            n = num.count()
+
+            def f(x2, x, n):
+                try:
+                    result = (x2 / n) - (x / n)**2
+                    if ddof:
+                        result = result * n / (n - ddof)
+                    return result
+                except ZeroDivisionError:
+                    return np.nan
+            name = '{0}var(ddof={1})'.format(self._token_prefix, ddof)
+            return map_partitions(f, None, x2, x, n, token=name)
+
+    @wraps(pd.DataFrame.std)
+    def std(self, axis=None, ddof=1):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            f = lambda x, ddof=ddof: x.std(axis=1, ddof=ddof)
+            name = '{0}std(axis=1, ddof={1})'.format(self._token_prefix, ddof)
+            return map_partitions(f, None, self, token=name)
+        else:
+            v = self.var(ddof=ddof)
+            name = '{0}std(ddof={1})'.format(self._token_prefix, ddof)
+            return map_partitions(np.sqrt, None, v, token=name)
+
+
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,
            operator.eq, operator.gt, operator.ge, operator.inv,
@@ -458,7 +564,6 @@ for op in [operator.abs, operator.add, operator.and_, operator_div,
            operator.sub, operator.truediv, operator.floordiv, operator.xor]:
     _Frame._bind_operator(op)
     Scalar._bind_operator(op)
-
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
@@ -475,6 +580,7 @@ class Series(_Frame):
     """
 
     _partition_type = pd.Series
+    _token_prefix = 'series-'
 
     def __init__(self, dsk, _name, name, divisions):
         self.dask = dsk
@@ -548,62 +654,56 @@ class Series(_Frame):
                           self.name, self.divisions)
         raise NotImplementedError()
 
+    @wraps(pd.DataFrame._get_numeric_data)
+    def _get_numeric_data(self, how='any', subset=None):
+        return self
+
+    def _validate_axis(self, axis=0):
+        if axis not in (0, 'index', None):
+            raise ValueError('No axis named {0}'.format(axis))
+        # convert to numeric axis
+        return {None: 0, 'index': 0}.get(axis, axis)
+
+    def _aca_agg(self, token, func, aggfunc=None):
+        """ Wrapper for aggregations """
+        if aggfunc is None:
+            aggfunc = func
+
+        return aca([self], chunk=func,
+                   aggregate=lambda x: aggfunc(pd.Series(x)),
+                   columns=return_scalar, token=self._token_prefix + token)
+
     @wraps(pd.Series.sum)
-    def sum(self):
-        return reduction(self, pd.Series.sum, pdsum, token='series-sum')
+    def sum(self, axis=None):
+        return super(Series, self).sum(axis=axis)
 
     @wraps(pd.Series.max)
-    def max(self):
-        return reduction(self, pd.Series.max, pdmax, token='series-max')
+    def max(self, axis=None):
+        return super(Series, self).max(axis=axis)
 
     @wraps(pd.Series.min)
-    def min(self):
-        return reduction(self, pd.Series.min, pdmin, token='series-min')
+    def min(self, axis=None):
+        return super(Series, self).min(axis=axis)
 
     @wraps(pd.Series.count)
     def count(self):
-        return reduction(self, pd.Series.count, pdsum, token='series-count')
+        return super(Series, self).count()
+
+    @wraps(pd.Series.mean)
+    def mean(self, axis=None):
+        return super(Series, self).mean(axis=axis)
+
+    @wraps(pd.Series.var)
+    def var(self, axis=None, ddof=1):
+        return super(Series, self).var(axis=axis, ddof=ddof)
+
+    @wraps(pd.Series.std)
+    def std(self, axis=None, ddof=1):
+        return super(Series, self).std(axis=axis, ddof=ddof)
 
     @wraps(pd.Series.nunique)
     def nunique(self):
         return self.drop_duplicates().count()
-
-    @wraps(pd.Series.mean)
-    def mean(self):
-        def chunk(ser):
-            return (ser.sum(), ser.count())
-
-        def agg(seq):
-            sums, counts = list(zip(*seq))
-            return 1.0 * np.nansum(sums) / np.nansum(counts)
-        return reduction(self, chunk, agg, token='series-mean')
-
-    @wraps(pd.Series.var)
-    def var(self, ddof=1):
-        def chunk(ser):
-            return (ser.sum(), (ser**2).sum(), ser.count())
-
-        def agg(seq):
-            x, x2, n = list(zip(*seq))
-            x = float(np.nansum(x))
-            x2 = float(np.nansum(x2))
-            n = np.nansum(n)
-            try:
-                result = (x2 / n) - (x / n) ** 2
-                if ddof:
-                    result = result * n / (n - ddof)
-                return result
-            except ZeroDivisionError:
-                return np.nan
-        token = 'series-var(ddof={0})'.format(ddof)
-        return reduction(self, chunk, agg, token=token)
-
-    @wraps(pd.Series.std)
-    def std(self, ddof=1):
-        name = 'series-std(ddof={0})-{1}'.format(ddof, tokenize(self))
-        df = self.var(ddof=ddof)
-        dsk = {(name, 0): (np.sqrt, (df._name, 0))}
-        return Scalar(merge(df.dask, dsk), name)
 
     @wraps(pd.Series.value_counts)
     def value_counts(self):
@@ -662,6 +762,8 @@ class Series(_Frame):
 
 class Index(Series):
 
+    _token_prefix = 'index-'
+
     @property
     def index(self):
         msg = "'{0}' object has no attribute 'index'"
@@ -698,6 +800,7 @@ class DataFrame(_Frame):
     """
 
     _partition_type = pd.DataFrame
+    _token_prefix = 'dataframe-'
 
     def __init__(self, dask, name, columns, divisions):
         self.dask = dask
@@ -889,92 +992,14 @@ class DataFrame(_Frame):
         # convert to numeric axis
         return {None: 0, 'index': 0, 'columns': 1}.get(axis, axis)
 
-    @wraps(pd.DataFrame.sum)
-    def sum(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            f = lambda x: x.sum(axis=1)
-            return self.map_partitions(f, None)
-        else:
-            chunk = lambda df: df.sum()
-            agg = lambda df: df.groupby(level=0).sum()
-            return aca([self], chunk=chunk, aggregate=agg, columns=None,
-                       token='dataframe-sum')
+    def _aca_agg(self, token, func, aggfunc=None):
+        """ Wrapper for aggregations """
+        if aggfunc is None:
+            aggfunc = func
 
-    @wraps(pd.DataFrame.max)
-    def max(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            f = lambda x: x.max(axis=1)
-            return self.map_partitions(f, None)
-        else:
-            chunk = lambda df: df.max()
-            agg = lambda df: df.groupby(level=0).max()
-            return aca([self], chunk=chunk, aggregate=agg, columns=None,
-                       token='dataframe-max')
-
-    @wraps(pd.DataFrame.min)
-    def min(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            f = lambda x: x.min(axis=1)
-            return self.map_partitions(f, None)
-        else:
-            chunk = lambda df: df.min()
-            agg = lambda df: df.groupby(level=0).min()
-            return aca([self], chunk=chunk, aggregate=agg, columns=None,
-                       token='dataframe-min')
-
-    @wraps(pd.DataFrame.count)
-    def count(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            f = lambda x: x.count(axis=1)
-            return self.map_partitions(f, None)
-        else:
-            chunk = lambda df: df.count()
-            agg = lambda df: df.groupby(level=0).sum()
-            return aca([self], chunk=chunk, aggregate=agg, columns=None,
-                       token='dataframe-count')
-
-    @wraps(pd.DataFrame.mean)
-    def mean(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            f = lambda x: x.mean(axis=1)
-            return self.map_partitions(f, None)
-        else:
-            num = self._get_numeric_data()
-            return num.sum() / num.count()
-
-    @wraps(pd.DataFrame.var)
-    def var(self, axis=None, ddof=1):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            f = lambda x, ddof=ddof: x.var(axis=1, ddof=ddof)
-            return self.map_partitions(f, None)
-        else:
-            num = self._get_numeric_data()
-            x = 1.0 * num.sum()
-            x2 = 1.0 * (num ** 2).sum()
-            n = num.count()
-
-            result = (x2 / n) - (x / n)**2
-            if ddof:
-                result = result * n / (n - ddof)
-            return result
-
-    @wraps(pd.DataFrame.std)
-    def std(self, axis=None, ddof=1):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            f = lambda x, ddof=ddof: x.std(axis=1, ddof=ddof)
-            return self.map_partitions(f, None)
-        else:
-            v = self.var(ddof=ddof)
-            def apply_sqrt(s):
-                return s.apply(np.sqrt)
-            return map_partitions(apply_sqrt, None, v)
+        return aca([self], chunk=func,
+                   aggregate=lambda x: aggfunc(x.groupby(level=0)),
+                   columns=None, token=self._token_prefix + token)
 
     @property
     def _elemwise_cols(self):
@@ -1152,16 +1177,6 @@ def empty_safe(func, arg):
     else:
         return func(arg)
 
-def pdsum(x):
-    # define local to assign static name to Series.sum
-    # to support string and other types, once convert to series
-    return pd.Series(x).sum()
-
-def pdmax(x):
-    return pd.Series(x).max()
-
-def pdmin(x):
-    return pd.Series(x).min()
 
 def reduction(x, chunk, aggregate, token=None):
     """ General version of reductions
@@ -1427,10 +1442,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
         return_type = type(args[0])
         columns = None
     else:
-        if isinstance(args[0], Index):
-            return_type = Index
-        else:
-            return_type = _get_return_type(columns)
+        return_type = _get_return_type(args[0], columns)
 
     dasks = [a.dask for a in args if isinstance(a, _Frame)]
     return return_type(merge(dsk, dsk2, *dasks), b, columns, [None, None])
@@ -1439,10 +1451,17 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
 aca = apply_concat_apply
 
 
-def _get_return_type(columns):
+def _get_return_type(arg, columns):
     if (isinstance(columns, (str, unicode)) or not
-        isinstance(columns, Iterable)):
-        return Series
+          isinstance(columns, Iterable)):
+
+        if columns == return_scalar:
+            return Scalar
+
+        elif isinstance(arg, Index):
+            return Index
+        else:
+            return Series
     else:
         return DataFrame
 
@@ -1459,13 +1478,20 @@ def map_partitions(func, columns, *args, **kwargs):
                arg.divisions == args[0].divisions for arg in args)
 
     token = kwargs.pop('token', None)
+    token_key = tokenize(token or func, columns, *args)
+    token = token or 'map-partitions'
+    name = '{0}-{1}'.format(token, token_key)
+
+    if all(isinstance(arg, Scalar) for arg in args):
+        # Special handling for Scalar.
+        # Scalar / DataFrame mixed ops are not yet supported.
+        dask = {(name, 0): (func, ) + tuple((arg._name, 0) for arg in args)}
+        return Scalar(merge(dask, *[arg.dask for arg in args]), name)
 
     if kwargs:
         raise ValueError("Keyword arguments not yet supported in map_partitions")
 
-    return_type = _get_return_type(columns)
-
-    name = 'map-partitions' + tokenize(token or func, columns, *args)
+    return_type = _get_return_type(args[0], columns)
     dsk = dict(((name, i), (apply, func,
                              (tuple, [(arg._name, i)
                                       if isinstance(arg, _Frame)
