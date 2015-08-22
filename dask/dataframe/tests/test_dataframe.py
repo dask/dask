@@ -616,6 +616,126 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
         assert eq(~(l == r), ~(el == er))
 
 
+def test_scalar_arithmetics():
+    l = dd.core.Scalar({('l', 0): 10}, 'l')
+    r = dd.core.Scalar({('r', 0): 4}, 'r')
+    el = 10
+    er = 4
+
+    assert isinstance(l, dd.core.Scalar)
+    assert isinstance(r, dd.core.Scalar)
+
+    # l, r may be repartitioned, test whether repartition keeps original data
+    assert eq(l, el)
+    assert eq(r, er)
+
+    assert eq(l + r, el + er)
+    assert eq(l * r, el * er)
+    assert eq(l - r, el - er)
+    assert eq(l / r, el / er)
+    assert eq(l // r, el // er)
+    assert eq(l ** r, el ** er)
+    assert eq(l % r, el % er)
+
+    assert eq(l & r, el & er)
+    assert eq(l | r, el | er)
+    assert eq(l ^ r, el ^ er)
+    assert eq(l > r, el > er)
+    assert eq(l < r, el < er)
+    assert eq(l >= r, el >= er)
+    assert eq(l <= r, el <= er)
+    assert eq(l == r, el == er)
+    assert eq(l != r, el != er)
+
+    assert eq(l + 2, el + 2)
+    assert eq(l * 2, el * 2)
+    assert eq(l - 2, el - 2)
+    assert eq(l / 2, el / 2)
+    assert eq(l & True, el & True)
+    assert eq(l | True, el | True)
+    assert eq(l ^ True, el ^ True)
+    assert eq(l // 2, el // 2)
+    assert eq(l ** 2, el ** 2)
+    assert eq(l % 2, el % 2)
+    assert eq(l > 2, el > 2)
+    assert eq(l < 2, el < 2)
+    assert eq(l >= 2, el >= 2)
+    assert eq(l <= 2, el <= 2)
+    assert eq(l == 2, el == 2)
+    assert eq(l != 2, el != 2)
+
+    assert eq(2 + r, 2 + er)
+    assert eq(2 * r, 2 * er)
+    assert eq(2 - r, 2 - er)
+    assert eq(2 / r, 2 / er)
+    assert eq(True & r, True & er)
+    assert eq(True | r, True | er)
+    assert eq(True ^ r, True ^ er)
+    assert eq(2 // r, 2 // er)
+    assert eq(2 ** r, 2 ** er)
+    assert eq(2 % r, 2 % er)
+    assert eq(2 > r, 2 > er)
+    assert eq(2 < r, 2 < er)
+    assert eq(2 >= r, 2 >= er)
+    assert eq(2 <= r, 2 <= er)
+    assert eq(2 == r, 2 == er)
+    assert eq(2 != r, 2 != er)
+
+    assert eq(-l, -el)
+    assert eq(abs(l), abs(el))
+
+    assert eq(~(l == r), ~(el == er))
+
+
+def test_scalar_arithmetics_with_dask_instances():
+    s = dd.core.Scalar({('s', 0): 10}, 's')
+    e = 10
+
+    pds = pd.Series([1, 2, 3, 4, 5, 6, 7])
+    dds = dd.from_pandas(pds, 2)
+
+    pdf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                        'b': [7, 6, 5, 4, 3, 2, 1]})
+    ddf = dd.from_pandas(pdf, 2)
+
+    # pandas Series
+    result = pds + s   # this result pd.Series (automatically computed)
+    assert isinstance(result, pd.Series)
+    assert eq(result, pds + e)
+
+    result = s + pds   # this result dd.Series
+    assert isinstance(result, dd.Series)
+    assert eq(result, pds + e)
+
+    # dask Series
+    result = dds + s   # this result dd.Series
+    assert isinstance(result, dd.Series)
+    assert eq(result, pds + e)
+
+    result = s + dds   # this result dd.Series
+    assert isinstance(result, dd.Series)
+    assert eq(result, pds + e)
+
+
+    # pandas DataFrame
+    result = pdf + s   # this result pd.DataFrame (automatically computed)
+    assert isinstance(result, pd.DataFrame)
+    assert eq(result, pdf + e)
+
+    result = s + pdf   # this result dd.DataFrame
+    assert isinstance(result, dd.DataFrame)
+    assert eq(result, pdf + e)
+
+    # dask DataFrame
+    result = ddf + s   # this result dd.DataFrame
+    assert isinstance(result, dd.DataFrame)
+    assert eq(result, pdf + e)
+
+    result = s + ddf   # this result dd.DataFrame
+    assert isinstance(result, dd.DataFrame)
+    assert eq(result, pdf + e)
+
+
 def test_reductions():
     nans1 = pd.Series([1] + [np.nan] * 4 + [2] + [np.nan] * 3)
     nands1 = dd.from_pandas(nans1, 2)

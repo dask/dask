@@ -19,7 +19,7 @@ from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
-from ..compatibility import unicode, apply
+from ..compatibility import unicode, apply, operator_div
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..base import Base, compute, tokenize, normalize_token
@@ -78,12 +78,54 @@ class Scalar(Base):
         # name and divisions are ignored.
         # There are dummies to be compat with Series and DataFrame
 
+    def __array__(self):
+        # array interface is required to support pandas instance + Scalar
+        # Otherwise, above op results in pd.Series of Scalar (object dtype)
+        return np.asarray(self.compute())
+
     @property
     def _args(self):
         return (self.dask, self._name)
 
     def _keys(self):
         return [(self._name, 0)]
+
+    @classmethod
+    def _get_unary_operator(cls, op):
+        def f(self):
+            name = tokenize(self)
+            dsk = {(name, 0): (op, (self._name, 0))}
+            return Scalar(merge(dsk, self.dask), name)
+        return f
+
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        return lambda self, other: _scalar_binary(op, self, other, inv=inv)
+
+
+def _scalar_binary(op, a, b, inv=False):
+    name = '{0}-{1}'.format(op.__name__, tokenize(a, b))
+
+    dsk = a.dask
+    if not isinstance(b, Base):
+        pass
+    elif isinstance(b, Scalar):
+        dsk = merge(dsk, b.dask)
+        b = (b._name, 0)
+    else:
+        return NotImplemented
+
+    if inv:
+        dsk.update({(name, 0): (op, b, (a._name, 0))})
+    else:
+        dsk.update({(name, 0): (op, (a._name, 0), b)})
+
+    if isinstance(b, pd.Series):
+        return Series(dsk, name, b.name, [b.index.min(), b.index.max()])
+    elif isinstance(b, pd.DataFrame):
+        return DataFrame(dsk, name, b.columns, [b.index.min(), b.index.max()])
+    else:
+        return Scalar(dsk, name)
 
 
 class _Frame(Base):
@@ -394,68 +436,28 @@ class _Frame(Base):
         """passed to elemwise ops, None for Series, columns for DataFrame"""
         return None
 
-    def __abs__(self):
-        return elemwise(operator.abs, self, columns=self._elemwise_cols)
-    def __add__(self, other):
-        return elemwise(operator.add, self, other, columns=self._elemwise_cols)
-    def __radd__(self, other):
-        return elemwise(operator.add, other, self, columns=self._elemwise_cols)
-    def __and__(self, other):
-        return elemwise(operator.and_, self, other, columns=self._elemwise_cols)
-    def __rand__(self, other):
-        return elemwise(operator.and_, other, self, columns=self._elemwise_cols)
-    def __div__(self, other):
-        return elemwise(operator.div, self, other, columns=self._elemwise_cols)
-    def __rdiv__(self, other):
-        return elemwise(operator.div, other, self, columns=self._elemwise_cols)
-    def __eq__(self, other):
-        return elemwise(operator.eq, self, other, columns=self._elemwise_cols)
-    def __gt__(self, other):
-        return elemwise(operator.gt, self, other, columns=self._elemwise_cols)
-    def __ge__(self, other):
-        return elemwise(operator.ge, self, other, columns=self._elemwise_cols)
-    def __invert__(self):
-        return elemwise(operator.inv, self, columns=self._elemwise_cols)
-    def __lt__(self, other):
-        return elemwise(operator.lt, self, other, columns=self._elemwise_cols)
-    def __le__(self, other):
-        return elemwise(operator.le, self, other, columns=self._elemwise_cols)
-    def __mod__(self, other):
-        return elemwise(operator.mod, self, other, columns=self._elemwise_cols)
-    def __rmod__(self, other):
-        return elemwise(operator.mod, other, self, columns=self._elemwise_cols)
-    def __mul__(self, other):
-        return elemwise(operator.mul, self, other, columns=self._elemwise_cols)
-    def __rmul__(self, other):
-        return elemwise(operator.mul, other, self, columns=self._elemwise_cols)
-    def __ne__(self, other):
-        return elemwise(operator.ne, self, other, columns=self._elemwise_cols)
-    def __neg__(self):
-        return elemwise(operator.neg, self, columns=self._elemwise_cols)
-    def __or__(self, other):
-        return elemwise(operator.or_, self, other, columns=self._elemwise_cols)
-    def __ror__(self, other):
-        return elemwise(operator.or_, other, self, columns=self._elemwise_cols)
-    def __pow__(self, other):
-        return elemwise(operator.pow, self, other, columns=self._elemwise_cols)
-    def __rpow__(self, other):
-        return elemwise(operator.pow, other, self, columns=self._elemwise_cols)
-    def __sub__(self, other):
-        return elemwise(operator.sub, self, other, columns=self._elemwise_cols)
-    def __rsub__(self, other):
-        return elemwise(operator.sub, other, self, columns=self._elemwise_cols)
-    def __truediv__(self, other):
-        return elemwise(operator.truediv, self, other, columns=self._elemwise_cols)
-    def __rtruediv__(self, other):
-        return elemwise(operator.truediv, other, self, columns=self._elemwise_cols)
-    def __floordiv__(self, other):
-        return elemwise(operator.floordiv, self, other, columns=self._elemwise_cols)
-    def __rfloordiv__(self, other):
-        return elemwise(operator.floordiv, other, self, columns=self._elemwise_cols)
-    def __xor__(self, other):
-        return elemwise(operator.xor, self, other, columns=self._elemwise_cols)
-    def __rxor__(self, other):
-        return elemwise(operator.xor, other, self, columns=self._elemwise_cols)
+    @classmethod
+    def _get_unary_operator(cls, op):
+        return lambda self: elemwise(op, self, columns=self._elemwise_cols)
+
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        if inv:
+            return lambda self, other: elemwise(op, other, self,
+                                                columns=self._elemwise_cols)
+        else:
+            return lambda self, other: elemwise(op, self, other,
+                                                columns=self._elemwise_cols)
+
+
+# bind operators
+for op in [operator.abs, operator.add, operator.and_, operator_div,
+           operator.eq, operator.gt, operator.ge, operator.inv,
+           operator.lt, operator.le, operator.mod, operator.mul,
+           operator.ne, operator.neg, operator.or_, operator.pow,
+           operator.sub, operator.truediv, operator.floordiv, operator.xor]:
+    _Frame._bind_operator(op)
+    Scalar._bind_operator(op)
 
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
@@ -1079,30 +1081,35 @@ def elemwise(op, *args, **kwargs):
 
     _name = 'elemwise-' + tokenize(op, kwargs, *args)
 
-    dfs = [arg for arg in args if isinstance(arg, _Frame)]
+    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar))]
     other = [(i, arg) for i, arg in enumerate(args)
-                      if not isinstance(arg, _Frame)]
+             if not isinstance(arg, (_Frame, Scalar))]
 
     if other:
         op2 = partial_by_order(op, other)
     else:
         op2 = op
 
+    dfs = [df for df in dasks if isinstance(df, _Frame)]
     divisions = dfs[0].divisions
     if not all(df.divisions == divisions for df in dfs):
         from .multi import align_partitions
-        dfs, divisions, parts = align_partitions(*dfs)
+        dasks, divisions, parts = align_partitions(*dasks)
+    n = len(divisions) - 1
 
-    dsk = dict(((_name, i), (op2,) + frs)
-                for i, frs in enumerate(zip(*[df._keys() for df in dfs])))
+    # adjust the key length of Scalar
+    keys = [d._keys() *  n if isinstance(d, Scalar)
+            else d._keys() for d in dasks]
+
+    dsk = dict(((_name, i), (op2,) + frs) for i, frs in enumerate(zip(*keys)))
+
+    dsk = merge(dsk, *[d.dask for d in dasks])
     if columns is not None:
-        return DataFrame(merge(dsk, *[df.dask for df in dfs]),
-                         _name, columns, divisions)
+        return DataFrame(dsk, _name, columns, divisions)
     else:
         column_name = name or consistent_name(n for df in dfs
                                               for n in df.columns)
-        return Series(merge(dsk, *[df.dask for df in dfs]),
-                      _name, column_name, divisions)
+        return Series(dsk, _name, column_name, divisions)
 
 
 def remove_empties(seq):
