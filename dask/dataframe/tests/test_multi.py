@@ -18,17 +18,36 @@ def test_align_partitions():
                      index=[30, 70, 80, 100])
     b = dd.repartition(B, [30, 80, 100])
 
+    s = dd.core.Scalar({('s', 0): 10}, 's')
+
     (aa, bb), divisions, L = align_partitions(a, b)
-    assert isinstance(a, dd.DataFrame)
-    assert isinstance(b, dd.DataFrame)
-    assert divisions == (10, 30, 40, 60, 80, 100)
-    assert isinstance(L, list)
-    assert len(divisions) == 1 + len(L)
+
+    def _check(a, b, aa, bb):
+        assert isinstance(a, dd.DataFrame)
+        assert isinstance(b, dd.DataFrame)
+        assert isinstance(aa, dd.DataFrame)
+        assert isinstance(bb, dd.DataFrame)
+        assert eq(a, aa)
+        assert eq(b, bb)
+        assert divisions == (10, 30, 40, 60, 80, 100)
+        assert isinstance(L, list)
+        assert len(divisions) == 1 + len(L)
+
+    _check(a, b, aa, bb)
     assert L == [[(aa._name, 0), (bb._name, 0)],
                  [(aa._name, 1), (bb._name, 1)],
                  [(aa._name, 2), (bb._name, 2)],
                  [(aa._name, 3), (bb._name, 3)],
                  [(aa._name, 4), (bb._name, 4)]]
+
+    (aa, ss, bb), divisions, L = align_partitions(a, s, b)
+    _check(a, b, aa, bb)
+    assert L == [[(aa._name, 0), None, (bb._name, 0)],
+                 [(aa._name, 1), None, (bb._name, 1)],
+                 [(aa._name, 2), None, (bb._name, 2)],
+                 [(aa._name, 3), None, (bb._name, 3)],
+                 [(aa._name, 4), None, (bb._name, 4)]]
+    assert eq(ss, 10)
 
     ldf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                         'b': [7, 6, 5, 4, 3, 2, 1]})

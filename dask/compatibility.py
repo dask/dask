@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import operator
 import sys
+import types
 
 PY3 = sys.version_info[0] == 3
 PY2 = sys.version_info[0] == 2
@@ -21,10 +23,11 @@ if PY3:
         else:
             return func(*args)
     range = range
+    operator_div = operator.truediv
+
 else:
     import __builtin__ as builtins
     from Queue import Queue, Empty
-    import operator
     from itertools import izip_longest as zip_longest
     from StringIO import StringIO
     from io import BytesIO
@@ -35,7 +38,31 @@ else:
     long = long
     apply = apply
     range = xrange
-
+    operator_div = operator.div
 
 def skip(func):
     return
+
+
+def bind_method(cls, name, func):
+    """Bind a method to class
+
+    Parameters
+    ----------
+
+    cls : type
+        class to receive bound method
+    name : basestring
+        name of method on class instance
+    func : function
+        function to be bound as method
+
+    Returns
+    -------
+    None
+    """
+    # only python 2 has bound/unbound method issue
+    if not PY3:
+        setattr(cls, name, types.MethodType(func, None, cls))
+    else:
+        setattr(cls, name, func)

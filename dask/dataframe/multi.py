@@ -55,7 +55,7 @@ We proceed with hash joins in the following stages:
 """
 
 from ..base import tokenize
-from .core import repartition, DataFrame, Index
+from .core import repartition, _Frame, DataFrame, Index
 from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
@@ -81,36 +81,41 @@ def align_partitions(*dfs):
 
     Parameters
     ----------
-    dfs: sequence of dd.DataFrames
+    dfs: sequence of dd.DataFrame, dd.Series and dd.base.Scalar
         Sequence of dataframes to be aligned on their index
 
 
     Returns
     -------
-    dfs: sequence of dd.DataFrames
-        These DataFrames have consistent divisions with each other
+    dfs: sequence of dd.DataFrame, dd.Series and dd.base.Scalar
+        These must have consistent divisions with each other
     divisions: tuple
         Full divisions sequence of the entire result
     result: list
-        A list of lists of keys that show which dataframes exist on which
+        A list of lists of keys that show which data exist on which
         divisions
     """
-    divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
-    divisionss = [tuple(divisions) for df in dfs]
-    dfs2 = [df.repartition(div, force=True) for df, div
-            in zip(dfs, divisionss)]
+    dfs1 = [df for df in dfs if isinstance(df, _Frame)]
+    if len(dfs) == 0:
+        raise ValueError("dfs contains no DataFrame and Series")
+    divisions = list(unique(merge_sorted(*[df.divisions for df in dfs1])))
+    dfs2 = [df.repartition(divisions, force=True)
+            if isinstance(df, _Frame) else df for df in dfs]
 
     result = list()
     inds = [0 for df in dfs]
     for d in divisions[:-1]:
         L = list()
-        for i in range(len(dfs)):
-            j = inds[i]
-            divs = dfs2[i].divisions
-            if j < len(divs) - 1 and divs[j] == d:
-                L.append((dfs2[i]._name, inds[i]))
-                inds[i] += 1
-            else:
+        for i, df in enumerate(dfs2):
+            if isinstance(df, _Frame):
+                j = inds[i]
+                divs = df.divisions
+                if j < len(divs) - 1 and divs[j] == d:
+                    L.append((df._name, inds[i]))
+                    inds[i] += 1
+                else:
+                    L.append(None)
+            else: # Scalar has no divisions
                 L.append(None)
         result.append(L)
     return dfs2, tuple(divisions), result
