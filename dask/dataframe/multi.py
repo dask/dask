@@ -121,17 +121,25 @@ def align_partitions(*dfs):
     return dfs2, tuple(divisions), result
 
 
-def _maybe_align_partitions(dasks):
+def _maybe_align_partitions(args):
     """ Align DataFrame blocks if divisions are different """
-    dasks = [df for df in dasks if isinstance(df, (_Frame, Scalar))]
+
+    # passed to align_partitions
+    indexer, dasks = zip(*[x for x in enumerate(args)
+                           if isinstance(x[1], (_Frame, Scalar))])
+
+    # to get current divisions
     dfs = [df for df in dasks if isinstance(df, _Frame)]
-    if not isinstance(dfs, list) or len(dfs) == 0:
-        raise ValueError('Input must be a list longer than 0')
+    if len(dfs) == 0:
+        # no need to align
+        return args
 
     divisions = dfs[0].divisions
     if not all(df.divisions == divisions for df in dfs):
         dasks, _, _ = align_partitions(*dasks)
-    return dasks
+        for i, d in zip(indexer, dasks):
+            args[i] = d
+    return args
 
 
 def require(divisions, parts, required=None):

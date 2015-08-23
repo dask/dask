@@ -25,7 +25,7 @@ from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
-from ..compatibility import unicode, apply, operator_div
+from ..compatibility import unicode, apply, operator_div, bind_method
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..base import Base, compute, tokenize, normalize_token
@@ -463,7 +463,6 @@ class _Frame(Base):
             return lambda self, other: elemwise(op, self, other,
                                                 columns=self._elemwise_cols)
 
-
     def _aca_agg(self, token, func, aggfunc=None):
         """ Wrapper for aggregations """
         raise NotImplementedError
@@ -646,15 +645,11 @@ class _Frame(Base):
             return self._cum_agg('cummin', self._partition_type.cummin,
                                  aggregate, np.nan)
 
+    @classmethod
+    def _bind_operator_method(cls, name, op):
+        """ bind operator method like DataFrame.add to this class """
+        raise NotImplementedError
 
-# bind operators
-for op in [operator.abs, operator.add, operator.and_, operator_div,
-           operator.eq, operator.gt, operator.ge, operator.inv,
-           operator.lt, operator.le, operator.mod, operator.mul,
-           operator.ne, operator.neg, operator.or_, operator.pow,
-           operator.sub, operator.truediv, operator.floordiv, operator.xor]:
-    _Frame._bind_operator(op)
-    Scalar._bind_operator(op)
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
@@ -927,6 +922,18 @@ class Series(_Frame):
     def to_frame(self, name=None):
         _name = name if name is not None else self.name
         return map_partitions(pd.Series.to_frame, [_name], self, name)
+
+    @classmethod
+    def _bind_operator_method(cls, name, op):
+        """ bind operator method like DataFrame.add to this class """
+
+        def meth(self, other, level=None, fill_value=None, axis=0):
+            if not level is None:
+                raise NotImplementedError('level must be None')
+            return map_partitions(op, self.column_info, self, other,
+                                  axis=axis, fill_value=fill_value)
+        meth.__doc__ = op.__doc__
+        bind_method(cls, name, meth)
 
 
 class Index(Series):
@@ -1209,6 +1216,63 @@ class DataFrame(_Frame):
                      left_on=on, suffixes=[lsuffix, rsuffix],
                      npartitions=npartitions)
 
+    @classmethod
+    def _bind_operator_method(cls, name, op):
+        """ bind operator method like DataFrame.add to this class """
+
+        # name must be explicitly passed for div method whose name is truediv
+
+        def meth(self, other, axis='columns', level=None, fill_value=None):
+            if level is not None:
+                raise NotImplementedError('level must be None')
+
+            axis = self._validate_axis(axis)
+
+            right = None
+            if axis == 1:
+                # when axis=1, series will be added to each row
+                # it not supported for dd.Series.
+                # dd.DataFrame is not affected as op is applied elemwise
+                if isinstance(other, Series):
+                    msg = 'Unable to {0} dd.Series with axis=1'.format(name)
+                    raise ValueError(msg)
+                elif isinstance(other, pd.Series):
+                    right = other.index
+            if isinstance(other, (DataFrame, pd.DataFrame)):
+                right = other.columns
+
+            if right is not None:
+                left = pd.DataFrame(columns=self.columns)
+                right = pd.DataFrame(columns=right)
+                columns = op(left, right, axis=axis).columns.tolist()
+            else:
+                columns = self.columns
+
+            return map_partitions(op, columns, self, other,
+                                  axis=axis, fill_value=fill_value)
+        meth.__doc__ = op.__doc__
+        bind_method(cls, name, meth)
+
+
+# bind operators
+for op in [operator.abs, operator.add, operator.and_, operator_div,
+           operator.eq, operator.gt, operator.ge, operator.inv,
+           operator.lt, operator.le, operator.mod, operator.mul,
+           operator.ne, operator.neg, operator.or_, operator.pow,
+           operator.sub, operator.truediv, operator.floordiv, operator.xor]:
+    _Frame._bind_operator(op)
+    Scalar._bind_operator(op)
+
+for name in ['add', 'sub', 'mul', 'div',
+             'truediv', 'floordiv', 'mod', 'pow',
+             'radd', 'rsub', 'rmul', 'rdiv',
+             'rtruediv', 'rfloordiv', 'rmod', 'rpow']:
+    meth = getattr(pd.DataFrame, name)
+    DataFrame._bind_operator_method(name, meth)
+
+    meth = getattr(pd.Series, name)
+    Series._bind_operator_method(name, meth)
+
 
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
@@ -1309,7 +1373,8 @@ def elemwise(op, *args, **kwargs):
             else arg for arg in args]
 
     from .multi import _maybe_align_partitions
-    dasks = _maybe_align_partitions(args)
+    args = _maybe_align_partitions(args)
+    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar))]
     dfs = [df for df in dasks if isinstance(df, _Frame)]
     divisions = dfs[0].divisions
     n = len(divisions) - 1
@@ -1672,32 +1737,33 @@ def map_partitions(func, columns, *args, **kwargs):
     targets: list
         List of target DataFrame / Series.
     """
-    assert all(not isinstance(arg, _Frame) or
-               arg.divisions == args[0].divisions for arg in args)
-
-    token = kwargs.pop('token', None)
+    token = kwargs.pop('token', 'map-partitions')
     token_key = tokenize(token or func, columns, *args)
-    token = token or 'map-partitions'
     name = '{0}-{1}'.format(token, token_key)
 
+    if len(kwargs) > 1:
+        func = partial(func, **kwargs)
+
     if all(isinstance(arg, Scalar) for arg in args):
-        # Special handling for Scalar.
-        # Scalar / DataFrame mixed ops are not yet supported.
         dask = {(name, 0): (func, ) + tuple((arg._name, 0) for arg in args)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name)
 
-    if kwargs:
-        raise ValueError("Keyword arguments not yet supported in map_partitions")
+    from .io import from_pandas
+    args = [from_pandas(arg, 1) if isinstance(arg, (pd.DataFrame, pd.Series))
+            else arg for arg in args]
 
-    return_type = _get_return_type(args[0], columns)
-    dsk = dict(((name, i), (apply, func,
-                             (tuple, [(arg._name, i)
-                                      if isinstance(arg, _Frame)
-                                      else arg
-                                      for arg in args])))
-                for i in range(args[0].npartitions))
+    from .multi import _maybe_align_partitions
+    args = _maybe_align_partitions(args)
+    dfs = [df for df in args if isinstance(df, _Frame)]
 
-    dasks = [arg.dask for arg in args if isinstance(arg, _Frame)]
+    return_type = _get_return_type(dfs[0], columns)
+    dsk = {}
+    for i in range(dfs[0].npartitions):
+        values = [(arg._name, i if isinstance(arg, _Frame) else 0)
+                  if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
+        dsk[(name, i)] = (apply, func, (tuple, values))
+
+    dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
     return return_type(merge(dsk, *dasks), name, columns, args[0].divisions)
 
 
