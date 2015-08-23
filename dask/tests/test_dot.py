@@ -8,6 +8,7 @@ import pytest
 pytest.importorskip("graphviz")
 
 from dask.dot import dot_graph, task_label, label, to_graphviz
+from IPython.display import Image
 
 # Since graphviz doesn't store a graph, we need to parse the output
 label_re = re.compile('.*\[label=(.*?) shape=.*\]')
@@ -75,9 +76,20 @@ def test_dot_graph():
     fn = 'test_dot_graph'
     fns = [fn + ext for ext in ['.png', '.pdf', '.dot']]
     try:
-        dot_graph(dsk, filename=fn)
+        i = dot_graph(dsk, filename=fn)
         assert all(os.path.exists(f) for f in fns)
+        assert isinstance(i, Image)
     finally:
         for f in fns:
             if os.path.exists(f):
                 os.remove(f)
+
+    fn = 'mydask' # default, remove existing files
+    fns = [fn + ext for ext in ['.png', '.pdf', '.dot']]
+    for f in fns:
+        if os.path.exists(f):
+            os.remove(f)
+    i = dot_graph(dsk, filename=None)
+    assert all(not os.path.exists(f) for f in fns)
+    assert isinstance(i, Image)
+

@@ -6,6 +6,7 @@ from subprocess import check_call, CalledProcessError
 from graphviz import Digraph
 
 from .core import istask, get_dependencies, ishashable
+from .compatibility import BytesIO
 
 
 def task_label(task):
@@ -132,19 +133,35 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
 
 def dot_graph(dsk, filename='mydask', **kwargs):
     g = to_graphviz(dsk, **kwargs)
-    g.save(filename + '.dot')
 
-    try:
-        check_call('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename), shell=True)
-        check_call('dot -Tpng {0}.dot -o {0}.png'.format(filename), shell=True)
-    except CalledProcessError:
-        raise RuntimeError(
-            "Please install The `dot` utility from graphviz:\n"
-            "  Debian:  sudo apt-get install graphviz\n"
-            "  Mac OSX: brew install graphviz\n"
-            "  Windows: http://www.graphviz.org/Download..php")  # pragma: no cover
-    try:
-        from IPython.display import Image
-        return Image(filename + '.png')
-    except ImportError:
-        pass
+    if filename is not None:
+        g.save(filename + '.dot')
+
+        try:
+            check_call('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename),
+                       shell=True)
+            check_call('dot -Tpng {0}.dot -o {0}.png'.format(filename),
+                       shell=True)
+
+        except CalledProcessError:
+            msg = ("Please install The `dot` utility from graphviz:\n"
+                   "  Debian:  sudo apt-get install graphviz\n"
+                   "  Mac OSX: brew install graphviz\n"
+                   "  Windows: http://www.graphviz.org/Download..php")
+            raise RuntimeError(msg)  # pragma: no cover
+
+        try:
+            from IPython.display import Image
+            return Image(filename + '.png')
+        except ImportError:
+            pass
+
+    else:
+        try:
+            from IPython.display import Image
+            s = BytesIO()
+            s.write(g.pipe(format='png'))
+            s.seek(0)
+            return Image(s.read())
+        except ImportError:
+            pass
