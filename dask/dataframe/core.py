@@ -813,6 +813,17 @@ class DataFrame(_Frame):
 
         return elemwise(_assign, self, *pairs, columns=list(df2.columns))
 
+    @wraps(pd.DataFrame.rename)
+    def rename(self, index=None, columns=None):
+        if index is not None:
+            raise ValueError("Cannot rename index.")
+        column_info = (pd.DataFrame(columns=self.column_info)
+                         .rename(columns=columns).columns)
+        func = pd.DataFrame.rename
+        # *args here is index, columns but columns arg is already used
+        return map_partitions(func, column_info, self, None, columns)
+
+
     def query(self, expr, **kwargs):
         """ Blocked version of pd.DataFrame.query
 

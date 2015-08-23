@@ -1601,3 +1601,21 @@ def test_gh580():
     ddf = dd.from_pandas(df, 2)
     assert eq(np.cos(df['x']), np.cos(ddf['x']))
     assert eq(np.cos(df['x']), np.cos(ddf['x']))
+
+
+def test_rename_dict():
+    renamer = {'a': 'A', 'b': 'B'}
+    assert eq(d.rename(columns=renamer),
+              full.rename(columns=renamer))
+
+
+def test_rename_function():
+    renamer = lambda x: x.upper()
+    assert eq(d.rename(columns=renamer),
+              full.rename(columns=renamer))
+
+
+def test_rename_index():
+    renamer = {0: 1}
+    assert raises(ValueError, lambda: d.rename(index=renamer))
+
