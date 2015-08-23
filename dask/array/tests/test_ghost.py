@@ -321,3 +321,15 @@ def test_tuple_boundaries():
              [13, 12, 12, 13, 14, 15, 66, 66],
              [42, 42, 42, 42, 42, 42, 66, 66]])
     assert eq(x2, res)
+
+
+def test_None_boundaries():
+    x = da.from_array(np.arange(16).reshape(4,4), chunks=(2, 2))
+    exp = boundaries(x, {0: 1, 1: 2}, {0: (33, None), 1: None})
+    res = np.array(
+          [[33, 33, 33, 33],
+           [ 0,  1,  2,  3],
+           [ 4,  5,  6,  7],
+           [ 8,  9, 10, 11],
+           [12, 13, 14, 15]])
+    assert eq(exp, res)
