@@ -258,16 +258,23 @@ def boundaries(x, depth=None, kind=None):
         if d == 0:
             continue
 
-        left_kind, right_kind = kind.get(i, (None, None))
+        left_kind, right_kind = kind.get(i, ('reflect', 'reflect'))
         l = handed_boundary('left', x, i, d, left_kind)
         r = handed_boundary('right', x, i, d, right_kind)
-        x = concatenate([l, x, r], axis=i)
+        if (l is None) and (r is None):
+            continue
+        elif l is None:
+            x = concatenate([x, r], axis=i)
+        elif r is None:
+            x = concatenate([l, x], axis=i)
+        else:
+            x = concatenate([l, x, r], axis=i)
     return x
 
 
 def handed_boundary(hand, x, axis, depth, kind):
     if kind is None:
-        return x
+        return None
     elif kind == 'periodic':
         b = periodic(hand, x, axis, depth)
     elif kind == 'reflect':
