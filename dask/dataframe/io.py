@@ -550,7 +550,7 @@ def _link(token, result):
 
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
-           complib=None, fletcher32=False, **kwargs):
+           complib=None, fletcher32=False, get=get_sync, **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -570,7 +570,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                             'complevel': complevel, 'complib': complib,
                             'fletcher32': fletcher32}))
 
-    DataFrame._get(merge(df.dask, dsk), (name, i), **kwargs)
+    DataFrame._get(merge(df.dask, dsk), (name, i), get=get_sync, **kwargs)
 
 
 dont_use_fixed_error_message = """
