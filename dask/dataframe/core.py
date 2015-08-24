@@ -431,6 +431,11 @@ class _Frame(Base):
         return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
                 fletcher32, **kwargs)
 
+    @wraps(pd.DataFrame.to_csv)
+    def to_csv(self, filename, **kwargs):
+        from .io import to_csv
+        return to_csv(self, filename, **kwargs)
+
     @property
     def _elemwise_cols(self):
         """passed to elemwise ops, None for Series, columns for DataFrame"""
@@ -861,11 +866,6 @@ class DataFrame(_Frame):
         from .io import to_castra
         return to_castra(self, fn, categories, sorted_index_column,
                          compute=compute)
-
-    @wraps(pd.DataFrame.to_csv)
-    def to_csv(self, filename, **kwargs):
-        from .io import to_csv
-        return to_csv(self, filename, **kwargs)
 
     def to_bag(self, index=False):
         """Convert to a dask Bag of tuples of each row.

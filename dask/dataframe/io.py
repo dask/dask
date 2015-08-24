@@ -647,9 +647,8 @@ def to_csv(df, filename, **kwargs):
     name = 'to-csv-' + uuid.uuid1().hex
 
     dsk = dict()
-    dsk[(name, 0)] = (apply, pd.DataFrame.to_csv,
-                        (tuple, [(df._name, 0), filename]),
-                        kwargs)
+    dsk[(name, 0)] = (lambda df, fn, kwargs: df.to_csv(fn, **kwargs),
+                        (df._name, 0), filename, kwargs)
 
     kwargs2 = kwargs.copy()
     kwargs2['mode'] = 'a'
@@ -657,9 +656,8 @@ def to_csv(df, filename, **kwargs):
 
     for i in range(1, df.npartitions):
         dsk[(name, i)] = (_link, (name, i - 1),
-                           (apply, pd.DataFrame.to_csv,
-                             (tuple, [(df._name, i), filename]),
-                             kwargs2))
+                           (lambda df, fn, kwargs: df.to_csv(fn, **kwargs),
+                             (df._name, i), filename, kwargs2))
 
     DataFrame._get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)
 

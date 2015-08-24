@@ -528,6 +528,21 @@ def test_to_csv():
             tm.assert_frame_equal(result, df)
 
 
+def test_to_csv_series():
+    s = pd.Series([1, 2, 3], index=[10, 20, 30], name='foo')
+    a = dd.from_pandas(s, 2)
+    with tmpfile('csv') as fn:
+        with tmpfile('csv') as fn2:
+            a.to_csv(fn)
+            s.to_csv(fn2)
+            with open(fn) as f:
+                adata = f.read()
+            with open(fn2) as f:
+                sdata = f.read()
+
+            assert adata == sdata
+
+
 def test_read_csv_with_nrows():
     with filetext(text) as fn:
         f = read_csv(fn, nrows=3)
