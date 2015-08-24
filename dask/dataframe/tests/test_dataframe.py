@@ -1655,3 +1655,10 @@ def test_rename_index():
     renamer = {0: 1}
     assert raises(ValueError, lambda: d.rename(index=renamer))
 
+
+def test_to_frame():
+    s = pd.Series([1, 2, 3], name='foo')
+    a = dd.from_pandas(s, npartitions=2)
+
+    assert eq(s.to_frame(), a.to_frame())
+    assert eq(s.to_frame('bar'), a.to_frame('bar'))
