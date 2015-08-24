@@ -177,3 +177,16 @@ def test_rechunk_with_integer():
     y = x.rechunk(3)
     assert y.chunks == ((3, 2),)
     assert (x.compute() == y.compute()).all()
+
+
+def test_rechunk_0d():
+    x = da.from_array(np.array(42), chunks=())
+    y = x.rechunk(())
+    assert y.chunks == ()
+    assert x.compute() == 42
+
+
+def test_rechunk_same():
+    x = da.ones((24, 24), chunks=(4, 8))
+    y = x.rechunk(x.chunks)
+    assert x is y

@@ -22,7 +22,6 @@ except ImportError:
 
 from .. import array as da
 from .. import core
-from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import unicode, apply, operator_div
 from ..utils import repr_long_list, IndexCallable, pseudorandom
@@ -1301,6 +1300,31 @@ def consistent_name(names):
         return first(allnames)
     else:
         return None
+
+
+def partial_by_order(op, other):
+    """
+
+    >>> f = partial_by_order(operator.add, [(1, 10)])
+    >>> f(5)
+    15
+    """
+    if (not isinstance(other, list) or
+        not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
+        raise ValueError('input must be list of tuples')
+
+    def f(*args):
+        args2 = list(args)
+        for i, arg in other:
+            args2.insert(i, arg)
+        return op(*args2)
+
+    if len(other) == 1:
+        other_arg = other[0][1]
+    else:
+        other_arg = '...'
+    f.__name__ = '{0}({1})'.format(op.__name__, other_arg)
+    return f
 
 
 def elemwise(op, *args, **kwargs):

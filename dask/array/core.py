@@ -182,7 +182,8 @@ def zero_broadcast_dimensions(lol, nblocks):
     return deepmap(f, lol)
 
 
-def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
+def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
+                         consolidate=None):
     """ Find block dimensions from arguments
 
     Parameters
@@ -194,6 +195,8 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
         maps {name: number of blocks}
     sentinels: iterable (optional)
         values for singleton dimensions
+    consolidate: func (optional)
+        use this to reduce each set of common blocks into a smaller set
 
     Examples
     --------
@@ -221,10 +224,14 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,))):
     L = concat([zip(inds, dims)
                     for (x, inds), (x, dims)
                     in join(first, argpairs, first, numblocks.items())])
+
     g = groupby(0, L)
     g = dict((k, set([d for i, d in v])) for k, v in g.items())
 
     g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
+
+    if consolidate is not None:
+        g2 = valmap(consolidate, g2)
 
     if g2 and not set(map(len, g2.values())) == set([1]):
         raise ValueError("Shapes do not align %s" % g)
@@ -676,6 +683,8 @@ class Array(Base):
             return [self._keys(*(args + (i,)))
                         for i in range(self.numblocks[ind])]
 
+    __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
+
     def __array__(self, dtype=None, **kwargs):
         x = self.compute()
         if dtype and x.dtype != dtype:
@@ -796,7 +805,9 @@ class Array(Base):
                 dt = np.dtype([(name, self._dtype[name]) for name in index])
             else:
                 dt = None
-            return elemwise(getarray, self, index, dtype=dt)
+            f = lambda x: getarray(x, index)
+            name = 'getitem-' + tokenize(self, index)
+            return elemwise(f, self, dtype=dt, name=name)
 
         # Slicing
         if not isinstance(index, tuple):
@@ -1184,6 +1195,67 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     return Array(dsk, name, chunks, dtype)
 
 
+def common_blockdim(blockdims):
+    """ Find the common block dimensions from the list of block dimensions
+
+    Currently only implements the simplest possible heuristic: the common
+    block-dimension is the only one that does not span fully span a dimension.
+    This is a conservative choice that allows us to avoid potentially very
+    expensive rechunking.
+
+    Assumes that each element of the input block dimensions has all the same
+    sum (i.e., that they correspond to dimensions of the same size).
+
+    Examples
+    --------
+
+    >>> common_blockdim([(3,), (2, 1)])
+    set([(2, 1)])
+    >>> common_blockdim([(2, 2), (3, 1)])  # doctest: +SKIP
+    Traceback (most recent call last):
+        ...
+    ValueError: Chunks do not align
+    """
+    non_trivial_dims = set([d for d in blockdims if len(d) > 1])
+    if len(non_trivial_dims) > 1:
+        raise ValueError('Chunks do not align %s' % non_trivial_dims)
+    elif non_trivial_dims:
+        return non_trivial_dims
+    else:
+        return blockdims
+
+
+def unify_chunks(*args):
+    """ Unify chunks across a sequence of arrays
+
+    Currently only uses very simple rules for unifying chunks: see
+    common_blockdim for more details.
+
+    Parameters
+    ----------
+    *args: sequence of Array, index pairs
+        Sequence like (x, 'ij', y, 'jk', z, 'i')
+
+    Returns
+    -------
+    chunkss : dict
+        Map like {index: chunks}.
+    arrays : list
+        List of rechunked arrays.
+    """
+    arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
+
+    nameinds = [(a.name, i) for a, i in arginds]
+    blockdim_dict = dict((a.name, a.chunks) for a, _ in arginds)
+
+    chunkss = broadcast_dimensions(nameinds, blockdim_dict,
+                                   consolidate=common_blockdim)
+    arrays = [a.rechunk(tuple(chunkss[j] if a.shape[n] > 1 else 1
+                              for n, j in enumerate(i)))
+              for a, i in arginds]
+    return chunkss, arrays
+
+
 def atop(func, out_ind, *args, **kwargs):
     """ Tensor operation: Generalized inner and outer products
 
@@ -1256,26 +1328,20 @@ def atop(func, out_ind, *args, **kwargs):
     if kwargs:
         raise TypeError("%s does not take the following keyword arguments %s" %
             (func.__name__, str(sorted(kwargs.keys()))))
-    arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
-    numblocks = dict([(a.name, a.numblocks) for a, ind in arginds])
+
+    chunkss, arrays = unify_chunks(*args)
+    arginds = list(zip(arrays, args[1::2]))
+
+    numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     # Finish up the name
     if not out:
         out = 'atop-' + tokenize(func, out_ind, argindsstr, dtype)
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
-
-    # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    shapes = dict((a.name, a.shape) for a, _ in arginds)
-    nameinds = [(a.name, i) for a, i in arginds]
-    dims = broadcast_dimensions(nameinds, shapes)
-    shape = tuple(dims[i] for i in out_ind)
-
-    blockdim_dict = dict((a.name, a.chunks) for a, _ in arginds)
-    chunkss = broadcast_dimensions(nameinds, blockdim_dict)
+    dsks = [a.dask for a, _ in arginds]
     chunks = tuple(chunkss[i] for i in out_ind)
 
-    dsks = [a.dask for a, _ in arginds]
     return Array(merge(dsk, *dsks), out, chunks, dtype=dtype)
 
 
@@ -1541,29 +1607,20 @@ def insert_to_ooc(out, arr):
     return dsk
 
 
-def partial_by_order(op, other):
+def asarray(array):
+    """Coerce argument into a dask array
+
+    >>> x = np.arange(3)
+    >>> asarray(x)
+    dask.array<asarray-..., shape=(3,), chunks=((3,)), dtype=int64>
+    >>>
     """
-
-    >>> f = partial_by_order(add, [(1, 10)])
-    >>> f(5)
-    15
-    """
-    if (not isinstance(other, list) or
-        not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
-        raise ValueError('input must be list of tuples')
-
-    def f(*args):
-        args2 = list(args)
-        for i, arg in other:
-            args2.insert(i, arg)
-        return op(*args2)
-
-    if len(other) == 1:
-        other_arg = other[0][1]
-    else:
-        other_arg = '...'
-    f.__name__ = '{0}({1})'.format(op.__name__, other_arg)
-    return f
+    if not isinstance(array, Array):
+        name = 'asarray-' + tokenize(array)
+        if not hasattr(array, 'shape'):
+            array = np.asarray(array)
+        array = from_array(array, chunks=array.shape, name=name)
+    return array
 
 
 def elemwise(op, *args, **kwargs):
@@ -1583,23 +1640,21 @@ def elemwise(op, *args, **kwargs):
     if not set(['name', 'dtype']).issuperset(kwargs):
         raise TypeError("%s does not take the following keyword arguments %s" %
             (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
-    out_ndim = max(len(arg.shape) if isinstance(arg, Array) else 0
-                   for arg in args)
+
+    out_ndim = max(len(getattr(arg, 'shape', ())) for arg in args)
     expr_inds = tuple(range(out_ndim))[::-1]
 
-    arrays = [arg for arg in args if isinstance(arg, Array)]
-    other = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
-    if any(isinstance(arg, np.ndarray) for arg in args):
-        raise NotImplementedError("Dask.array operations only work on dask "
-                                  "arrays, not numpy arrays.")
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
-    elif not all(a._dtype is not None for a in arrays):
+    elif any(a._dtype is None for a in args if isinstance(a, Array)):
         dt = None
     else:
-
+        # Note that this is not really the right logic here. The dtype
+        # signature is fixed independent of the number of dimensions, except
+        # for scalars/0d arrays, for which the dtype depends on the value:
+        # https://github.com/numpy/numpy/issues/6240
         vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
-                if hasattr(a, 'dtype') else a
+                if isinstance(a, Array) else a
                 for a in args]
         try:
             dt = op(*vals).dtype
@@ -1607,14 +1662,10 @@ def elemwise(op, *args, **kwargs):
             dt = None
 
     name = kwargs.get('name', None) or 'elemwise-' + tokenize(op, dt, *args)
+    args = [asarray(arg) for arg in args]
 
-    if other:
-        op2 = partial_by_order(op, other)
-    else:
-        op2 = op
-
-    return atop(op2, expr_inds,
-                *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+    return atop(op, expr_inds,
+                *concat((a, tuple(range(a.ndim)[::-1])) for a in args),
                 dtype=dt, name=name)
 
 

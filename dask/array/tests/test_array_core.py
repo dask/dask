@@ -331,9 +331,10 @@ def test_binops():
                                      for i in range(3)))
 
     result = elemwise(pow, a, 2, name='c')
-    assert result.dask[('c', 0)][1] == ('a', 0)
-    f = result.dask[('c', 0)][0]
-    assert f(10) == 100
+    task = result.dask[('c', 0)]
+    assert task[0] == pow
+    assert task[1] == ('a', 0)
+    assert task[2][0].startswith('asarray')
 
 
 def test_isnull():
@@ -365,17 +366,30 @@ def test_elemwise_on_scalars():
     assert eq(a, x)
 
 
-def test_partial_by_order():
-    f = partial_by_order(add, [(1, 20)])
-    assert f(5) == 25
-    assert f.__name__ == 'add(20)'
+def test_elemwise_with_ndarrays():
+    x = np.arange(3)
+    y = np.arange(12).reshape(4, 3)
+    a = from_array(x, chunks=(3,))
+    b = from_array(y, chunks=(2, 3))
 
-    f = partial_by_order(lambda x, y, z: x + y + z, [(1, 10), (2, 15)])
-    assert f(3) == 28
-    assert f.__name__ == '<lambda>(...)'
+    assert eq(x + a, 2 * x)
+    assert eq(a + x, 2 * x)
 
-    assert raises(ValueError, lambda: partial_by_order(add, 1))
-    assert raises(ValueError, lambda: partial_by_order(add, [1]))
+    assert eq(x + b, x + y)
+    assert eq(b + x, x + y)
+    assert eq(a + y, x + y)
+    assert eq(y + a, x + y)
+
+
+def test_elemwise_differently_chunked():
+    x = np.arange(3)
+    y = np.arange(12).reshape(4, 3)
+    a = from_array(x, chunks=(3,))
+    b = from_array(y, chunks=(2, 2))
+
+    assert eq(a + b, x + y)
+    assert eq(b + a, x + y)
+
 
 def test_operators():
     x = np.arange(10)
@@ -1185,12 +1199,6 @@ def test_from_array_with_missing_chunks():
     x = np.random.randn(2, 4, 3)
     d = da.from_array(x, chunks=(None, 2, None))
     assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
-
-
-def test_numpy_compat_is_notimplemented():
-    a = np.arange(10)
-    x = da.from_array(a, chunks=5)
-    assert raises(NotImplementedError, lambda: x + a)
 
 
 def test_cache():
