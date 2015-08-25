@@ -995,6 +995,33 @@ class DataFrame(_Frame):
                          .columns)
         return elemwise(pd.DataFrame.drop, self, labels, axis, columns=columns)
 
+    @wraps(pd.DataFrame.merge)
+    def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
+              left_index=False, right_index=False,
+              suffixes=('_x', '_y'), npartitions=None):
+
+        if not isinstance(right, (DataFrame, pd.DataFrame)):
+            raise ValueError('right must be DataFrame')
+
+        from .multi import merge
+        return merge(self, right, how=how, on=on,
+                     left_on=left_on, right_on=right_on,
+                     left_index=left_index, right_index=right_index,
+                     suffixes=suffixes, npartitions=npartitions)
+
+    @wraps(pd.DataFrame.join)
+    def join(self, other, on=None, how='left',
+             lsuffix='', rsuffix='', npartitions=None):
+
+        if not isinstance(other, (DataFrame, pd.DataFrame)):
+            raise ValueError('other must be DataFrame')
+
+        from .multi import merge
+        return merge(self, other, how=how,
+                     left_index=on is None, right_index=True,
+                     left_on=on, suffixes=[lsuffix, rsuffix],
+                     npartitions=npartitions)
+
 
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))

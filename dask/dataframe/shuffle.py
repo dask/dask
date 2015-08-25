@@ -110,11 +110,12 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     name = 'set-partition--collect-' + token
     if compute and not categories:
         dsk4.update(dict(((name, i),
-                     (_set_collect, i, p, barrier_token))
+                     (_set_collect, i, p, barrier_token, df.columns))
                      for i in range(len(divisions) - 1)))
     else:
         dsk4.update(dict(((name, i),
-                     (_categorize, catname2, (_set_collect, i, p, barrier_token)))
+                     (_categorize, catname2,
+                        (_set_collect, i, p, barrier_token, df.columns)))
                     for i in range(len(divisions) - 1)))
 
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
@@ -140,12 +141,15 @@ def _set_partition(df, index, divisions, p):
     p.append(dict(enumerate(shards)))
 
 
-def _set_collect(group, p, barrier_token):
+def _set_collect(group, p, barrier_token, columns):
     """ Get new partition dataframe from partd """
     try:
         return p.get(group)
     except ValueError:
-        return pd.DataFrame()
+        assert columns is not None, columns
+        # when unable to get group, create dummy DataFrame
+        # which has the same columns as original
+        return pd.DataFrame([], columns=columns)
 
 
 def shuffle(df, index, npartitions=None):
