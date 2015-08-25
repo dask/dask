@@ -664,6 +664,11 @@ class Series(_Frame):
         from .io import to_bag
         return to_bag(self, index)
 
+    @wraps(pd.Series.to_frame)
+    def to_frame(self, name=None):
+        _name = name if name is not None else self.name
+        return map_partitions(pd.Series.to_frame, [_name], self, name)
+
 
 class Index(Series):
 
