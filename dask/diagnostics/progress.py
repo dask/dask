@@ -89,7 +89,7 @@ class ProgressBar(Callback):
         if not errored:
             self._draw_bar(1, elapsed)
         else:
-            self._update_bar()
+            self._update_bar(elapsed)
         sys.stdout.write('\n')
         sys.stdout.flush()
 
