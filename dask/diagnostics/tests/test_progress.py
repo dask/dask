@@ -42,7 +42,7 @@ def test_clean_exit():
     try:
         with ProgressBar() as pbar:
             get(dsk, 'a')
-    except:
+    except ZeroDivisionError:
         pass
     assert not pbar._running
     assert not pbar._timer.is_alive()
