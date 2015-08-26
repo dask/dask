@@ -777,6 +777,19 @@ def test_reductions():
     assert_dask_graph(d.b.nunique(), 'drop-duplicates')
 
 
+def test_reduction_series_invalid_axis():
+    for axis in [1, 'columns']:
+        for s in [d.a, full.a]: # both must behave the same
+            assert raises(ValueError, lambda: s.sum(axis=axis))
+            assert raises(ValueError, lambda: s.min(axis=axis))
+            assert raises(ValueError, lambda: s.max(axis=axis))
+            # only count doesn't have axis keyword
+            assert raises(TypeError, lambda: s.count(axis=axis))
+            assert raises(ValueError, lambda: s.std(axis=axis))
+            assert raises(ValueError, lambda: s.var(axis=axis))
+            assert raises(ValueError, lambda: s.mean(axis=axis))
+
+
 def test_reductions_non_numeric_dtypes():
     # test non-numric blocks
 
@@ -854,6 +867,7 @@ def test_reductions_frame():
 
     assert raises(ValueError, lambda: d.sum(axis='incorrect').compute())
 
+    # axis=0
     assert_dask_graph(d.sum(), 'dataframe-sum')
     assert_dask_graph(d.min(), 'dataframe-min')
     assert_dask_graph(d.max(), 'dataframe-max')
@@ -865,6 +879,15 @@ def test_reductions_frame():
     assert_dask_graph(d.var(), 'dataframe-count')
     assert_dask_graph(d.mean(), 'dataframe-sum')
     assert_dask_graph(d.mean(), 'dataframe-count')
+
+    # axis=1
+    assert_dask_graph(d.sum(axis=1), 'dataframe-sum(axis=1)')
+    assert_dask_graph(d.min(axis=1), 'dataframe-min(axis=1)')
+    assert_dask_graph(d.max(axis=1), 'dataframe-max(axis=1)')
+    assert_dask_graph(d.count(axis=1), 'dataframe-count(axis=1)')
+    assert_dask_graph(d.std(axis=1), 'dataframe-std(axis=1, ddof=1)')
+    assert_dask_graph(d.var(axis=1), 'dataframe-var(axis=1, ddof=1)')
+    assert_dask_graph(d.mean(axis=1), 'dataframe-mean(axis=1)')
 
 def test_reductions_frame_dtypes():
     df = pd.DataFrame({'int': [1, 2, 3, 4, 5, 6, 7, 8],
