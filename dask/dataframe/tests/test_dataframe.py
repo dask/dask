@@ -1393,19 +1393,13 @@ def test_series_resample_failing(freq, how, npartitions, nskipped):
 def test_series_resample_big_freq(how, npartitions):
     from pandas.tseries.offsets import Week
     freq = 'W'
-    divisions = tuple(map(pd.Timestamp,
-                          ['21-JAN-2013', '28-FEB-2014',
-                           '1-OCT-2014', '3-NOV-2014']))
+    index = pd.date_range('21-Jan-2013', '3-NOV-2014', freq=Week())
+    df = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(df, npartitions=npartitions)
 
-    data = dict((('series-1', i),
-                pd.Series(i, index=pd.date_range(start=start, end=end,
-                                                 freq=Week())))
-                for i, (start, end) in enumerate(zip(divisions[:-1],
-                                                     divisions[1:])))
-    ds = dd.Series(data, 'series-1', 'a', divisions)
     resampled = ds.resample(freq, how=how)
     result = resampled.compute()
-    expected = ds.compute().resample(freq, how=how)
+    expected = df.resample(freq, how=how)
     tm.assert_series_equal(result, expected, check_dtype=False)
 
 

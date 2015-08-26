@@ -681,16 +681,20 @@ class Series(_Frame):
         --------
         pandas.Series.resample
         """
-        rule = pd.datetools.to_offset(rule)
-        rule.normalize = True
-        newdivs = [rule.rollback(self.divisions[0])]
-        for div in self.divisions[1:-1]:
-            newdivs.append(rule.rollforward(div))
+
+        divs = pd.Series(range(len(self.divisions)), index=self.divisions)
+        temp = divs.resample(rule, how='count', axis=axis, fill_method=fill_method,
+                          closed=closed, label=label, convention=convention,
+                          kind=kind, loffset=loffset, limit=limit, base=base)
+        newdivs = temp.loc[temp > 0].index.tolist()
         if newdivs[-1] < self.divisions[-1]:
             newdivs.append(self.divisions[-1])
+        if newdivs[0] > self.divisions[0]:
+            newdivs.insert(0, self.divisions[0])
 
         day_nanos = pd.datetools.Day().nanos
 
+        rule = pd.datetools.to_offset(rule)
         def block_func(df):
             if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
                 raise NotImplementedError('Resampling frequency %s that does'
