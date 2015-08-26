@@ -681,24 +681,11 @@ class Series(_Frame):
         --------
         pandas.Series.resample
         """
-        # TODO: Probably a better way to do this
-        start, end = pd.tseries.resample._get_range_edges(self.divisions[0],
-                self.divisions[-1], rule)
-        index = pd.date_range(start=start, end=end, freq=rule)
-        newdivs = [start]
         rule = pd.datetools.to_offset(rule)
+        rule.normalize = True
+        newdivs = [rule.rollback(self.divisions[0])]
         for div in self.divisions[1:-1]:
-            # TODO: can we compute this value in O(1) instead of O(log n)?
-            pos = np.searchsorted(index.values, div.asm8, side='right')
-            actual_pos = min(len(index) - 1, pos)
-            newdiv = index[actual_pos]
-            assert newdiv.freq == rule
-            newdivs.append(newdiv)
-
-        # unique because our searchsorted algo above can return the same
-        # div multiple times and repartition will generate an empty list, which
-        # pandas concat does not accept
-        newdivs = list(unique(newdivs))
+            newdivs.append(rule.rollforward(div))
         if newdivs[-1] < self.divisions[-1]:
             newdivs.append(self.divisions[-1])
 
