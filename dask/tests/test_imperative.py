@@ -1,5 +1,5 @@
 from operator import add
-from collections import Iterator
+from collections import Iterator, namedtuple
 from random import random
 
 import pytest
@@ -29,6 +29,12 @@ def test_to_task_dasks():
     assert len(dasks) == 2
     assert a.dask in dasks
     assert b.dask in dasks
+
+    f = namedtuple('f', ['x', 'y'])
+    x = f(1, 2)
+    task, dasks = to_task_dasks(x)
+    assert task == x
+    assert dasks == []
 
 
 def test_operators():

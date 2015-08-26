@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 from dask.utils import raises
 from dask.core import (istask, get, get_dependencies, flatten, subs,
         preorder_traversal)
@@ -24,6 +26,8 @@ def test_istask():
     assert istask((inc, 1))
     assert not istask(1)
     assert not istask((1, 2))
+    f = namedtuple('f', ['x', 'y'])
+    assert not istask(f(sum, 2))
 
 
 d = {':x': 1,

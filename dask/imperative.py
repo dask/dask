@@ -64,13 +64,15 @@ def to_task_dasks(expr):
     """
     if isinstance(expr, Value):
         return expr.key, expr._dasks
-    elif isinstance(expr, base.Base):
+    if isinstance(expr, base.Base):
         name = tokenize(expr, True)
         keys = expr._keys()
         dsk = expr._optimize(expr.dask, keys)
         dsk[name] = (expr._finalize, expr, (concrete, keys))
         return name, [dsk]
-    elif isinstance(expr, (Iterator, list, tuple, set)):
+    if isinstance(expr, tuple) and type(expr) != tuple:
+        return expr, []
+    if isinstance(expr, (Iterator, list, tuple, set)):
         args, dasks = unzip(map(to_task_dasks, expr), 2)
         args = list(args)
         dasks = flat_unique(dasks)
@@ -79,11 +81,10 @@ def to_task_dasks(expr):
             return (type(expr), args), dasks
         else:
             return args, dasks
-    elif isinstance(expr, dict):
+    if isinstance(expr, dict):
         args, dasks = to_task_dasks(list([k, v] for k, v in expr.items()))
         return (dict, args), dasks
-    else:
-        return expr, []
+    return expr, []
 
 
 tokens = ('_{0}'.format(i) for i in count(1))
