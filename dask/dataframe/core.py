@@ -849,8 +849,9 @@ class DataFrame(_Frame):
                                                key, self.divisions)
         if isinstance(key, Series) and self.divisions == key.divisions:
             name = 'series-slice-%s[%s]' % (self._name, key._name)
-            dsk = dict(((name, i), (operator.getitem, (self._name, i),
-                                                       (key._name, i)))
+            dsk = dict(((name, i), (self._partition_type._getitem_array,
+                                     (self._name, i),
+                                     (key._name, i)))
                         for i in range(self.npartitions))
             return self._constructor(merge(self.dask, key.dask, dsk), name,
                                            self.columns, self.divisions)
