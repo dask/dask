@@ -211,5 +211,5 @@ Additional Notes
 
 There are some more detailed notes on the distributed scheduler here_
 
-.. _chest: https://github.com/ContinuumIO/chest
+.. _chest: https://github.com/blaze/chest
 .. _here: distributed-details.html

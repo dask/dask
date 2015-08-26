@@ -50,7 +50,7 @@ def eq(a, b, check_names=True):
         b = b.sort_index()
         tm.assert_frame_equal(a, b)
     elif isinstance(a, pd.Series):
-        tm.assert_series_equal(a, b)
+        tm.assert_series_equal(a, b, check_names=check_names)
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b)
     else:
@@ -618,6 +618,126 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
         assert eq(~(l == r), ~(el == er))
 
 
+def test_scalar_arithmetics():
+    l = dd.core.Scalar({('l', 0): 10}, 'l')
+    r = dd.core.Scalar({('r', 0): 4}, 'r')
+    el = 10
+    er = 4
+
+    assert isinstance(l, dd.core.Scalar)
+    assert isinstance(r, dd.core.Scalar)
+
+    # l, r may be repartitioned, test whether repartition keeps original data
+    assert eq(l, el)
+    assert eq(r, er)
+
+    assert eq(l + r, el + er)
+    assert eq(l * r, el * er)
+    assert eq(l - r, el - er)
+    assert eq(l / r, el / er)
+    assert eq(l // r, el // er)
+    assert eq(l ** r, el ** er)
+    assert eq(l % r, el % er)
+
+    assert eq(l & r, el & er)
+    assert eq(l | r, el | er)
+    assert eq(l ^ r, el ^ er)
+    assert eq(l > r, el > er)
+    assert eq(l < r, el < er)
+    assert eq(l >= r, el >= er)
+    assert eq(l <= r, el <= er)
+    assert eq(l == r, el == er)
+    assert eq(l != r, el != er)
+
+    assert eq(l + 2, el + 2)
+    assert eq(l * 2, el * 2)
+    assert eq(l - 2, el - 2)
+    assert eq(l / 2, el / 2)
+    assert eq(l & True, el & True)
+    assert eq(l | True, el | True)
+    assert eq(l ^ True, el ^ True)
+    assert eq(l // 2, el // 2)
+    assert eq(l ** 2, el ** 2)
+    assert eq(l % 2, el % 2)
+    assert eq(l > 2, el > 2)
+    assert eq(l < 2, el < 2)
+    assert eq(l >= 2, el >= 2)
+    assert eq(l <= 2, el <= 2)
+    assert eq(l == 2, el == 2)
+    assert eq(l != 2, el != 2)
+
+    assert eq(2 + r, 2 + er)
+    assert eq(2 * r, 2 * er)
+    assert eq(2 - r, 2 - er)
+    assert eq(2 / r, 2 / er)
+    assert eq(True & r, True & er)
+    assert eq(True | r, True | er)
+    assert eq(True ^ r, True ^ er)
+    assert eq(2 // r, 2 // er)
+    assert eq(2 ** r, 2 ** er)
+    assert eq(2 % r, 2 % er)
+    assert eq(2 > r, 2 > er)
+    assert eq(2 < r, 2 < er)
+    assert eq(2 >= r, 2 >= er)
+    assert eq(2 <= r, 2 <= er)
+    assert eq(2 == r, 2 == er)
+    assert eq(2 != r, 2 != er)
+
+    assert eq(-l, -el)
+    assert eq(abs(l), abs(el))
+
+    assert eq(~(l == r), ~(el == er))
+
+
+def test_scalar_arithmetics_with_dask_instances():
+    s = dd.core.Scalar({('s', 0): 10}, 's')
+    e = 10
+
+    pds = pd.Series([1, 2, 3, 4, 5, 6, 7])
+    dds = dd.from_pandas(pds, 2)
+
+    pdf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                        'b': [7, 6, 5, 4, 3, 2, 1]})
+    ddf = dd.from_pandas(pdf, 2)
+
+    # pandas Series
+    result = pds + s   # this result pd.Series (automatically computed)
+    assert isinstance(result, pd.Series)
+    assert eq(result, pds + e)
+
+    result = s + pds   # this result dd.Series
+    assert isinstance(result, dd.Series)
+    assert eq(result, pds + e)
+
+    # dask Series
+    result = dds + s   # this result dd.Series
+    assert isinstance(result, dd.Series)
+    assert eq(result, pds + e)
+
+    result = s + dds   # this result dd.Series
+    assert isinstance(result, dd.Series)
+    assert eq(result, pds + e)
+
+
+    # pandas DataFrame
+    result = pdf + s   # this result pd.DataFrame (automatically computed)
+    assert isinstance(result, pd.DataFrame)
+    assert eq(result, pdf + e)
+
+    result = s + pdf   # this result dd.DataFrame
+    assert isinstance(result, dd.DataFrame)
+    assert eq(result, pdf + e)
+
+    # dask DataFrame
+    result = ddf + s   # this result dd.DataFrame
+    assert isinstance(result, dd.DataFrame)
+    assert eq(result, pdf + e)
+
+    result = s + ddf   # this result dd.DataFrame
+    assert isinstance(result, dd.DataFrame)
+    assert eq(result, pdf + e)
+
+
 def test_reductions():
     nans1 = pd.Series([1] + [np.nan] * 4 + [2] + [np.nan] * 3)
     nands1 = dd.from_pandas(nans1, 2)
@@ -657,6 +777,19 @@ def test_reductions():
     assert_dask_graph(d.b.mean(), 'series-mean')
     # nunique is performed using drop-duplicates
     assert_dask_graph(d.b.nunique(), 'drop-duplicates')
+
+
+def test_reduction_series_invalid_axis():
+    for axis in [1, 'columns']:
+        for s in [d.a, full.a]: # both must behave the same
+            assert raises(ValueError, lambda: s.sum(axis=axis))
+            assert raises(ValueError, lambda: s.min(axis=axis))
+            assert raises(ValueError, lambda: s.max(axis=axis))
+            # only count doesn't have axis keyword
+            assert raises(TypeError, lambda: s.count(axis=axis))
+            assert raises(ValueError, lambda: s.std(axis=axis))
+            assert raises(ValueError, lambda: s.var(axis=axis))
+            assert raises(ValueError, lambda: s.mean(axis=axis))
 
 
 def test_reductions_non_numeric_dtypes():
@@ -736,6 +869,7 @@ def test_reductions_frame():
 
     assert raises(ValueError, lambda: d.sum(axis='incorrect').compute())
 
+    # axis=0
     assert_dask_graph(d.sum(), 'dataframe-sum')
     assert_dask_graph(d.min(), 'dataframe-min')
     assert_dask_graph(d.max(), 'dataframe-max')
@@ -747,6 +881,15 @@ def test_reductions_frame():
     assert_dask_graph(d.var(), 'dataframe-count')
     assert_dask_graph(d.mean(), 'dataframe-sum')
     assert_dask_graph(d.mean(), 'dataframe-count')
+
+    # axis=1
+    assert_dask_graph(d.sum(axis=1), 'dataframe-sum(axis=1)')
+    assert_dask_graph(d.min(axis=1), 'dataframe-min(axis=1)')
+    assert_dask_graph(d.max(axis=1), 'dataframe-max(axis=1)')
+    assert_dask_graph(d.count(axis=1), 'dataframe-count(axis=1)')
+    assert_dask_graph(d.std(axis=1), 'dataframe-std(axis=1, ddof=1)')
+    assert_dask_graph(d.var(axis=1), 'dataframe-var(axis=1, ddof=1)')
+    assert_dask_graph(d.mean(axis=1), 'dataframe-mean(axis=1)')
 
 def test_reductions_frame_dtypes():
     df = pd.DataFrame({'int': [1, 2, 3, 4, 5, 6, 7, 8],
@@ -999,17 +1142,53 @@ def test_len():
     assert len(d.a) == len(full.a)
 
 def test_quantile():
-    result = d.b.quantile([.3, .7]).compute()
+    # series / multiple
+    result = d.b.quantile([.3, .7])
+    exp = full.b.quantile([.3, .7]) # result may different
     assert len(result) == 2
-    assert result[0] == 0
-    assert 3 < result[1] < 7
+    assert result.divisions == (.3, .7)
+    assert eq(result.index, exp.index)
+    assert isinstance(result, dd.Series)
 
+    result = result.compute()
+    assert isinstance(result, pd.Series)
+    assert result.iloc[0] == 0
+    assert 5 < result.iloc[1] < 6
+
+    # index
+    s = pd.Series(np.arange(10), index=np.arange(10))
+    ds = dd.from_pandas(s, 2)
+
+    result = ds.index.quantile([.3, .7])
+    exp = s.quantile([.3, .7])
+    assert len(result) == 2
+    assert result.divisions == (.3, .7)
+    assert eq(result.index, exp.index)
+    assert isinstance(result, dd.Series)
+
+    result = result.compute()
+    assert isinstance(result, pd.Series)
+    assert 1 < result.iloc[0] < 2
+    assert 7 < result.iloc[1] < 8
+
+    # series / single
+    result = d.b.quantile(.5)
+    exp = full.b.quantile(.5) # result may different
+    assert isinstance(result, dd.core.Scalar)
+    result = result.compute()
+    assert 4 < result < 6
 
 def test_empty_quantile():
-    assert d.b.quantile([]).compute().tolist() == []
+    result = d.b.quantile([])
+    exp = full.b.quantile([])
+    assert result.divisions == (None, None)
 
-def test_quantiles_raises():
-    assert raises(NotImplementedError, lambda: d.b.quantiles([30]))
+    # because of a pandas bug, name is not preserved
+    # https://github.com/pydata/pandas/pull/10881
+    assert result.name == 'b'
+    assert result.compute().name == 'b'
+    assert eq(result, exp, check_names=False)
+
 
 def test_index():
     assert eq(d.index, full.index)
@@ -1543,3 +1722,28 @@ def test_gh580():
     ddf = dd.from_pandas(df, 2)
     assert eq(np.cos(df['x']), np.cos(ddf['x']))
     assert eq(np.cos(df['x']), np.cos(ddf['x']))
+
+
+def test_rename_dict():
+    renamer = {'a': 'A', 'b': 'B'}
+    assert eq(d.rename(columns=renamer),
+              full.rename(columns=renamer))
+
+
+def test_rename_function():
+    renamer = lambda x: x.upper()
+    assert eq(d.rename(columns=renamer),
+              full.rename(columns=renamer))
+
+
+def test_rename_index():
+    renamer = {0: 1}
+    assert raises(ValueError, lambda: d.rename(index=renamer))
+
+
+def test_to_frame():
+    s = pd.Series([1, 2, 3], name='foo')
+    a = dd.from_pandas(s, npartitions=2)
+
+    assert eq(s.to_frame(), a.to_frame())
+    assert eq(s.to_frame('bar'), a.to_frame('bar'))

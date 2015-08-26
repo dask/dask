@@ -238,5 +238,5 @@ of pandas should expect disappointment if they do not deeply understand the
 current design and limitations of dask.dataframe.
 
 
-.. _Chest: http://github.com/ContinuumIO/chest
+.. _Chest: http://github.com/blaze/chest
 .. _shared: shared.html
