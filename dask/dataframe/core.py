@@ -4,7 +4,7 @@ import bisect
 import operator
 import uuid
 
-from operator import methodcaller, getitem, setitem
+from operator import getitem, setitem
 from pprint import pformat
 from functools import wraps
 from collections import Iterable
@@ -586,7 +586,7 @@ class Series(_Frame):
             pos = np.searchsorted(index.values, div.asm8, side='right')
             actual_pos = min(len(index) - 1, pos)
             newdiv = index[actual_pos]
-            assert newdiv.offset == rule
+            assert newdiv.freq == rule
             newdivs.append(newdiv)
 
         # unique because our searchsorted algo above can return the same
@@ -596,11 +596,6 @@ class Series(_Frame):
         if newdivs[-1] < self.divisions[-1]:
             newdivs.append(self.divisions[-1])
 
-        func = methodcaller('resample', rule=rule, how=how, axis=axis,
-                            fill_method=fill_method, closed=closed,
-                            label=label, convention=convention, kind=kind,
-                            loffset=loffset, limit=limit, base=base)
-
         day_nanos = pd.datetools.Day().nanos
 
         def block_func(df):
@@ -608,7 +603,11 @@ class Series(_Frame):
                 raise NotImplementedError('Resampling frequency %s that does'
                                           ' not evenly divide a day is not '
                                           'implemented' % rule)
-            return func(df)
+
+            return df.resample(rule=rule, how=how, axis=axis,
+                               fill_method=fill_method, closed=closed,
+                               label=label, convention=convention, kind=kind,
+                               loffset=loffset, limit=limit, base=base)
 
         return self.repartition(newdivs, force=True).map_partitions(block_func)
 
