@@ -38,7 +38,7 @@ def istask(x):
     >>> istask(1)
     False
     """
-    return isinstance(x, tuple) and x and callable(x[0])
+    return type(x) is tuple and x and callable(x[0])
 
 
 def preorder_traversal(task):
