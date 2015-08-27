@@ -470,6 +470,22 @@ def test_from_castra():
         del with_fn, c
 
 
+def test_from_castra_with_selection():
+    """ Optimizations fuse getitems with load_partitions
+
+    We used to use getitem for both column access and selections
+    """
+    pytest.importorskip('castra')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+    a = dd.from_pandas(df, 2)
+
+    b = dd.from_castra(a.to_castra())
+
+    assert eq(b[b.y > 3].x, df[df.y > 3].x)
+
+
 def test_to_hdf():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
