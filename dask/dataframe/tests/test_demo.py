@@ -1,8 +1,6 @@
 import dask.dataframe as dd
 import pandas.util.testing as tm
 import pandas as pd
-import dask
-dask.set_options(get=dask.async.get_sync)
 
 
 def test_make_timeseries():
