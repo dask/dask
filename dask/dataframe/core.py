@@ -1,15 +1,20 @@
 from __future__ import division
 
-from functools import wraps, reduce
-from collections import Iterable
 import bisect
+import operator
 import uuid
-from toolz import merge, partial, first, partition, unique
+
 from operator import getitem, setitem
+from pprint import pformat
+from functools import wraps
+from collections import Iterable
 from datetime import datetime
+
+from toolz import merge, partial, first, partition, unique
+
 import pandas as pd
 import numpy as np
-import operator
+
 try:
     from chest import Chest as Cache
 except ImportError:
@@ -649,6 +654,60 @@ class Series(_Frame):
         """
         return quantile(self, q)
 
+    def resample(self, rule, how='mean', axis=0, fill_method=None, closed=None,
+                 label=None, convention='start', kind=None, loffset=None,
+                 limit=None, base=0):
+        """Group by a DatetimeIndex values in time periods of size `rule`.
+
+        Parameters
+        ----------
+        rule : str or pandas.datetools.Tick
+            The frequency to resample by. For example, 'H' is one hour
+            intervals.
+        how : str or callable
+            Method to use to summarize your data. For example, 'mean' takes the
+            average value of the Series in the time interval `rule`.
+
+        Notes
+        -----
+        For additional argument descriptions please consult the pandas
+        documentation.
+
+        Returns
+        -------
+        dask.dataframe.Series
+
+        See Also
+        --------
+        pandas.Series.resample
+        """
+
+        divs = pd.Series(range(len(self.divisions)), index=self.divisions)
+        temp = divs.resample(rule, how='count', axis=axis, fill_method=fill_method,
+                          closed=closed, label=label, convention=convention,
+                          kind=kind, loffset=loffset, limit=limit, base=base)
+        newdivs = temp.loc[temp > 0].index.tolist()
+        if newdivs[-1] < self.divisions[-1]:
+            newdivs.append(self.divisions[-1])
+        if newdivs[0] > self.divisions[0]:
+            newdivs.insert(0, self.divisions[0])
+
+        day_nanos = pd.datetools.Day().nanos
+
+        rule = pd.datetools.to_offset(rule)
+        def block_func(df):
+            if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
+                raise NotImplementedError('Resampling frequency %s that does'
+                                          ' not evenly divide a day is not '
+                                          'implemented' % rule)
+
+            return df.resample(rule=rule, how=how, axis=axis,
+                               fill_method=fill_method, closed=closed,
+                               label=label, convention=convention, kind=kind,
+                               loffset=loffset, limit=limit, base=base)
+
+        return self.repartition(newdivs, force=True).map_partitions(block_func)
+
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
             name = 'series-index-%s[%s]' % (self._name, key._name)
@@ -1096,12 +1155,23 @@ def _loc(df, start, stop, include_right_boundary=True):
     2  20
     2  30
     """
-    result = df.loc[slice(start, stop)]
+    result = df.loc[start:stop]
     if not include_right_boundary:
-        # result = df[df.index != stop]
-        result = result.iloc[:result.index.get_slice_bound(stop, 'left',
-                                                   result.index.inferred_type)]
-    return result
+        right_index = result.index.get_slice_bound(stop, 'left',
+                                                   result.index.inferred_type)
+        result = result.iloc[:right_index]
+    if not result.empty:
+        return result
+
+    # this is horrible
+    # i need to find a non-type-specific way to generate a range containing
+    # values that don't exist in the index and fill that with NaNs
+    try:
+        freq = pd.infer_freq(df.index)
+    except (TypeError, pd.tseries.tools.DateParseError):
+        return result
+    else:
+        return pd.Series([np.nan], index=pd.date_range(start, stop, freq=freq))
 
 
 def _coerce_loc_index(divisions, o):
@@ -1398,7 +1468,7 @@ class SeriesGroupBy(_GroupBy):
         self.key = key
         self.kwargs = kwargs
 
-    def apply(func, columns=None):
+    def apply(self, func, columns=None):
         # df = set_index(self.df, self.index, **self.kwargs)
         if self.index._name == self.df.index._name:
             df = self.df
@@ -1462,9 +1532,9 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
 
     a = '{0}--first-{1}'.format(token, token_key)
     dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)
-                                                if isinstance(x, _Frame)
-                                                else x for x in args])))
-                for i in range(args[0].npartitions))
+                                               if isinstance(x, _Frame)
+                                               else x for x in args])))
+               for i in range(args[0].npartitions))
 
     b = '{0}--second-{1}'.format(token, token_key)
     dsk2 = {(b, 0): (aggregate,
@@ -1777,6 +1847,10 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         elif len(tmp) == 1:
             d[(out2, j - 1)] = tmp[0]
         else:
+            if not tmp:
+                raise ValueError('check for duplicate partitions\nold:\n%s\n\n'
+                                 'new:\n%s\n\ncombined:\n%s'
+                                 % (pformat(a), pformat(b), pformat(c)))
             d[(out2, j - 1)] = (pd.concat, (list, tmp))
         j += 1
     return d

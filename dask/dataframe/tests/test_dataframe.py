@@ -1,9 +1,11 @@
+from itertools import product
 from datetime import datetime
 from operator import getitem
 
 import pandas as pd
 import pandas.util.testing as tm
 import numpy as np
+import pytest
 
 import dask
 from dask.async import get_sync
@@ -1345,6 +1347,60 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby('strings')['data'].nunique()
     assert eq(s.groupby('strings')['data'].nunique(), expected)
+
+
+@pytest.mark.parametrize(['freq', 'how', 'npartitions', 'nskipped'],
+                         list(product(['30T', 'H', 'D'],
+                                      ['sum', 'mean', 'count', 'nunique'],
+                                      [2, 3],
+                                      [2, 3])))
+def test_series_resample(freq, how, npartitions, nskipped):
+    n = 24 * 60 * 3
+    index = pd.date_range(start='20120102', periods=n, freq='T').values
+    index = index[::nskipped]
+    s = pd.Series(np.arange(len(index), dtype='f8'), index=pd.Index(index))
+    expected = s.resample(freq, how=how)
+    ds = dd.from_pandas(s, npartitions=npartitions)
+
+    resampled = ds.resample(freq, how=how)
+    result = resampled.compute()
+    assert resampled.divisions[0] == result.index[0]
+    tm.assert_series_equal(result, expected, check_dtype=False)
+
+
+@pytest.mark.xfail(raises=NotImplementedError)
+@pytest.mark.parametrize(['freq', 'how', 'npartitions', 'nskipped'],
+                         list(product(['57T'],
+                                      ['sum', 'mean', 'count', 'nunique'],
+                                      [2, 3],
+                                      [2, 3])))
+def test_series_resample_failing(freq, how, npartitions, nskipped):
+    n = 24 * 60 * 3
+    index = pd.date_range(start='20120102', periods=n, freq='T').values
+    index = index[::nskipped]
+    s = pd.Series(np.arange(len(index), dtype='f8'), index=pd.Index(index))
+    expected = s.resample(freq, how=how)
+    ds = dd.from_pandas(s, npartitions=npartitions)
+
+    resampled = ds.resample(freq, how=how)
+    result = resampled.compute()
+    tm.assert_series_equal(result, expected, check_dtype=False)
+
+
+@pytest.mark.parametrize(['how', 'npartitions'],
+                         list(product(['sum', 'mean', 'count', 'nunique'],
+                                      [2, 5])))
+def test_series_resample_big_freq(how, npartitions):
+    from pandas.tseries.offsets import Week
+    freq = 'W'
+    index = pd.date_range('21-Jan-2013', '3-NOV-2014', freq=Week())
+    df = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(df, npartitions=npartitions)
+
+    resampled = ds.resample(freq, how=how)
+    result = resampled.compute()
+    expected = df.resample(freq, how=how)
+    tm.assert_series_equal(result, expected, check_dtype=False)
 
 
 def test_set_partition_2():

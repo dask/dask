@@ -2,7 +2,7 @@ from collections import namedtuple
 
 from dask.utils import raises
 from dask.core import (istask, get, get_dependencies, flatten, subs,
-        preorder_traversal)
+                       preorder_traversal)
 
 
 def contains(a, b):
