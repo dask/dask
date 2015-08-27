@@ -1,17 +1,15 @@
 from __future__ import division
 
 import bisect
+from collections import Iterable, Iterator
+from datetime import datetime
+from functools import wraps
 import operator
-import uuid
-
 from operator import getitem, setitem
 from pprint import pformat
-from functools import wraps
-from collections import Iterable
-from datetime import datetime
+import uuid
 
 from toolz import merge, partial, first, partition, unique
-
 import pandas as pd
 import numpy as np
 
@@ -1595,15 +1593,29 @@ def map_partitions(func, columns, *args, **kwargs):
         raise ValueError("Keyword arguments not yet supported in map_partitions")
 
     return_type = _get_return_type(args[0], columns)
-    dsk = dict(((name, i), (apply, func,
+    dsk = dict(((name, i), (_rename, columns, (apply, func,
                              (tuple, [(arg._name, i)
                                       if isinstance(arg, _Frame)
                                       else arg
-                                      for arg in args])))
+                                      for arg in args]))))
                 for i in range(args[0].npartitions))
 
     dasks = [arg.dask for arg in args if isinstance(arg, _Frame)]
     return return_type(merge(dsk, *dasks), name, columns, args[0].divisions)
+
+
+def _rename(columns, df):
+    """ Rename columns in dataframe or series """
+    if isinstance(columns, Iterator):
+        columns = list(columns)
+    if columns is None:
+        return df
+    if isinstance(df, pd.DataFrame) and len(columns) == len(df.columns):
+        return df.rename(columns=dict(zip(df.columns, columns)))
+    elif isinstance(df, pd.Series):
+        return pd.Series(df, name=columns)
+    else:
+        return df
 
 
 def categorize_block(df, categories):
