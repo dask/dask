@@ -23,3 +23,12 @@ def test_make_timeseries():
     b = dd.demo.make_timeseries('2000', '2015', {'A': float, 'B': int, 'C': str},
                                  freq='2D', partition_freq='6M', seed=123)
     tm.assert_frame_equal(a.head(), b.head())
+
+
+def test_no_overlaps():
+    df = dd.demo.make_timeseries('2000', '2001', {'A': float},
+                                 freq='3H', partition_freq='3M')
+
+    assert all(df.get_division(i).index.max().compute()
+             < df.get_division(i + 1).index.min().compute()
+             for i in range(df.npartitions - 2))
