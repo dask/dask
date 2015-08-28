@@ -565,6 +565,87 @@ class _Frame(Base):
             name = '{0}std(ddof={1})'.format(self._token_prefix, ddof)
             return map_partitions(np.sqrt, None, v, token=name)
 
+    def _cum_agg(self, token, chunk, aggregate, agginit):
+        """ Wrapper for cumulative operation """
+        # cumulate each partitions
+        name1 = '{0}{1}-map'.format(self._token_prefix, token)
+        cumpart = map_partitions(chunk, self.column_info, self, token=name1)
+        # take last element of each cumulated partitions
+        name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
+        cumlast = map_partitions(lambda x: x.iloc[-1],
+                                 self.column_info, cumpart, token=name2)
+
+        name = '{0}{1}'.format(self._token_prefix, token)
+        cname = '{0}{1}-cum-last'.format(self._token_prefix, token)
+
+        # aggregate cumulated partisions and its previous last element
+        dask = {}
+        if isinstance(self, DataFrame):
+            agginit = pd.Series(agginit, index=self.column_info)
+        dask[(cname, 0)] = agginit
+        dask[(name, 0)] = (cumpart._name, 0)
+        for i in range(1, self.npartitions):
+            # store each cumulative step to graph to reduce computation
+            dask[(cname, i)] = (aggregate, (cname, i - 1),
+                                (cumlast._name, i - 1))
+            dask[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
+        return self._constructor(merge(dask, cumpart.dask, cumlast.dask),
+                                 name, self.column_info, self.divisions)
+
+    @wraps(pd.DataFrame.cumsum)
+    def cumsum(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            name = '{0}cumsum(axis=1)'.format(self._token_prefix)
+            return map_partitions(self._partition_type.cumsum,
+                                  self.column_info, self, 1, token=name)
+        else:
+            return self._cum_agg('cumsum', self._partition_type.cumsum,
+                                 operator.add, 0)
+
+    @wraps(pd.DataFrame.cumprod)
+    def cumprod(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            name = '{0}cumprod(axis=1)'.format(self._token_prefix)
+            return map_partitions(self._partition_type.cumprod,
+                                  self.column_info, self, 1, token=name)
+        else:
+           return self._cum_agg('cumprod', self._partition_type.cumprod,
+                                 operator.mul, 1)
+
+    @wraps(pd.DataFrame.cummax)
+    def cummax(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            name = '{0}cummax(axis=1)'.format(self._token_prefix)
+            return map_partitions(self._partition_type.cummax,
+                                  self.column_info, self, 1, token=name)
+        else:
+            def aggregate(x, y):
+                if isinstance(x, (pd.Series, pd.DataFrame)):
+                    return x.where(x > y, y, axis=x.ndim - 1)
+                else:       # scalsr
+                    return x if x > y else y
+            return self._cum_agg('cummax', self._partition_type.cummax,
+                                 aggregate, np.nan)
+
+    @wraps(pd.DataFrame.cummin)
+    def cummin(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            name = '{0}cummin(axis=1)'.format(self._token_prefix)
+            return map_partitions(self._partition_type.cummin,
+                                  self.column_info, self, 1, token=name)
+        else:
+            def aggregate(x, y):
+                if isinstance(x, (pd.Series, pd.DataFrame)):
+                    return x.where(x < y, y, axis=x.ndim - 1)
+                else:       # scalar
+                    return x if x < y else y
+            return self._cum_agg('cummin', self._partition_type.cummin,
+                                 aggregate, np.nan)
+
 
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,
@@ -764,6 +845,22 @@ class Series(_Frame):
     @wraps(pd.Series.std)
     def std(self, axis=None, ddof=1):
         return super(Series, self).std(axis=axis, ddof=ddof)
+
+    @wraps(pd.Series.cumsum)
+    def cumsum(self, axis=None):
+        return super(Series, self).cumsum(axis=axis)
+
+    @wraps(pd.Series.cumprod)
+    def cumprod(self, axis=None):
+        return super(Series, self).cumprod(axis=axis)
+
+    @wraps(pd.Series.cummax)
+    def cummax(self, axis=None):
+        return super(Series, self).cummax(axis=axis)
+
+    @wraps(pd.Series.cummin)
+    def cummin(self, axis=None):
+        return super(Series, self).cummin(axis=axis)
 
     @wraps(pd.Series.nunique)
     def nunique(self):

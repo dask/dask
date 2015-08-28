@@ -907,6 +907,25 @@ def test_reductions_frame_dtypes():
     assert eq(df.var(ddof=0), ddf.var(ddof=0))
     assert eq(df.mean(), ddf.mean())
 
+def test_cumulative():
+    pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+    ddf = dd.from_pandas(pdf, 5)
+
+    assert eq(ddf.cumsum(), pdf.cumsum())
+    assert eq(ddf.cumprod(), pdf.cumprod())
+    assert eq(ddf.cummin(), pdf.cummin())
+    assert eq(ddf.cummax(), pdf.cummax())
+
+    assert eq(ddf.cumsum(axis=1), pdf.cumsum(axis=1))
+    assert eq(ddf.cumprod(axis=1), pdf.cumprod(axis=1))
+    assert eq(ddf.cummin(axis=1), pdf.cummin(axis=1))
+    assert eq(ddf.cummax(axis=1), pdf.cummax(axis=1))
+
+    assert eq(ddf.a.cumsum(), pdf.a.cumsum())
+    assert eq(ddf.a.cumprod(), pdf.a.cumprod())
+    assert eq(ddf.a.cummin(), pdf.a.cummin())
+    assert eq(ddf.a.cummax(), pdf.a.cummax())
+
 def test_dropna():
     df = pd.DataFrame({'x': [np.nan, 2,      3, 4, np.nan,      6],
                        'y': [1,      2, np.nan, 4, np.nan, np.nan],
