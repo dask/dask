@@ -13,7 +13,7 @@ from ..dot import funcname
 from ..core import istask
 
 
-def pprint_task(task, keys):
+def pprint_task(task, keys, budget=60):
     """Return a nicely formatted string for a task.
 
     Examples
@@ -40,18 +40,30 @@ def pprint_task(task, keys):
         else:
             head = funcname(task[0])
             tail = ')'
-        args = ', '.join(pprint_task(t, keys) for t in task[1:])
-        return '{0}({1}{2}'.format(head, args, tail)
+        budget2 = int((budget - len(head) - len(tail)) / len(task[1:]))
+        if budget2 > 5:
+            args = ', '.join(pprint_task(t, keys, budget2) for t in task[1:])
+        else:
+            args = '...'
+        result = '{0}({1}{2}'.format(head, args, tail)
     elif isinstance(task, list):
-        args = ', '.join(pprint_task(t, keys) for t in task)
-        return '[{0}]'.format(args)
+        task2 = task[:3]
+        budget2 = int((budget - 2 - 2 *len(task2)) / len(task2))
+        args = ', '.join(pprint_task(t, keys, budget2) for t in task2)
+        if len(task) > 3:
+            result = '[{0}, ...]'.format(args)
+        else:
+            result = '[{0}]'.format(args)
     else:
         try:
             if task in keys:
-                return '_'
+                result = '_'
+            else:
+                result = '*'
         except TypeError:
-            pass
-        return '*'
+            result = '*'
+
+    return result
 
 
 def get_colors(palette, funcs):

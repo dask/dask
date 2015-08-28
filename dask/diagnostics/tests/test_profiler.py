@@ -5,6 +5,7 @@ from dask.diagnostics import Profiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
 import pytest
+
 try:
     import bokeh
 except:
@@ -57,6 +58,13 @@ def test_pprint_task():
     res = 'sum([*, _, add(_, *)])'
     assert pprint_task((sum, [1, 'b', (add, 'a', 1)]), keys) == res
     assert pprint_task((sum, (1, 2, 3, 4, 5, 6, 7)), keys) == 'sum(*)'
+
+    assert len(pprint_task((sum, list(keys) * 100), keys)) < 100
+    assert pprint_task((sum, list(keys) * 100), keys) == 'sum([_, _, _, ...])'
+    assert pprint_task((sum, [1, 2, (sum, ['a', 4]), 5, 6] * 100), keys) == \
+            'sum([*, *, sum([_, *]), ...])'
+    assert pprint_task((sum, [1, 2, (sum, ['a', (sum, [1, 2, 3])]), 5, 6])
+                      , keys) == 'sum([*, *, sum([_, sum(...)]), ...])'
 
 
 @pytest.mark.skipif("not bokeh")
