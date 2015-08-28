@@ -642,7 +642,10 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
         return dsk, keys
 
 
-def to_csv(df, filename, **kwargs):
+def to_csv(df, filename, compression=None, **kwargs):
+    if compression:
+        raise NotImplementedError("Writing compressed csv files not supported")
+
     myget = kwargs.pop('get', None)
     name = 'to-csv-' + uuid.uuid1().hex
 
