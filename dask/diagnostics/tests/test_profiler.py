@@ -1,4 +1,4 @@
-from operator import add, mul
+from operator import add, mul, div
 import os
 
 from dask.diagnostics import Profiler
@@ -36,14 +36,11 @@ def test_profiler():
 
 
 def test_profiler_works_under_error():
-    def f(x):
-        return 1 / x
-
-    dsk = {'x': (f, 1), 'y': (f, 2), 'z': (f, 0)}
+    dsk = {'x': (div, 1, 1), 'y': (div, 'x', 2), 'z': (div, 'y', 0)}
 
     with ignoring(ZeroDivisionError):
         with prof:
-            out = get(dsk, ['x', 'y', 'z'])
+            out = get(dsk, 'z')
 
     assert all(len(v) == 5 for v in prof.results())
     assert len(prof.results()) == 2
