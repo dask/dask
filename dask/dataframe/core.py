@@ -525,7 +525,7 @@ class _Frame(Base):
                 except ZeroDivisionError:
                     return np.nan
             name = '{0}mean-{1}'.format(self._token_prefix, tokenize(s))
-            return map_partitions(f, None, s, n, token=name)
+            return map_partitions(f, no_default, s, n, token=name)
 
     @wraps(pd.DataFrame.var)
     def var(self, axis=None, ddof=1):
@@ -549,7 +549,7 @@ class _Frame(Base):
                 except ZeroDivisionError:
                     return np.nan
             name = '{0}var(ddof={1})'.format(self._token_prefix, ddof)
-            return map_partitions(f, None, x2, x, n, token=name)
+            return map_partitions(f, no_default, x2, x, n, token=name)
 
     @wraps(pd.DataFrame.std)
     def std(self, axis=None, ddof=1):
@@ -561,7 +561,7 @@ class _Frame(Base):
         else:
             v = self.var(ddof=ddof)
             name = '{0}std(ddof={1})'.format(self._token_prefix, ddof)
-            return map_partitions(np.sqrt, None, v, token=name)
+            return map_partitions(np.sqrt, no_default, v, token=name)
 
 
 # bind operators
@@ -1600,6 +1600,9 @@ def map_partitions(func, columns, *args, **kwargs):
                                       for arg in args]))))
                 for i in range(args[0].npartitions))
 
+    if columns is no_default:
+        columns = None
+
     dasks = [arg.dask for arg in args if isinstance(arg, _Frame)]
     return return_type(merge(dsk, *dasks), name, columns, args[0].divisions)
 
@@ -1608,7 +1611,7 @@ def _rename(columns, df):
     """ Rename columns in dataframe or series """
     if isinstance(columns, Iterator):
         columns = list(columns)
-    if columns is None:
+    if columns is no_default:
         return df
     if isinstance(df, pd.DataFrame) and len(columns) == len(df.columns):
         return df.rename(columns=dict(zip(df.columns, columns)))
