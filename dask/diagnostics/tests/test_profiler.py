@@ -1,4 +1,4 @@
-from operator import add, mul, div
+from operator import add, mul
 import os
 
 from dask.diagnostics import Profiler
@@ -36,6 +36,7 @@ def test_profiler():
 
 
 def test_profiler_works_under_error():
+    div = lambda x, y: x / y
     dsk = {'x': (div, 1, 1), 'y': (div, 'x', 2), 'z': (div, 'y', 0)}
 
     with ignoring(ZeroDivisionError):
