@@ -1,6 +1,7 @@
 from operator import add, mul
 from dask.diagnostics import Profiler
 from dask.threaded import get
+from dask.utils import ignoring
 import pytest
 try:
     import bokeh
@@ -29,6 +30,20 @@ def test_profiler():
     assert tasks == [(add, 'a', 'b'), (mul, 'a', 'b'), (mul, 'c', 'd')]
     prof.clear()
     assert prof.results() == []
+
+
+def test_profiler_works_under_error():
+    def f(x):
+        return 1 / x
+
+    dsk = {'x': (f, 1), 'y': (f, 2), 'z': (f, 0)}
+
+    with ignoring(ZeroDivisionError):
+        with prof:
+            out = get(dsk, ['x', 'y', 'z'])
+
+    assert all(len(v) == 5 for v in prof.results())
+    assert len(prof.results()) == 2
 
 
 @pytest.mark.skipif("not bokeh")
