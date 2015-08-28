@@ -1,7 +1,9 @@
 from operator import add, mul
+import os
+
 from dask.diagnostics import Profiler
 from dask.threaded import get
-from dask.utils import ignoring
+from dask.utils import ignoring, tmpfile
 import pytest
 try:
     import bokeh
@@ -73,6 +75,19 @@ def test_profiler_plot():
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert p.title == "Not the default"
+
+
+@pytest.mark.skipif("not bokeh")
+def test_saves_file():
+    with tmpfile('html') as fn:
+        with prof:
+            get(dsk, 'e')
+        # Run just to see that it doesn't error
+        prof.visualize(show=False, file_path=fn)
+
+        assert os.path.exists(fn)
+        with open(fn) as f:
+            assert 'HTML' in f.read()
 
 
 @pytest.mark.skipif("not bokeh")

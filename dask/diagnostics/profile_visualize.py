@@ -80,7 +80,7 @@ def get_colors(palette, funcs):
 
 
 def visualize(results, dsk, palette='GnBu', file_path=None,
-              show=True, **kwargs):
+              show=True, save=True, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -159,4 +159,6 @@ def visualize(results, dsk, palette='GnBu', file_path=None,
 
     if show:
         bp.show(p)
+    if save:
+        bp.save(p)
     return p
