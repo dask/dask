@@ -29,7 +29,6 @@ from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..base import Base, compute, tokenize, normalize_token
 
-
 no_default = '__no_default__'
 return_scalar = '__return_scalar__'
 
@@ -1042,6 +1041,7 @@ class DataFrame(_Frame):
 
     @wraps(pd.DataFrame.set_index)
     def set_index(self, other, **kwargs):
+        from .shuffle import set_index
         return set_index(self, other, **kwargs)
 
     def set_partition(self, column, divisions, **kwargs):
@@ -1052,6 +1052,7 @@ class DataFrame(_Frame):
         See also:
             set_index
         """
+        from .shuffle import set_partition
         return set_partition(self, column, divisions, **kwargs)
 
     @property
@@ -1310,7 +1311,16 @@ def elemwise(op, *args, **kwargs):
 
     _name = 'elemwise-' + tokenize(op, kwargs, *args)
 
-    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar))]
+    from .io import from_pandas
+    args = [from_pandas(arg, 1) if isinstance(arg, (pd.DataFrame, pd.Series))
+            else arg for arg in args]
+
+    from .multi import _maybe_align_partitions
+    dasks = _maybe_align_partitions(args)
+    dfs = [df for df in dasks if isinstance(df, _Frame)]
+    divisions = dfs[0].divisions
+    n = len(divisions) - 1
+
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar))]
 
@@ -1318,13 +1328,6 @@ def elemwise(op, *args, **kwargs):
         op2 = partial_by_order(op, other)
     else:
         op2 = op
-
-    dfs = [df for df in dasks if isinstance(df, _Frame)]
-    divisions = dfs[0].divisions
-    if not all(df.divisions == divisions for df in dfs):
-        from .multi import align_partitions
-        dasks, divisions, parts = align_partitions(*dasks)
-    n = len(divisions) - 1
 
     # adjust the key length of Scalar
     keys = [d._keys() *  n if isinstance(d, Scalar)
@@ -1524,6 +1527,7 @@ class GroupBy(_GroupBy):
                                   columns or self.df.columns,
                                   self.df, func)
         else:
+            from .shuffle import shuffle
             # df = set_index(self.df, self.index, **self.kwargs)
             df = shuffle(self.df, self.index, **self.kwargs)
             return map_partitions(_groupby_apply,
@@ -1573,6 +1577,7 @@ class SeriesGroupBy(_GroupBy):
                                   self.df, self.key, func,
                                   columns=columns)
         else:
+            from .shuffle import shuffle
             df = shuffle(self.df, self.index, **self.kwargs)
             return map_partitions(_groupby_apply,
                                   columns or self.df.columns,
@@ -2070,5 +2075,3 @@ class StringAccessor(object):
                     return partial(self._function_map, key)
             else:
                 raise
-
-from .shuffle import set_index, set_partition, shuffle
