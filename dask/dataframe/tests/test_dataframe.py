@@ -1,6 +1,6 @@
 from itertools import product
 from datetime import datetime
-from operator import add, getitem
+from operator import getitem
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -12,7 +12,7 @@ from dask.async import get_sync
 from dask.utils import raises, ignoring
 import dask.dataframe as dd
 from dask.dataframe.core import (concat, repartition_divisions, _loc,
-        _coerce_loc_index, aca, reduction, _concat, partial_by_order)
+        _coerce_loc_index, aca, reduction, _concat)
 
 
 def check_dask(dsk, check_names=True):
@@ -310,19 +310,6 @@ def test_groupby_multilevel_getitem():
         assert eq(d.max(), p.max())
         assert eq(d.count(), p.count())
         assert eq(d.mean(), p.mean().astype(float))
-
-
-def test_partial_by_order():
-    f = partial_by_order(add, [(1, 20)])
-    assert f(5) == 25
-    assert f.__name__ == 'add(20)'
-
-    f = partial_by_order(lambda x, y, z: x + y + z, [(1, 10), (2, 15)])
-    assert f(3) == 28
-    assert f.__name__ == '<lambda>(...)'
-
-    assert raises(ValueError, lambda: partial_by_order(add, 1))
-    assert raises(ValueError, lambda: partial_by_order(add, [1]))
 
 
 def test_arithmetics():

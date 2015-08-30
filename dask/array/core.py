@@ -1623,6 +1623,47 @@ def asarray(array):
     return array
 
 
+def partial_by_order(op, other):
+    """
+
+    >>> f = partial_by_order(add, [(1, 10)])
+    >>> f(5)
+    15
+    """
+    if (not isinstance(other, list) or
+        not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
+        raise ValueError('input must be list of tuples')
+
+    def f(*args):
+        args2 = list(args)
+        for i, arg in other:
+            args2.insert(i, arg)
+        return op(*args2)
+
+    if len(other) == 1:
+        other_arg = other[0][1]
+    else:
+        other_arg = '...'
+    f.__name__ = '{0}({1})'.format(op.__name__, other_arg)
+    return f
+
+
+def is_scalar_for_binops(a):
+    """
+    >>> is_scalar_for_binops(42)
+    True
+    >>> is_scalar_for_binops('foo')
+    True
+    >>> is_scalar_for_binops(True)
+    True
+    >>> is_scalar_for_binops(np.array(42))
+    True
+    >>> is_scalar_for_binops(np.array([1, 2, 3]))
+    False
+    """
+    return np.isscalar(a) or (isinstance(a, np.ndarray) and a.ndim == 0)
+
+
 def elemwise(op, *args, **kwargs):
     """ Apply elementwise function across arguments
 
@@ -1644,17 +1685,22 @@ def elemwise(op, *args, **kwargs):
     out_ndim = max(len(getattr(arg, 'shape', ())) for arg in args)
     expr_inds = tuple(range(out_ndim))[::-1]
 
+    arrays = [asarray(a) for a in args if not is_scalar_for_binops(a)]
+    other = [(i, a) for i, a in enumerate(args) if is_scalar_for_binops(a)]
+
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
-    elif any(a._dtype is None for a in args if isinstance(a, Array)):
+    elif any(a._dtype is None for a in arrays):
         dt = None
     else:
-        # Note that this is not really the right logic here. The dtype
-        # signature is fixed independent of the number of dimensions, except
-        # for scalars/0d arrays, for which the dtype depends on the value:
+        # We follow NumPy's rules for dtype promotion, which special cases
+        # scalars and 0d ndarrays (which it considers equivalent) by using
+        # their values to compute the result dtype:
         # https://github.com/numpy/numpy/issues/6240
+        # We don't inspect the values of 0d dask arrays, because these could
+        # hold potentially very expensive calculations.
         vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
-                if isinstance(a, Array) else a
+                if not is_scalar_for_binops(a) else a
                 for a in args]
         try:
             dt = op(*vals).dtype
@@ -1662,10 +1708,14 @@ def elemwise(op, *args, **kwargs):
             dt = None
 
     name = kwargs.get('name', None) or 'elemwise-' + tokenize(op, dt, *args)
-    args = [asarray(arg) for arg in args]
 
-    return atop(op, expr_inds,
-                *concat((a, tuple(range(a.ndim)[::-1])) for a in args),
+    if other:
+        op2 = partial_by_order(op, other)
+    else:
+        op2 = op
+
+    return atop(op2, expr_inds,
+                *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
                 dtype=dt, name=name)
 
 

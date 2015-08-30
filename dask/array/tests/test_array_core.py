@@ -320,10 +320,10 @@ def test_take():
 
 
 def test_binops():
-    a = Array(dict((('a', i), '') for i in range(3)),
-              'a', chunks=((10, 10, 10),))
-    b = Array(dict((('b', i), '') for i in range(3)),
-              'b', chunks=((10, 10, 10),))
+    a = Array(dict((('a', i), np.array([''])) for i in range(3)),
+              'a', chunks=((1, 1, 1),))
+    b = Array(dict((('b', i), np.array([''])) for i in range(3)),
+              'b', chunks=((1, 1, 1),))
 
     result = elemwise(add, a, b, name='c')
     assert result.dask == merge(a.dask, b.dask,
@@ -331,10 +331,9 @@ def test_binops():
                                      for i in range(3)))
 
     result = elemwise(pow, a, 2, name='c')
-    task = result.dask[('c', 0)]
-    assert task[0] == pow
-    assert task[1] == ('a', 0)
-    assert task[2][0].startswith('asarray')
+    assert result.dask[('c', 0)][1] == ('a', 0)
+    f = result.dask[('c', 0)][0]
+    assert f(10) == 100
 
 
 def test_isnull():
@@ -364,6 +363,19 @@ def test_elemwise_on_scalars():
     a = from_array(x, chunks=(5,))
     assert len(a._keys()) == 3
     assert eq(a, x)
+
+
+def test_partial_by_order():
+    f = partial_by_order(add, [(1, 20)])
+    assert f(5) == 25
+    assert f.__name__ == 'add(20)'
+
+    f = partial_by_order(lambda x, y, z: x + y + z, [(1, 10), (2, 15)])
+    assert f(3) == 28
+    assert f.__name__ == '<lambda>(...)'
+
+    assert raises(ValueError, lambda: partial_by_order(add, 1))
+    assert raises(ValueError, lambda: partial_by_order(add, [1]))
 
 
 def test_elemwise_with_ndarrays():
@@ -411,6 +423,16 @@ def test_operators():
 
     assert eq(abs(-a), a)
     assert eq(a, +x)
+
+
+def test_operator_dtype_promotion():
+    x = np.arange(10, dtype=np.float32)
+    y = np.array([1])
+    a = from_array(x, chunks=(5,))
+
+    assert eq(x + 1, a + 1)  # still float32
+    assert eq(x + 1e50, a + 1e50)  # now float64
+    assert eq(x + y, a + y)  # also float64
 
 
 def test_field_access():
