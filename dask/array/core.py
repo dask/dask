@@ -1080,6 +1080,14 @@ class Array(Base):
         from .rechunk import rechunk
         return rechunk(self, chunks)
 
+    @property
+    def real(self):
+        return real(self)
+
+    @property
+    def imag(self):
+        return imag(self)
+
 
 normalize_token.register(Array, lambda a: a.name)
 

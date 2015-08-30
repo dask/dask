@@ -879,7 +879,9 @@ def test_arithmetic():
 
     assert eq(da.angle(a + 1j), np.angle(x + 1j))
     assert eq(da.real(a + 1j), np.real(x + 1j))
+    assert eq((a + 1j).real, np.real(x + 1j))
     assert eq(da.imag(a + 1j), np.imag(x + 1j))
+    assert eq((a + 1j).imag, np.imag(x + 1j))
 
     assert eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
     assert eq(da.fabs(b), np.fabs(y))
