@@ -883,7 +883,7 @@ def test_arithmetic():
 
     assert eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
     assert eq(da.fabs(b), np.fabs(y))
-    assert eq(da.sign(b - 2), np.fabs(y - 2))
+    assert eq(da.sign(b - 2), np.sign(y - 2))
 
     l1, l2 = da.frexp(a)
     r1, r2 = np.frexp(x)
