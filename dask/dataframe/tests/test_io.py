@@ -639,3 +639,14 @@ def test_to_bag():
     assert ddf.to_bag(True).compute(get=get_sync) == list(a.itertuples(True))
     assert ddf.x.to_bag(True).compute(get=get_sync) == list(a.x.iteritems())
     assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)
+
+
+def test_bad_csv():
+    with tempfile.NamedTemporaryFile() as file_:
+        file_.write('numbers,names\n')
+        for i in range(1000):
+            file_.write('1,foo\n')
+        file_.write('1.5,bar\n')
+        file_.seek(0)
+        a = dd.read_csv(file_.name)
+        pytest.raises(ValueError, lambda: a.compute())
