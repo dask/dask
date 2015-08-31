@@ -1709,7 +1709,7 @@ imag = wrap_elemwise(np.imag)
 
 clip = wrap_elemwise(np.clip)
 fabs = wrap_elemwise(np.fabs)
-sign = wrap_elemwise(np.fabs)
+sign = wrap_elemwise(np.sign)
 
 
 def frexp(x):
