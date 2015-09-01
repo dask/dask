@@ -39,13 +39,16 @@ def try_pd_read_csv(*args, **kwargs):
     try:
         return pd.read_csv(*args, **kwargs)
     except ValueError as e:
-        # this is brittle
-        e_parts = e.message.split(' ')
-        column_number = int(e_parts[-1])
-        column_name = kwargs.get('names')[column_number]
-        dtype1 = e_parts[7]
-        dtype2 = e_parts[9]
-        msg %= (column_name, dtype1, dtype2, column_name, dtype2)
+        try:
+            # this is brittle
+            e_parts = e.message.split(' ')
+            column_number = int(e_parts[-1])
+            column_name = kwargs.get('names')[column_number]
+            dtype1 = e_parts[7]
+            dtype2 = e_parts[9]
+            msg %= (column_name, dtype1, dtype2, column_name, dtype2)
+        except:
+            raise e
         raise ValueError(msg)
 
 
