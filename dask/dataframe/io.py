@@ -145,9 +145,9 @@ def read_csv(fn, *args, **kwargs):
         divisions = [None] * (nchunks + 1)
 
         first_read_csv = partial(try_pd_read_csv, *args, header=header,
-                               **dissoc(kwargs, 'compression'))
-        rest_read_csv = partial(pd.read_csv, *args, header=None,
-                              **dissoc(kwargs, 'compression'))
+                                 **dissoc(kwargs, 'compression'))
+        rest_read_csv = partial(try_pd_read_csv, *args, header=None,
+                                **dissoc(kwargs, 'compression'))
 
         # Create dask graph
         dsk = dict(((name, i), (rest_read_csv, (BytesIO,
