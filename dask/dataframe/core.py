@@ -1261,18 +1261,7 @@ def _loc(df, start, stop, include_right_boundary=True):
         right_index = result.index.get_slice_bound(stop, 'left',
                                                    result.index.inferred_type)
         result = result.iloc[:right_index]
-    if not result.empty:
-        return result
-
-    # this is horrible
-    # i need to find a non-type-specific way to generate a range containing
-    # values that don't exist in the index and fill that with NaNs
-    try:
-        freq = pd.infer_freq(df.index)
-    except (TypeError, pd.tseries.tools.DateParseError):
-        return result
-    else:
-        return pd.Series([np.nan], index=pd.date_range(start, stop, freq=freq))
+    return result
 
 
 def _coerce_loc_index(divisions, o):
