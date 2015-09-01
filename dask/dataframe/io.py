@@ -141,7 +141,7 @@ def read_csv(fn, *args, **kwargs):
         nchunks = int(ceil(total_bytes / chunkbytes))
         divisions = [None] * (nchunks + 1)
 
-        first_read_csv = partial(pd.read_csv, *args, header=header,
+        first_read_csv = partial(try_pd_read_csv, *args, header=header,
                                **dissoc(kwargs, 'compression'))
         rest_read_csv = partial(pd.read_csv, *args, header=None,
                               **dissoc(kwargs, 'compression'))
