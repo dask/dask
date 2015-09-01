@@ -9,6 +9,7 @@ from pprint import pformat
 from functools import wraps
 from collections import Iterable
 from datetime import datetime
+from distutils.version import LooseVersion
 
 from toolz import merge, partial, first, partition, unique
 
@@ -869,7 +870,10 @@ class Series(_Frame):
     @wraps(pd.Series.value_counts)
     def value_counts(self):
         chunk = lambda s: s.value_counts()
-        agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
+        if LooseVersion(pd.__version__) > '0.16.2':
+            agg = lambda s: s.groupby(level=0).sum().sort_values(ascending=False)
+        else:
+            agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
         return aca(self, chunk=chunk, aggregate=agg, columns=self.name,
                    token='value-counts')
 
