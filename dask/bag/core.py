@@ -1082,6 +1082,50 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     return Bag(d, name, len(d))
 
 
+def from_castra(x, columns=None, index=False, npartitions=None):
+    """Load a dask Bag from a Castra.
+
+    Parameters
+    ----------
+    x : filename or Castra
+    columns: list or string, optional
+        The columns to load. Default is all columns.
+    index: bool, optional
+        If True, the index is included as the first element in each tuple.
+        Default is False.
+    npartitions: int, optional
+        The number of desired partitions. Defaults to number of partitions in
+        the Castra.
+    """
+    from castra import Castra
+    if not isinstance(x, Castra):
+        x = Castra(x, readonly=True)
+    elif not x._readonly:
+        x = Castra(x.path, readonly=True)
+    if columns is None:
+        columns = x.columns
+    if npartitions is None:
+        npartitions = len(x.partitions)
+    parts = from_sequence(x.partitions, npartitions=npartitions)
+    func = lambda p: load_castra_partition(x, p, columns, index)
+    return parts.map_partitions(func).map_partitions(reify)
+
+
+def load_castra_partition(castra, parts, columns, index):
+    import blosc
+    # Due to serialization issues, blosc needs to be manually initialized in
+    # each process.
+    blosc.init()
+    for part in parts:
+        df = castra.load_partition(part, columns)
+        if isinstance(columns, list):
+            items = df.itertuples(index)
+        else:
+            items = df.iteritems() if index else iter(df)
+        for item in items:
+            yield item
+
+
 def from_url(urls):
     """Create a dask.bag from a url
 

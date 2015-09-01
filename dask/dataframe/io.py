@@ -535,7 +535,7 @@ def from_castra(x, columns=None):
     """
     from castra import Castra
     if not isinstance(x, Castra):
-        x = Castra(x)
+        x = Castra(x, readonly=True)
     return x.to_dask(columns)
 
 
