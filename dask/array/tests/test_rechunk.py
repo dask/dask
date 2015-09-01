@@ -180,10 +180,11 @@ def test_rechunk_with_integer():
 
 
 def test_rechunk_0d():
-    x = da.from_array(np.array(42), chunks=())
+    a = np.array(42)
+    x = da.from_array(a, chunks=())
     y = x.rechunk(())
     assert y.chunks == ()
-    assert x.compute() == 42
+    assert y.compute() == a
 
 
 def test_rechunk_same():

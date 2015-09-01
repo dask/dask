@@ -795,6 +795,8 @@ class Array(Base):
         return complex(self.compute())
 
     def __getitem__(self, index):
+        out = 'getitem-' + tokenize(self, index)
+
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if (isinstance(index, (str, unicode)) or
             (    isinstance(index, list)
@@ -805,9 +807,7 @@ class Array(Base):
                 dt = np.dtype([(name, self._dtype[name]) for name in index])
             else:
                 dt = None
-            f = lambda x: getarray(x, index)
-            name = 'getitem-' + tokenize(self, index)
-            return elemwise(f, self, dtype=dt, name=name)
+            return elemwise(getarray, self, index, dtype=dt, name=out)
 
         # Slicing
         if not isinstance(index, tuple):
@@ -816,7 +816,6 @@ class Array(Base):
         if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
-        out = 'getitem-' + tokenize(self, index)
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         return Array(merge(self.dask, dsk), out, chunks, dtype=self._dtype)
@@ -1648,20 +1647,26 @@ def partial_by_order(op, other):
     return f
 
 
-def is_scalar_for_binops(a):
+def is_scalar_for_elemwise(arg):
     """
-    >>> is_scalar_for_binops(42)
+    >>> is_scalar_for_elemwise(42)
     True
-    >>> is_scalar_for_binops('foo')
+    >>> is_scalar_for_elemwise('foo')
     True
-    >>> is_scalar_for_binops(True)
+    >>> is_scalar_for_elemwise(True)
     True
-    >>> is_scalar_for_binops(np.array(42))
+    >>> is_scalar_for_elemwise(np.array(42))
     True
-    >>> is_scalar_for_binops(np.array([1, 2, 3]))
+    >>> is_scalar_for_elemwise([1, 2, 3])
+    True
+    >>> is_scalar_for_elemwise(np.array([1, 2, 3]))
+    False
+    >>> is_scalar_for_elemwise(from_array(np.array(0), chunks=()))
     False
     """
-    return np.isscalar(a) or (isinstance(a, np.ndarray) and a.ndim == 0)
+    return (np.isscalar(arg)
+            or not hasattr(arg, 'shape')
+            or (isinstance(arg, np.ndarray) and arg.ndim == 0))
 
 
 def elemwise(op, *args, **kwargs):
@@ -1685,8 +1690,8 @@ def elemwise(op, *args, **kwargs):
     out_ndim = max(len(getattr(arg, 'shape', ())) for arg in args)
     expr_inds = tuple(range(out_ndim))[::-1]
 
-    arrays = [asarray(a) for a in args if not is_scalar_for_binops(a)]
-    other = [(i, a) for i, a in enumerate(args) if is_scalar_for_binops(a)]
+    arrays = [asarray(a) for a in args if not is_scalar_for_elemwise(a)]
+    other = [(i, a) for i, a in enumerate(args) if is_scalar_for_elemwise(a)]
 
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
@@ -1700,7 +1705,7 @@ def elemwise(op, *args, **kwargs):
         # We don't inspect the values of 0d dask arrays, because these could
         # hold potentially very expensive calculations.
         vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
-                if not is_scalar_for_binops(a) else a
+                if not is_scalar_for_elemwise(a) else a
                 for a in args]
         try:
             dt = op(*vals).dtype
