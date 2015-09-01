@@ -25,6 +25,30 @@ from .shuffle import set_partition
 
 csv_defaults = {'compression': None}
 
+
+def try_pd_read_csv(*args, **kwargs):
+    msg = """
+    By inspecting the first 1,000 rows of your csv file we guessed that the
+    column: %s had dtype: %s. But now that we're reading all the data we see it
+    has some values with dtype: %s. You should probably add the following
+    keyword arguments to your `read_csv` call:
+
+        dtype={'%s': %s}
+    """
+
+    try:
+        return pd.read_csv(*args, **kwargs)
+    except ValueError as e:
+        # this is brittle
+        e_parts = e.message.split(' ')
+        column_number = int(e_parts[-1])
+        column_name = kwargs.get('names')[column_number]
+        dtype1 = e_parts[7]
+        dtype2 = e_parts[9]
+        msg %= (column_name, dtype1, dtype2, column_name, dtype2)
+        raise ValueError(msg)
+
+
 def fill_kwargs(fn, args, kwargs):
     """ Read a csv file and fill up kwargs
 
