@@ -1099,7 +1099,7 @@ def from_castra(x, columns=None, index=False, npartitions=None):
     """
     from castra import Castra
     if not isinstance(x, Castra):
-        x = Castra(x)
+        x = Castra(x, readonly=True)
     path = x.path
     if columns is None:
         columns = x.columns
@@ -1107,7 +1107,7 @@ def from_castra(x, columns=None, index=False, npartitions=None):
         npartitions = len(x.partitions)
     parts = from_sequence(x.partitions, npartitions=npartitions)
     func = lambda p: load_castra_partition(path, p, columns, index)
-    return parts.map_partitions(func).map_partitions(list)
+    return parts.map_partitions(func).map_partitions(reify)
 
 
 def load_castra_partition(path, parts, columns, index):
@@ -1116,7 +1116,7 @@ def load_castra_partition(path, parts, columns, index):
     # Due to serialization issues, blosc needs to be manually initialized in
     # each process.
     blosc.init()
-    c = Castra(path)
+    c = Castra(path, readonly=True)
     for part in parts:
         df = c.load_partition(part, columns)
         if isinstance(columns, list):
