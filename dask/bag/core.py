@@ -1100,25 +1100,24 @@ def from_castra(x, columns=None, index=False, npartitions=None):
     from castra import Castra
     if not isinstance(x, Castra):
         x = Castra(x, readonly=True)
-    path = x.path
+    elif not x._readonly:
+        x = Castra(x.path, readonly=True)
     if columns is None:
         columns = x.columns
     if npartitions is None:
         npartitions = len(x.partitions)
     parts = from_sequence(x.partitions, npartitions=npartitions)
-    func = lambda p: load_castra_partition(path, p, columns, index)
+    func = lambda p: load_castra_partition(x, p, columns, index)
     return parts.map_partitions(func).map_partitions(reify)
 
 
-def load_castra_partition(path, parts, columns, index):
-    from castra import Castra
+def load_castra_partition(castra, parts, columns, index):
     import blosc
     # Due to serialization issues, blosc needs to be manually initialized in
     # each process.
     blosc.init()
-    c = Castra(path, readonly=True)
     for part in parts:
-        df = c.load_partition(part, columns)
+        df = castra.load_partition(part, columns)
         if isinstance(columns, list):
             items = df.itertuples(index)
         else:
