@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip('numpy')
 
 import numpy as np
-from dask.array import from_array
+import dask.array as da
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
 
 
@@ -20,7 +20,7 @@ def same_keys(a, b):
 def test_tsqr_regular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, chunks=(10, n), name='A')
+    data = da.from_array(mat, chunks=(10, n), name='A')
 
     q, r = tsqr(data)
     q = np.array(q)
@@ -34,7 +34,7 @@ def test_tsqr_regular_blocks():
 def test_tsqr_irregular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, chunks=(3, n), name='A')[1:]
+    data = da.from_array(mat, chunks=(3, n), name='A')[1:]
     mat2 = mat[1:, :]
 
     q, r = tsqr(data)
@@ -49,7 +49,7 @@ def test_tsqr_irregular_blocks():
 def test_tsqr_svd_regular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, chunks=(10, n), name='A')
+    data = da.from_array(mat, chunks=(10, n), name='A')
 
     u, s, vt = tsqr(data, compute_svd=True)
     u = np.array(u)
@@ -68,7 +68,7 @@ def test_tsqr_svd_regular_blocks():
 def test_tsqr_svd_irregular_blocks():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, chunks=(3, n), name='A')[1:]
+    data = da.from_array(mat, chunks=(3, n), name='A')[1:]
     mat2 = mat[1:, :]
 
     u, s, vt = tsqr(data, compute_svd=True)
@@ -88,7 +88,7 @@ def test_tsqr_svd_irregular_blocks():
 def test_linalg_consistent_names():
     m, n = 20, 10
     mat = np.random.rand(m, n)
-    data = from_array(mat, chunks=(10, n), name='A')
+    data = da.from_array(mat, chunks=(10, n), name='A')
 
     q1, r1 = qr(data)
     q2, r2 = qr(data)
@@ -109,11 +109,11 @@ def test_svd_compressed():
     mat1 = np.random.randn(m, r)
     mat2 = np.random.randn(r, n)
     mat = mat1.dot(mat2)
-    data = from_array(mat, chunks=(50, 50))
+    data = da.from_array(mat, chunks=(50, 50))
 
     n_iter = 6
     for i in range(n_iter):
-        u, s, vt = svd_compressed(data, r)
+        u, s, vt = svd_compressed(data, r, seed=1234)
         u = np.array(u)
         s = np.array(s)
         vt = np.array(vt)
@@ -128,7 +128,7 @@ def test_svd_compressed():
                        np.linalg.norm(mat),
                        rtol=tol, atol=tol)  # average accuracy check
 
-    u, s, vt = svd_compressed(data, r)
+    u, s, vt = svd_compressed(data, r, seed=1234)
     u = np.array(u)[:, :r]
     s = np.array(s)[:r]
     vt = np.array(vt)[:r, :]
@@ -139,3 +139,12 @@ def test_svd_compressed():
     assert np.allclose(np.eye(r, r), np.dot(u.T, u))  # u must be orthonormal
     assert np.allclose(np.eye(r, r), np.dot(vt, vt.T))  # v must be orthonormal
     assert np.allclose(s, s_exact)  # s must contain the singular values
+
+
+def test_svd_compressed_deterministic():
+    m, n = 30, 25
+    x = da.random.RandomState(1234).random_sample(size=(m, n), chunks=(5, 5))
+    u, s, vt = svd_compressed(x, 3, seed=1234)
+    u2, s2, vt2 = svd_compressed(x, 3, seed=1234)
+
+    assert all(da.compute((u == u2).all(), (s == s2).all(), (vt == vt2).all()))

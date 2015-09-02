@@ -6,7 +6,7 @@ import numpy as np
 
 from ..base import tokenize
 from .core import top, dotmany, Array
-from .random import standard_normal
+from .random import RandomState
 
 
 def _cumsum_blocks(it):
@@ -187,7 +187,7 @@ def compression_level(n, q, oversampling=10, min_subspace_size=20):
     return min(max(min_subspace_size, q + oversampling), n)
 
 
-def compression_matrix(data, q, n_power_iter=0):
+def compression_matrix(data, q, n_power_iter=0, seed=None):
     """ Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
@@ -218,8 +218,9 @@ def compression_matrix(data, q, n_power_iter=0):
     """
     n = data.shape[1]
     comp_level = compression_level(n, q)
-    omega = standard_normal(size=(n, comp_level), chunks=(data.chunks[1],
-                                                          (comp_level,)))
+    state = RandomState(seed)
+    omega = state.standard_normal(size=(n, comp_level), chunks=(data.chunks[1],
+                                                                (comp_level,)))
     mat_h = data.dot(omega)
     for j in range(n_power_iter):
         mat_h = data.dot(data.T.dot(mat_h))
@@ -227,7 +228,7 @@ def compression_matrix(data, q, n_power_iter=0):
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, name=None):
+def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
     """ Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -269,7 +270,7 @@ def svd_compressed(a, k, n_power_iter=0, name=None):
     s:  Array, singular values in decreasing order (largest first)
     v:  Array, unitary / orthogonal
     """
-    comp = compression_matrix(a, k, n_power_iter=n_power_iter)
+    comp = compression_matrix(a, k, n_power_iter=n_power_iter, seed=seed)
     a_compressed = comp.dot(a)
     v, s, u = tsqr(a_compressed.T, name, compute_svd=True)
     u = comp.T.dot(u)
