@@ -943,8 +943,8 @@ class Series(_Frame):
 
     def apply(self, func, convert_dtype=True, args=(), **kwds):
         """ Parallel version of pandas.Series.apply """
-        return map_partitions(pd.Series.apply, self.name, self, func, convert_dtype, args,
-                **kwds)
+        return map_partitions(pd.Series.apply, self.name, self, func,
+                              convert_dtype, args, **kwds)
 
 
 class Index(Series):
@@ -1272,7 +1272,8 @@ class DataFrame(_Frame):
         2.  The user must provide output columns or column
         """
         if axis == 0:
-            raise ValueError("dd.DataFrame.apply only supports axis=1\n"
+            raise NotImplementedError(
+                    "dd.DataFrame.apply only supports axis=1\n"
                     "  Try: df.apply(func, axis=1)")
 
         if columns is no_default:

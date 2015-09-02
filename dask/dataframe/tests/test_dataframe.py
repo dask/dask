@@ -2033,5 +2033,5 @@ def test_apply():
     assert eq(a.apply(lambda xy: xy[0] + xy[1], axis=1, columns=None),
               df.apply(lambda xy: xy[0] + xy[1], axis=1))
 
-    assert raises(ValueError, lambda: a.apply(lambda xy: xy, axis=0))
+    assert raises(NotImplementedError, lambda: a.apply(lambda xy: xy, axis=0))
     assert raises(ValueError, lambda: a.apply(lambda xy: xy, axis=1))
