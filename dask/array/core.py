@@ -2111,12 +2111,12 @@ def bincount(x, weights=None, minlength=None):
         dsk = dict(((name, i),
                     (np.bincount, (x.name, i), (weights.name, i), minlength))
                     for i, _ in enumerate(x._keys()))
-        dtype = 'f8'
+        dtype = np.bincount([1], weights=[1]).dtype
     else:
         dsk = dict(((name, i),
                     (np.bincount, (x.name, i), None, minlength))
                     for i, _ in enumerate(x._keys()))
-        dtype = 'i8'
+        dtype = np.bincount([]).dtype
 
     # Sum up all of the intermediate bincounts per block
     name = 'bincount-sum-' + token
