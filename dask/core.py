@@ -438,7 +438,7 @@ def quote(x):
     (tuple, [add, 1, 2])
     """
     if isinstance(x, list):
-        return (list2, x)
+        return (list2, list(map(quote, x)))
     if istask(x):
-        return (tuple, list(x))
+        return (tuple, list(map(quote, x)))
     return x

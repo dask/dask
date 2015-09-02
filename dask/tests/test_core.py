@@ -164,5 +164,8 @@ def test_subs_with_surprisingly_friendly_eq():
 
 
 def test_quote():
-    assert quote([1, 2, 3]) == (list2, [1, 2, 3])
-    assert quote((add, 1, 2)) == (tuple, [add, 1, 2])
+    literals = [[1, 2, 3], (add, 1, 2),
+                [1, [2, 3]], (add, 1, (add, 2, 3))]
+
+    for l in literals:
+        assert get({'x': quote(l)}, 'x') == l
