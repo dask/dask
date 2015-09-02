@@ -30,7 +30,8 @@ def scheduler(kwargs={}):
 @contextmanager
 def scheduler_and_workers(n=2, scheduler_kwargs={}, worker_kwargs={}):
     with scheduler(scheduler_kwargs) as s:
-        workers = [Worker(s.address_to_workers, hostname='127.0.0.1', nthreads=50, **worker_kwargs) for i in range(n)]
+        workers = [Worker(s.address_to_workers, hostname='127.0.0.1',
+                          nthreads=10, **worker_kwargs) for i in range(n)]
 
         # wait for workers to register
         while(len(s.workers) < n):
