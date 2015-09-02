@@ -1881,3 +1881,16 @@ def test_series_groupby_propagates_names():
     expected.name = 'y'
 
     tm.assert_series_equal(result.compute(), expected)
+
+
+def test_series_groupby():
+    s = pd.Series([1, 2, 2, 1, 1])
+    pd_group = s.groupby(s)
+
+    ss = dd.from_pandas(s, npartitions=2)
+    dask_group = ss.groupby(ss)
+
+    assert eq(dask_group.count(), pd_group.count())
+    assert eq(dask_group.sum(), pd_group.sum())
+    assert eq(dask_group.min(), pd_group.min())
+    assert eq(dask_group.max(), pd_group.max())
