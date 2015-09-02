@@ -13,8 +13,18 @@ from ..dot import funcname
 from ..core import istask
 
 
-def pprint_task(task, keys, budget=60):
+def pprint_task(task, keys, label_size=60):
     """Return a nicely formatted string for a task.
+
+    Parameters
+    ----------
+
+    task:
+        Value within dask graph to render as text
+    keys: iterable
+        List of keys within dask graph
+    label_size: int (optional)
+        Maximum size of output label, defaults to 60
 
     Examples
     --------
@@ -40,16 +50,17 @@ def pprint_task(task, keys, budget=60):
         else:
             head = funcname(task[0])
             tail = ')'
-        budget2 = int((budget - len(head) - len(tail)) / len(task[1:]))
-        if budget2 > 5:
-            args = ', '.join(pprint_task(t, keys, budget2) for t in task[1:])
+        label_size2 = int((label_size - len(head) - len(tail)) / len(task[1:]))
+        if label_size2 > 5:
+            args = ', '.join(pprint_task(t, keys, label_size2)
+                             for t in task[1:])
         else:
             args = '...'
         result = '{0}({1}{2}'.format(head, args, tail)
     elif isinstance(task, list):
         task2 = task[:3]
-        budget2 = int((budget - 2 - 2 *len(task2)) / len(task2))
-        args = ', '.join(pprint_task(t, keys, budget2) for t in task2)
+        label_size2 = int((label_size - 2 - 2 *len(task2)) / len(task2))
+        args = ', '.join(pprint_task(t, keys, label_size2) for t in task2)
         if len(task) > 3:
             result = '[{0}, ...]'.format(args)
         else:
@@ -92,7 +103,7 @@ def get_colors(palette, funcs):
 
 
 def visualize(results, dsk, palette='GnBu', file_path=None,
-              show=True, save=True, **kwargs):
+              show=True, save=True, label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -107,6 +118,10 @@ def visualize(results, dsk, palette='GnBu', file_path=None,
         Name of the plot output file.
     show : boolean, optional
         If True (default), the plot is opened in a browser.
+    save : boolean, optional
+        If True (default), the plot is saved to disk.
+    label_size: int (optional)
+        Maximum size of output labels in plot, defaults to 60
     **kwargs
         Other keyword arguments, passed to bokeh.figure. These will override
         all defaults set by visualize.
@@ -142,7 +157,7 @@ def visualize(results, dsk, palette='GnBu', file_path=None,
     data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
     data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
     data['y'] = [id_lk[i] + 1 for i in ids]
-    data['function'] = funcs = [pprint_task(i, dsk) for i in tasks]
+    data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
     data['color'] = get_colors(palette, funcs)
     data['key'] = [str(i) for i in keys]
 
