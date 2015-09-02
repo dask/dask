@@ -62,7 +62,8 @@ class Profiler(Callback):
 
         TaskData(key, task, start_time, end_time, worker_id)"""
 
-        return list(starmap(TaskData, self._results.values()))
+        results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
+        return list(starmap(TaskData, results.values()))
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
