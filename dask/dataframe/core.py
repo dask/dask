@@ -3,6 +3,7 @@ from __future__ import division
 import bisect
 from collections import Iterable, Iterator
 from datetime import datetime
+from distutils.version import LooseVersion
 from functools import wraps
 import operator
 from operator import getitem, setitem
@@ -22,11 +23,10 @@ from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
-from ..compatibility import unicode, apply, operator_div
+from ..compatibility import unicode, apply, operator_div, bind_method
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..base import Base, compute, tokenize, normalize_token
-
 
 no_default = '__no_default__'
 return_scalar = '__return_scalar__'
@@ -461,7 +461,6 @@ class _Frame(Base):
             return lambda self, other: elemwise(op, self, other,
                                                 columns=self._elemwise_cols)
 
-
     def _aca_agg(self, token, func, aggfunc=None):
         """ Wrapper for aggregations """
         raise NotImplementedError
@@ -563,15 +562,92 @@ class _Frame(Base):
             name = '{0}std(ddof={1})'.format(self._token_prefix, ddof)
             return map_partitions(np.sqrt, no_default, v, token=name)
 
+    def _cum_agg(self, token, chunk, aggregate, agginit):
+        """ Wrapper for cumulative operation """
+        # cumulate each partitions
+        name1 = '{0}{1}-map'.format(self._token_prefix, token)
+        cumpart = map_partitions(chunk, self.column_info, self, token=name1)
+        # take last element of each cumulated partitions
+        name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
+        cumlast = map_partitions(lambda x: x.iloc[-1],
+                                 self.column_info, cumpart, token=name2)
 
-# bind operators
-for op in [operator.abs, operator.add, operator.and_, operator_div,
-           operator.eq, operator.gt, operator.ge, operator.inv,
-           operator.lt, operator.le, operator.mod, operator.mul,
-           operator.ne, operator.neg, operator.or_, operator.pow,
-           operator.sub, operator.truediv, operator.floordiv, operator.xor]:
-    _Frame._bind_operator(op)
-    Scalar._bind_operator(op)
+        name = '{0}{1}'.format(self._token_prefix, token)
+        cname = '{0}{1}-cum-last'.format(self._token_prefix, token)
+
+        # aggregate cumulated partisions and its previous last element
+        dask = {}
+        if isinstance(self, DataFrame):
+            agginit = pd.Series(agginit, index=self.column_info)
+        dask[(cname, 0)] = agginit
+        dask[(name, 0)] = (cumpart._name, 0)
+        for i in range(1, self.npartitions):
+            # store each cumulative step to graph to reduce computation
+            dask[(cname, i)] = (aggregate, (cname, i - 1),
+                                (cumlast._name, i - 1))
+            dask[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
+        return self._constructor(merge(dask, cumpart.dask, cumlast.dask),
+                                 name, self.column_info, self.divisions)
+
+    @wraps(pd.DataFrame.cumsum)
+    def cumsum(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            name = '{0}cumsum(axis=1)'.format(self._token_prefix)
+            return map_partitions(self._partition_type.cumsum,
+                                  self.column_info, self, 1, token=name)
+        else:
+            return self._cum_agg('cumsum', self._partition_type.cumsum,
+                                 operator.add, 0)
+
+    @wraps(pd.DataFrame.cumprod)
+    def cumprod(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            name = '{0}cumprod(axis=1)'.format(self._token_prefix)
+            return map_partitions(self._partition_type.cumprod,
+                                  self.column_info, self, 1, token=name)
+        else:
+           return self._cum_agg('cumprod', self._partition_type.cumprod,
+                                 operator.mul, 1)
+
+    @wraps(pd.DataFrame.cummax)
+    def cummax(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            name = '{0}cummax(axis=1)'.format(self._token_prefix)
+            return map_partitions(self._partition_type.cummax,
+                                  self.column_info, self, 1, token=name)
+        else:
+            def aggregate(x, y):
+                if isinstance(x, (pd.Series, pd.DataFrame)):
+                    return x.where(x > y, y, axis=x.ndim - 1)
+                else:       # scalsr
+                    return x if x > y else y
+            return self._cum_agg('cummax', self._partition_type.cummax,
+                                 aggregate, np.nan)
+
+    @wraps(pd.DataFrame.cummin)
+    def cummin(self, axis=None):
+        axis = self._validate_axis(axis)
+        if axis == 1:
+            name = '{0}cummin(axis=1)'.format(self._token_prefix)
+            return map_partitions(self._partition_type.cummin,
+                                  self.column_info, self, 1, token=name)
+        else:
+            def aggregate(x, y):
+                if isinstance(x, (pd.Series, pd.DataFrame)):
+                    return x.where(x < y, y, axis=x.ndim - 1)
+                else:       # scalar
+                    return x if x < y else y
+            return self._cum_agg('cummin', self._partition_type.cummin,
+                                 aggregate, np.nan)
+
+    @classmethod
+    def _bind_operator_method(cls, name, op):
+        """ bind operator method like DataFrame.add to this class """
+        raise NotImplementedError
+
 
 normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
@@ -763,6 +839,22 @@ class Series(_Frame):
     def std(self, axis=None, ddof=1):
         return super(Series, self).std(axis=axis, ddof=ddof)
 
+    @wraps(pd.Series.cumsum)
+    def cumsum(self, axis=None):
+        return super(Series, self).cumsum(axis=axis)
+
+    @wraps(pd.Series.cumprod)
+    def cumprod(self, axis=None):
+        return super(Series, self).cumprod(axis=axis)
+
+    @wraps(pd.Series.cummax)
+    def cummax(self, axis=None):
+        return super(Series, self).cummax(axis=axis)
+
+    @wraps(pd.Series.cummin)
+    def cummin(self, axis=None):
+        return super(Series, self).cummin(axis=axis)
+
     @wraps(pd.Series.nunique)
     def nunique(self):
         return self.drop_duplicates().count()
@@ -770,7 +862,10 @@ class Series(_Frame):
     @wraps(pd.Series.value_counts)
     def value_counts(self):
         chunk = lambda s: s.value_counts()
-        agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
+        if LooseVersion(pd.__version__) > '0.16.2':
+            agg = lambda s: s.groupby(level=0).sum().sort_values(ascending=False)
+        else:
+            agg = lambda s: s.groupby(level=0).sum().sort(inplace=False, ascending=False)
         return aca(self, chunk=chunk, aggregate=agg, columns=self.name,
                    token='value-counts')
 
@@ -825,6 +920,18 @@ class Series(_Frame):
     def to_frame(self, name=None):
         _name = name if name is not None else self.name
         return map_partitions(pd.Series.to_frame, [_name], self, name)
+
+    @classmethod
+    def _bind_operator_method(cls, name, op):
+        """ bind operator method like DataFrame.add to this class """
+
+        def meth(self, other, level=None, fill_value=None, axis=0):
+            if not level is None:
+                raise NotImplementedError('level must be None')
+            return map_partitions(op, self.column_info, self, other,
+                                  axis=axis, fill_value=fill_value)
+        meth.__doc__ = op.__doc__
+        bind_method(cls, name, meth)
 
 
 class Index(Series):
@@ -943,6 +1050,7 @@ class DataFrame(_Frame):
 
     @wraps(pd.DataFrame.set_index)
     def set_index(self, other, **kwargs):
+        from .shuffle import set_index
         return set_index(self, other, **kwargs)
 
     def set_partition(self, column, divisions, **kwargs):
@@ -953,6 +1061,7 @@ class DataFrame(_Frame):
         See also:
             set_index
         """
+        from .shuffle import set_partition
         return set_partition(self, column, divisions, **kwargs)
 
     @property
@@ -1105,6 +1214,63 @@ class DataFrame(_Frame):
                      left_on=on, suffixes=[lsuffix, rsuffix],
                      npartitions=npartitions)
 
+    @classmethod
+    def _bind_operator_method(cls, name, op):
+        """ bind operator method like DataFrame.add to this class """
+
+        # name must be explicitly passed for div method whose name is truediv
+
+        def meth(self, other, axis='columns', level=None, fill_value=None):
+            if level is not None:
+                raise NotImplementedError('level must be None')
+
+            axis = self._validate_axis(axis)
+
+            right = None
+            if axis == 1:
+                # when axis=1, series will be added to each row
+                # it not supported for dd.Series.
+                # dd.DataFrame is not affected as op is applied elemwise
+                if isinstance(other, Series):
+                    msg = 'Unable to {0} dd.Series with axis=1'.format(name)
+                    raise ValueError(msg)
+                elif isinstance(other, pd.Series):
+                    right = other.index
+            if isinstance(other, (DataFrame, pd.DataFrame)):
+                right = other.columns
+
+            if right is not None:
+                left = pd.DataFrame(columns=self.columns)
+                right = pd.DataFrame(columns=right)
+                columns = op(left, right, axis=axis).columns.tolist()
+            else:
+                columns = self.columns
+
+            return map_partitions(op, columns, self, other,
+                                  axis=axis, fill_value=fill_value)
+        meth.__doc__ = op.__doc__
+        bind_method(cls, name, meth)
+
+
+# bind operators
+for op in [operator.abs, operator.add, operator.and_, operator_div,
+           operator.eq, operator.gt, operator.ge, operator.inv,
+           operator.lt, operator.le, operator.mod, operator.mul,
+           operator.ne, operator.neg, operator.or_, operator.pow,
+           operator.sub, operator.truediv, operator.floordiv, operator.xor]:
+    _Frame._bind_operator(op)
+    Scalar._bind_operator(op)
+
+for name in ['add', 'sub', 'mul', 'div',
+             'truediv', 'floordiv', 'mod', 'pow',
+             'radd', 'rsub', 'rmul', 'rdiv',
+             'rtruediv', 'rfloordiv', 'rmod', 'rpow']:
+    meth = getattr(pd.DataFrame, name)
+    DataFrame._bind_operator_method(name, meth)
+
+    meth = getattr(pd.Series, name)
+    Series._bind_operator_method(name, meth)
+
 
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
@@ -1158,18 +1324,7 @@ def _loc(df, start, stop, include_right_boundary=True):
         right_index = result.index.get_slice_bound(stop, 'left',
                                                    result.index.inferred_type)
         result = result.iloc[:right_index]
-    if not result.empty:
-        return result
-
-    # this is horrible
-    # i need to find a non-type-specific way to generate a range containing
-    # values that don't exist in the index and fill that with NaNs
-    try:
-        freq = pd.infer_freq(df.index)
-    except (TypeError, pd.tseries.tools.DateParseError):
-        return result
-    else:
-        return pd.Series([np.nan], index=pd.date_range(start, stop, freq=freq))
+    return result
 
 
 def _coerce_loc_index(divisions, o):
@@ -1211,7 +1366,17 @@ def elemwise(op, *args, **kwargs):
 
     _name = 'elemwise-' + tokenize(op, kwargs, *args)
 
+    from .io import from_pandas
+    args = [from_pandas(arg, 1) if isinstance(arg, (pd.DataFrame, pd.Series))
+            else arg for arg in args]
+
+    from .multi import _maybe_align_partitions
+    args = _maybe_align_partitions(args)
     dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar))]
+    dfs = [df for df in dasks if isinstance(df, _Frame)]
+    divisions = dfs[0].divisions
+    n = len(divisions) - 1
+
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar))]
 
@@ -1219,13 +1384,6 @@ def elemwise(op, *args, **kwargs):
         op2 = partial_by_order(op, other)
     else:
         op2 = op
-
-    dfs = [df for df in dasks if isinstance(df, _Frame)]
-    divisions = dfs[0].divisions
-    if not all(df.divisions == divisions for df in dfs):
-        from .multi import align_partitions
-        dasks, divisions, parts = align_partitions(*dasks)
-    n = len(divisions) - 1
 
     # adjust the key length of Scalar
     keys = [d._keys() *  n if isinstance(d, Scalar)
@@ -1425,6 +1583,7 @@ class GroupBy(_GroupBy):
                                   columns or self.df.columns,
                                   self.df, func)
         else:
+            from .shuffle import shuffle
             # df = set_index(self.df, self.index, **self.kwargs)
             df = shuffle(self.df, self.index, **self.kwargs)
             return map_partitions(_groupby_apply,
@@ -1474,6 +1633,7 @@ class SeriesGroupBy(_GroupBy):
                                   self.df, self.key, func,
                                   columns=columns)
         else:
+            from .shuffle import shuffle
             df = shuffle(self.df, self.index, **self.kwargs)
             return map_partitions(_groupby_apply,
                                   columns or self.df.columns,
@@ -1575,35 +1735,37 @@ def map_partitions(func, columns, *args, **kwargs):
     targets: list
         List of target DataFrame / Series.
     """
-    assert all(not isinstance(arg, _Frame) or
-               arg.divisions == args[0].divisions for arg in args)
-
-    token = kwargs.pop('token', None)
+    token = kwargs.pop('token', 'map-partitions')
     token_key = tokenize(token or func, columns, *args)
-    token = token or 'map-partitions'
     name = '{0}-{1}'.format(token, token_key)
 
+    if len(kwargs) > 1:
+        func = partial(func, **kwargs)
+
     if all(isinstance(arg, Scalar) for arg in args):
-        # Special handling for Scalar.
-        # Scalar / DataFrame mixed ops are not yet supported.
         dask = {(name, 0): (func, ) + tuple((arg._name, 0) for arg in args)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name)
 
-    if kwargs:
-        raise ValueError("Keyword arguments not yet supported in map_partitions")
-
-    return_type = _get_return_type(args[0], columns)
-    dsk = dict(((name, i), (_rename, columns, (apply, func,
-                             (tuple, [(arg._name, i)
-                                      if isinstance(arg, _Frame)
-                                      else arg
-                                      for arg in args]))))
-                for i in range(args[0].npartitions))
+    from .io import from_pandas
+    args = [from_pandas(arg, 1) if isinstance(arg, (pd.DataFrame, pd.Series))
+            else arg for arg in args]
 
     if columns is no_default:
         columns = None
 
-    dasks = [arg.dask for arg in args if isinstance(arg, _Frame)]
+    from .multi import _maybe_align_partitions
+    args = _maybe_align_partitions(args)
+    dfs = [df for df in args if isinstance(df, _Frame)]
+
+    return_type = _get_return_type(dfs[0], columns)
+    dsk = {}
+    for i in range(dfs[0].npartitions):
+        values = [(arg._name, i if isinstance(arg, _Frame) else 0)
+                  if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
+        dsk[(name, i)] = (_rename, columns, (apply, func, (tuple, values)))
+
+    dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
+
     return return_type(merge(dsk, *dasks), name, columns, args[0].divisions)
 
 
@@ -1988,5 +2150,3 @@ class StringAccessor(object):
                     return partial(self._function_map, key)
             else:
                 raise
-
-from .shuffle import set_index, set_partition, shuffle

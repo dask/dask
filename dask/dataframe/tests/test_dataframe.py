@@ -340,7 +340,9 @@ def test_arithmetics():
              (d, ddf4, full, pdf4),
              (d, ddf4.repartition([0, 9]), full, pdf4),
              (d.repartition([0, 3, 9]), ddf4.repartition([0, 5, 9]),
-              full, pdf4)]
+              full, pdf4),
+             # dask + pandas
+             (d, pdf4, full, pdf4), (ddf2, pdf3, pdf2, pdf3)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b)
@@ -376,7 +378,9 @@ def test_arithmetics():
              (ddf7.repartition(['a', 'c', 'h']), ddf8.repartition(['a', 'h']),
               pdf7, pdf8),
              (ddf7.repartition(['a', 'b', 'e', 'h']),
-              ddf8.repartition(['a', 'e', 'h']), pdf7, pdf8)]
+              ddf8.repartition(['a', 'e', 'h']), pdf7, pdf8),
+             # dask + pandas
+             (ddf5, pdf6, pdf5, pdf6), (ddf7, pdf8, pdf7, pdf8)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b,
@@ -427,7 +431,11 @@ def test_arithmetics_different_index():
              (ddf5.repartition([1, 7, 8, 9]), ddf6.repartition([2, 3, 4, 6]),
               pdf5, pdf6),
              (ddf6.repartition([2, 6]), ddf5.repartition([1, 3, 7, 9]),
-              pdf6, pdf5)]
+              pdf6, pdf5),
+             # dask + pandas
+             (ddf1, pdf2, pdf1, pdf2), (ddf2, pdf1, pdf2, pdf1),
+             (ddf3, pdf4, pdf3, pdf4), (ddf4, pdf3, pdf4, pdf3),
+             (ddf5, pdf6, pdf5, pdf6), (ddf6, pdf5, pdf6, pdf5)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b,
@@ -465,8 +473,10 @@ def test_arithmetics_different_index():
              (ddf8.repartition([-5, 0, 10, 20], force=True),
               ddf7.repartition([-1, 4, 11, 13], force=True), pdf8, pdf7),
              (ddf9, ddf10, pdf9, pdf10),
-             (ddf10, ddf9, pdf10, pdf9)
-             ]
+             (ddf10, ddf9, pdf10, pdf9),
+             # dask + pandas
+             (ddf7, pdf8, pdf7, pdf8), (ddf8, pdf7, pdf8, pdf7),
+             (ddf9, pdf10, pdf9, pdf10), (ddf10, pdf9, pdf10, pdf9)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b,
@@ -477,7 +487,7 @@ def test_arithmetics_different_index():
 
 def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert isinstance(l, dd.Series)
-    assert isinstance(r, dd.Series)
+    assert isinstance(r, (dd.Series, pd.Series))
     assert isinstance(el, pd.Series)
     assert isinstance(er, pd.Series)
 
@@ -549,7 +559,7 @@ def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
 
 def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert isinstance(l, dd.DataFrame)
-    assert isinstance(r, dd.DataFrame)
+    assert isinstance(r, (dd.DataFrame, pd.DataFrame))
     assert isinstance(el, pd.DataFrame)
     assert isinstance(er, pd.DataFrame)
     # l, r may be repartitioned, test whether repartition keeps original data
@@ -738,6 +748,104 @@ def test_scalar_arithmetics_with_dask_instances():
     assert eq(result, pdf + e)
 
 
+def test_frame_series_arithmetic_methods():
+
+    pdf1 = pd.DataFrame({'A': np.arange(10),
+                         'B': [np.nan, 1, 2, 3, 4] * 2,
+                         'C': [np.nan] * 10,
+                         'D': np.arange(10)},
+                        index=list('abcdefghij'), columns=list('ABCD'))
+    pdf2 = pd.DataFrame(np.random.randn(10, 4),
+                        index=list('abcdefghjk'), columns=list('ABCX'))
+    ps1 = pdf1.A
+    ps2 = pdf2.A
+
+    ddf1 = dd.from_pandas(pdf1, 2)
+    ddf2 = dd.from_pandas(pdf2, 2)
+    ds1 = ddf1.A
+    ds2 = ddf2.A
+
+    s = dd.core.Scalar({('s', 0): 4}, 's')
+
+    for l, r, el, er in [(ddf1, ddf2, pdf1, pdf2), (ds1, ds2, ps1, ps2),
+                         (ddf1.repartition(['a', 'f', 'j']), ddf2, pdf1, pdf2),
+                         (ds1.repartition(['a', 'b', 'f', 'j']), ds2, ps1, ps2),
+                         (ddf1, ddf2.repartition(['a', 'k']), pdf1, pdf2),
+                         (ds1, ds2.repartition(['a', 'b', 'd', 'h', 'k']), ps1, ps2),
+                         (ddf1, 3, pdf1, 3), (ds1, 3, ps1, 3),
+                         (ddf1, s, pdf1, 4), (ds1, s, ps1, 4)]:
+        # l, r may be repartitioned, test whether repartition keeps original data
+        assert eq(l, el)
+        assert eq(r, er)
+
+        assert eq(l.add(r, fill_value=0), el.add(er, fill_value=0))
+        assert eq(l.sub(r, fill_value=0), el.sub(er, fill_value=0))
+        assert eq(l.mul(r, fill_value=0), el.mul(er, fill_value=0))
+        assert eq(l.div(r, fill_value=0), el.div(er, fill_value=0))
+        assert eq(l.truediv(r, fill_value=0), el.truediv(er, fill_value=0))
+        assert eq(l.floordiv(r, fill_value=1), el.floordiv(er, fill_value=1))
+        assert eq(l.mod(r, fill_value=0), el.mod(er, fill_value=0))
+        assert eq(l.pow(r, fill_value=0), el.pow(er, fill_value=0))
+
+        assert eq(l.radd(r, fill_value=0), el.radd(er, fill_value=0))
+        assert eq(l.rsub(r, fill_value=0), el.rsub(er, fill_value=0))
+        assert eq(l.rmul(r, fill_value=0), el.rmul(er, fill_value=0))
+        assert eq(l.rdiv(r, fill_value=0), el.rdiv(er, fill_value=0))
+        assert eq(l.rtruediv(r, fill_value=0), el.rtruediv(er, fill_value=0))
+        assert eq(l.rfloordiv(r, fill_value=1), el.rfloordiv(er, fill_value=1))
+        assert eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
+        assert eq(l.rpow(r, fill_value=0), el.rpow(er, fill_value=0))
+
+    for l, r, el, er in [(ddf1, ds2, pdf1, ps2), (ddf1, ddf2.X, pdf1, pdf2.X)]:
+        assert eq(l, el)
+        assert eq(r, er)
+
+        # must specify axis=0 to add Series to each column
+        # axis=1 is not supported (add to each row)
+        assert eq(l.add(r, axis=0), el.add(er, axis=0))
+        assert eq(l.sub(r, axis=0), el.sub(er, axis=0))
+        assert eq(l.mul(r, axis=0), el.mul(er, axis=0))
+        assert eq(l.div(r, axis=0), el.div(er, axis=0))
+        assert eq(l.truediv(r, axis=0), el.truediv(er, axis=0))
+        assert eq(l.floordiv(r, axis=0), el.floordiv(er, axis=0))
+        assert eq(l.mod(r, axis=0), el.mod(er, axis=0))
+        assert eq(l.pow(r, axis=0), el.pow(er, axis=0))
+
+        assert eq(l.radd(r, axis=0), el.radd(er, axis=0))
+        assert eq(l.rsub(r, axis=0), el.rsub(er, axis=0))
+        assert eq(l.rmul(r, axis=0), el.rmul(er, axis=0))
+        assert eq(l.rdiv(r, axis=0), el.rdiv(er, axis=0))
+        assert eq(l.rtruediv(r, axis=0), el.rtruediv(er, axis=0))
+        assert eq(l.rfloordiv(r, axis=0), el.rfloordiv(er, axis=0))
+        assert eq(l.rmod(r, axis=0), el.rmod(er, axis=0))
+        assert eq(l.rpow(r, axis=0), el.rpow(er, axis=0))
+
+        assert raises(ValueError, lambda: l.add(r, axis=1))
+
+    for l, r, el, er in [(ddf1, pdf2, pdf1, pdf2), (ddf1, ps2, pdf1, ps2)]:
+        assert eq(l, el)
+        assert eq(r, er)
+
+        for axis in [0, 1, 'index', 'columns']:
+            assert eq(l.add(r, axis=axis), el.add(er, axis=axis))
+            assert eq(l.sub(r, axis=axis), el.sub(er, axis=axis))
+            assert eq(l.mul(r, axis=axis), el.mul(er, axis=axis))
+            assert eq(l.div(r, axis=axis), el.div(er, axis=axis))
+            assert eq(l.truediv(r, axis=axis), el.truediv(er, axis=axis))
+            assert eq(l.floordiv(r, axis=axis), el.floordiv(er, axis=axis))
+            assert eq(l.mod(r, axis=axis), el.mod(er, axis=axis))
+            assert eq(l.pow(r, axis=axis), el.pow(er, axis=axis))
+
+            assert eq(l.radd(r, axis=axis), el.radd(er, axis=axis))
+            assert eq(l.rsub(r, axis=axis), el.rsub(er, axis=axis))
+            assert eq(l.rmul(r, axis=axis), el.rmul(er, axis=axis))
+            assert eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis))
+            assert eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
+            assert eq(l.rfloordiv(r, axis=axis), el.rfloordiv(er, axis=axis))
+            assert eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
+            assert eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
+
+
 def test_reductions():
     nans1 = pd.Series([1] + [np.nan] * 4 + [2] + [np.nan] * 3)
     nands1 = dd.from_pandas(nans1, 2)
@@ -907,6 +1015,25 @@ def test_reductions_frame_dtypes():
     assert eq(df.var(ddof=0), ddf.var(ddof=0))
     assert eq(df.mean(), ddf.mean())
 
+def test_cumulative():
+    pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+    ddf = dd.from_pandas(pdf, 5)
+
+    assert eq(ddf.cumsum(), pdf.cumsum())
+    assert eq(ddf.cumprod(), pdf.cumprod())
+    assert eq(ddf.cummin(), pdf.cummin())
+    assert eq(ddf.cummax(), pdf.cummax())
+
+    assert eq(ddf.cumsum(axis=1), pdf.cumsum(axis=1))
+    assert eq(ddf.cumprod(axis=1), pdf.cumprod(axis=1))
+    assert eq(ddf.cummin(axis=1), pdf.cummin(axis=1))
+    assert eq(ddf.cummax(axis=1), pdf.cummax(axis=1))
+
+    assert eq(ddf.a.cumsum(), pdf.a.cumsum())
+    assert eq(ddf.a.cumprod(), pdf.a.cumprod())
+    assert eq(ddf.a.cummin(), pdf.a.cummin())
+    assert eq(ddf.a.cummax(), pdf.a.cummax())
+
 def test_dropna():
     df = pd.DataFrame({'x': [np.nan, 2,      3, 4, np.nan,      6],
                        'y': [1,      2, np.nan, 4, np.nan, np.nan],
@@ -936,7 +1063,7 @@ def test_map_partitions_multi_argument():
 def test_map_partitions():
     assert eq(d.map_partitions(lambda df: df, columns=d.columns), full)
     assert eq(d.map_partitions(lambda df: df), full)
-    result = d.map_partitions(lambda df: df.sum(axis=1), None)
+    result = d.map_partitions(lambda df: df.sum(axis=1), columns=None)
     assert eq(result, full.sum(axis=1))
 
 

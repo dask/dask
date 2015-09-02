@@ -198,6 +198,8 @@ def rechunk(x, chunks):
         chunks = tuple(lc if lc is not None else rc
                        for lc, rc in zip(chunks, x.chunks))
     chunks = normalize_chunks(chunks, x.shape)
+    if chunks == x.chunks:
+        return x
     if not len(chunks) == x.ndim or tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Provided chunks are not consistent with shape")
 

@@ -538,9 +538,20 @@ def test_to_csv():
         a = dd.from_pandas(df, npartitions)
         with tmpfile('csv') as fn:
             a.to_csv(fn)
-
             result = pd.read_csv(fn, index_col=0)
+            tm.assert_frame_equal(result, df)
 
+
+@pytest.mark.xfail
+def test_to_csv_gzip():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpfile('csv') as fn:
+            a.to_csv(fn, compression='gzip')
+            result = pd.read_csv(fn, index_col=0, compression='gzip')
             tm.assert_frame_equal(result, df)
 
 

@@ -320,10 +320,10 @@ def test_take():
 
 
 def test_binops():
-    a = Array(dict((('a', i), '') for i in range(3)),
-              'a', chunks=((10, 10, 10),))
-    b = Array(dict((('b', i), '') for i in range(3)),
-              'b', chunks=((10, 10, 10),))
+    a = Array(dict((('a', i), np.array([''])) for i in range(3)),
+              'a', chunks=((1, 1, 1),))
+    b = Array(dict((('b', i), np.array([''])) for i in range(3)),
+              'b', chunks=((1, 1, 1),))
 
     result = elemwise(add, a, b, name='c')
     assert result.dask == merge(a.dask, b.dask,
@@ -377,6 +377,32 @@ def test_partial_by_order():
     assert raises(ValueError, lambda: partial_by_order(add, 1))
     assert raises(ValueError, lambda: partial_by_order(add, [1]))
 
+
+def test_elemwise_with_ndarrays():
+    x = np.arange(3)
+    y = np.arange(12).reshape(4, 3)
+    a = from_array(x, chunks=(3,))
+    b = from_array(y, chunks=(2, 3))
+
+    assert eq(x + a, 2 * x)
+    assert eq(a + x, 2 * x)
+
+    assert eq(x + b, x + y)
+    assert eq(b + x, x + y)
+    assert eq(a + y, x + y)
+    assert eq(y + a, x + y)
+
+
+def test_elemwise_differently_chunked():
+    x = np.arange(3)
+    y = np.arange(12).reshape(4, 3)
+    a = from_array(x, chunks=(3,))
+    b = from_array(y, chunks=(2, 2))
+
+    assert eq(a + b, x + y)
+    assert eq(b + a, x + y)
+
+
 def test_operators():
     x = np.arange(10)
     y = np.arange(10).reshape((10, 1))
@@ -397,6 +423,16 @@ def test_operators():
 
     assert eq(abs(-a), a)
     assert eq(a, +x)
+
+
+def test_operator_dtype_promotion():
+    x = np.arange(10, dtype=np.float32)
+    y = np.array([1])
+    a = from_array(x, chunks=(5,))
+
+    assert eq(x + 1, a + 1)  # still float32
+    assert eq(x + 1e50, a + 1e50)  # now float64
+    assert eq(x + y, a + y)  # also float64
 
 
 def test_field_access():
@@ -879,11 +915,13 @@ def test_arithmetic():
 
     assert eq(da.angle(a + 1j), np.angle(x + 1j))
     assert eq(da.real(a + 1j), np.real(x + 1j))
+    assert eq((a + 1j).real, np.real(x + 1j))
     assert eq(da.imag(a + 1j), np.imag(x + 1j))
+    assert eq((a + 1j).imag, np.imag(x + 1j))
 
     assert eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
     assert eq(da.fabs(b), np.fabs(y))
-    assert eq(da.sign(b - 2), np.fabs(y - 2))
+    assert eq(da.sign(b - 2), np.sign(y - 2))
 
     l1, l2 = da.frexp(a)
     r1, r2 = np.frexp(x)
@@ -1185,12 +1223,6 @@ def test_from_array_with_missing_chunks():
     x = np.random.randn(2, 4, 3)
     d = da.from_array(x, chunks=(None, 2, None))
     assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
-
-
-def test_numpy_compat_is_notimplemented():
-    a = np.arange(10)
-    x = da.from_array(a, chunks=5)
-    assert raises(NotImplementedError, lambda: x + a)
 
 
 def test_cache():
