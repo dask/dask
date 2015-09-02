@@ -811,6 +811,10 @@ class Series(_Frame):
                    aggregate=lambda x: aggfunc(pd.Series(x)),
                    columns=return_scalar, token=self._token_prefix + token)
 
+    @wraps(pd.Series.groupby)
+    def groupby(self, key, **kwargs):
+        return SeriesGroupBy(self, key, **kwargs)
+
     @wraps(pd.Series.sum)
     def sum(self, axis=None):
         return super(Series, self).sum(axis=axis)
@@ -1500,7 +1504,10 @@ class _GroupBy(object):
         if isinstance(self.index, Series):
 
             def chunk(df, index, func=func, key=self.key):
-                return func(df.groupby(index)[key])
+                if isinstance(df, pd.Series):
+                    return func(df.groupby(index))
+                else:
+                    return func(df.groupby(index)[key])
 
             agg = lambda df: aggfunc(df.groupby(level=0))
             token = self._token_prefix + token
@@ -1619,7 +1626,7 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, index, key, **kwargs):
+    def __init__(self, df, index, key=None, **kwargs):
         self.df = df
         self.index = index
         self.key = key
