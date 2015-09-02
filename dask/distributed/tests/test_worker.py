@@ -27,7 +27,7 @@ def worker(data=None, scheduler='tcp://127.0.0.1:5555'):
     if data is None:
         data = dict()
 
-    a = Worker(scheduler, data, hostname='127.0.0.1', nthreads=50)
+    a = Worker(scheduler, data, hostname='127.0.0.1', nthreads=10)
 
     try:
         yield a

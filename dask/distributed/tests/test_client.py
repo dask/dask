@@ -18,7 +18,8 @@ def inc(x):
 @contextmanager
 def scheduler_and_workers(n=2):
     s = Scheduler(hostname='127.0.0.1')
-    workers = [Worker(s.address_to_workers, hostname='127.0.0.1') for i in range(n)]
+    workers = [Worker(s.address_to_workers, hostname='127.0.0.1', nthreads=10)
+                for i in range(n)]
     while len(s.workers) < n:
         sleep(1e-6)
     try:
