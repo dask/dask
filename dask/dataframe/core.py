@@ -1,18 +1,16 @@
 from __future__ import division
 
 import bisect
-import operator
-import uuid
-
-from operator import getitem, setitem
-from pprint import pformat
-from functools import wraps
-from collections import Iterable
+from collections import Iterable, Iterator
 from datetime import datetime
 from distutils.version import LooseVersion
+from functools import wraps
+import operator
+from operator import getitem, setitem
+from pprint import pformat
+import uuid
 
 from toolz import merge, partial, first, partition, unique
-
 import pandas as pd
 import numpy as np
 
@@ -526,7 +524,7 @@ class _Frame(Base):
                 except ZeroDivisionError:
                     return np.nan
             name = '{0}mean-{1}'.format(self._token_prefix, tokenize(s))
-            return map_partitions(f, None, s, n, token=name)
+            return map_partitions(f, no_default, s, n, token=name)
 
     @wraps(pd.DataFrame.var)
     def var(self, axis=None, ddof=1):
@@ -550,7 +548,7 @@ class _Frame(Base):
                 except ZeroDivisionError:
                     return np.nan
             name = '{0}var(ddof={1})'.format(self._token_prefix, ddof)
-            return map_partitions(f, None, x2, x, n, token=name)
+            return map_partitions(f, no_default, x2, x, n, token=name)
 
     @wraps(pd.DataFrame.std)
     def std(self, axis=None, ddof=1):
@@ -562,7 +560,7 @@ class _Frame(Base):
         else:
             v = self.var(ddof=ddof)
             name = '{0}std(ddof={1})'.format(self._token_prefix, ddof)
-            return map_partitions(np.sqrt, None, v, token=name)
+            return map_partitions(np.sqrt, no_default, v, token=name)
 
     def _cum_agg(self, token, chunk, aggregate, agginit):
         """ Wrapper for cumulative operation """
@@ -1752,6 +1750,9 @@ def map_partitions(func, columns, *args, **kwargs):
     args = [from_pandas(arg, 1) if isinstance(arg, (pd.DataFrame, pd.Series))
             else arg for arg in args]
 
+    if columns is no_default:
+        columns = None
+
     from .multi import _maybe_align_partitions
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
@@ -1761,10 +1762,25 @@ def map_partitions(func, columns, *args, **kwargs):
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (apply, func, (tuple, values))
+        dsk[(name, i)] = (_rename, columns, (apply, func, (tuple, values)))
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
+
     return return_type(merge(dsk, *dasks), name, columns, args[0].divisions)
+
+
+def _rename(columns, df):
+    """ Rename columns in dataframe or series """
+    if isinstance(columns, Iterator):
+        columns = list(columns)
+    if columns is no_default:
+        return df
+    if isinstance(df, pd.DataFrame) and len(columns) == len(df.columns):
+        return df.rename(columns=dict(zip(df.columns, columns)))
+    elif isinstance(df, pd.Series):
+        return pd.Series(df, name=columns)
+    else:
+        return df
 
 
 def categorize_block(df, categories):
