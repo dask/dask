@@ -55,7 +55,7 @@ We proceed with hash joins in the following stages:
 """
 
 from ..base import tokenize
-from .core import repartition, _Frame, DataFrame, Index
+from .core import repartition, _Frame, Scalar, DataFrame, Index
 from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
@@ -119,6 +119,19 @@ def align_partitions(*dfs):
                 L.append(None)
         result.append(L)
     return dfs2, tuple(divisions), result
+
+
+def _maybe_align_partitions(dasks):
+    """ Align DataFrame blocks if divisions are different """
+    dasks = [df for df in dasks if isinstance(df, (_Frame, Scalar))]
+    dfs = [df for df in dasks if isinstance(df, _Frame)]
+    if not isinstance(dfs, list) or len(dfs) == 0:
+        raise ValueError('Input must be a list longer than 0')
+
+    divisions = dfs[0].divisions
+    if not all(df.divisions == divisions for df in dfs):
+        dasks, _, _ = align_partitions(*dasks)
+    return dasks
 
 
 def require(divisions, parts, required=None):

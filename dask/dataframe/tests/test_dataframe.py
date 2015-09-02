@@ -340,7 +340,9 @@ def test_arithmetics():
              (d, ddf4, full, pdf4),
              (d, ddf4.repartition([0, 9]), full, pdf4),
              (d.repartition([0, 3, 9]), ddf4.repartition([0, 5, 9]),
-              full, pdf4)]
+              full, pdf4),
+             # dask + pandas
+             (d, pdf4, full, pdf4), (ddf2, pdf3, pdf2, pdf3)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b)
@@ -376,7 +378,9 @@ def test_arithmetics():
              (ddf7.repartition(['a', 'c', 'h']), ddf8.repartition(['a', 'h']),
               pdf7, pdf8),
              (ddf7.repartition(['a', 'b', 'e', 'h']),
-              ddf8.repartition(['a', 'e', 'h']), pdf7, pdf8)]
+              ddf8.repartition(['a', 'e', 'h']), pdf7, pdf8),
+             # dask + pandas
+             (ddf5, pdf6, pdf5, pdf6), (ddf7, pdf8, pdf7, pdf8)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b,
@@ -427,7 +431,11 @@ def test_arithmetics_different_index():
              (ddf5.repartition([1, 7, 8, 9]), ddf6.repartition([2, 3, 4, 6]),
               pdf5, pdf6),
              (ddf6.repartition([2, 6]), ddf5.repartition([1, 3, 7, 9]),
-              pdf6, pdf5)]
+              pdf6, pdf5),
+             # dask + pandas
+             (ddf1, pdf2, pdf1, pdf2), (ddf2, pdf1, pdf2, pdf1),
+             (ddf3, pdf4, pdf3, pdf4), (ddf4, pdf3, pdf4, pdf3),
+             (ddf5, pdf6, pdf5, pdf6), (ddf6, pdf5, pdf6, pdf5)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b,
@@ -465,8 +473,10 @@ def test_arithmetics_different_index():
              (ddf8.repartition([-5, 0, 10, 20], force=True),
               ddf7.repartition([-1, 4, 11, 13], force=True), pdf8, pdf7),
              (ddf9, ddf10, pdf9, pdf10),
-             (ddf10, ddf9, pdf10, pdf9)
-             ]
+             (ddf10, ddf9, pdf10, pdf9),
+             # dask + pandas
+             (ddf7, pdf8, pdf7, pdf8), (ddf8, pdf7, pdf8, pdf7),
+             (ddf9, pdf10, pdf9, pdf10), (ddf10, pdf9, pdf10, pdf9)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b,
@@ -477,7 +487,7 @@ def test_arithmetics_different_index():
 
 def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert isinstance(l, dd.Series)
-    assert isinstance(r, dd.Series)
+    assert isinstance(r, (dd.Series, pd.Series))
     assert isinstance(el, pd.Series)
     assert isinstance(er, pd.Series)
 
@@ -549,7 +559,7 @@ def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
 
 def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert isinstance(l, dd.DataFrame)
-    assert isinstance(r, dd.DataFrame)
+    assert isinstance(r, (dd.DataFrame, pd.DataFrame))
     assert isinstance(el, pd.DataFrame)
     assert isinstance(er, pd.DataFrame)
     # l, r may be repartitioned, test whether repartition keeps original data
