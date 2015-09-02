@@ -105,7 +105,7 @@ def test_linalg_consistent_names():
 def test_svd_compressed():
     m, n = 300, 250
     r = 10
-    np.random.seed(1234)
+    np.random.seed(4321)
     mat1 = np.random.randn(m, r)
     mat2 = np.random.randn(r, n)
     mat = mat1.dot(mat2)
@@ -113,10 +113,8 @@ def test_svd_compressed():
 
     n_iter = 6
     for i in range(n_iter):
-        u, s, vt = svd_compressed(data, r, seed=1234)
-        u = np.array(u)
-        s = np.array(s)
-        vt = np.array(vt)
+        u, s, vt = svd_compressed(data, r, seed=4321)
+        u, s, vt = da.compute(u, s, vt)
         if i == 0:
             usvt = np.dot(u, np.dot(np.diag(s), vt))
         else:
@@ -128,10 +126,11 @@ def test_svd_compressed():
                        np.linalg.norm(mat),
                        rtol=tol, atol=tol)  # average accuracy check
 
-    u, s, vt = svd_compressed(data, r, seed=1234)
-    u = np.array(u)[:, :r]
-    s = np.array(s)[:r]
-    vt = np.array(vt)[:r, :]
+    u, s, vt = svd_compressed(data, r, seed=4321)
+    u, s, vt = da.compute(u, s, vt)
+    u = u[:, :r]
+    s = s[:r]
+    vt = vt[:r, :]
 
     s_exact = np.linalg.svd(mat)[1]
     s_exact = s_exact[:r]
