@@ -23,7 +23,8 @@ if PY3:
         else:
             return func(*args)
     range = range
-    operator_div = operator.truediv
+
+
 
 else:
     import __builtin__ as builtins
@@ -38,7 +39,7 @@ else:
     long = long
     apply = apply
     range = xrange
-    operator_div = operator.div
+
 
 def skip(func):
     return
@@ -66,3 +67,14 @@ def bind_method(cls, name, func):
         setattr(cls, name, types.MethodType(func, None, cls))
     else:
         setattr(cls, name, func)
+
+
+_basic_operators = [operator.abs, operator.add, operator.and_,
+                    operator.eq, operator.gt, operator.ge, operator.inv,
+                    operator.lt, operator.le, operator.mod,
+                    operator.mul, operator.ne, operator.neg,
+                    operator.or_, operator.pow, operator.sub,
+                    operator.truediv, operator.floordiv, operator.xor]
+
+if PY2:
+    _basic_operators += [operator.div]

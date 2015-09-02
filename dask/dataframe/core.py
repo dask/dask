@@ -25,7 +25,7 @@ from .. import array as da
 from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
-from ..compatibility import unicode, apply, operator_div
+from ..compatibility import unicode, apply, _basic_operators
 from ..utils import repr_long_list, IndexCallable, pseudorandom
 from .utils import shard_df_on_index
 from ..base import Base, compute, tokenize, normalize_token
@@ -648,11 +648,7 @@ class _Frame(Base):
 
 
 # bind operators
-for op in [operator.abs, operator.add, operator.and_, operator_div,
-           operator.eq, operator.gt, operator.ge, operator.inv,
-           operator.lt, operator.le, operator.mod, operator.mul,
-           operator.ne, operator.neg, operator.or_, operator.pow,
-           operator.sub, operator.truediv, operator.floordiv, operator.xor]:
+for op in _basic_operators:
     _Frame._bind_operator(op)
     Scalar._bind_operator(op)
 
