@@ -186,6 +186,6 @@ def visualize(results, dsk, palette='GnBu', file_path=None,
 
     if show:
         bp.show(p)
-    if save:
+    if file_path and save:
         bp.save(p)
     return p
