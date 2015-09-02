@@ -949,13 +949,13 @@ class Series(_Frame):
 
         The original docstring follows:\n
         """ + pd.Series.apply.__doc__
-        name = 'apply' + next(tokens)
+        name = 'apply-' + tokenize(self, func, convert_dtype, args, kwds)
         dsk = dict(((name, i),
                     (apply, pd.Series.apply,
                       (tuple, [(self._name, i), func, convert_dtype, args]),
                       kwds))
                     for i in range(self.npartitions))
-        return Series(merge(self.dask, dsk), name, None, self.divisions)
+        return Series(merge(self.dask, dsk), name, self.name, self.divisions)
 
 
 class Index(Series):
