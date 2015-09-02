@@ -194,8 +194,8 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
-    left_empty = pd.DataFrame([], columns=lhs.columns)
-    right_empty = pd.DataFrame([], columns=rhs.columns)
+    left_empty = pd.DataFrame(columns=lhs.columns)
+    right_empty = pd.DataFrame(columns=rhs.columns)
 
     name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
     dsk = dict(((name, i),
@@ -219,10 +219,10 @@ def pdmerge(left, right, how, left_on, right_on,
             default_left_columns, default_right_columns):
 
     if not len(left):
-        left = pd.DataFrame([], columns=default_left_columns)
+        left = pd.DataFrame(columns=default_left_columns)
 
     if not len(right):
-        right = pd.DataFrame([], columns=default_right_columns)
+        right = pd.DataFrame(columns=default_right_columns)
 
     result = pd.merge(left, right, how=how,
                       left_on=left_on, right_on=right_on,
@@ -259,8 +259,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
         right_index = False
 
     # fake column names
-    left_empty = pd.DataFrame([], columns=lhs.columns)
-    right_empty = pd.DataFrame([], columns=rhs.columns)
+    left_empty = pd.DataFrame(columns=lhs.columns)
+    right_empty = pd.DataFrame(columns=rhs.columns)
     j = pd.merge(left_empty, right_empty, how, None,
                  left_on=left_on, right_on=right_on,
                  left_index=left_index, right_index=right_index,
@@ -292,12 +292,12 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
 
 def concat_indexed_dataframes(dfs, join='outer'):
     """ Concatenate indexed dataframes together along the index """
-    assert join in ('inner', 'outer')
+    if join not in ('inner', 'outer'):
+        raise ValueError("'join' must be 'inner' or 'outer'")
     dfs2, divisions, parts = align_partitions(*dfs)
 
-    empties = [pd.DataFrame([], columns=df.columns) for df in dfs]
-
-    columns = pd.concat(empties, 0, join).columns
+    empties = [pd.DataFrame(columns=df.columns) for df in dfs]
+    columns = pd.concat(empties, axis=0, join=join).columns
 
     parts2 = [[df if df is not None else empty
                for df, empty in zip(part, empties)]
