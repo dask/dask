@@ -123,7 +123,6 @@ def align_partitions(*dfs):
 
 def _maybe_align_partitions(args):
     """ Align DataFrame blocks if divisions are different """
-
     # passed to align_partitions
     indexer, dasks = zip(*[x for x in enumerate(args)
                            if isinstance(x[1], (_Frame, Scalar))])

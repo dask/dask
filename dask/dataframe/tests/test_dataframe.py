@@ -42,14 +42,30 @@ def check_dask(dsk, check_names=True):
     return dsk
 
 
+def _maybe_sort(a):
+    # sort by value, then index
+    try:
+        if isinstance(a, pd.DataFrame):
+            # ToDo: after v0.17, we can use consistent method
+            # https://github.com/pydata/pandas/pull/10726
+            a = a.sort(columns=a.columns.tolist())
+        else:
+            a = a.order()
+    except TypeError:
+        pass
+    return a.sort_index()
+
+
 def eq(a, b, check_names=True):
     a = check_dask(a, check_names=check_names)
     b = check_dask(b, check_names=check_names)
     if isinstance(a, pd.DataFrame):
-        a = a.sort_index()
-        b = b.sort_index()
+        a = _maybe_sort(a)
+        b = _maybe_sort(b)
         tm.assert_frame_equal(a, b)
     elif isinstance(a, pd.Series):
+        a = _maybe_sort(a)
+        b = _maybe_sort(b)
         tm.assert_series_equal(a, b, check_names=check_names)
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b)
@@ -1431,11 +1447,30 @@ def test_concat2():
     c = dd.concat([a, b])
 
     assert c.npartitions == a.npartitions + b.npartitions
-
     assert eq(pd.concat([a.compute(), b.compute()]), c)
-
     assert dd.concat([a, b]).dask == dd.concat([a, b]).dask
 
+def test_concat3():
+    pdf1 = pd.DataFrame(np.random.randn(10, 5),
+                        columns=list('ABCDE'), index=list('abcdefghij'))
+    pdf2 = pd.DataFrame(np.random.randn(13, 5),
+                        columns=list('ABCDE'), index=list('fghijklmnopqr'))
+    pdf3 = pd.DataFrame(np.random.randn(13, 6),
+                        columns=list('CDEXYZ'), index=list('fghijklmnopqr'))
+
+    ddf1 = dd.from_pandas(pdf1, 2)
+    ddf2 = dd.from_pandas(pdf2, 3)
+    ddf3 = dd.from_pandas(pdf3, 2)
+
+    eq(dd.concat([ddf1, ddf1]), pd.concat([pdf1, pdf1]))
+    eq(dd.concat([ddf1, ddf2]), pd.concat([pdf1, pdf2]))
+    eq(dd.concat([ddf1, ddf3]), pd.concat([pdf1, pdf3]))
+
+    eq(dd.concat([ddf2, ddf1]), pd.concat([pdf2, pdf1]))
+    eq(dd.concat([ddf2, ddf3]), pd.concat([pdf2, pdf3]))
+
+    eq(dd.concat([ddf3, ddf1]), pd.concat([pdf3, pdf1]))
+    eq(dd.concat([ddf3, ddf2]), pd.concat([pdf3, pdf2]))
 
 def test_dataframe_series_are_dillable():
     try:

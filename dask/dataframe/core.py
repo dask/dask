@@ -1394,8 +1394,8 @@ def elemwise(op, *args, **kwargs):
             else d._keys() for d in dasks]
 
     dsk = dict(((_name, i), (op2,) + frs) for i, frs in enumerate(zip(*keys)))
-
     dsk = merge(dsk, *[d.dask for d in dasks])
+
     if columns is not None:
         return DataFrame(dsk, _name, columns, divisions)
     else:
@@ -1462,24 +1462,50 @@ def reduction(x, chunk, aggregate, token=None):
 def concat(dfs):
     """ Concatenate dataframes along rows
 
-    Currently only supports unknown divisions
+    - If divisions are known, concatenate every divisions each by each.
+    - If divisions are unknown, concatenate to the last
+    - Concatenating DataFrames mixed with known and unknown divisions are not
+      supported.
     """
-    if any(df.known_divisions for df in dfs):
-        # For this to work we need to add a final division for "maximum element"
-        raise NotImplementedError("Concat can't currently handle dataframes"
-                " with known divisions")
-    name = 'concat-' + tokenize(*dfs)
-    dsk = dict()
-    i = 0
-    for df in dfs:
-        for key in df._keys():
-            dsk[(name, i)] = key
-            i += 1
+    if not isinstance(dfs, list):
+        dfs = [dfs]
+    if len(dfs) == 0:
+        raise ValueError('Input must be a list')
 
-    divisions = [None] * (i + 1)
+    if all(df.known_divisions for df in dfs):
+        from .multi import _maybe_align_partitions
+        dfs = _maybe_align_partitions(dfs)
+        name = 'concat-{0}'.format(tokenize(*dfs))
 
-    return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
-                     dfs[0].columns, divisions)
+        dsk = dict()
+        for i in range(dfs[0].npartitions):
+            dsk[(name, i)] = (_concat, (list, [(df._name, i) for df in dfs]))
+
+        dasks = [df.dask for df in dfs]
+
+        empties = [pd.DataFrame([], columns=df.columns) for df in dfs]
+        columns = pd.concat(empties).columns.tolist()
+
+        return DataFrame(merge(dsk, *dasks), name,
+                         columns, dfs[0].divisions)
+
+    elif all(not df.known_divisions for df in dfs):
+        name = 'concat-{0}'.format(tokenize(*dfs))
+        dsk = dict()
+        i = 0
+        for df in dfs:
+            for key in df._keys():
+                dsk[(name, i)] = key
+                i += 1
+
+        divisions = [None] * (i + 1)
+
+        return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
+                         dfs[0].columns, divisions)
+    else:
+        msg = ("concat can't handle dataframes mixed "
+               "with known and unknown divisions")
+        raise NotImplementedError(msg)
 
 
 def _groupby_apply(df, ind, func):
