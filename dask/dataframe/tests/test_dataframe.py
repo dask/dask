@@ -2029,3 +2029,9 @@ def test_apply():
 
     func = lambda row: row['x'] + row['y']
     assert eq(a.x.apply(lambda x: x + 1), df.x.apply(lambda x: x + 1))
+
+    assert eq(a.apply(lambda xy: xy[0] + xy[1], axis=1, columns=None),
+              df.apply(lambda xy: xy[0] + xy[1], axis=1))
+
+    assert raises(ValueError, lambda: a.apply(lambda xy: xy, axis=0))
+    assert raises(ValueError, lambda: a.apply(lambda xy: xy, axis=1))
