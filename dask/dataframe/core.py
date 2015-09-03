@@ -941,9 +941,12 @@ class Series(_Frame):
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
 
-    def apply(self, func, convert_dtype=True, args=(), **kwds):
+    def apply(self, func, convert_dtype=True, columns=no_default, args=(), **kwds):
         """ Parallel version of pandas.Series.apply """
-        return map_partitions(pd.Series.apply, self.name, self, func,
+        if columns is no_default:
+            columns = self.name
+
+        return map_partitions(pd.Series.apply, columns, self, func,
                               convert_dtype, args, **kwds)
 
 

@@ -2026,12 +2026,14 @@ def test_apply():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     a = dd.from_pandas(df, npartitions=2)
 
-
     func = lambda row: row['x'] + row['y']
-    assert eq(a.x.apply(lambda x: x + 1), df.x.apply(lambda x: x + 1))
+    eq(a.x.apply(lambda x: x + 1), df.x.apply(lambda x: x + 1))
 
-    assert eq(a.apply(lambda xy: xy[0] + xy[1], axis=1, columns=None),
-              df.apply(lambda xy: xy[0] + xy[1], axis=1))
+    eq(a.apply(lambda xy: xy[0] + xy[1], axis=1, columns=None),
+       df.apply(lambda xy: xy[0] + xy[1], axis=1))
 
     assert raises(NotImplementedError, lambda: a.apply(lambda xy: xy, axis=0))
     assert raises(ValueError, lambda: a.apply(lambda xy: xy, axis=1))
+
+    func = lambda x: pd.Series([x, x])
+    eq(a.x.apply(func, columns=[0, 1]), df.x.apply(func))
