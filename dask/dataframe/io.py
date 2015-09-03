@@ -26,30 +26,33 @@ from .shuffle import set_partition
 csv_defaults = {'compression': None}
 
 
-def try_pd_read_csv(*args, **kwargs):
-    msg = """
-    By inspecting the first 1,000 rows of your csv file we guessed that the
-    column: %s had dtype: %s. But now that we're reading all the data we see it
-    has some values with dtype: %s. You should probably add the following
-    keyword arguments to your `read_csv` call:
+read_csv_dtype_msg = """
+Dask dataframe inspected the first 1,000 rows of your csv file and guessed that
+column: %s had dtype: %s.
 
-        dtype={'%s': %s}
-    """
+This guess was incorrect and now that we're reading all the data we see it has
+some values with dtype: %s. You should add the following keyword arguments to
+your `read_csv` call:
 
+    read_csv(..., dtype={'%s': '%s'})
+"""
+
+def _read_csv(fn, i, chunkbytes, compression, kwargs):
+    block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression)
+    block = BytesIO(block)
     try:
-        return pd.read_csv(*args, **kwargs)
-    except ValueError as pandas_exception:
-        try:
-            # this is brittle
-            parts = str(pandas_exception).split(' ')
-            column_number = int(parts[-1])
-            column_name = kwargs.get('names')[column_number]
-            dtype1 = parts[7]
-            dtype2 = parts[9]
-            msg %= (column_name, dtype1, dtype2, column_name, dtype2)
-        except Exception as _:
-            raise pandas_exception
-        raise ValueError(msg)
+        return pd.read_csv(block, **kwargs)
+    except ValueError as e:
+        parts = str(e).split(' ')
+        column_number = int(parts[-1])
+        column_name = kwargs.get('names')[column_number]
+
+        dtype_old = parts[7]
+        dtype_new = parts[9]
+        new_dtype = kwargs['dtype'].copy()
+        new_dtype[column_name] = dtype_new
+        raise ValueError(read_csv_dtype_msg %
+                (column_name, dtype_old, dtype_new, column_name, dtype_new))
 
 
 def fill_kwargs(fn, args, kwargs):
@@ -113,6 +116,7 @@ def fill_kwargs(fn, args, kwargs):
 
     return kwargs
 
+
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
     chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
@@ -144,19 +148,16 @@ def read_csv(fn, *args, **kwargs):
         nchunks = int(ceil(total_bytes / chunkbytes))
         divisions = [None] * (nchunks + 1)
 
-        first_read_csv = partial(try_pd_read_csv, *args, header=header,
-                                 **dissoc(kwargs, 'compression'))
-        rest_read_csv = partial(try_pd_read_csv, *args, header=None,
-                                **dissoc(kwargs, 'compression'))
+        first_kwargs = merge(kwargs, dict(header=header, compression=None))
+        rest_kwargs = merge(kwargs, dict(header=None, compression=None))
 
         # Create dask graph
-        dsk = dict(((name, i), (rest_read_csv, (BytesIO,
-                                   (textblock, fn,
-                                       i*chunkbytes, (i+1) * chunkbytes,
-                                       kwargs['compression']))))
+        dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
+                                           kwargs['compression'], rest_kwargs))
                    for i in range(1, nchunks))
-        dsk[(name, 0)] = (first_read_csv, (BytesIO,
-                           (textblock, fn, 0, chunkbytes, kwargs['compression'])))
+
+        dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
+                                     first_kwargs)
 
         result = DataFrame(dsk, name, columns, divisions)
 
