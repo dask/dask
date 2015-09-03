@@ -1894,3 +1894,11 @@ def test_series_groupby():
     assert eq(dask_group.sum(), pd_group.sum())
     assert eq(dask_group.min(), pd_group.min())
     assert eq(dask_group.max(), pd_group.max())
+
+    pd_group2 = s.groupby(s + 1)
+    dask_group2 = ss.groupby(ss + 1)
+
+    assert eq(dask_group2.count(), pd_group2.count())
+    assert eq(dask_group2.sum(), pd_group2.sum())
+    assert eq(dask_group2.min(), pd_group2.min())
+    assert eq(dask_group2.max(), pd_group2.max())
