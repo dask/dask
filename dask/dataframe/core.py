@@ -706,6 +706,10 @@ class Series(_Frame):
         """ Return 1 element tuple containing the name """
         return (self.name,)
 
+    @property
+    def nbytes(self):
+        return reduction(self, lambda s: s.nbytes, np.sum, token='nbytes')
+
     def __repr__(self):
         return ("dd.%s<%s, divisions=%s>" %
                 (self.__class__.__name__, self._name,

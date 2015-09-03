@@ -873,6 +873,7 @@ def test_reductions():
         assert eq(dds.var(ddof=0), pds.var(ddof=0))
         assert eq(dds.mean(), pds.mean())
         assert eq(dds.nunique(), pds.nunique())
+        assert eq(dds.nbytes, pds.nbytes)
 
     assert_dask_graph(d.b.sum(), 'series-sum')
     assert_dask_graph(d.b.min(), 'series-min')
@@ -1234,10 +1235,12 @@ def test_categorize():
 
     assert (d.categorize().compute().dtypes == 'category').all()
 
+
 def test_ndim():
     assert (d.ndim == 2)
     assert (d.a.ndim == 1)
     assert (d.index.ndim == 1)
+
 
 def test_dtype():
     assert (d.dtypes == full.dtypes).all()
