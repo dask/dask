@@ -54,6 +54,15 @@ class ProgressBar(Callback):
     ...     out = some_slow_computation.compute()
     [########################################] | 100% Completed | 10.4 s
 
+    The duration of the last computation is available as an attribute
+
+    >>> pbar = ProgressBar()
+    >>> with pbar:                          # doctest: +SKIP
+    ...     out = some_computation.compute()
+    [########################################] | 100% Completed | 10.4 s
+    >>> pbar.last_duration                  # doctest: +SKIP
+    10.4
+
     You can also register a progress bar so that it displays for all
     computations:
 
@@ -67,6 +76,7 @@ class ProgressBar(Callback):
         self._minimum = minimum
         self._width = width
         self._dt = dt
+        self.last_duration = 0
 
     def _start(self, dsk):
         self._state = None
@@ -84,6 +94,7 @@ class ProgressBar(Callback):
         self._running = False
         self._timer.join()
         elapsed = default_timer() - self._start_time
+        self.last_duration = elapsed
         if elapsed < self._minimum:
             return
         if not errored:
