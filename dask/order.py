@@ -27,12 +27,12 @@ Breaking Ties
 -------------
 
 And so we create a total ordering over all nodes to serve as a tie breaker.  We
-represent this ordering with a dictionary.  Larger scores have higher priority.
+represent this ordering with a dictionary.  Lower scores have higher priority.
 
-    {'a': 3,
-     'c': 2,
-     'd': 1,
-     'b': 1}
+    {'d': 0,
+     'c': 1,
+     'a': 2,
+     'b': 3}
 
 There are several ways in which we might order our keys.  In practice we have
 found the following objectives important:
@@ -55,8 +55,8 @@ concern (2) we prefer to traverse down children in the order of which child has
 the descendent on whose result the most tasks depend.
 """
 from __future__ import absolute_import, division, print_function
-from .core import get_deps
 from operator import add
+from .core import get_deps
 
 
 def order(dsk):
@@ -70,13 +70,12 @@ def order(dsk):
 
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
-    {'a': 3, 'c': 2, 'b': 1, 'd': 0}
+    {'a': 2, 'c': 1, 'b': 3, 'd': 0}
     """
     dependencies, dependents = get_deps(dsk)
     ndeps = ndependents(dependencies, dependents)
     maxes = child_max(dependencies, dependents, ndeps)
     return dfs(dependencies, dependents, key=maxes.get)
-
 
 def ndependents(dependencies, dependents):
     """ Number of total data elements that depend on key
@@ -103,37 +102,30 @@ def ndependents(dependencies, dependents):
     leaves = [k for k, v in dependencies.items() if not v]
 
     for leaf in leaves:
-        _ndependents(leaf, result, dependents)
+        _ndependents(leaf, result, dependencies, dependents)
 
     return result
 
 
-def _ndependents(key, result, dependents):
+def _ndependents(key, result, dependencies, dependents):
     """ Helper function for ndependents """
-    stack = [(key, sum(result.values()) + 1)]
-    while stack:
-        key, value = stack.pop()
+    if key not in result:
         deps = dependents[key]
-        ndeps = 0
-        for dep in deps:
-            val = result.setdefault(dep, value)
-            stack.append((dep, val))
-            ndeps += val
-        if deps and key not in result:
-            result[key] = ndeps + 1
+        result[key] = sum(
+            [_ndependents(k, result, dependencies, dependents)
+             for k in deps]) + 1
+    return result[key]
 
 
 def child_max(dependencies, dependents, scores):
     """ Maximum-ish of scores of children
 
     This takes a dictionary of scores per key and returns a new set of scores
-    per key that is the maximum of the scores of all children of that node
-    minus a half.  In some sense this ranks each node by the maximum importance
-    of their children but then subtracts a little bit to ensure that the parent
-    node is slightly less important.  This half-score stops us from losing
-    information about depth, otherwise things tend to flatten out.
+    per key that is the maximum of the scores of all children of that node plus
+    its own score.  In some sense this ranks each node by the maximum
+    importance of their children plus their own value.
 
-    This is generally fed in the result from ``ndependents``
+    This is generally fed the result from ``ndependents``
 
     Examples
     --------
@@ -143,10 +135,11 @@ def child_max(dependencies, dependents, scores):
     >>> dependencies, dependents = get_deps(dsk)
 
     >>> sorted(child_max(dependencies, dependents, scores).items())
-    [('a', 3), ('b', 2), ('c', 2.5), ('d', 2.0)]
+    [('a', 3), ('b', 2), ('c', 5), ('d', 6)]
     """
+    result = dict()
+
     leaves = [k for k, v in dependencies.items() if not v]
-    result = dict.fromkeys(leaves)
 
     for leaf in leaves:
         result[leaf] = scores[leaf]
@@ -154,30 +147,18 @@ def child_max(dependencies, dependents, scores):
     roots = [k for k, v in dependents.items() if not v]
 
     for root in roots:
-        _child_max(root, result, dependencies)
+        _child_max(root, scores, result, dependencies, dependents)
 
     return result
 
 
-def _child_max(key, result, dependencies):
+def _child_max(key, scores, result, dependencies, dependents):
     """ Recursive helper function for child_max """
-    # base case
-    stack = [(key, max(result.values()) - 0.5)]
-    while stack:
-        # current dependency its dependencies value
-        key, value = _, keyval = stack.pop()
-
-        # get each dependency's score, or set to `value` if not seen
+    if key not in result:
         deps = dependencies[key]
-        for dep in deps:
-            depval = result.setdefault(dep, value)
-            stack.append((dep, depval))
-            keyval = max(depval, keyval)
-
-        # if key has deps, then its value is the max of all the values of its
-        # deps - 0.5
-        if deps and key not in result:
-            result[key] = keyval - 0.5
+        result[key] = max([_child_max(k, scores, result, dependencies,
+                                      dependents) for k in deps]) + scores[key]
+    return result[key]
 
 
 def dfs(dependencies, dependents, key=lambda x: x):
@@ -197,25 +178,27 @@ def dfs(dependencies, dependents, key=lambda x: x):
     >>> dependencies, dependents = get_deps(dsk)
 
     >>> sorted(dfs(dependencies, dependents).items())
-    [('a', 3), ('b', 1), ('c', 2), ('d', 0)]
+    [('a', 2), ('b', 3), ('c', 1), ('d', 0)]
     """
     result = dict()
     i = 0
 
     roots = [k for k, v in dependents.items() if not v]
-    stack = sorted(roots, key=key, reverse=True)
+    stack = sorted(roots, key=key)
     seen = set()
 
     while stack:
         item = stack.pop()
+        if item in seen:
+            continue
         seen.add(item)
 
         result[item] = i
         deps = dependencies[item]
-        deps = deps - seen
-        seen |= deps
-        deps = sorted(deps, key=key, reverse=True)
-        stack.extend(deps)
+        if deps:
+            deps = deps - seen
+            deps = sorted(deps, key=key)
+            stack.extend(deps)
         i += 1
 
     return result

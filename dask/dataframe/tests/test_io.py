@@ -9,6 +9,7 @@ import pytest
 from toolz import valmap
 import tempfile
 import shutil
+from time import sleep
 
 import dask.array as da
 import dask.dataframe as dd
@@ -310,6 +311,7 @@ def test_consistent_dtypes():
         os.remove('_foo.2.csv')
 
 
+@pytest.mark.slow
 def test_compression_multiple_files():
     tdir = tempfile.mkdtemp()
     try:
@@ -416,7 +418,7 @@ def test_from_dask_array_raises():
 def test_to_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]},
+                       'y': [2, 3, 4, 5]},
                        index=pd.Index([1., 2., 3., 4.], name='ind'))
     a = dd.from_pandas(df, 2)
 
@@ -434,9 +436,54 @@ def test_to_castra():
     finally:
         c.drop()
 
+    c = a.to_castra(sorted_index_column='y')
+    try:
+        tm.assert_frame_equal(c[:], df.set_index('y'))
+    finally:
+        c.drop()
+
     dsk, keys = a.to_castra(compute=False)
     assert isinstance(dsk, dict)
     assert isinstance(keys, list)
+    c, last = keys
+    assert last[1] == a.npartitions - 1
+
+
+def test_from_castra():
+    pytest.importorskip('castra')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+    a = dd.from_pandas(df, 2)
+
+    c = a.to_castra()
+    with_castra = dd.from_castra(c)
+    with_fn = dd.from_castra(c.path)
+    with_columns = dd.from_castra(c, 'x')
+    try:
+        tm.assert_frame_equal(df, with_castra.compute())
+        tm.assert_frame_equal(df, with_fn.compute())
+        tm.assert_series_equal(df.x, with_columns.compute())
+    finally:
+        # Calling c.drop() is a race condition on drop from `with_fn.__del__`
+        # and c.drop. Manually `del`ing gets around this.
+        del with_fn, c
+
+
+def test_from_castra_with_selection():
+    """ Optimizations fuse getitems with load_partitions
+
+    We used to use getitem for both column access and selections
+    """
+    pytest.importorskip('castra')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [2, 3, 4, 5]},
+                       index=pd.Index([1., 2., 3., 4.], name='ind'))
+    a = dd.from_pandas(df, 2)
+
+    b = dd.from_castra(a.to_castra())
+
+    assert eq(b[b.y > 3].x, df[df.y > 3].x)
 
 
 def test_to_hdf():
@@ -491,10 +538,36 @@ def test_to_csv():
         a = dd.from_pandas(df, npartitions)
         with tmpfile('csv') as fn:
             a.to_csv(fn)
-
             result = pd.read_csv(fn, index_col=0)
-
             tm.assert_frame_equal(result, df)
+
+
+@pytest.mark.xfail
+def test_to_csv_gzip():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    for npartitions in [1, 2]:
+        a = dd.from_pandas(df, npartitions)
+        with tmpfile('csv') as fn:
+            a.to_csv(fn, compression='gzip')
+            result = pd.read_csv(fn, index_col=0, compression='gzip')
+            tm.assert_frame_equal(result, df)
+
+
+def test_to_csv_series():
+    s = pd.Series([1, 2, 3], index=[10, 20, 30], name='foo')
+    a = dd.from_pandas(s, 2)
+    with tmpfile('csv') as fn:
+        with tmpfile('csv') as fn2:
+            a.to_csv(fn)
+            s.to_csv(fn2)
+            with open(fn) as f:
+                adata = f.read()
+            with open(fn2) as f:
+                sdata = f.read()
+
+            assert adata == sdata
 
 
 def test_read_csv_with_nrows():
@@ -540,12 +613,29 @@ def test_multiple_read_csv_has_deterministic_name():
         os.remove('_foo.2.csv')
 
 
+@pytest.mark.slow
 def test_read_csv_of_modified_file_has_different_name():
     with filetext(text) as fn:
+        mtime = os.path.getmtime(fn)
+        sleep(1)
         a = read_csv(fn)
+        sleep(1)
         with open(fn, 'a') as f:
             f.write('\nGeorge,700')
             os.fsync(f)
         b = read_csv(fn)
 
         assert sorted(a.dask) != sorted(b.dask)
+
+
+def test_to_bag():
+    pytest.importorskip('dask.bag')
+    a = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                      'y': [2, 3, 4, 5]},
+                     index=pd.Index([1., 2., 3., 4.], name='ind'))
+    ddf = dd.from_pandas(a, 2)
+
+    assert ddf.to_bag().compute(get=get_sync) == list(a.itertuples(False))
+    assert ddf.to_bag(True).compute(get=get_sync) == list(a.itertuples(True))
+    assert ddf.x.to_bag(True).compute(get=get_sync) == list(a.x.iteritems())
+    assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)

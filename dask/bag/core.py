@@ -8,12 +8,14 @@ import gzip
 import zlib
 import bz2
 import os
+import codecs
 
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 from dask.utils import takes_multiple_arguments
+from sys import getdefaultencoding
 
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
@@ -30,11 +32,13 @@ from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
         unquote, StringIO)
-from ..base import Base
+from ..base import Base, normalize_token
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
+
+system_encoding = getdefaultencoding()
 
 no_default = '__no__default__'
 
@@ -104,7 +108,7 @@ def list2(seq):
     return list(seq)
 
 
-def to_textfiles(b, path, name_function=str):
+def to_textfiles(b, path, name_function=str, encoding=system_encoding):
     """ Write bag to disk, one filename per partition, one line per element
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -166,7 +170,7 @@ def to_textfiles(b, path, name_function=str):
                 "3.  A path with a * in it -- 'foo.*.json'")
 
     name = next(names)
-    dsk = dict(((name, i), (write, (b.name, i), path))
+    dsk = dict(((name, i), (write, (b.name, i), path, encoding))
             for i, path in enumerate(paths))
 
     return Bag(merge(b.dask, dsk), name, b.npartitions)
@@ -340,28 +344,60 @@ class Bag(Base):
                              "Use db.from_filenames instead.")
 
     @wraps(to_textfiles)
-    def to_textfiles(self, path, name_function=str):
-        return to_textfiles(self, path, name_function)
+    def to_textfiles(self, path, name_function=str, encoding=system_encoding):
+        return to_textfiles(self, path, name_function, encoding)
 
-    def fold(self, binop, combine=None, initial=None):
-        """ Splittable reduction
+    def fold(self, binop, combine=None, initial=no_default):
+        """ Parallelizable reduction
 
-        Apply binary operator on each partition to perform reduce.  Follow by a
-        second binary operator to combine results
+        Fold is like the builtin function ``reduce`` except that it works in
+        parallel.  Fold takes two binary operator functions, one to reduce each
+        partition of our dataset and another to combine results between
+        partitions
+
+        1.  ``binop``: Binary operator to reduce within each partition
+        2.  ``combine``:  Binary operator to combine results from binop
+
+        Sequentially this would look like the following:
+
+        >>> intermediates = [reduce(binop, part) for part in partitions]  # doctest: +SKIP
+        >>> final = reduce(combine, intermediates)  # doctest: +SKIP
+
+        If only one function is given then it is used for both functions
+        ``binop`` and ``combine`` as in the following example to compute the
+        sum:
+
+        >>> def add(x, y):
+        ...     return x + y
 
         >>> b = from_sequence(range(5))
-        >>> b.fold(lambda x, y: x + y).compute()  # doctest: +SKIP
+        >>> b.fold(add).compute()  # doctest: +SKIP
         10
 
-        Optionally provide default arguments and special combine binary
-        operator
+        In full form we provide both binary operators as well as their default
+        arguments
 
-        >>> b.fold(lambda x, y: x + y, lambda x, y: x + y, 0).compute()  # doctest: +SKIP
+        >>> b.fold(binop=add, combine=add, initial=0).compute()  # doctest: +SKIP
         10
+
+        More complex binary operators are also doable
+
+        >>> def add_to_set(acc, x):
+        ...     ''' Add new element x to set acc '''
+        ...     return acc | set([x])
+        >>> b.fold(add_to_set, set.union, initial=set()).compute()  # doctest: +SKIP
+        {1, 2, 3, 4, 5}
+
+        See Also
+        --------
+
+        Bag.foldby
         """
         a = next(names)
         b = next(names)
-        if initial:
+        if isinstance(initial, list):
+            initial = (list2, initial)
+        if initial is not no_default:
             dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
                             for i in range(self.npartitions))
         else:
@@ -588,14 +624,15 @@ class Bag(Base):
 
         It can be tricky to construct the right binary operators to perform
         analytic queries.  The ``foldby`` method accepts two binary operators,
-        ``binop`` and ``combine``.
+        ``binop`` and ``combine``.  Binary operators two inputs and output must
+        have the same type.
 
-        Binop takes a running total and a new element and produces a new total
+        Binop takes a running total and a new element and produces a new total:
 
         >>> def binop(total, x):
         ...     return total + x['amount']
 
-        Combine takes two totals and combines them
+        Combine takes two totals and combines them:
 
         >>> def combine(total1, total2):
         ...     return total1 + total2
@@ -768,6 +805,10 @@ class Bag(Base):
                             name, columns, divisions)
 
 
+normalize_token.register(Item, lambda a: a.key)
+normalize_token.register(Bag, lambda a: a.name)
+
+
 def partition(grouper, sequence, npartitions, p, nelements=2**20):
     """ Partition a bag along a grouper, store partitions on disk """
     for block in partition_all(nelements, sequence):
@@ -785,10 +826,14 @@ def collect(grouper, group, p, barrier_token):
     return list(d.items())
 
 
+def decode_sequence(encoding, seq):
+    for item in seq:
+        yield item.decode(encoding)
+
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
-def from_filenames(filenames, chunkbytes=None):
+def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
     """ Create dask by loading in lines from many files
 
     Provide list of filenames
@@ -819,29 +864,29 @@ def from_filenames(filenames, chunkbytes=None):
 
     if chunkbytes:
         chunkbytes = int(chunkbytes)
-        taskss = [_chunk_read_file(fn, chunkbytes) for fn in full_filenames]
+        taskss = [_chunk_read_file(fn, chunkbytes, encoding) for fn in full_filenames]
         d = dict(((name, i), task)
                  for i, task in enumerate(toolz.concat(taskss)))
     else:
         extension = os.path.splitext(filenames[0])[1].strip('.')
         myopen = opens.get(extension, open)
 
-        d = dict(((name, i), (list, (myopen, fn)))
+        d = dict(((name, i), (list, (decode_sequence, encoding, (myopen, fn, 'rb'))))
                  for i, fn in enumerate(full_filenames))
 
     return Bag(d, name, len(d))
 
 
-def _chunk_read_file(filename, chunkbytes):
+def _chunk_read_file(filename, chunkbytes, encoding):
     extension = os.path.splitext(filename)[1].strip('.')
     compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
 
     return [(list, (StringIO, (bytes.decode,
-                    (textblock, filename, i, i + chunkbytes, compression))))
+                    (textblock, filename, i, i + chunkbytes, compression), encoding)))
              for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
-def write(data, filename):
+def write(data, filename, encoding):
     dirname = os.path.dirname(filename)
     if not os.path.exists(dirname):
         with ignoring(OSError):
@@ -850,12 +895,12 @@ def write(data, filename):
     ext = os.path.splitext(filename)[1][1:]
     if ext == 'gz':
         f = gzip.open(filename, 'wb')
-        data = (line.encode() for line in data)
+        data = (line.encode(encoding) for line in data)
     elif ext == 'bz2':
         f = bz2.BZ2File(filename, 'wb')
-        data = (line.encode() for line in data)
+        data = (line.encode(encoding) for line in data)
     else:
-        f = open(filename, 'w')
+        f = codecs.open(filename, 'wb', encoding=encoding)
     try:
         for item in data:
             f.write(item)
@@ -1037,10 +1082,54 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     return Bag(d, name, len(d))
 
 
+def from_castra(x, columns=None, index=False, npartitions=None):
+    """Load a dask Bag from a Castra.
+
+    Parameters
+    ----------
+    x : filename or Castra
+    columns: list or string, optional
+        The columns to load. Default is all columns.
+    index: bool, optional
+        If True, the index is included as the first element in each tuple.
+        Default is False.
+    npartitions: int, optional
+        The number of desired partitions. Defaults to number of partitions in
+        the Castra.
+    """
+    from castra import Castra
+    if not isinstance(x, Castra):
+        x = Castra(x, readonly=True)
+    elif not x._readonly:
+        x = Castra(x.path, readonly=True)
+    if columns is None:
+        columns = x.columns
+    if npartitions is None:
+        npartitions = len(x.partitions)
+    parts = from_sequence(x.partitions, npartitions=npartitions)
+    func = lambda p: load_castra_partition(x, p, columns, index)
+    return parts.map_partitions(func).map_partitions(reify)
+
+
+def load_castra_partition(castra, parts, columns, index):
+    import blosc
+    # Due to serialization issues, blosc needs to be manually initialized in
+    # each process.
+    blosc.init()
+    for part in parts:
+        df = castra.load_partition(part, columns)
+        if isinstance(columns, list):
+            items = df.itertuples(index)
+        else:
+            items = df.iteritems() if index else iter(df)
+        for item in items:
+            yield item
+
+
 def from_url(urls):
     """Create a dask.bag from a url
 
-    >>> a = from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')  # doctest: +SKIP
+    >>> a = from_url('http://raw.githubusercontent.com/blaze/dask/master/README.rst')  # doctest: +SKIP
     >>> a.npartitions  # doctest: +SKIP
     1
 

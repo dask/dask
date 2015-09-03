@@ -1,7 +1,7 @@
 import pytest
 from operator import getitem
-from toolz import valmap
-from dask.dataframe.optimize import rewrite_rules, dataframe_from_ctable
+from toolz import valmap, merge
+from dask.dataframe.optimize import dataframe_from_ctable
 import dask.dataframe as dd
 import pandas as pd
 
@@ -22,27 +22,19 @@ def test_column_optimizations_with_bcolz_and_rewrite():
     bc = bcolz.ctable([[1, 2, 3], [10, 20, 30]], names=['a', 'b'])
     func = lambda x: x
     for cols in [None, 'abc', ['abc']]:
-        dsk2 = dict((('x', i),
-                     (func,
-                       (getitem,
-                         (dataframe_from_ctable, bc, slice(0, 2), cols, {}),
-                         (list, ['a', 'b']))))
-                for i in [1, 2, 3])
+        dsk2 = merge(dict((('x', i),
+                          (dataframe_from_ctable, bc, slice(0, 2), cols, {}))
+                          for i in [1, 2, 3]),
+                     dict((('y', i),
+                          (getitem, ('x', i), (list, ['a', 'b'])))
+                          for i in [1, 2, 3]))
 
-        expected = dict((('x', i), (func, (dataframe_from_ctable,
-                                     bc, slice(0, 2), (list, ['a', 'b']), {})))
-                for i in [1, 2, 3])
-        result = valmap(rewrite_rules.rewrite, dsk2)
+        expected = dict((('y', i), (dataframe_from_ctable,
+                                     bc, slice(0, 2), (list, ['a', 'b']), {}))
+                          for i in [1, 2, 3])
 
+        result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
         assert result == expected
-
-
-def test_fast_functions():
-    df = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None, None, None])
-    e = df.a + df.b
-    assert len(e.dask) > 6
-
-    assert len(dd.optimize(e.dask, e._keys())) == 6
 
 
 def test_castra_column_store():

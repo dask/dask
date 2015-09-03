@@ -30,7 +30,8 @@ def scheduler(kwargs={}):
 @contextmanager
 def scheduler_and_workers(n=2, scheduler_kwargs={}, worker_kwargs={}):
     with scheduler(scheduler_kwargs) as s:
-        workers = [Worker(s.address_to_workers, hostname='127.0.0.1', nthreads=50, **worker_kwargs) for i in range(n)]
+        workers = [Worker(s.address_to_workers, hostname='127.0.0.1',
+                          nthreads=10, **worker_kwargs) for i in range(n)]
 
         # wait for workers to register
         while(len(s.workers) < n):
@@ -280,10 +281,8 @@ def test_collect_retry():
             sleep(1e-6)
         result = w1.pool.apply_async(w1.collect,
                                      args=({'x': [w2.address, w3.address]},))
-        # sometimes the above^ call to w1.collect will get called *after*,
-        # prune_and_notify below. Causing a hang. I'm not sure what to do
-        # about this, so here is a sleep.
-        sleep(0.1)
+        while not w1.queues_by_worker:
+            sleep(0.01)
         while w2.address in s.workers:
             s.prune_and_notify(timeout=0.1)
 

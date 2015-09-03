@@ -5,6 +5,7 @@ from operator import itemgetter
 
 from toolz import unique, groupby
 import bokeh.plotting as bp
+from bokeh.io import _state
 from bokeh.palettes import brewer
 from bokeh.models import HoverTool
 
@@ -12,8 +13,18 @@ from ..dot import funcname
 from ..core import istask
 
 
-def pprint_task(task, keys):
+def pprint_task(task, keys, label_size=60):
     """Return a nicely formatted string for a task.
+
+    Parameters
+    ----------
+
+    task:
+        Value within dask graph to render as text
+    keys: iterable
+        List of keys within dask graph
+    label_size: int (optional)
+        Maximum size of output label, defaults to 60
 
     Examples
     --------
@@ -39,18 +50,31 @@ def pprint_task(task, keys):
         else:
             head = funcname(task[0])
             tail = ')'
-        args = ', '.join(pprint_task(t, keys) for t in task[1:])
-        return '{0}({1}{2}'.format(head, args, tail)
+        label_size2 = int((label_size - len(head) - len(tail)) / len(task[1:]))
+        if label_size2 > 5:
+            args = ', '.join(pprint_task(t, keys, label_size2)
+                             for t in task[1:])
+        else:
+            args = '...'
+        result = '{0}({1}{2}'.format(head, args, tail)
     elif isinstance(task, list):
-        args = ', '.join(pprint_task(t, keys) for t in task)
-        return '[{0}]'.format(args)
+        task2 = task[:3]
+        label_size2 = int((label_size - 2 - 2 *len(task2)) / len(task2))
+        args = ', '.join(pprint_task(t, keys, label_size2) for t in task2)
+        if len(task) > 3:
+            result = '[{0}, ...]'.format(args)
+        else:
+            result = '[{0}]'.format(args)
     else:
         try:
             if task in keys:
-                return '_'
+                result = '_'
+            else:
+                result = '*'
         except TypeError:
-            pass
-        return '*'
+            result = '*'
+
+    return result
 
 
 def get_colors(palette, funcs):
@@ -78,8 +102,8 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(results, dsk, palette='GnBu', file_path="profile.html",
-              show=True, **kwargs):
+def visualize(results, dsk, palette='GnBu', file_path=None,
+              show=True, save=True, label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -94,6 +118,10 @@ def visualize(results, dsk, palette='GnBu', file_path="profile.html",
         Name of the plot output file.
     show : boolean, optional
         If True (default), the plot is opened in a browser.
+    save : boolean, optional
+        If True (default), the plot is saved to disk.
+    label_size: int (optional)
+        Maximum size of output labels in plot, defaults to 60
     **kwargs
         Other keyword arguments, passed to bokeh.figure. These will override
         all defaults set by visualize.
@@ -103,7 +131,9 @@ def visualize(results, dsk, palette='GnBu', file_path="profile.html",
     The completed bokeh plot object.
     """
 
-    bp.output_file(file_path)
+    if not _state._notebook:
+        file_path = file_path or "profile.html"
+        bp.output_file(file_path)
     keys, tasks, starts, ends, ids = zip(*results)
 
     id_group = groupby(itemgetter(4), results)
@@ -127,7 +157,7 @@ def visualize(results, dsk, palette='GnBu', file_path="profile.html",
     data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
     data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
     data['y'] = [id_lk[i] + 1 for i in ids]
-    data['function'] = funcs = [pprint_task(i, dsk) for i in tasks]
+    data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
     data['color'] = get_colors(palette, funcs)
     data['key'] = [str(i) for i in keys]
 
@@ -156,4 +186,6 @@ def visualize(results, dsk, palette='GnBu', file_path="profile.html",
 
     if show:
         bp.show(p)
+    if file_path and save:
+        bp.save(p)
     return p

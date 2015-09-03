@@ -1,4 +1,6 @@
+# coding=utf-8
 from __future__ import absolute_import, division, print_function
+from sys import getdefaultencoding
 
 import pytest
 pytest.importorskip('dill')
@@ -8,7 +10,7 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI, inline_singleton_lists, optimize)
+        _parse_s3_URI, inline_singleton_lists, optimize, decode_sequence)
 from dask.utils import filetexts, tmpfile, raises
 from dask.async import get_sync
 import dask
@@ -21,6 +23,8 @@ import partd
 from tempfile import mkdtemp
 
 from collections import Iterator
+
+system_encoding = getdefaultencoding()
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -132,8 +136,24 @@ def test_pluck_with_default():
     assert list(b.pluck(0, None)) == ['H', None, 'W']
 
 
-def test_fold_computation():
-    assert int(b.fold(add)) == sum(L)
+def test_fold():
+    assert b.fold(add).compute() == sum(L)
+    assert b.fold(add, initial=10).compute() == sum(L) + 10 * b.npartitions
+
+    c = db.from_sequence(range(5), npartitions=3)
+    def binop(acc, x):
+        acc = acc.copy()
+        acc.add(x)
+        return acc
+
+    assert c.fold(binop, set.union, initial=set()).compute() == set(c)
+
+    d = db.from_sequence('hello')
+    assert set(d.fold(lambda a, b: ''.join([a, b]), initial='').compute()) == set('hello')
+
+    e = db.from_sequence([[1], [2], [3]], npartitions=2)
+    with dask.set_options(get=get_sync):
+        assert set(e.fold(add, initial=[]).compute()) == set([1, 2, 3])
 
 
 def test_distinct():
@@ -263,12 +283,35 @@ def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
 
 
+def test_from_castra():
+    castra = pytest.importorskip('castra')
+    pd = pytest.importorskip('pandas')
+    dd = pytest.importorskip('dask.dataframe')
+    df = pd.DataFrame({'x': list(range(100)),
+                       'y': [str(i) for i in range(100)]})
+    a = dd.from_pandas(df, 10)
+
+    c = a.to_castra()
+    default = db.from_castra(c)
+    with_columns = db.from_castra(c, 'x')
+    with_index = db.from_castra(c, 'x', index=True)
+    with_nparts = db.from_castra(c, 'x', npartitions=4)
+    try:
+        assert list(default) == list(zip(range(100), map(str, range(100))))
+        assert list(with_columns) == list(range(100))
+        assert list(with_index) == list(zip(range(100), range(100)))
+        assert with_nparts.npartitions == 4
+        assert list(with_nparts) == list(range(100))
+    finally:
+        c.drop()
+
+
 @pytest.mark.slow
 def test_from_url():
     a = db.from_url(['http://google.com', 'http://github.com'])
     assert a.npartitions == 2
 
-    b = db.from_url('http://raw.githubusercontent.com/ContinuumIO/dask/master/README.rst')
+    b = db.from_url('http://raw.githubusercontent.com/blaze/dask/master/README.rst')
     assert b.npartitions == 1
     assert b'Dask\n' in b.take(10)
 
@@ -287,16 +330,16 @@ def test_from_filenames_gzip():
     b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (gzip.open, os.path.abspath('foo.json.gz'))),
-                 (list, (gzip.open, os.path.abspath('bar.json.gz')))]))
+            set([(list, (decode_sequence, system_encoding, (gzip.open, os.path.abspath('foo.json.gz'), 'rb'))),
+                 (list, (decode_sequence, system_encoding, (gzip.open, os.path.abspath('bar.json.gz'), 'rb')))]))
 
 
 def test_from_filenames_bz2():
     b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (bz2.BZ2File, os.path.abspath('foo.json.bz2'))),
-                 (list, (bz2.BZ2File, os.path.abspath('bar.json.bz2')))]))
+            set([(list, (decode_sequence, system_encoding, (bz2.BZ2File, os.path.abspath('foo.json.bz2'), 'rb'))),
+                 (list, (decode_sequence, system_encoding, (bz2.BZ2File, os.path.abspath('bar.json.bz2'), 'rb')))]))
 
 
 def test_from_filenames_large():
@@ -312,6 +355,19 @@ def test_from_filenames_large():
         assert list(b) == list(d)
 
 
+def test_from_filenames_encoding():
+    with tmpfile() as fn:
+        with open(fn, 'wb') as f:
+            f.write((u'你好！' + os.linesep).encode('gb18030') * 100)
+        b = db.from_filenames(fn, chunkbytes=100, encoding='gb18030')
+        c = db.from_filenames(fn, encoding='gb18030')
+        assert len(b.dask) > 5
+        assert list(map(lambda x: x.encode('utf-8'), b)) == list(map(lambda x: x.encode('utf-8'), c))
+
+        d = db.from_filenames([fn], chunkbytes=100, encoding='gb18030')
+        assert list(b) == list(d)
+
+
 def test_from_filenames_large_gzip():
     with tmpfile('gz') as fn:
         f = gzip.open(fn, 'wb')
@@ -321,7 +377,7 @@ def test_from_filenames_large_gzip():
         b = db.from_filenames(fn, chunkbytes=100)
         c = db.from_filenames(fn)
         assert len(b.dask) > 5
-        assert list(b) == [s.decode() for s in c]
+        assert list(b) == list(c)
 
 
 @pytest.mark.slow
@@ -494,11 +550,32 @@ def test_to_textfiles():
             c.compute(get=dask.get)
             assert os.path.exists(os.path.join(dir, '1.' + ext))
 
-            f = myopen(os.path.join(dir, '1.' + ext), 'r')
+            f = myopen(os.path.join(dir, '1.' + ext), 'rb')
             text = f.read()
             if hasattr(text, 'decode'):
                 text = text.decode()
             assert 'xyz' in text
+            f.close()
+        finally:
+            if os.path.exists(dir):
+                shutil.rmtree(dir)
+
+
+def test_to_textfiles_encoding():
+    b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
+    dir = mkdtemp()
+    for ext, myopen in [('gz', gzip.open), ('bz2', bz2.BZ2File), ('', open)]:
+        c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030')
+        assert c.npartitions == b.npartitions
+        try:
+            c.compute(get=dask.get)
+            assert os.path.exists(os.path.join(dir, '1.' + ext))
+
+            f = myopen(os.path.join(dir, '1.' + ext), 'rb')
+            text = f.read()
+            if hasattr(text, 'decode'):
+                text = text.decode('gb18030')
+            assert u'天气' in text
             f.close()
         finally:
             if os.path.exists(dir):

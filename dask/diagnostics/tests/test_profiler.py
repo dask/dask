@@ -1,7 +1,11 @@
 from operator import add, mul
+import os
+
 from dask.diagnostics import Profiler
 from dask.threaded import get
+from dask.utils import ignoring, tmpfile
 import pytest
+
 try:
     import bokeh
 except:
@@ -31,6 +35,18 @@ def test_profiler():
     assert prof.results() == []
 
 
+def test_profiler_works_under_error():
+    div = lambda x, y: x / y
+    dsk = {'x': (div, 1, 1), 'y': (div, 'x', 2), 'z': (div, 'y', 0)}
+
+    with ignoring(ZeroDivisionError):
+        with prof:
+            out = get(dsk, 'z')
+
+    assert all(len(v) == 5 for v in prof.results())
+    assert len(prof.results()) == 2
+
+
 @pytest.mark.skipif("not bokeh")
 def test_pprint_task():
     from dask.diagnostics.profile_visualize import pprint_task
@@ -40,6 +56,13 @@ def test_pprint_task():
     res = 'sum([*, _, add(_, *)])'
     assert pprint_task((sum, [1, 'b', (add, 'a', 1)]), keys) == res
     assert pprint_task((sum, (1, 2, 3, 4, 5, 6, 7)), keys) == 'sum(*)'
+
+    assert len(pprint_task((sum, list(keys) * 100), keys)) < 100
+    assert pprint_task((sum, list(keys) * 100), keys) == 'sum([_, _, _, ...])'
+    assert pprint_task((sum, [1, 2, (sum, ['a', 4]), 5, 6] * 100), keys) == \
+            'sum([*, *, sum([_, *]), ...])'
+    assert pprint_task((sum, [1, 2, (sum, ['a', (sum, [1, 2, 3])]), 5, 6])
+                      , keys) == 'sum([*, *, sum([_, sum(...)]), ...])'
 
 
 @pytest.mark.skipif("not bokeh")
@@ -58,6 +81,19 @@ def test_profiler_plot():
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert p.title == "Not the default"
+
+
+@pytest.mark.skipif("not bokeh")
+def test_saves_file():
+    with tmpfile('html') as fn:
+        with prof:
+            get(dsk, 'e')
+        # Run just to see that it doesn't error
+        prof.visualize(show=False, file_path=fn)
+
+        assert os.path.exists(fn)
+        with open(fn) as f:
+            assert 'HTML' in f.read()
 
 
 @pytest.mark.skipif("not bokeh")

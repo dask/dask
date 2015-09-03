@@ -18,6 +18,15 @@ from dask.utils import raises, ignoring, tmpfile
 inc = lambda x: x + 1
 
 
+def same_keys(a, b):
+    def key(k):
+        if isinstance(k, str):
+            return (k, -1, -1, -1)
+        else:
+            return k
+    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+
+
 def test_getem():
     assert getem('X', (2, 3), shape=(4, 6)) == \
     {('X', 0, 0): (getarray, 'X', (slice(0, 2), slice(0, 3))),
@@ -147,6 +156,7 @@ def test_transpose():
 
     assert eq(d.transpose((2, 0, 1)),
               x.transpose((2, 0, 1)))
+    assert same_keys(d.transpose((2, 0, 1)), d.transpose((2, 0, 1)))
 
 
 def test_broadcast_dimensions_works_with_singleton_dimensions():
@@ -226,6 +236,7 @@ def test_stack():
                                           (None, colon, colon))
     assert s.dask[(s.name, 2, 1, 0)] == (getarray, ('C', 1, 0),
                                           (None, colon, colon))
+    assert same_keys(s, stack([a, b, c], axis=0))
 
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
@@ -234,6 +245,7 @@ def test_stack():
                                             (colon, None, colon))
     assert s2.dask[(s2.name, 1, 1, 0)] == (getarray, ('B', 1, 0),
                                             (colon, None, colon))
+    assert same_keys(s2, stack([a, b, c], axis=1))
 
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
@@ -242,6 +254,7 @@ def test_stack():
                                             (colon, colon, None))
     assert s2.dask[(s2.name, 1, 1, 2)] == (getarray, ('C', 1, 1),
                                             (colon, colon, None))
+    assert same_keys(s2, stack([a, b, c], axis=2))
 
     assert raises(ValueError, lambda: stack([a, b, c], axis=3))
 
@@ -278,6 +291,7 @@ def test_concatenate():
     assert x.chunks == ((2, 2, 2, 2, 2, 2), (3, 3))
     assert x.dask[(x.name, 0, 1)] == ('A', 0, 1)
     assert x.dask[(x.name, 5, 0)] == ('C', 1, 0)
+    assert same_keys(x, concatenate([a, b, c], axis=0))
 
     y = concatenate([a, b, c], axis=1)
 
@@ -285,6 +299,7 @@ def test_concatenate():
     assert y.chunks == ((2, 2), (3, 3, 3, 3, 3, 3))
     assert y.dask[(y.name, 1, 0)] == ('A', 1, 0)
     assert y.dask[(y.name, 1, 5)] == ('C', 1, 1)
+    assert same_keys(y, concatenate([a, b, c], axis=1))
 
     assert set(b.dask.keys()).issubset(y.dask.keys())
 
@@ -301,13 +316,14 @@ def test_take():
     assert eq(np.take(x, 3, axis=0), take(a, 3, axis=0))
     assert eq(np.take(x, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
     assert raises(ValueError, lambda: take(a, 3, axis=2))
+    assert same_keys(take(a, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
 
 
 def test_binops():
-    a = Array(dict((('a', i), '') for i in range(3)),
-              'a', chunks=((10, 10, 10),))
-    b = Array(dict((('b', i), '') for i in range(3)),
-              'b', chunks=((10, 10, 10),))
+    a = Array(dict((('a', i), np.array([''])) for i in range(3)),
+              'a', chunks=((1, 1, 1),))
+    b = Array(dict((('b', i), np.array([''])) for i in range(3)),
+              'b', chunks=((1, 1, 1),))
 
     result = elemwise(add, a, b, name='c')
     assert result.dask == merge(a.dask, b.dask,
@@ -349,6 +365,44 @@ def test_elemwise_on_scalars():
     assert eq(a, x)
 
 
+def test_partial_by_order():
+    f = partial_by_order(add, [(1, 20)])
+    assert f(5) == 25
+    assert f.__name__ == 'add(20)'
+
+    f = partial_by_order(lambda x, y, z: x + y + z, [(1, 10), (2, 15)])
+    assert f(3) == 28
+    assert f.__name__ == '<lambda>(...)'
+
+    assert raises(ValueError, lambda: partial_by_order(add, 1))
+    assert raises(ValueError, lambda: partial_by_order(add, [1]))
+
+
+def test_elemwise_with_ndarrays():
+    x = np.arange(3)
+    y = np.arange(12).reshape(4, 3)
+    a = from_array(x, chunks=(3,))
+    b = from_array(y, chunks=(2, 3))
+
+    assert eq(x + a, 2 * x)
+    assert eq(a + x, 2 * x)
+
+    assert eq(x + b, x + y)
+    assert eq(b + x, x + y)
+    assert eq(a + y, x + y)
+    assert eq(y + a, x + y)
+
+
+def test_elemwise_differently_chunked():
+    x = np.arange(3)
+    y = np.arange(12).reshape(4, 3)
+    a = from_array(x, chunks=(3,))
+    b = from_array(y, chunks=(2, 2))
+
+    assert eq(a + b, x + y)
+    assert eq(b + a, x + y)
+
+
 def test_operators():
     x = np.arange(10)
     y = np.arange(10).reshape((10, 1))
@@ -371,11 +425,22 @@ def test_operators():
     assert eq(a, +x)
 
 
+def test_operator_dtype_promotion():
+    x = np.arange(10, dtype=np.float32)
+    y = np.array([1])
+    a = from_array(x, chunks=(5,))
+
+    assert eq(x + 1, a + 1)  # still float32
+    assert eq(x + 1e50, a + 1e50)  # now float64
+    assert eq(x + y, a + y)  # also float64
+
+
 def test_field_access():
     x = np.array([(1, 1.0), (2, 2.0)], dtype=[('a', 'i4'), ('b', 'f4')])
     y = from_array(x, chunks=(1,))
     assert eq(y['a'], x['a'])
     assert eq(y[['b', 'a']], x[['b', 'a']])
+    assert same_keys(y[['b', 'a']], y[['b', 'a']])
 
 
 def test_tensordot():
@@ -386,6 +451,8 @@ def test_tensordot():
 
     assert eq(tensordot(a, b, axes=1), np.tensordot(x, y, axes=1))
     assert eq(tensordot(a, b, axes=(1, 0)), np.tensordot(x, y, axes=(1, 0)))
+    assert same_keys(tensordot(a, b, axes=(1, 0)), tensordot(a, b, axes=(1, 0)))
+    assert not same_keys(tensordot(a, b, axes=0), tensordot(a, b, axes=1))
 
     # assert (tensordot(a, a).chunks
     #      == tensordot(a, a, axes=((1, 0), (0, 1))).chunks)
@@ -486,6 +553,8 @@ def test_insert():
     assert raises(NotImplementedError, lambda: insert(a, [4, 2], -1, axis=0))
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=2))
     assert raises(IndexError, lambda: insert(a, [3], -1, axis=-3))
+    assert same_keys(insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0),
+                    insert(a, [2, 3, 8, 8, -2, -2], -1, axis=0))
 
 
 def test_multi_insert():
@@ -544,10 +613,11 @@ def test_map_blocks2():
     def func(block, block_id=None):
         return np.ones_like(block) * sum(block_id)
 
-    d = d.map_blocks(func, dtype='i8')
+    out = d.map_blocks(func, dtype='i8')
     expected = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4], dtype='i8')
 
-    assert eq(d, expected)
+    assert eq(out, expected)
+    assert same_keys(d.map_blocks(func, dtype='i8'), out)
 
 
 def test_fromfunction():
@@ -556,6 +626,7 @@ def test_fromfunction():
     d = fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
 
     assert eq(d, np.fromfunction(f, shape=(5, 5)))
+    assert same_keys(d, fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8'))
 
 
 def test_from_function_requires_block_args():
@@ -719,6 +790,7 @@ def test_astype():
 
     assert d.astype('i8')._dtype == 'i8'
     assert eq(d.astype('i8'), x.astype('i8'))
+    assert same_keys(d.astype('i8'), d.astype('i8'))
 
 
 def test_arithmetic():
@@ -843,11 +915,13 @@ def test_arithmetic():
 
     assert eq(da.angle(a + 1j), np.angle(x + 1j))
     assert eq(da.real(a + 1j), np.real(x + 1j))
+    assert eq((a + 1j).real, np.real(x + 1j))
     assert eq(da.imag(a + 1j), np.imag(x + 1j))
+    assert eq((a + 1j).imag, np.imag(x + 1j))
 
     assert eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
     assert eq(da.fabs(b), np.fabs(y))
-    assert eq(da.sign(b - 2), np.fabs(y - 2))
+    assert eq(da.sign(b - 2), np.sign(y - 2))
 
     l1, l2 = da.frexp(a)
     r1, r2 = np.frexp(x)
@@ -860,6 +934,16 @@ def test_arithmetic():
     assert eq(l2, r2)
 
     assert eq(da.around(a, -1), np.around(x, -1))
+
+
+def test_elemwise_consistent_names():
+    a = da.from_array(np.arange(5, dtype='f4'), chunks=(2,))
+    b = da.from_array(np.arange(5, dtype='f4'), chunks=(2,))
+    assert same_keys(a + b, a + b)
+    assert same_keys(a + 2, a + 2)
+    assert same_keys(da.exp(a), da.exp(a))
+    assert same_keys(da.exp(a, dtype='f8'), da.exp(a, dtype='f8'))
+    assert same_keys(da.maximum(a, b), da.maximum(a, b))
 
 
 def test_optimize():
@@ -913,6 +997,7 @@ def test_squeeze():
     assert eq(x.squeeze(), x.compute().squeeze())
 
     assert x.squeeze().chunks == ((3, 3, 3, 1),)
+    assert same_keys(x.squeeze(), x.squeeze())
 
 
 def test_size():
@@ -956,11 +1041,13 @@ def test_from_array_with_lock():
 
 def test_from_func():
     x = np.arange(10)
-    d = from_func(lambda n: n * x, (10,), x.dtype, kwargs={'n': 2})
+    f = lambda n: n * x
+    d = from_func(f, (10,), x.dtype, kwargs={'n': 2})
 
     assert d.shape == x.shape
     assert d.dtype == x.dtype
     assert eq(d.compute(), 2 * x)
+    assert same_keys(d, from_func(f, (10,), x.dtype, kwargs={'n': 2}))
 
 
 def test_topk():
@@ -971,6 +1058,7 @@ def test_topk():
 
     assert e.chunks == ((2,),)
     assert eq(e, np.sort(x)[-1:-3:-1])
+    assert same_keys(da.topk(2, d), e)
 
 
 def test_topk_k_bigger_than_chunk():
@@ -986,8 +1074,9 @@ def test_topk_k_bigger_than_chunk():
 def test_bincount():
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
-
-    assert eq(da.bincount(d, minlength=6), np.bincount(x, minlength=6))
+    e = da.bincount(d, minlength=6)
+    assert eq(e, np.bincount(x, minlength=6))
+    assert same_keys(da.bincount(d, minlength=6), e)
 
 
 def test_bincount_with_weights():
@@ -996,8 +1085,9 @@ def test_bincount_with_weights():
     weights = np.array([1, 2, 1, 0.5, 1])
 
     dweights = da.from_array(weights, chunks=2)
-    assert eq(da.bincount(d, weights=dweights, minlength=6),
-              np.bincount(x, weights=dweights, minlength=6))
+    e = da.bincount(d, weights=dweights, minlength=6)
+    assert eq(e, np.bincount(x, weights=dweights, minlength=6))
+    assert same_keys(da.bincount(d, weights=dweights, minlength=6), e)
 
 
 def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
@@ -1023,6 +1113,7 @@ def test_histogram():
     assert a2.sum(axis=0) == n
     assert a1.sum(axis=0) == n
     assert eq(a1, a2)
+    assert same_keys(da.histogram(v, bins=bins)[0], a1)
 
 
 def test_histogram_alternative_bins_range():
@@ -1122,20 +1213,16 @@ def test_map_blocks3():
     z = np.arange(100).reshape((10, 10))
     f = da.from_array(z, chunks=5)
 
-    assert eq(da.core.map_blocks(lambda a, b: a+2*b, d, f, dtype=d.dtype),
-              x + 2*z)
+    func = lambda a, b: a + 2*b
+    res = da.core.map_blocks(func, d, f, dtype=d.dtype)
+    assert eq(res, x + 2*z)
+    assert same_keys(da.core.map_blocks(func, d, f, dtype=d.dtype), res)
 
 
 def test_from_array_with_missing_chunks():
     x = np.random.randn(2, 4, 3)
     d = da.from_array(x, chunks=(None, 2, None))
     assert d.chunks == da.from_array(x, chunks=(2, 2, 3)).chunks
-
-
-def test_numpy_compat_is_notimplemented():
-    a = np.arange(10)
-    x = da.from_array(a, chunks=5)
-    assert raises(NotImplementedError, lambda: x + a)
 
 
 def test_cache():
@@ -1215,6 +1302,7 @@ def test_h5py_newaxis():
             assert d[None, :, :].compute(get=get_sync).shape == (1, 10, 10)
             assert d[:, None, :].compute(get=get_sync).shape == (10, 1, 10)
             assert d[:, :, None].compute(get=get_sync).shape == (10, 10, 1)
+            assert same_keys(d[:, :, None], d[:, :, None])
 
 
 def test_ellipsis_slicing():
@@ -1230,6 +1318,7 @@ def test_point_slicing():
 
     result = d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]]
     assert eq(result, x[[0, 1, 6, 0], [0, 1, 0, 7]])
+    assert same_keys(result, d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]])
 
 
 def test_point_slicing_with_full_slice():

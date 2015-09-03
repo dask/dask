@@ -1,9 +1,12 @@
 from itertools import count
+from operator import getitem
+
+from toolz import identity
+
 from .compatibility import zip_longest
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, add, inc, ishashable, preorder_traversal)
 from .rewrite import END
-from toolz import identity
 
 
 def cull(dsk, keys):
@@ -454,3 +457,40 @@ def merge_sync(dsk1, dsk2):
 
 # store the name iterator in the function
 merge_sync.names = ('merge_%d' % i for i in count(1))
+
+
+def fuse_getitem(dsk, func, place):
+    """ Fuse getitem with lower operation
+
+    Parameters
+    ----------
+
+    dsk: dict
+        dask graph
+    func: function
+        A function in a task to merge
+    place: int
+        Location in task to insert the getitem key
+
+    >>> def load(store, partition, columns):
+    ...     pass
+    >>> dsk = {'x': (load, 'store', 'part', ['a', 'b']),
+    ...        'y': (getitem, 'x', 'a')}
+    >>> dsk2 = fuse_getitem(dsk, load, 3)  # columns in arg place 3
+    >>> cull(dsk2, 'y')
+    {'y': (<function load at ...>, 'store', 'part', 'a')}
+    """
+    dsk2 = dict()
+    seen = set()
+    for k, v in dsk.items():
+        try:
+            if (istask(v) and v[0] == getitem and v[1] in dsk and
+                istask(dsk[v[1]]) and dsk[v[1]][0] == func):
+                vv = list(dsk[v[1]])
+                vv[place] = v[2]
+                dsk2[k] = tuple(vv)
+            else:
+                dsk2[k] = v
+        except TypeError:
+            dsk2[k] = v
+    return dsk2

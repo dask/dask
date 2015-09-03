@@ -54,7 +54,8 @@ We proceed with hash joins in the following stages:
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
 
-from .core import repartition, DataFrame, Index, tokenize
+from ..base import tokenize
+from .core import repartition, _Frame, Scalar, DataFrame, Index
 from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
@@ -80,38 +81,65 @@ def align_partitions(*dfs):
 
     Parameters
     ----------
-    dfs: sequence of dd.DataFrames
+    dfs: sequence of dd.DataFrame, dd.Series and dd.base.Scalar
         Sequence of dataframes to be aligned on their index
+
 
     Returns
     -------
-    dfs: sequence of dd.DataFrames
-        These DataFrames have consistent divisions with each other
+    dfs: sequence of dd.DataFrame, dd.Series and dd.base.Scalar
+        These must have consistent divisions with each other
     divisions: tuple
         Full divisions sequence of the entire result
     result: list
-        A list of lists of keys that show which dataframes exist on which
+        A list of lists of keys that show which data exist on which
         divisions
     """
-    divisions = list(unique(merge_sorted(*[df.divisions for df in dfs])))
-    divisionss = [bound(divisions, df.divisions[0], df.divisions[-1])
-                  for df in dfs]
-    dfs2 = list(map(repartition, dfs, divisionss))
+    dfs1 = [df for df in dfs if isinstance(df, _Frame)]
+    if len(dfs) == 0:
+        raise ValueError("dfs contains no DataFrame and Series")
+    divisions = list(unique(merge_sorted(*[df.divisions for df in dfs1])))
+    dfs2 = [df.repartition(divisions, force=True)
+            if isinstance(df, _Frame) else df for df in dfs]
 
     result = list()
     inds = [0 for df in dfs]
     for d in divisions[:-1]:
         L = list()
-        for i in range(len(dfs)):
-            j = inds[i]
-            divs = dfs2[i].divisions
-            if j < len(divs) - 1 and divs[j] == d:
-                L.append((dfs2[i]._name, inds[i]))
-                inds[i] += 1
-            else:
+        for i, df in enumerate(dfs2):
+            if isinstance(df, _Frame):
+                j = inds[i]
+                divs = df.divisions
+                if j < len(divs) - 1 and divs[j] == d:
+                    L.append((df._name, inds[i]))
+                    inds[i] += 1
+                else:
+                    L.append(None)
+            else: # Scalar has no divisions
                 L.append(None)
         result.append(L)
     return dfs2, tuple(divisions), result
+
+
+def _maybe_align_partitions(args):
+    """ Align DataFrame blocks if divisions are different """
+
+    # passed to align_partitions
+    indexer, dasks = zip(*[x for x in enumerate(args)
+                           if isinstance(x[1], (_Frame, Scalar))])
+
+    # to get current divisions
+    dfs = [df for df in dasks if isinstance(df, _Frame)]
+    if len(dfs) == 0:
+        # no need to align
+        return args
+
+    divisions = dfs[0].divisions
+    if not all(df.divisions == divisions for df in dfs):
+        dasks, _, _ = align_partitions(*dasks)
+        for i, d in zip(indexer, dasks):
+            args[i] = d
+    return args
 
 
 def require(divisions, parts, required=None):
@@ -170,8 +198,7 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     left_empty = pd.DataFrame([], columns=lhs.columns)
     right_empty = pd.DataFrame([], columns=rhs.columns)
 
-    token = tokenize((lhs._name, rhs._name, how, lsuffix, rsuffix))
-    name = 'join-indexed-' + token
+    name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
     dsk = dict(((name, i),
                 (pd.DataFrame.join, a, b, None, how, lsuffix, rsuffix)
                 if a is not None and b is not None else
@@ -188,20 +215,25 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk), name, j.columns, divisions)
 
 
-def pdmerge(left, right, *args, **kwargs):
-    default_left_columns = kwargs.pop('left_columns')
-    default_right_columns = kwargs.pop('right_columns')
+def pdmerge(left, right, how, left_on, right_on,
+            left_index, right_index, suffixes,
+            default_left_columns, default_right_columns):
 
     if not len(left):
         left = pd.DataFrame([], columns=default_left_columns)
+
     if not len(right):
         right = pd.DataFrame([], columns=default_right_columns)
 
+    result = pd.merge(left, right, how=how,
+                      left_on=left_on, right_on=right_on,
+                      left_index=left_index, right_index=right_index,
+                      suffixes=suffixes)
+    return result
 
-    return pd.merge(left, right, *args, **kwargs)
 
-
-def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffixes=('_x', '_y')):
+def hash_join(lhs, left_on, rhs, right_on, how='inner',
+              npartitions=None, suffixes=('_x', '_y')):
     """ Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
@@ -212,34 +244,45 @@ def hash_join(lhs, on_left, rhs, on_right, how='inner', npartitions=None, suffix
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle(lhs, on_left, npartitions)
-    rhs2 = shuffle(rhs, on_right, npartitions)
+    lhs2 = shuffle(lhs, left_on, npartitions)
+    rhs2 = shuffle(rhs, right_on, npartitions)
+
+    if isinstance(left_on, Index):
+        left_on = None
+        left_index = True
+    else:
+        left_index = False
+
+    if isinstance(right_on, Index):
+        right_on = None
+        right_index = True
+    else:
+        right_index = False
 
     # fake column names
     left_empty = pd.DataFrame([], columns=lhs.columns)
     right_empty = pd.DataFrame([], columns=rhs.columns)
-    left_on = None if isinstance(on_left, Index) else on_left
-    left_index = isinstance(on_left, Index)
-    right_on = None if isinstance(on_right, Index) else on_right
-    right_index = isinstance(on_right, Index)
     j = pd.merge(left_empty, right_empty, how, None,
                  left_on=left_on, right_on=right_on,
-                 left_index=left_index, right_index=right_index)
+                 left_index=left_index, right_index=right_index,
+                 suffixes=suffixes)
 
-    if isinstance(on_left, list):
-        on_left = (list, tuple(on_left))
-    if isinstance(on_right, list):
-        on_right = (list, tuple(on_right))
+    merger = partial(pdmerge, suffixes=suffixes,
+                     default_left_columns=list(lhs.columns),
+                     default_right_columns=list(rhs.columns))
 
-    pdmerge2 = partial(pdmerge, suffixes=suffixes,
-                       left_columns=list(lhs.columns),
-                       right_columns=list(rhs.columns))
+    if isinstance(left_on, list):
+        left_on = (list, tuple(left_on))
+    if isinstance(right_on, list):
+        right_on = (list, tuple(right_on))
 
-    token = tokenize((lhs._name, on_left, rhs._name, on_right, how,
-                      npartitions, suffixes))
+    token = tokenize(lhs, left_on, rhs, right_on, left_index, right_index,
+                     how, npartitions, suffixes)
     name = 'hash-join-' + token
-    dsk = dict(((name, i), (pdmerge2, (lhs2._name, i), (rhs2._name, i),
-                             how, None, on_left, on_right))
+
+    dsk = dict(((name, i), (merger, (lhs2._name, i), (rhs2._name, i),
+                            how, left_on, right_on,
+                            left_index, right_index))
                 for i in range(npartitions))
 
     divisions = [None] * (npartitions + 1)
@@ -261,8 +304,7 @@ def concat_indexed_dataframes(dfs, join='outer'):
                for df, empty in zip(part, empties)]
               for part in parts]
 
-    token = tokenize(([df._name for df in dfs], join))
-    name = 'concat-indexed-' + token
+    name = 'concat-indexed-' + tokenize(join, *dfs)
     dsk = dict(((name, i), (pd.concat, part, 0, join))
                 for i, part in enumerate(parts2))
 
@@ -272,15 +314,19 @@ def concat_indexed_dataframes(dfs, join='outer'):
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           left_index=False, right_index=False, suffixes=('_x', '_y'),
           npartitions=None):
+
     if not on and not left_on and not right_on and not left_index and not right_index:
         on = [c for c in left.columns if c in right.columns]
         if not on:
             left_index = right_index = True
+
     if on and not left_on and not right_on:
         left_on = right_on = on
         on = None
-    if isinstance(left, pd.core.generic.NDFrame) and isinstance(right, pd.core.generic.NDFrame):
-        return pd.merge(left, right, how, on=on, left_on=left_on,
+
+    if (isinstance(left, pd.core.generic.NDFrame) and
+        isinstance(right, pd.core.generic.NDFrame)):
+        return pd.merge(left, right, how=how, on=on, left_on=left_on,
                         right_on=right_on, left_index=left_index,
                         right_index=right_index, suffixes=suffixes)
 
@@ -290,13 +336,14 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             left = left.set_index(left[left_on])
             left_on = False
             left_index = True
-        left = from_pandas(left, npartitions=1)  # turn into dataframe
+        left = from_pandas(left, npartitions=1)  # turn into DataFrame
+
     if isinstance(right, pd.core.generic.NDFrame):
         if left_index and right_on:  # change to join on index
             right = right.set_index(right[right_on])
             right_on = False
             right_index = True
-        right = from_pandas(right, npartitions=1)  # turn into dataframe
+        right = from_pandas(right, npartitions=1)  # turn into DataFrame
 
     # Both sides are now dd.DataFrame or dd.Series objects
 
@@ -308,3 +355,4 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
         return hash_join(left, left.index if left_index else left_on,
                          right, right.index if right_index else right_on,
                          how, npartitions, suffixes)
+

@@ -1,15 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
-from itertools import count, product
+from itertools import product
 from functools import partial
 
 from toolz import curry
 import numpy as np
 
-from .core import Array, normalize_chunks, tokens
+from ..base import tokenize
+from .core import Array, normalize_chunks
 from .numpy_compat import full
-
-names = ('wrapped_%d' % i for i in count(1))
 
 
 def dims_from_size(size, blocksize):
@@ -26,7 +25,7 @@ def dims_from_size(size, blocksize):
 
 def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     """
-    Transform np.random function into blocked version
+    Transform np creation function into blocked version
     """
     if 'shape' not in kwargs:
         shape, args = args[0], args[1:]
@@ -44,7 +43,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     if dtype is None:
         dtype = func(shape, *args, **kwargs).dtype
 
-    name = name or next(names)
+    name = name or 'wrapped-' + tokenize(func, shape, chunks, dtype, args, kwargs)
 
     keys = product([name], *[range(len(bd)) for bd in chunks])
     shapes = product(*chunks)

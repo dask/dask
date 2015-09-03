@@ -5,7 +5,8 @@ import numpy as np
 import uuid
 
 from ..optimize import cull
-from .core import DataFrame, Series, _Frame, tokenize
+from ..base import tokenize
+from .core import DataFrame, Series, _Frame
 from .utils import (strip_categories, shard_df_on_index, _categorize,
                     get_categories)
 
@@ -60,10 +61,11 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     """
     if isinstance(index, _Frame):
         assert df.divisions == index.divisions
+        columns = df.columns
+    else:
+        columns = tuple([c for c in df.columns if c != index])
 
-    token = tokenize((df._name,
-                      (index._name if isinstance(index, _Frame) else  index),
-                      divisions))
+    token = tokenize(df, index, divisions)
     always_new_token = uuid.uuid1().hex
     import partd
 
@@ -108,11 +110,12 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     name = 'set-partition--collect-' + token
     if compute and not categories:
         dsk4.update(dict(((name, i),
-                     (_set_collect, i, p, barrier_token))
+                     (_set_collect, i, p, barrier_token, df.columns))
                      for i in range(len(divisions) - 1)))
     else:
         dsk4.update(dict(((name, i),
-                     (_categorize, catname2, (_set_collect, i, p, barrier_token)))
+                     (_categorize, catname2,
+                        (_set_collect, i, p, barrier_token, df.columns)))
                     for i in range(len(divisions) - 1)))
 
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
@@ -122,7 +125,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     if compute:
         dsk = cull(dsk, list(dsk4.keys()))
 
-    return DataFrame(dsk, name, df.columns, divisions)
+    return DataFrame(dsk, name, columns, divisions)
 
 
 def barrier(args):
@@ -138,12 +141,15 @@ def _set_partition(df, index, divisions, p):
     p.append(dict(enumerate(shards)))
 
 
-def _set_collect(group, p, barrier_token):
+def _set_collect(group, p, barrier_token, columns):
     """ Get new partition dataframe from partd """
     try:
         return p.get(group)
     except ValueError:
-        return pd.DataFrame()
+        assert columns is not None, columns
+        # when unable to get group, create dummy DataFrame
+        # which has the same columns as original
+        return pd.DataFrame([], columns=columns)
 
 
 def shuffle(df, index, npartitions=None):
@@ -167,9 +173,7 @@ def shuffle(df, index, npartitions=None):
     if npartitions is None:
         npartitions = df.npartitions
 
-    token = tokenize((df._name,
-                      (index._name if isinstance(index, _Frame) else  index),
-                      npartitions))
+    token = tokenize(df, index, npartitions)
     always_new_token = uuid.uuid1().hex
 
     import partd

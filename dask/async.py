@@ -123,6 +123,7 @@ from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
 from .context import _globals
 from .order import order
 from .callbacks import unpack_callbacks
+from .optimize import cull
 
 def inc(x):
     return x + 1
@@ -185,7 +186,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
 
     ready_set = set([k for k, v in waiting.items() if not v])
-    ready = sorted(ready_set, key=sortkey)
+    ready = sorted(ready_set, key=sortkey, reverse=True)
     waiting = dict((k, v) for k, v in waiting.items() if v)
 
     state = {'dependencies': dependencies,
@@ -307,7 +308,7 @@ def finish_task(dsk, key, state, results, sortkey, delete=True,
     if key in state['ready-set']:
         state['ready-set'].remove(key)
 
-    for dep in sorted(state['dependents'][key], key=sortkey):
+    for dep in sorted(state['dependents'][key], key=sortkey, reverse=True):
         s = state['waiting'][dep]
         s.remove(key)
         if not s:
@@ -434,11 +435,15 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         result_flat = set([result])
     results = set(result_flat)
 
+    dsk = dsk.copy()
+    for f in start_cbs:
+        f(dsk)
+
+    dsk = cull(dsk, list(results))
+
     keyorder = order(dsk)
 
     state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
-    for f in start_cbs:
-        f(dsk, state)
 
     if rerun_exceptions_locally is None:
         rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
@@ -468,7 +473,12 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
     # Main loop, wait on tasks to finish, insert new ones
     while state['waiting'] or state['ready'] or state['running']:
-        key, res, tb, worker_id = queue.get()
+        try:
+            key, res, tb, worker_id = queue.get()
+        except KeyboardInterrupt:
+            for f in finish_cbs:
+                f(dsk, state, True)
+            raise
         if isinstance(res, Exception):
             for f in finish_cbs:
                 f(dsk, state, True)

@@ -1,12 +1,12 @@
-from itertools import count, product
-from toolz import merge, first, accumulate, groupby, pluck
+from itertools import product
 from operator import getitem, add
 from math import ceil
-from ..compatibility import long
+
+from toolz import merge, first, accumulate
 import numpy as np
 
-
-slice_names = ('slice-%d' % i for i in count(1))
+from ..compatibility import long
+from ..base import tokenize
 
 
 def sanitize_index_elements(ind):
@@ -187,7 +187,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     # Mixed case. Both slices/integers and lists. slice/integer then take
     else:
         # Do first pass without lists
-        tmp = next(slice_names)
+        tmp = 'slice-' + tokenize((out_name, in_name, blockdims, index))
         dsk, blockdims2 = slice_slices_and_integers(tmp, in_name, blockdims, index_without_list)
 
         # After collapsing some axes due to int indices, adjust axis parameter

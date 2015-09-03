@@ -7,15 +7,13 @@ The rechunk module defines:
         of an existing dask array to new chunks or blockshape
 """
 
-from itertools import count, product, chain
+from itertools import product, chain
 from operator import getitem, add
 import numpy as np
 from toolz import merge, accumulate
 
+from ..base import tokenize
 from .core import concatenate3, Array, normalize_chunks
-
-
-rechunk_names  = ('rechunk-%d' % i for i in count(1))
 
 
 def cumdims_label(chunks, const):
@@ -200,12 +198,14 @@ def rechunk(x, chunks):
         chunks = tuple(lc if lc is not None else rc
                        for lc, rc in zip(chunks, x.chunks))
     chunks = normalize_chunks(chunks, x.shape)
+    if chunks == x.chunks:
+        return x
     if not len(chunks) == x.ndim or tuple(map(sum, chunks)) != x.shape:
         raise ValueError("Provided chunks are not consistent with shape")
 
     crossed = intersect_chunks(x.chunks, chunks)
     x2 = dict()
-    temp_name = next(rechunk_names)
+    temp_name = 'rechunk-' + tokenize(x, chunks)
     new_index = tuple(product(*(tuple(range(len(n))) for n in chunks)))
     for flat_idx, cross1 in enumerate(crossed):
         new_idx = new_index[flat_idx]

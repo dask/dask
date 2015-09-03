@@ -13,11 +13,11 @@ performant drop-in replacement for a subset of the NumPy library.
 
 *Can we implement a large DataFrame as a sequence of smaller in-memory DataFrames and use task scheduling for execution?*
 
-Maybe.  In some ways Pandas is simpler than NumPy
+Maybe.  In some ways pandas is simpler than NumPy
 
 *  The single index dimension removes the need for most complex communication patterns like tensor contraction or QR decompositions.
 
-But in other ways Pandas is more complex
+But in other ways pandas is more complex
 
 *  We index DataFrames dimensions with values other than ``0, 1, 2, ...``
 *  Some algorithms depend on data values and not just the shape of the data.
@@ -45,7 +45,7 @@ involves ranges of index values, not locations.*
 
 The ``chunks`` tuple represents the block structure of a dask array in all dimensions.  In Frames we have only one dimension (simpler) but that dimension may be within other ordered dimensions like time or text.  Additionally there is no clear way to determine how many elements may be within two bounds from the metadata alone (e.g. how many records in the month of July).
 
-We define a Frame as a sequence of blocks, where each block is a Pandas DataFrame.  This sequence is sorted along an index column so that the index of all records in block ``i`` is less than the index of all records in block ``i+1``.  We store this information in a ``divisions`` attribute.  In the example to the right we index our frame by time and separate blocks by month.  Note that blocks may be of varying size.
+We define a Frame as a sequence of blocks, where each block is a pandas DataFrame.  This sequence is sorted along an index column so that the index of all records in block ``i`` is less than the index of all records in block ``i+1``.  We store this information in a ``divisions`` attribute.  In the example to the right we index our frame by time and separate blocks by month.  Note that blocks may be of varying size.
 
 We store the separation points (e.g. ``2014-02-01T00:00:00``) in the
 ``divisions`` attribute.
@@ -154,7 +154,7 @@ Some open questions
 -------------------
 
 *  Should we include other metadata like column names and dtypes?
-*  What are some other Pandas operations that trigger re-indexing events?
+*  What are some other pandas operations that trigger re-indexing events?
 *  What about multi-indices?  Do we need any special consideration here or is
    it sufficient to partition on the outer-most index and have the internal
    blocks think about the rest of the multi-index at a per-block level?
@@ -175,4 +175,4 @@ What are some bite-sized tasks?
 
 
 .. _`External sorts`: http://en.wikipedia.org/wiki/External_sorting
-.. _`Issue 52`: https://github.com/ContinuumIO/dask/issues/52
+.. _`Issue 52`: https://github.com/blaze/dask/issues/52
