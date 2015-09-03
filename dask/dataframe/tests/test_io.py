@@ -641,6 +641,22 @@ def test_to_bag():
     assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)
 
 
+def test_csv_expands_dtypes():
+    with filetext(text) as fn:
+        a = read_csv(fn, chunkbytes=30, dtype={})
+        a_kwargs = list(a.dask.values())[0][-1]
+
+        b = read_csv(fn, chunkbytes=30)
+        b_kwargs = list(b.dask.values())[0][-1]
+
+        assert a_kwargs['dtype'] == b_kwargs['dtype']
+
+        a = read_csv(fn, chunkbytes=30, dtype={'amount': float})
+        a_kwargs = list(a.dask.values())[0][-1]
+
+        assert a_kwargs['dtype']['amount'] == float
+
+
 def test_report_dtype_correction_on_csvs():
     text = 'numbers,names\n'
     for i in range(1000):

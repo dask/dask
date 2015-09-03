@@ -107,10 +107,18 @@ def fill_kwargs(fn, args, kwargs):
     if 'parse_dates' not in kwargs:
         kwargs['parse_dates'] = [col for col in head.dtypes.index
                            if np.issubdtype(head.dtypes[col], np.datetime64)]
-    if 'dtype' not in kwargs:
-        kwargs['dtype'] = dict(head.dtypes)
+
+    new_dtype = dict(head.dtypes)
+    dtype = kwargs.get('dtype', dict())
+    for k, v in dict(head.dtypes).items():
+        if k not in dtype:
+            dtype[k] = v
+
+    if kwargs.get('parse_dates'):
         for col in kwargs['parse_dates']:
-            del kwargs['dtype'][col]
+            del dtype[col]
+
+    kwargs['dtype'] = dtype
 
     kwargs['columns'] = list(head.columns)
 
