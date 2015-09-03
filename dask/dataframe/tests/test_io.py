@@ -641,7 +641,7 @@ def test_to_bag():
     assert ddf.x.to_bag().compute(get=get_sync) == list(a.x)
 
 
-def test_bad_csv():
+def test_report_dtype_correction_on_csvs():
     text = 'numbers,names\n'
     for i in range(1000):
         text += '1,foo\n'
@@ -649,6 +649,6 @@ def test_bad_csv():
     with filetext(text) as fn:
         try:
             dd.read_csv(fn).compute()
-            raise ValueError
+            assert False
         except ValueError as e:
-            assert "dtype={'numbers': float64}" in str(e)
+            assert "dtype={'numbers': 'float64'}" in str(e)
