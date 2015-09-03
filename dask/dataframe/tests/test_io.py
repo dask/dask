@@ -675,3 +675,22 @@ def test_report_dtype_correction_on_csvs():
             assert False
         except ValueError as e:
             assert "'numbers': 'float64'" in str(e)
+
+
+def test_hdf_globbing():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    a = dd.from_pandas(df, 2)
+
+    with tmpfile('foo.h5') as fn:
+        a.to_hdf(fn, '/data', format='table')
+        fn_with_star = '/tmp/*.foo.h5'
+        a = dd.read_hdf(fn_with_star, '/data', chunksize=2)
+        assert a.npartitions == 2
+
+        tm.assert_frame_equal(a.compute(), df)
+
+        tm.assert_frame_equal(
+              dd.read_hdf(fn_with_star, '/data', chunksize=2, start=1, stop=3).compute(),
+              pd.read_hdf(fn, '/data', start=1, stop=3))

@@ -631,9 +631,15 @@ This HDFStore is not partitionable and can only be use monolithically with
 pandas.  In the future when creating HDFStores use the ``format='table'``
 option to ensure that your dataset can be parallelized"""
 
+def _glob_hdf_path(path):
+    path2 = sorted(glob(path))
+    if len(path2) == 1:
+        return path2[0]
+
 @wraps(pd.read_hdf)
 def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
         chunksize=1000000):
+    path_or_buf = _glob_hdf_path(path_or_buf)
     with pd.HDFStore(path_or_buf) as hdf:
         storer = hdf.get_storer(key)
         if storer.format_type != 'table':
