@@ -1902,3 +1902,7 @@ def test_series_groupby():
     assert eq(dask_group2.sum(), pd_group2.sum())
     assert eq(dask_group2.min(), pd_group2.min())
     assert eq(dask_group2.max(), pd_group2.max())
+
+    assert raises(TypeError, lambda: ss.groupby([1, 2]))
+    sss = dd.from_pandas(s, npartitions=3)
+    assert raises(ValueError, lambda: ss.groupby(sss))
