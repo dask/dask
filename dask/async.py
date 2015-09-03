@@ -489,15 +489,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 _execute_task(task, data)  # Re-execute locally
             else:
                 raise type(res)(
-                "Exception occurred in remote worker.\n\n"
-                "Something you've asked dask to compute raised an exception.\n"
-                "That exception and the traceback are copied below.\n"
-                "To use pdb, rerun the computation with the keyword argument\n"
-                "    dask.set_options(rerun_exceptions_locally=True)\n"
-                "    or\n"
-                "    dataset.compute(rerun_exceptions_locally=True)\n\n"
-                "The original exception and traceback follow below:\n\n"
-                    + str(res) + "\n\nTraceback:\n" + tb)
+                    str(res) + "\n\nTraceback:\n" + tb)
         state['cache'][key] = res
         finish_task(dsk, key, state, results, keyorder.get)
         for f in posttask_cbs:
