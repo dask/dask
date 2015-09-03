@@ -41,7 +41,7 @@ def try_pd_read_csv(*args, **kwargs):
     except ValueError as pandas_exception:
         try:
             # this is brittle
-            parts = pandas_exception.message.split(' ')
+            parts = str(pandas_exception).split(' ')
             column_number = int(parts[-1])
             column_name = kwargs.get('names')[column_number]
             dtype1 = parts[7]
