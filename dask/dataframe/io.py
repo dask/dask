@@ -26,16 +26,6 @@ from .shuffle import set_partition
 csv_defaults = {'compression': None}
 
 
-read_csv_dtype_msg = """
-Dask dataframe inspected the first 1,000 rows of your csv file and guessed that
-column: %s had dtype: %s.
-
-This guess was incorrect and now that we're reading all the data we see it has
-some values with dtype: %s. You should add the following keyword arguments to
-your `read_csv` call:
-
-    read_csv(..., dtype={'%s': '%s'})
-"""
 
 def _read_csv(fn, i, chunkbytes, compression, kwargs):
     block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression)
@@ -43,16 +33,38 @@ def _read_csv(fn, i, chunkbytes, compression, kwargs):
     try:
         return pd.read_csv(block, **kwargs)
     except ValueError as e:
-        parts = str(e).split(' ')
-        column_number = int(parts[-1])
-        column_name = kwargs.get('names')[column_number]
+        msg = """
+        Dask dataframe inspected the first 1,000 rows of your csv file to guess the
+        data types of your columns.  These first 1,000 rows led us to an incorrect
+        guess.
 
-        dtype_old = parts[7]
-        dtype_new = parts[9]
-        new_dtype = kwargs['dtype'].copy()
-        new_dtype[column_name] = dtype_new
-        raise ValueError(read_csv_dtype_msg %
-                (column_name, dtype_old, dtype_new, column_name, dtype_new))
+        For example a column may have had integers in the first thousand
+        rows followed by a float or missing value in the 1,001-th row.
+
+        You will need to specify some dtype information explicitly using the
+        ``dtype=`` keyword argument for the right column names and dtypes.
+
+            df = dd.read_csv(..., dtype={'my-column': float})
+
+        Pandas has given us the following error when trying to parse the file:
+
+        %(pandas_error)s
+        """
+        match = re.match('cannot safely convert passed user dtype of (?P<old_dtype>\S+) for (?P<new_dtype>\S+) dtyped data in column (?P<column_number>\d+)', e.message)
+        if match:
+            d = match.groupdict()
+            d['column'] = kwargs['names'][int(d['column_number'])]
+            msg += """
+        From this we think that you should probably add the following column/dtype
+        pair to your dtype= keyword argument
+
+        '%(column)s': '%(new_dtype)s'
+        """ % d
+
+        # TODO: add more regexes and msg logic here for other pandas errors
+        #       as apporpriate
+
+        raise ValueError(msg)
 
 
 def fill_kwargs(fn, args, kwargs):

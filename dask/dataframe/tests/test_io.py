@@ -664,7 +664,7 @@ def test_report_dtype_correction_on_csvs():
     text += '1.5,bar\n'
     with filetext(text) as fn:
         try:
-            dd.read_csv(fn).compute()
+            dd.read_csv(fn).compute(get=get_sync)
             assert False
         except ValueError as e:
-            assert "dtype={'numbers': 'float64'}" in str(e)
+            assert "'numbers': 'float64'" in str(e)
