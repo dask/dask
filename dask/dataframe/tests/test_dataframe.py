@@ -2036,4 +2036,4 @@ def test_apply():
     assert raises(ValueError, lambda: a.apply(lambda xy: xy, axis=1))
 
     func = lambda x: pd.Series([x, x])
-    eq(a.x.apply(func, columns=[0, 1]), df.x.apply(func))
+    eq(a.x.apply(func, name=[0, 1]), df.x.apply(func))
