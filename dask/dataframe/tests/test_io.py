@@ -648,5 +648,8 @@ def test_bad_csv():
             file_.write('1,foo\n')
         file_.write('1.5,bar\n')
         file_.seek(0)
-        a = dd.read_csv(file_.name)
-        pytest.raises(ValueError, lambda: a.compute())
+        try:
+            dd.read_csv(file_.name).compute()
+            raise ValueError
+        except ValueError as e:
+            assert "dtype={'numbers': float64}" in e.message
