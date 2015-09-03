@@ -34,31 +34,31 @@ def _read_csv(fn, i, chunkbytes, compression, kwargs):
         return pd.read_csv(block, **kwargs)
     except ValueError as e:
         msg = """
-        Dask dataframe inspected the first 1,000 rows of your csv file to guess the
-        data types of your columns.  These first 1,000 rows led us to an incorrect
-        guess.
+    Dask dataframe inspected the first 1,000 rows of your csv file to guess the
+    data types of your columns.  These first 1,000 rows led us to an incorrect
+    guess.
 
-        For example a column may have had integers in the first thousand
-        rows followed by a float or missing value in the 1,001-th row.
+    For example a column may have had integers in the first 1000
+    rows followed by a float or missing value in the 1,001-st row.
 
-        You will need to specify some dtype information explicitly using the
-        ``dtype=`` keyword argument for the right column names and dtypes.
+    You will need to specify some dtype information explicitly using the
+    ``dtype=`` keyword argument for the right column names and dtypes.
 
-            df = dd.read_csv(..., dtype={'my-column': float})
+        df = dd.read_csv(..., dtype={'my-column': float})
 
-        Pandas has given us the following error when trying to parse the file:
+    Pandas has given us the following error when trying to parse the file:
 
-        %(pandas_error)s
-        """
-        match = re.match('cannot safely convert passed user dtype of (?P<old_dtype>\S+) for (?P<new_dtype>\S+) dtyped data in column (?P<column_number>\d+)', e.message)
+      "%s"
+        """ % e.args[0]
+        match = re.match('cannot safely convert passed user dtype of (?P<old_dtype>\S+) for (?P<new_dtype>\S+) dtyped data in column (?P<column_number>\d+)', e.args[0])
         if match:
             d = match.groupdict()
             d['column'] = kwargs['names'][int(d['column_number'])]
             msg += """
-        From this we think that you should probably add the following column/dtype
-        pair to your dtype= keyword argument
+    From this we think that you should probably add the following column/dtype
+    pair to your dtype= dictionary
 
-        '%(column)s': '%(new_dtype)s'
+    '%(column)s': '%(new_dtype)s'
         """ % d
 
         # TODO: add more regexes and msg logic here for other pandas errors
