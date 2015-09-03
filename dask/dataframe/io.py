@@ -38,17 +38,17 @@ def try_pd_read_csv(*args, **kwargs):
 
     try:
         return pd.read_csv(*args, **kwargs)
-    except ValueError as e:
+    except ValueError as pandas_exception:
         try:
             # this is brittle
-            e_parts = e.message.split(' ')
-            column_number = int(e_parts[-1])
+            parts = pandas_exception.message.split(' ')
+            column_number = int(parts[-1])
             column_name = kwargs.get('names')[column_number]
-            dtype1 = e_parts[7]
-            dtype2 = e_parts[9]
+            dtype1 = parts[7]
+            dtype2 = parts[9]
             msg %= (column_name, dtype1, dtype2, column_name, dtype2)
-        except:
-            raise e
+        except Exception as _:
+            raise pandas_exception
         raise ValueError(msg)
 
 
