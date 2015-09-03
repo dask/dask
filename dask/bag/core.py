@@ -9,14 +9,14 @@ import zlib
 import bz2
 import os
 import codecs
+from sys import getdefaultencoding
 
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
 from dask.utils import takes_multiple_arguments
-from sys import getdefaultencoding
-
+from dask.core import list2, quote
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
@@ -30,8 +30,8 @@ with ignoring(ImportError):
 from ..multiprocessing import get as mpget
 from ..core import istask, get_dependencies, reverse_dict
 from ..optimize import fuse, cull, inline
-from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse, quote,
-        unquote, StringIO)
+from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
+        StringIO)
 from ..base import Base, normalize_token
 
 names = ('bag-%d' % i for i in itertools.count(1))
@@ -101,11 +101,6 @@ def optimize(dsk, keys):
     dsk4 = inline_singleton_lists(dsk3)
     dsk5 = lazify(dsk4)
     return dsk5
-
-
-def list2(seq):
-    """ Another list function that won't be removed by lazify """
-    return list(seq)
 
 
 def to_textfiles(b, path, name_function=str, encoding=system_encoding):
@@ -323,8 +318,7 @@ class Bag(Base):
         [1, 10]
         """
         name = next(names)
-        if isinstance(key, list):
-            key = (list2, key)
+        key = quote(key)
         if default == no_default:
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i))))
                        for i in range(self.npartitions))
@@ -395,8 +389,7 @@ class Bag(Base):
         """
         a = next(names)
         b = next(names)
-        if isinstance(initial, list):
-            initial = (list2, initial)
+        initial = quote(initial)
         if initial is not no_default:
             dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
                             for i in range(self.npartitions))
@@ -459,7 +452,7 @@ class Bag(Base):
         a = next(names)
         dsk = dict(((a, i), (set, key)) for i, key in enumerate(self._keys()))
         b = next(names)
-        dsk2 = {(b, 0): (apply, set.union, (list2, list(dsk.keys())))}
+        dsk2 = {(b, 0): (apply, set.union, quote(list(dsk.keys())))}
 
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
@@ -932,6 +925,7 @@ def _get_key(bucket_name, conn_args, key_name):
 
 
 def _parse_s3_URI(bucket_name, paths):
+    from ..compatibility import quote, unquote
     assert bucket_name.startswith('s3://')
     o = urlparse('s3://' + quote(bucket_name[len('s3://'):]))
     # if path is specified

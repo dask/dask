@@ -1,8 +1,9 @@
 from collections import namedtuple
+from operator import add
 
 from dask.utils import raises
 from dask.core import (istask, get, get_dependencies, flatten, subs,
-                       preorder_traversal)
+                       preorder_traversal, quote, list2)
 
 
 def contains(a, b):
@@ -160,3 +161,11 @@ def test_subs_with_surprisingly_friendly_eq():
     else:
         df = pd.DataFrame()
         assert subs(df, 'x', 1) is df
+
+
+def test_quote():
+    literals = [[1, 2, 3], (add, 1, 2),
+                [1, [2, 3]], (add, 1, (add, 2, 3))]
+
+    for l in literals:
+        assert get({'x': quote(l)}, 'x') == l
