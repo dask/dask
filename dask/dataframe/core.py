@@ -812,8 +812,8 @@ class Series(_Frame):
                    columns=return_scalar, token=self._token_prefix + token)
 
     @wraps(pd.Series.groupby)
-    def groupby(self, key, **kwargs):
-        return SeriesGroupBy(self, key, **kwargs)
+    def groupby(self, index, **kwargs):
+        return SeriesGroupBy(self, index, **kwargs)
 
     @wraps(pd.Series.sum)
     def sum(self, axis=None):
@@ -1631,6 +1631,13 @@ class SeriesGroupBy(_GroupBy):
         self.index = index
         self.key = key
         self.kwargs = kwargs
+
+        if not isinstance(index, Series):
+            raise TypeError("A dask Series must be used as the index for a "
+                            "Series groupby.")
+        if not df.divisions == index.divisions:
+            raise ValueError("The Series and index of the groupby must have "
+                             "the same divisions.")
 
     def apply(self, func, columns=None):
         # df = set_index(self.df, self.index, **self.kwargs)
