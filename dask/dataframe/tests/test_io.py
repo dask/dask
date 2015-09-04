@@ -685,22 +685,23 @@ def test_hdf_globbing():
 
     pattern = '/tmp/*foo.h5'
     with tmpfile('one_foo.h5') as fn1:
-        a.to_hdf(fn1, '/data', format='table')
-        res = dd.read_hdf(pattern, '/data', chunksize=2)
+        a.to_hdf(fn1, '/foo/data', format='table')
+        res = dd.read_hdf(pattern, '/*/data', chunksize=2)
         assert res.npartitions == 2
 
         tm.assert_frame_equal(res.compute(), df)
-        res = dd.read_hdf(pattern, '/data', chunksize=2, start=1, stop=3)
-        expected = pd.read_hdf(fn1, '/data', start=1, stop=3)
+        res = dd.read_hdf(pattern, '/*/data', chunksize=2, start=1, stop=3)
+        expected = pd.read_hdf(fn1, '/foo/data', start=1, stop=3)
         tm.assert_frame_equal(res.compute(), expected)
 
         with tmpfile('two_foo.h5') as fn2:
-            a.to_hdf(fn2, '/data', format='table')
+            a.to_hdf(fn2, '/bar/data', format='table')
+            a.to_hdf(fn2, '/qux/data', format='table')
 
-            res = dd.read_hdf(pattern, '/data', chunksize=2)
-            assert res.npartitions == 4
-            tm.assert_frame_equal(res.compute(), pd.concat([df, df]))
+            res = dd.read_hdf(pattern, '/*/data', chunksize=2)
+            assert res.npartitions == 2 + 2 + 2
+            tm.assert_frame_equal(res.compute(), pd.concat([df] * 3))
 
-            res2 = dd.read_hdf(pattern, '/data', chunksize=2, start=1, stop=3)
-            exp2 = pd.concat([pd.read_hdf(fn2, '/data', start=1, stop=3)] * 2)
+            res2 = dd.read_hdf(pattern, '/*/data', chunksize=2, start=1, stop=3)
+            exp2 = pd.concat([pd.read_hdf(fn2, '/bar/data', start=1, stop=3)] * 3)
             tm.assert_frame_equal(res2.compute(), exp2)
