@@ -1632,12 +1632,13 @@ class SeriesGroupBy(_GroupBy):
         self.key = key
         self.kwargs = kwargs
 
-        if not isinstance(index, Series):
-            raise TypeError("A dask Series must be used as the index for a "
-                            "Series groupby.")
-        if not df.divisions == index.divisions:
-            raise ValueError("The Series and index of the groupby must have "
-                             "the same divisions.")
+        if isinstance(df, Series):
+            if not isinstance(index, Series):
+                raise TypeError("A dask Series must be used as the index for a"
+                                " Series groupby.")
+            if not df.divisions == index.divisions:
+                raise NotImplementedError("The Series and index of the groupby"
+                                          " must have the same divisions.")
 
     def apply(self, func, columns=None):
         # df = set_index(self.df, self.index, **self.kwargs)
