@@ -55,12 +55,15 @@ We proceed with hash joins in the following stages:
 """
 
 from ..base import tokenize
-from .core import repartition, _Frame, Scalar, DataFrame, Index
+from .core import (repartition, _get_return_type, _Frame, Scalar, DataFrame,
+                   Index)
 from .io import from_pandas
 from .shuffle import shuffle
 from bisect import bisect_left, bisect_right
 from toolz import merge_sorted, unique, partial
 import toolz
+
+import numpy as np
 import pandas as pd
 
 
@@ -290,24 +293,68 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
                      name, j.columns, divisions)
 
 
-def concat_indexed_dataframes(dfs, join='outer'):
+def _pdconcat(dfs, axis=0, join='outer'):
+    """ Concatenate caring empty Series """
+
+    # Concat with empty Series with axis=1 will not affect to the
+    # result. Special handling is needed in each partition
+    if axis == 1:
+        # becahse dfs is a generator, once convert to list
+        dfs = list(dfs)
+
+        if join == 'outer':
+            # outer concat should keep all empty Series
+
+            # input must include one non-empty data at least
+            # because of the alignment
+            first = [df for df in dfs if len(df) > 0][0]
+
+            def _pad(base, fillby):
+                # use aligned index to keep index for outer concat
+                return pd.Series([np.nan] * len(fillby),
+                                  index=fillby.index, name=base.name)
+
+            dfs = [_pad(df, first) if isinstance(df, pd.Series) and len(df) == 0
+                   else df for df in dfs]
+        else:
+            # inner concat should result in empty if any input is empty
+            if any(len(df) == 0 for df in dfs):
+                dfs = [pd.DataFrame(columns=df.columns)
+                       if isinstance(df, pd.DataFrame) else
+                       pd.Series(name=df.name) for df in dfs]
+
+    return pd.concat(dfs, axis=axis, join=join)
+
+
+def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     """ Concatenate indexed dataframes together along the index """
+
     if join not in ('inner', 'outer'):
         raise ValueError("'join' must be 'inner' or 'outer'")
+
+    if not all(isinstance(df, _Frame) for df in dfs):
+        raise ValueError("All inputs must be dd.DataFrame or dd.Series")
+
     dfs2, divisions, parts = align_partitions(*dfs)
 
-    empties = [pd.DataFrame(columns=df.columns) for df in dfs]
-    columns = pd.concat(empties, axis=0, join=join).columns
+    empties = [df._empty_partition for df in dfs]
+    result = pd.concat(empties, axis=axis, join=join)
+    if isinstance(result, pd.Series):
+        columns = result.name
+    else:
+        columns = result.columns.tolist()
 
     parts2 = [[df if df is not None else empty
                for df, empty in zip(part, empties)]
               for part in parts]
 
     name = 'concat-indexed-' + tokenize(join, *dfs)
-    dsk = dict(((name, i), (pd.concat, part, 0, join))
+    dsk = dict(((name, i), (_pdconcat, part, axis, join))
                 for i, part in enumerate(parts2))
 
-    return DataFrame(toolz.merge(dsk, *[df.dask for df in dfs2]), name, columns, divisions)
+    return_type = _get_return_type(dfs[0], columns)
+    return return_type(toolz.merge(dsk, *[df.dask for df in dfs2]),
+                       name, columns, divisions)
 
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
