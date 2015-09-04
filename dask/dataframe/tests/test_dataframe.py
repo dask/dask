@@ -1890,19 +1890,15 @@ def test_series_groupby():
     ss = dd.from_pandas(s, npartitions=2)
     dask_group = ss.groupby(ss)
 
-    assert eq(dask_group.count(), pd_group.count())
-    assert eq(dask_group.sum(), pd_group.sum())
-    assert eq(dask_group.min(), pd_group.min())
-    assert eq(dask_group.max(), pd_group.max())
-
     pd_group2 = s.groupby(s + 1)
     dask_group2 = ss.groupby(ss + 1)
 
-    assert eq(dask_group2.count(), pd_group2.count())
-    assert eq(dask_group2.sum(), pd_group2.sum())
-    assert eq(dask_group2.min(), pd_group2.min())
-    assert eq(dask_group2.max(), pd_group2.max())
+    for dg, pdg in [(dask_group, pd_group), (pd_group2, dask_group2)]:
+        assert eq(dg.count(), pdg.count())
+        assert eq(dg.sum(), pdg.sum())
+        assert eq(dg.min(), pdg.min())
+        assert eq(dg.max(), pdg.max())
 
     assert raises(TypeError, lambda: ss.groupby([1, 2]))
     sss = dd.from_pandas(s, npartitions=3)
-    assert raises(ValueError, lambda: ss.groupby(sss))
+    assert raises(NotImplementedError, lambda: ss.groupby(sss))
