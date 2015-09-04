@@ -42,14 +42,30 @@ def check_dask(dsk, check_names=True):
     return dsk
 
 
+def _maybe_sort(a):
+    # sort by value, then index
+    try:
+        if isinstance(a, pd.DataFrame):
+            # ToDo: after v0.17, we can use consistent method
+            # https://github.com/pydata/pandas/pull/10726
+            a = a.sort(columns=a.columns.tolist())
+        else:
+            a = a.order()
+    except TypeError:
+        pass
+    return a.sort_index()
+
+
 def eq(a, b, check_names=True):
     a = check_dask(a, check_names=check_names)
     b = check_dask(b, check_names=check_names)
     if isinstance(a, pd.DataFrame):
-        a = a.sort_index()
-        b = b.sort_index()
+        a = _maybe_sort(a)
+        b = _maybe_sort(b)
         tm.assert_frame_equal(a, b)
     elif isinstance(a, pd.Series):
+        a = _maybe_sort(a)
+        b = _maybe_sort(b)
         tm.assert_series_equal(a, b, check_names=check_names)
     elif isinstance(a, pd.Index):
         tm.assert_index_equal(a, b)
@@ -1428,13 +1444,112 @@ def test_concat2():
            ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
     b = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
 
-    c = dd.concat([a, b])
-
-    assert c.npartitions == a.npartitions + b.npartitions
-
-    assert eq(pd.concat([a.compute(), b.compute()]), c)
-
+    result = dd.concat([a, b])
+    assert result.npartitions == a.npartitions + b.npartitions
+    assert result.divisions == (None, ) * (result.npartitions + 1)
+    assert eq(pd.concat([a.compute(), b.compute()]), result)
     assert dd.concat([a, b]).dask == dd.concat([a, b]).dask
+
+    dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
+    c = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None])
+
+    result = dd.concat([a, c])
+    assert result.npartitions == a.npartitions + c.npartitions
+    assert result.divisions == (None, ) * (result.npartitions + 1)
+    assert eq(pd.concat([a.compute(), c.compute()]), result)
+    assert dd.concat([a, c]).dask == dd.concat([a, c]).dask
+
+    dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]},
+                                  index=[3, 4, 5])}
+    d = dd.DataFrame(dsk, 'y', ['b', 'c'], [0, 3, 5])
+
+    result = dd.concat([a, d])
+    assert result.npartitions == a.npartitions + d.npartitions
+    assert result.divisions == (None, ) * (result.npartitions + 1)
+    assert eq(pd.concat([a.compute(), d.compute()]), result)
+    assert dd.concat([a, d]).dask == dd.concat([a, d]).dask
+
+def test_concat3():
+    pdf1 = pd.DataFrame(np.random.randn(6, 5),
+                        columns=list('ABCDE'), index=list('abcdef'))
+    pdf2 = pd.DataFrame(np.random.randn(6, 5),
+                        columns=list('ABCFG'), index=list('ghijkl'))
+    pdf3 = pd.DataFrame(np.random.randn(6, 5),
+                        columns=list('ABCHI'), index=list('mnopqr'))
+    ddf1 = dd.from_pandas(pdf1, 2)
+    ddf2 = dd.from_pandas(pdf2, 3)
+    ddf3 = dd.from_pandas(pdf3, 2)
+
+    result = dd.concat([ddf1, ddf2])
+    assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
+    assert result.npartitions == ddf1.npartitions + ddf2.npartitions
+    assert eq(result, pd.concat([pdf1, pdf2]))
+
+    assert eq(dd.concat([ddf1, ddf2], interleave_partitions=True),
+              pd.concat([pdf1, pdf2]))
+
+    result = dd.concat([ddf1, ddf2, ddf3])
+    assert result.divisions == (ddf1.divisions[:-1] + ddf2.divisions[:-1] +
+                                ddf3.divisions)
+    assert result.npartitions == (ddf1.npartitions + ddf2.npartitions +
+                                  ddf3.npartitions)
+    assert eq(result, pd.concat([pdf1, pdf2, pdf3]))
+
+    assert eq(dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
+              pd.concat([pdf1, pdf2, pdf3]))
+
+def test_concat4_interleave_partitions():
+    pdf1 = pd.DataFrame(np.random.randn(10, 5),
+                        columns=list('ABCDE'), index=list('abcdefghij'))
+    pdf2 = pd.DataFrame(np.random.randn(13, 5),
+                        columns=list('ABCDE'), index=list('fghijklmnopqr'))
+    pdf3 = pd.DataFrame(np.random.randn(13, 6),
+                        columns=list('CDEXYZ'), index=list('fghijklmnopqr'))
+
+    ddf1 = dd.from_pandas(pdf1, 2)
+    ddf2 = dd.from_pandas(pdf2, 3)
+    ddf3 = dd.from_pandas(pdf3, 2)
+
+    msg = ('All inputs have known divisions which cannnot be '
+           'concatenated in order. Specify '
+           'interleave_partitions=True to ignore order')
+
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.concat([ddf1, ddf1])
+    assert eq(dd.concat([ddf1, ddf1], interleave_partitions=True),
+              pd.concat([pdf1, pdf1]))
+
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.concat([ddf1, ddf2])
+    assert eq(dd.concat([ddf1, ddf2], interleave_partitions=True),
+              pd.concat([pdf1, pdf2]))
+
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.concat([ddf1, ddf3])
+    assert eq(dd.concat([ddf1, ddf3], interleave_partitions=True),
+              pd.concat([pdf1, pdf3]))
+
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.concat([ddf2, ddf1])
+    assert eq(dd.concat([ddf2, ddf1], interleave_partitions=True),
+              pd.concat([pdf2, pdf1]))
+
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.concat([ddf2, ddf3])
+    assert eq(dd.concat([ddf2, ddf3], interleave_partitions=True),
+              pd.concat([pdf2, pdf3]))
+
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.concat([ddf3, ddf1])
+    assert eq(dd.concat([ddf3, ddf1], interleave_partitions=True),
+              pd.concat([pdf3, pdf1]))
+
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.concat([ddf3, ddf2])
+    assert eq(dd.concat([ddf3, ddf2], interleave_partitions=True),
+              pd.concat([pdf3, pdf2]))
 
 
 def test_dataframe_series_are_dillable():

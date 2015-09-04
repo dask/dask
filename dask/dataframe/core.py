@@ -1394,8 +1394,8 @@ def elemwise(op, *args, **kwargs):
             else d._keys() for d in dasks]
 
     dsk = dict(((_name, i), (op2,) + frs) for i, frs in enumerate(zip(*keys)))
-
     dsk = merge(dsk, *[d.dask for d in dasks])
+
     if columns is not None:
         return DataFrame(dsk, _name, columns, divisions)
     else:
@@ -1459,16 +1459,8 @@ def reduction(x, chunk, aggregate, token=None):
     return Scalar(merge(x.dask, dsk, dsk2), b)
 
 
-def concat(dfs):
-    """ Concatenate dataframes along rows
-
-    Currently only supports unknown divisions
-    """
-    if any(df.known_divisions for df in dfs):
-        # For this to work we need to add a final division for "maximum element"
-        raise NotImplementedError("Concat can't currently handle dataframes"
-                " with known divisions")
-    name = 'concat-' + tokenize(*dfs)
+def _concat_dfs(dfs, name):
+    """ Internal function to concat dask dict and DataFrame.columns """
     dsk = dict()
     i = 0
     for df in dfs:
@@ -1476,10 +1468,99 @@ def concat(dfs):
             dsk[(name, i)] = key
             i += 1
 
-    divisions = [None] * (i + 1)
+    empties = [pd.DataFrame(columns=df.columns) for df in dfs]
+    columns = pd.concat(empties, axis=0, join='outer').columns
 
-    return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
-                     dfs[0].columns, divisions)
+    return dsk, columns
+
+
+def concat(dfs, interleave_partitions=False):
+    """ Concatenate DataFrames along rows.
+
+    - If all divisions are known and ordered, concatenate DataFrames keeping
+      divisions. When divisions are not ordered, specifying
+      interleave_partition=True allows concatenate divisions each by each.
+    - If any of division is unknown, concatenate DataFrames resetting its
+      division to unknown (None)
+
+    Parameters
+    ----------
+
+    dfs: list
+        List of dask.DataFrames to be concatenated
+    interleave_partitions: bool, default False
+        Whether to concatenate DataFrames ignoring its order. If True, every
+        divisions are concatenated each by each.
+
+    Examples
+    --------
+
+    # If all divisions are known and ordered, divisions are kept.
+    >>> a                                               # doctest: +SKIP
+    dd.DataFrame<x, divisions=(1, 3, 5)>
+    >>> b                                               # doctest: +SKIP
+    dd.DataFrame<y, divisions=(6, 8, 10)>
+    >>> dd.concat([a, b])                               # doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(1, 3, 6, 8, 10)>
+
+    # Unable to concatenate if divisions are not ordered.
+    >>> a                                               # doctest: +SKIP
+    dd.DataFrame<x, divisions=(1, 3, 5)>
+    >>> b                                               # doctest: +SKIP
+    dd.DataFrame<y, divisions=(2, 3, 6)>
+    >>> dd.concat([a, b])                               # doctest: +SKIP
+    ValueError: All inputs have known divisions which cannnot be concatenated
+    in order. Specify interleave_partitions=True to ignore order
+
+    # Specify interleave_partitions=True to ignore the division order.
+    >>> dd.concat([a, b], interleave_partitions=True)   # doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(1, 2, 3, 5, 6)>
+
+    # If any of division is unknown, the result division will be unknown
+    >>> a                                               # doctest: +SKIP
+    dd.DataFrame<x, divisions=(None, None)>
+    >>> b                                               # doctest: +SKIP
+    dd.DataFrame<y, divisions=(1, 4, 10)>
+    >>> dd.concat([a, b])                               # doctest: +SKIP
+    dd.DataFrame<concat-..., divisions=(None, None, None, None)>
+    """
+    if not isinstance(dfs, list):
+        dfs = [dfs]
+    if len(dfs) == 0:
+        raise ValueError('Input must be a list longer than 0')
+
+    if all(df.known_divisions for df in dfs):
+        # each DataFrame's division must be greater than previous one
+        if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
+               for i in range(len(dfs) - 1)):
+            name = 'concat-{0}'.format(tokenize(*dfs))
+            dsk, columns = _concat_dfs(dfs, name)
+
+            divisions = []
+            for df in dfs[:-1]:
+                # remove last to concatenate with next
+                divisions += df.divisions[:-1]
+            divisions += dfs[-1].divisions
+
+            return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
+                             columns, divisions)
+        else:
+            if interleave_partitions:
+                from .multi import concat_indexed_dataframes
+                return concat_indexed_dataframes(dfs)
+
+            raise ValueError('All inputs have known divisions which cannnot be '
+                             'concatenated in order. Specify '
+                             'interleave_partitions=True to ignore order')
+
+    else:
+        name = 'concat-{0}'.format(tokenize(*dfs))
+        dsk, columns = _concat_dfs(dfs, name)
+
+        divisions = [None] * (len(dsk) + 1)
+
+        return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
+                         columns, divisions)
 
 
 def _groupby_apply(df, ind, func):
