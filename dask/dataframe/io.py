@@ -631,15 +631,8 @@ This HDFStore is not partitionable and can only be use monolithically with
 pandas.  In the future when creating HDFStores use the ``format='table'``
 option to ensure that your dataset can be parallelized"""
 
-def _glob_hdf_path(path):
-    path2 = sorted(glob(path))
-    if len(path2) == 1:
-        return path2[0]
-
-@wraps(pd.read_hdf)
-def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
-        chunksize=1000000):
-    path_or_buf = _glob_hdf_path(path_or_buf)
+def _read_single_hdf(path_or_buf, key, start=0, stop=None, columns=None,
+        chunksize=int(1e6)):
     with pd.HDFStore(path_or_buf) as hdf:
         storer = hdf.get_storer(key)
         if storer.format_type != 'table':
@@ -663,6 +656,15 @@ def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
     divisions = [None] * (len(dsk) + 1)
 
     return DataFrame(dsk, name, columns, divisions)
+
+
+@wraps(pd.read_hdf)
+def read_hdf(pattern, key, start=0, stop=None, columns=None,
+             chunksize=1000000):
+    paths = sorted(glob(pattern))
+    reader = lambda p: _read_single_hdf(p, key, start=start, stop=stop,
+            columns=columns, chunksize=chunksize)
+    return concat([reader(path) for path in paths])
 
 
 def to_castra(df, fn=None, categories=None, sorted_index_column=None,
