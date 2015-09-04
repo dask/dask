@@ -25,6 +25,48 @@ from .shuffle import set_partition
 
 csv_defaults = {'compression': None}
 
+
+
+def _read_csv(fn, i, chunkbytes, compression, kwargs):
+    block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression)
+    block = BytesIO(block)
+    try:
+        return pd.read_csv(block, **kwargs)
+    except ValueError as e:
+        msg = """
+    Dask dataframe inspected the first 1,000 rows of your csv file to guess the
+    data types of your columns.  These first 1,000 rows led us to an incorrect
+    guess.
+
+    For example a column may have had integers in the first 1000
+    rows followed by a float or missing value in the 1,001-st row.
+
+    You will need to specify some dtype information explicitly using the
+    ``dtype=`` keyword argument for the right column names and dtypes.
+
+        df = dd.read_csv(..., dtype={'my-column': float})
+
+    Pandas has given us the following error when trying to parse the file:
+
+      "%s"
+        """ % e.args[0]
+        match = re.match('cannot safely convert passed user dtype of (?P<old_dtype>\S+) for (?P<new_dtype>\S+) dtyped data in column (?P<column_number>\d+)', e.args[0])
+        if match:
+            d = match.groupdict()
+            d['column'] = kwargs['names'][int(d['column_number'])]
+            msg += """
+    From this we think that you should probably add the following column/dtype
+    pair to your dtype= dictionary
+
+    '%(column)s': '%(new_dtype)s'
+        """ % d
+
+        # TODO: add more regexes and msg logic here for other pandas errors
+        #       as apporpriate
+
+        raise ValueError(msg)
+
+
 def fill_kwargs(fn, args, kwargs):
     """ Read a csv file and fill up kwargs
 
@@ -77,14 +119,23 @@ def fill_kwargs(fn, args, kwargs):
     if 'parse_dates' not in kwargs:
         kwargs['parse_dates'] = [col for col in head.dtypes.index
                            if np.issubdtype(head.dtypes[col], np.datetime64)]
-    if 'dtype' not in kwargs:
-        kwargs['dtype'] = dict(head.dtypes)
+
+    new_dtype = dict(head.dtypes)
+    dtype = kwargs.get('dtype', dict())
+    for k, v in dict(head.dtypes).items():
+        if k not in dtype:
+            dtype[k] = v
+
+    if kwargs.get('parse_dates'):
         for col in kwargs['parse_dates']:
-            del kwargs['dtype'][col]
+            del dtype[col]
+
+    kwargs['dtype'] = dtype
 
     kwargs['columns'] = list(head.columns)
 
     return kwargs
+
 
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
@@ -117,19 +168,16 @@ def read_csv(fn, *args, **kwargs):
         nchunks = int(ceil(total_bytes / chunkbytes))
         divisions = [None] * (nchunks + 1)
 
-        first_read_csv = partial(pd.read_csv, *args, header=header,
-                               **dissoc(kwargs, 'compression'))
-        rest_read_csv = partial(pd.read_csv, *args, header=None,
-                              **dissoc(kwargs, 'compression'))
+        first_kwargs = merge(kwargs, dict(header=header, compression=None))
+        rest_kwargs = merge(kwargs, dict(header=None, compression=None))
 
         # Create dask graph
-        dsk = dict(((name, i), (rest_read_csv, (BytesIO,
-                                   (textblock, fn,
-                                       i*chunkbytes, (i+1) * chunkbytes,
-                                       kwargs['compression']))))
+        dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
+                                           kwargs['compression'], rest_kwargs))
                    for i in range(1, nchunks))
-        dsk[(name, 0)] = (first_read_csv, (BytesIO,
-                           (textblock, fn, 0, chunkbytes, kwargs['compression'])))
+
+        dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
+                                     first_kwargs)
 
         result = DataFrame(dsk, name, columns, divisions)
 
