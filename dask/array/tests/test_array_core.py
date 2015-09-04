@@ -1381,3 +1381,17 @@ def test_array():
     d = da.ones(5, chunks=3, dtype='i4')
     assert eq(da.array(d, ndmin=3, dtype='i8'),
               np.array(x, ndmin=3, dtype='i8'))
+
+
+def test_cov():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(4, 4))
+
+    assert eq(da.cov(d), np.cov(x))
+    assert eq(da.cov(d, d), np.cov(x, x))
+
+    y = np.arange(8)
+    e = da.from_array(y, chunks=(4,))
+
+    assert eq(da.cov(d, e), np.cov(x, y))
+    assert eq(da.cov(e, d), np.cov(y, x))
