@@ -858,7 +858,6 @@ def test_arithmetic():
 
     assert eq(da.logaddexp(a, b), np.logaddexp(x, y))
     assert eq(da.logaddexp2(a, b), np.logaddexp2(x, y))
-    assert eq(da.conj(a + 1j * b), np.conj(x + 1j * y))
     assert eq(da.exp(b), np.exp(y))
     assert eq(da.log(a), np.log(x))
     assert eq(da.log10(a), np.log10(x))
@@ -918,6 +917,8 @@ def test_arithmetic():
     assert eq((a + 1j).real, np.real(x + 1j))
     assert eq(da.imag(a + 1j), np.imag(x + 1j))
     assert eq((a + 1j).imag, np.imag(x + 1j))
+    assert eq(da.conj(a + 1j * b), np.conj(x + 1j * y))
+    assert eq((a + 1j * b).conj(), (x + 1j * y).conj())
 
     assert eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
     assert eq(da.fabs(b), np.fabs(y))

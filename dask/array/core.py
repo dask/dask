@@ -1100,6 +1100,9 @@ class Array(Base):
     def imag(self):
         return imag(self)
 
+    def conj(self):
+        return conj(self)
+
 
 normalize_token.register(Array, lambda a: a.name)
 
@@ -2573,6 +2576,6 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
 
     X = X - X.mean(axis=1-axis, keepdims=True)
     if not rowvar:
-        return (dot(X.T, conj(X)) / fact).squeeze()
+        return (dot(X.T, X.conj()) / fact).squeeze()
     else:
-        return (dot(X, conj(X.T)) / fact).squeeze()
+        return (dot(X, X.T.conj()) / fact).squeeze()
