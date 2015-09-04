@@ -10,6 +10,7 @@ from math import ceil
 from toolz import merge, dissoc, assoc
 from operator import getitem
 from hashlib import md5
+from fnmatch import fnmatchcase
 import uuid
 
 from ..compatibility import BytesIO, unicode, range, apply
@@ -631,31 +632,43 @@ This HDFStore is not partitionable and can only be use monolithically with
 pandas.  In the future when creating HDFStores use the ``format='table'``
 option to ensure that your dataset can be parallelized"""
 
-def _read_single_hdf(path_or_buf, key, start=0, stop=None, columns=None,
-        chunksize=int(1e6)):
-    with pd.HDFStore(path_or_buf) as hdf:
-        storer = hdf.get_storer(key)
-        if storer.format_type != 'table':
-            raise TypeError(dont_use_fixed_error_message)
-        if stop is None:
-            stop = storer.nrows
 
-    if columns is None:
-        columns = list(pd.read_hdf(path_or_buf, key, stop=0).columns)
+def _read_single_hdf(path, key, start=0, stop=None, columns=None,
+                     chunksize=int(1e6)):
+    def get_keys_and_stops(path, key, stop):
+        with pd.HDFStore(path) as hdf:
+            keys = [k for k in hdf.keys() if fnmatchcase(k, key)]
+            stops = []
+            for k in keys:
+                storer = hdf.get_storer(k)
+                if storer.format_type != 'table':
+                    raise TypeError(dont_use_fixed_error_message)
+                if stop is None:
+                    stops.append(storer.nrows)
+                else:
+                    stops.append(stop)
+        return keys, stops
 
-    token = tokenize((path_or_buf, os.path.getmtime(path_or_buf), key, start,
-                      stop, columns, chunksize))
-    name = 'read-hdf-' + token
+    def one_path_one_key(path, key, start, stop, columns, chunksize):
+        if columns is None:
+            columns = list(pd.read_hdf(path, key, stop=0).columns)
 
-    dsk = dict(((name, i), (apply, pd.read_hdf,
-                             (path_or_buf, key),
-                             {'start': s, 'stop': s + chunksize,
-                              'columns': columns}))
-                for i, s in enumerate(range(start, stop, chunksize)))
+        token = tokenize((path, os.path.getmtime(path), key, start,
+                          stop, columns, chunksize))
+        name = 'read-hdf-' + token
 
-    divisions = [None] * (len(dsk) + 1)
+        dsk = dict(((name, i), (apply, pd.read_hdf,
+                                 (path, key),
+                                 {'start': s, 'stop': s + chunksize,
+                                  'columns': columns}))
+                    for i, s in enumerate(range(start, stop, chunksize)))
 
-    return DataFrame(dsk, name, columns, divisions)
+        divisions = [None] * (len(dsk) + 1)
+        return DataFrame(dsk, name, columns, divisions)
+
+    keys, stops = get_keys_and_stops(path, key, stop)
+    get_df = lambda k, s: one_path_one_key(path, k, start, s, columns, chunksize)
+    return concat([get_df(k, s) for k, s in zip(keys, stops)])
 
 
 @wraps(pd.read_hdf)
