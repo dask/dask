@@ -675,9 +675,9 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
 def read_hdf(pattern, key, start=0, stop=None, columns=None,
              chunksize=1000000):
     paths = sorted(glob(pattern))
-    reader = lambda p: _read_single_hdf(p, key, start=start, stop=stop,
-            columns=columns, chunksize=chunksize)
-    return concat([reader(path) for path in paths])
+    return concat([_read_single_hdf(path, key, start=start, stop=stop,
+                                    columns=columns, chunksize=chunksize)
+                   for path in paths])
 
 
 def to_castra(df, fn=None, categories=None, sorted_index_column=None,
