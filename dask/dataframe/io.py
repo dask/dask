@@ -25,6 +25,33 @@ from .shuffle import set_partition
 
 csv_defaults = {'compression': None}
 
+
+def try_pd_read_csv(*args, **kwargs):
+    msg = """
+    By inspecting the first 1,000 rows of your csv file we guessed that the
+    column: %s had dtype: %s. But now that we're reading all the data we see it
+    has some values with dtype: %s. You should probably add the following
+    keyword arguments to your `read_csv` call:
+
+        dtype={'%s': %s}
+    """
+
+    try:
+        return pd.read_csv(*args, **kwargs)
+    except ValueError as pandas_exception:
+        try:
+            # this is brittle
+            parts = str(pandas_exception).split(' ')
+            column_number = int(parts[-1])
+            column_name = kwargs.get('names')[column_number]
+            dtype1 = parts[7]
+            dtype2 = parts[9]
+            msg %= (column_name, dtype1, dtype2, column_name, dtype2)
+        except Exception as _:
+            raise pandas_exception
+        raise ValueError(msg)
+
+
 def fill_kwargs(fn, args, kwargs):
     """ Read a csv file and fill up kwargs
 
@@ -117,10 +144,10 @@ def read_csv(fn, *args, **kwargs):
         nchunks = int(ceil(total_bytes / chunkbytes))
         divisions = [None] * (nchunks + 1)
 
-        first_read_csv = partial(pd.read_csv, *args, header=header,
-                               **dissoc(kwargs, 'compression'))
-        rest_read_csv = partial(pd.read_csv, *args, header=None,
-                              **dissoc(kwargs, 'compression'))
+        first_read_csv = partial(try_pd_read_csv, *args, header=header,
+                                 **dissoc(kwargs, 'compression'))
+        rest_read_csv = partial(try_pd_read_csv, *args, header=None,
+                                **dissoc(kwargs, 'compression'))
 
         # Create dask graph
         dsk = dict(((name, i), (rest_read_csv, (BytesIO,
