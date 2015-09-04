@@ -941,6 +941,13 @@ class Series(_Frame):
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
 
+    def apply(self, func, convert_dtype=True, name=no_default, args=(), **kwds):
+        """ Parallel version of pandas.Series.apply """
+        if name is no_default:
+            name = self.name
+        return map_partitions(pd.Series.apply, name, self, func,
+                              convert_dtype, args, **kwds)
+
 
 class Index(Series):
 
@@ -1104,7 +1111,6 @@ class DataFrame(_Frame):
         # *args here is index, columns but columns arg is already used
         return map_partitions(func, column_info, self, None, columns)
 
-
     def query(self, expr, **kwargs):
         """ Blocked version of pd.DataFrame.query
 
@@ -1258,6 +1264,29 @@ class DataFrame(_Frame):
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
+
+    def apply(self, func, axis=0, args=(), columns=no_default, **kwds):
+        """ Parallel version of pandas.DataFrame.apply
+
+        This mimics the pandas version except for the following:
+
+        1.  The user must specify axis=0 explicitly
+        2.  The user must provide output columns or column
+        """
+        if axis == 0:
+            raise NotImplementedError(
+                    "dd.DataFrame.apply only supports axis=1\n"
+                    "  Try: df.apply(func, axis=1)")
+
+        if columns is no_default:
+            raise ValueError(
+            "Please supply column names of output dataframe or series\n"
+            "  Before: df.apply(func)\n"
+            "  After:  df.apply(func, columns=['x', 'y']) for dataframe result\n"
+            "  or:     df.apply(func, columns='x')        for series result")
+
+        return map_partitions(pd.DataFrame.apply, columns, self, func, axis,
+                              False, False, None, args, **kwds)
 
 
 # bind operators
