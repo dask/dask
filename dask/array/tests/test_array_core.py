@@ -1374,3 +1374,10 @@ def test_vindex_merge():
 
 def test_empty_array():
     assert eq(np.arange(0), da.arange(0, chunks=5))
+
+
+def test_array():
+    x = np.ones(5, dtype='i4')
+    d = da.ones(5, chunks=3, dtype='i4')
+    assert eq(da.array(d, ndmin=3, dtype='i8'),
+              np.array(x, ndmin=3, dtype='i8'))
