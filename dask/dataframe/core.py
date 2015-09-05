@@ -1725,6 +1725,11 @@ class GroupBy(_GroupBy):
         return self.df.columns
 
     def apply(self, func, columns=None):
+        """ Apply function to each group.
+
+        If the grouper does not align with the index then this causes a full
+        shuffle.  The order of rows within each group may not be preserved.
+        """
         if (isinstance(self.index, Series) and
             self.index._name == self.df.index._name):
             df = self.df
@@ -1787,6 +1792,11 @@ class SeriesGroupBy(_GroupBy):
         return self.key
 
     def apply(self, func, columns=None):
+        """ Apply function to each group.
+
+        If the grouper does not align with the index then this causes a full
+        shuffle.  The order of rows within each group may not be preserved.
+        """
         # df = set_index(self.df, self.index, **self.kwargs)
         if self.index._name == self.df.index._name:
             df = self.df

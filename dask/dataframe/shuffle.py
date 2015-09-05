@@ -14,8 +14,10 @@ from .utils import (strip_categories, shard_df_on_index, _categorize,
 def set_index(df, index, npartitions=None, compute=True, **kwargs):
     """ Set DataFrame index to new column
 
-    Sorts index and realigns Dataframe to new sorted order.  This shuffles and
-    repartitions your data.
+    Sorts index and realigns Dataframe to new sorted order.
+
+    This shuffles and repartitions your data.  If done in parallel the
+    resulting order is non-deterministic.
     """
     npartitions = npartitions or df.npartitions
     if not isinstance(index, Series):
@@ -160,7 +162,8 @@ def shuffle(df, index, npartitions=None):
     full dataset read, serialization and shuffle.  This is expensive.  If
     possible you should avoid shuffles.
 
-    This does not preserve a meaningful index/partitioning scheme.
+    This does not preserve a meaningful index/partitioning scheme.  This is not
+    deterministic if done in parallel.
 
     See Also
     --------
