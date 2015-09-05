@@ -45,8 +45,11 @@ class Profiler(Callback):
         self._results = {}
         self._dsk = {}
 
-    def _start(self, dsk):
+    def __enter__(self):
         self.clear()
+        return super(Profiler, self).__enter__()
+
+    def _start(self, dsk):
         self._dsk = dsk.copy()
 
     def _pretask(self, key, dsk, state):

@@ -113,3 +113,21 @@ def test_get_colors():
     cmap = get_colors('BrBG', funcs)
     lk = dict(zip([0, 1], BrBG3))
     assert cmap == [lk[i] for i in funcs]
+
+
+def test_two_gets():
+    with prof:
+        get(dsk, 'e')
+    n = len(prof.results())
+
+    dsk2 = {'x': (add, 1, 2), 'y': (add, 'x', 'x')}
+
+    with prof:
+        get(dsk2, 'y')
+    m = len(prof.results())
+
+    with prof:
+        get(dsk, 'e')
+        get(dsk2, 'y')
+
+    assert len(prof.results()) == m + n
