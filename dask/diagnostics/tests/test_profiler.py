@@ -26,13 +26,13 @@ def test_profiler():
     with prof:
         out = get(dsk, 'e')
     assert out == 6
-    prof_data = sorted(prof.results(), key=lambda d: d.key)
+    prof_data = sorted(prof.results, key=lambda d: d.key)
     keys = [i.key for i in prof_data]
     assert keys == ['c', 'd', 'e']
     tasks = [i.task for i in prof_data]
     assert tasks == [(add, 'a', 'b'), (mul, 'a', 'b'), (mul, 'c', 'd')]
     prof.clear()
-    assert prof.results() == []
+    assert prof.results == []
 
 
 def test_profiler_works_under_error():
@@ -43,8 +43,8 @@ def test_profiler_works_under_error():
         with prof:
             out = get(dsk, 'z')
 
-    assert all(len(v) == 5 for v in prof.results())
-    assert len(prof.results()) == 2
+    assert all(len(v) == 5 for v in prof.results)
+    assert len(prof.results) == 2
 
 
 @pytest.mark.skipif("not bokeh")
@@ -118,16 +118,17 @@ def test_get_colors():
 def test_two_gets():
     with prof:
         get(dsk, 'e')
-    n = len(prof.results())
+    n = len(prof.results)
 
     dsk2 = {'x': (add, 1, 2), 'y': (add, 'x', 'x')}
 
     with prof:
         get(dsk2, 'y')
-    m = len(prof.results())
+    m = len(prof.results)
 
     with prof:
         get(dsk, 'e')
         get(dsk2, 'y')
+        get(dsk, 'e')
 
-    assert len(prof.results()) == m + n
+    assert len(prof.results) == n + m + n

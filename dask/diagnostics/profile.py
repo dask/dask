@@ -32,7 +32,7 @@ class Profiler(Callback):
     ...     get(dsk, 'z')
     22
 
-    >>> prof.results()  # doctest: +SKIP
+    >>> prof.results  # doctest: +SKIP
     [('y', (add, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
      ('z', (mul, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
 
@@ -43,6 +43,7 @@ class Profiler(Callback):
     """
     def __init__(self):
         self._results = {}
+        self.results = []
         self._dsk = {}
 
     def __enter__(self):
@@ -60,13 +61,17 @@ class Profiler(Callback):
         end = default_timer()
         self._results[key] += (end, id)
 
+    def _finish(self, dsk, state, failed):
+        results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
+        self.results += list(starmap(TaskData, results.values()))
+        self._results.clear()
+
     def results(self):
         """Returns a list containing namedtuples of:
 
         TaskData(key, task, start_time, end_time, worker_id)"""
 
-        results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
-        return list(starmap(TaskData, results.values()))
+        return
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -76,9 +81,10 @@ class Profiler(Callback):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
-        return visualize(self.results(), self._dsk, **kwargs)
+        return visualize(self.results, self._dsk, **kwargs)
 
     def clear(self):
         """Clear out old results from profiler"""
         self._results.clear()
+        del self.results[:]
         self._dsk = {}
