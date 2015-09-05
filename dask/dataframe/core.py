@@ -1608,6 +1608,17 @@ def _groupby_getitem_apply(df, ind, key, func):
 def _groupby_level0_getitem_apply(df, key, func):
     return df.groupby(level=0)[key].apply(func)
 
+def _groupby_get_group(df, by_key, get_key, columns):
+    grouped = df.groupby(by_key)
+    if isinstance(columns, tuple):
+        columns = list(columns)
+    if get_key in grouped.groups:
+        return grouped[columns].get_group(get_key)
+    else:
+        # to create empty DataFrame/Series, which has the same
+        # dtype as the original
+        return df[0:0][columns]
+
 
 class _GroupBy(object):
 
@@ -1663,6 +1674,12 @@ class _GroupBy(object):
     def mean(self):
         return 1.0 * self.sum() / self.count()
 
+    def get_group(self, key):
+        token = self._token_prefix + 'get_group'
+        return map_partitions(_groupby_get_group, self.column_info,
+                              self.df,
+                              self.index, key, self.column_info, token=token)
+
 
 class GroupBy(_GroupBy):
 
@@ -1695,6 +1712,10 @@ class GroupBy(_GroupBy):
             _key = [c for c in df.columns if c != index]
 
         self.key = key or _key
+
+    @property
+    def column_info(self):
+        return self.df.columns
 
     def apply(self, func, columns=None):
         if (isinstance(self.index, Series) and
@@ -1753,6 +1774,10 @@ class SeriesGroupBy(_GroupBy):
             if not df.divisions == index.divisions:
                 raise NotImplementedError("The Series and index of the groupby"
                                           " must have the same divisions.")
+
+    @property
+    def column_info(self):
+        return self.key
 
     def apply(self, func, columns=None):
         # df = set_index(self.df, self.index, **self.kwargs)

@@ -208,7 +208,7 @@ def test_set_index():
 
 
 def test_split_apply_combine_on_series():
-    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 6], 'b': [4, 2., 7]},
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 6], 'b': [4, 2, 7]},
                                   index=[0, 1, 3]),
            ('x', 1): pd.DataFrame({'a': [4, 2, 6], 'b': [3, 3, 1]},
                                   index=[5, 6, 8]),
@@ -327,6 +327,26 @@ def test_groupby_multilevel_getitem():
         assert eq(d.count(), p.count())
         assert eq(d.mean(), p.mean().astype(float))
 
+def test_groupby_get_group():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 6], 'b': [4, 2, 7]},
+                                  index=[0, 1, 3]),
+           ('x', 1): pd.DataFrame({'a': [4, 2, 6], 'b': [3, 3, 1]},
+                                  index=[5, 6, 8]),
+           ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
+                                  index=[9, 9, 9])}
+    d = dd.DataFrame(dsk, 'x', ['a', 'b'], [0, 4, 9, 9])
+    full = d.compute()
+
+    for ddkey, pdkey in [('b', 'b'), (d.b, full.b),
+                         (d.b + 1, full.b + 1)]:
+        ddgrouped = d.groupby(ddkey)
+        pdgrouped = full.groupby(pdkey)
+        # DataFrame
+        assert eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
+        assert eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
+        # Series
+        assert eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
+        assert eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 def test_arithmetics():
     pdf2 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
