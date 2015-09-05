@@ -1052,6 +1052,12 @@ def test_reductions_frame_dtypes():
     assert eq(df.var(ddof=0), ddf.var(ddof=0))
     assert eq(df.mean(), ddf.mean())
 
+    assert eq(df._get_numeric_data(), ddf._get_numeric_data())
+
+    numerics = ddf[['int', 'float']]
+    assert numerics._get_numeric_data().dask == numerics.dask
+
+
 def test_cumulative():
     pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(pdf, 5)
@@ -1355,6 +1361,43 @@ def test_empty_quantile():
     assert result.compute().name == 'b'
     assert eq(result, exp, check_names=False)
 
+def test_dataframe_quantile():
+
+    # column X is for test column order and result division
+    df = pd.DataFrame({'A': np.arange(20),
+                       'X': np.arange(20, 40),
+                       'B': np.arange(10, 30),
+                       'C': ['a', 'b', 'c', 'd'] * 5},
+                       columns=['A', 'X', 'B', 'C'])
+    ddf = dd.from_pandas(df, 3)
+
+    result = ddf.quantile()
+    assert result.npartitions == 1
+    assert result.divisions == ('A', 'X')
+
+    result = result.compute()
+    assert isinstance(result, pd.Series)
+    tm.assert_index_equal(result.index, pd.Index(['A', 'X', 'B']))
+    assert (result > pd.Series([16, 36, 26], index=['A', 'X', 'B'])).all()
+    assert (result < pd.Series([17, 37, 27], index=['A', 'X', 'B'])).all()
+
+    result = ddf.quantile([0.25, 0.75])
+    assert result.npartitions == 1
+    assert result.divisions == (0.25, 0.75)
+
+    result = result.compute()
+    assert isinstance(result, pd.DataFrame)
+    tm.assert_index_equal(result.index, pd.Index([0.25, 0.75]))
+    tm.assert_index_equal(result.columns, pd.Index(['A', 'X', 'B']))
+    minexp = pd.DataFrame([[1, 21, 11], [17, 37, 27]],
+                          index=[0.25, 0.75], columns=['A', 'X', 'B'])
+    assert (result > minexp).all().all()
+    maxexp = pd.DataFrame([[2, 22, 12], [18, 38, 28]],
+                          index=[0.25, 0.75], columns=['A', 'X', 'B'])
+    assert (result < maxexp).all().all()
+
+    assert eq(ddf.quantile(axis=1), df.quantile(axis=1))
+    assert raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
 
 def test_index():
     assert eq(d.index, full.index)
