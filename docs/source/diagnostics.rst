@@ -70,8 +70,7 @@ list of ``namedtuple`` objects containing the data for each task.
 
 .. code-block:: python
 
-    >>> data = prof.results()
-    >>> data[0]  # doctest: +SKIP
+    >>> prof.results[0]  # doctest: +SKIP
     TaskData(key=('tsqr_1_QR_st1', 9, 0),
              task=(qr, (_apply_random, 'random_sample', 1730327976, (1000, 1000), (), {})),
              start_time=1435613641.833878,
