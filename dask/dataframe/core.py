@@ -374,7 +374,7 @@ class _Frame(Base):
 
         # not implemented because of performance concerns.
         # see https://github.com/blaze/dask/pull/507
-        raise AttributeError("Dask Dataframe does not support iloc")
+        raise NotImplementedError("Dask Dataframe does not support iloc")
 
     def repartition(self, divisions, force=False):
         """ Repartition dataframe along new divisions
@@ -1017,6 +1017,8 @@ class DataFrame(_Frame):
                             for i in range(self.npartitions))
                 return self._constructor_sliced(merge(self.dask, dsk), name,
                                                       key, self.divisions)
+            else:
+                raise KeyError(key)
         if isinstance(key, list):
             name = '%s[%s]' % (self._name, str(key))
             if all(k in self.columns for k in key):
@@ -1026,7 +1028,12 @@ class DataFrame(_Frame):
                             for i in range(self.npartitions))
                 return self._constructor(merge(self.dask, dsk), name,
                                                key, self.divisions)
-        if isinstance(key, Series) and self.divisions == key.divisions:
+            else:
+                raise KeyError([k for k in key if k not in self.columns])
+        if isinstance(key, Series):
+            if self.divisions != key.divisions:
+                from .multi import _maybe_align_partitions
+                self, key = _maybe_align_partitions([self, key])
             name = 'series-slice-%s[%s]' % (self._name, key._name)
             dsk = dict(((name, i), (self._partition_type._getitem_array,
                                      (self._name, i),
@@ -1034,7 +1041,7 @@ class DataFrame(_Frame):
                         for i in range(self.npartitions))
             return self._constructor(merge(self.dask, key.dask, dsk), name,
                                            self.columns, self.divisions)
-        raise NotImplementedError()
+        raise NotImplementedError(key)
 
     def __getattr__(self, key):
         try:
@@ -1042,8 +1049,8 @@ class DataFrame(_Frame):
         except AttributeError as e:
             try:
                 return self[key]
-            except NotImplementedError:
-                raise e
+            except KeyError as e:
+                raise AttributeError(e)
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +

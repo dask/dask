@@ -1383,7 +1383,23 @@ def test_loc_with_series():
 
 
 def test_iloc_raises():
-    assert raises(AttributeError, lambda: d.iloc[:5])
+    assert raises(NotImplementedError, lambda: d.iloc[:5])
+
+
+def test_getitem():
+    df = pd.DataFrame({'A': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'B': [9, 8, 7, 6, 5, 4, 3, 2, 1],
+                       'C': [True, False, True] * 3},
+                      columns=list('ABC'))
+    ddf = dd.from_pandas(df, 2)
+    assert eq(ddf['A'], df['A'])
+    assert eq(ddf[['A', 'B']], df[['A', 'B']])
+    assert eq(ddf[ddf.C], df[df.C])
+    assert eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C])
+
+    assert raises(KeyError, lambda: df['X'])
+    assert raises(KeyError, lambda: df[['A', 'X']])
+    assert raises(AttributeError, lambda: df.X)
 
 
 def test_assign():
