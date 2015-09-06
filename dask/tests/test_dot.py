@@ -73,10 +73,11 @@ def test_aliases():
 
 
 def test_dot_graph():
-    fn = 'test_dot_graph'
+    fn = '$(touch should_not_get_created.txt)'
     fns = [fn + ext for ext in ['.png', '.pdf', '.dot']]
     try:
         i = dot_graph(dsk, filename=fn)
+        assert not os.path.exists('should_not_get_created.txt')
         assert all(os.path.exists(f) for f in fns)
         assert isinstance(i, Image)
     finally:
@@ -92,4 +93,3 @@ def test_dot_graph():
     i = dot_graph(dsk, filename=None)
     assert all(not os.path.exists(f) for f in fns)
     assert isinstance(i, Image)
-

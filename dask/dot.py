@@ -4,9 +4,11 @@ import re
 from subprocess import check_call, CalledProcessError
 
 from graphviz import Digraph
+from toolz.curried.operator import add
 
 from .core import istask, get_dependencies, ishashable
 from .compatibility import BytesIO
+
 
 
 def task_label(task):
@@ -135,14 +137,12 @@ def dot_graph(dsk, filename='mydask', **kwargs):
     g = to_graphviz(dsk, **kwargs)
 
     if filename is not None:
-        g.save(filename + '.dot')
+        dot, pdf, png = map(add(filename), ('.dot', '.pdf', '.png'))
+        g.save(dot)
 
         try:
-            check_call('dot -Tpdf {0}.dot -o {0}.pdf'.format(filename),
-                       shell=True)
-            check_call('dot -Tpng {0}.dot -o {0}.png'.format(filename),
-                       shell=True)
-
+            check_call(['dot', '-Tpdf', dot, '-o', pdf])
+            check_call(['dot', '-Tpng', dot, '-o', png])
         except CalledProcessError:
             msg = ("Please install The `dot` utility from graphviz:\n"
                    "  Debian:  sudo apt-get install graphviz\n"
@@ -152,7 +152,7 @@ def dot_graph(dsk, filename='mydask', **kwargs):
 
         try:
             from IPython.display import Image
-            return Image(filename + '.png')
+            return Image(png)
         except ImportError:
             pass
 
