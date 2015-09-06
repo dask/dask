@@ -687,6 +687,11 @@ class Series(_Frame):
         return Series
 
     @property
+    def _empty_partition(self):
+        """ Return empty dummy to emulate the result """
+        return self._partition_type(name=self.name)
+
+    @property
     def ndim(self):
         """ Return dimensionality """
         return 1
@@ -800,7 +805,8 @@ class Series(_Frame):
     def _get_numeric_data(self, how='any', subset=None):
         return self
 
-    def _validate_axis(self, axis=0):
+    @classmethod
+    def _validate_axis(cls, axis=0):
         if axis not in (0, 'index', None):
             raise ValueError('No axis named {0}'.format(axis))
         # convert to numeric axis
@@ -1009,6 +1015,11 @@ class DataFrame(_Frame):
     def _constructor(self):
         return DataFrame
 
+    @property
+    def _empty_partition(self):
+        """ Return empty dummy to emulate the result """
+        return self._partition_type(columns=self.columns)
+
     def __getitem__(self, key):
         if isinstance(key, (str, unicode)):
             name = self._name + '.' + key
@@ -1179,7 +1190,8 @@ class DataFrame(_Frame):
     def _get_numeric_data(self, how='any', subset=None):
         return self.map_partitions(pd.DataFrame._get_numeric_data)
 
-    def _validate_axis(self, axis=0):
+    @classmethod
+    def _validate_axis(cls, axis=0):
         if axis not in (0, 1, 'index', 'columns', None):
             raise ValueError('No axis named {0}'.format(axis))
         # convert to numeric axis
@@ -1410,9 +1422,7 @@ def elemwise(op, *args, **kwargs):
 
     _name = 'elemwise-' + tokenize(op, kwargs, *args)
 
-    from .io import from_pandas
-    args = [from_pandas(arg, 1) if isinstance(arg, (pd.DataFrame, pd.Series))
-            else arg for arg in args]
+    args = _maybe_from_pandas(args)
 
     from .multi import _maybe_align_partitions
     args = _maybe_align_partitions(args)
@@ -1499,35 +1509,58 @@ def reduction(x, chunk, aggregate, token=None):
     return Scalar(merge(x.dask, dsk, dsk2), b)
 
 
-def _concat_dfs(dfs, name):
+def _concat_dfs(dfs, name, join='outer'):
     """ Internal function to concat dask dict and DataFrame.columns """
     dsk = dict()
     i = 0
+
+    empties = [df._empty_partition for df in dfs]
+    result = pd.concat(empties, axis=0, join=join)
+    if isinstance(result, pd.Series):
+        columns = result.name
+    else:
+        columns = result.columns.tolist()
+
     for df in dfs:
+        if columns != df.columns:
+            df = df[[c for c in columns if c in df.columns]]
+            dsk = merge(dsk, df.dask)
+
         for key in df._keys():
             dsk[(name, i)] = key
             i += 1
 
-    empties = [pd.DataFrame(columns=df.columns) for df in dfs]
-    columns = pd.concat(empties, axis=0, join='outer').columns
-
     return dsk, columns
 
+def _maybe_from_pandas(dfs):
+    from .io import from_pandas
+    dfs = [from_pandas(df, 1) if isinstance(df, (pd.DataFrame, pd.Series))
+           else df for df in dfs]
+    return dfs
 
-def concat(dfs, interleave_partitions=False):
+
+def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     """ Concatenate DataFrames along rows.
 
-    - If all divisions are known and ordered, concatenate DataFrames keeping
-      divisions. When divisions are not ordered, specifying
-      interleave_partition=True allows concatenate divisions each by each.
-    - If any of division is unknown, concatenate DataFrames resetting its
-      division to unknown (None)
+    - When axis=0 (default), concatenate DataFrames row-wise:
+      - If all divisions are known and ordered, concatenate DataFrames keeping
+        divisions. When divisions are not ordered, specifying
+        interleave_partition=True allows concatenate divisions each by each.
+      - If any of division is unknown, concatenate DataFrames resetting its
+        division to unknown (None)
+    - When axis=1, concatenate DataFrames column-wise:
+      - Allowed if all divisions are known.
+      - If any of division is unknown, it raises ValueError.
 
     Parameters
     ----------
 
     dfs: list
         List of dask.DataFrames to be concatenated
+    axis: {0, 1, 'index', 'columns'}, default 0
+        The axis to concatenate along
+    join : {'inner', 'outer'}, default 'outer'
+        How to handle indexes on other axis
     interleave_partitions: bool, default False
         Whether to concatenate DataFrames ignoring its order. If True, every
         divisions are concatenated each by each.
@@ -1569,38 +1602,59 @@ def concat(dfs, interleave_partitions=False):
     if len(dfs) == 0:
         raise ValueError('Input must be a list longer than 0')
 
-    if all(df.known_divisions for df in dfs):
-        # each DataFrame's division must be greater than previous one
-        if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
-               for i in range(len(dfs) - 1)):
-            name = 'concat-{0}'.format(tokenize(*dfs))
-            dsk, columns = _concat_dfs(dfs, name)
+    if not join in ('inner', 'outer'):
+        raise ValueError("'join' must be 'inner' or 'outer'")
 
-            divisions = []
-            for df in dfs[:-1]:
-                # remove last to concatenate with next
-                divisions += df.divisions[:-1]
-            divisions += dfs[-1].divisions
+    axis = DataFrame._validate_axis(axis)
+    dasks = [df for df in dfs if isinstance(df, _Frame)]
 
-            return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
-                             columns, divisions)
+    if all(df.known_divisions for df in dasks):
+        # must be converted here to check whether divisions can be
+        # concatenated
+        dfs = _maybe_from_pandas(dfs)
+        if axis == 1:
+            from .multi import concat_indexed_dataframes
+            return concat_indexed_dataframes(dfs, axis=axis, join=join)
         else:
-            if interleave_partitions:
-                from .multi import concat_indexed_dataframes
-                return concat_indexed_dataframes(dfs)
+            # each DataFrame's division must be greater than previous one
+            if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
+                   for i in range(len(dfs) - 1)):
+                name = 'concat-{0}'.format(tokenize(*dfs))
+                dsk, columns = _concat_dfs(dfs, name, join=join)
 
-            raise ValueError('All inputs have known divisions which cannnot be '
-                             'concatenated in order. Specify '
-                             'interleave_partitions=True to ignore order')
+                divisions = []
+                for df in dfs[:-1]:
+                    # remove last to concatenate with next
+                    divisions += df.divisions[:-1]
+                divisions += dfs[-1].divisions
+
+                return_type = _get_return_type(dfs[0], columns)
+                return return_type(merge(dsk, *[df.dask for df in dfs]), name,
+                                   columns, divisions)
+            else:
+                if interleave_partitions:
+                    from .multi import concat_indexed_dataframes
+                    return concat_indexed_dataframes(dfs, join=join)
+
+                raise ValueError('All inputs have known divisions which cannnot '
+                                 'be concatenated in order. Specify '
+                                 'interleave_partitions=True to ignore order')
 
     else:
-        name = 'concat-{0}'.format(tokenize(*dfs))
-        dsk, columns = _concat_dfs(dfs, name)
+        if axis == 1:
+             raise ValueError('Unable to concatenate DataFrame with unknown '
+                              'division specifying axis=1')
+        else:
+            # concat will not regard Series as row
+            dfs = _maybe_from_pandas(dfs)
+            name = 'concat-{0}'.format(tokenize(*dfs))
+            dsk, columns = _concat_dfs(dfs, name, join=join)
 
-        divisions = [None] * (len(dsk) + 1)
+            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
 
-        return DataFrame(merge(dsk, *[df.dask for df in dfs]), name,
-                         columns, divisions)
+            return_type = _get_return_type(dfs[0], columns)
+            return return_type(merge(dsk, *[df.dask for df in dfs]), name,
+                               columns, divisions)
 
 
 def _groupby_apply(df, ind, func):
@@ -1874,6 +1928,15 @@ aca = apply_concat_apply
 
 
 def _get_return_type(arg, columns):
+    """ Get the class of the result
+
+    - When columns is str/unicode, the result is:
+       - Scalar when columns is ``return_scalar``
+       - Index if arg is Index
+       - Series otherwise
+    - Otherwise, result is DataFrame.
+    """
+
     if (isinstance(columns, (str, unicode)) or not
           isinstance(columns, Iterable)):
 
@@ -1907,9 +1970,7 @@ def map_partitions(func, columns, *args, **kwargs):
         dask = {(name, 0): (func, ) + tuple((arg._name, 0) for arg in args)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name)
 
-    from .io import from_pandas
-    args = [from_pandas(arg, 1) if isinstance(arg, (pd.DataFrame, pd.Series))
-            else arg for arg in args]
+    args = _maybe_from_pandas(args)
 
     if columns is no_default:
         columns = None
