@@ -2118,3 +2118,11 @@ def test_apply():
 
     func = lambda x: pd.Series([x, x])
     eq(a.x.apply(func, name=[0, 1]), df.x.apply(func))
+
+
+def test_index_time_properties():
+    i = tm.makeTimeSeries()
+    a = dd.from_pandas(i, npartitions=3)
+
+    assert (i.index.day == a.index.day.compute()).all()
+    assert (i.index.month == a.index.month.compute()).all()

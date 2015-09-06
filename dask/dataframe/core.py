@@ -1328,6 +1328,14 @@ for name in ['add', 'sub', 'mul', 'div',
     Series._bind_operator_method(name, meth)
 
 
+def elemwise_property(attr, s):
+    return map_partitions(getattr, s.name, s, attr)
+
+for name in ['nanosecond', 'microsecond', 'millisecond', 'second', 'minute',
+        'hour', 'day', 'week', 'month', 'quarter', 'year']:
+    setattr(Index, name, property(partial(elemwise_property, name)))
+
+
 def _assign(df, *pairs):
     kwargs = dict(partition(2, pairs))
     return df.assign(**kwargs)
