@@ -4,7 +4,6 @@ import re
 from subprocess import check_call, CalledProcessError
 
 from graphviz import Digraph
-from toolz.curried.operator import add
 
 from .core import istask, get_dependencies, ishashable
 from .compatibility import BytesIO
@@ -137,7 +136,7 @@ def dot_graph(dsk, filename='mydask', **kwargs):
     g = to_graphviz(dsk, **kwargs)
 
     if filename is not None:
-        dot, pdf, png = map(add(filename), ('.dot', '.pdf', '.png'))
+        dot, pdf, png = (filename + ext for ext in ('.dot', '.pdf', '.png'))
         g.save(dot)
 
         try:
