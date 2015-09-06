@@ -1021,8 +1021,8 @@ class DataFrame(_Frame):
         return self._partition_type(columns=self.columns)
 
     def __getitem__(self, key):
-        if isinstance(key, (str, unicode)):
-            name = self._name + '.' + key
+        if np.isscalar(key):
+            name = '{0}.{1}'.format(self._name, key)
             if key in self.columns:
                 dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                             for i in range(self.npartitions))

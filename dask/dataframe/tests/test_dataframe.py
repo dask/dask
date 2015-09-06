@@ -1421,6 +1421,15 @@ def test_getitem():
     assert raises(KeyError, lambda: df[['A', 'X']])
     assert raises(AttributeError, lambda: df.X)
 
+    # not str/unicode
+    df = pd.DataFrame(np.random.randn(10, 5))
+    ddf = dd.from_pandas(df, 2)
+    assert eq(ddf[0], df[0])
+    assert eq(ddf[[1, 2]], df[[1, 2]])
+
+    assert raises(KeyError, lambda: df[8])
+    assert raises(KeyError, lambda: df[[1, 8]])
+
 
 def test_assign():
     assert eq(d.assign(c=d.a + 1, e=d.a + d.b),
