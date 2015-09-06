@@ -1903,6 +1903,9 @@ def test_datetime_accessor():
     assert eq(a.x.dt.date, df.x.dt.date, check_names=False)
     assert (a.x.dt.to_pydatetime().compute() == df.x.dt.to_pydatetime()).all()
 
+    assert a.x.dt.date.dask == a.x.dt.date.dask
+    assert a.x.dt.to_pydatetime().dask == a.x.dt.to_pydatetime().dask
+
 
 def test_str_accessor():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'D']})
@@ -1912,6 +1915,8 @@ def test_str_accessor():
     assert 'upper' in dir(a.x.str)
 
     assert eq(a.x.str.upper(), df.x.str.upper())
+
+    assert a.x.str.upper().dask == a.x.str.upper().dask
 
 
 def test_empty_max():

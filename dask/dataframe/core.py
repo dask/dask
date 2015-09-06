@@ -2308,7 +2308,36 @@ def repartition(df, divisions, force=False):
     raise ValueError('Data must be DataFrame or Series')
 
 
-class DatetimeAccessor(object):
+class Accessor(object):
+    def __init__(self, series):
+        if not isinstance(series, Series):
+            raise ValueError('Accessor cannot be initialized')
+        self._series = series
+
+    def _property_map(self, key):
+        return map_partitions(self.getattr, self._series.name, self._series, key)
+
+    def _function_map(self, key, *args):
+        return map_partitions(self.call, self._series.name, self._series, key,
+                *args)
+
+    def __dir__(self):
+        return sorted(set(dir(type(self)) + list(self.__dict__) +
+                      dir(self.ns)))
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            if key in dir(self.ns):
+                if isinstance(getattr(self.ns, key), property):
+                    return self._property_map(key)
+                else:
+                    return partial(self._function_map, key)
+            else:
+                raise
+
+class DatetimeAccessor(Accessor):
     """ Accessor object for datetimelike properties of the Series values.
 
     Examples
@@ -2316,36 +2345,19 @@ class DatetimeAccessor(object):
 
     >>> s.dt.microsecond  # doctest: +SKIP
     """
-    def __init__(self, series):
-        if not isinstance(series, Series):
-            raise ValueError('DatetimeAccessor cannot be initialized')
-        self._series = series
+    ns = pd.Series.dt
 
-    def __dir__(self):
-        return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      dir(pd.Series.dt)))
+    @staticmethod
+    def getattr(obj, attr):
+        return getattr(obj.dt, attr)
 
-    def _property_map(self, key):
-        return self._series.map_partitions(lambda s: getattr(s.dt, key))
-
-    def _function_map(self, key, *args):
-        func = lambda s: getattr(s.dt, key)(*args)
-        return self._series.map_partitions(func, *args)
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            if key in dir(pd.Series.dt):
-                if isinstance(getattr(pd.Series.dt, key), property):
-                    return self._property_map(key)
-                else:
-                    return partial(self._function_map, key)
-            else:
-                raise
+    @staticmethod
+    def call(obj, attr, *args):
+        return getattr(obj.dt, attr)(*args)
 
 
-class StringAccessor(object):
+
+class StringAccessor(Accessor):
     """ Accessor object for string properties of the Series values.
 
     Examples
@@ -2353,30 +2365,12 @@ class StringAccessor(object):
 
     >>> s.str.lower()  # doctest: +SKIP
     """
-    def __init__(self, series):
-        if not isinstance(series, Series):
-            raise ValueError('DatetimeAccessor cannot be initialized')
-        self._series = series
+    ns = pd.Series.str
 
-    def __dir__(self):
-        return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      dir(pd.Series.str)))
+    @staticmethod
+    def getattr(obj, attr):
+        return getattr(obj.str, attr)
 
-    def _property_map(self, key):
-        return self._series.map_partitions(lambda s: getattr(s.str, key))
-
-    def _function_map(self, key, *args):
-        func = lambda s: getattr(s.str, key)(*args)
-        return self._series.map_partitions(func, *args)
-
-    def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            if key in dir(pd.Series.str):
-                if isinstance(getattr(pd.Series.str, key), property):
-                    return self._property_map(key)
-                else:
-                    return partial(self._function_map, key)
-            else:
-                raise
+    @staticmethod
+    def call(obj, attr, *args):
+        return getattr(obj.str, attr)(*args)
