@@ -666,8 +666,8 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         return DataFrame(dsk, name, columns, divisions)
 
     keys, stops = get_keys_and_stops(path, key, stop)
-    get_df = lambda k, s: one_path_one_key(path, k, start, s, columns, chunksize)
-    return concat([get_df(k, s) for k, s in zip(keys, stops)])
+    return concat([one_path_one_key(path, k, start, s, columns, chunksize)
+                   for k, s in zip(keys, stops)])
 
 
 @wraps(pd.read_hdf)
