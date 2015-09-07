@@ -76,13 +76,6 @@ class Profiler(Callback):
         self.results += list(starmap(TaskData, results.values()))
         self._results.clear()
 
-    def results(self):
-        """Returns a list containing namedtuples of:
-
-        TaskData(key, task, start_time, end_time, worker_id)"""
-
-        return
-
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
 
