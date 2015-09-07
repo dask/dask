@@ -40,6 +40,16 @@ class Profiler(Callback):
     method. Note that this requires bokeh to be installed.
 
     >>> prof.visualize() # doctest: +SKIP
+
+    You can activate the profiler globally
+
+    >>> prof.register()  # doctest: +SKIP
+
+    If you use the profiler globally you will need to clear out old results
+    manually.
+
+    >>> prof.clear()
+
     """
     def __init__(self):
         self._results = {}
