@@ -1,13 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
 import re
-from subprocess import check_call, CalledProcessError
+from functools import partial
 
 from graphviz import Digraph
 
 from .core import istask, get_dependencies, ishashable
-from .compatibility import BytesIO
 
+IPYTHON_IMAGE_FORMATS = frozenset(['jpeg', 'png'])
 
 
 def task_label(task):
@@ -132,35 +132,82 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
     return g
 
 
-def dot_graph(dsk, filename='mydask', **kwargs):
-    g = to_graphviz(dsk, **kwargs)
+def _get_display_cls(format):
+    """
+    Get the appropriate IPython display class for `format`.
 
-    if filename is not None:
-        dot, pdf, png = (filename + ext for ext in ('.dot', '.pdf', '.png'))
-        g.save(dot)
+    Returns `IPython.display.SVG` if format=='svg', otherwise
+    `IPython.display.Image`.
 
-        try:
-            check_call(['dot', '-Tpdf', dot, '-o', pdf])
-            check_call(['dot', '-Tpng', dot, '-o', png])
-        except CalledProcessError:
-            msg = ("Please install The `dot` utility from graphviz:\n"
-                   "  Debian:  sudo apt-get install graphviz\n"
-                   "  Mac OSX: brew install graphviz\n"
-                   "  Windows: http://www.graphviz.org/Download..php")
-            raise RuntimeError(msg)  # pragma: no cover
+    If IPython is not importable, return dummy function that swallows its
+    arguments and returns None.
+    """
+    dummy = lambda *args, **kwargs: None
+    try:
+        import IPython.display as display
+    except ImportError:
+        # Can't return a display object if no IPython.
+        return dummy
 
-        try:
-            from IPython.display import Image
-            return Image(png)
-        except ImportError:
-            pass
-
+    if format in {'pdf', 'dot'}:
+        # IPython can't display PDF or dot files natively.
+        return dummy
+    elif format in IPYTHON_IMAGE_FORMATS:
+        # Partially apply `format` so that this and `SVG` supply a uniform
+        # interface to the caller.
+        return partial(display.Image, format=format)
+    elif format == 'svg':
+        return display.SVG
     else:
-        try:
-            from IPython.display import Image
-            s = BytesIO()
-            s.write(g.pipe(format='png'))
-            s.seek(0)
-            return Image(s.read())
-        except ImportError:
-            pass
+        raise ValueError("Unknown format '%s' passed to `dot_graph`" % format)
+
+
+def dot_graph(dsk, filename='mydask', format='png', **kwargs):
+    """
+    Render a task graph using dot.
+
+    If `filename` is not None, write a file to disk with that name in the
+    format specified by `format`.  `filename` should not include an extension.
+
+    Parameters
+    ----------
+    dsk : dict
+        The graph to display.
+    filename : str or None, optional
+        The name (without an extension) of the file to write to disk.  If
+        `filename` is None, no file will be written, and we communicate with
+        dot using only pipes.  Default is 'mydask'.
+    format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
+        Format in which to write output file.  Default is 'png'.
+    **kwargs
+        Additional keyword arguments to forward to `to_graphviz`.
+
+    Returns
+    -------
+    result : None or IPython.display.Image or IPython.display.SVG  (See below.)
+
+    Notes
+    -----
+    If IPython is installed, we return an IPython.display object in the
+    requested format.  If IPython is not installed, we just return None.
+
+    We always return None if format is 'pdf' or 'dot', because IPython can't
+    display these formats natively. Passing these formats with filename=None
+    will not produce any useful output.
+
+    See Also
+    --------
+    dask.dot.to_graphviz
+    """
+    g = to_graphviz(dsk, **kwargs)
+    data = g.pipe(format=format)
+    display_cls = _get_display_cls(format)
+
+    if not filename:
+        return display_cls(data=data)
+
+    full_filename = '.'.join([filename, format])
+    with open(full_filename, 'wb') as f:
+        f.write(data)
+
+    return _get_display_cls(format)(filename=full_filename)

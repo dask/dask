@@ -8,7 +8,8 @@ import pytest
 pytest.importorskip("graphviz")
 
 from dask.dot import dot_graph, task_label, label, to_graphviz
-from IPython.display import Image
+from dask.utils import ensure_not_exists
+from IPython.display import Image, SVG
 
 # Since graphviz doesn't store a graph, we need to parse the output
 label_re = re.compile('.*\[label=(.*?) shape=.*\]')
@@ -72,24 +73,60 @@ def test_aliases():
     assert len(g.body) - len(labels) == 1   # Single edge
 
 
-def test_dot_graph():
-    fn = '$(touch should_not_get_created.txt)'
-    fns = [fn + ext for ext in ['.png', '.pdf', '.dot']]
-    try:
-        i = dot_graph(dsk, filename=fn)
-        assert not os.path.exists('should_not_get_created.txt')
-        assert all(os.path.exists(f) for f in fns)
-        assert isinstance(i, Image)
-    finally:
-        for f in fns:
-            if os.path.exists(f):
-                os.remove(f)
+def test_dot_graph(tmpdir):
+    # Use a name that the shell would interpret specially to ensure that we're
+    # not vulnerable to shell injection when interacting with `dot`.
+    filename = str(tmpdir.join('$(touch should_not_get_created.txt)'))
 
-    fn = 'mydask' # default, remove existing files
-    fns = [fn + ext for ext in ['.png', '.pdf', '.dot']]
-    for f in fns:
-        if os.path.exists(f):
-            os.remove(f)
-    i = dot_graph(dsk, filename=None)
-    assert all(not os.path.exists(f) for f in fns)
-    assert isinstance(i, Image)
+    # Map from format extension to expected return type.
+    result_types = {
+        'png': Image,
+        'jpeg': Image,
+        'dot': type(None),
+        'pdf': type(None),
+        'svg': SVG,
+    }
+    for format in result_types:
+        target = '.'.join([filename, format])
+        ensure_not_exists(target)
+        try:
+            result = dot_graph(dsk, filename=filename, format=format)
+
+            assert not os.path.exists('should_not_get_created.txt')
+            assert os.path.isfile(target)
+            assert isinstance(result, result_types[format])
+        finally:
+            ensure_not_exists(target)
+
+
+def test_dot_graph_no_filename(tmpdir):
+    # Map from format extension to expected return type.
+    result_types = {
+        'png': Image,
+        'jpeg': Image,
+        'dot': type(None),
+        'pdf': type(None),
+        'svg': SVG,
+    }
+    for format in result_types:
+        before = tmpdir.listdir()
+        result = dot_graph(dsk, filename=None, format=format)
+        # We shouldn't write any files if filename is None.
+        after = tmpdir.listdir()
+        assert before == after
+        assert isinstance(result, result_types[format])
+
+
+def test_dot_graph_defaults():
+    # Test with default args.
+    default_name = 'mydask'
+    default_format = 'png'
+    target = '.'.join([default_name, default_format])
+
+    ensure_not_exists(target)
+    try:
+        result = dot_graph(dsk)
+        assert os.path.isfile(target)
+        assert isinstance(result, Image)
+    finally:
+        ensure_not_exists(target)
