@@ -760,31 +760,64 @@ class Series(_Frame):
         pandas.Series.resample
         """
 
+        # Validate Rule
+        rule = pd.datetools.to_offset(rule)
+        day_nanos = pd.datetools.Day().nanos
+        if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
+            raise NotImplementedError('Resampling frequency %s that does not '
+                                      'evenly divide a day is not '
+                                      'implemented' % rule)
+        # Construct new divisions
         divs = pd.Series(range(len(self.divisions)), index=self.divisions)
-        temp = divs.resample(rule, how='count', axis=axis, fill_method=fill_method,
-                          closed=closed, label=label, convention=convention,
-                          kind=kind, loffset=loffset, limit=limit, base=base)
-        newdivs = temp.loc[temp > 0].index.tolist()
+        g = pd.TimeGrouper(rule, how=how, axis=axis, fill_method=fill_method,
+                           closed=closed, label=label, convention=convention,
+                           kind=kind, loffset=loffset, limit=limit, base=base)
+        bins = divs.resample(rule, how='count', axis=axis,
+                             fill_method=fill_method, closed=closed,
+                             label=label, convention=convention, kind=kind,
+                             loffset=loffset, limit=limit, base=base)
+        newdivs = bins.loc[bins > 0].index.tolist()
+        # Bound edges of divisions
         if newdivs[-1] < self.divisions[-1]:
             newdivs.append(self.divisions[-1])
         if newdivs[0] > self.divisions[0]:
             newdivs.insert(0, self.divisions[0])
+        # Deal with closed on right
+        nano = pd.datetools.to_offset('N')
+        if g.closed == 'right':
+            for i in range(1, len(newdivs) - 1):
+                newdivs[i] += nano
 
-        day_nanos = pd.datetools.Day().nanos
+        kwargs = dict(rule=rule, how=how, axis=axis, fill_method=fill_method,
+                      closed=closed, label=label, convention=convention,
+                      kind=kind, loffset=loffset, limit=limit, base=base)
 
-        rule = pd.datetools.to_offset(rule)
-        def block_func(df):
-            if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
-                raise NotImplementedError('Resampling frequency %s that does'
-                                          ' not evenly divide a day is not '
-                                          'implemented' % rule)
+        def block_func(df, left=None, right=None):
+            # left <= df.index[0], df.index[-1] < right
+            l = 0
+            if left and left < df.index[0]:
+                df = pd.concat([pd.Series(df.iloc[0], index=[left - nano]), df])
+                l = 1
+            r = None
+            if right:
+                if g.label == 'right':
+                    index = [right + rule]
+                else:
+                    index = [right]
+                df = pd.concat([df, pd.Series(df.iloc[0], index=index)])
+                r = -1
+            res = df.resample(**kwargs)
+            return res.iloc[l:r]
 
-            return df.resample(rule=rule, how=how, axis=axis,
-                               fill_method=fill_method, closed=closed,
-                               label=label, convention=convention, kind=kind,
-                               loffset=loffset, limit=limit, base=base)
-
-        return self.repartition(newdivs, force=True).map_partitions(block_func)
+        partitioned = self.repartition(newdivs, force=True)
+        args = zip(partitioned._keys(),
+                   [None] + newdivs[1:],
+                   newdivs[1:-1] + [None])
+        name = tokenize(self, kwargs)
+        dsk = partitioned.dask.copy()
+        for i, (k, l, r) in enumerate(args):
+            dsk[(name, i)] = (block_func, k, l, r)
+        return Series(dsk, name, self.name, newdivs)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
