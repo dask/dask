@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from contextlib import contextmanager
+from errno import ENOENT
 from functools import partial
 import os
 import sys
@@ -352,3 +353,14 @@ class Dispatch(object):
             if cls in lk:
                 return lk[cls](arg)
         raise TypeError("No dispatch for {0} type".format(typ))
+
+
+def ensure_not_exists(filename):
+    """
+    Ensure that a file does not exist.
+    """
+    try:
+        os.unlink(filename)
+    except OSError as e:
+        if e.errno != ENOENT:
+            raise
