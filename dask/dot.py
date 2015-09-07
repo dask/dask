@@ -7,8 +7,6 @@ from graphviz import Digraph
 
 from .core import istask, get_dependencies, ishashable
 
-IPYTHON_IMAGE_FORMATS = frozenset(['jpeg', 'png'])
-
 
 def task_label(task):
     """Label for a task on a dot graph.
@@ -132,6 +130,10 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None):
     return g
 
 
+IPYTHON_IMAGE_FORMATS = frozenset(['jpeg', 'png'])
+IPYTHON_NO_DISPLAY_FORMATS = frozenset(['dot', 'pdf'])
+
+
 def _get_display_cls(format):
     """
     Get the appropriate IPython display class for `format`.
@@ -149,11 +151,11 @@ def _get_display_cls(format):
         # Can't return a display object if no IPython.
         return dummy
 
-    if format in {'pdf', 'dot'}:
-        # IPython can't display PDF or dot files natively.
+    if format in IPYTHON_NO_DISPLAY_FORMATS:
+        # IPython can't display this format natively, so just return None.
         return dummy
     elif format in IPYTHON_IMAGE_FORMATS:
-        # Partially apply `format` so that this and `SVG` supply a uniform
+        # Partially apply `format` so that `Image` and `SVG` supply a uniform
         # interface to the caller.
         return partial(display.Image, format=format)
     elif format == 'svg':
