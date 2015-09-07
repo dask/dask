@@ -7,10 +7,9 @@ import re
 import os
 from glob import glob
 from math import ceil
-from toolz import merge, dissoc, assoc
+from toolz import merge, assoc
 from operator import getitem
-from hashlib import md5
-from fnmatch import fnmatchcase
+from fnmatch import fnmatch
 import uuid
 
 from ..compatibility import BytesIO, unicode, range, apply
@@ -637,7 +636,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                      chunksize=int(1e6)):
     def get_keys_and_stops(path, key, stop):
         with pd.HDFStore(path) as hdf:
-            keys = [k for k in hdf.keys() if fnmatchcase(k, key)]
+            keys = [k for k in hdf.keys() if fnmatch(k, key)]
             stops = []
             for k in keys:
                 storer = hdf.get_storer(k)
@@ -675,6 +674,9 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
 def read_hdf(pattern, key, start=0, stop=None, columns=None,
              chunksize=1000000):
     paths = sorted(glob(pattern))
+    if (start != 0 or stop is not None) and len(paths) > 1:
+        raise NotImplementedError("start and stop are ambiguous for more than "
+                                  "one file.")
     return concat([_read_single_hdf(path, key, start=start, stop=stop,
                                     columns=columns, chunksize=chunksize)
                    for path in paths])

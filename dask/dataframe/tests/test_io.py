@@ -701,7 +701,3 @@ def test_hdf_globbing():
             res = dd.read_hdf(pattern, '/*/data', chunksize=2)
             assert res.npartitions == 2 + 2 + 2
             tm.assert_frame_equal(res.compute(), pd.concat([df] * 3))
-
-            res2 = dd.read_hdf(pattern, '/*/data', chunksize=2, start=1, stop=3)
-            exp2 = pd.concat([pd.read_hdf(fn2, '/bar/data', start=1, stop=3)] * 3)
-            tm.assert_frame_equal(res2.compute(), exp2)
