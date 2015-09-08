@@ -268,7 +268,7 @@ def boundaries(x, depth=None, kind=None):
         if d == 0:
             continue
 
-        this_kind = kind.get(i, 'reflect')
+        this_kind = kind.get(i, None)
         if this_kind is None:
             continue
         elif this_kind == 'periodic':
