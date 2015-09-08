@@ -462,6 +462,8 @@ def map_blocks(func, *arrs, **kwargs):
 
 @wraps(np.squeeze)
 def squeeze(a, axis=None):
+    if 1 not in a.shape:
+        return a
     if axis is None:
         axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
     b = a.map_blocks(partial(np.squeeze, axis=axis), dtype=a.dtype)
@@ -1098,6 +1100,9 @@ class Array(Base):
     def imag(self):
         return imag(self)
 
+    def conj(self):
+        return conj(self)
+
 
 normalize_token.register(Array, lambda a: a.name)
 
@@ -1596,6 +1601,11 @@ def tensordot(lhs, rhs, axes=2):
                 out_index,
                 lhs, tuple(left_index),
                 rhs, tuple(right_index), dtype=dt)
+
+
+@wraps(np.dot)
+def dot(a, b):
+    return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
 def insert_to_ooc(out, arr):
@@ -2511,3 +2521,62 @@ def _vindex_merge(locations, values):
         x[tuple(ind)] = val
 
     return x
+
+
+@wraps(np.array)
+def array(x, dtype=None, ndmin=None):
+    while x.ndim < ndmin:
+        x = x[None, :]
+    if dtype is not None and x.dtype != dtype:
+        x = x.astype(dtype)
+    return x
+
+
+@wraps(np.cov)
+def cov(m, y=None, rowvar=1, bias=0, ddof=None):
+    # This was copied almost verbatim from np.cov
+    # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
+    # or NUMPY_LICENSE.txt within this directory
+    if ddof is not None and ddof != int(ddof):
+        raise ValueError(
+            "ddof must be integer")
+
+    # Handles complex arrays too
+    m = asarray(m)
+    if y is None:
+        dtype = np.result_type(m, np.float64)
+    else:
+        y = asarray(y)
+        dtype = np.result_type(m, y, np.float64)
+    X = array(m, ndmin=2, dtype=dtype)
+
+    if X.shape[0] == 1:
+        rowvar = 1
+    if rowvar:
+        N = X.shape[1]
+        axis = 0
+    else:
+        N = X.shape[0]
+        axis = 1
+
+    # check ddof
+    if ddof is None:
+        if bias == 0:
+            ddof = 1
+        else:
+            ddof = 0
+    fact = float(N - ddof)
+    if fact <= 0:
+        import warnings
+        warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
+        fact = 0.0
+
+    if y is not None:
+        y = array(y, ndmin=2, dtype=dtype)
+        X = concatenate((X, y), axis)
+
+    X = X - X.mean(axis=1-axis, keepdims=True)
+    if not rowvar:
+        return (dot(X.T, X.conj()) / fact).squeeze()
+    else:
+        return (dot(X, X.T.conj()) / fact).squeeze()

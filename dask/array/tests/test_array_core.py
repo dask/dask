@@ -858,7 +858,6 @@ def test_arithmetic():
 
     assert eq(da.logaddexp(a, b), np.logaddexp(x, y))
     assert eq(da.logaddexp2(a, b), np.logaddexp2(x, y))
-    assert eq(da.conj(a + 1j * b), np.conj(x + 1j * y))
     assert eq(da.exp(b), np.exp(y))
     assert eq(da.log(a), np.log(x))
     assert eq(da.log10(a), np.log10(x))
@@ -918,6 +917,8 @@ def test_arithmetic():
     assert eq((a + 1j).real, np.real(x + 1j))
     assert eq(da.imag(a + 1j), np.imag(x + 1j))
     assert eq((a + 1j).imag, np.imag(x + 1j))
+    assert eq(da.conj(a + 1j * b), np.conj(x + 1j * y))
+    assert eq((a + 1j * b).conj(), (x + 1j * y).conj())
 
     assert eq(da.clip(b, 1, 4), np.clip(y, 1, 4))
     assert eq(da.fabs(b), np.fabs(y))
@@ -1374,3 +1375,29 @@ def test_vindex_merge():
 
 def test_empty_array():
     assert eq(np.arange(0), da.arange(0, chunks=5))
+
+
+def test_array():
+    x = np.ones(5, dtype='i4')
+    d = da.ones(5, chunks=3, dtype='i4')
+    assert eq(da.array(d, ndmin=3, dtype='i8'),
+              np.array(x, ndmin=3, dtype='i8'))
+
+
+def test_cov():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(4, 4))
+
+    assert eq(da.cov(d), np.cov(x))
+    assert eq(da.cov(d, rowvar=0), np.cov(x, rowvar=0))
+    assert eq(da.cov(d, ddof=10), np.cov(x, ddof=10))
+    assert eq(da.cov(d, bias=1), np.cov(x, bias=1))
+    assert eq(da.cov(d, d), np.cov(x, x))
+
+    y = np.arange(8)
+    e = da.from_array(y, chunks=(4,))
+
+    assert eq(da.cov(d, e), np.cov(x, y))
+    assert eq(da.cov(e, d), np.cov(y, x))
+
+    assert raises(ValueError, lambda: da.cov(d, ddof=1.5))
