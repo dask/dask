@@ -48,9 +48,9 @@ def ignoring(*exceptions):
 
 
 @contextmanager
-def tmpfile(extension=''):
+def tmpfile(extension='', dir=None):
     extension = '.' + extension.lstrip('.')
-    handle, filename = tempfile.mkstemp(extension)
+    handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
     os.remove(filename)
 
