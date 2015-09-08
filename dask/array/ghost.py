@@ -294,7 +294,9 @@ def ghost(x, depth, boundary):
     depth: dict
         The size of the shared boundary per axis
     boundary: dict
-        The boundary condition on each axis
+        The boundary condition on each axis. Options are 'reflect', 'periodic',
+        'nearest', an integer will fill the boundary with that integer, and
+        `None` will not create a boundary.
 
     The axes dict informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
