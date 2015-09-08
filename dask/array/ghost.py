@@ -268,11 +268,14 @@ def boundaries(x, depth=None, kind=None):
         if d == 0:
             continue
 
-        if kind.get(i) == 'periodic':
+        this_kind = kind.get(i, 'reflect')
+        if this_kind is None:
+            continue
+        elif this_kind == 'periodic':
             x = periodic(x, i, d)
-        elif kind.get(i) == 'reflect':
+        elif this_kind == 'reflect':
             x = reflect(x, i, d)
-        elif kind.get(i) == 'nearest':
+        elif this_kind == 'nearest':
             x = nearest(x, i, d)
         elif i in kind:
             x = constant(x, i, d, kind[i])
