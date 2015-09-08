@@ -1734,8 +1734,8 @@ class _GroupBy(object):
     def max(self):
         return self._aca_agg(token='max', func=lambda x: x.max())
 
-    @wraps(pd.core.groupby.GroupBy.count)
     def count(self):
+        """ Compute count of groups """
         return self._aca_agg(token='count', func=lambda x: x.count(),
                              aggfunc=lambda x: x.sum())
 
