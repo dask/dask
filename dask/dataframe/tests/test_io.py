@@ -681,23 +681,21 @@ def test_hdf_globbing():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
-    a = dd.from_pandas(df, 2)
 
-    pattern = '/tmp/*foo.h5'
-    with tmpfile('one_foo.h5') as fn1:
-        a.to_hdf(fn1, '/foo/data', format='table')
-        res = dd.read_hdf(pattern, '/*/data', chunksize=2)
+    with tmpfile('one_dask_foo.h5') as fn1:
+        df.to_hdf(fn1, '/foo/data', format='table')
+        res = dd.read_hdf('/tmp/*dask_foo.h5', '/*/data', chunksize=2)
         assert res.npartitions == 2
 
         tm.assert_frame_equal(res.compute(), df)
-        res = dd.read_hdf(pattern, '/*/data', chunksize=2, start=1, stop=3)
+        res = dd.read_hdf('/tmp/*dask_foo.h5', '/*/data', chunksize=2, start=1, stop=3)
         expected = pd.read_hdf(fn1, '/foo/data', start=1, stop=3)
         tm.assert_frame_equal(res.compute(), expected)
 
-        with tmpfile('two_foo.h5') as fn2:
-            a.to_hdf(fn2, '/bar/data', format='table')
-            a.to_hdf(fn2, '/qux/data', format='table')
+        with tmpfile('two_dask_foo.h5') as fn2:
+            df.to_hdf(fn2, '/bar/data', format='table')
+            df.to_hdf(fn2, '/qux/data', format='table')
 
-            res = dd.read_hdf(pattern, '/*/data', chunksize=2)
+            res = dd.read_hdf('/tmp/*dask_foo.h5', '/*/data', chunksize=2)
             assert res.npartitions == 2 + 2 + 2
             tm.assert_frame_equal(res.compute(), pd.concat([df] * 3))
