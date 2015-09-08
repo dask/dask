@@ -709,8 +709,10 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     """
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
-        raise NotImplementedError("start and stop are ambiguous for more than "
-                                  "one file.")
+        msg = ("start and stop are ambiguous for more than one file. It \n"
+        "could be interpreted as the starting and stopping index per file,\n"
+        "or starting and stopping index of the global dataset.")
+        raise NotImplementedError(msg)
     return concat([_read_single_hdf(path, key, start=start, stop=stop,
                                     columns=columns, chunksize=chunksize)
                    for path in paths])
