@@ -1389,6 +1389,9 @@ def test_cov():
     d = da.from_array(x, chunks=(4, 4))
 
     assert eq(da.cov(d), np.cov(x))
+    assert eq(da.cov(d, rowvar=0), np.cov(x, rowvar=0))
+    assert eq(da.cov(d, ddof=10), np.cov(x, ddof=10))
+    assert eq(da.cov(d, bias=1), np.cov(x, bias=1))
     assert eq(da.cov(d, d), np.cov(x, x))
 
     y = np.arange(8)
@@ -1396,3 +1399,5 @@ def test_cov():
 
     assert eq(da.cov(d, e), np.cov(x, y))
     assert eq(da.cov(e, d), np.cov(y, x))
+
+    assert raises(ValueError, lambda: da.cov(d, ddof=1.5))

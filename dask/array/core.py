@@ -2567,6 +2567,7 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
             ddof = 0
     fact = float(N - ddof)
     if fact <= 0:
+        import warnings
         warnings.warn("Degrees of freedom <= 0 for slice", RuntimeWarning)
         fact = 0.0
 
