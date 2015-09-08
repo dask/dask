@@ -1,6 +1,7 @@
 from itertools import product
 from datetime import datetime
 from operator import getitem
+from distutils.version import LooseVersion
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -2142,6 +2143,8 @@ def test_index_time_properties():
     assert (i.index.month == a.index.month.compute()).all()
 
 
+@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.16.2',
+        reason="nlargest not in pandas pre 0.16.2")
 def test_nlargest():
     from string import ascii_lowercase
     df = pd.DataFrame({'a': np.random.permutation(10),
@@ -2153,6 +2156,8 @@ def test_nlargest():
     eq(res, exp)
 
 
+@pytest.mark.skipif(LooseVersion(pd.__version__) <= '0.16.2',
+        reason="nlargest not in pandas pre 0.16.2")
 def test_nlargest_multiple_columns():
     from string import ascii_lowercase
     df = pd.DataFrame({'a': np.random.permutation(10),
