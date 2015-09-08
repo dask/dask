@@ -162,7 +162,7 @@ def trim_internal(x, axes):
     return map_blocks(partial(chunk.trim, axes=axes), x, chunks=chunks)
 
 
-def periodic(x, axis, depth):
+def periodic(hand, x, axis, depth):
     """ Copy a slice of an array around to its other side
 
     Useful to create periodic boundary conditions for ghost
@@ -174,15 +174,14 @@ def periodic(x, axis, depth):
     right = ((slice(None, None, None),) * axis +
              (slice(-depth, None),) +
              (slice(None, None, None),) * (x.ndim - axis - 1))
-    l = x[left]
-    r = x[right]
 
-    l, r = _remove_ghost_boundaries(l, r, axis, depth)
+    if hand == 'left':
+        return x[right]  # return right slice on left
+    elif hand == 'right':
+        return x[left]  # return left slice on right
 
-    return concatenate([r, x, l], axis=axis)
 
-
-def reflect(x, axis, depth):
+def reflect(hand, x, axis, depth):
     """ Reflect boundaries of array on the same side
 
     This is the converse of ``periodic``
@@ -198,15 +197,14 @@ def reflect(x, axis, depth):
     right = ((slice(None, None, None),) * axis +
              (slice(-1, -depth-1, -1),) +
              (slice(None, None, None),) * (x.ndim - axis - 1))
-    l = x[left]
-    r = x[right]
 
-    l, r = _remove_ghost_boundaries(l, r, axis, depth)
+    if hand == 'left':
+        return x[left]
+    elif hand == 'right':
+        return x[right]
 
-    return concatenate([l, x, r], axis=axis)
 
-
-def nearest(x, axis, depth):
+def nearest(hand, x, axis, depth):
     """ Each reflect each boundary value outwards
 
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
@@ -219,12 +217,10 @@ def nearest(x, axis, depth):
              (slice(-1, -2, -1),) +
              (slice(None, None, None),) * (x.ndim - axis - 1))
 
-    l = concatenate([x[left]] * depth, axis=axis)
-    r = concatenate([x[right]] * depth, axis=axis)
-
-    l, r = _remove_ghost_boundaries(l, r, axis, depth)
-
-    return concatenate([l, x, r], axis=axis)
+    if hand == 'left':
+        return concatenate([x[left]] * depth, axis=axis)
+    elif hand == 'right':
+        return concatenate([x[right]] * depth, axis=axis)
 
 
 def constant(x, axis, depth, value):
@@ -235,18 +231,14 @@ def constant(x, axis, depth, value):
     c = wrap.full(tuple(map(sum, chunks)), value,
                   chunks=tuple(chunks), dtype=x._dtype)
 
-    return concatenate([c, x, c], axis=axis)
+    return c
 
 
-def _remove_ghost_boundaries(l, r, axis, depth):
-    lchunks = list(l.chunks)
-    lchunks[axis] = (depth,)
-    rchunks = list(r.chunks)
-    rchunks[axis] = (depth,)
-
-    l = l.rechunk(tuple(lchunks))
-    r = r.rechunk(tuple(rchunks))
-    return l, r
+def _remove_ghost_boundaries(x, axis, depth):
+    chunks = list(x.chunks)
+    chunks[axis] = (depth,)
+    x = x.rechunk(tuple(chunks))
+    return x
 
 
 def boundaries(x, depth=None, kind=None):
@@ -258,26 +250,43 @@ def boundaries(x, depth=None, kind=None):
     periodic
     constant
     """
-    if not isinstance(kind, dict):
-        kind = dict((i, kind) for i in range(x.ndim))
-    if not isinstance(depth, dict):
-        depth = dict((i, depth) for i in range(x.ndim))
+    depth = coerce_depth(x.ndim, depth)
+    kind = coerce_boundary(x.ndim, kind)
 
     for i in range(x.ndim):
         d = depth.get(i, 0)
         if d == 0:
             continue
 
-        if kind.get(i) == 'periodic':
-            x = periodic(x, i, d)
-        elif kind.get(i) == 'reflect':
-            x = reflect(x, i, d)
-        elif kind.get(i) == 'nearest':
-            x = nearest(x, i, d)
-        elif i in kind:
-            x = constant(x, i, d, kind[i])
-
+        left_kind, right_kind = kind.get(i, ('reflect', 'reflect'))
+        l = handed_boundary('left', x, i, d, left_kind)
+        r = handed_boundary('right', x, i, d, right_kind)
+        if (l is None) and (r is None):
+            continue
+        elif l is None:
+            x = concatenate([x, r], axis=i)
+        elif r is None:
+            x = concatenate([l, x], axis=i)
+        else:
+            x = concatenate([l, x, r], axis=i)
     return x
+
+
+def handed_boundary(hand, x, axis, depth, kind):
+    if kind is None:
+        return None
+    elif kind == 'periodic':
+        b = periodic(hand, x, axis, depth)
+    elif kind == 'reflect':
+        b = reflect(hand, x, axis, depth)
+    elif kind == 'nearest':
+        b = nearest(hand, x, axis, depth)
+    elif isinstance(kind, (float, int)): #XXX: check for scalars better
+        b = constant(x, axis, depth, kind)
+    else:
+        raise ValueError("Unkown boundary kind %s" % (kind,))
+
+    return _remove_ghost_boundaries(b, axis, depth)
 
 
 def ghost(x, depth, boundary):
@@ -330,20 +339,11 @@ def ghost(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
-    if isinstance(depth, int):
-        depth = (depth,) * x.ndim
-    if isinstance(depth, tuple):
-        depth = dict(zip(range(x.ndim), depth))
-
-    if boundary is None:
-        boundary = 'reflect'
-    if not isinstance(boundary, (tuple, dict)):
-        boundary = (boundary,) * x.ndim
-    if isinstance(boundary, tuple):
-        boundary = dict(zip(range(x.ndim), boundary))
+    depth2 = coerce_depth(x.ndim, depth)
+    boundary2 = coerce_boundary(x.ndim, boundary)
 
     # is depth larger than chunk size?
-    depth_values = [depth.get(i, 0) for i in range(x.ndim)]
+    depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
     for d, c in zip(depth_values, x.chunks):
         if d > min(c):
             raise ValueError("The overlapping depth %d is larger than your\n"
@@ -351,30 +351,45 @@ def ghost(x, depth, boundary):
                              "with a larger chunk size or a chunk size that\n"
                              "more evenly divides the shape of your array." %
                              (d, min(c)))
-    x2 = boundaries(x, depth, boundary)
-    x3 = ghost_internal(x2, depth)
-    trim = dict((k, v*2 if boundary.get(k, None) is not None else 0)
-                for k, v in depth.items())
+    x2 = boundaries(x, depth2, boundary2)
+    x3 = ghost_internal(x2, depth2)
+    trim = dict((k, v*2 if boundary2.get(k, None) is not None else 0)
+                for k, v in depth2.items())
     x4 = chunk.trim(x3, trim)
     return x4
 
 
 def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
-    if isinstance(depth, int):
-        depth = (depth,) * x.ndim
-    if isinstance(depth, tuple):
-        depth = dict(zip(range(x.ndim), depth))
+    depth2 = coerce_depth(x.ndim, depth)
+    boundary2 = coerce_boundary(x.ndim, boundary)
 
+    g = ghost(x, depth=depth2, boundary=boundary2)
+    g2 = g.map_blocks(func, **kwargs)
+    if trim:
+        return trim_internal(g2, depth2)
+    else:
+        return g2
+
+
+def coerce_depth(ndim, depth):
+    if isinstance(depth, int):
+        depth = (depth,) * ndim
+    if isinstance(depth, tuple):
+        depth = dict(zip(range(ndim), depth))
+    return depth
+
+
+def coerce_boundary(ndim, boundary):
     if boundary is None:
         boundary = 'reflect'
     if not isinstance(boundary, (tuple, dict)):
-        boundary = (boundary,) * x.ndim
+        boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):
-        boundary = dict(zip(range(x.ndim), boundary))
-
-    g = ghost(x, depth=depth, boundary=boundary)
-    g2 = g.map_blocks(func, **kwargs)
-    if trim:
-        return trim_internal(g2, depth)
-    else:
-        return g2
+        boundary = dict(zip(range(ndim), boundary))
+    for i in range(ndim):
+        if i not in boundary:
+            boundary[i] = 'reflect'
+    for ax, b in boundary.items():
+        if not isinstance(b, tuple):
+            boundary[ax] = (b, b)
+    return boundary

@@ -81,7 +81,7 @@ def test_periodic():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
 
-    e = periodic(d, axis=0, depth=2)
+    e = boundaries(d, {0: 2}, {0: 'periodic'})
     assert e.shape[0] == d.shape[0] + 4
     assert e.shape[1] == d.shape[1]
 
@@ -92,13 +92,8 @@ def test_periodic():
 def test_reflect():
     x = np.arange(10)
     d = da.from_array(x, chunks=(5, 5))
-
-    e = reflect(d, axis=0, depth=2)
+    e = boundaries(d, 2, 'reflect')
     expected = np.array([1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 8])
-    assert eq(e, expected)
-
-    e = reflect(d, axis=0, depth=1)
-    expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
     assert eq(e, expected)
 
 
@@ -106,11 +101,11 @@ def test_nearest():
     x = np.arange(10)
     d = da.from_array(x, chunks=(5, 5))
 
-    e = nearest(d, axis=0, depth=2)
+    e = boundaries(d, 2, 'nearest')
     expected = np.array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9])
     assert eq(e, expected)
 
-    e = nearest(d, axis=0, depth=1)
+    e = boundaries(d, 1, 'nearest')
     expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
     assert eq(e, expected)
 
@@ -118,8 +113,8 @@ def test_nearest():
 def test_constant():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
+    e = boundaries(d, {0: 2}, {0: 10})
 
-    e = constant(d, axis=0, depth=2, value=10)
     assert e.shape[0] == d.shape[0] + 4
     assert e.shape[1] == d.shape[1]
 
@@ -152,7 +147,7 @@ def test_boundaries():
 def test_ghost():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
-    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'reflect'})
+    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
     assert g.chunks == ((8, 8), (6, 6))
     expected = np.array(
       [[100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
@@ -174,9 +169,6 @@ def test_ghost():
     assert eq(g, expected)
     assert same_keys(g, ghost(d, depth={0: 2, 1: 1},
                              boundary={0: 100, 1: 'reflect'}))
-
-    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
-    assert g.chunks == ((8, 8), (5, 5))
 
 
 def test_map_overlap():
@@ -313,3 +305,31 @@ def test_bad_depth_raises():
     depth = {0: 4, 1: 2}
 
     pytest.raises(ValueError, ghost, darr, depth=depth, boundary=1)
+
+
+def test_tuple_boundaries():
+    depth = {0:1, 1:2}
+    bd = {0: (33, 42), 1:('reflect', 66)}
+
+    x = da.from_array(np.arange(16).reshape(4, 4), chunks=(2, 2))
+    x2 = boundaries(x, depth, bd)
+    res = np.array(
+            [[33, 33, 33, 33, 33, 33, 66, 66],
+             [ 1,  0,  0,  1,  2,  3, 66, 66],
+             [ 5,  4,  4,  5,  6,  7, 66, 66],
+             [ 9,  8,  8,  9, 10, 11, 66, 66],
+             [13, 12, 12, 13, 14, 15, 66, 66],
+             [42, 42, 42, 42, 42, 42, 66, 66]])
+    assert eq(x2, res)
+
+
+def test_None_boundaries():
+    x = da.from_array(np.arange(16).reshape(4,4), chunks=(2, 2))
+    exp = boundaries(x, {0: 1, 1: 2}, {0: (33, None), 1: None})
+    res = np.array(
+          [[33, 33, 33, 33],
+           [ 0,  1,  2,  3],
+           [ 4,  5,  6,  7],
+           [ 8,  9, 10, 11],
+           [12, 13, 14, 15]])
+    assert eq(exp, res)
