@@ -22,6 +22,8 @@
 
 [Phil Elson](https://github.com/pelson)
 
+[Scott Sanderson](https://github.com/ssanderson)
+
 [Stephan Hoyer](http://stephanhoyer.com)
 
 [sinhrks](https://github.com/sinhrks)
