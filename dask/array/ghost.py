@@ -268,8 +268,8 @@ def boundaries(x, depth=None, kind=None):
         if d == 0:
             continue
 
-        this_kind = kind.get(i, None)
-        if this_kind is None:
+        this_kind = kind.get(i, 'none')
+        if this_kind == 'none':
             continue
         elif this_kind == 'periodic':
             x = periodic(x, i, d)
@@ -295,8 +295,7 @@ def ghost(x, depth, boundary):
         The size of the shared boundary per axis
     boundary: dict
         The boundary condition on each axis. Options are 'reflect', 'periodic',
-        'nearest', an integer will fill the boundary with that integer, and
-        `None` will not create a boundary.
+        'nearest', 'none', an integer will fill the boundary with that integer.
 
     The axes dict informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
@@ -349,7 +348,7 @@ def ghost(x, depth, boundary):
                              (d, min(c)))
     x2 = boundaries(x, depth2, boundary2)
     x3 = ghost_internal(x2, depth2)
-    trim = dict((k, v*2 if boundary2.get(k, None) is not None else 0)
+    trim = dict((k, v*2 if boundary2.get(k, 'none') != 'none' else 0)
                 for k, v in depth2.items())
     x4 = chunk.trim(x3, trim)
     return x4

@@ -175,7 +175,7 @@ def test_ghost():
     assert same_keys(g, ghost(d, depth={0: 2, 1: 1},
                              boundary={0: 100, 1: 'reflect'}))
 
-    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: None})
+    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'none'})
     expected = np.array(
       [[100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
@@ -193,8 +193,8 @@ def test_ghost():
        [ 56,  57,  58,  59,  60,  59,  60,  61,  62,  63],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
        [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
-    assert g.chunks == ((8, 8), (5, 5))
     assert eq(g, expected)
+    assert g.chunks == ((8, 8), (5, 5))
 
 
 def test_map_overlap():
@@ -330,10 +330,12 @@ def test_bad_depth_raises():
 
     depth = {0: 4, 1: 2}
 
+    pytest.raises(ValueError, ghost, darr, depth=depth, boundary=1)
 
-def test_None_boundaries():
+
+def test_none_boundaries():
     x = da.from_array(np.arange(16).reshape(4, 4), chunks=(2, 2))
-    exp = boundaries(x, 2, {0: None, 1: 33})
+    exp = boundaries(x, 2, {0: 'none', 1: 33})
     res = np.array(
           [[33, 33,  0,  1,  2,  3, 33, 33],
            [33, 33,  4,  5,  6,  7, 33, 33],
