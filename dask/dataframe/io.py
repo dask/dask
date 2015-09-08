@@ -631,6 +631,13 @@ This HDFStore is not partitionable and can only be use monolithically with
 pandas.  In the future when creating HDFStores use the ``format='table'``
 option to ensure that your dataset can be parallelized"""
 
+read_hdf_error_msg = """
+The start and stop keywords are not supported when reading from more than
+one file/dataset.
+
+The combination is ambiguous because it could be interpreted as the starting
+and stopping index per file, or starting and stopping index of the global
+dataset."""
 
 def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                      chunksize=int(1e6)):
@@ -680,6 +687,8 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         return DataFrame(dsk, name, columns, divisions)
 
     keys, stops = get_keys_and_stops(path, key, stop)
+    if (start != 0 or stop is not None) and len(keys) > 1:
+        raise NotImplementedError(read_hdf_error_msg)
     return concat([one_path_one_key(path, k, start, s, columns, chunksize)
                    for k, s in zip(keys, stops)])
 
@@ -709,10 +718,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     """
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
-        msg = ("start and stop are ambiguous for more than one file. It \n"
-        "could be interpreted as the starting and stopping index per file,\n"
-        "or starting and stopping index of the global dataset.")
-        raise NotImplementedError(msg)
+        raise NotImplementedError(read_hdf_error_msg)
     return concat([_read_single_hdf(path, key, start=start, stop=stop,
                                     columns=columns, chunksize=chunksize)
                    for path in paths])
