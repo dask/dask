@@ -715,6 +715,20 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     Returns
     -------
     dask.DataFrame
+
+    Examples
+    --------
+    Load single file
+
+    >>> dd.read_hdf('myfile.1.hdf5', '/x')  # doctest: +SKIP
+
+    Load multiple files
+
+    >>> dd.read_hdf('myfile.*.hdf5', '/x')  # doctest: +SKIP
+
+    Load multiple datasets
+
+    >>> dd.read_hdf('myfile.1.hdf5', '/*')  # doctest: +SKIP
     """
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
