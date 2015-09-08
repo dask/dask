@@ -1738,6 +1738,32 @@ def test_series_resample_big_freq(how, npartitions):
     tm.assert_series_equal(result, expected, check_dtype=False)
 
 
+def test_resample_fail_cases():
+    # Split between partitions
+    s = pd.Series(range(60), index=pd.date_range('2012', periods=60, freq='h'))
+    s = pd.concat([s.iloc[:20], s.iloc[30:]])
+    ds = dd.from_pandas(s, npartitions=4)
+    result = ds.resample('d').compute()
+    expected = s.resample('d')
+    tm.assert_series_equal(result, expected, check_dtype=False)
+
+    # Resample by week, multiple data points per day
+    s = pd.Series(range(400), index=pd.date_range('2012', periods=400, freq='h'))
+    s = pd.concat([s.iloc[:20], s.iloc[30:]])
+    ds = dd.from_pandas(s, npartitions=2)
+    result = ds.resample('W').compute()
+    expected = s.resample('W')
+    tm.assert_series_equal(result, expected, check_dtype=False)
+
+    # Resample by week, multiple data points per day, left convention
+    s = pd.Series(range(400), index=pd.date_range('2012', periods=400, freq='h'))
+    s = pd.concat([s.iloc[:20], s.iloc[30:]])
+    ds = dd.from_pandas(s, npartitions=2)
+    result = ds.resample('W', labe='left').compute()
+    expected = s.resample('W', label='left')
+    tm.assert_series_equal(result, expected, check_dtype=False)
+
+
 def test_set_partition_2():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')})
     ddf = dd.from_pandas(df, 2)
