@@ -1100,8 +1100,11 @@ class DataFrame(_Frame):
         """ Return DataFrame.columns """
         return self.columns
 
-    @wraps(pd.DataFrame.nlargest)
     def nlargest(self, n=5, columns=None):
+        """
+        Return the rows which contain the largest n elements from the provided
+        column, in descending order.
+        """
         return nlargest(self, n, columns)
 
     @wraps(pd.DataFrame.groupby)
