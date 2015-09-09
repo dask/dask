@@ -7,7 +7,7 @@ from toolz import unique, groupby
 import bokeh.plotting as bp
 from bokeh.io import _state
 from bokeh.palettes import brewer
-from bokeh.models import HoverTool
+from bokeh.models import HoverTool, LinearAxis, Range1d
 
 from ..dot import funcname
 from ..core import istask
@@ -102,16 +102,18 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(results, dsk, palette='GnBu', file_path=None,
+def visualize(results, dsk, resources=None, palette='GnBu', file_path=None,
               show=True, save=True, label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
     ----------
     results : sequence
-        Output of profiler.results().
+        Output of profiler.results
     dsk : dict
         The dask graph being profiled.
+    resources : sequence, optional
+        Output of profiler.resource_results
     palette : string, optional
         Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
     file_path : string, optional
@@ -183,6 +185,23 @@ def visualize(results, dsk, palette='GnBu', file_path=None,
     </div>
     """
     hover.point_policy = 'follow_mouse'
+
+    if resources:
+        t, mem, cpu = zip(*resources)
+        t = [i - left for i in t]
+        p2 = bp.figure(y_range=(0, max(cpu)), x_range=p.x_range,
+                       title=None, plot_width=defaults['plot_width'],
+                       plot_height=defaults['plot_height'],
+                       tools=defaults['tools'])
+        colors = brewer[palette][6]
+        p2.line(t, cpu, color=colors[0], line_width=4, legend='% CPU')
+        p2.yaxis.axis_label = "% CPU"
+        p2.extra_y_ranges = {'memory': Range1d(start=0, end=max(mem))}
+        p2.line(t, mem, color=colors[2], y_range_name='memory', line_width=4, legend='Memory')
+        p2.add_layout(LinearAxis(y_range_name='memory', axis_label='Memory (MB)'), 'right')
+        p2.xaxis.axis_label = "Time (s)"
+        p.xaxis.axis_label = None
+        p = bp.gridplot([[p],[p2]])
 
     if show:
         bp.show(p)
