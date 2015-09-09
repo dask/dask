@@ -12,6 +12,7 @@ import uuid
 
 from toolz import merge, partial, first, partition, unique
 import pandas as pd
+from pandas.util.decorators import cache_readonly
 import numpy as np
 
 try:
@@ -33,7 +34,7 @@ return_scalar = '__return_scalar__'
 
 pd.computation.expressions.set_use_numexpr(False)
 
-def _concat(args):
+def _concat(args, **kwargs):
     """ Generic concat operation """
     if not args:
         return args
@@ -562,6 +563,41 @@ class _Frame(Base):
             name = '{0}std(ddof={1})'.format(self._token_prefix, ddof)
             return map_partitions(np.sqrt, no_default, v, token=name)
 
+    def quantile(self, q=0.5, axis=0):
+        """ Approximate row-wise and precise column-wise quantiles of DataFrame
+
+        q : list/array of floats, default 0.5 (50%)
+            Iterable of numbers ranging from 0 to 1 for the desired quantiles
+        axis : {0, 1, 'index', 'columns'} (default 0)
+            0 or 'index' for row-wise, 1 or 'columns' for column-wis
+        """
+        axis = self._validate_axis(axis)
+        name = 'quantiles-concat--' + tokenize(self, q, axis)
+
+        if axis == 1:
+            if isinstance(q, list):
+                # Not supported, the result will have current index as columns
+                raise ValueError("'q' must be scalar when axis=1 is specified")
+            return map_partitions(pd.DataFrame.quantile, None, self,
+                                  q, axis, token=name)
+        else:
+            num = self._get_numeric_data()
+            quantiles = tuple(quantile(self[c], q) for c in num.columns)
+
+            dask = {}
+            dask = merge(dask, *[q.dask for q in quantiles])
+            qnames = [(q._name, 0) for q in quantiles]
+
+            if isinstance(quantiles[0], Scalar):
+                dask[(name, 0)] = (pd.Series, (list, qnames), num.columns)
+                divisions = (min(num.columns), max(num.columns))
+                return Series(dask, name, num.columns, divisions)
+            else:
+                from .multi import _pdconcat
+                dask[(name, 0)] = (_pdconcat, (list, qnames), 1)
+                return DataFrame(dask, name, num.columns,
+                                 quantiles[0].divisions)
+
     def _cum_agg(self, token, chunk, aggregate, agginit):
         """ Wrapper for cumulative operation """
         # cumulate each partitions
@@ -729,10 +765,10 @@ class Series(_Frame):
     def __array_wrap__(self, array, context=None):
         return pd.Series(array, name=self.name)
 
-    def quantile(self, q):
-        """ Approximate quantiles of column
+    def quantile(self, q=0.5):
+        """ Approximate quantiles of Series
 
-        q : list/array of floats
+        q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
         """
         return quantile(self, q)
@@ -1186,9 +1222,21 @@ class DataFrame(_Frame):
         from .io import to_bag
         return to_bag(self, index)
 
+    @cache_readonly
+    def _numeric_columns(self):
+        # Cache to avoid repeated calls
+        dummy = self._get(self.dask, self._keys()[0])._get_numeric_data()
+        return dummy.columns.tolist()
+
     @wraps(pd.DataFrame._get_numeric_data)
     def _get_numeric_data(self, how='any', subset=None):
-        return self.map_partitions(pd.DataFrame._get_numeric_data)
+        if len(self._numeric_columns) < len(self.columns):
+            name = self._token_prefix + '-get_numeric_data'
+            return map_partitions(pd.DataFrame._get_numeric_data,
+                                  self._numeric_columns, self, token=name)
+        else:
+            # use current data if unchanged
+            return self
 
     @classmethod
     def _validate_axis(cls, axis=0):
@@ -2056,7 +2104,7 @@ def categorize(df, columns=None, **kwargs):
 
 
 def quantile(df, q):
-    """ Approximate quantiles of column
+    """ Approximate quantiles of Series / single column DataFrame
 
     Parameters
     ----------
