@@ -778,18 +778,18 @@ class Series(_Frame):
         day_nanos = pd.datetools.Day().nanos
 
         rule = pd.datetools.to_offset(rule)
-        def block_func(df):
-            if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
-                raise NotImplementedError('Resampling frequency %s that does'
-                                          ' not evenly divide a day is not '
-                                          'implemented' % rule)
 
-            return df.resample(rule=rule, how=how, axis=axis,
-                               fill_method=fill_method, closed=closed,
-                               label=label, convention=convention, kind=kind,
-                               loffset=loffset, limit=limit, base=base)
+        if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
+            raise NotImplementedError('Resampling frequency %s that does'
+                                      ' not evenly divide a day is not '
+                                      'implemented' % rule)
 
-        return self.repartition(newdivs, force=True).map_partitions(block_func)
+        return map_partitions(pd.Series.resample, self.name,
+                self.repartition(newdivs, force=True),
+                rule=rule, how=how, axis=axis,
+                fill_method=fill_method, closed=closed, label=label,
+                convention=convention, kind=kind, loffset=loffset, limit=limit,
+                base=base)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
