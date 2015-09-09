@@ -399,7 +399,15 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
                 empty_chunks[k] = (d,)
 
                 empty = wrap.empty(empty_shape, chunks=empty_chunks)
+
+                out_chunks = list(x.chunks)
+                ax_chunks = list(out_chunks[k])
+                ax_chunks[0] += d
+                ax_chunks[-1] += d
+                out_chunks[k] = ax_chunks
+
                 x = concatenate([empty, x, empty], axis=k)
+                x = x.rechunk(out_chunks)
         return x
 
     depth2 = coerce_depth(x.ndim, depth)
