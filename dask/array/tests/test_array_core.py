@@ -4,6 +4,9 @@ import pytest
 pytest.importorskip('numpy')
 
 from operator import add
+from tempfile import mkdtemp
+import shutil
+import os
 
 from toolz import merge
 from toolz.curried import identity
@@ -1401,3 +1404,34 @@ def test_cov():
     assert eq(da.cov(e, d), np.cov(y, x))
 
     assert raises(ValueError, lambda: da.cov(d, ddof=1.5))
+
+
+def test_memmap():
+    with tmpfile('npy') as fn_1:
+        with tmpfile('npy') as fn_2:
+            x = da.arange(100, chunks=15)
+            target = np.memmap(fn_1, shape=x.shape, mode='w+', dtype=x.dtype)
+
+            x.store(target)
+
+            assert eq(target, x)
+
+            np.save(fn_2, target)
+
+            assert eq(np.load(fn_2, mmap_mode='r'), x)
+
+
+def test_to_npy_stack():
+    x = np.arange(5*10*10).reshape((5, 10, 10))
+    d = da.from_array(x, chunks=(2, 4, 4))
+
+    dirname = mkdtemp()
+    try:
+        da.to_npy_stack(dirname, d, axis=0)
+        assert os.path.exists(os.path.join(dirname, '0.npy'))
+        assert (np.load(os.path.join(dirname, '1.npy')) == x[2:4]).all()
+
+        e = da.from_npy_stack(dirname)
+        assert eq(d, e)
+    finally:
+        shutil.rmtree(dirname)
