@@ -814,18 +814,18 @@ class Series(_Frame):
         day_nanos = pd.datetools.Day().nanos
 
         rule = pd.datetools.to_offset(rule)
-        def block_func(df):
-            if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
-                raise NotImplementedError('Resampling frequency %s that does'
-                                          ' not evenly divide a day is not '
-                                          'implemented' % rule)
 
-            return df.resample(rule=rule, how=how, axis=axis,
-                               fill_method=fill_method, closed=closed,
-                               label=label, convention=convention, kind=kind,
-                               loffset=loffset, limit=limit, base=base)
+        if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
+            raise NotImplementedError('Resampling frequency %s that does'
+                                      ' not evenly divide a day is not '
+                                      'implemented' % rule)
 
-        return self.repartition(newdivs, force=True).map_partitions(block_func)
+        return map_partitions(pd.Series.resample, self.name,
+                self.repartition(newdivs, force=True),
+                rule=rule, how=how, axis=axis,
+                fill_method=fill_method, closed=closed, label=label,
+                convention=convention, kind=kind, loffset=loffset, limit=limit,
+                base=base)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
@@ -2025,15 +2025,14 @@ def map_partitions(func, columns, *args, **kwargs):
     targets: list
         List of target DataFrame / Series.
     """
+    assert callable(func)
     token = kwargs.pop('token', 'map-partitions')
-    token_key = tokenize(token or func, columns, *args)
+    token_key = tokenize(token or func, columns, kwargs, *args)
     name = '{0}-{1}'.format(token, token_key)
 
-    if len(kwargs) > 1:
-        func = partial(func, **kwargs)
-
     if all(isinstance(arg, Scalar) for arg in args):
-        dask = {(name, 0): (func, ) + tuple((arg._name, 0) for arg in args)}
+        dask = {(name, 0):
+                (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name)
 
     args = _maybe_from_pandas(args)
@@ -2050,7 +2049,8 @@ def map_partitions(func, columns, *args, **kwargs):
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (_rename, columns, (apply, func, (tuple, values)))
+        dsk[(name, i)] = (_rename, columns, (apply, func, (tuple, values),
+                                                          kwargs))
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
 

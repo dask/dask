@@ -1164,6 +1164,22 @@ def test_map_partitions_method_names():
     assert b.name == 'x'
 
 
+def test_map_partitions_keeps_kwargs_in_dict():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
+    a = dd.from_pandas(df, npartitions=2)
+
+
+    def f(s, x=1):
+        return s + x
+
+    b = a.x.map_partitions(f, x=5)
+
+    assert "'x': 5" in str(b.dask)
+    eq(df.x + 5, b)
+
+    assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
+
+
 def test_drop_duplicates():
     assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())
     assert eq(d.drop_duplicates(), full.drop_duplicates())
