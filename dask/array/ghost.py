@@ -380,12 +380,15 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
            [20, 21, 22, 23],
            [24, 25, 26, 27],
            [28, 29, 30, 31]])
-    >>> d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},\
-                    boundary={0: 'reflect', 1: 'none'}).compute()
-    array([[12, 13, 14, 15],
-           [16, 17, 18, 19],
-           [20, 21, 22, 23],
-           [24, 25, 26, 27]])
+
+    >>> func = lambda x: x + x.size
+    >>> depth = {0: 1, 1: 1}
+    >>> boundary = {0: 'reflect', 1: 'none'}
+    >>> map_overlap(d, func, depth, boundary).compute()  # doctest: +NORMALIZE_WHITESPACE
+    array([[ 12.,  13.,  14.,  15.],
+           [ 16.,  17.,  18.,  19.],
+           [ 20.,  21.,  22.,  23.],
+           [ 24.,  25.,  26.,  27.]])
     """
     def add_dummy_padding(x, depth, boundary):
         for k, v in boundary.items():
