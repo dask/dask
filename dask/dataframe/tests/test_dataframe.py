@@ -1171,6 +1171,8 @@ def test_map_partitions_keeps_kwargs_in_dict():
     assert "'x': 5" in str(b.dask)
     eq(df.x + 5, b)
 
+    assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
+
 
 def test_drop_duplicates():
     assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())

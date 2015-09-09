@@ -1979,7 +1979,7 @@ def map_partitions(func, columns, *args, **kwargs):
     """
     assert callable(func)
     token = kwargs.pop('token', 'map-partitions')
-    token_key = tokenize(token or func, columns, *args)
+    token_key = tokenize(token or func, columns, kwargs, *args)
     name = '{0}-{1}'.format(token, token_key)
 
     if all(isinstance(arg, Scalar) for arg in args):
