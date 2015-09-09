@@ -142,7 +142,7 @@ class _ResourceProf(Process):
         ps = [self.parent] + [p for p in self.parent.children() if p.pid != pid]
         while self._trigger.is_set():
             tic = default_timer()
-            mem = sum(p.memory_info().rss for p in ps)
+            mem = sum(p.memory_info().rss for p in ps)/1e6
             cpu = sum(p.cpu_percent() for p in ps)
             data.append((tic, mem, cpu))
             sleep(self.dt)
