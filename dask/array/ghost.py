@@ -355,6 +355,39 @@ def ghost(x, depth, boundary):
 
 
 def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
+    """
+    Map a function over a dask array with ghost cells.
+
+    Parameters
+    ----------
+
+    x: da.Array
+        A dask array
+    func: function
+        The function applied to each block. It must accept a single numpy array.
+    depth: int, tuple, dict
+        The depth of the ghosting on each axis.
+    boundary: int, tuple, dict
+        The boundary condition on each axis. Options are 'reflect', 'periodic',
+        'nearest', 'none', an integer will fill the boundary with that integer.
+
+    >>> import numpy as np
+    >>> import dask.array as da
+    >>> x = np.arange(16).reshape((4, 4))
+    >>> d = da.from_array(x, chunks=(2, 2))
+    >>> d.map_overlap(lambda x: x + x.size, depth=1).compute()
+    array([[16, 17, 18, 19],
+           [20, 21, 22, 23],
+           [24, 25, 26, 27],
+           [28, 29, 30, 31]])
+    >>> d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},\
+                    boundary={0: 'reflect', 1: 'none'}).compute()
+    array([[12, 13, 14, 15],
+           [16, 17, 18, 19],
+           [20, 21, 22, 23],
+           [24, 25, 26, 27]])
+    """
+
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
