@@ -1342,7 +1342,9 @@ for name in ['nanosecond', 'microsecond', 'millisecond', 'second', 'minute',
 
 
 def nlargest(df, n=5, columns=None):
-    if isinstance(df, Series):
+    if isinstance(df, Index):
+        raise AttributeError("nlargest is not available for Index objects")
+    elif isinstance(df, Series):
         token = 'series-nlargest-n={0}'.format(n)
         f = lambda s: s.nlargest(n)
     elif isinstance(df, DataFrame):
