@@ -203,6 +203,14 @@ def test_map_overlap():
     y = x.map_overlap(lambda x: x + len(x), depth=2)
     assert eq(y, np.arange(10) + 5 + 2 + 2)
 
+    x = np.arange(16).reshape((4, 4))
+    d = da.from_array(x, chunks=(2, 2))
+    exp1 = d.map_overlap(lambda x: x + x.size, depth=1).compute()
+    exp2 = d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},\
+                    boundary={0: 'reflect', 1: 'none'}).compute()
+    assert eq(exp1, x + 16)
+    assert eq(exp2, x + 12)
+
 
 def test_nearest_ghost():
     a = np.arange(144).reshape(12, 12).astype(float)

@@ -387,6 +387,20 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
            [20, 21, 22, 23],
            [24, 25, 26, 27]])
     """
+    def add_dummy_padding(x, depth, boundary):
+        for k, v in boundary.items():
+            if v == 'none':
+                d = depth[k]
+
+                empty_shape = list(x.shape)
+                empty_shape[k] = d
+
+                empty_chunks = list(x.chunks)
+                empty_chunks[k] = (d,)
+
+                empty = wrap.empty(empty_shape, chunks=empty_chunks)
+                x = concatenate([empty, x, empty], axis=k)
+        return x
 
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
@@ -394,7 +408,8 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     g = ghost(x, depth=depth2, boundary=boundary2)
     g2 = g.map_blocks(func, **kwargs)
     if trim:
-        return trim_internal(g2, depth2)
+        g3 = add_dummy_padding(g2, depth2, boundary2)
+        return trim_internal(g3, depth2)
     else:
         return g2
 
