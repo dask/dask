@@ -2379,11 +2379,13 @@ def to_hdf5(filename, *args, **kwargs):
     else:
         raise ValueError("Please provide {'/data/path': array} dictionary")
 
+    chunks = kwargs.pop('chunks', None)
+
     import h5py
     with h5py.File(filename) as f:
         dsets = [f.require_dataset(dp, shape=x.shape, dtype=x.dtype,
-                                        chunks=tuple([c[0] for c in x.chunks]),
-                                        **kwargs)
+                           chunks=chunks or tuple([c[0] for c in x.chunks]),
+                                                **kwargs)
                     for dp, x in data.items()]
         store(list(data.values()), dsets)
 
