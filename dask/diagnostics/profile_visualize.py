@@ -18,7 +18,6 @@ def pprint_task(task, keys, label_size=60):
 
     Parameters
     ----------
-
     task:
         Value within dask graph to render as text
     keys: iterable
@@ -59,7 +58,7 @@ def pprint_task(task, keys, label_size=60):
         result = '{0}({1}{2}'.format(head, args, tail)
     elif isinstance(task, list):
         task2 = task[:3]
-        label_size2 = int((label_size - 2 - 2 *len(task2)) / len(task2))
+        label_size2 = int((label_size - 2 - 2*len(task2)) / len(task2))
         args = ', '.join(pprint_task(t, keys, label_size2) for t in task2)
         if len(task) > 3:
             result = '[{0}, ...]'.format(args)
@@ -102,26 +101,65 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(results, dsk, resources=None, palette='GnBu', file_path=None,
-              show=True, save=True, label_size=60, **kwargs):
+def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
+
+    If multiple profilers are passed in, the plots are stacked vertically.
 
     Parameters
     ----------
-    results : sequence
-        Output of profiler.results
-    dsk : dict
-        The dask graph being profiled.
-    resources : sequence, optional
-        Output of profiler.resource_results
-    palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+    profilers : profiler or list
+        Profiler or list of profilers.
     file_path : string, optional
         Name of the plot output file.
     show : boolean, optional
         If True (default), the plot is opened in a browser.
     save : boolean, optional
         If True (default), the plot is saved to disk.
+    **kwargs
+        Other keyword arguments, passed to bokeh.figure. These will override
+        all defaults set by visualize.
+
+    Returns
+    -------
+    The completed bokeh plot object.
+    """
+    if not _state._notebook:
+        file_path = file_path or "profile.html"
+        bp.output_file(file_path)
+
+    if not isinstance(profilers, list):
+        profilers = [profilers]
+    figs = [prof._plot(**kwargs) for prof in profilers]
+    # Stack the plots
+    if len(figs) == 1:
+        p = figs[0]
+    else:
+        top = figs[0]
+        for f in figs[1:]:
+            f.x_range = top.x_range
+            f.title = None
+        for f in figs[:1]:
+            f.xaxis.axis_label = None
+        p = bp.gridplot([[f] for f in figs])
+    if show:
+        bp.show(p)
+    if file_path and save:
+        bp.save(p)
+    return p
+
+
+def plot_tasks(results, dsk, palette='GnBu', label_size=60, **kwargs):
+    """Visualize the results of profiling in a bokeh plot.
+
+    Parameters
+    ----------
+    results : sequence
+        Output of Profiler.results
+    dsk : dict
+        The dask graph being profiled.
+    palette : string, optional
+        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
     label_size: int (optional)
         Maximum size of output labels in plot, defaults to 60
     **kwargs
@@ -133,9 +171,6 @@ def visualize(results, dsk, resources=None, palette='GnBu', file_path=None,
     The completed bokeh plot object.
     """
 
-    if not _state._notebook:
-        file_path = file_path or "profile.html"
-        bp.output_file(file_path)
     keys, tasks, starts, ends, ids = zip(*results)
 
     id_group = groupby(itemgetter(4), results)
@@ -149,8 +184,9 @@ def visualize(results, dsk, resources=None, palette='GnBu', file_path=None,
 
     defaults = dict(title="Profile Results",
                     tools="hover,save,reset,resize,xwheel_zoom,xpan",
-                    plot_width=800, plot_height=400)
-    defaults.update(kwargs)
+                    plot_width=800, plot_height=300)
+    defaults.update((k, v) for (k, v) in kwargs.items() if k in
+                    bp.Figure.properties())
 
     p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
                   x_range=[0, right - left], **defaults)
@@ -186,25 +222,42 @@ def visualize(results, dsk, resources=None, palette='GnBu', file_path=None,
     """
     hover.point_policy = 'follow_mouse'
 
-    if resources:
-        t, mem, cpu = zip(*resources)
-        t = [i - left for i in t]
-        p2 = bp.figure(y_range=(0, max(cpu)), x_range=p.x_range,
-                       title=None, plot_width=defaults['plot_width'],
-                       plot_height=defaults['plot_height'],
-                       tools=defaults['tools'])
-        colors = brewer[palette][6]
-        p2.line(t, cpu, color=colors[0], line_width=4, legend='% CPU')
-        p2.yaxis.axis_label = "% CPU"
-        p2.extra_y_ranges = {'memory': Range1d(start=0, end=max(mem))}
-        p2.line(t, mem, color=colors[2], y_range_name='memory', line_width=4, legend='Memory')
-        p2.add_layout(LinearAxis(y_range_name='memory', axis_label='Memory (MB)'), 'right')
-        p2.xaxis.axis_label = "Time (s)"
-        p.xaxis.axis_label = None
-        p = bp.gridplot([[p],[p2]])
+    return p
 
-    if show:
-        bp.show(p)
-    if file_path and save:
-        bp.save(p)
+
+def plot_resources(results, palette='GnBu', **kwargs):
+    """Plot resource usage in a bokeh plot.
+
+    Parameters
+    ----------
+    results : sequence
+        Output of ResourceProfiler.results
+    palette : string, optional
+        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+    **kwargs
+        Other keyword arguments, passed to bokeh.figure. These will override
+        all defaults set by plot_resources.
+
+    Returns
+    -------
+    The completed bokeh plot object.
+    """
+    t, mem, cpu = zip(*results)
+    left, right = min(t), max(t)
+    t = [i - left for i in t]
+    defaults = dict(title="Profile Results",
+                    tools="save,reset,resize,xwheel_zoom,xpan",
+                    plot_width=800, plot_height=300)
+    defaults.update((k, v) for (k, v) in kwargs.items() if k in
+                    bp.Figure.properties())
+    p = bp.figure(y_range=(0, max(cpu)), x_range=(0, right - left), **defaults)
+    colors = brewer[palette][6]
+    p.line(t, cpu, color=colors[0], line_width=4, legend='% CPU')
+    p.yaxis.axis_label = "% CPU"
+    p.extra_y_ranges = {'memory': Range1d(start=0, end=max(mem))}
+    p.line(t, mem, color=colors[2], y_range_name='memory', line_width=4,
+           legend='Memory')
+    p.add_layout(LinearAxis(y_range_name='memory', axis_label='Memory (MB)'),
+                 'right')
+    p.xaxis.axis_label = "Time (s)"
     return p

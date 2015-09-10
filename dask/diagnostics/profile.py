@@ -53,14 +53,9 @@ class Profiler(Callback):
     >>> prof.clear()
 
     """
-    def __init__(self, resources=False):
+    def __init__(self):
         self._results = {}
         self.results = []
-        if resources:
-            self._resprof = _ResourceProf()
-            self._resprof.start()
-        else:
-            self._resprof = None
         self._dsk = {}
 
     def __enter__(self):
@@ -69,7 +64,6 @@ class Profiler(Callback):
 
     def _start(self, dsk):
         self._dsk.update(dsk)
-        self._resprof and self._resprof.start_collect()
 
     def _pretask(self, key, dsk, state):
         start = default_timer()
@@ -83,11 +77,10 @@ class Profiler(Callback):
         results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
         self.results += list(starmap(TaskData, results.values()))
         self._results.clear()
-        self._resprof and self._resprof.stop_collect()
 
-    @property
-    def resource_results(self):
-        return self._resprof.results if self._resprof else None
+    def _plot(self, **kwargs):
+        from .profile_visualize import plot_tasks
+        return plot_tasks(self.results, self._dsk, **kwargs)
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -97,36 +90,96 @@ class Profiler(Callback):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
-        return visualize(self.results, self._dsk,
-                         resources=self.resource_results, **kwargs)
+        return visualize(self, **kwargs)
 
     def clear(self):
         """Clear out old results from profiler"""
         self._results.clear()
         del self.results[:]
-        if self._resprof:
-            self._resprof.results = []
         self._dsk = {}
 
 
-class _ResourceProf(Process):
-    """Report resource usage for this process, and all subprocesses"""
+ResourceData = namedtuple('ResourceData', ('time', 'mem', 'cpu'))
+
+
+class ResourceProfiler(Callback):
+    """A profiler for resource use.
+
+    Records the following each timestep
+        1. Time in seconds since the epoch
+        2. Memory usage
+        3. % CPU usage
+
+    Examples
+    --------
+
+    >>> from operator import add, mul
+    >>> from dask.threaded import get
+    >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
+    >>> with ResourceProfiler() as prof:  # doctest: +SKIP
+    ...     get(dsk, 'z')
+    22
+
+    These results can be visualized in a bokeh plot using the ``visualize``
+    method. Note that this requires bokeh to be installed.
+
+    >>> prof.visualize() # doctest: +SKIP
+
+    You can activate the profiler globally
+
+    >>> prof.register()  # doctest: +SKIP
+
+    If you use the profiler globally you will need to clear out old results
+    manually.
+
+    >>> prof.clear()
+    """
+    def __init__(self, dt=1):
+        self._tracker = _Tracker(dt)
+        self._tracker.start()
+        self.results = []
+
+    def _start(self, dsk):
+        assert self._tracker.is_alive(), "Resource tracker is shutdown"
+        self._tracker._trigger.set()
+
+    def _finish(self, dsk, state, failed):
+        self._tracker._trigger.clear()
+        self.results.extend(self._tracker.queue.get())
+
+    def close(self):
+        """Shutdown the resource tracker process"""
+        self._tracker.shutdown()
+
+    def clear(self):
+        self.results = []
+
+    def _plot(self, **kwargs):
+        from .profile_visualize import plot_resources
+        return plot_resources(self.results, **kwargs)
+
+    def visualize(self, **kwargs):
+        """Visualize the profiling run in a bokeh plot.
+
+        See also
+        --------
+        dask.diagnostics.profile_visualize.visualize
+        """
+        from .profile_visualize import visualize
+        return visualize(self, **kwargs)
+
+
+class _Tracker(Process):
+    """Background process for tracking resource usage"""
     def __init__(self, dt=1):
         import psutil
+        Process.__init__(self)
+        self.daemon = True
         self.dt = dt
         self.parent = psutil.Process(current_process().pid)
         self.queue = Queue()
-        self.results = []
         self._trigger = Event()     # Sleeps until trigger
         self._shutdown = Event()    # Set when process should shutdown
-        Process.__init__(self)
-
-    def start_collect(self):
-        self._trigger.set()
-
-    def stop_collect(self):
-        self._trigger.clear()
-        self.results.extend(self.queue.get())
 
     def shutdown(self):
         self._shutdown.set()
@@ -150,7 +203,10 @@ class _ResourceProf(Process):
 
     def run(self):
         while True:
-            self._trigger.wait()
+            try:
+                self._trigger.wait()
+            except KeyboardInterrupt:
+                continue
             if self._shutdown.is_set():
                 break
             self._collect()
