@@ -107,7 +107,7 @@ class ResourceProfiler(Callback):
 
     Records the following each timestep
         1. Time in seconds since the epoch
-        2. Memory usage
+        2. Memory usage in MB
         3. % CPU usage
 
     Examples
@@ -145,7 +145,7 @@ class ResourceProfiler(Callback):
 
     def _finish(self, dsk, state, failed):
         self._tracker._trigger.clear()
-        self.results.extend(self._tracker.queue.get())
+        self.results.extend(starmap(ResourceData, self._tracker.queue.get()))
 
     def close(self):
         """Shutdown the resource tracker process"""
