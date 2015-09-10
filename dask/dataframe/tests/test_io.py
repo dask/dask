@@ -683,20 +683,32 @@ def test_hdf_globbing():
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
 
     tdir = tempfile.mkdtemp()
-    with tmpfile('one_dask_foo.h5', dir=tdir) as fn1:
-        df.to_hdf(fn1, '/foo/data', format='table')
-        res = dd.read_hdf(os.path.join(tdir, '*dask_foo.h5'), '/*/data', chunksize=2)
-        assert res.npartitions == 2
+    try:
+        df.to_hdf(os.path.join(tdir, 'one.h5'), '/foo/data', format='table')
+        df.to_hdf(os.path.join(tdir, 'two.h5'), '/bar/data', format='table')
+        df.to_hdf(os.path.join(tdir, 'two.h5'), '/foo/data', format='table')
 
+        res = dd.read_hdf(os.path.join(tdir, 'one.h5'), '/*/data',
+                          chunksize=2)
+        assert res.npartitions == 2
         tm.assert_frame_equal(res.compute(), df)
-        res = dd.read_hdf(os.path.join(tdir, '*dask_foo.h5'), '/*/data', chunksize=2, start=1, stop=3)
-        expected = pd.read_hdf(fn1, '/foo/data', start=1, stop=3)
+
+        res = dd.read_hdf(os.path.join(tdir, 'one.h5'), '/*/data',
+                          chunksize=2, start=1, stop=3)
+        expected = pd.read_hdf(os.path.join(tdir, 'one.h5'), '/foo/data',
+                               start=1, stop=3)
         tm.assert_frame_equal(res.compute(), expected)
 
-        with tmpfile('two_dask_foo.h5', dir=tdir) as fn2:
-            df.to_hdf(fn2, '/bar/data', format='table')
-            df.to_hdf(fn2, '/qux/data', format='table')
+        res = dd.read_hdf(os.path.join(tdir, 'two.h5'), '/*/data', chunksize=2)
+        assert res.npartitions == 2 + 2
+        tm.assert_frame_equal(res.compute(), pd.concat([df] * 2))
 
-            res = dd.read_hdf(os.path.join(tdir, '*dask_foo.h5'), '/*/data', chunksize=2)
-            assert res.npartitions == 2 + 2 + 2
-            tm.assert_frame_equal(res.compute(), pd.concat([df] * 3))
+        res = dd.read_hdf(os.path.join(tdir, '*.h5'), '/foo/data', chunksize=2)
+        assert res.npartitions == 2 + 2
+        tm.assert_frame_equal(res.compute(), pd.concat([df] * 2))
+
+        res = dd.read_hdf(os.path.join(tdir, '*.h5'), '/*/data', chunksize=2)
+        assert res.npartitions == 2 + 2 + 2
+        tm.assert_frame_equal(res.compute(), pd.concat([df] *  3))
+    finally:
+        shutil.rmtree(tdir)
