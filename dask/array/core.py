@@ -2635,8 +2635,18 @@ def to_npy_stack(dirname, x, axis=0):
 
     Array._get(merge(dsk, xx.dask), list(dsk))
 
-def from_npy_stack(dirname):
-    """ See da.to_npy_stack for docstring """
+def from_npy_stack(dirname, mmap_mode='r'):
+    """ Load dask array from stack of npy files
+
+    See ``da.to_npy_stack`` for docstring
+
+    Parameters
+    ----------
+    dirname: string
+        Directory of .npy files
+    mmap_mode: (None or 'r')
+        Read data in memory map mode
+    """
     with open(os.path.join(dirname, 'info'), 'rb') as f:
         info = pickle.load(f)
 
@@ -2646,7 +2656,7 @@ def from_npy_stack(dirname):
 
     name = 'from-npy-stack-%s' % dirname
     keys = list(product([name], *[range(len(c)) for c in chunks]))
-    values = [(np.load, os.path.join(dirname, '%d.npy' % i))
+    values = [(np.load, os.path.join(dirname, '%d.npy' % i), mmap_mode)
               for i in range(len(chunks[axis]))]
     dsk = dict(zip(keys, values))
 
