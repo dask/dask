@@ -423,6 +423,11 @@ def map_blocks(func, *arrs, **kwargs):
 
     >>> def func(block, block_id=None):
     ...     pass
+
+    You may specify the name of the resulting task in the graph with the
+    optional ``name`` keyword argument.
+
+    >>> y = x.map_blocks(lambda x: x + 1, name='increment')
     """
     if not callable(func):
         raise TypeError("First argument must be callable function, not %s\n"
@@ -437,7 +442,8 @@ def map_blocks(func, *arrs, **kwargs):
 
     out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
 
-    result = atop(func, out_ind, *args, dtype=dtype)
+    name = kwargs.get('name', None)
+    result = atop(func, out_ind, *args, name=name, dtype=dtype)
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -1043,8 +1049,8 @@ class Array(Base):
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
 
     @wraps(map_blocks)
-    def map_blocks(self, func, chunks=None, dtype=None):
-        return map_blocks(func, self, chunks=chunks, dtype=dtype)
+    def map_blocks(self, func, chunks=None, dtype=None, name=None):
+        return map_blocks(func, self, chunks=chunks, dtype=dtype, name=name)
 
     def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
         """ Map a function over blocks of the array with some overlap
