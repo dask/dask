@@ -593,6 +593,9 @@ def test_map_blocks():
     assert d.chunks == e.chunks
     assert eq(e, x + 1)
 
+    e = d.map_blocks(inc, name='increment')
+    assert e.name == 'increment'
+
     d = from_array(x, chunks=(10, 10))
     e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5), dtype=d.dtype)
 
