@@ -662,10 +662,16 @@ class Array(Base):
             return self.compute().dtype
 
     def __repr__(self):
-        chunks = '(' + ', '.join(map(repr_long_list, self.chunks)) + ')'
+        """
+
+        >>> import dask.array as da
+        >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
+        dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
+        """
+        chunksize = str(tuple(c[0] for c in self.chunks))
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
-        return ("dask.array<%s, shape=%s, dtype=%s>" %
-                (name, self.shape, self._dtype))
+        return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
+                (name, self.shape, self._dtype, chunksize))
 
     @property
     def ndim(self):
@@ -1655,8 +1661,7 @@ def asarray(array):
 
     >>> x = np.arange(3)
     >>> asarray(x)
-    dask.array<asarray-..., shape=(3,), chunks=((3,)), dtype=int64>
-    >>>
+    dask.array<asarray..., shape=(3,), dtype=int64, chunksize=(3,)>
     """
     if not isinstance(array, Array):
         name = 'asarray-' + tokenize(array)
