@@ -639,9 +639,8 @@ def test_from_function_requires_block_args():
 
 def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
-    assert d.name in repr(d)
+    assert d.name[:5] in repr(d)
     assert str(d.shape) in repr(d)
-    assert str(d.chunks) in repr(d)
     assert str(d._dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000

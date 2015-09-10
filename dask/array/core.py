@@ -663,8 +663,9 @@ class Array(Base):
 
     def __repr__(self):
         chunks = '(' + ', '.join(map(repr_long_list, self.chunks)) + ')'
-        return ("dask.array<%s, shape=%s, chunks=%s, dtype=%s>" %
-                (self.name, self.shape, chunks, self._dtype))
+        name = self.name if len(self.name) < 10 else self.name[:7] + '...'
+        return ("dask.array<%s, shape=%s, dtype=%s>" %
+                (name, self.shape, self._dtype))
 
     @property
     def ndim(self):
