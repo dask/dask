@@ -921,9 +921,7 @@ class Series(_Frame):
 
     @wraps(pd.Series.nlargest)
     def nlargest(self, n=5):
-        f = lambda s: s.nlargest(n)
-        token = 'series-nlargest-n={0}'.format(n)
-        return aca(self, f, f, columns=self.name, token=token)
+        return nlargest(self, n)
 
     @wraps(pd.Series.isin)
     def isin(self, other):
@@ -1137,6 +1135,13 @@ class DataFrame(_Frame):
     def column_info(self):
         """ Return DataFrame.columns """
         return self.columns
+
+    def nlargest(self, n=5, columns=None):
+        """
+        Return the rows which contain the largest n elements from the provided
+        column, in descending order.
+        """
+        return nlargest(self, n, columns)
 
     @wraps(pd.DataFrame.groupby)
     def groupby(self, key, **kwargs):
@@ -1382,6 +1387,19 @@ def elemwise_property(attr, s):
 for name in ['nanosecond', 'microsecond', 'millisecond', 'second', 'minute',
         'hour', 'day', 'week', 'month', 'quarter', 'year']:
     setattr(Index, name, property(partial(elemwise_property, name)))
+
+
+def nlargest(df, n=5, columns=None):
+    if isinstance(df, Index):
+        raise AttributeError("nlargest is not available for Index objects")
+    elif isinstance(df, Series):
+        token = 'series-nlargest-n={0}'.format(n)
+        f = lambda s: s.nlargest(n)
+    elif isinstance(df, DataFrame):
+        token = 'dataframe-nlargest-n={0}'.format(n)
+        f = lambda df: df.nlargest(n, columns)
+        columns = df.columns  # this is a hack.
+    return aca(df, f, f, columns=columns, token=token)
 
 
 def _assign(df, *pairs):
