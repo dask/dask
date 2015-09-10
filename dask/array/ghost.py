@@ -268,11 +268,14 @@ def boundaries(x, depth=None, kind=None):
         if d == 0:
             continue
 
-        if kind.get(i) == 'periodic':
+        this_kind = kind.get(i, 'none')
+        if this_kind == 'none':
+            continue
+        elif this_kind == 'periodic':
             x = periodic(x, i, d)
-        elif kind.get(i) == 'reflect':
+        elif this_kind == 'reflect':
             x = reflect(x, i, d)
-        elif kind.get(i) == 'nearest':
+        elif this_kind == 'nearest':
             x = nearest(x, i, d)
         elif i in kind:
             x = constant(x, i, d, kind[i])
@@ -291,7 +294,8 @@ def ghost(x, depth, boundary):
     depth: dict
         The size of the shared boundary per axis
     boundary: dict
-        The boundary condition on each axis
+        The boundary condition on each axis. Options are 'reflect', 'periodic',
+        'nearest', 'none', an integer will fill the boundary with that integer.
 
     The axes dict informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
@@ -330,20 +334,11 @@ def ghost(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
-    if isinstance(depth, int):
-        depth = (depth,) * x.ndim
-    if isinstance(depth, tuple):
-        depth = dict(zip(range(x.ndim), depth))
-
-    if boundary is None:
-        boundary = 'reflect'
-    if not isinstance(boundary, (tuple, dict)):
-        boundary = (boundary,) * x.ndim
-    if isinstance(boundary, tuple):
-        boundary = dict(zip(range(x.ndim), boundary))
+    depth2 = coerce_depth(x.ndim, depth)
+    boundary2 = coerce_boundary(x.ndim, boundary)
 
     # is depth larger than chunk size?
-    depth_values = [depth.get(i, 0) for i in range(x.ndim)]
+    depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
     for d, c in zip(depth_values, x.chunks):
         if d > min(c):
             raise ValueError("The overlapping depth %d is larger than your\n"
@@ -351,30 +346,73 @@ def ghost(x, depth, boundary):
                              "with a larger chunk size or a chunk size that\n"
                              "more evenly divides the shape of your array." %
                              (d, min(c)))
-    x2 = boundaries(x, depth, boundary)
-    x3 = ghost_internal(x2, depth)
-    trim = dict((k, v*2 if boundary.get(k, None) is not None else 0)
-                for k, v in depth.items())
+    x2 = boundaries(x, depth2, boundary2)
+    x3 = ghost_internal(x2, depth2)
+    trim = dict((k, v*2 if boundary2.get(k, 'none') != 'none' else 0)
+                for k, v in depth2.items())
     x4 = chunk.trim(x3, trim)
     return x4
 
 
-def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
-    if isinstance(depth, int):
-        depth = (depth,) * x.ndim
-    if isinstance(depth, tuple):
-        depth = dict(zip(range(x.ndim), depth))
+def add_dummy_padding(x, depth, boundary):
+    """
+    Pads an array which has 'none' as the boundary type.
+    Used to simplify trimming arrays which use 'none'.
 
+    >>> import dask.array as da
+    >>> x = da.arange(6, chunks=3)
+    >>> add_dummy_padding(x, {0: 1}, {0: 'none'}).compute()  # doctest: +NORMALIZE_WHITESPACE
+    array([..., 0., 1., 2., 3., 4., 5., ...])
+    """
+    for k, v in boundary.items():
+        if v == 'none':
+            d = depth[k]
+
+            empty_shape = list(x.shape)
+            empty_shape[k] = d
+
+            empty_chunks = list(x.chunks)
+            empty_chunks[k] = (d,)
+
+            empty = wrap.empty(empty_shape, chunks=empty_chunks)
+
+            out_chunks = list(x.chunks)
+            ax_chunks = list(out_chunks[k])
+            ax_chunks[0] += d
+            ax_chunks[-1] += d
+            out_chunks[k] = ax_chunks
+
+            x = concatenate([empty, x, empty], axis=k)
+            x = x.rechunk(out_chunks)
+    return x
+
+
+def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
+    depth2 = coerce_depth(x.ndim, depth)
+    boundary2 = coerce_boundary(x.ndim, boundary)
+
+    g = ghost(x, depth=depth2, boundary=boundary2)
+    g2 = g.map_blocks(func, **kwargs)
+    if trim:
+        g3 = add_dummy_padding(g2, depth2, boundary2)
+        return trim_internal(g3, depth2)
+    else:
+        return g2
+
+
+def coerce_depth(ndim, depth):
+    if isinstance(depth, int):
+        depth = (depth,) * ndim
+    if isinstance(depth, tuple):
+        depth = dict(zip(range(ndim), depth))
+    return depth
+
+
+def coerce_boundary(ndim, boundary):
     if boundary is None:
         boundary = 'reflect'
     if not isinstance(boundary, (tuple, dict)):
-        boundary = (boundary,) * x.ndim
+        boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):
-        boundary = dict(zip(range(x.ndim), boundary))
-
-    g = ghost(x, depth=depth, boundary=boundary)
-    g2 = g.map_blocks(func, **kwargs)
-    if trim:
-        return trim_internal(g2, depth)
-    else:
-        return g2
+        boundary = dict(zip(range(ndim), boundary))
+    return boundary

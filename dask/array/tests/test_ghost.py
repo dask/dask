@@ -175,7 +175,25 @@ def test_ghost():
     assert same_keys(g, ghost(d, depth={0: 2, 1: 1},
                              boundary={0: 100, 1: 'reflect'}))
 
-    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100})
+    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'none'})
+    expected = np.array(
+      [[100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+       [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+       [  0,   1,   2,   3,   4,   3,   4,   5,   6,   7],
+       [  8,   9,  10,  11,  12,  11,  12,  13,  14,  15],
+       [ 16,  17,  18,  19,  20,  19,  20,  21,  22,  23],
+       [ 24,  25,  26,  27,  28,  27,  28,  29,  30,  31],
+       [ 32,  33,  34,  35,  36,  35,  36,  37,  38,  39],
+       [ 40,  41,  42,  43,  44,  43,  44,  45,  46,  47],
+       [ 16,  17,  18,  19,  20,  19,  20,  21,  22,  23],
+       [ 24,  25,  26,  27,  28,  27,  28,  29,  30,  31],
+       [ 32,  33,  34,  35,  36,  35,  36,  37,  38,  39],
+       [ 40,  41,  42,  43,  44,  43,  44,  45,  46,  47],
+       [ 48,  49,  50,  51,  52,  51,  52,  53,  54,  55],
+       [ 56,  57,  58,  59,  60,  59,  60,  61,  62,  63],
+       [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+       [100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
+    assert eq(g, expected)
     assert g.chunks == ((8, 8), (5, 5))
 
 
@@ -184,6 +202,14 @@ def test_map_overlap():
 
     y = x.map_overlap(lambda x: x + len(x), depth=2)
     assert eq(y, np.arange(10) + 5 + 2 + 2)
+
+    x = np.arange(16).reshape((4, 4))
+    d = da.from_array(x, chunks=(2, 2))
+    exp1 = d.map_overlap(lambda x: x + x.size, depth=1).compute()
+    exp2 = d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},\
+                    boundary={0: 'reflect', 1: 'none'}).compute()
+    assert eq(exp1, x + 16)
+    assert eq(exp2, x + 12)
 
 
 def test_nearest_ghost():
@@ -313,3 +339,14 @@ def test_bad_depth_raises():
     depth = {0: 4, 1: 2}
 
     pytest.raises(ValueError, ghost, darr, depth=depth, boundary=1)
+
+
+def test_none_boundaries():
+    x = da.from_array(np.arange(16).reshape(4, 4), chunks=(2, 2))
+    exp = boundaries(x, 2, {0: 'none', 1: 33})
+    res = np.array(
+          [[33, 33,  0,  1,  2,  3, 33, 33],
+           [33, 33,  4,  5,  6,  7, 33, 33],
+           [33, 33,  8,  9, 10, 11, 33, 33],
+           [33, 33, 12, 13, 14, 15, 33, 33]])
+    assert eq(exp, res)
