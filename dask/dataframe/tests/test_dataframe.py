@@ -1577,6 +1577,7 @@ def test_concat2():
     d = dd.DataFrame(dsk, 'y', ['b', 'c', 'd'], [0, 3, 5])
 
     cases = [[a, b], [a, c], [a, d]]
+    assert concat([a]) is a
     for case in cases:
         result = dd.concat(case)
         pdcase = [c.compute() for c in case]
