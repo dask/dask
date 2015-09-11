@@ -16,14 +16,16 @@ __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
 class Base(object):
     """Base class for dask collections"""
 
-    def visualize(self, filename='mydask', optimize_graph=False):
-        return visualize(self, filename=filename, optimize_graph=optimize_graph)
+    def visualize(self, filename='mydask', format=None, optimize_graph=False):
+        return visualize(self, filename=filename, format=format,
+                         optimize_graph=optimize_graph)
 
-    def _visualize(self, filename='mydask', optimize_graph=False):
+    def _visualize(self, filename='mydask', format=None, optimize_graph=False):
         warn = DeprecationWarning("``_visualize`` is deprecated, use "
                                   "``visualize`` instead.")
         warnings.warn(warn)
-        return self.visualize(filename=filename, optimize_graph=optimize_graph)
+        return self.visualize(filename=filename, format=format,
+                              optimize_graph=optimize_graph)
 
     def compute(self, **kwargs):
         return compute(self, **kwargs)[0]
