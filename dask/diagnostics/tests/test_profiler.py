@@ -3,7 +3,6 @@ import os
 from time import sleep
 
 from dask.diagnostics import Profiler, ResourceProfiler
-from dask.diagnostics.profile_visualize import visualize
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
 import pytest
@@ -142,9 +141,11 @@ def test_resource_profiler_plot():
 @pytest.mark.skipif("not bokeh")
 @pytest.mark.slow
 def test_plot_both():
+    from dask.diagnostics.profile_visualize import visualize
     from bokeh.plotting import GridPlot
-    with ResourceProfiler(dt=0.01) as rprof, prof:
-        get(dsk2, 'c')
+    with ResourceProfiler(dt=0.01) as rprof:
+        with prof:
+            get(dsk2, 'c')
     p = visualize([prof, rprof], label_size=50,
                   title="Not the default", show=False, save=False)
     assert isinstance(p, GridPlot)
