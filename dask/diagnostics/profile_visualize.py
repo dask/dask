@@ -139,8 +139,13 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
         for f in figs[1:]:
             f.x_range = top.x_range
             f.title = None
+            f.min_border_top = 20
         for f in figs[:1]:
             f.xaxis.axis_label = None
+            f.min_border_bottom = 20
+        for f in figs:
+            f.min_border_left = 75
+            f.min_border_right = 75
         p = bp.gridplot([[f] for f in figs])
     if show:
         bp.show(p)

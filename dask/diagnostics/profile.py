@@ -207,5 +207,6 @@ class _Tracker(Process):
                 continue
             if msg == 'shutdown':
                 break
-            self._collect()
+            elif msg == 'start':
+                self._collect()
         self.child_conn.close()

@@ -22,7 +22,7 @@ dsk = {'a': 1,
        'd': (mul, 'a', 'b'),
        'e': (mul, 'c', 'd')}
 
-dsk2 = {'a': 1, 'b': 2, 'c': (lambda a, b: sleep(1) or (a + b), 'a', 'b')}
+dsk2 = {'a': 1, 'b': 2, 'c': (lambda a, b: sleep(0.1) or (a + b), 'a', 'b')}
 
 
 def test_profiler():
@@ -69,7 +69,6 @@ def test_two_gets():
     assert len(prof.results) == n + m + n
 
 
-@pytest.mark.slow
 def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
         out = get(dsk2, 'c')
@@ -122,7 +121,6 @@ def test_profiler_plot():
 
 
 @pytest.mark.skipif("not bokeh")
-@pytest.mark.slow
 def test_resource_profiler_plot():
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, 'c')
@@ -139,7 +137,6 @@ def test_resource_profiler_plot():
 
 
 @pytest.mark.skipif("not bokeh")
-@pytest.mark.slow
 def test_plot_both():
     from dask.diagnostics.profile_visualize import visualize
     from bokeh.plotting import GridPlot
