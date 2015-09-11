@@ -4,7 +4,7 @@ from collections import namedtuple
 from itertools import starmap
 from timeit import default_timer
 from time import sleep
-from multiprocessing import Process, Event, Queue, current_process
+from multiprocessing import Process, Pipe, current_process
 
 from ..callbacks import Callback
 
@@ -132,7 +132,7 @@ class ResourceProfiler(Callback):
     If you use the profiler globally you will need to clear out old results
     manually.
 
-    >>> prof.clear()
+    >>> prof.clear()  # doctest: +SKIP
     """
     def __init__(self, dt=1):
         self._tracker = _Tracker(dt)
@@ -141,11 +141,11 @@ class ResourceProfiler(Callback):
 
     def _start(self, dsk):
         assert self._tracker.is_alive(), "Resource tracker is shutdown"
-        self._tracker._trigger.set()
+        self._tracker.parent_conn.send('start')
 
     def _finish(self, dsk, state, failed):
-        self._tracker._trigger.clear()
-        self.results.extend(starmap(ResourceData, self._tracker.queue.get()))
+        self._tracker.parent_conn.send('stop')
+        self.results.extend(starmap(ResourceData, self._tracker.parent_conn.recv()))
 
     def close(self):
         """Shutdown the resource tracker process"""
@@ -177,14 +177,12 @@ class _Tracker(Process):
         self.daemon = True
         self.dt = dt
         self.parent = psutil.Process(current_process().pid)
-        self.queue = Queue()
-        self._trigger = Event()     # Sleeps until trigger
-        self._shutdown = Event()    # Set when process should shutdown
+        self.parent_conn, self.child_conn = Pipe()
 
     def shutdown(self):
-        self._shutdown.set()
-        self._trigger.set()
-        self.queue.close()
+        if not self.parent_conn.closed:
+            self.parent_conn.send('shutdown')
+            self.parent_conn.close()
         self.join()
 
     __del__ = shutdown
@@ -193,21 +191,21 @@ class _Tracker(Process):
         data = []
         pid = current_process()
         ps = [self.parent] + [p for p in self.parent.children() if p.pid != pid]
-        while self._trigger.is_set():
+        while not self.child_conn.poll():
             tic = default_timer()
             mem = sum(p.memory_info().rss for p in ps)/1e6
             cpu = sum(p.cpu_percent() for p in ps)
             data.append((tic, mem, cpu))
             sleep(self.dt)
-        self.queue.put(data)
+        self.child_conn.send(data)
 
     def run(self):
         while True:
             try:
-                self._trigger.wait()
+                msg = self.child_conn.recv()
             except KeyboardInterrupt:
                 continue
-            if self._shutdown.is_set():
+            if msg == 'shutdown':
                 break
             self._collect()
-        self.queue.close()
+        self.child_conn.close()
