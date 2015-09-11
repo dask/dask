@@ -1,7 +1,8 @@
 from operator import add, mul
 import os
+from time import sleep
 
-from dask.diagnostics import Profiler
+from dask.diagnostics import Profiler, ResourceProfiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
 import pytest
@@ -20,6 +21,8 @@ dsk = {'a': 1,
        'c': (add, 'a', 'b'),
        'd': (mul, 'a', 'b'),
        'e': (mul, 'c', 'd')}
+
+dsk2 = {'a': 1, 'b': 2, 'c': (lambda a, b: sleep(0.1) or (a + b), 'a', 'b')}
 
 
 def test_profiler():
@@ -47,6 +50,42 @@ def test_profiler_works_under_error():
     assert len(prof.results) == 2
 
 
+def test_two_gets():
+    with prof:
+        get(dsk, 'e')
+    n = len(prof.results)
+
+    dsk2 = {'x': (add, 1, 2), 'y': (add, 'x', 'x')}
+
+    with prof:
+        get(dsk2, 'y')
+    m = len(prof.results)
+
+    with prof:
+        get(dsk, 'e')
+        get(dsk2, 'y')
+        get(dsk, 'e')
+
+    assert len(prof.results) == n + m + n
+
+
+def test_resource_profiler():
+    with ResourceProfiler(dt=0.01) as rprof:
+        out = get(dsk2, 'c')
+    results = rprof.results
+    assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
+
+    rprof.clear()
+    assert rprof.results == []
+
+    rprof.close()
+    assert not rprof._tracker.is_alive()
+
+    with pytest.raises(AssertionError):
+        with rprof:
+            get(dsk, 'e')
+
+
 @pytest.mark.skipif("not bokeh")
 def test_pprint_task():
     from dask.diagnostics.profile_visualize import pprint_task
@@ -69,18 +108,49 @@ def test_pprint_task():
 def test_profiler_plot():
     with prof:
         get(dsk, 'e')
-    # Run just to see that it doesn't error
-    prof.visualize(show=False)
     p = prof.visualize(plot_width=500,
                        plot_height=300,
                        tools="hover",
                        title="Not the default",
-                       show=False)
+                       show=False, save=False)
     assert p.plot_width == 500
     assert p.plot_height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert p.title == "Not the default"
+
+
+@pytest.mark.skipif("not bokeh")
+def test_resource_profiler_plot():
+    with ResourceProfiler(dt=0.01) as rprof:
+        get(dsk2, 'c')
+    p = rprof.visualize(plot_width=500,
+                        plot_height=300,
+                        tools="hover",
+                        title="Not the default",
+                        show=False, save=False)
+    assert p.plot_width == 500
+    assert p.plot_height == 300
+    assert len(p.tools) == 1
+    assert isinstance(p.tools[0], bokeh.models.HoverTool)
+    assert p.title == "Not the default"
+
+
+@pytest.mark.skipif("not bokeh")
+def test_plot_both():
+    from dask.diagnostics.profile_visualize import visualize
+    from bokeh.plotting import GridPlot
+    with ResourceProfiler(dt=0.01) as rprof:
+        with prof:
+            get(dsk2, 'c')
+    p = visualize([prof, rprof], label_size=50,
+                  title="Not the default", show=False, save=False)
+    assert isinstance(p, GridPlot)
+    assert len(p.children) == 2
+    assert p.children[0][0].title == "Not the default"
+    assert p.children[0][0].xaxis[0].axis_label is None
+    assert p.children[1][0].title is None
+    assert p.children[1][0].xaxis[0].axis_label == 'Time (s)'
 
 
 @pytest.mark.skipif("not bokeh")
@@ -113,22 +183,3 @@ def test_get_colors():
     cmap = get_colors('BrBG', funcs)
     lk = dict(zip([0, 1], BrBG3))
     assert cmap == [lk[i] for i in funcs]
-
-
-def test_two_gets():
-    with prof:
-        get(dsk, 'e')
-    n = len(prof.results)
-
-    dsk2 = {'x': (add, 1, 2), 'y': (add, 'x', 'x')}
-
-    with prof:
-        get(dsk2, 'y')
-    m = len(prof.results)
-
-    with prof:
-        get(dsk, 'e')
-        get(dsk2, 'y')
-        get(dsk, 'e')
-
-    assert len(prof.results) == n + m + n

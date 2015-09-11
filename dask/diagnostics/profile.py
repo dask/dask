@@ -3,6 +3,8 @@ from __future__ import absolute_import
 from collections import namedtuple
 from itertools import starmap
 from timeit import default_timer
+from time import sleep
+from multiprocessing import Process, Pipe, current_process
 
 from ..callbacks import Callback
 
@@ -61,7 +63,7 @@ class Profiler(Callback):
         return super(Profiler, self).__enter__()
 
     def _start(self, dsk):
-        self._dsk = dsk.copy()
+        self._dsk.update(dsk)
 
     def _pretask(self, key, dsk, state):
         start = default_timer()
@@ -76,6 +78,10 @@ class Profiler(Callback):
         self.results += list(starmap(TaskData, results.values()))
         self._results.clear()
 
+    def _plot(self, **kwargs):
+        from .profile_visualize import plot_tasks
+        return plot_tasks(self.results, self._dsk, **kwargs)
+
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
 
@@ -84,10 +90,123 @@ class Profiler(Callback):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
-        return visualize(self.results, self._dsk, **kwargs)
+        return visualize(self, **kwargs)
 
     def clear(self):
         """Clear out old results from profiler"""
         self._results.clear()
         del self.results[:]
         self._dsk = {}
+
+
+ResourceData = namedtuple('ResourceData', ('time', 'mem', 'cpu'))
+
+
+class ResourceProfiler(Callback):
+    """A profiler for resource use.
+
+    Records the following each timestep
+        1. Time in seconds since the epoch
+        2. Memory usage in MB
+        3. % CPU usage
+
+    Examples
+    --------
+
+    >>> from operator import add, mul
+    >>> from dask.threaded import get
+    >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
+    >>> with ResourceProfiler() as prof:  # doctest: +SKIP
+    ...     get(dsk, 'z')
+    22
+
+    These results can be visualized in a bokeh plot using the ``visualize``
+    method. Note that this requires bokeh to be installed.
+
+    >>> prof.visualize() # doctest: +SKIP
+
+    You can activate the profiler globally
+
+    >>> prof.register()  # doctest: +SKIP
+
+    If you use the profiler globally you will need to clear out old results
+    manually.
+
+    >>> prof.clear()  # doctest: +SKIP
+    """
+    def __init__(self, dt=1):
+        self._tracker = _Tracker(dt)
+        self._tracker.start()
+        self.results = []
+
+    def _start(self, dsk):
+        assert self._tracker.is_alive(), "Resource tracker is shutdown"
+        self._tracker.parent_conn.send('start')
+
+    def _finish(self, dsk, state, failed):
+        self._tracker.parent_conn.send('stop')
+        self.results.extend(starmap(ResourceData, self._tracker.parent_conn.recv()))
+
+    def close(self):
+        """Shutdown the resource tracker process"""
+        self._tracker.shutdown()
+
+    def clear(self):
+        self.results = []
+
+    def _plot(self, **kwargs):
+        from .profile_visualize import plot_resources
+        return plot_resources(self.results, **kwargs)
+
+    def visualize(self, **kwargs):
+        """Visualize the profiling run in a bokeh plot.
+
+        See also
+        --------
+        dask.diagnostics.profile_visualize.visualize
+        """
+        from .profile_visualize import visualize
+        return visualize(self, **kwargs)
+
+
+class _Tracker(Process):
+    """Background process for tracking resource usage"""
+    def __init__(self, dt=1):
+        import psutil
+        Process.__init__(self)
+        self.daemon = True
+        self.dt = dt
+        self.parent = psutil.Process(current_process().pid)
+        self.parent_conn, self.child_conn = Pipe()
+
+    def shutdown(self):
+        if not self.parent_conn.closed:
+            self.parent_conn.send('shutdown')
+            self.parent_conn.close()
+        self.join()
+
+    __del__ = shutdown
+
+    def _collect(self):
+        data = []
+        pid = current_process()
+        ps = [self.parent] + [p for p in self.parent.children() if p.pid != pid]
+        while not self.child_conn.poll():
+            tic = default_timer()
+            mem = sum(p.memory_info().rss for p in ps)/1e6
+            cpu = sum(p.cpu_percent() for p in ps)
+            data.append((tic, mem, cpu))
+            sleep(self.dt)
+        self.child_conn.send(data)
+
+    def run(self):
+        while True:
+            try:
+                msg = self.child_conn.recv()
+            except KeyboardInterrupt:
+                continue
+            if msg == 'shutdown':
+                break
+            elif msg == 'start':
+                self._collect()
+        self.child_conn.close()
