@@ -639,9 +639,8 @@ def test_from_function_requires_block_args():
 
 def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
-    assert d.name in repr(d)
+    assert d.name[:5] in repr(d)
     assert str(d.shape) in repr(d)
-    assert str(d.chunks) in repr(d)
     assert str(d._dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
     assert len(str(d)) < 1000
@@ -718,6 +717,22 @@ def test_to_hdf5():
 
             assert eq(d[:], x)
             assert d.chunks == (2, 2)
+
+    with tmpfile('.hdf5') as fn:
+        x.to_hdf5(fn, '/x', chunks=None)
+        with h5py.File(fn) as f:
+            d = f['/x']
+
+            assert eq(d[:], x)
+            assert d.chunks is None
+
+    with tmpfile('.hdf5') as fn:
+        x.to_hdf5(fn, '/x', chunks=(1, 1))
+        with h5py.File(fn) as f:
+            d = f['/x']
+
+            assert eq(d[:], x)
+            assert d.chunks == (1, 1)
 
     with tmpfile('.hdf5') as fn:
         da.to_hdf5(fn, {'/x': x, '/y': y})
