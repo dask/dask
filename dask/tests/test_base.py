@@ -103,5 +103,7 @@ def test_visualize():
         x = da.arange(5, chunks=2)
         x.visualize(filename=os.path.join(d, 'mydask'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
+        x.visualize(filename=os.path.join(d, 'mydask.pdf'))
+        assert os.path.exists(os.path.join(d, 'mydask.pdf'))
     finally:
         shutil.rmtree(d)

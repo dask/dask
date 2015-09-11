@@ -164,7 +164,7 @@ def _get_display_cls(format):
         raise ValueError("Unknown format '%s' passed to `dot_graph`" % format)
 
 
-def dot_graph(dsk, filename='mydask', format='png', **kwargs):
+def dot_graph(dsk, filename='mydask', format=None, **kwargs):
     """
     Render a task graph using dot.
 
@@ -202,6 +202,15 @@ def dot_graph(dsk, filename='mydask', format='png', **kwargs):
     dask.dot.to_graphviz
     """
     g = to_graphviz(dsk, **kwargs)
+
+    fmts = ['png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg']
+    if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
+        format = filename.lower().split('.')[-1]
+        filename = filename.rsplit('.')[0]
+
+    if format is None:
+        format = 'png'
+
     data = g.pipe(format=format)
     display_cls = _get_display_cls(format)
 
