@@ -719,6 +719,22 @@ def test_to_hdf5():
             assert d.chunks == (2, 2)
 
     with tmpfile('.hdf5') as fn:
+        x.to_hdf5(fn, '/x', chunks=None)
+        with h5py.File(fn) as f:
+            d = f['/x']
+
+            assert eq(d[:], x)
+            assert d.chunks is None
+
+    with tmpfile('.hdf5') as fn:
+        x.to_hdf5(fn, '/x', chunks=(1, 1))
+        with h5py.File(fn) as f:
+            d = f['/x']
+
+            assert eq(d[:], x)
+            assert d.chunks == (1, 1)
+
+    with tmpfile('.hdf5') as fn:
         da.to_hdf5(fn, {'/x': x, '/y': y})
 
         with h5py.File(fn) as f:
