@@ -461,23 +461,16 @@ class _Frame(Base):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
-    @property
-    def _elemwise_cols(self):
-        """passed to elemwise ops, None for Series, columns for DataFrame"""
-        return None
-
     @classmethod
     def _get_unary_operator(cls, op):
-        return lambda self: elemwise(op, self, columns=self._elemwise_cols)
+        return lambda self: elemwise(op, self)
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
         if inv:
-            return lambda self, other: elemwise(op, other, self,
-                                                columns=self._elemwise_cols)
+            return lambda self, other: elemwise(op, other, self)
         else:
-            return lambda self, other: elemwise(op, self, other,
-                                                columns=self._elemwise_cols)
+            return lambda self, other: elemwise(op, self, other)
 
     def _aca_agg(self, token, func, aggfunc=None):
         """ Wrapper for aggregations """
@@ -1283,10 +1276,6 @@ class DataFrame(_Frame):
                    aggregate=lambda x: aggfunc(x.groupby(level=0)),
                    columns=None, token=self._token_prefix + token)
 
-    @property
-    def _elemwise_cols(self):
-        return self.columns
-
     @wraps(pd.DataFrame.drop)
     def drop(self, labels, axis=0):
         if axis != 1:
@@ -1493,7 +1482,7 @@ def _coerce_loc_index(divisions, o):
 
 def elemwise(op, *args, **kwargs):
     """ Elementwise operation for dask.Dataframes """
-    columns = kwargs.get('columns', None)
+    columns = kwargs.get('columns', no_default)
     name = kwargs.get('name', None)
 
     _name = 'elemwise-' + tokenize(op, kwargs, *args)
@@ -1522,11 +1511,15 @@ def elemwise(op, *args, **kwargs):
     dsk = dict(((_name, i), (op2,) + frs) for i, frs in enumerate(zip(*keys)))
     dsk = merge(dsk, *[d.dask for d in dasks])
 
-    if columns is None:
+    if columns == no_default:
+        if len(dfs) >= 2 and len(dasks) != len(dfs):
+            # should not occur in current funcs
+            msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
+            raise NotImplementedError(msg)
         if len(dfs) == 1:
-            columns = dfs[0].name
+            columns = dfs[0]
         else:
-            columns = op2(*[df._empty_partition for df in dfs]).name
+            columns = op2(*[df._empty_partition for df in dfs])
     return _Frame(dsk, _name, columns, divisions)
 
 
