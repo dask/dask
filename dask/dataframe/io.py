@@ -384,7 +384,8 @@ def from_pandas(data, npartitions):
         raise TypeError("Input must be a pandas DataFrame or Series")
     nrows = len(data)
     chunksize = int(ceil(nrows / npartitions))
-    data = data.sort_index(ascending=True)
+    if not data.index.is_monotonic_increasing:
+        data = data.sort_index(ascending=True)
     divisions = tuple(data.index[i]
                       for i in range(0, nrows, chunksize))
     divisions = divisions + (data.index[-1],)
