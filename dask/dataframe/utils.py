@@ -160,7 +160,3 @@ def get_categories(df):
     if iscategorical(df.index.dtype):
         result['.index'] = df.index.categories
     return result
-
-
-def is_frame_or_series(x):
-    return isinstance(x, (pd.Series, pd.DataFrame))

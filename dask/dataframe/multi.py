@@ -376,21 +376,21 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
         left_on = right_on = on
         on = None
 
-    if (utils.is_frame_or_series(left) and
-        utils.is_frame_or_series(right)):
+    if (isinstance(left, (pd.Series, pd.DataFrame)) and
+        isinstance(right, (pd.Series, pd.DataFrame))):
         return pd.merge(left, right, how=how, on=on, left_on=left_on,
                         right_on=right_on, left_index=left_index,
                         right_index=right_index, suffixes=suffixes)
 
     # Transform pandas objects into dask.dataframe objects
-    if utils.is_frame_or_series(left):
+    if isinstance(left, (pd.Series, pd.DataFrame)):
         if right_index and left_on:  # change to join on index
             left = left.set_index(left[left_on])
             left_on = False
             left_index = True
         left = from_pandas(left, npartitions=1)  # turn into DataFrame
 
-    if utils.is_frame_or_series(right):
+    if isinstance(right, (pd.Series, pd.DataFrame)):
         if left_index and right_on:  # change to join on index
             right = right.set_index(right[right_on])
             right_on = False

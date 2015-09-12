@@ -125,7 +125,7 @@ def _scalar_binary(op, a, b, inv=False):
     else:
         dsk.update({(name, 0): (op, (a._name, 0), b)})
 
-    if utils.is_frame_or_series(b):
+    if isinstance(b, (pd.Series, pd.DataFrame)):
         return _Frame(dsk, name, b, [b.index.min(), b.index.max()])
     else:
         return Scalar(dsk, name)
@@ -144,12 +144,10 @@ class _Frame(Base):
         particular DataFrame / Series
     metadata: scalar, None, list, pandas.Series or pandas.DataFrame
         metadata to specify data structure.
-
         - If scalar or None is given, the result is Series.
         - If list is given, the result is DataFrame.
         - If pandas data is given, the result is the class corresponding to
           pandas data.
-
     divisions: tuple of index values
         Values along which we partition our blocks on the index
     """
@@ -686,7 +684,7 @@ class _Frame(Base):
                                   self.column_info, self, 1, token=name)
         else:
             def aggregate(x, y):
-                if utils.is_frame_or_series(x):
+                if isinstance(x, (pd.Series, pd.DataFrame)):
                     return x.where(x > y, y, axis=x.ndim - 1)
                 else:       # scalsr
                     return x if x > y else y
@@ -702,7 +700,7 @@ class _Frame(Base):
                                   self.column_info, self, 1, token=name)
         else:
             def aggregate(x, y):
-                if utils.is_frame_or_series(x):
+                if isinstance(x, (pd.Series, pd.DataFrame)):
                     return x.where(x < y, y, axis=x.ndim - 1)
                 else:       # scalar
                     return x if x < y else y
@@ -1613,7 +1611,7 @@ def reduction(x, chunk, aggregate, token=None):
 
 def _maybe_from_pandas(dfs):
     from .io import from_pandas
-    dfs = [from_pandas(df, 1) if utils.is_frame_or_series(df)
+    dfs = [from_pandas(df, 1) if isinstance(df, (pd.Series, pd.DataFrame))
            else df for df in dfs]
     return dfs
 
@@ -2259,7 +2257,7 @@ def repartition(df, divisions, force=False):
                                     df._name, tmp, out, force=force)
         return df._constructor(merge(df.dask, dsk), out,
                                df.column_info, divisions)
-    elif utils.is_frame_or_series(df):
+    elif isinstance(df, (pd.Series, pd.DataFrame)):
         name = 'repartition-dataframe-' + token
         dfs = utils.shard_df_on_index(df, divisions[1:-1])
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
