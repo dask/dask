@@ -368,6 +368,13 @@ def test_from_pandas_series():
     tm.assert_series_equal(s, ds.compute())
 
 
+def test_from_pandas_non_sorted():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[3, 1, 2])
+    ddf = dd.from_pandas(df, npartitions=2, sort=False)
+    assert not ddf.known_divisions
+    eq(df, ddf)
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
 
