@@ -132,7 +132,27 @@ def _scalar_binary(op, a, b, inv=False):
 
 
 class _Frame(Base):
-    """ Superclass for DataFrame and Series """
+    """ Superclass for DataFrame and Series
+
+    Parameters
+    ----------
+
+    dsk: dict
+        The dask graph to compute this DataFrame
+    _name: str
+        The key prefix that specifies which keys in the dask comprise this
+        particular DataFrame / Series
+    metadata: scalar, None, list, pandas.Series or pandas.DataFrame
+        metadata to specify data structure.
+
+        - If scalar or None is given, the result is Series.
+        - If list is given, the result is DataFrame.
+        - If pandas data is given, the result is the class corresponding to
+          pandas data.
+
+    divisions: tuple of index values
+        Values along which we partition our blocks on the index
+    """
 
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(threaded.get)
@@ -703,6 +723,19 @@ class Series(_Frame):
 
     Mimics ``pandas.Series``.
 
+    Parameters
+    ----------
+
+    dsk: dict
+        The dask graph to compute this Series
+    _name: str
+        The key prefix that specifies which keys in the dask comprise this
+        particular Series
+    name: scalar or None
+        Series name.  This metadata aids usability
+    divisions: tuple of index values
+        Values along which we partition our blocks on the index
+
     See Also
     --------
 
@@ -1036,11 +1069,11 @@ class DataFrame(_Frame):
     ----------
 
     dask: dict
-        The dask graph to compute this Dataframe
+        The dask graph to compute this DataFrame
     name: str
         The key prefix that specifies which keys in the dask comprise this
         particular DataFrame
-    columns: list of strings
+    columns: list of str
         Column names.  This metadata aids usability
     divisions: tuple of index values
         Values along which we partition our blocks on the index
