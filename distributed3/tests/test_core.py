@@ -2,14 +2,14 @@ from tornado import gen, ioloop
 from tornado.tcpclient import TCPClient
 from multiprocessing import Process
 from distributed3.core import (read, write, pingpong, read_sync, write_sync,
-        EchoServer, connect_sync, rpc)
+        Server, connect_sync, rpc)
 from functools import partial
 
 
 def test_server():
     @gen.coroutine
     def f():
-        server = EchoServer({'ping': pingpong})
+        server = Server({'ping': pingpong})
         server.listen(8887)
 
         stream = yield TCPClient().connect('127.0.0.1', 8887)
@@ -30,7 +30,7 @@ def test_server():
 def test_rpc():
     @gen.coroutine
     def f():
-        server = EchoServer({'ping': pingpong})
+        server = Server({'ping': pingpong})
         server.listen(8887)
 
         remote = rpc('127.0.0.1', 8887)
@@ -48,9 +48,9 @@ def test_rpc():
 
 def test_sync():
     def f():
-        from distributed3.core import EchoServer
+        from distributed3.core import Server
         from tornado.ioloop import IOLoop
-        server = EchoServer({'ping': pingpong})
+        server = Server({'ping': pingpong})
         server.listen(8887)
         IOLoop.current().start()
         IOLoop.current().stop()

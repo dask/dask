@@ -21,10 +21,10 @@ def handle_signal(sig, frame):
     IOLoop.instance().add_callback(IOLoop.instance().stop)
 
 
-class EchoServer(TCPServer):
+class Server(TCPServer):
     def __init__(self, handlers):
         self.handlers = handlers
-        super(EchoServer, self).__init__()
+        super(Server, self).__init__()
 
     @gen.coroutine
     def handle_stream(self, stream, address):
@@ -185,7 +185,7 @@ class rpc(object):
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
-    server = EchoServer({'ping': pingpong})
+    server = Server({'ping': pingpong})
     server.listen(8889)
     IOLoop.current().start()
     IOLoop.current().close()
