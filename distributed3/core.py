@@ -10,6 +10,7 @@ from dill import loads, dumps
 from tornado import ioloop, gen
 from tornado.gen import Return
 from tornado.tcpserver import TCPServer
+from tornado.tcpclient import TCPClient
 from tornado.ioloop import IOLoop
 
 
@@ -126,6 +127,59 @@ def write(stream, msg):
 
 def pingpong(stream):
     return b'pong'
+
+
+@gen.coroutine
+def send_recv(ip_or_stream, port=None, reply=True, loop=None, **kwargs):
+    """ Send and recv with a stream
+
+    Keyword arguments turn into the message
+
+    response = yield send_recv(stream, op='ping', reply=True)
+    """
+    if port is not None:
+        given_ip_port = True
+        stream = yield TCPClient().connect(ip_or_stream, port)
+    else:
+        given_ip_port = False
+        stream = ip_or_stream
+    msg = kwargs
+    msg['reply'] = reply
+    if 'close' not in msg:
+        msg['close'] = given_ip_port
+    yield write(stream, msg)
+    if reply:
+        response = yield read(stream)
+    else:
+        response = None
+    if kwargs['close']:
+        stream.close()
+    raise Return(response)
+
+
+class rpc(object):
+    """ Use send_recv to cause rpc computations on client_connected calls
+
+    By convention the `client_connected` coroutine looks for operations by name
+    in the `op` key of a message.
+
+    >>> msg = {'op': 'func', 'key1': 100, 'key2': 1000}
+    >>> result = yield send_recv(stream, **msg)  # doctest: +SKIP
+
+    This class uses this convention to provide a Python interface for calling
+    remote functions
+
+    >>> remote = rpc(stream)  # doctest: +SKIP
+    >>> result = yield remote.func(key1=100, key2=1000)  # doctest: +SKIP
+    """
+    def __init__(self, *args):
+        self.args = args
+
+    def __getattr__(self, key):
+        def _(**kwargs):
+            return send_recv(*self.args, op=key, **kwargs)
+        return _
+
 
 
 if __name__ == '__main__':
