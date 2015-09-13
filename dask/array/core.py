@@ -14,6 +14,9 @@ from toolz.curried import (pipe, partition, concat, unique, pluck, join, first,
                            memoize, map, groupby, valmap, accumulate, merge,
                            curry, reduce, interleave, sliding_window, partial)
 import numpy as np
+import os
+import pickle
+import uuid
 
 from threading import Lock
 from . import chunk
@@ -1121,6 +1124,7 @@ class Array(Base):
         return squeeze(self)
 
     def rechunk(self, chunks):
+        """ See da.rechunk for docstring """
         from .rechunk import rechunk
         return rechunk(self, chunks)
 
@@ -2614,3 +2618,80 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
         return (dot(X.T, X.conj()) / fact).squeeze()
     else:
         return (dot(X, X.T.conj()) / fact).squeeze()
+
+
+def to_npy_stack(dirname, x, axis=0):
+    """ Write dask array to a stack of .npy files
+
+    This partitions the dask.array along one axis and stores each block along
+    that axis as a single .npy file in the specified directory
+
+    Example
+    -------
+
+    >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
+    >>> da.to_npy_stack('data/', x, axis=0)  # doctest: +SKIP
+
+    $ tree data/
+    data/
+    |-- 0.npy
+    |-- 1.npy
+    |-- 2.npy
+    |-- info
+
+    The ``.npy`` files store numpy arrays for ``x[0:2], x[2:4], and x[4:5]``
+    respectively, as is specified by the chunk size along the zeroth axis.  The
+    info file stores the dtype, chunks, and axis information of the array.
+
+    You can load these stacks with the ``da.from_npy_stack`` function.
+
+    >>> y = da.from_npy_stack('data/')  # doctest: +SKIP
+
+    See also:
+        from_npy_stack
+    """
+
+    chunks = tuple((c if i == axis else (sum(c),))
+                   for i, c in enumerate(x.chunks))
+    xx = x.rechunk(chunks)
+
+    if not os.path.exists(dirname):
+        os.path.mkdir(dirname)
+
+    meta = {'chunks': chunks, 'dtype': x.dtype, 'axis': axis}
+
+    with open(os.path.join(dirname, 'info'), 'wb') as f:
+        pickle.dump(meta, f)
+
+    name = 'to-npy-stack-' + str(uuid.uuid1())
+    dsk = dict(((name, i), (np.save, os.path.join(dirname, '%d.npy' % i), key))
+              for i, key in enumerate(core.flatten(xx._keys())))
+
+    Array._get(merge(dsk, xx.dask), list(dsk))
+
+def from_npy_stack(dirname, mmap_mode='r'):
+    """ Load dask array from stack of npy files
+
+    See ``da.to_npy_stack`` for docstring
+
+    Parameters
+    ----------
+    dirname: string
+        Directory of .npy files
+    mmap_mode: (None or 'r')
+        Read data in memory map mode
+    """
+    with open(os.path.join(dirname, 'info'), 'rb') as f:
+        info = pickle.load(f)
+
+    dtype = info['dtype']
+    chunks = info['chunks']
+    axis = info['axis']
+
+    name = 'from-npy-stack-%s' % dirname
+    keys = list(product([name], *[range(len(c)) for c in chunks]))
+    values = [(np.load, os.path.join(dirname, '%d.npy' % i), mmap_mode)
+              for i in range(len(chunks[axis]))]
+    dsk = dict(zip(keys, values))
+
+    return Array(dsk, name, chunks, dtype)
