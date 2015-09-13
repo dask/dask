@@ -12,7 +12,8 @@ import dask
 from dask.async import get_sync
 from dask.utils import raises, ignoring
 import dask.dataframe as dd
-from dask.dataframe.core import (concat, repartition_divisions, _loc,
+
+from dask.dataframe.core import (repartition_divisions, _loc,
         _coerce_loc_index, aca, reduction, _concat, _Frame)
 
 
@@ -406,6 +407,17 @@ def test_arithmetics():
     ddf7 = dd.from_pandas(pdf7, 3)
     ddf8 = dd.from_pandas(pdf8, 4)
 
+    pdf9 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8],
+                         'b': [5, 6, 7, 8, 1, 2, 3, 4],
+                         'c': [5, 6, 7, 8, 1, 2, 3, 4]},
+                        index=list('aaabcdeh'))
+    pdf10 = pd.DataFrame({'b': [5, 6, 7, 8, 4, 3, 2, 1],
+                          'c': [2, 4, 5, 3, 4, 2, 1, 0],
+                          'd': [2, 4, 5, 3, 4, 2, 1, 0]},
+                        index=list('abcdefgh'))
+    ddf9 = dd.from_pandas(pdf9, 3)
+    ddf10 = dd.from_pandas(pdf10, 4)
+
     # Arithmetics with different index
     cases = [(ddf5, ddf6, pdf5, pdf6),
              (ddf5.repartition([0, 9]), ddf6, pdf5, pdf6),
@@ -416,8 +428,12 @@ def test_arithmetics():
               pdf7, pdf8),
              (ddf7.repartition(['a', 'b', 'e', 'h']),
               ddf8.repartition(['a', 'e', 'h']), pdf7, pdf8),
+             (ddf9, ddf10, pdf9, pdf10),
+             (ddf9.repartition(['a', 'c', 'h']), ddf10.repartition(['a', 'h']),
+              pdf9, pdf10),
              # dask + pandas
-             (ddf5, pdf6, pdf5, pdf6), (ddf7, pdf8, pdf7, pdf8)]
+             (ddf5, pdf6, pdf5, pdf6), (ddf7, pdf8, pdf7, pdf8),
+             (ddf9, pdf10, pdf9, pdf10)]
 
     for (l, r, el, er) in cases:
         check_series_arithmetics(l.a, r.b, el.a, er.b,

@@ -19,7 +19,7 @@ from .. import array as da
 from ..async import get_sync
 
 from . import core
-from .core import DataFrame, Series, concat, categorize_block
+from .core import DataFrame, Series, categorize_block
 from .shuffle import set_partition
 
 
@@ -149,6 +149,7 @@ def read_csv(fn, *args, **kwargs):
 
     # Handle glob strings
     if '*' in fn:
+        from .multi import concat
         return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
 
     token = tokenize(os.path.getmtime(fn), args, kwargs)

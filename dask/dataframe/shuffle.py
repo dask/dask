@@ -151,7 +151,7 @@ def _set_collect(group, p, barrier_token, columns):
         assert columns is not None, columns
         # when unable to get group, create dummy DataFrame
         # which has the same columns as original
-        return pd.DataFrame([], columns=columns)
+        return pd.DataFrame(columns=columns)
 
 
 def shuffle(df, index, npartitions=None):
@@ -221,7 +221,7 @@ def partition(df, index, npartitions, p):
     rng = pd.Series(np.arange(len(df)))
     if isinstance(index, Iterator):
         index = list(index)
-    if not isinstance(index, (pd.Index, pd.core.generic.NDFrame)):
+    if not isinstance(index, (pd.Index, pd.Series, pd.DataFrame)):
         index = df[index]
 
     if isinstance(index, pd.Index):
