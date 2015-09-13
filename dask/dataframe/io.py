@@ -332,7 +332,7 @@ def from_array(x, chunksize=50000, columns=None):
     return DataFrame(dsk, name, columns, divisions)
 
 
-def from_pandas(data, npartitions):
+def from_pandas(data, npartitions, sort=True):
     """Construct a dask object from a pandas object.
 
     If given a ``pandas.Series`` a ``dask.Series`` will be returned. If given a
@@ -385,10 +385,14 @@ def from_pandas(data, npartitions):
         raise TypeError("Input must be a pandas DataFrame or Series")
     nrows = len(data)
     chunksize = int(ceil(nrows / npartitions))
-    data = data.sort_index(ascending=True)
-    divisions = tuple(data.index[i]
-                      for i in range(0, nrows, chunksize))
-    divisions = divisions + (data.index[-1],)
+    if sort and not data.index.is_monotonic_increasing:
+        data = data.sort_index(ascending=True)
+    if sort:
+        divisions = tuple(data.index[i]
+                          for i in range(0, nrows, chunksize))
+        divisions = divisions + (data.index[-1],)
+    else:
+        divisions = [None] * (npartitions + 1)
 
     name = 'from_pandas-' + tokenize(data, chunksize)
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
