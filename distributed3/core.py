@@ -149,6 +149,8 @@ def send_recv(ip_or_stream, port=None, reply=True, loop=None, **kwargs):
 
     response = yield send_recv(stream, op='ping', reply=True)
     """
+    if isinstance(ip_or_stream, tuple):
+        ip_or_stream, port = ip_or_stream
     if port is not None:
         given_ip_port = True
         stream = yield connect(ip_or_stream, port)
