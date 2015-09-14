@@ -1,8 +1,7 @@
 from tornado import gen, ioloop
-from tornado.tcpclient import TCPClient
 from multiprocessing import Process
 from distributed3.core import (read, write, pingpong, read_sync, write_sync,
-        Server, connect_sync, rpc)
+        Server, connect_sync, rpc, connect)
 from functools import partial
 
 
@@ -12,7 +11,7 @@ def test_server():
         server = Server({'ping': pingpong})
         server.listen(8887)
 
-        stream = yield TCPClient().connect('127.0.0.1', 8887)
+        stream = yield connect('127.0.0.1', 8887)
 
         yield write(stream, {'op': 'ping'})
         response = yield read(stream)

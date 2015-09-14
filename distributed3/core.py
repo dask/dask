@@ -12,6 +12,7 @@ from tornado.gen import Return
 from tornado.tcpserver import TCPServer
 from tornado.tcpclient import TCPClient
 from tornado.ioloop import IOLoop
+from tornado.iostream import StreamClosedError
 
 
 log = print
@@ -128,6 +129,17 @@ def write(stream, msg):
 def pingpong(stream):
     return b'pong'
 
+@gen.coroutine
+def connect(ip, port, timeout=1):
+    client = TCPClient()
+    try:
+        stream = yield client.connect(ip, port)
+        raise Return(stream)
+    except StreamClosedError:
+        if time() - start < timeout:
+            yield gen.sleep(0.01)
+        else:
+            raise
 
 @gen.coroutine
 def send_recv(ip_or_stream, port=None, reply=True, loop=None, **kwargs):
@@ -139,7 +151,7 @@ def send_recv(ip_or_stream, port=None, reply=True, loop=None, **kwargs):
     """
     if port is not None:
         given_ip_port = True
-        stream = yield TCPClient().connect(ip_or_stream, port)
+        stream = yield connect(ip_or_stream, port)
     else:
         given_ip_port = False
         stream = ip_or_stream
