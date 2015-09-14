@@ -5,6 +5,7 @@ from functools import partial
 from time import sleep
 
 from tornado import gen
+from tornado.gen import Return
 
 from .core import Server, read, write, rpc
 from .utils import ignoring
@@ -57,7 +58,6 @@ class Center(Server):
     @gen.coroutine
     def terminate(self, stream):
         self.stop()
-
 
     def register(self, stream, address=None, keys=(),
             ncores=None):
