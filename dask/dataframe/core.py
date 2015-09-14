@@ -1599,6 +1599,7 @@ def _maybe_from_pandas(dfs):
            else df for df in dfs]
     return dfs
 
+
 def _groupby_apply(df, ind, func):
     return df.groupby(ind).apply(func)
 

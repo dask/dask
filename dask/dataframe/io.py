@@ -7,9 +7,9 @@ import re
 import os
 from glob import glob
 from math import ceil
-from toolz import merge, dissoc, assoc
+from toolz import merge, assoc
 from operator import getitem
-from hashlib import md5
+from fnmatch import fnmatch
 import uuid
 
 from ..compatibility import BytesIO, unicode, range, apply
@@ -631,32 +631,113 @@ This HDFStore is not partitionable and can only be use monolithically with
 pandas.  In the future when creating HDFStores use the ``format='table'``
 option to ensure that your dataset can be parallelized"""
 
+read_hdf_error_msg = """
+The start and stop keywords are not supported when reading from more than
+one file/dataset.
+
+The combination is ambiguous because it could be interpreted as the starting
+and stopping index per file, or starting and stopping index of the global
+dataset."""
+
+def _read_single_hdf(path, key, start=0, stop=None, columns=None,
+                     chunksize=int(1e6)):
+    """
+    Read a single hdf file into a dask.dataframe. Used for each file in
+    read_hdf.
+    """
+    def get_keys_and_stops(path, key, stop):
+        """
+        Get the "keys" or group identifiers which match the given key, which
+        can contain wildcards. This uses the hdf file identified by the
+        given path. Also get the index of the last row of data for each matched
+        key.
+        """
+        with pd.HDFStore(path) as hdf:
+            keys = [k for k in hdf.keys() if fnmatch(k, key)]
+            stops = []
+            for k in keys:
+                storer = hdf.get_storer(k)
+                if storer.format_type != 'table':
+                    raise TypeError(dont_use_fixed_error_message)
+                if stop is None:
+                    stops.append(storer.nrows)
+                else:
+                    stops.append(stop)
+        return keys, stops
+
+    def one_path_one_key(path, key, start, stop, columns, chunksize):
+        """
+        Get the data frame corresponding to one path and one key (which should
+        not contain any wildcards).
+        """
+        if columns is None:
+            columns = list(pd.read_hdf(path, key, stop=0).columns)
+
+        token = tokenize((path, os.path.getmtime(path), key, start,
+                          stop, columns, chunksize))
+        name = 'read-hdf-' + token
+
+        dsk = dict(((name, i), (apply, pd.read_hdf,
+                                 (path, key),
+                                 {'start': s, 'stop': s + chunksize,
+                                  'columns': columns}))
+                    for i, s in enumerate(range(start, stop, chunksize)))
+
+        divisions = [None] * (len(dsk) + 1)
+        return DataFrame(dsk, name, columns, divisions)
+
+    keys, stops = get_keys_and_stops(path, key, stop)
+    if (start != 0 or stop is not None) and len(keys) > 1:
+        raise NotImplementedError(read_hdf_error_msg)
+    from .multi import concat
+    return concat([one_path_one_key(path, k, start, s, columns, chunksize)
+                   for k, s in zip(keys, stops)])
+
+
 @wraps(pd.read_hdf)
-def read_hdf(path_or_buf, key, start=0, stop=None, columns=None,
-        chunksize=1000000):
-    with pd.HDFStore(path_or_buf) as hdf:
-        storer = hdf.get_storer(key)
-        if storer.format_type != 'table':
-            raise TypeError(dont_use_fixed_error_message)
-        if stop is None:
-            stop = storer.nrows
+def read_hdf(pattern, key, start=0, stop=None, columns=None,
+             chunksize=1000000):
+    """
+    Read hdf files into a dask dataframe. Like pandas.read_hdf, except it we
+    can read multiple files, and read multiple keys from the same file by using
+    pattern matching.
 
-    if columns is None:
-        columns = list(pd.read_hdf(path_or_buf, key, stop=0).columns)
+    Parameters
+    ----------
+    pattern : pattern (string), or buffer to read from. Can contain wildcards
+    key : group identifier in the store. Can contain wildcards
+    start : optional, integer (defaults to 0), row number to start at
+    stop : optional, integer (defaults to None, the last row), row number to
+        stop at
+    columns : optional, a list of columns that if not None, will limit the
+        return columns
+    chunksize : optional, nrows to include in iteration, return an iterator
 
-    token = tokenize((path_or_buf, os.path.getmtime(path_or_buf), key, start,
-                      stop, columns, chunksize))
-    name = 'read-hdf-' + token
+    Returns
+    -------
+    dask.DataFrame
 
-    dsk = dict(((name, i), (apply, pd.read_hdf,
-                             (path_or_buf, key),
-                             {'start': s, 'stop': s + chunksize,
-                              'columns': columns}))
-                for i, s in enumerate(range(start, stop, chunksize)))
+    Examples
+    --------
+    Load single file
 
-    divisions = [None] * (len(dsk) + 1)
+    >>> dd.read_hdf('myfile.1.hdf5', '/x')  # doctest: +SKIP
 
-    return DataFrame(dsk, name, columns, divisions)
+    Load multiple files
+
+    >>> dd.read_hdf('myfile.*.hdf5', '/x')  # doctest: +SKIP
+
+    Load multiple datasets
+
+    >>> dd.read_hdf('myfile.1.hdf5', '/*')  # doctest: +SKIP
+    """
+    paths = sorted(glob(pattern))
+    if (start != 0 or stop is not None) and len(paths) > 1:
+        raise NotImplementedError(read_hdf_error_msg)
+    from .multi import concat
+    return concat([_read_single_hdf(path, key, start=start, stop=stop,
+                                    columns=columns, chunksize=chunksize)
+                   for path in paths])
 
 
 def to_castra(df, fn=None, categories=None, sorted_index_column=None,

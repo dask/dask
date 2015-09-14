@@ -495,8 +495,10 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
         dfs = [dfs]
     if len(dfs) == 0:
         raise ValueError('Input must be a list longer than 0')
+    if len(dfs) == 1:
+        return dfs[0]
 
-    if not join in ('inner', 'outer'):
+    if join not in ('inner', 'outer'):
         raise ValueError("'join' must be 'inner' or 'outer'")
 
     axis = DataFrame._validate_axis(axis)
