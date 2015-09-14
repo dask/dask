@@ -3,7 +3,7 @@ from operator import add, mul, getitem
 from toolz import partial, identity
 from dask.utils import raises
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
-        dealias, equivalent, sync_keys, merge_sync, fuse_getitem)
+        dealias, equivalent, sync_keys, merge_sync, fuse_getitem, fuse_selections)
 
 
 def inc(x):
@@ -320,5 +320,16 @@ def test_fuse_getitem():
     dsk = {'x': (load, 'store', 'part', ['a', 'b']),
            'y': (getitem, 'x', 'a')}
     dsk2 = fuse_getitem(dsk, load, 3)
+    dsk2 = cull(dsk2, 'y')
+    assert dsk2 == {'y': (load, 'store', 'part', 'a')}
+
+
+def test_fuse_selections():
+    def load(*args):
+        pass
+    dsk = {'x': (load, 'store', 'part', ['a', 'b']),
+           'y': (getitem, 'x', 'a')}
+    merge = lambda t1, t2: (load, t2[1], t2[2], t1[2])
+    dsk2 = fuse_selections(dsk, getitem, load, merge)
     dsk2 = cull(dsk2, 'y')
     assert dsk2 == {'y': (load, 'store', 'part', 'a')}
