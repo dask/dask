@@ -626,86 +626,70 @@ class _Frame(Base):
                 return DataFrame(dask, name, num.columns,
                                  quantiles[0].divisions)
 
-    def _cum_agg(self, token, chunk, aggregate, agginit):
+    def _cum_agg(self, token, chunk, aggregate, agginit, axis):
         """ Wrapper for cumulative operation """
-        # cumulate each partitions
-        name1 = '{0}{1}-map'.format(self._token_prefix, token)
-        cumpart = map_partitions(chunk, self.column_info, self, token=name1)
-        # take last element of each cumulated partitions
-        name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
-        cumlast = map_partitions(lambda x: x.iloc[-1],
-                                 self.column_info, cumpart, token=name2)
 
-        name = '{0}{1}'.format(self._token_prefix, token)
-        cname = '{0}{1}-cum-last'.format(self._token_prefix, token)
+        axis = self._validate_axis(axis)
 
-        # aggregate cumulated partisions and its previous last element
-        dask = {}
-        if isinstance(self, DataFrame):
-            agginit = pd.Series(agginit, index=self.column_info)
-        dask[(cname, 0)] = agginit
-        dask[(name, 0)] = (cumpart._name, 0)
-        for i in range(1, self.npartitions):
-            # store each cumulative step to graph to reduce computation
-            dask[(cname, i)] = (aggregate, (cname, i - 1),
-                                (cumlast._name, i - 1))
-            dask[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
-        return self._constructor(merge(dask, cumpart.dask, cumlast.dask),
-                                 name, self.column_info, self.divisions)
+        if axis == 1:
+            name = '{0}{1}(axis=1)'.format(self._token_prefix, token)
+            return map_partitions(chunk, self.column_info, self, 1, token=name)
+
+        else:
+            # cumulate each partitions
+            name1 = '{0}{1}-map'.format(self._token_prefix, token)
+            cumpart = map_partitions(chunk, self.column_info, self, token=name1)
+            # take last element of each cumulated partitions
+            name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
+            cumlast = map_partitions(lambda x: x.iloc[-1],
+                                     self.column_info, cumpart, token=name2)
+
+            name = '{0}{1}'.format(self._token_prefix, token)
+            cname = '{0}{1}-cum-last'.format(self._token_prefix, token)
+
+            # aggregate cumulated partisions and its previous last element
+            dask = {}
+            if isinstance(self, DataFrame):
+                agginit = pd.Series(agginit, index=self.column_info)
+            dask[(cname, 0)] = agginit
+            dask[(name, 0)] = (cumpart._name, 0)
+            for i in range(1, self.npartitions):
+                # store each cumulative step to graph to reduce computation
+                dask[(cname, i)] = (aggregate, (cname, i - 1),
+                                    (cumlast._name, i - 1))
+                dask[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
+            return self._constructor(merge(dask, cumpart.dask, cumlast.dask),
+                                     name, self.column_info, self.divisions)
 
     @wraps(pd.DataFrame.cumsum)
     def cumsum(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            name = '{0}cumsum(axis=1)'.format(self._token_prefix)
-            return map_partitions(self._partition_type.cumsum,
-                                  self.column_info, self, 1, token=name)
-        else:
-            return self._cum_agg('cumsum', self._partition_type.cumsum,
-                                 operator.add, 0)
+        return self._cum_agg('cumsum', self._partition_type.cumsum,
+                             operator.add, 0, axis=axis)
 
     @wraps(pd.DataFrame.cumprod)
     def cumprod(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            name = '{0}cumprod(axis=1)'.format(self._token_prefix)
-            return map_partitions(self._partition_type.cumprod,
-                                  self.column_info, self, 1, token=name)
-        else:
-           return self._cum_agg('cumprod', self._partition_type.cumprod,
-                                 operator.mul, 1)
+        return self._cum_agg('cumprod', self._partition_type.cumprod,
+                             operator.mul, 1, axis=axis)
 
     @wraps(pd.DataFrame.cummax)
     def cummax(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            name = '{0}cummax(axis=1)'.format(self._token_prefix)
-            return map_partitions(self._partition_type.cummax,
-                                  self.column_info, self, 1, token=name)
-        else:
-            def aggregate(x, y):
-                if isinstance(x, (pd.Series, pd.DataFrame)):
-                    return x.where(x > y, y, axis=x.ndim - 1)
-                else:       # scalsr
-                    return x if x > y else y
-            return self._cum_agg('cummax', self._partition_type.cummax,
-                                 aggregate, np.nan)
+        def aggregate(x, y):
+            if isinstance(x, (pd.Series, pd.DataFrame)):
+                return x.where(x > y, y, axis=x.ndim - 1)
+            else:       # scalar
+                return x if x > y else y
+        return self._cum_agg('cummax', self._partition_type.cummax,
+                             aggregate, np.nan, axis=axis)
 
     @wraps(pd.DataFrame.cummin)
     def cummin(self, axis=None):
-        axis = self._validate_axis(axis)
-        if axis == 1:
-            name = '{0}cummin(axis=1)'.format(self._token_prefix)
-            return map_partitions(self._partition_type.cummin,
-                                  self.column_info, self, 1, token=name)
-        else:
-            def aggregate(x, y):
-                if isinstance(x, (pd.Series, pd.DataFrame)):
-                    return x.where(x < y, y, axis=x.ndim - 1)
-                else:       # scalar
-                    return x if x < y else y
-            return self._cum_agg('cummin', self._partition_type.cummin,
-                                 aggregate, np.nan)
+        def aggregate(x, y):
+            if isinstance(x, (pd.Series, pd.DataFrame)):
+                return x.where(x < y, y, axis=x.ndim - 1)
+            else:       # scalar
+                return x if x < y else y
+        return self._cum_agg('cummin', self._partition_type.cummin,
+                             aggregate, np.nan, axis=axis)
 
     @classmethod
     def _bind_operator_method(cls, name, op):
