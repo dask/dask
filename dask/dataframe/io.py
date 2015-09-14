@@ -689,6 +689,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
     keys, stops = get_keys_and_stops(path, key, stop)
     if (start != 0 or stop is not None) and len(keys) > 1:
         raise NotImplementedError(read_hdf_error_msg)
+    from .multi import concat
     return concat([one_path_one_key(path, k, start, s, columns, chunksize)
                    for k, s in zip(keys, stops)])
 
@@ -733,6 +734,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
+    from .multi import concat
     return concat([_read_single_hdf(path, key, start=start, stop=stop,
                                     columns=columns, chunksize=chunksize)
                    for path in paths])
