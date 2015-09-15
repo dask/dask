@@ -55,3 +55,6 @@ def test_castra_column_store():
 
         assert dsk == {(df2._name, 0): (Castra.load_partition, c, '0--2',
                                             (list, ['x']))}
+        df3 = df.index
+        dsk = dd.optimize(df3.dask, df3._keys())
+        assert dsk == {(df3._name, 0): (Castra.load_index, c, '0--2')}

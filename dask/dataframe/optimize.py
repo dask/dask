@@ -1,15 +1,15 @@
 """ Dataframe optimizations """
 
-a, b, c, d, e = '~a', '~b', '~c', '~d', '~e'
-from ..rewrite import RuleSet, RewriteRule
 from .io import dataframe_from_ctable
-from ..optimize import cull, inline_functions, fuse_getitem
-from ..core import istask
-from ..utils import ignoring
+from ..optimize import cull, fuse_getitem, fuse_selections
 from .. import core
-from toolz import valmap
-from operator import getitem
-import operator
+
+
+def fuse_castra_index(dsk):
+    from castra import Castra
+    def merge(a, b):
+        return (Castra.load_index, b[1], b[2]) if a[2] == 'index' else a
+    return fuse_selections(dsk, getattr, Castra.load_partition, merge)
 
 
 def optimize(dsk, keys, **kwargs):
@@ -20,8 +20,9 @@ def optimize(dsk, keys, **kwargs):
     try:
         from castra import Castra
         dsk3 = fuse_getitem(dsk2, Castra.load_partition, 3)
+        dsk4 = fuse_castra_index(dsk3)
     except ImportError:
-        dsk3 = dsk2
-    dsk4 = fuse_getitem(dsk3, dataframe_from_ctable, 3)
-    dsk5 = cull(dsk4, keys)
-    return dsk5
+        dsk4 = dsk2
+    dsk5 = fuse_getitem(dsk4, dataframe_from_ctable, 3)
+    dsk6 = cull(dsk5, keys)
+    return dsk6

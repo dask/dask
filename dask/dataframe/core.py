@@ -248,7 +248,7 @@ class _Frame(Base):
                    token='drop-duplicates')
 
     def __len__(self):
-        return reduction(self, len, np.sum, token='len').compute()
+        return reduction(self.index, len, np.sum, token='len').compute()
 
     def map_partitions(self, func, columns=no_default, *args, **kwargs):
         """ Apply Python function on each DataFrame block
