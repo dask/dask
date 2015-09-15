@@ -201,7 +201,7 @@ def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
     """ Guess if csv file has a header or not
 
     This uses Pandas to read a sample of the file, then looks at the column
-    names to see if they are all word-like.
+    names to see if they are all phrase-like (words, potentially with spaces in between)
 
     Returns True or False
     """
@@ -211,7 +211,7 @@ def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
     except StopIteration:
         df = pd.read_csv(fn, encoding=encoding, compression=compression)
     return (len(df) > 0 and
-            all(re.match('^\s*\D\w*\s*$', n) for n in df.columns) and
+            all(re.match('^\s*\D[\w ]*\s*$', n) for n in df.columns) and
             not all(dt == 'O' for dt in df.dtypes))
 
 
@@ -261,7 +261,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
     if infer_header(fn, **kwargs):
         kwargs['header'] = 0
 
-    one_chunk = pd.read_csv(fn, *args, nrows=100, **kwargs)
+    one_chunk = pd.read_csv(fn, *args, **merge(kwargs, dict(nrows=100)))
 
     if categorize is not False:
         category_columns = [c for c in one_chunk.dtypes.index
@@ -271,7 +271,7 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
         category_columns = []
     cols = category_columns + ([index] if index else [])
 
-    dtypes = dict((c, one_chunk.dtypes[c]) for c in cols)
+    dtypes = dict((c, one_chunk.dtypes[c]) for c in cols if c not in kwargs.get('parse_dates', ()))
     d = read_csv(fn, *args, **merge(kwargs,
                                     dict(usecols=cols,
                                          parse_dates=None,
