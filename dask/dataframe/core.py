@@ -1817,6 +1817,9 @@ class SeriesGroupBy(_GroupBy):
                         .apply(pd.DataFrame.drop_duplicates, subset=self.key))
                 grouped.index = grouped.index.get_level_values(level=0)
             else:
+                if isinstance(index, np.ndarray):
+                    assert len(index) == len(df)
+                    index = pd.Series(index, index=df.index)
                 grouped = pd.concat([df, index], axis=1).drop_duplicates()
             return grouped
 
