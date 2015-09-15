@@ -221,7 +221,6 @@ def test_split_apply_combine_on_series():
 
     for ddkey, pdkey in [('b', 'b'), (d.b, full.b),
                          (d.b + 1, full.b + 1)]:
-        assert eq(d.groupby(ddkey).a.sum(), full.groupby(pdkey).a.sum())
         assert eq(d.groupby(ddkey).a.min(), full.groupby(pdkey).a.min())
         assert eq(d.groupby(ddkey).a.max(), full.groupby(pdkey).a.max())
         assert eq(d.groupby(ddkey).a.count(), full.groupby(pdkey).a.count())
@@ -233,6 +232,13 @@ def test_split_apply_combine_on_series():
         assert eq(d.groupby(ddkey).max(), full.groupby(pdkey).max())
         assert eq(d.groupby(ddkey).count(), full.groupby(pdkey).count())
         assert eq(d.groupby(ddkey).mean(), full.groupby(pdkey).mean())
+
+    for ddkey, pdkey in [(d.b, full.b), (d.b + 1, full.b + 1)]:
+        assert eq(d.a.groupby(ddkey).sum(), full.a.groupby(pdkey).sum(), check_names=False)
+        assert eq(d.a.groupby(ddkey).max(), full.a.groupby(pdkey).max(), check_names=False)
+        assert eq(d.a.groupby(ddkey).count(), full.a.groupby(pdkey).count(), check_names=False)
+        assert eq(d.a.groupby(ddkey).mean(), full.a.groupby(pdkey).mean(), check_names=False)
+        assert eq(d.a.groupby(ddkey).nunique(), full.a.groupby(pdkey).nunique(), check_names=False)
 
     for i in range(8):
         assert eq(d.groupby(d.b > i).a.sum(), full.groupby(full.b > i).a.sum())
