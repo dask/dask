@@ -1812,13 +1812,20 @@ class SeriesGroupBy(_GroupBy):
         def chunk(df, index):
             # we call set_index here to force a possibly duplicate index
             # for our reduce step
-            grouped = (df.groupby(index)
-                .apply(pd.DataFrame.drop_duplicates, subset=self.key))
-            grouped.index = grouped.index.get_level_values(level=0)
+            if isinstance(df, pd.DataFrame):
+                grouped = (df.groupby(index)
+                        .apply(pd.DataFrame.drop_duplicates, subset=self.key))
+                grouped.index = grouped.index.get_level_values(level=0)
+            else:
+                grouped = df.groupby(index).apply(pd.Series.drop_duplicates)
+                grouped.index = index
             return grouped
 
         def agg(df):
-            return df.groupby(level=0)[self.key].nunique()
+            if isinstance(df, pd.DataFrame):
+                return df.groupby(level=0)[self.key].nunique()
+            else:
+                return df.groupby(level=0).nunique()
 
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=self.key,
