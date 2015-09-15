@@ -40,6 +40,7 @@ def _test_cluster(f):
                 yield a._close()
             with ignoring():
                 yield b._close()
+            c.stop()
 
     IOLoop.current().run_sync(g)
 
@@ -191,3 +192,17 @@ def test_close_worker_cleanly_before_map():
 
         assert list(p.available_cores.keys()) == [('127.0.0.1', b['port'])]
         p.close()
+
+
+def test_collect_from_dead_worker():
+    @gen.coroutine
+    def f(c, a, b, p):
+        remote = yield p._scatter(range(10))
+        yield a._close()
+        try:
+            local = yield p._gather(remote)
+            assert False
+        except KeyError:
+            pass
+
+    _test_cluster(f)
