@@ -50,6 +50,8 @@ def test_worker():
         a_stream.close()
         yield a._close()
 
+        assert a.address not in c.ncores and b.address in c.ncores
+
         assert list(c.ncores.keys()) == [(b.ip, b.port)]
 
         b_stream.close()

@@ -62,7 +62,11 @@ class Server(TCPServer):
                 else:
                     result = yield gen.maybe_future(handler(stream, **msg))
                 if reply:
-                    yield write(stream, result)
+                    try:
+                        yield write(stream, result)
+                    except StreamClosedError:
+                        log("Lost connection: %s" % str(address))
+                        break
                 if close:
                     break
         finally:
@@ -146,7 +150,7 @@ def connect(ip, port, timeout=1):
             raise
 
 @gen.coroutine
-def send_recv(ip_or_stream, port=None, reply=True, loop=None, **kwargs):
+def send_recv(ip_or_stream, port=None, reply=True, **kwargs):
     """ Send and recv with a stream
 
     Keyword arguments turn into the message
@@ -173,6 +177,11 @@ def send_recv(ip_or_stream, port=None, reply=True, loop=None, **kwargs):
     if kwargs['close']:
         stream.close()
     raise Return(response)
+
+
+def send_recv_sync(ip_or_stream, port=None, reply=True, **kwargs):
+    return IOLoop.current().run_sync(
+            lambda: send_recv(ip_or_stream, port, reply, **kwargs))
 
 
 class rpc(object):

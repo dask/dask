@@ -1,11 +1,12 @@
 from operator import add
-from time import time
+from time import time, sleep
 from toolz import merge
 
 from distributed3 import Center, Worker, Pool
 from distributed3.pool import divide_tasks, RemoteData
 from distributed3.utils import ignoring
-from distributed3.core import connect_sync, read_sync, write_sync
+from distributed3.core import (connect_sync, read_sync, write_sync,
+        send_recv_sync)
 from contextlib import contextmanager
 from multiprocessing import Process
 
@@ -149,25 +150,44 @@ def cluster():
             break
 
     try:
-        yield 8010, 8011, 8012
+        yield {'proc': center, 'port': 8010}, [{'proc': a, 'port': 8011},
+                                               {'proc': b, 'port': 8012}]
     finally:
-        center.terminate()
-        a.terminate()
-        b.terminate()
+        with ignoring():
+            a.terminate()
+        with ignoring():
+            b.terminate()
+        with ignoring():
+            center.terminate()
 
 
 def test_cluster():
-    with cluster() as (c, a, b):
+    with cluster() as (c, [a, b]):
         pass
 
 
 def test_pool_synchronous():
-    with cluster() as (c, a, b):
-        pool = Pool('127.0.0.1', c)
+    with cluster() as (c, [a, b]):
+        pool = Pool('127.0.0.1', c['port'])
         pool.sync_center()
-        assert pool.available_cores == {('127.0.0.1', a): 1,
-                                        ('127.0.0.1', b): 1}
+        assert pool.available_cores == {('127.0.0.1', a['port']): 1,
+                                        ('127.0.0.1', b['port']): 1}
 
         data = pool.map(lambda x: x * 10, [1, 2, 3])
         results = pool.gather(data)
         assert results == [10, 20, 30]
+
+
+def test_close_worker_cleanly_before_map():
+    with cluster() as (c, [a, b]):
+        p = Pool('127.0.0.1', c['port'])
+
+        send_recv_sync('127.0.0.1', a['port'], op='terminate')
+
+        while len(send_recv_sync('127.0.0.1', c['port'], op='ncores')) > 1:
+            sleep(0.01)
+
+        result = p.map(lambda x: x + 1, range(3))
+
+        assert list(p.available_cores.keys()) == [('127.0.0.1', b['port'])]
+        p.close()

@@ -90,7 +90,7 @@ class Worker(Server):
         self.status = 'closed'
 
     @gen.coroutine
-    def terminate(self, reader, writer):
+    def terminate(self, stream):
         yield self._close()
 
     @property

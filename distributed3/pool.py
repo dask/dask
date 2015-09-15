@@ -45,7 +45,6 @@ class Pool(object):
         self.center_ip = center_ip
         self.center_port = center_port
         self._open_streams = set()
-        self.ioloop = IOLoop.current()
 
     @gen.coroutine
     def _sync_center(self):
@@ -79,7 +78,7 @@ class Pool(object):
 
         for worker, count in self.available_cores.items():
             for i in range(count):
-                self.ioloop.spawn_callback(handle_worker,
+                IOLoop.current().spawn_callback(handle_worker,
                     self.who_has, self.has_what, tasks, shares, extra, remaining,
                     running, finished, output, worker, computation_done,
                     self.center_ip, self.center_port)

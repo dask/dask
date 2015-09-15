@@ -15,18 +15,18 @@ no_default = '__no_default__'
 
 
 @gen.coroutine
-def collect_from_center(stream, needed=[], loop=None):
+def collect_from_center(stream, needed=[]):
     """ Collect data from peers """
     needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
     who_has = yield rpc(stream).who_has(keys=needed)
     assert set(who_has) == set(needed)
 
-    result = yield collect_from_workers(who_has, loop=loop)
+    result = yield collect_from_workers(who_has)
     raise Return([result[key] for key in needed])
 
 
 @gen.coroutine
-def collect_from_workers(who_has, loop=None):
+def collect_from_workers(who_has):
     """ Collect data from peers """
     d = defaultdict(list)
     for key, addresses in who_has.items():
@@ -36,7 +36,7 @@ def collect_from_workers(who_has, loop=None):
             raise KeyError('No workers found that have key: %s' % key)
         d[addr].append(key)
 
-    results = yield [rpc(*addr).get_data(keys=keys, loop=loop)
+    results = yield [rpc(*addr).get_data(keys=keys)
                         for addr, keys in d.items()]
 
     # TODO: make resilient to missing workers
@@ -58,10 +58,9 @@ class RemoteData(object):
     >>> rd.get()  # doctest: +SKIP
     10
     """
-    def __init__(self, key, center_ip, center_port, loop=None, status=None,
-            result=no_default):
+    def __init__(self, key, center_ip, center_port, status=None,
+                       result=no_default):
         self.key = key
-        self.loop = loop
         self.status = status
         self.center_ip = center_ip
         self.center_port = center_port
@@ -104,7 +103,7 @@ class RemoteData(object):
     """
 
 @gen.coroutine
-def scatter_to_center(ip, port, data, key=None, loop=None):
+def scatter_to_center(ip, port, data, key=None):
     """ Scatter data to workers
 
     See also:
@@ -112,12 +111,12 @@ def scatter_to_center(ip, port, data, key=None, loop=None):
     """
     ncores = yield rpc(ip, port).ncores()
 
-    result = yield scatter_to_workers(ip, port, ncores, data, key=key, loop=loop)
+    result = yield scatter_to_workers(ip, port, ncores, data, key=key)
     raise Return(result)
 
 
 @gen.coroutine
-def scatter_to_workers(ip, port, ncores, data, key=None, loop=None):
+def scatter_to_workers(ip, port, ncores, data, key=None):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
@@ -142,7 +141,7 @@ def scatter_to_workers(ip, port, ncores, data, key=None, loop=None):
 
     yield [rpc(*w).update_data(data=v) for w, v in d.items()]
 
-    result = [RemoteData(b, ip, port, loop, result=c)
+    result = [RemoteData(b, ip, port, result=c)
                 for a, b, c in L]
 
     raise Return(result)
