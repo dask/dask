@@ -1411,7 +1411,8 @@ def elemwise_property(attr, s):
     return map_partitions(getattr, s.name, s, attr)
 
 for name in ['nanosecond', 'microsecond', 'millisecond', 'second', 'minute',
-        'hour', 'day', 'week', 'month', 'quarter', 'year']:
+             'hour', 'day', 'dayofweek', 'dayofyear', 'week', 'weekday',
+             'weekofyear', 'month', 'quarter', 'year']:
     setattr(Index, name, property(partial(elemwise_property, name)))
 
 
