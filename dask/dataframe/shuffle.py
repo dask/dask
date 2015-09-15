@@ -19,6 +19,12 @@ def set_index(df, index, npartitions=None, compute=True, **kwargs):
     This shuffles and repartitions your data.  If done in parallel the
     resulting order is non-deterministic.
     """
+    if isinstance(index, (DataFrame, tuple, list)):
+        raise NotImplementedError(
+            "Dask dataframe does not yet support multi-indexes.\n"
+            "You tried to index with this index: %s\n"
+            "Indexes must be single columns only." % str(index))
+
     npartitions = npartitions or df.npartitions
     if not isinstance(index, Series):
         index2 = df[index]
