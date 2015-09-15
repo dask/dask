@@ -226,3 +226,25 @@ def test_failing_job():
             pass
 
     _test_cluster(f)
+
+
+def test_job_kills_node():
+    with cluster() as (c, [a, b]):
+        def f(x):
+            sleep(0.1)
+            return x + 1
+
+        @gen.coroutine
+        def kill_a():
+            yield gen.sleep(0.5)
+            a['proc'].terminate()
+
+        @gen.coroutine
+        def g():
+            p = Pool('127.0.0.1', c['port'])
+
+            IOLoop.current().spawn_callback(kill_a)
+
+            results = yield p._map(f, range(20))
+
+        IOLoop.current().run_sync(g)

@@ -11,6 +11,7 @@ from tornado import gen
 from tornado.gen import Return
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
+from tornado.iostream import StreamClosedError
 
 from .core import read, write, connect, rpc
 from .client import RemoteData, scatter_to_workers, collect_from_center
@@ -68,7 +69,7 @@ class Pool(object):
                               needed=needed, index=i))
 
         output = [None for i in seq]
-        running, finished = set(), set()
+        running, finished, erred = set(), set(), set()
         needed = {i: task['needed'] for i, task in enumerate(tasks)}
         remaining = set(needed)
 
@@ -80,7 +81,8 @@ class Pool(object):
             for i in range(count):
                 IOLoop.current().spawn_callback(handle_worker,
                     self.who_has, self.has_what, tasks, shares, extra, remaining,
-                    running, finished, output, worker, computation_done,
+                    running, finished, erred,
+                    output, worker, computation_done,
                     self.center_ip, self.center_port)
 
         yield computation_done                         # wait until done
@@ -344,7 +346,7 @@ def handle_task(task, output, stream, center_ip, center_port):
 
 @gen.coroutine
 def handle_worker(who_has, has_what, tasks, shares, extra,
-                  remaining, running, finished,
+                  remaining, running, finished, erred,
                   output, ident, computation_done,
                   center_ip, center_port):
     """ Handle one core on one remote worker
@@ -401,7 +403,11 @@ def handle_worker(who_has, has_what, tasks, shares, extra,
             continue
 
         running.add(i)
-        yield _handle_task(tasks[i])
+        try:
+            yield _handle_task(tasks[i])
+        except StreamClosedError:
+            erred.add(i)
+            raise Return(None)
         mark_done(i)
 
         who_has[tasks[i]['key']].add(ident)
@@ -413,7 +419,11 @@ def handle_worker(who_has, has_what, tasks, shares, extra,
     while extra:                                # Process shared tasks
         i = extra.pop()
         running.add(i)
-        yield _handle_task(tasks[i])
+        try:
+            yield _handle_task(tasks[i])
+        except StreamClosedError:
+            erred.add(i)
+            raise Return(None)
         mark_done(i)
 
         who_has[tasks[i]['key']].add(ident)
@@ -427,7 +437,11 @@ def handle_worker(who_has, has_what, tasks, shares, extra,
             continue
 
         log("%s: Redundantly compute %s" % (str(ident), str(i)))
-        yield _handle_task(tasks[i])
+        try:
+            yield _handle_task(tasks[i])
+        except StreamClosedError:
+            erred.add(i)
+            raise Return(None)
         mark_done(i)
         who_has[tasks[i]['key']].add(ident)
         has_what[ident].add(tasks[i]['key'])
@@ -453,7 +467,24 @@ def handle_worker(who_has, has_what, tasks, shares, extra,
             break
 
         running.add(i)
-        yield _handle_task(tasks[i])
+        try:
+            yield _handle_task(tasks[i])
+        except StreamClosedError:
+            erred.add(i)
+            raise Return(None)
+        mark_done(i)
+
+        who_has[tasks[i]['key']].add(ident)
+        has_what[ident].add(tasks[i]['key'])
+
+    while erred:                                # Process errored tasks
+        i = erred.pop()
+        running.add(i)
+        try:
+            yield _handle_task(tasks[i])
+        except StreamClosedError:
+            erred.add(i)
+            raise Return(None)
         mark_done(i)
 
         who_has[tasks[i]['key']].add(ident)
