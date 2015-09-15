@@ -206,3 +206,23 @@ def test_collect_from_dead_worker():
             pass
 
     _test_cluster(f)
+
+
+def test_failing_job():
+    def g(x):
+        return 1 / x
+
+    @gen.coroutine
+    def f(c, a, b, p):
+        results = yield p._map(g, [2, 1, 0])
+
+        result = yield results[0]._get()
+        assert result == 1 / 2
+
+        try:
+            yield results[2]._get()
+            assert False
+        except ZeroDivisionError as e:
+            pass
+
+    _test_cluster(f)
