@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+
+from sys import argv, exit
+import socket
+
+try:
+    center_ip, center_port = argv[1].split(':')
+    center_port = int(center_port)
+except IndexError:
+    print("Usage: python dworker.py center-ip center-port")
+
+from distributed3.utils import get_ip
+ip = get_ip()
+
+
+# Set up signal handling
+import signal
+
+def handle_signal(sig, frame):
+    IOLoop.instance().add_callback(IOLoop.instance().stop)
+
+signal.signal(signal.SIGINT, handle_signal)
+signal.signal(signal.SIGTERM, handle_signal)
+
+
+from distributed3 import Worker
+from tornado.ioloop import IOLoop
+
+port = 8788
+while True:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(('127.0.0.1', port))
+    except socket.error:
+        print("Port %d taken.  Trying %d" % (port, port + 1))
+        port += 1
+    else:
+        sock.close()
+        break
+
+print("Start worker at %s:%d\nCenter at %s:%d" % 
+        (ip, port, center_ip, center_port))
+try:
+    worker = Worker(ip, port, center_ip, center_port)
+    worker.start()
+    IOLoop.current().start()
+except KeyboardInterrupt:
+    assert worker.status == 'closed'
+
+IOLoop.current().close()
+print("\nEnd worker at %s:%d\n" % (ip, port))

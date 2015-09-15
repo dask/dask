@@ -59,8 +59,7 @@ class Center(Server):
     def terminate(self, stream):
         self.stop()
 
-    def register(self, stream, address=None, keys=(),
-            ncores=None):
+    def register(self, stream, address=None, keys=(), ncores=None):
         self.has_what[address] = set(keys)
         self.ncores[address] = ncores
         print("Register %s" % str(address))

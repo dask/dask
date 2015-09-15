@@ -42,7 +42,11 @@ class Server(TCPServer):
         log("Connection from %s:%d" % address)
         try:
             while True:
-                msg = yield read(stream)
+                try:
+                    msg = yield read(stream)
+                except StreamClosedError:
+                    log("Lost connection: %s" % str(address))
+                    break
                 op = msg.pop('op')
                 close = msg.pop('close', False)
                 reply = msg.pop('reply', True)

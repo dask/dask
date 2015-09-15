@@ -9,10 +9,10 @@ import traceback
 from toolz import merge
 from tornado.gen import Return
 from tornado import gen
+from tornado.ioloop import IOLoop
 
 from .core import rpc, connect_sync, read_sync, write_sync, connect, Server
 from .client import collect_from_center
-
 
 _ncores = ThreadPool()._processes
 
@@ -78,6 +78,9 @@ class Worker(Server):
                 ncores=self.ncores, address=(self.ip, self.port))
         assert resp == b'OK'
         log('Registered with center')
+
+    def start(self):
+        IOLoop.current().add_callback(self._start)
 
     @gen.coroutine
     def _close(self):
