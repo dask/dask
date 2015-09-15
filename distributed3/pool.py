@@ -96,14 +96,15 @@ class Pool(object):
         raise Return(output)
 
     def map(self, func, seq, **kwargs):
-        return sync(self._map(func, seq, **kwargs), self.loop)
+        return IOLoop.current().run_sync(
+                lambda: self._map(func, seq, **kwargs))
 
     def sync_center(self):
         """ Get who_has and has_what dictionaries from a center
 
         In particular this tells us what workers we have at our disposal
         """
-        return sync(self._sync_center(), self.loop)
+        return IOLoop.current().run_sync(self._sync_center)
 
     @gen.coroutine
     def _close_connections(self):
@@ -114,15 +115,11 @@ class Pool(object):
                 result = yield r.close(close=True)
 
     def close_connections(self):
-        sync(self._close_connections(), self.loop)
-
+        return IOLoop.current().run_sync(self._close_connections)
 
     def close(self):
         """ Close the thread that manages our event loop """
         self.close_connections()
-        if hasattr(self, '_thread'):
-            self._kill_q.put('')
-            self._thread.join()
 
     @gen.coroutine
     def _apply_async(self, func, args=(), kwargs={}, key=None):
@@ -149,10 +146,11 @@ class Pool(object):
         If an arg or a kwarg is a ``RemoteData`` object then that data will be
         communicated as necessary among the ``Worker`` peers.
         """
-        return sync(self._apply_async(func, args, kwargs, key), self.loop)
+        return IOLoop.current().run_sync(
+                lambda: self._apply_async(args, kwargs, key))
 
     def apply(self, func, args=(), kwargs={}, key=None):
-        return self.apply_async(func, args, kwargs, key).get()
+        return self.apply(func, args, kwargs, key).get()
 
     @gen.coroutine
     def _scatter(self, data, key=None):
@@ -161,16 +159,17 @@ class Pool(object):
         raise Return(result)
 
     def scatter(self, data, key=None):
-        return sync(self._scatter(data, key), self.loop)
+        return IOLoop.current().run_sync(
+                lambda: self._scatter(data, key))
 
     @gen.coroutine
     def _gather(self, data):
-        result = yield collect_from_center(self.center_ip,
-                                           self.center_port, data)
+        result = yield collect_from_center((self.center_ip, self.center_port),
+                                          data)
         raise Return(result)
 
     def gather(self, data):
-        return sync(self._gather(data), self.loop)
+        return IOLoop.current().run_sync(lambda: self._gather(data))
 
 
 class PendingComputation(object):
@@ -226,10 +225,7 @@ class PendingComputation(object):
         raise Return(self._result)
 
     def get(self):
-        try:
-            return self._result
-        except AttributeError:
-            return sync(self._get(), self.loop)
+        return IOLoop.current().run_sync(self._get)
 
 
 def choose_worker(needed, who_has, has_what, available_cores):

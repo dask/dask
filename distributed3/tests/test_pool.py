@@ -5,7 +5,9 @@ from toolz import merge
 from distributed3 import Center, Worker, Pool
 from distributed3.pool import divide_tasks, RemoteData
 from distributed3.utils import ignoring
+from distributed3.core import connect_sync, read_sync, write_sync
 from contextlib import contextmanager
+from multiprocessing import Process
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -111,3 +113,61 @@ def test_workshare():
     assert extra == {4, 5}
 
 
+def run_center(port):
+    from distributed3 import Center
+    from tornado.ioloop import IOLoop
+    center = Center('127.0.0.1', port)
+    center.listen(port)
+    IOLoop.current().start()
+    IOLoop.current().close()
+
+
+def run_worker(port, center_port, **kwargs):
+    from distributed3 import Worker
+    from tornado.ioloop import IOLoop
+    worker = Worker('127.0.0.1', port, '127.0.0.1', center_port, **kwargs)
+    worker.start()
+    IOLoop.current().start()
+    IOLoop.current().close()
+
+
+@contextmanager
+def cluster():
+    center = Process(target=run_center, args=(8010,))
+    a = Process(target=run_worker, args=(8011, 8010), kwargs={'ncores': 1})
+    b = Process(target=run_worker, args=(8012, 8010), kwargs={'ncores': 1})
+
+    center.start()
+    a.start()
+    b.start()
+
+    sock = connect_sync('127.0.0.1', 8010)
+    while True:
+        write_sync(sock, {'op': 'ncores'})
+        ncores = read_sync(sock)
+        if len(ncores) == 2:
+            break
+
+    try:
+        yield 8010, 8011, 8012
+    finally:
+        center.terminate()
+        a.terminate()
+        b.terminate()
+
+
+def test_cluster():
+    with cluster() as (c, a, b):
+        pass
+
+
+def test_pool_synchronous():
+    with cluster() as (c, a, b):
+        pool = Pool('127.0.0.1', c)
+        pool.sync_center()
+        assert pool.available_cores == {('127.0.0.1', a): 1,
+                                        ('127.0.0.1', b): 1}
+
+        data = pool.map(lambda x: x * 10, [1, 2, 3])
+        results = pool.gather(data)
+        assert results == [10, 20, 30]
