@@ -1817,15 +1817,14 @@ class SeriesGroupBy(_GroupBy):
                         .apply(pd.DataFrame.drop_duplicates, subset=self.key))
                 grouped.index = grouped.index.get_level_values(level=0)
             else:
-                grouped = df.groupby(index).apply(pd.Series.drop_duplicates)
-                grouped.index = index
+                grouped = pd.concat([df, index], axis=1).drop_duplicates()
             return grouped
 
         def agg(df):
-            if isinstance(df, pd.DataFrame):
-                return df.groupby(level=0)[self.key].nunique()
+            if isinstance(self.df, Series):
+                return df.groupby(df.columns[1])[df.columns[0]].nunique()
             else:
-                return df.groupby(level=0).nunique()
+                return df.groupby(level=0)[self.key].nunique()
 
         return aca([self.df, self.index],
                    chunk=chunk, aggregate=agg, columns=self.key,

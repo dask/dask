@@ -212,7 +212,7 @@ def test_set_index():
 def test_split_apply_combine_on_series():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 6], 'b': [4, 2, 7]},
                                   index=[0, 1, 3]),
-           ('x', 1): pd.DataFrame({'a': [4, 2, 6], 'b': [3, 3, 1]},
+           ('x', 1): pd.DataFrame({'a': [4, 4, 6], 'b': [3, 3, 1]},
                                   index=[5, 6, 8]),
            ('x', 2): pd.DataFrame({'a': [4, 3, 7], 'b': [1, 1, 3]},
                                   index=[9, 9, 9])}
