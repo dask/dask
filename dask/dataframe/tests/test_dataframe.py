@@ -972,8 +972,10 @@ def test_reductions_non_numeric_dtypes():
     # test non-numric blocks
 
     def check_raises(d, p, func):
-        assert raises(TypeError, lambda: getattr(d, func)().compute())
-        assert raises(TypeError, lambda: getattr(p, func)())
+        assert raises((TypeError, ValueError),
+                      lambda: getattr(d, func)().compute())
+        assert raises((TypeError, ValueError),
+                      lambda: getattr(p, func)())
 
     pds = pd.Series(['a', 'b', 'c', 'd', 'e'])
     dds = dd.from_pandas(pds, 2)
@@ -1011,8 +1013,7 @@ def test_reductions_non_numeric_dtypes():
     # ToDo: pandas supports timedelta std, otherwise dask raises:
     # incompatible type for a datetime/timedelta operation [__pow__]
     # assert eq(dds.std(), pds.std())
-
-    check_raises(dds, pds, 'var')
+    # assert eq(dds.var(), pds.var())
 
     # ToDo: pandas supports timedelta std, otherwise dask raises:
     # TypeError: unsupported operand type(s) for *: 'float' and 'Timedelta'
