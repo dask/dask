@@ -34,7 +34,6 @@ def test_errors_propagate():
         result = get(dsk, 'x')
     except Exception as e:
         assert isinstance(e, ValueError)
-        assert "bad" in str(e)
         assert "12345" in str(e)
 
 

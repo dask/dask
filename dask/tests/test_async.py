@@ -148,25 +148,22 @@ def test_order_of_startstate():
     assert result['ready'] == ['b', 'y']
 
 
-def test_rerun_exceptions_locally():
-    counter = [0]
+def test_nonstandard_exceptions_propagate():
+    class MyException(Exception):
+        def __init__(self, a, b):
+            self.a = a
+            self.b = b
+
+        def __str__(self):
+            return "My Exception!"
+
     def f():
-        counter[0] += 1
-        raise Exception('TOKEN')
+        raise MyException(1, 2)
 
     from dask.threaded import get
+
     try:
         get({'x': (f,)}, 'x')
-    except Exception as e:
-        assert 'execute_task' in str(e).lower()
-
-    try:
-        get({'x': (f,)}, 'x', rerun_exceptions_locally=True)
-    except Exception as e:
-        assert 'execute_task' not in str(e).lower()
-
-    try:
-        with dask.set_options(rerun_exceptions_locally=True):
-            get({'x': (f,)}, 'x')
-    except Exception as e:
-        assert 'execute_task' not in str(e).lower()
+        assert False
+    except MyException as e:
+        assert e.a == 1 and e.b == 2
