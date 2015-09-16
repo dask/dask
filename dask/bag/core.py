@@ -39,6 +39,8 @@ tokens = ('-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
 
 system_encoding = getdefaultencoding()
+if system_encoding == 'ascii':
+    system_encoding = 'utf-8'
 
 no_default = '__no__default__'
 

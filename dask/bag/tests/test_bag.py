@@ -10,7 +10,8 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI, inline_singleton_lists, optimize, decode_sequence)
+        _parse_s3_URI, inline_singleton_lists, optimize, decode_sequence,
+        system_encoding)
 from dask.utils import filetexts, tmpfile, raises
 from dask.async import get_sync
 import dask
@@ -23,8 +24,6 @@ import partd
 from tempfile import mkdtemp
 
 from collections import Iterator
-
-system_encoding = getdefaultencoding()
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
@@ -678,6 +677,7 @@ class BagOfDicts(db.Bag):
             return d
         return self.map(setter)
 
+
 def test_bag_class_extend():
     dictbag = BagOfDicts(*db.from_sequence([{'a': {'b': 'c'}}])._args)
     assert dictbag.get('a').get('b').compute()[0] == 'c'
@@ -685,3 +685,11 @@ def test_bag_class_extend():
         {'b': 'c', 'd': 'EXTENSIBILITY!!!'}
     assert isinstance(dictbag.get('a').get('b'), BagOfDicts)
 
+
+def test_gh715():
+    bin_data = u'\u20ac'.encode('utf-8')
+    with tmpfile() as fn:
+        with open(fn, 'wb') as f:
+            f.write(bin_data)
+        a = db.from_filenames(fn)
+        assert a.compute()[0] == bin_data.decode('utf-8')
