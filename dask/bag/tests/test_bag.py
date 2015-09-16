@@ -10,7 +10,8 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI, inline_singleton_lists, optimize, decode_sequence)
+        _parse_s3_URI, inline_singleton_lists, optimize, decode_sequence,
+        system_encoding)
 from dask.utils import filetexts, tmpfile, raises
 from dask.async import get_sync
 import dask
@@ -23,8 +24,6 @@ import partd
 from tempfile import mkdtemp
 
 from collections import Iterator
-
-system_encoding = getdefaultencoding()
 
 dsk = {('x', 0): (range, 5),
        ('x', 1): (range, 5),
