@@ -32,7 +32,9 @@ def pprint_task(task, keys, label_size=60):
     ...        'b': 2,
     ...        'c': (add, 'a', 'b'),
     ...        'd': (add, (mul, 'a', 'b'), 'c'),
-    ...        'e': (sum, ['a', 'b', 5])}
+    ...        'e': (sum, ['a', 'b', 5]),
+    ...        'f': (add,),
+    ...        'g': []}
 
     >>> pprint_task(dsk['c'], dsk)
     'add(_, _)'
@@ -40,6 +42,10 @@ def pprint_task(task, keys, label_size=60):
     'add(mul(_, _), _)'
     >>> pprint_task(dsk['e'], dsk)
     'sum([_, _, *])'
+    >>> pprint_task(dsk['f'], dsk)
+    'add()'
+    >>> pprint_task(dsk['g'], dsk)
+    '[]'
     """
     if istask(task):
         func = task[0]
@@ -49,31 +55,34 @@ def pprint_task(task, keys, label_size=60):
         else:
             head = funcname(task[0])
             tail = ')'
-        label_size2 = int((label_size - len(head) - len(tail)) / len(task[1:]))
-        if label_size2 > 5:
-            args = ', '.join(pprint_task(t, keys, label_size2)
-                             for t in task[1:])
+        if task[1:]:
+            label_size2 = int((label_size - len(head) - len(tail)) / len(task[1:]))
+            if label_size2 > 5:
+                args = ', '.join(pprint_task(t, keys, label_size2)
+                                 for t in task[1:])
+            else:
+                args = '...'
         else:
-            args = '...'
-        result = '{0}({1}{2}'.format(head, args, tail)
+            args = ''
+        return '{0}({1}{2}'.format(head, args, tail)
     elif isinstance(task, list):
-        task2 = task[:3]
-        label_size2 = int((label_size - 2 - 2*len(task2)) / len(task2))
-        args = ', '.join(pprint_task(t, keys, label_size2) for t in task2)
-        if len(task) > 3:
-            result = '[{0}, ...]'.format(args)
+        if not task:
+            return '[]'
+        elif len(task) > 3:
+            result = pprint_task(task[:3], keys, label_size)
+            return result[:-1] + ', ...]'
         else:
-            result = '[{0}]'.format(args)
+            label_size2 = int((label_size - 2 - 2*len(task)) / len(task))
+            args = ', '.join(pprint_task(t, keys, label_size2) for t in task)
+            return '[{0}]'.format(args)
     else:
         try:
             if task in keys:
-                result = '_'
+                return '_'
             else:
-                result = '*'
+                return '*'
         except TypeError:
-            result = '*'
-
-    return result
+            return '*'
 
 
 def get_colors(palette, funcs):
