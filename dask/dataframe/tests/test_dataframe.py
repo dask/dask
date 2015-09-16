@@ -209,6 +209,14 @@ def test_set_index():
     assert str(d4.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
 
 
+def test_set_index_raises_error_on_bad_input():
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                        'b': [7, 6, 5, 4, 3, 2, 1]})
+    ddf = dd.from_pandas(df, 2)
+
+    assert raises(NotImplementedError, lambda: ddf.set_index(['a', 'b']))
+
+
 def test_split_apply_combine_on_series():
     dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 6], 'b': [4, 2, 7]},
                                   index=[0, 1, 3]),
