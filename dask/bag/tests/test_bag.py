@@ -677,6 +677,7 @@ class BagOfDicts(db.Bag):
             return d
         return self.map(setter)
 
+
 def test_bag_class_extend():
     dictbag = BagOfDicts(*db.from_sequence([{'a': {'b': 'c'}}])._args)
     assert dictbag.get('a').get('b').compute()[0] == 'c'
@@ -684,3 +685,11 @@ def test_bag_class_extend():
         {'b': 'c', 'd': 'EXTENSIBILITY!!!'}
     assert isinstance(dictbag.get('a').get('b'), BagOfDicts)
 
+
+def test_gh715():
+    bin_data = u'\u20ac'.encode('utf-8')
+    with tmpfile() as fn:
+        with open(fn, 'wb') as f:
+            f.write(bin_data)
+        a = db.from_filenames(fn)
+        assert a.compute()[0] == bin_data.decode('utf-8')
