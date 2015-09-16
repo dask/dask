@@ -14,7 +14,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
 from .core import read, write, connect, rpc
-from .client import RemoteData, scatter_to_workers, collect_from_center
+from .client import RemoteData, scatter_to_workers, gather_from_center
 
 
 log = print
@@ -165,7 +165,7 @@ class Pool(object):
 
     @gen.coroutine
     def _gather(self, data):
-        result = yield collect_from_center((self.center_ip, self.center_port),
+        result = yield gather_from_center((self.center_ip, self.center_port),
                                           data)
         raise Return(result)
 

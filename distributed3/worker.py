@@ -12,7 +12,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from .core import rpc, connect_sync, read_sync, write_sync, connect, Server
-from .client import collect_from_center
+from .client import gather_from_center
 
 _ncores = ThreadPool()._processes
 
@@ -104,10 +104,10 @@ class Worker(Server):
 
         needed = [n for n in needed if n not in self.data]
 
-        # Collect data from peers
+        # gather data from peers
         if needed:
-            log("Collect data from peers: %s" % str(needed))
-            other = yield collect_from_center(center, needed=needed)
+            log("gather data from peers: %s" % str(needed))
+            other = yield gather_from_center(center, needed=needed)
             data2 = merge(self.data, dict(zip(needed, other)))
         else:
             data2 = self.data

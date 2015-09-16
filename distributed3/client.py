@@ -15,19 +15,19 @@ no_default = '__no_default__'
 
 
 @gen.coroutine
-def collect_from_center(stream, needed=[]):
-    """ Collect data from peers """
+def gather_from_center(stream, needed=[]):
+    """ gather data from peers """
     needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
     who_has = yield rpc(stream).who_has(keys=needed)
     assert set(who_has) == set(needed)
 
-    result = yield collect_from_workers(who_has)
+    result = yield gather_from_workers(who_has)
     raise Return([result[key] for key in needed])
 
 
 @gen.coroutine
-def collect_from_workers(who_has):
-    """ Collect data from peers """
+def gather_from_workers(who_has):
+    """ gather data from peers """
     d = defaultdict(list)
     for key, addresses in who_has.items():
         try:

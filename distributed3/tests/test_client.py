@@ -7,7 +7,7 @@ from tornado.ioloop import IOLoop
 
 from distributed3 import Center, Worker
 from distributed3.client import (scatter_to_center, scatter_to_workers,
-        collect_from_center)
+        gather_from_center)
 
 
 def test_scatter_delete():
