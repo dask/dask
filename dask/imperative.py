@@ -3,7 +3,7 @@ from functools import partial, wraps
 from itertools import chain, count
 from collections import Iterator
 
-from toolz import merge, unique, curry
+from toolz import merge, unique, curry, groupby
 
 from .optimize import cull, fuse
 from .utils import concrete
@@ -114,11 +114,18 @@ def applyfunc(func, args, kwargs, pure=False):
     of that computation."""
 
     args, dasks = unzip(map(to_task_dasks, args), 2)
+    g = groupby(lambda v: hasattr(v[1], 'dask'), kwargs.items())
+    if False in g:
+        func = partial(func, **dict(g[False]))
+    if True in g:
+        dask_kwargs, dasks2 = to_task_dasks(dict(g[True]))
+        dasks = dasks + (dasks2,)
+        task = (apply, func, (list, list(args)), dask_kwargs)
+    else:
+        task = (func,) + args
+    name = tokenize(*task, pure=pure)
     dasks = flat_unique(dasks)
-    if kwargs:
-        func = partial(func, **kwargs)
-    name = tokenize(func, *args, pure=pure)
-    dasks.append({name: (func,) + args})
+    dasks.append({name: task})
     return Value(name, dasks)
 
 
