@@ -67,6 +67,22 @@ def _read_csv(fn, i, chunkbytes, compression, kwargs):
         raise ValueError(msg)
 
 
+def clean_kwargs(kwargs):
+    """ Do some sanity checks on kwargs
+
+    >>> clean_kwargs({'parse_dates': ['a', 'b'], 'usecols': ['b', 'c']})
+    {'parse_dates': ['b'], 'usecols': ['b', 'c']}
+    """
+    kwargs = kwargs.copy()
+
+    kwargs['parse_dates'] = [col for col in kwargs.get('parse_dates', ())
+            if kwargs.get('usecols') is None
+            or isinstance(col, (tuple, list)) and all(c in kwargs['usecols']
+                                                      for c in col)
+            or col in kwargs['usecols']]
+    return kwargs
+
+
 def fill_kwargs(fn, args, kwargs):
     """ Read a csv file and fill up kwargs
 
@@ -119,6 +135,7 @@ def fill_kwargs(fn, args, kwargs):
         if kwargs['header'] is True:
             kwargs['header'] = 0
 
+    kwargs = clean_kwargs(kwargs)
     try:
         head = pd.read_csv(fn, *args, **assoc(kwargs, 'nrows', sample_nrows))
     except StopIteration:
@@ -150,6 +167,7 @@ def read_csv(fn, *args, **kwargs):
     chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
     categorize = kwargs.pop('categorize', None)
     index = kwargs.pop('index', None)
+    kwargs = kwargs.copy()
     if index and categorize == None:
         categorize = True
 
@@ -279,11 +297,11 @@ def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
         category_columns = []
     cols = category_columns + ([index] if index else [])
 
-    dtypes = dict((c, one_chunk.dtypes[c]) for c in cols if c not in kwargs.get('parse_dates', ()))
-    d = read_csv(fn, *args, **merge(kwargs,
-                                    dict(usecols=cols,
-                                         parse_dates=None,
-                                         dtype=dtypes)))
+    dtypes = dict((c, one_chunk.dtypes[c]) for c in cols
+                 if c not in kwargs.get('parse_dates', ()))
+    kwargs2 = merge(kwargs, dict(usecols=cols, dtype=dtypes))
+    kwargs2 = clean_kwargs(kwargs2)
+    d = read_csv(fn, *args, **kwargs2)
     categories = [d[c].drop_duplicates() for c in category_columns]
 
     if index:
