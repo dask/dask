@@ -247,7 +247,7 @@ class Value(base.Base):
         return hash(self.key)
 
     def __dir__(self):
-        return list(self.__dict__.keys())
+        return dir(type(self))
 
     def __getattr__(self, attr):
         if not attr.startswith('_'):
