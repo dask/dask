@@ -46,6 +46,47 @@ def test_read_csv():
         result = f.compute(get=dask.get).sort('name')
         assert (result.values == pd.read_csv(fn).sort('name').values).all()
 
+timeseries = """
+Date,Open,High,Low,Close,Volume,Adj Close
+2015-08-28,198.50,199.839996,197.919998,199.240005,143298900,199.240005
+2015-08-27,197.020004,199.419998,195.210007,199.160004,266244700,199.160004
+2015-08-26,192.080002,194.789993,188.369995,194.679993,328058100,194.679993
+2015-08-25,195.429993,195.449997,186.919998,187.229996,353966700,187.229996
+2015-08-24,197.630005,197.630005,182.399994,189.550003,478672400,189.550003
+2015-08-21,201.729996,203.940002,197.520004,197.630005,328271500,197.630005
+2015-08-20,206.509995,208.289993,203.899994,204.009995,185865600,204.009995
+2015-08-19,209.089996,210.009995,207.350006,208.279999,167316300,208.279999
+2015-08-18,210.259995,210.679993,209.699997,209.929993,70043800,209.929993
+""".strip()
+
+def test_read_csv_with_datetime_index_partitions_one():
+    with filetext(timeseries) as fn:
+        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4], parse_dates=['Date'])
+        # nrows set to explicitly set to single chunk
+        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4], parse_dates=['Date'],  nrows=1000)
+        np.all(df == ddf.compute())
+        # because fn is so small, by default, this will only be one chunk
+        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4], parse_dates=['Date'])
+        np.all(df == ddf.compute())
+
+def test_read_csv_with_datetime_index_partitions_n():
+    with filetext(timeseries) as fn:
+        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4], parse_dates=['Date'])
+        # because fn is so small, by default, set chunksize small
+        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4], parse_dates=['Date'], chunkbytes=400)
+        print(df)
+        print(ddf.compute())
+        np.all(df == ddf.compute())
+
+def test_from_pandas_with_datetime_index():
+    with filetext(timeseries) as fn:
+        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4], parse_dates=['Date'])
+        ddf = dd.from_pandas(df, 2)
+        assert(df.index.dtype == ddf.index.compute().dtype)
+        assert(df.index.name == ddf.index.compute().name)
+        assert(np.all(df.sort_index() == ddf.index.compute()))
+        #assert(np.all(df.index.values == ddf.index.compute().values))
+
 
 def test_read_gzip_csv():
     with filetext(text.encode(), open=gzip.open) as fn:
