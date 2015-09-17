@@ -7,3 +7,4 @@ dist/
 log.*
 log
 .coverage
+.DS_Store
