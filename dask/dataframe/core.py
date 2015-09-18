@@ -849,9 +849,8 @@ class Series(_Frame):
             raise NotImplementedError('Keywords: ' + err)
 
         # Create a grouper to determine closed and label conventions
-        g = pd.TimeGrouper(rule, how='count', closed=closed, label=label)
         newdivs, outdivs = _resample_bin_and_out_divs(self.divisions, rule,
-                                                      g.closed, g.label)
+                                                      closed, label)
 
         # Repartition divs into bins. These won't match labels after mapping
         partitioned = self.repartition(newdivs, force=True)
