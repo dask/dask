@@ -1,7 +1,9 @@
 import os
+from itertools import product
+
 
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
-                        Dispatch, tmpfile, next_newline)
+                        Dispatch, tmpfile, next_linesep)
 
 
 def test_textblock():
@@ -54,31 +56,36 @@ def test_dispatch():
     assert foo((1, 2.0, b)) == (2, 1.0, b)
 
 
-def test_nextnewline():
-    encoding = 'utf-16-le'
+def test_nextlinesep():
+    lineseps = ('\r', '\n', '\r\n')
+    encodings = ('utf-16-le', 'utf-8')
+    for sep, encoding in product(lineseps, encodings):
+        euro = u'\u20ac'
+        yen = u'\u00a5'
 
-    euro = u'\u20ac'
-    yen = u'\u00a5'
+        bin_euro = u'\u20ac'.encode(encoding)
+        bin_yen = u'\u00a5'.encode(encoding)
+        bin_sep = sep.encode(encoding)
 
-    bin_euro = u'\u20ac'.encode(encoding)
-    bin_yen = u'\u00a5'.encode(encoding)
-    bin_newline = '\n'.encode(encoding)
+        data = (euro * 10) + sep + (yen * 10) + sep + (euro * 10)
+        bin_data = data.encode(encoding)
 
-    data = (euro * 10) + '\n' + (yen * 10) + '\n' + (euro * 10)
-    bin_data = data.encode(encoding)
+        with tmpfile() as fn:
+            with open(fn, 'w+b') as f:
+                f.write(bin_data)
+                f.seek(0)
 
-    with tmpfile() as fn:
-        with open(fn, 'w+b') as f:
-            f.write(bin_data)
-            f.seek(0)
+                start, stop = next_linesep(f, 5, encoding, sep)
+                assert start == len(bin_euro) * 10
+                assert stop == len(bin_euro) * 10 + len(sep.encode(encoding))
 
-            start, stop = next_newline(f, 2, encoding)
-            assert start == len(bin_euro) * 10
-            assert stop == len(bin_euro) * 10 + len('\n'.encode(encoding))
+                seek = len(bin_euro) * 10 + len(bin_sep) + len(bin_yen)
+                start, stop = next_linesep(f, seek, encoding, sep)
 
-            start, stop = next_newline(f, len(bin_euro)*11, encoding)
-            assert start == len(bin_euro) * 20 + len(bin_newline)
-            assert stop == len(bin_euro) * 20 + len(bin_newline) * 2
+                exp_start = len(bin_euro) * 10 + len(bin_sep) + len(bin_yen) * 10
+                exp_stop = exp_start + len(bin_sep)
+                assert start == exp_start
+                assert stop == exp_stop
 
 
 def test_gh606():
