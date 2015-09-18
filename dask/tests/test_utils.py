@@ -17,7 +17,7 @@ def test_textblock():
             assert textblock(f, 1, 10) == textblock(fn, 1, 10)
 
             assert textblock(f, 0, 3) == ('123' + os.linesep).encode()
-            assert textblock(f, 3 + len(os.linesep), 6) == ('456' + os.linesep).encode()
+            assert textblock(f, 3, 3) == b''
 
 
 def test_takes_multiple_arguments():
