@@ -691,6 +691,16 @@ class _Frame(Base):
         return self._cum_agg('cummin', self._partition_type.cummin,
                              aggregate, np.nan, axis=axis)
 
+    @wraps(pd.DataFrame.where)
+    def where(self, cond, other=np.nan):
+        return map_partitions(self._partition_type.where,
+                              self.column_info, self, cond, other)
+
+    @wraps(pd.DataFrame.mask)
+    def mask(self, cond, other=np.nan):
+        return map_partitions(self._partition_type.mask,
+                              self.column_info, self, cond, other)
+
     @classmethod
     def _bind_operator_method(cls, name, op):
         """ bind operator method like DataFrame.add to this class """

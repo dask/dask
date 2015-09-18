@@ -1128,6 +1128,71 @@ def test_dropna():
               df.dropna(subset=['y', 'z'], how='all'))
 
 
+def test_where_mask():
+    pdf1 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                         'b': [3, 5, 2, 5, 7, 2, 4, 2, 4]})
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({'a': [True, False, True] * 3,
+                         'b': [False, False, True] * 3})
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    # different index
+    pdf3 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                         'b': [3, 5, 2, 5, 7, 2, 4, 2, 4]},
+                        index=[0, 1, 2, 3, 4, 5, 6, 7, 8])
+    ddf3 = dd.from_pandas(pdf3, 2)
+    pdf4 = pd.DataFrame({'a': [True, False, True] * 3,
+                         'b': [False, False, True] * 3},
+                        index=[5, 6, 7, 8, 9, 10, 11, 12, 13])
+    ddf4 = dd.from_pandas(pdf4, 2)
+
+    # different columns
+    pdf5 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                         'b': [9, 4, 2, 6, 2, 3, 1, 6, 2],
+                         'c': [5, 6, 7, 8, 9, 10, 11, 12, 13]},
+                        index=[0, 1, 2, 3, 4, 5, 6, 7, 8])
+    ddf5 = dd.from_pandas(pdf5, 2)
+    pdf6 = pd.DataFrame({'a': [True, False, True] * 3,
+                         'b': [False, False, True] * 3,
+                         'd': [False] * 9,
+                         'e': [True] * 9},
+                         index=[5, 6, 7, 8, 9, 10, 11, 12, 13])
+    ddf6 = dd.from_pandas(pdf6, 2)
+
+    cases = [(ddf1, ddf2, pdf1, pdf2),
+             (ddf1.repartition([0, 3, 6, 8]), ddf2, pdf1, pdf2),
+             (ddf1, ddf4, pdf3, pdf4),
+             (ddf3.repartition([0, 4, 6, 8]), ddf4.repartition([5, 9, 10, 13]),
+              pdf3, pdf4),
+             (ddf5, ddf6, pdf5, pdf6),
+             (ddf5.repartition([0, 4, 7, 8]), ddf6, pdf5, pdf6),
+
+             # use pd.DataFrame as cond
+             (ddf1, pdf2, pdf1, pdf2),
+             (ddf1, pdf4, pdf3, pdf4),
+             (ddf5, pdf6, pdf5, pdf6)]
+
+    for ddf, ddcond, pdf, pdcond in cases:
+        assert isinstance(ddf, dd.DataFrame)
+        assert isinstance(ddcond, (dd.DataFrame, pd.DataFrame))
+        assert isinstance(pdf, pd.DataFrame)
+        assert isinstance(pdcond, pd.DataFrame)
+
+        assert eq(ddf.where(ddcond), pdf.where(pdcond))
+        assert eq(ddf.mask(ddcond), pdf.mask(pdcond))
+        assert eq(ddf.where(ddcond, -ddf), pdf.where(pdcond, -pdf))
+        assert eq(ddf.mask(ddcond, -ddf), pdf.mask(pdcond, -pdf))
+
+        # ToDo: Should work on pandas 0.17
+        # https://github.com/pydata/pandas/pull/10283
+        # assert eq(ddf.where(ddcond.a, -ddf), pdf.where(pdcond.a, -pdf))
+        # assert eq(ddf.mask(ddcond.a, -ddf), pdf.mask(pdcond.a, -pdf))
+
+        assert eq(ddf.a.where(ddcond.a), pdf.a.where(pdcond.a))
+        assert eq(ddf.a.mask(ddcond.a), pdf.a.mask(pdcond.a))
+        assert eq(ddf.a.where(ddcond.a, -ddf.a), pdf.a.where(pdcond.a, -pdf.a))
+        assert eq(ddf.a.mask(ddcond.a, -ddf.a), pdf.a.mask(pdcond.a, -pdf.a))
+
 def test_map_partitions_multi_argument():
     assert eq(dd.map_partitions(lambda a, b: a + b, None, d.a, d.b),
               full.a + full.b)
