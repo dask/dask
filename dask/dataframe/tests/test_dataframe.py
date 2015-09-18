@@ -15,7 +15,6 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc,
         _coerce_loc_index, aca, reduction, _concat, _Frame)
-dask.set_options(get=get_sync)
 
 
 def check_dask(dsk, check_names=True):

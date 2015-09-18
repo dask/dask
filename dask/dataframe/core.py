@@ -2100,7 +2100,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed, label):
     else:
         newdivs = tempdivs
     if g.label == 'right':
-        outdivs = rule + tempdivs
+        outdivs = tempdivs + rule
     else:
         outdivs = tempdivs
 
