@@ -1,9 +1,9 @@
 import operator
-from functools import partial, wraps
+from functools import wraps
 from itertools import chain, count
 from collections import Iterator
 
-from toolz import merge, unique, curry, groupby
+from toolz import merge, unique, curry
 
 from .optimize import cull, fuse
 from .utils import concrete
@@ -114,11 +114,8 @@ def applyfunc(func, args, kwargs, pure=False):
     of that computation."""
 
     args, dasks = unzip(map(to_task_dasks, args), 2)
-    g = groupby(lambda v: hasattr(v[1], 'dask'), kwargs.items())
-    if False in g:
-        func = partial(func, **dict(g[False]))
-    if True in g:
-        dask_kwargs, dasks2 = to_task_dasks(dict(g[True]))
+    if kwargs:
+        dask_kwargs, dasks2 = to_task_dasks(kwargs)
         dasks = dasks + (dasks2,)
         task = (apply, func, (list, list(args)), dask_kwargs)
     else:
