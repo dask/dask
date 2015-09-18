@@ -852,6 +852,11 @@ class Series(_Frame):
             raise NotImplementedError('Resampling frequency %s that does'
                                       ' not evenly divide a day is not '
                                       'implemented' % rule)
+        # TODO: Fix this, see issue #726
+        if not hasattr(rule, 'delta'):
+            raise NotImplementedError("The current implementation doesn't "
+                                      "properly handle resampling periods "
+                                      "larger than a day.")
 
         return map_partitions(pd.Series.resample, self.name,
                 self.repartition(newdivs, force=True),
