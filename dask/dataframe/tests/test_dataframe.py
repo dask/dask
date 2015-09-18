@@ -15,6 +15,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc,
         _coerce_loc_index, aca, reduction, _concat, _Frame)
+dask.set_options(get=get_sync)
 
 
 def check_dask(dsk, check_names=True):
@@ -1776,58 +1777,39 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     assert eq(s.groupby('strings')['data'].nunique(), expected)
 
 
-@pytest.mark.parametrize(['freq', 'how', 'npartitions', 'nskipped'],
-                         list(product(['30T', 'H', 'D'],
-                                      ['sum', 'mean', 'count', 'nunique'],
-                                      [2, 3],
-                                      [2, 3])))
-def test_series_resample(freq, how, npartitions, nskipped):
-    n = 24 * 60 * 3
-    index = pd.date_range(start='20120102', periods=n, freq='T').values
-    index = index[::nskipped]
-    s = pd.Series(np.arange(len(index), dtype='f8'), index=pd.Index(index))
-    expected = s.resample(freq, how=how)
-    ds = dd.from_pandas(s, npartitions=npartitions)
-
-    resampled = ds.resample(freq, how=how)
-    result = resampled.compute()
-    assert resampled.divisions[0] == result.index[0]
-    tm.assert_series_equal(result, expected, check_dtype=False)
-
-
-@pytest.mark.xfail(raises=NotImplementedError)
-@pytest.mark.parametrize(['freq', 'how', 'npartitions', 'nskipped'],
-                         list(product(['57T'],
-                                      ['sum', 'mean', 'count', 'nunique'],
-                                      [2, 3],
-                                      [2, 3])))
-def test_series_resample_failing(freq, how, npartitions, nskipped):
-    n = 24 * 60 * 3
-    index = pd.date_range(start='20120102', periods=n, freq='T').values
-    index = index[::nskipped]
-    s = pd.Series(np.arange(len(index), dtype='f8'), index=pd.Index(index))
-    expected = s.resample(freq, how=how)
-    ds = dd.from_pandas(s, npartitions=npartitions)
-
-    resampled = ds.resample(freq, how=how)
-    result = resampled.compute()
-    tm.assert_series_equal(result, expected, check_dtype=False)
-
-
-@pytest.mark.parametrize(['how', 'npartitions'],
-                         list(product(['sum', 'mean', 'count', 'nunique'],
-                                      [2, 5])))
-def test_series_resample_big_freq(how, npartitions):
-    from pandas.tseries.offsets import Week
-    freq = 'W'
-    index = pd.date_range('21-Jan-2013', '3-NOV-2014', freq=Week())
+@pytest.mark.parametrize(['npartitions', 'freq', 'closed', 'label'],
+                         list(product([2, 5], ['30T', 'h', 'd', 'w', 'M'],
+                                      ['right', 'left'], ['right', 'left'])))
+def test_series_resample(npartitions, freq, closed, label):
+    index = pd.date_range('1-1-2000', '2-15-2000', freq='h')
+    index = index.union(pd.date_range('4-15-2000', '5-15-2000', freq='h'))
     df = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(df, npartitions=npartitions)
-
-    resampled = ds.resample(freq, how=how)
-    result = resampled.compute()
-    expected = df.resample(freq, how=how)
+    # Series output
+    result = ds.resample(freq, how='mean', closed=closed, label=label).compute()
+    expected = df.resample(freq, how='mean', closed=closed, label=label)
     tm.assert_series_equal(result, expected, check_dtype=False)
+    # Frame output
+    resampled = ds.resample(freq, how='ohlc', closed=closed, label=label)
+    divisions = resampled.divisions
+    result = resampled.compute()
+    expected = df.resample(freq, how='ohlc', closed=closed, label=label)
+    tm.assert_frame_equal(result, expected, check_dtype=False)
+    assert expected.index[0] == divisions[0]
+    assert expected.index[-1] == divisions[-1]
+
+
+def test_series_resample_not_implemented():
+    index = pd.date_range(start='20120102', periods=100, freq='T')
+    s = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(s, npartitions=5)
+    # Frequency doesn't evenly divide day
+    assert raises(NotImplementedError, lambda: ds.resample('57T'))
+    # Kwargs not implemented
+    kwargs = {'fill_method': 'bfill', 'limit': 2, 'loffset': 2, 'base': 2,
+              'convention': 'end', 'kind': 'period'}
+    for k, v in kwargs.items():
+        assert raises(NotImplementedError, lambda: ds.resample('6h', **{k: v}))
 
 
 def test_set_partition_2():
