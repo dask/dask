@@ -1089,6 +1089,23 @@ def test_reductions_frame_dtypes():
     numerics = ddf[['int', 'float']]
     assert numerics._get_numeric_data().dask == numerics.dask
 
+def test_describe():
+    # prepare test case which approx quantiles will be the same as actuals
+    s = pd.Series(list(range(20)) * 4)
+    df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20})
+
+    ds = dd.from_pandas(s, 4)
+    ddf = dd.from_pandas(df, 4)
+
+    assert eq(s.describe(), ds.describe())
+    assert eq(df.describe(), ddf.describe())
+
+    # remove string columns
+    df = pd.DataFrame({'a': list(range(20)) * 4, 'b': list(range(4)) * 20,
+                       'c': list('abcd') * 20})
+    ddf = dd.from_pandas(df, 4)
+    assert eq(df.describe(), ddf.describe())
+
 
 def test_cumulative():
     pdf = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
