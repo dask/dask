@@ -4,12 +4,11 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Container, Iterable, Sequence
 from functools import wraps
-from inspect import getargspec
 
 from toolz import concat
 import numpy as np
 
-from ..compatibility import builtins
+from ..compatibility import builtins, getargspec
 from ..utils import ignoring
 
 

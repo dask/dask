@@ -25,7 +25,7 @@ from . import numpy_compat
 from ..base import Base, compute, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
         IndexCallable)
-from ..compatibility import unicode, long
+from ..compatibility import unicode, long, getargspec
 from .. import threaded, core
 
 
@@ -451,7 +451,7 @@ def map_blocks(func, *arrs, **kwargs):
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
     try:
-        spec = inspect.getargspec(func)
+        spec = getargspec(func)
     except:
         spec = None
     if spec and 'block_id' in spec.args:

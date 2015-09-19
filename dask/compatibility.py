@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import functools
+import inspect
 import operator
 import sys
 import types
@@ -25,6 +27,9 @@ if PY3:
     range = range
     operator_div = operator.truediv
 
+    def _getargspec(func):
+        return inspect.getfullargspec(func)
+
 else:
     import __builtin__ as builtins
     from Queue import Queue, Empty
@@ -39,6 +44,20 @@ else:
     apply = apply
     range = xrange
     operator_div = operator.div
+
+    def _getargspec(func):
+        return inspect.getargspec(func)
+
+
+def getargspec(func):
+    """Version of inspect.getargspec that works for functools.partial objects"""
+    if isinstance(func, functools.partial):
+        return _getargspec(func.func)
+    else:
+        if isinstance(func, type):
+            return _getargspec(func.__init__)
+        else:
+            return _getargspec(func)
 
 def skip(func):
     return
