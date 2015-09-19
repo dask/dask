@@ -381,6 +381,13 @@ def ensure_not_exists(filename):
             raise
 
 
+def _skip_doctest(line):
+    if '>>>' in line:
+        return line + '    # doctest: +SKIP'
+    else:
+        return line
+
+
 def derived_from(original_klass, version=None, ua_args=[]):
     """Decorator to attach original class's docstring to the wrapped method.
 
@@ -417,6 +424,7 @@ def derived_from(original_klass, version=None, ua_args=[]):
                         "        Dask doesn't supports following argument(s).\n\n")
                 args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
                 doc = doc + note + args
+            doc = '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
             method.__doc__ = doc
             return method
 

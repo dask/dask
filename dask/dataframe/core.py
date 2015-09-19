@@ -240,12 +240,6 @@ class _Frame(Base):
                     for i, key in enumerate(self._keys()))
         return self._constructor(dsk2, name, self.column_info, self.divisions)
 
-    @derived_from(pd.DataFrame, version='0.17.0')
-    def xxx(self):
-        chunk = lambda s: s.drop_duplicates()
-        return aca(self, chunk=chunk, aggregate=chunk, columns=self.column_info,
-                   token='drop-duplicates')
-
     @derived_from(pd.DataFrame)
     def drop_duplicates(self):
         chunk = lambda s: s.drop_duplicates()
@@ -263,19 +257,26 @@ class _Frame(Base):
         result is a Series).  The output type will be determined by the type of
         ``columns``.
 
-        >>> df.map_partitions(lambda df: df.x + 1, columns='x')  # doctest: +SKIP
-
-        >>> df.map_partitions(lambda df: df.head(), columns=df.columns)  # doctest: +SKIP
-
         Parameters
         ----------
 
-        func: function
+        func : function
             Function applied to each blocks
-        columns: tuple or scalar
+        columns : tuple or scalar
             Column names or name of the output. Defaults to names of data itself.
             When tuple is passed, DataFrame is returned. When scalar is passed,
             Series is returned.
+
+        Examples
+        --------
+
+        When str is passed as columns, the result will be Series.
+
+        >>> df.map_partitions(lambda df: df.x + 1, columns='x')  # doctest: +SKIP
+
+        When tuple is passed as columns, the result will be Series.
+
+        >>> df.map_partitions(lambda df: df.head(), columns=df.columns)  # doctest: +SKIP
         """
         if columns == no_default:
             columns = self.column_info
@@ -284,10 +285,15 @@ class _Frame(Base):
     def random_split(self, p, seed=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
+        Examples
+        --------
+
         50/50 split
+
         >>> a, b = df.random_split([0.5, 0.5])  # doctest: +SKIP
 
         80/10/10 split, consistent seed
+
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
         """
         seeds = np.random.RandomState(seed).randint(0, np.iinfo(np.int32).max,
@@ -423,12 +429,15 @@ class _Frame(Base):
         Parameters
         ----------
 
-        divisions: list
+        divisions : list
             List of partitions to be used
-        force: bool, default False
+        force : bool, default False
             Allows the expansion of the existing divisions.
             If False then the new divisions lower and upper bounds must be
             the same as the old divisions.
+
+        Examples
+        --------
 
         >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
         """
@@ -598,6 +607,9 @@ class _Frame(Base):
 
     def quantile(self, q=0.5, axis=0):
         """ Approximate row-wise and precise column-wise quantiles of DataFrame
+
+        Parameters
+        ----------
 
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
@@ -1975,9 +1987,12 @@ def _get_return_type(arg, columns):
 def map_partitions(func, columns, *args, **kwargs):
     """ Apply Python function on each DataFrame block
 
-    column_info: tuple or string
+    Parameters
+    ----------
+
+    column_info : tuple or string
         Column names or name of the output
-    targets: list
+    targets : list
         List of target DataFrame / Series.
     """
     assert callable(func)
@@ -2175,20 +2190,25 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
     Parameters
     ----------
-    a: tuple
+
+    a : tuple
         old divisions
-    b: tuple, list
+    b : tuple, list
         new divisions
-    name: str
+    name : str
         name of old dataframe
-    out1: str
+    out1 : str
         name of temporary splits
-    out2: str
+    out2 : str
         name of new dataframe
-    force: bool, default False
+    force : bool, default False
         Allows the expansion of the existing divisions.
         If False then the new divisions lower and upper bounds must be
         the same as the old divisions.
+
+
+    Examples
+    --------
 
     >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
     {('b', 0): (<function _loc at ...>, ('a', 0), 1, 3, False),
@@ -2329,12 +2349,16 @@ def repartition(df, divisions, force=False):
     Parameters
     ----------
 
-    divisions: list
+    divisions : list
         List of partitions to be used
-    force: bool, default False
+    force : bool, default False
         Allows the expansion of the existing divisions.
         If False then the new divisions lower and upper bounds must be
         the same as the old divisions.
+
+
+    Examples
+    --------
 
     >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
 
