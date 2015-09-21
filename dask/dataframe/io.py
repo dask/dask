@@ -11,6 +11,7 @@ from toolz import merge, assoc, dissoc
 from operator import getitem
 from fnmatch import fnmatch
 import uuid
+import codecs
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size
@@ -25,6 +26,32 @@ from .shuffle import set_partition
 
 csv_defaults = {'compression': None}
 
+
+encoding_from_bom = {codecs.BOM_UTF16: 'utf-16',
+                     codecs.BOM_UTF16_BE: 'utf-16-be',
+                     codecs.BOM_UTF16_LE: 'utf-16-le',
+                     codecs.BOM_UTF32: 'utf-32',
+                     codecs.BOM_UTF32_BE: 'utf-32-be',
+                     codecs.BOM_UTF32_LE: 'utf-32-le'}
+
+
+def get_bom(fn):
+    with open(fn, 'rb') as f:
+        f.seek(0)
+        bom = f.read(2)
+        f.seek(0)
+        return bom
+
+
+def add_endianess_to_encoding(fn, my_encoding):
+    bom = get_bom(fn)
+    file_encoding = encoding_from_bom.get(bom)
+    if file_encoding is None:
+        return my_encoding
+    elif file_encoding.startswith(my_encoding):
+        return file_encoding
+    else:
+        return my_encoding
 
 
 def _read_csv(fn, i, chunkbytes, compression, kwargs):
@@ -137,6 +164,10 @@ def fill_kwargs(fn, args, kwargs):
             raise ValueError("No files found matching name %s" % fn)
         fn = filenames[0]
 
+    encoding = kwargs.get('encoding')
+    encoding = add_endianess_to_encoding(fn, encoding)
+    if encoding is not None:
+        kwargs['encoding'] = encoding
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)
     if 'header' not in kwargs:
