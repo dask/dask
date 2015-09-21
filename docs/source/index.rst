@@ -82,6 +82,7 @@ Schedulers execute task graphs.  After a collection produces a graph we execute
 this graph in parallel, either using all of the cores on a single workstation
 or using a distributed cluster.
 
+* :doc:`scheduler-overview`
 * :doc:`shared`
 * :doc:`distributed`
 
@@ -90,6 +91,7 @@ or using a distributed cluster.
    :hidden:
    :caption: Schedulers
 
+   scheduler-overview.rst
    shared.rst
    distributed.rst
 
