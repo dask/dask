@@ -871,31 +871,42 @@ class Series(_Frame):
         pandas.Series.resample
         """
 
-        divs = pd.Series(range(len(self.divisions)), index=self.divisions)
-        temp = divs.resample(rule, how='count', axis=axis, fill_method=fill_method,
-                          closed=closed, label=label, convention=convention,
-                          kind=kind, loffset=loffset, limit=limit, base=base)
-        newdivs = temp.loc[temp > 0].index.tolist()
-        if newdivs[-1] < self.divisions[-1]:
-            newdivs.append(self.divisions[-1])
-        if newdivs[0] > self.divisions[0]:
-            newdivs.insert(0, self.divisions[0])
-
-        day_nanos = pd.datetools.Day().nanos
-
+        # Validate Inputs
         rule = pd.datetools.to_offset(rule)
-
+        day_nanos = pd.datetools.Day().nanos
         if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
             raise NotImplementedError('Resampling frequency %s that does'
                                       ' not evenly divide a day is not '
                                       'implemented' % rule)
+        kwargs = {'fill_method': fill_method, 'limit': limit,
+                  'loffset': loffset, 'base': base,
+                  'convention': convention != 'start', 'kind': kind}
+        err = ', '.join('`{0}`'.format(k) for (k, v) in kwargs.items() if v)
+        if err:
+            raise NotImplementedError('Keywords: ' + err)
 
-        return map_partitions(pd.Series.resample, self.name,
-                self.repartition(newdivs, force=True),
-                rule=rule, how=how, axis=axis,
-                fill_method=fill_method, closed=closed, label=label,
-                convention=convention, kind=kind, loffset=loffset, limit=limit,
-                base=base)
+        # Create a grouper to determine closed and label conventions
+        newdivs, outdivs = _resample_bin_and_out_divs(self.divisions, rule,
+                                                      closed, label)
+
+        # Repartition divs into bins. These won't match labels after mapping
+        partitioned = self.repartition(newdivs, force=True)
+
+        kwargs = {'how': how, 'closed': closed, 'label': label}
+        name = tokenize(self, rule, kwargs)
+        dsk = partitioned.dask
+        def func(series, start, end, closed):
+            out = series.resample(rule, **kwargs)
+            return out.reindex(pd.date_range(start, end, freq=rule, closed=closed))
+
+        keys = partitioned._keys()
+        args = zip(keys, outdivs, outdivs[1:], ['left']*(len(keys)-1) + [None])
+        for i, (k, s, e, c) in enumerate(args):
+            dsk[(name, i)] = (func, k, s, e, c)
+
+        if how == 'ohlc':
+            return DataFrame(dsk, name, ['open', 'high', 'low', 'close'], outdivs)
+        return Series(dsk, name, self.name, outdivs)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
@@ -2109,6 +2120,46 @@ def pd_split(df, p, seed=0):
     p = list(p)
     index = pseudorandom(len(df), p, seed)
     return [df.iloc[index == i] for i in range(len(p))]
+
+
+def _resample_bin_and_out_divs(divisions, rule, closed, label):
+    rule = pd.datetools.to_offset(rule)
+    g = pd.TimeGrouper(rule, how='count', closed=closed, label=label)
+
+    # Determine bins to apply `how` to. Disregard labeling scheme.
+    divs = pd.Series(range(len(divisions)), index=divisions)
+    temp = divs.resample(rule, how='count', closed=closed, label='left')
+    tempdivs = temp.loc[temp > 0].index
+
+    # Cleanup closed == 'right' and label == 'right'
+    res = pd.offsets.Nano() if hasattr(rule, 'delta') else pd.offsets.Day()
+    if g.closed == 'right':
+        newdivs = tempdivs + res
+    else:
+        newdivs = tempdivs
+    if g.label == 'right':
+        outdivs = tempdivs + rule
+    else:
+        outdivs = tempdivs
+
+    newdivs = newdivs.tolist()
+    outdivs = outdivs.tolist()
+
+    # Adjust ends
+    if newdivs[0] < divisions[0]:
+        newdivs[0] = divisions[0]
+    if newdivs[-1] < divisions[-1]:
+        if len(newdivs) < len(divs):
+            setter = lambda a, val: a.append(val)
+        else:
+            setter = lambda a, val: a.__setitem__(-1, val)
+        setter(newdivs, divisions[-1])
+        if outdivs[-1] > divisions[-1]:
+            setter(outdivs, outdivs[-1])
+        elif outdivs[-1] < divisions[-1]:
+            setter(outdivs, temp.index[-1])
+
+    return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
 
 def repartition_divisions(a, b, name, out1, out2, force=False):
