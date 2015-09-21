@@ -13,9 +13,8 @@ from time import sleep
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.io import (read_csv, file_size, categories_and_quantiles,
-        dataframe_from_ctable, from_array, from_bcolz, infer_header,
-        from_dask_array)
+from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
+        from_array, from_bcolz, infer_header, from_dask_array)
 from dask.compatibility import StringIO
 
 from dask.utils import filetext, tmpfile, ignoring
@@ -40,57 +39,16 @@ Frank,600
 
 def test_read_csv():
     with filetext(text) as fn:
-        f = read_csv(fn, chunkbytes=30)
+        f = dd.read_csv(fn, chunkbytes=30)
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
         result = f.compute(get=dask.get).sort('name')
         assert (result.values == pd.read_csv(fn).sort('name').values).all()
 
-timeseries = """
-Date,Open,High,Low,Close,Volume,Adj Close
-2015-08-28,198.50,199.839996,197.919998,199.240005,143298900,199.240005
-2015-08-27,197.020004,199.419998,195.210007,199.160004,266244700,199.160004
-2015-08-26,192.080002,194.789993,188.369995,194.679993,328058100,194.679993
-2015-08-25,195.429993,195.449997,186.919998,187.229996,353966700,187.229996
-2015-08-24,197.630005,197.630005,182.399994,189.550003,478672400,189.550003
-2015-08-21,201.729996,203.940002,197.520004,197.630005,328271500,197.630005
-2015-08-20,206.509995,208.289993,203.899994,204.009995,185865600,204.009995
-2015-08-19,209.089996,210.009995,207.350006,208.279999,167316300,208.279999
-2015-08-18,210.259995,210.679993,209.699997,209.929993,70043800,209.929993
-""".strip()
-
-def test_read_csv_with_datetime_index_partitions_one():
-    with filetext(timeseries) as fn:
-        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4], parse_dates=['Date'])
-        # nrows set to explicitly set to single chunk
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4], parse_dates=['Date'],  nrows=1000)
-        np.all(df == ddf.compute())
-        # because fn is so small, by default, this will only be one chunk
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4], parse_dates=['Date'])
-        np.all(df == ddf.compute())
-
-def test_read_csv_with_datetime_index_partitions_n():
-    with filetext(timeseries) as fn:
-        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4], parse_dates=['Date'])
-        # because fn is so small, by default, set chunksize small
-        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4], parse_dates=['Date'], chunkbytes=400)
-        print(df)
-        print(ddf.compute())
-        np.all(df == ddf.compute())
-
-def test_from_pandas_with_datetime_index():
-    with filetext(timeseries) as fn:
-        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4], parse_dates=['Date'])
-        ddf = dd.from_pandas(df, 2)
-        assert(df.index.dtype == ddf.index.compute().dtype)
-        assert(df.index.name == ddf.index.compute().name)
-        assert(np.all(df.sort_index() == ddf.index.compute()))
-        #assert(np.all(df.index.values == ddf.index.compute().values))
-
 
 def test_read_gzip_csv():
     with filetext(text.encode(), open=gzip.open) as fn:
-        f = read_csv(fn, chunkbytes=30, compression='gzip')
+        f = dd.read_csv(fn, chunkbytes=30, compression='gzip')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
         result = f.compute(get=dask.get).sort('name')
@@ -105,46 +63,19 @@ def test_file_size():
         assert file_size(fn, 'gzip') in counts
 
 
-def test_categories_and_quantiles():
-    with filetext(text) as fn:
-        cats, quant = categories_and_quantiles(fn, (), {})
-
-        assert list(cats['name']) == ['Alice', 'Bob', 'Charlie', 'Dennis', 'Edith', 'Frank']
-
-        cats, quant = categories_and_quantiles(fn, (), {}, index='amount',
-                chunkbytes=30)
-
-        assert len(quant) == 4
-        assert (-600 < quant[1:]).all() and (600 > quant[:-1]).all()
-        assert quant[0] == -500
-        assert quant[-1] == 600
-
-
 def test_read_multiple_csv():
     try:
         with open('_foo.1.csv', 'w') as f:
             f.write(text)
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
-        df = read_csv('_foo.*.csv')
+        df = dd.read_csv('_foo.*.csv')
 
         assert (len(read_csv('_foo.*.csv').compute()) ==
                 len(read_csv('_foo.1.csv').compute()) * 2)
     finally:
         os.remove('_foo.1.csv')
         os.remove('_foo.2.csv')
-
-
-def test_read_csv_categorize():
-    with filetext(text) as fn:
-        f = read_csv(fn, chunkbytes=30, categorize=True)
-        assert list(f.dtypes) == ['category', 'i8']
-
-        expected = pd.read_csv(fn)
-        expected['name'] = expected.name.astype('category')
-
-        assert (f.dtypes == expected.dtypes).all()
-        assert len(f.compute().name.cat.categories) == 6
 
 
 def normalize_text(s):
@@ -162,7 +93,7 @@ def test_consistent_dtypes():
     """)
 
     with filetext(text) as fn:
-        df = read_csv(fn, chunkbytes=30)
+        df = dd.read_csv(fn, chunkbytes=30)
         assert isinstance(df.amount.sum().compute(), float)
 
 
@@ -175,9 +106,9 @@ def test_infer_header():
 
 def eq(a, b):
     if hasattr(a, 'dask'):
-        a = a.compute(get=dask.get)
+        a = a.compute(get=dask.async.get_sync)
     if hasattr(b, 'dask'):
-        b = b.compute(get=dask.get)
+        b = b.compute(get=dask.async.get_sync)
     if isinstance(a, pd.DataFrame):
         a = a.sort_index()
         b = b.sort_index()
@@ -197,37 +128,28 @@ Charlie,300,2014-01-01
 Dan,400,2014-01-01
 """.strip()
 
-def test_read_csv_categorize_with_parse_dates():
-    with filetext(datetime_csv_file) as fn:
-        f = read_csv(fn, chunkbytes=30, categorize=True, parse_dates=['when'])
-        assert list(f.dtypes) == ['category', 'i8', 'M8[ns]']
 
-
-def test_read_csv_categorize_and_index():
+def test_read_csv_index():
     with filetext(text) as fn:
-        f = read_csv(fn, chunkbytes=20, index='amount')
+        f = dd.read_csv(fn, chunkbytes=20, index='amount')
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
         blocks = dd.DataFrame._get(f.dask, f._keys(), get=get_sync)
         for i, block in enumerate(blocks):
-            if i < len(f.divisions):
-                assert (block.index <= f.divisions[i + 1]).all()
+            if i < len(f.divisions) - 2:
+                assert (block.index < f.divisions[i + 1]).all()
             if i > 0:
-                assert (block.index > f.divisions[i]).all()
+                assert (block.index >= f.divisions[i]).all()
 
         expected = pd.read_csv(fn).set_index('amount')
-        expected['name'] = expected.name.astype('category')
 
-        result = result.sort()
-        expected = expected.sort()
-
-        assert eq(result, expected)
+        eq(result, expected)
 
 
 def test_usecols():
     with filetext(datetime_csv_file) as fn:
-        df = read_csv(fn, chunkbytes=30, usecols=['when', 'amount'])
+        df = dd.read_csv(fn, chunkbytes=30, usecols=['when', 'amount'])
         expected = pd.read_csv(fn, usecols=['when', 'amount'])
         assert (df.compute().values == expected.values).all()
 
@@ -620,10 +542,10 @@ def test_to_csv_series():
 
 def test_read_csv_with_nrows():
     with filetext(text) as fn:
-        f = read_csv(fn, nrows=3)
+        f = dd.read_csv(fn, nrows=3)
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions == 1
-        assert eq(read_csv(fn, nrows=3), pd.read_csv(fn, nrows=3))
+        assert eq(dd.read_csv(fn, nrows=3), pd.read_csv(fn, nrows=3))
 
 
 def test_read_csv_raises_on_no_files():
@@ -636,13 +558,13 @@ def test_read_csv_raises_on_no_files():
 
 def test_read_csv_has_deterministic_name():
     with filetext(text) as fn:
-        a = read_csv(fn)
-        b = read_csv(fn)
+        a = dd.read_csv(fn)
+        b = dd.read_csv(fn)
         assert a._name == b._name
         assert sorted(a.dask.keys()) == sorted(b.dask.keys())
         assert isinstance(a._name, str)
 
-        c = read_csv(fn, skiprows=1, na_values=[0])
+        c = dd.read_csv(fn, skiprows=1, na_values=[0])
         assert a._name != c._name
 
 
@@ -652,8 +574,8 @@ def test_multiple_read_csv_has_deterministic_name():
             f.write(text)
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
-        a = read_csv('_foo.*.csv')
-        b = read_csv('_foo.*.csv')
+        a = dd.read_csv('_foo.*.csv')
+        b = dd.read_csv('_foo.*.csv')
 
         assert sorted(a.dask.keys()) == sorted(b.dask.keys())
     finally:
@@ -666,12 +588,12 @@ def test_read_csv_of_modified_file_has_different_name():
     with filetext(text) as fn:
         mtime = os.path.getmtime(fn)
         sleep(1)
-        a = read_csv(fn)
+        a = dd.read_csv(fn)
         sleep(1)
         with open(fn, 'a') as f:
             f.write('\nGeorge,700')
             os.fsync(f)
-        b = read_csv(fn)
+        b = dd.read_csv(fn)
 
         assert sorted(a.dask) != sorted(b.dask)
 
@@ -691,15 +613,15 @@ def test_to_bag():
 
 def test_csv_expands_dtypes():
     with filetext(text) as fn:
-        a = read_csv(fn, chunkbytes=30, dtype={})
+        a = dd.read_csv(fn, chunkbytes=30, dtype={})
         a_kwargs = list(a.dask.values())[0][-1]
 
-        b = read_csv(fn, chunkbytes=30)
+        b = dd.read_csv(fn, chunkbytes=30)
         b_kwargs = list(b.dask.values())[0][-1]
 
         assert a_kwargs['dtype'] == b_kwargs['dtype']
 
-        a = read_csv(fn, chunkbytes=30, dtype={'amount': float})
+        a = dd.read_csv(fn, chunkbytes=30, dtype={'amount': float})
         a_kwargs = list(a.dask.values())[0][-1]
 
         assert a_kwargs['dtype']['amount'] == float
@@ -762,3 +684,48 @@ def test_index_col():
             assert False
         except ValueError as e:
             assert 'set_index' in str(e)
+
+
+timeseries = """
+Date,Open,High,Low,Close,Volume,Adj Close
+2015-08-28,198.50,199.839996,197.919998,199.240005,143298900,199.240005
+2015-08-27,197.020004,199.419998,195.210007,199.160004,266244700,199.160004
+2015-08-26,192.080002,194.789993,188.369995,194.679993,328058100,194.679993
+2015-08-25,195.429993,195.449997,186.919998,187.229996,353966700,187.229996
+2015-08-24,197.630005,197.630005,182.399994,189.550003,478672400,189.550003
+2015-08-21,201.729996,203.940002,197.520004,197.630005,328271500,197.630005
+2015-08-20,206.509995,208.289993,203.899994,204.009995,185865600,204.009995
+2015-08-19,209.089996,210.009995,207.350006,208.279999,167316300,208.279999
+2015-08-18,210.259995,210.679993,209.699997,209.929993,70043800,209.929993
+""".strip()
+
+
+def test_read_csv_with_datetime_index_partitions_one():
+    with filetext(timeseries) as fn:
+        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
+                         parse_dates=['Date'])
+        # chunkbytes set to explicitly set to single chunk
+        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
+                          parse_dates=['Date'],  chunkbytes=10000000)
+        eq(df, ddf)
+
+        # because fn is so small, by default, this will only be one chunk
+        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
+                          parse_dates=['Date'])
+        eq(df, ddf)
+
+def test_read_csv_with_datetime_index_partitions_n():
+    with filetext(timeseries) as fn:
+        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
+                         parse_dates=['Date'])
+        # because fn is so small, by default, set chunksize small
+        ddf = dd.read_csv(fn, index='Date', header=0, usecols=[0, 4],
+                          parse_dates=['Date'], chunkbytes=400)
+        eq(df, ddf)
+
+def test_from_pandas_with_datetime_index():
+    with filetext(timeseries) as fn:
+        df = pd.read_csv(fn, index_col=0, header=0, usecols=[0, 4],
+                         parse_dates=['Date'])
+        ddf = dd.from_pandas(df, 2)
+        eq(df, ddf)

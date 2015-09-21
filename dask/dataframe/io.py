@@ -7,7 +7,7 @@ import re
 import os
 from glob import glob
 from math import ceil
-from toolz import merge, assoc
+from toolz import merge, assoc, dissoc
 from operator import getitem
 from fnmatch import fnmatch
 import uuid
@@ -72,8 +72,17 @@ def clean_kwargs(kwargs):
 
     >>> clean_kwargs({'parse_dates': ['a', 'b'], 'usecols': ['b', 'c']})
     {'parse_dates': ['b'], 'usecols': ['b', 'c']}
+
+    >>> clean_kwargs({'names': ['a', 'b'], 'usecols': [1]})
+    {'parse_dates': [], 'names': ['a', 'b'], 'usecols': ['b']}
     """
     kwargs = kwargs.copy()
+
+    if 'usecols' in kwargs and 'names' in kwargs:
+        kwargs['usecols'] = [kwargs['names'][c]
+                              if isinstance(c, int) and c not in kwargs['names']
+                              else c
+                              for c in kwargs['usecols']]
 
     kwargs['parse_dates'] = [col for col in kwargs.get('parse_dates', ())
             if kwargs.get('usecols') is None
@@ -164,12 +173,13 @@ def fill_kwargs(fn, args, kwargs):
 
 @wraps(pd.read_csv)
 def read_csv(fn, *args, **kwargs):
+    if 'nrows' in kwargs:  # Just create single partition
+        df = read_csv(fn, *args, **dissoc(kwargs, 'nrows'))
+        return df.head(kwargs['nrows'], compute=False)
+
     chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
-    categorize = kwargs.pop('categorize', None)
     index = kwargs.pop('index', None)
     kwargs = kwargs.copy()
-    if index and categorize == None:
-        categorize = True
 
     kwargs = fill_kwargs(fn, args, kwargs)
 
@@ -184,41 +194,26 @@ def read_csv(fn, *args, **kwargs):
     columns = kwargs.pop('columns')
     header = kwargs.pop('header')
 
-    if 'nrows' in kwargs:  # Just create single partition
-        dsk = {(name, 0): (apply, pd.read_csv, (fn,),
-                                  assoc(kwargs, 'header', header))}
-        result = DataFrame(dsk, name, columns, [None, None])
+    # Chunk sizes and numbers
+    total_bytes = file_size(fn, kwargs['compression'])
+    nchunks = int(ceil(total_bytes / chunkbytes))
+    divisions = [None] * (nchunks + 1)
 
-    else:
-        # Chunk sizes and numbers
-        total_bytes = file_size(fn, kwargs['compression'])
-        nchunks = int(ceil(total_bytes / chunkbytes))
-        divisions = [None] * (nchunks + 1)
+    first_kwargs = merge(kwargs, dict(header=header, compression=None))
+    rest_kwargs = merge(kwargs, dict(header=None, compression=None))
 
-        first_kwargs = merge(kwargs, dict(header=header, compression=None))
-        rest_kwargs = merge(kwargs, dict(header=None, compression=None))
+    # Create dask graph
+    dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
+                                       kwargs['compression'], rest_kwargs))
+               for i in range(1, nchunks))
 
-        # Create dask graph
-        dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
-                                           kwargs['compression'], rest_kwargs))
-                   for i in range(1, nchunks))
+    dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
+                                 first_kwargs)
 
-        dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
-                                     first_kwargs)
-
-        result = DataFrame(dsk, name, columns, divisions)
-
-    if categorize or index:
-        categories, quantiles = categories_and_quantiles(fn, args, kwargs,
-                                                         index, categorize,
-                                                         chunkbytes=chunkbytes)
-
-    if categorize:
-        func = partial(categorize_block, categories=categories)
-        result = result.map_partitions(func, columns=columns)
+    result = DataFrame(dsk, name, columns, divisions)
 
     if index:
-        result = set_partition(result, index, quantiles)
+        result = result.set_index(index)
 
     return result
 
@@ -227,7 +222,8 @@ def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
     """ Guess if csv file has a header or not
 
     This uses Pandas to read a sample of the file, then looks at the column
-    names to see if they are all phrase-like (words, potentially with spaces in between)
+    names to see if they are all phrase-like (words, potentially with spaces
+    in between.)
 
     Returns True or False
     """
@@ -252,69 +248,6 @@ def csv_names(fn, encoding='utf-8', compression=None, names=None,
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
                 names=names, parse_dates=parse_dates, **kwargs)
     return list(df.columns)
-
-
-def categories_and_quantiles(fn, args, kwargs, index=None, categorize=None,
-        chunkbytes=2**26):
-    """
-    Categories of Object columns and quantiles of index column for CSV
-
-    Computes both of the following in a single pass
-
-    1.  The categories for all object dtype columns
-    2.  The quantiles of the index column
-
-    Parameters
-    ----------
-
-    fn: string
-        Filename of csv file
-    args: tuple
-        arguments to be passed in to read_csv function
-    kwargs: dict
-        keyword arguments to pass in to read_csv function
-    index: string or None
-        Name of column on which to compute quantiles
-    categorize: bool
-        Whether or not to compute categories of Object dtype columns
-    """
-    kwargs = kwargs.copy()
-
-    compression = kwargs.get('compression', None)
-    total_bytes = file_size(fn, compression)
-    nchunks = int(ceil(total_bytes / chunkbytes))
-
-    if infer_header(fn, **kwargs):
-        kwargs['header'] = 0
-
-    one_chunk = pd.read_csv(fn, *args, **merge(kwargs, dict(nrows=100)))
-
-    if categorize is not False:
-        category_columns = [c for c in one_chunk.dtypes.index
-                               if one_chunk.dtypes[c] == 'O'
-                               and c not in kwargs.get('parse_dates', ())]
-    else:
-        category_columns = []
-    cols = category_columns + ([index] if index else [])
-
-    dtypes = dict((c, one_chunk.dtypes[c]) for c in cols
-                 if c not in kwargs.get('parse_dates', ()))
-    kwargs2 = merge(kwargs, dict(usecols=cols, dtype=dtypes))
-    kwargs2 = clean_kwargs(kwargs2)
-    d = read_csv(fn, *args, **kwargs2)
-    categories = [d[c].drop_duplicates() for c in category_columns]
-
-    if index:
-        quantiles = d[index].quantile(np.linspace(0, 1, nchunks + 1))
-        result = compute(quantiles, *categories)
-        quantiles, categories = result[0].values, result[1:]
-    else:
-        categories = compute(*categories)
-        quantiles = None
-
-    categories = dict(zip(category_columns, categories))
-
-    return categories, quantiles
 
 
 def from_array(x, chunksize=50000, columns=None):
