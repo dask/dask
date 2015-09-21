@@ -77,6 +77,7 @@ def order(dsk):
     maxes = child_max(dependencies, dependents, ndeps)
     return dfs(dependencies, dependents, key=maxes.get)
 
+
 def ndependents(dependencies, dependents):
     """ Number of total data elements that depend on key
 
@@ -94,27 +95,16 @@ def ndependents(dependencies, dependents):
     [('a', 3), ('b', 2), ('c', 1)]
     """
     result = dict()
-
-    roots = [k for k, v in dependents.items() if not v]
-
-    result.update(dict((r, 1) for r in roots))
-
-    leaves = [k for k, v in dependencies.items() if not v]
-
-    for leaf in leaves:
-        _ndependents(leaf, result, dependencies, dependents)
-
+    num_needed = dict((k, len(v)) for k, v in dependents.items())
+    current = set(k for k, v in num_needed.items() if v == 0)
+    while current:
+        key = current.pop()
+        result[key] = 1 + sum(result[parent] for parent in dependents[key])
+        for child in dependencies[key]:
+            num_needed[child] -= 1
+            if num_needed[child] == 0:
+                current.add(child)
     return result
-
-
-def _ndependents(key, result, dependencies, dependents):
-    """ Helper function for ndependents """
-    if key not in result:
-        deps = dependents[key]
-        result[key] = sum(
-            [_ndependents(k, result, dependencies, dependents)
-             for k in deps]) + 1
-    return result[key]
 
 
 def child_max(dependencies, dependents, scores):
@@ -138,27 +128,20 @@ def child_max(dependencies, dependents, scores):
     [('a', 3), ('b', 2), ('c', 5), ('d', 6)]
     """
     result = dict()
-
-    leaves = [k for k, v in dependencies.items() if not v]
-
-    for leaf in leaves:
-        result[leaf] = scores[leaf]
-
-    roots = [k for k, v in dependents.items() if not v]
-
-    for root in roots:
-        _child_max(root, scores, result, dependencies, dependents)
-
+    num_needed = dict((k, len(v)) for k, v in dependencies.items())
+    current = set(k for k, v in num_needed.items() if v == 0)
+    while current:
+        key = current.pop()
+        score = scores[key]
+        children = dependencies[key]
+        if children:
+            score += max(result[child] for child in children)
+        result[key] = score
+        for parent in dependents[key]:
+            num_needed[parent] -= 1
+            if num_needed[parent] == 0:
+                current.add(parent)
     return result
-
-
-def _child_max(key, scores, result, dependencies, dependents):
-    """ Recursive helper function for child_max """
-    if key not in result:
-        deps = dependencies[key]
-        result[key] = max([_child_max(k, scores, result, dependencies,
-                                      dependents) for k in deps]) + scores[key]
-    return result[key]
 
 
 def dfs(dependencies, dependents, key=lambda x: x):
