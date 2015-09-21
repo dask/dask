@@ -729,3 +729,52 @@ def test_from_pandas_with_datetime_index():
                          parse_dates=['Date'])
         ddf = dd.from_pandas(df, 2)
         eq(df, ddf)
+
+
+def test_encoding_gh601():
+    ar = pd.Series(range(0, 100))
+    br = ar % 7
+    cr = br * 3.3
+    dr = br / 1.9836
+    test_df = pd.concat([ar, br, cr, dr], axis=1)
+    with tmpfile('.csv') as fn:
+        test_df.to_csv(fn, encoding='utf-16')
+
+        a = pd.read_csv(fn, encoding='utf-16')
+        d = dd.read_csv(fn, encoding='utf-16', chunkbytes=1000)
+        d.compute()
+
+    with tmpfile('.csv') as fn:
+        test_df.to_csv(fn, encoding='utf-16-le')
+
+        a = pd.read_csv(fn, encoding='utf-16-le')
+        d = dd.read_csv(fn, encoding='utf-16-le', chunkbytes=1000)
+        d.compute()
+
+    with tmpfile('.csv') as fn:
+        test_df.to_csv(fn, encoding='utf-16-be')
+
+        a = pd.read_csv(fn, encoding='utf-16-be')
+        d = dd.read_csv(fn, encoding='utf-16-be', chunkbytes=1000)
+        d.compute()
+
+    with tmpfile('.csv') as fn:
+        test_df.to_csv(fn, encoding='utf-32')
+
+        a = pd.read_csv(fn, encoding='utf-32')
+        d = dd.read_csv(fn, encoding='utf-32', chunkbytes=1000)
+        d.compute()
+
+    with tmpfile('.csv') as fn:
+        test_df.to_csv(fn, encoding='utf-32-le')
+
+        a = pd.read_csv(fn, encoding='utf-32-le')
+        d = dd.read_csv(fn, encoding='utf-32-le', chunkbytes=1000)
+        d.compute()
+
+    with tmpfile('.csv') as fn:
+        test_df.to_csv(fn, encoding='utf-32-be')
+
+        a = pd.read_csv(fn, encoding='utf-32-be')
+        d = dd.read_csv(fn, encoding='utf-32-be', chunkbytes=1000)
+        d.compute()
