@@ -91,6 +91,14 @@ def fill_kwargs(fn, args, kwargs):
     kwargs: dict
         keyword arguments to give to pd.read_csv
     """
+
+    if 'index_col' in kwargs:
+        msg = """
+        The index column cannot be set at dataframe creation time. Instead use
+        the `set_index` method on the dataframe after it is created.
+        """
+        raise ValueError(msg)
+
     kwargs = merge(csv_defaults, kwargs)
     sample_nrows = kwargs.pop('sample_nrows', 1000)
     essentials = ['columns', 'names', 'header', 'parse_dates', 'dtype']
