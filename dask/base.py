@@ -135,15 +135,31 @@ normalize_token.register(dict, lambda a: tuple(sorted(a.items())))
 
 with ignoring(ImportError):
     import pandas as pd
-    normalize_token.register(pd.DataFrame,
-            lambda a: (id(a), len(a), list(a.columns)))
-    normalize_token.register(pd.Series, lambda a: (id(a), len(a), a.name))
+
+    @partial(normalize_token.register, pd.Index)
+    def normalize_index(ind):
+        return tokenize(ind.name, ind.values)
+
+    @partial(normalize_token.register, pd.Categorical)
+    def normalize_categorical(cat):
+        return tokenize(cat.codes, cat.categories, cat.ordered)
+
+    @partial(normalize_token.register, pd.Series)
+    def normalize_series(s):
+        return tokenize(s.name, s._data.blocks[0].values, s.dtype, s.index)
+
+    @partial(normalize_token.register, pd.DataFrame)
+    def normalize_dataframe(df):
+        data = [block.values for block in df._data.blocks]
+        data += [df.columns, df.index]
+        return tokenize(*data)
+
 
 with ignoring(ImportError):
     import numpy as np
     @partial(normalize_token.register, np.ndarray)
     def normalize_array(x):
-        if x.dtype.hasobject == 'O':
+        if x.dtype.hasobject:
             L = x.flat.tolist()
             try:
                 data = md5('-'.join(L)).hexdigest()

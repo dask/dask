@@ -64,6 +64,22 @@ def test_tokenize_numpy_array_on_object_dtype():
            tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object))
 
 
+def test_tokenize_pandas():
+    a = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
+    b = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
+
+    assert tokenize(a) == tokenize(b)
+    b.index.name = 'foo'
+    assert tokenize(a) != tokenize(b)
+
+    a = pd.DataFrame({'x': [1, 2, 3], 'y': ['a', 'b', 'a']})
+    b = pd.DataFrame({'x': [1, 2, 3], 'y': ['a', 'b', 'a']})
+    a['z'] = a.y.astype('category')
+    assert tokenize(a) != tokenize(b)
+    b['z'] = a.y.astype('category')
+    assert tokenize(a) == tokenize(b)
+
+
 da = pytest.importorskip('dask.array')
 import numpy as np
 
