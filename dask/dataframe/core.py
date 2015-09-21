@@ -763,6 +763,34 @@ class _Frame(Base):
         return map_partitions(self._partition_type.mask,
                               self.column_info, self, cond, other)
 
+    @derived_from(pd.Series)
+    def append(self, other):
+        # because DataFrame.append will override the method,
+        # wrap by pd.Series.append docstring
+
+        if isinstance(other, (list, dict)):
+            msg = "append doesn't support list or dict input"
+            raise NotImplementedError(msg)
+
+        if not isinstance(other, _Frame):
+            from .io import from_pandas
+            other = from_pandas(other, 1)
+
+        from .multi import _append
+        if self.known_divisions and other.known_divisions:
+            if self.divisions[-1] < other.divisions[0]:
+                divisions = self.divisions[:-1] + other.divisions
+                return _append(self, other, divisions)
+            else:
+                msg = ("Unable to append two dataframes to each other with known "
+                       "divisions if those divisions are not ordered. "
+                       "The divisions/index of the second dataframe must be "
+                       "greater than the divisions/index of the first dataframe.")
+                raise ValueError(msg)
+        else:
+            divisions = [None] * (self.npartitions + other.npartitions + 1)
+            return _append(self, other, divisions)
+
     @classmethod
     def _bind_operator_method(cls, name, op):
         """ bind operator method like DataFrame.add to this class """
@@ -1412,6 +1440,16 @@ class DataFrame(_Frame):
                      left_index=on is None, right_index=True,
                      left_on=on, suffixes=[lsuffix, rsuffix],
                      npartitions=npartitions)
+
+    @derived_from(pd.DataFrame)
+    def append(self, other):
+        if isinstance(other, Series):
+            msg = ('Unable to appending dd.Series to dd.DataFrame.'
+                   'Use pd.Series to append as row.')
+            raise ValueError(msg)
+        elif isinstance(other, pd.Series):
+            other = other.to_frame().T
+        return super(DataFrame, self).append(other)
 
     @classmethod
     def _bind_operator_method(cls, name, op):
