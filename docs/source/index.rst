@@ -40,12 +40,20 @@ Dask collections are the main interaction point for users.  They look like
 NumPy and pandas but generate dask graphs internally.  If you are a dask *user*
 then you should start here.
 
+* :doc:`array`
+* :doc:`bag`
+* :doc:`dataframe`
+* :doc:`imperative`
+
 .. toctree::
    :maxdepth: 1
+   :hidden:
+   :caption: Collections
 
    array.rst
    bag.rst
    dataframe.rst
+   imperative.rst
 
 **Graphs:**
 
@@ -53,13 +61,19 @@ Dask graphs encode algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
 dask collections.  If you are a *developer* then you should start here.
 
+* :doc:`graphs`
+* :doc:`spec`
+* :doc:`custom-graphs`
+* :doc:`optimize`
+
 .. toctree::
    :maxdepth: 1
+   :hidden:
+   :caption: Graphs
 
    graphs.rst
    spec.rst
    custom-graphs.rst
-   imperative.rst
    optimize.rst
 
 **Scheduling:**
@@ -68,20 +82,47 @@ Schedulers execute task graphs.  After a collection produces a graph we execute
 this graph in parallel, either using all of the cores on a single workstation
 or using a distributed cluster.
 
+* :doc:`scheduler-overview`
+* :doc:`shared`
+* :doc:`distributed`
+
 .. toctree::
    :maxdepth: 1
+   :hidden:
+   :caption: Schedulers
 
+   scheduler-overview.rst
    shared.rst
    distributed.rst
 
-**Other**
+**Inspecting and Diagnosing Graphs**
+
+Parallel code can be tricky to debug and profile. Dask provides a few tools to
+help make debugging and profiling graph execution easier.
+
+* :doc:`inspect`
+* :doc:`diagnostics`
 
 .. toctree::
    :maxdepth: 1
+   :hidden:
+   :caption: Diagnostics
 
-   install.rst
    inspect.rst
    diagnostics.rst
+
+**Other**
+
+* :doc:`install`
+* :doc:`faq`
+* :doc:`spark`
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: More information
+
+   install.rst
    faq.rst
    spark.rst
 

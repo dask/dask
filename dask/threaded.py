@@ -29,7 +29,7 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
         A dask dictionary specifying a workflow
     result: key or list of keys
         Keys corresponding to desired data
-    nthreads: integer of thread count
+    num_workers: integer of thread count
         The number of threads to use in the ThreadPool that will actually execute tasks
     cache: dict-like (optional)
         Temporary storage of results
