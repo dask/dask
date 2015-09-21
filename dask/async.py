@@ -488,12 +488,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 task = dsk[key]
                 _execute_task(task, data)  # Re-execute locally
             else:
-                raise type(res)('\nRemote Exception:\n'
-                              + '-----------------\n'
-                              + str(res) + '\n\n'
-                              + 'Traceback:\n'
-                              + '----------\n'
-                              + tb)
+                raise(remote_exception(res, tb))
         state['cache'][key] = res
         finish_task(dsk, key, state, results, keyorder.get)
         for f in posttask_cbs:
@@ -546,3 +541,57 @@ def sortkey(item):
     ('tuple', ('x', 1))
     """
     return (type(item).__name__, item)
+
+
+"""
+Remote Exceptions
+-----------------
+
+We want the following behaviors from remote exceptions
+
+1.  Include the original error message
+2.  Respond to try-except blocks with original error type
+3.  Include remote traceback
+"""
+
+
+class RemoteException(Exception):
+    """ Remote Exception
+
+    Contains the exception and traceback from a remotely run task
+    """
+    def __init__(self, exception, traceback):
+        self.exception = exception
+        self.traceback = traceback
+
+    def __str__(self):
+        return (str(self.exception) + "\n\n"
+                "Traceback\n"
+                "---------\n"
+                + self.traceback)
+
+    def __dir__(self):
+        return sorted(set(dir(type(self))
+                        + list(self.__dict__)
+                        + dir(self.exception)))
+
+    def __getattr__(self, key):
+        try:
+            return object.__getattribute__(self, key)
+        except AttributeError:
+            return getattr(self.exception, key)
+
+
+exceptions = dict()
+
+
+def remote_exception(exc, tb):
+    """ Metaclass that wraps exception type in RemoteException """
+    if type(exc) in exceptions:
+        typ = exceptions[type(exc)]
+    else:
+        typ = type(exc.__class__.__name__,
+                   (RemoteException, type(exc)),
+                   {'exception_type': type(exc)})
+        exceptions[type(exc)] = typ
+    return typ(exc, tb)
