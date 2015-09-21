@@ -14,6 +14,7 @@ import dill
 
 from dask.distributed.scheduler import Scheduler
 from dask.distributed.worker import Worker
+from dask.utils import raises
 
 context = zmq.Context()
 
@@ -175,6 +176,7 @@ def test_schedule():
             else:
                 break
         assert not a.data and not b.data
+        assert len(s.queues) == 0
 
 
 def test_gather():
@@ -347,3 +349,43 @@ def test_cull_redundant_data():
 
         assert ('x' in a.data and 'x' not in b.data or
                 'x' in b.data and 'x' not in a.data)
+
+
+def test_scatter_hang():
+    with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
+                               worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
+
+        data = {'x': 1, 'y': 2, 'z': 3}
+        w2.close()
+        while w2.status != 'closed':
+            sleep(1e-6)
+        assert raises(RuntimeError, lambda: s.scatter(data))
+        assert len(s.queues_by_worker[w1.address]) == 0
+        assert len(s.queues_by_worker[w2.address]) == 0
+
+
+def test_schedule_hang():
+    with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
+                               worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
+        dsk = {'x': (add, 1, 2), 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
+        w2.close()
+        while w2.status != 'closed':
+            sleep(1e-6)
+        assert raises(RuntimeError, lambda: s.schedule(dsk, ['y']))
+        assert len(s.queues_by_worker[w1.address]) == 0
+        assert len(s.queues_by_worker[w2.address]) == 0
+        assert len(s.queues) == 0
+
+
+def test_gather_hang():
+    with scheduler_and_workers(n=2, scheduler_kwargs={'worker_timeout': 0.1},
+                               worker_kwargs={'heartbeat': 0.01}) as (s, (w1, w2)):
+        s.send_data('x', 1, w1.address)
+        s.send_data('y', 2, w2.address)
+        w2.close()
+        while w2.status != 'closed':
+            sleep(1e-6)
+        assert raises(RuntimeError, lambda: s.gather(['x', 'y']))
+        assert len(s.queues_by_worker[w1.address]) == 0
+        assert len(s.queues_by_worker[w2.address]) == 0
+        assert len(s.queues) == 0

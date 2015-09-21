@@ -130,6 +130,7 @@ class Scheduler(object):
         self.lock = Lock()
         self.status = 'run'
         self.queues = dict()
+        self.queues_by_worker = defaultdict(lambda: defaultdict(set))
 
         self._schedule_lock = Lock()
 
@@ -271,7 +272,9 @@ class Scheduler(object):
                 self.who_has[key].add(address)
                 self.worker_has[address].add(key)
 
-                self.queues[payload['queue']].put(payload)
+                qkey = payload['queue']
+                self.queues_by_worker[address][qkey].remove(key)
+                self.queues[qkey].put(payload)
 
     def _status_to_client(self, header, payload):
         with logerrors():
@@ -318,7 +321,7 @@ class Scheduler(object):
 
         See also:
             Scheduler.schedule
-            Scheduler.worker_finished_task
+            Scheduler._worker_finished_task
         """
         worker = self.available_workers.get()
         locations = dict((dep, self.who_has[dep]) for dep in deps)
@@ -327,6 +330,8 @@ class Scheduler(object):
                   'dumps': dill.dumps, 'loads': dill.loads}
         payload = {'key': key, 'task': task, 'locations': locations,
                    'queue': queue}
+
+        self.queues_by_worker[worker][queue].add(key)
         self.send_to_worker(worker, header, payload)
 
     def release_key(self, key):
@@ -442,6 +447,7 @@ class Scheduler(object):
         self.queues[qkey] = queue
         counter = 0
         for (k, v), w in zip(key_value_pairs, workers):
+            self.queues_by_worker[w][qkey].add(k)
             header = {'function': 'setitem', 'jobid': k}
             payload = {'key': k, 'value': v}
             if block:
@@ -450,10 +456,15 @@ class Scheduler(object):
             counter += 1
 
         if block:
-            for i in range(counter):
-                queue.get()
-
-            del self.queues[qkey]
+            with self.queue_context(qkey):
+                for i in range(counter):
+                    msg = queue.get()
+                    key = msg['key']
+                    status = msg['status']
+                    worker = msg['worker']
+                    if status == 'failed':
+                        err = 'worker: %s died!, key: %s not collected' % (worker, key)
+                        raise RuntimeError(err)
 
     def gather(self, keys):
         """ Gather data from workers
@@ -497,13 +508,16 @@ class Scheduler(object):
 
         # Wait for replies
         cache = dict()
-        for i in flatten(keys):
-            k, v = queue.get()
-            cache[k] = v
-        del self.queues[qkey]
+        with self.queue_context(qkey):
+            for i in flatten(keys):
+                msg = queue.get()
+                if msg['status'] == 'failed':
+                    raise RuntimeError('Failed to gather a key')
+                cache[msg['key']] = msg['value']
+            del self.queues[qkey]
 
-        # Reshape to keys
-        return core.get(cache, keys)
+            # Reshape to keys
+            return core.get(cache, keys)
 
     def _gather_send(self, qkey, key):
         if isinstance(key, list):
@@ -514,6 +528,7 @@ class Scheduler(object):
             payload = {'key': key, 'queue': qkey}
             seq = list(self.who_has[key])
             worker = random.choice(seq)
+            self.queues_by_worker[worker][qkey].add(key)
             self.send_to_worker(worker, header, payload)
 
     def _getitem_ack(self, header, payload):
@@ -524,12 +539,11 @@ class Scheduler(object):
             Worker.getitem
         """
         payload = pickle.loads(payload)
-        log(self.address_to_workers, 'Getitem ack', payload['key'],
-                                                    payload['queue'])
+        log(self.address_to_workers, 'Getitem ack', payload['key'], payload['queue'])
         with logerrors():
             assert header['status'] == 'OK'
-            self.queues[payload['queue']].put((payload['key'],
-                                               payload['value']))
+            payload['status'] = 'success'
+            self.queues[payload['queue']].put(payload)
 
     def _setitem_ack(self, header, payload):
         """ Receive acknowledgement from worker about a setitem request
@@ -545,7 +559,10 @@ class Scheduler(object):
         self.worker_has[address].add(key)
         queue = payload.get('queue')
         if queue:
-            self.queues[queue].put(key)
+            msg = {'status': 'success',
+                   'key': key,
+                   'worker': address}
+            self.queues[queue].put(msg)
 
     def close_workers(self):
         header = {'function': 'close'}
@@ -639,41 +656,44 @@ class Scheduler(object):
                 self.trigger_task(key, dsk[key],
                         dag_state['dependencies'][key], qkey)  # Fire
 
-            try:
-                worker = self.available_workers.get(timeout=20)
-                self.available_workers.put(worker)  # put him back in
-            except Empty:
-                raise ValueError("Waited 20 seconds. No workers found")
+            with self.queue_context(qkey):
+                try:
+                    worker = self.available_workers.get(timeout=20)
+                    self.available_workers.put(worker)  # put him back in
+                except Empty:
+                    raise ValueError("Waited 20 seconds. No workers found")
 
-            # Seed initial tasks
-            while dag_state['ready'] and self.available_workers.qsize() > 0:
-                fire_task()
-
-            # Main loop, wait on tasks to finish, insert new ones
-            release_data = partial(self._release_data, protected=preexisting_data)
-            while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
-                payload = event_queue.get()
-
-                if isinstance(payload['status'], Exception):
-                    raise payload['status']
-
-                key = payload['key']
-                finish_task(dsk, key, dag_state, results, sortkey,
-                            release_data=release_data,
-                            delete=key not in preexisting_data)
-
+                # Seed initial tasks
                 while dag_state['ready'] and self.available_workers.qsize() > 0:
                     fire_task()
 
-            result2 = self.gather(result)
-            if not keep_results:  # release result data from workers
-                for key in flatten(result):
-                    if key not in preexisting_data:
-                        self.release_key(key)
+                # Main loop, wait on tasks to finish, insert new ones
+                release_data = partial(self._release_data, protected=preexisting_data)
+                while dag_state['waiting'] or dag_state['ready'] or dag_state['running']:
+                    payload = event_queue.get()
 
-            self.cull_redundant_data(3)
+                    if isinstance(payload['status'], Exception):
+                        raise payload['status']
+                    elif payload['status'] == 'failed':
+                        raise RuntimeError('A worker has died interuppting scheduling')
 
-        return result2
+                    key = payload['key']
+                    finish_task(dsk, key, dag_state, results, sortkey,
+                                release_data=release_data,
+                                delete=key not in preexisting_data)
+
+                    while dag_state['ready'] and self.available_workers.qsize() > 0:
+                        fire_task()
+
+                result2 = self.gather(result)
+                if not keep_results:  # release result data from workers
+                    for key in flatten(result):
+                        if key not in preexisting_data:
+                            self.release_key(key)
+
+                self.cull_redundant_data(3)
+
+            return result2
 
     def _schedule_from_client(self, header, payload):
         """
@@ -775,6 +795,7 @@ class Scheduler(object):
     def prune_and_notify(self, timeout=20):
         removed = self.prune_workers(timeout=timeout)
         if removed != []:
+            self.worker_death(removed)
             for w_address in self.workers:
                 header = {'function': 'worker-death'}
                 payload = {'removed': removed}
@@ -799,3 +820,28 @@ class Scheduler(object):
                     self.send_to_worker(worker, header, payload)
                     self.who_has[key].remove(worker)
                     self.worker_has[worker].remove(key)
+
+    def worker_death(self, removed_workers):
+        """
+        A worker died, check no queues are blocking waiting for data from the
+        worker.
+        """
+        with logerrors():
+            for w in removed_workers:
+                for queue, keys in self.queues_by_worker[w].items():
+                    for k in keys:
+                        msg = {'status': 'failed',
+                               'key': k,
+                               'worker': w}
+                        self.queues[queue].put(msg)
+
+    @contextmanager
+    def queue_context(self, qkey):
+        try:
+            yield
+        except Exception as e:
+            raise e
+        finally:
+            self.queues.pop(qkey, None)
+            for w in self.queues_by_worker:
+                self.queues_by_worker[w].pop(qkey, None)
