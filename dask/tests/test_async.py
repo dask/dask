@@ -165,5 +165,8 @@ def test_nonstandard_exceptions_propagate():
     try:
         get({'x': (f,)}, 'x')
         assert False
-    except MyException as e:
-        assert e.a == 1 and e.b == 2
+    except RemoteException as e:
+        assert isinstance(e.exception, MyException)
+        assert "My Exception!" in str(e)
+        assert "Traceback" in str(e)
+        assert e.exception.a == 1 and e.exception.b == 2
