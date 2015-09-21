@@ -712,3 +712,12 @@ def test_hdf_globbing():
         tm.assert_frame_equal(res.compute(), pd.concat([df] *  3))
     finally:
         shutil.rmtree(tdir)
+
+
+def test_index_col():
+    with filetext(text) as fn:
+        try:
+            f = read_csv(fn, chunkbytes=30, index_col='name')
+            assert False
+        except ValueError as e:
+            assert 'set_index' in str(e)
