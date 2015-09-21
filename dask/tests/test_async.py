@@ -168,7 +168,10 @@ def test_nonstandard_exceptions_propagate():
     except MyException as e:
         assert "My Exception!" in str(e)
         assert "Traceback" in str(e)
+        assert 'a' in dir(e)
+        assert 'traceback' in dir(e)
         assert e.exception.a == 1 and e.exception.b == 2
+        assert e.a == 1 and e.b == 2
 
 
 def test_remote_exception():
