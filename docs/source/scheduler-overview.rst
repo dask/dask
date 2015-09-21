@@ -1,7 +1,7 @@
 Scheduler Overview
 ==================
 
-Once a dask graph is created, a scheduler is needed to run it. Dask currently
+After we create a dask graph, we use a scheduler to run it. Dask currently
 implements a few different schedulers:
 
 - ``dask.threaded.get``: a scheduler backed by a thread pool
@@ -70,6 +70,10 @@ are shared.
     >>> da.compute(y, z)    # Compute y and z, sharing intermediate results
     (5050, 50.5)
 
+Here the ``x + 1`` intermediate was only computed once, while calling
+``y.compute()`` and ``z.compute()`` would compute it twice. For large graphs
+that share many intermediates this can be a big performance gain.
+
 The ``compute`` function works with any dask collection, and is found in
 ``dask.base``. For convenience it has also been imported into the top level
 namespace of each collection.
@@ -97,7 +101,7 @@ may want to use a different scheduler. There are two ways to do this:
 1. Using the ``get`` keyword in the ``compute`` method
 
     .. code-block:: python
-        
+
         >>> x.sum().compute(get=dask.multiprocessing.get)
 
 2. Using ``set_options``. This can be used either as a context manager, or to
@@ -136,6 +140,26 @@ global pool set with ``set_options``:
 
 For more information on the individual options for each scheduler, see the
 docstrings for each scheduler ``get`` function.
+
+
+Debugging the schedulers
+------------------------
+
+Debugging parallel code can be difficult, as conventional tools such as ``pdb``
+don't work well with multiple threads or processes. To get around this when
+debugging, it is recommeneded to use the synchronous scheduler found at
+``dask.async.get_sync``. This runs everything serially, allowing it to work
+well with ``pdb``.
+
+.. code-block:: python
+
+    >>> set_options(get=dask.async.get_sync)
+    >>> x.sum().compute()    # This computation runs serially instead of in parallel
+
+
+The shared memory schedulers also provide a set of callbacks that can be used
+for diagnosing and profiling. You can learn more about scheduler callbacks and
+diagnostics :doc:`here <diagnostics>`.
 
 
 More Information
