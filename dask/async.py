@@ -488,7 +488,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 task = dsk[key]
                 _execute_task(task, data)  # Re-execute locally
             else:
-                raise(RemoteException(res, tb))
+                raise(remote_exception(res, tb))
         state['cache'][key] = res
         finish_task(dsk, key, state, results, keyorder.get)
         for f in posttask_cbs:
@@ -543,6 +543,18 @@ def sortkey(item):
     return (type(item).__name__, item)
 
 
+"""
+Remote Exceptions
+-----------------
+
+We want the following behaviors from remote exceptions
+
+1.  Include the original error message
+2.  Respond to try-except blocks with original error type
+3.  Include remote traceback
+"""
+
+
 class RemoteException(Exception):
     """ Remote Exception
 
@@ -559,3 +571,18 @@ class RemoteException(Exception):
                 "Traceback\n"
                 "---------\n"
                 + self.traceback)
+
+
+exceptions = dict()
+
+
+def remote_exception(exc, tb):
+    """ Metaclass that wraps exception type in RemoteException """
+    if type(exc) in exceptions:
+        typ = exceptions[type(exc)]
+    else:
+        typ = type(exc.__class__.__name__,
+                   (RemoteException, type(exc)),
+                   {'exception_type': type(exc)})
+        exceptions[type(exc)] = typ
+    return typ(exc, tb)
