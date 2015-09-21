@@ -164,6 +164,17 @@ def test_pure():
     assert myrand().key != myrand().key
 
 
+def test_kwargs():
+    def mysum(a, b, c=(), **kwargs):
+        return a + b + sum(c) + sum(kwargs.values())
+    dmysum = do(mysum)
+    ten = dmysum(1, 2, c=[value(3), 0], four=dmysum(2,2))
+    assert ten.compute() == 10
+    dmysum = do(mysum, pure=True)
+    ten = dmysum(1, 2, c=[value(3), 0], four=dmysum(2,2))
+    assert ten.compute() == 10
+
+
 da = pytest.importorskip('dask.array')
 import numpy as np
 

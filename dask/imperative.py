@@ -1,5 +1,5 @@
 import operator
-from functools import partial, wraps
+from functools import wraps
 from itertools import chain, count
 from collections import Iterator
 
@@ -114,11 +114,15 @@ def applyfunc(func, args, kwargs, pure=False):
     of that computation."""
 
     args, dasks = unzip(map(to_task_dasks, args), 2)
-    dasks = flat_unique(dasks)
     if kwargs:
-        func = partial(func, **kwargs)
-    name = tokenize(func, *args, pure=pure)
-    dasks.append({name: (func,) + args})
+        dask_kwargs, dasks2 = to_task_dasks(kwargs)
+        dasks = dasks + (dasks2,)
+        task = (apply, func, (list, list(args)), dask_kwargs)
+    else:
+        task = (func,) + args
+    name = tokenize(*task, pure=pure)
+    dasks = flat_unique(dasks)
+    dasks.append({name: task})
     return Value(name, dasks)
 
 
@@ -240,7 +244,7 @@ class Value(base.Base):
         return hash(self.key)
 
     def __dir__(self):
-        return list(self.__dict__.keys())
+        return dir(type(self))
 
     def __getattr__(self, attr):
         if not attr.startswith('_'):
