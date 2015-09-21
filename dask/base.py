@@ -132,14 +132,26 @@ normalize_token.register((int, float, str, tuple, list), lambda a: a)
 normalize_token.register(object,
         lambda a: normalize_function(a) if callable(a) else a)
 normalize_token.register(dict, lambda a: tuple(sorted(a.items())))
+
 with ignoring(ImportError):
     import pandas as pd
     normalize_token.register(pd.DataFrame,
             lambda a: (id(a), len(a), list(a.columns)))
     normalize_token.register(pd.Series, lambda a: (id(a), len(a), a.name))
+
 with ignoring(ImportError):
     import numpy as np
-    normalize_token.register(np.ndarray, lambda a: (id(a), a.dtype, a.shape))
+    @partial(normalize_token.register, np.ndarray)
+    def normalize_array(x):
+        if x.dtype.hasobject == 'O':
+            L = x.flat.tolist()
+            try:
+                data = md5('-'.join(L)).hexdigest()
+            except TypeError:
+                data = md5('-'.join(map(str, L))).hexdigest()
+        else:
+            data = md5(x.data).hexdigest()
+        return (data, x.dtype, x.shape, x.strides)
 
 
 def tokenize(*args):

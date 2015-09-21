@@ -43,6 +43,27 @@ def test_tokenize():
     assert tokenize(a, b) == tokenize(normalize_token(a), normalize_token(b))
 
 
+def test_tokenize_numpy_array_consistent_on_values():
+    np = pytest.importorskip('numpy')
+    assert tokenize(np.random.RandomState(1234).random_sample(1000)) == \
+           tokenize(np.random.RandomState(1234).random_sample(1000))
+
+
+def test_tokenize_numpy_array_supports_uneven_sizes():
+    np = pytest.importorskip('numpy')
+    tokenize(np.random.random(7).astype(dtype='i2'))
+
+
+def test_tokenize_numpy_array_on_object_dtype():
+    np = pytest.importorskip('numpy')
+    assert tokenize(np.array(['a', 'aa', 'aaa'], dtype=object)) == \
+           tokenize(np.array(['a', 'aa', 'aaa'], dtype=object))
+    assert tokenize(np.array(['a', None, 'aaa'], dtype=object)) == \
+           tokenize(np.array(['a', None, 'aaa'], dtype=object))
+    assert tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) == \
+           tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object))
+
+
 da = pytest.importorskip('dask.array')
 import numpy as np
 
