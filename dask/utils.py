@@ -136,10 +136,28 @@ def filetexts(d, open=open):
 opens = {'gzip': gzip.open}
 
 
-def textblock(file, start, stop, compression=None):
+def next_linesep(fo, seek, encoding, linesep):
+    bin_linesep = linesep.encode(encoding)
+    data = b''
+    data_len = 0
+
+    while bin_linesep not in data:
+        data_len += 1
+        fo.seek(seek)
+        data = fo.read(data_len)
+        if len(data) < data_len:
+            break  # eof
+
+    stop = seek + data_len
+    start = stop - len(bin_linesep)
+    return start, stop
+
+
+def textblock(file, start, stop, compression=None, encoding=None,
+              linesep=None):
     """ Pull out a block of text from a file given start and stop bytes
 
-    This gets data starting/ending from the next newline delimiter
+    This gets data starting/ending from the next linesep delimiter
 
     Example
     -------
@@ -162,23 +180,30 @@ def textblock(file, start, stop, compression=None):
         finally:
             f.close()
         return result
+
+    if encoding is None:
+        encoding = getattr(file, 'encoding', 'utf-8')
+        if encoding is None:
+            encoding = 'utf-8'
+
+    if linesep is None:
+        linesep = os.linesep
+
     if start:
-        file.seek(start - 1)
-        line = file.readline() # burn a line
-        start = file.tell()
+        startstart, startstop = next_linesep(file, start, encoding, linesep)
+    else:
+        startstart = start
+        startstop = start
 
     if stop is None:
         file.seek(start)
         return file.read()
 
-    stop -= 1
-    file.seek(stop)
-    line = file.readline()
-    stop = file.tell()
+    stopstart, stopstop = next_linesep(file, stop, encoding, linesep)
 
-    file.seek(start)
+    file.seek(startstop)
 
-    return file.read(stop - start)
+    return file.read(stopstop - startstop)
 
 
 def concrete(seq):
