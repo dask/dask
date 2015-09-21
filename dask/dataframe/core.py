@@ -626,6 +626,33 @@ class _Frame(Base):
                 return DataFrame(dask, name, num.columns,
                                  quantiles[0].divisions)
 
+    @wraps(pd.DataFrame.describe)
+    def describe(self):
+        name = 'describe--' + tokenize(self)
+
+        # currently, only numeric describe is supported
+        num = self._get_numeric_data()
+
+        stats = [num.count(), num.mean(), num.std(), num.min(),
+                 num.quantile([0.25, 0.5, 0.75]), num.max()]
+        stats_names = [(s._name, 0) for s in stats]
+
+        def build_partition(values):
+            assert len(values) == 6
+            count, mean, std, min, q, max = values
+            part1 = self._partition_type([count, mean, std, min],
+                                         index=['count', 'mean', 'std', 'min'])
+            q.index = ['25%', '50%', '75%']
+            part3 = self._partition_type([max], index=['max'])
+            return pd.concat([part1, q, part3])
+
+        dsk = dict()
+        dsk[(name, 0)] = (build_partition, (list, stats_names))
+        dsk = merge(dsk, num.dask, *[s.dask for s in stats])
+
+        return self._constructor(dsk, name, num.column_info,
+                                 divisions=[None, None])
+
     def _cum_agg(self, token, chunk, aggregate, agginit, axis):
         """ Wrapper for cumulative operation """
 
@@ -1155,10 +1182,15 @@ class DataFrame(_Frame):
         """ Return dimensionality """
         return 2
 
+    @cache_readonly
+    def _dtypes(self):
+        """ for cache, cache_readonly hides docstring """
+        return self._get(self.dask, self._keys()[0]).dtypes
+
     @property
     def dtypes(self):
         """ Return data types """
-        return self._get(self.dask, self._keys()[0]).dtypes
+        return self._dtypes
 
     @wraps(pd.DataFrame.set_index)
     def set_index(self, other, **kwargs):
@@ -1269,20 +1301,17 @@ class DataFrame(_Frame):
         from .io import to_bag
         return to_bag(self, index)
 
-    @cache_readonly
-    def _numeric_columns(self):
-        # Cache to avoid repeated calls
-        dummy = self._get(self.dask, self._keys()[0])._get_numeric_data()
-        return dummy.columns.tolist()
-
     @wraps(pd.DataFrame._get_numeric_data)
     def _get_numeric_data(self, how='any', subset=None):
-        if len(self._numeric_columns) < len(self.columns):
+        numeric_columns = [c for c, dtype in zip(self.columns, self.dtypes)
+                           if issubclass(dtype.type, np.number)]
+
+        if len(numeric_columns) < len(self.columns):
             name = self._token_prefix + '-get_numeric_data'
             return map_partitions(pd.DataFrame._get_numeric_data,
-                                  self._numeric_columns, self, token=name)
+                                  numeric_columns, self, token=name)
         else:
-            # use current data if unchanged
+            # use myself if all numerics
             return self
 
     @classmethod
