@@ -160,13 +160,16 @@ with ignoring(ImportError):
     @partial(normalize_token.register, np.ndarray)
     def normalize_array(x):
         if x.dtype.hasobject:
-            L = x.flat.tolist()
             try:
-                data = md5('-'.join(L)).hexdigest()
+                data = md5('-'.join(x.flat)).hexdigest()
             except TypeError:
-                data = md5('-'.join(map(str, L))).hexdigest()
+                data = md5('-'.join(map(str, x.flat))).hexdigest()
         else:
-            data = md5(x.data).hexdigest()
+            try:
+                buffer = x.data
+            except AttributeError:
+                buffer = np.array(x).data  # force a copy
+            data = md5(buffer).hexdigest()
         return (data, x.dtype, x.shape, x.strides)
 
 

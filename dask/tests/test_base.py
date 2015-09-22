@@ -54,6 +54,11 @@ def test_tokenize_numpy_array_supports_uneven_sizes():
     tokenize(np.random.random(7).astype(dtype='i2'))
 
 
+def test_tokenize_discontiguous_numpy_array():
+    np = pytest.importorskip('numpy')
+    tokenize(np.random.random(8)[::2])
+
+
 def test_tokenize_numpy_array_on_object_dtype():
     np = pytest.importorskip('numpy')
     assert tokenize(np.array(['a', 'aa', 'aaa'], dtype=object)) == \
