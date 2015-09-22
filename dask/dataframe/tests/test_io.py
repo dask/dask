@@ -731,35 +731,20 @@ def test_from_pandas_with_datetime_index():
         eq(df, ddf)
 
 
-ar = pd.Series(range(0, 100))
-br = ar % 7
-cr = br * 3.3
-dr = br / 1.9836
-test_df = pd.concat([ar, br, cr, dr], axis=1)
-
-
 def test_encoding_gh601():
-    with tmpfile('.csv') as fn:
-        test_df.to_csv(fn, encoding='utf-16')
+    encodings = ('utf-16', 'utf-16-le', 'utf-16-be')
+    ar = pd.Series(range(0, 100))
+    br = ar % 7
+    cr = br * 3.3
+    dr = br / 1.9836
+    test_df = pd.concat([ar, br, cr, dr], axis=1)
 
-        a = pd.read_csv(fn, encoding='utf-16')
-        d = dd.read_csv(fn, encoding='utf-16', chunkbytes=1000)
-        d.compute()
+    for encoding in encodings:
+        with tmpfile('.csv') as fn:
+            test_df.to_csv(fn, encoding=encoding)
 
-
-def test_encoding_gh601_utf_16_le():
-    with tmpfile('.csv') as fn:
-        test_df.to_csv(fn, encoding='utf-16-le')
-
-        a = pd.read_csv(fn, encoding='utf-16-le')
-        d = dd.read_csv(fn, encoding='utf-16-le', chunkbytes=1000)
-        d.compute()
-
-
-def test_encoding_gh601_utf_16_be():
-    with tmpfile('.csv') as fn:
-        test_df.to_csv(fn, encoding='utf-16-be')
-
-        a = pd.read_csv(fn, encoding='utf-16-be')
-        d = dd.read_csv(fn, encoding='utf-16-be', chunkbytes=1000)
-        d.compute()
+            a = pd.read_csv(fn, encoding=encoding)
+            d = dd.read_csv(fn, encoding=encoding, chunkbytes=1000)
+            d = d.compute()
+            d.index = range(100)
+            assert eq(d, a)
