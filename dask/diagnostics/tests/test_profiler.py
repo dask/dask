@@ -5,6 +5,7 @@ from time import sleep
 from dask.diagnostics import Profiler, ResourceProfiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
+from dask.compatibility import apply
 import pytest
 
 try:

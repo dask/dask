@@ -73,9 +73,10 @@ def pprint_task(task, keys, label_size=60):
                 tail = ')'
             args = task[1:]
             kwargs = {}
-        label_size2 = int((label_size - len(head) - len(tail)) //
-                          (len(args) + len(kwargs)))
-        pprint = lambda t: pprint_task(t, keys, label_size2)
+        if args or kwargs:
+            label_size2 = int((label_size - len(head) - len(tail)) //
+                              (len(args) + len(kwargs)))
+            pprint = lambda t: pprint_task(t, keys, label_size2)
         if args:
             if label_size2 > 5:
                 args = ', '.join(pprint(t) for t in args)
@@ -86,7 +87,7 @@ def pprint_task(task, keys, label_size=60):
         if kwargs:
             if label_size2 > 5:
                 kwargs = ', ' + ', '.join('{0}={1}'.format(k, pprint(v))
-                                          for k, v in kwargs.items())
+                                          for k, v in sorted(kwargs.items()))
             else:
                 kwargs = ', ...'
         else:
