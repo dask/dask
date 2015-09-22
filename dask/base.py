@@ -132,14 +132,50 @@ normalize_token.register((int, float, str, tuple, list), lambda a: a)
 normalize_token.register(object,
         lambda a: normalize_function(a) if callable(a) else a)
 normalize_token.register(dict, lambda a: tuple(sorted(a.items())))
+
 with ignoring(ImportError):
     import pandas as pd
-    normalize_token.register(pd.DataFrame,
-            lambda a: (id(a), len(a), list(a.columns)))
-    normalize_token.register(pd.Series, lambda a: (id(a), len(a), a.name))
+
+    @partial(normalize_token.register, pd.Index)
+    def normalize_index(ind):
+        return [ind.name, normalize_token(ind.values)]
+
+    @partial(normalize_token.register, pd.Categorical)
+    def normalize_categorical(cat):
+        return [normalize_token(cat.codes),
+                normalize_token(cat.categories),
+                cat.ordered]
+
+    @partial(normalize_token.register, pd.Series)
+    def normalize_series(s):
+        return [s.name, s.dtype,
+                normalize_token(s._data.blocks[0].values),
+                normalize_token(s.index)]
+
+    @partial(normalize_token.register, pd.DataFrame)
+    def normalize_dataframe(df):
+        data = [block.values for block in df._data.blocks]
+        data += [df.columns, df.index]
+        return list(map(normalize_token, data))
+
+
 with ignoring(ImportError):
     import numpy as np
-    normalize_token.register(np.ndarray, lambda a: (id(a), a.dtype, a.shape))
+    @partial(normalize_token.register, np.ndarray)
+    def normalize_array(x):
+        if not x.shape:
+            return (str(x), x.dtype)
+        if x.dtype.hasobject:
+            try:
+                data = md5('-'.join(x.flat)).hexdigest()
+            except TypeError:
+                data = md5(b'-'.join([str(item).encode() for item in x.flat])).hexdigest()
+        else:
+            try:
+                data = md5(x.view('i1').data).hexdigest()
+            except (BufferError, AttributeError, ValueError):
+                data = md5(x.copy().view('i1').data).hexdigest()
+        return (data, x.dtype, x.shape, x.strides)
 
 
 def tokenize(*args):

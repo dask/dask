@@ -43,6 +43,58 @@ def test_tokenize():
     assert tokenize(a, b) == tokenize(normalize_token(a), normalize_token(b))
 
 
+def test_tokenize_numpy_array_consistent_on_values():
+    np = pytest.importorskip('numpy')
+    assert tokenize(np.random.RandomState(1234).random_sample(1000)) == \
+           tokenize(np.random.RandomState(1234).random_sample(1000))
+
+
+def test_tokenize_numpy_array_supports_uneven_sizes():
+    np = pytest.importorskip('numpy')
+    tokenize(np.random.random(7).astype(dtype='i2'))
+
+
+def test_tokenize_discontiguous_numpy_array():
+    np = pytest.importorskip('numpy')
+    tokenize(np.random.random(8)[::2])
+
+
+def test_tokenize_numpy_datetime():
+    np = pytest.importorskip('numpy')
+    tokenize(np.array(['2000-01-01T12:00:00'], dtype='M8[ns]'))
+
+
+def test_tokenize_numpy_scalar():
+    np = pytest.importorskip('numpy')
+    tokenize(np.array(1.0, dtype='f8'))
+
+
+def test_tokenize_numpy_array_on_object_dtype():
+    np = pytest.importorskip('numpy')
+    assert tokenize(np.array(['a', 'aa', 'aaa'], dtype=object)) == \
+           tokenize(np.array(['a', 'aa', 'aaa'], dtype=object))
+    assert tokenize(np.array(['a', None, 'aaa'], dtype=object)) == \
+           tokenize(np.array(['a', None, 'aaa'], dtype=object))
+    assert tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) == \
+           tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object))
+
+
+def test_tokenize_pandas():
+    a = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
+    b = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
+
+    assert tokenize(a) == tokenize(b)
+    b.index.name = 'foo'
+    assert tokenize(a) != tokenize(b)
+
+    a = pd.DataFrame({'x': [1, 2, 3], 'y': ['a', 'b', 'a']})
+    b = pd.DataFrame({'x': [1, 2, 3], 'y': ['a', 'b', 'a']})
+    a['z'] = a.y.astype('category')
+    assert tokenize(a) != tokenize(b)
+    b['z'] = a.y.astype('category')
+    assert tokenize(a) == tokenize(b)
+
+
 da = pytest.importorskip('dask.array')
 import numpy as np
 
