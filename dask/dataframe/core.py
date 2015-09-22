@@ -4,7 +4,6 @@ import bisect
 from collections import Iterable, Iterator
 from datetime import datetime
 from distutils.version import LooseVersion
-from functools import wraps
 import operator
 from operator import getitem, setitem
 from pprint import pformat
@@ -25,8 +24,8 @@ from .. import core
 from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import unicode, apply, operator_div, bind_method
-from ..utils import repr_long_list, IndexCallable, pseudorandom
-from . import utils
+from ..utils import (repr_long_list, IndexCallable,
+                     pseudorandom, derived_from)
 from ..base import Base, compute, tokenize, normalize_token
 
 no_default = '__no_default__'
@@ -241,7 +240,7 @@ class _Frame(Base):
                     for i, key in enumerate(self._keys()))
         return self._constructor(dsk2, name, self.column_info, self.divisions)
 
-    @wraps(pd.DataFrame.drop_duplicates)
+    @derived_from(pd.DataFrame)
     def drop_duplicates(self):
         chunk = lambda s: s.drop_duplicates()
         return aca(self, chunk=chunk, aggregate=chunk, columns=self.column_info,
@@ -258,19 +257,26 @@ class _Frame(Base):
         result is a Series).  The output type will be determined by the type of
         ``columns``.
 
-        >>> df.map_partitions(lambda df: df.x + 1, columns='x')  # doctest: +SKIP
-
-        >>> df.map_partitions(lambda df: df.head(), columns=df.columns)  # doctest: +SKIP
-
         Parameters
         ----------
 
-        func: function
+        func : function
             Function applied to each blocks
-        columns: tuple or scalar
+        columns : tuple or scalar
             Column names or name of the output. Defaults to names of data itself.
             When tuple is passed, DataFrame is returned. When scalar is passed,
             Series is returned.
+
+        Examples
+        --------
+
+        When str is passed as columns, the result will be Series.
+
+        >>> df.map_partitions(lambda df: df.x + 1, columns='x')  # doctest: +SKIP
+
+        When tuple is passed as columns, the result will be Series.
+
+        >>> df.map_partitions(lambda df: df.head(), columns=df.columns)  # doctest: +SKIP
         """
         if columns == no_default:
             columns = self.column_info
@@ -279,10 +285,15 @@ class _Frame(Base):
     def random_split(self, p, seed=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
+        Examples
+        --------
+
         50/50 split
+
         >>> a, b = df.random_split([0.5, 0.5])  # doctest: +SKIP
 
         80/10/10 split, consistent seed
+
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
         """
         seeds = np.random.RandomState(seed).randint(0, np.iinfo(np.int32).max,
@@ -418,12 +429,15 @@ class _Frame(Base):
         Parameters
         ----------
 
-        divisions: list
+        divisions : list
             List of partitions to be used
-        force: bool, default False
+        force : bool, default False
             Allows the expansion of the existing divisions.
             If False then the new divisions lower and upper bounds must be
             the same as the old divisions.
+
+        Examples
+        --------
 
         >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
         """
@@ -435,7 +449,7 @@ class _Frame(Base):
     def __setstate__(self, dict):
         self.__dict__ = dict
 
-    @wraps(pd.Series.fillna)
+    @derived_from(pd.Series)
     def fillna(self, value):
         func = getattr(self._partition_type, 'fillna')
         return map_partitions(func, self.column_info, self, value)
@@ -467,14 +481,14 @@ class _Frame(Base):
         return self._constructor(merge(self.dask, dsk), name,
                                        self.column_info, self.divisions)
 
-    @wraps(pd.DataFrame.to_hdf)
+    @derived_from(pd.DataFrame)
     def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
                complib=None, fletcher32=False, **kwargs):
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
                 fletcher32, **kwargs)
 
-    @wraps(pd.DataFrame.to_csv)
+    @derived_from(pd.DataFrame)
     def to_csv(self, filename, **kwargs):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
@@ -494,7 +508,7 @@ class _Frame(Base):
         """ Wrapper for aggregations """
         raise NotImplementedError
 
-    @wraps(pd.DataFrame.sum)
+    @derived_from(pd.DataFrame)
     def sum(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -504,7 +518,7 @@ class _Frame(Base):
         else:
             return self._aca_agg(token='sum', func=lambda x: x.sum())
 
-    @wraps(pd.DataFrame.max)
+    @derived_from(pd.DataFrame)
     def max(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -514,7 +528,7 @@ class _Frame(Base):
         else:
             return self._aca_agg(token='max', func=lambda x: x.max())
 
-    @wraps(pd.DataFrame.min)
+    @derived_from(pd.DataFrame)
     def min(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -524,7 +538,7 @@ class _Frame(Base):
         else:
             return self._aca_agg(token='min', func=lambda x: x.min())
 
-    @wraps(pd.DataFrame.count)
+    @derived_from(pd.DataFrame)
     def count(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -535,7 +549,7 @@ class _Frame(Base):
             return self._aca_agg(token='count', func=lambda x: x.count(),
                                  aggfunc=lambda x: x.sum())
 
-    @wraps(pd.DataFrame.mean)
+    @derived_from(pd.DataFrame)
     def mean(self, axis=None):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -555,7 +569,7 @@ class _Frame(Base):
             name = '{0}mean-{1}'.format(self._token_prefix, tokenize(s))
             return map_partitions(f, no_default, s, n, token=name)
 
-    @wraps(pd.DataFrame.var)
+    @derived_from(pd.DataFrame)
     def var(self, axis=None, ddof=1):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -579,7 +593,7 @@ class _Frame(Base):
             name = '{0}var(ddof={1})'.format(self._token_prefix, ddof)
             return map_partitions(f, no_default, x2, x, n, token=name)
 
-    @wraps(pd.DataFrame.std)
+    @derived_from(pd.DataFrame)
     def std(self, axis=None, ddof=1):
         axis = self._validate_axis(axis)
         if axis == 1:
@@ -593,6 +607,9 @@ class _Frame(Base):
 
     def quantile(self, q=0.5, axis=0):
         """ Approximate row-wise and precise column-wise quantiles of DataFrame
+
+        Parameters
+        ----------
 
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
@@ -626,7 +643,7 @@ class _Frame(Base):
                 return DataFrame(dask, name, num.columns,
                                  quantiles[0].divisions)
 
-    @wraps(pd.DataFrame.describe)
+    @derived_from(pd.DataFrame)
     def describe(self):
         name = 'describe--' + tokenize(self)
 
@@ -688,17 +705,17 @@ class _Frame(Base):
             return self._constructor(merge(dask, cumpart.dask, cumlast.dask),
                                      name, self.column_info, self.divisions)
 
-    @wraps(pd.DataFrame.cumsum)
+    @derived_from(pd.DataFrame)
     def cumsum(self, axis=None):
         return self._cum_agg('cumsum', self._partition_type.cumsum,
                              operator.add, 0, axis=axis)
 
-    @wraps(pd.DataFrame.cumprod)
+    @derived_from(pd.DataFrame)
     def cumprod(self, axis=None):
         return self._cum_agg('cumprod', self._partition_type.cumprod,
                              operator.mul, 1, axis=axis)
 
-    @wraps(pd.DataFrame.cummax)
+    @derived_from(pd.DataFrame)
     def cummax(self, axis=None):
         def aggregate(x, y):
             if isinstance(x, (pd.Series, pd.DataFrame)):
@@ -708,7 +725,7 @@ class _Frame(Base):
         return self._cum_agg('cummax', self._partition_type.cummax,
                              aggregate, np.nan, axis=axis)
 
-    @wraps(pd.DataFrame.cummin)
+    @derived_from(pd.DataFrame)
     def cummin(self, axis=None):
         def aggregate(x, y):
             if isinstance(x, (pd.Series, pd.DataFrame)):
@@ -718,12 +735,12 @@ class _Frame(Base):
         return self._cum_agg('cummin', self._partition_type.cummin,
                              aggregate, np.nan, axis=axis)
 
-    @wraps(pd.DataFrame.where)
+    @derived_from(pd.DataFrame)
     def where(self, cond, other=np.nan):
         return map_partitions(self._partition_type.where,
                               self.column_info, self, cond, other)
 
-    @wraps(pd.DataFrame.mask)
+    @derived_from(pd.DataFrame)
     def mask(self, cond, other=np.nan):
         return map_partitions(self._partition_type.mask,
                               self.column_info, self, cond, other)
@@ -918,7 +935,7 @@ class Series(_Frame):
                           self.name, self.divisions)
         raise NotImplementedError()
 
-    @wraps(pd.DataFrame._get_numeric_data)
+    @derived_from(pd.DataFrame)
     def _get_numeric_data(self, how='any', subset=None):
         return self
 
@@ -938,59 +955,59 @@ class Series(_Frame):
                    aggregate=lambda x: aggfunc(pd.Series(x)),
                    columns=return_scalar, token=self._token_prefix + token)
 
-    @wraps(pd.Series.groupby)
+    @derived_from(pd.Series)
     def groupby(self, index, **kwargs):
         return SeriesGroupBy(self, index, **kwargs)
 
-    @wraps(pd.Series.sum)
+    @derived_from(pd.Series)
     def sum(self, axis=None):
         return super(Series, self).sum(axis=axis)
 
-    @wraps(pd.Series.max)
+    @derived_from(pd.Series)
     def max(self, axis=None):
         return super(Series, self).max(axis=axis)
 
-    @wraps(pd.Series.min)
+    @derived_from(pd.Series)
     def min(self, axis=None):
         return super(Series, self).min(axis=axis)
 
-    @wraps(pd.Series.count)
+    @derived_from(pd.Series)
     def count(self):
         return super(Series, self).count()
 
-    @wraps(pd.Series.mean)
+    @derived_from(pd.Series)
     def mean(self, axis=None):
         return super(Series, self).mean(axis=axis)
 
-    @wraps(pd.Series.var)
+    @derived_from(pd.Series)
     def var(self, axis=None, ddof=1):
         return super(Series, self).var(axis=axis, ddof=ddof)
 
-    @wraps(pd.Series.std)
+    @derived_from(pd.Series)
     def std(self, axis=None, ddof=1):
         return super(Series, self).std(axis=axis, ddof=ddof)
 
-    @wraps(pd.Series.cumsum)
+    @derived_from(pd.Series)
     def cumsum(self, axis=None):
         return super(Series, self).cumsum(axis=axis)
 
-    @wraps(pd.Series.cumprod)
+    @derived_from(pd.Series)
     def cumprod(self, axis=None):
         return super(Series, self).cumprod(axis=axis)
 
-    @wraps(pd.Series.cummax)
+    @derived_from(pd.Series)
     def cummax(self, axis=None):
         return super(Series, self).cummax(axis=axis)
 
-    @wraps(pd.Series.cummin)
+    @derived_from(pd.Series)
     def cummin(self, axis=None):
         return super(Series, self).cummin(axis=axis)
 
-    @wraps(pd.Series.nunique)
+    @derived_from(pd.Series)
     def nunique(self):
         return self.drop_duplicates().count()
 
-    @wraps(pd.Series.value_counts)
+    @derived_from(pd.Series)
     def value_counts(self):
         chunk = lambda s: s.value_counts()
         if LooseVersion(pd.__version__) > '0.16.2':
@@ -1000,36 +1017,36 @@ class Series(_Frame):
         return aca(self, chunk=chunk, aggregate=agg, columns=self.name,
                    token='value-counts')
 
-    @wraps(pd.Series.nlargest)
+    @derived_from(pd.Series)
     def nlargest(self, n=5):
         return nlargest(self, n)
 
-    @wraps(pd.Series.isin)
+    @derived_from(pd.Series)
     def isin(self, other):
         return elemwise(pd.Series.isin, self, other)
 
-    @wraps(pd.Series.map)
+    @derived_from(pd.Series)
     def map(self, arg, na_action=None):
         return elemwise(pd.Series.map, self, arg, na_action, name=self.name)
 
-    @wraps(pd.Series.astype)
+    @derived_from(pd.Series)
     def astype(self, dtype):
         return map_partitions(pd.Series.astype, self.name, self, dtype)
 
-    @wraps(pd.Series.dropna)
+    @derived_from(pd.Series)
     def dropna(self):
         return map_partitions(pd.Series.dropna, self.name, self)
 
-    @wraps(pd.Series.between)
+    @derived_from(pd.Series)
     def between(self, left, right, inclusive=True):
         return map_partitions(pd.Series.between, self.name, self, left, right,
                 inclusive)
 
-    @wraps(pd.Series.clip)
+    @derived_from(pd.Series)
     def clip(self, lower=None, upper=None):
         return map_partitions(pd.Series.clip, self.name, self, lower, upper)
 
-    @wraps(pd.Series.notnull)
+    @derived_from(pd.Series)
     def notnull(self):
         return map_partitions(pd.Series.notnull, self.name, self)
 
@@ -1045,7 +1062,7 @@ class Series(_Frame):
         from .io import to_bag
         return to_bag(self, index)
 
-    @wraps(pd.Series.to_frame)
+    @derived_from(pd.Series)
     def to_frame(self, name=None):
         _name = name if name is not None else self.name
         return map_partitions(pd.Series.to_frame, [_name], self, name)
@@ -1203,7 +1220,7 @@ class DataFrame(_Frame):
         """ Return data types """
         return self._dtypes
 
-    @wraps(pd.DataFrame.set_index)
+    @derived_from(pd.DataFrame)
     def set_index(self, other, **kwargs):
         from .shuffle import set_index
         return set_index(self, other, **kwargs)
@@ -1224,21 +1241,18 @@ class DataFrame(_Frame):
         """ Return DataFrame.columns """
         return self.columns
 
+    @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None):
-        """
-        Return the rows which contain the largest n elements from the provided
-        column, in descending order.
-        """
         return nlargest(self, n, columns)
 
-    @wraps(pd.DataFrame.groupby)
+    @derived_from(pd.DataFrame)
     def groupby(self, key, **kwargs):
         return GroupBy(self, key, **kwargs)
 
     def categorize(self, columns=None, **kwargs):
         return categorize(self, columns, **kwargs)
 
-    @wraps(pd.DataFrame.assign)
+    @derived_from(pd.DataFrame)
     def assign(self, **kwargs):
         pairs = list(sum(kwargs.items(), ()))
 
@@ -1246,7 +1260,7 @@ class DataFrame(_Frame):
         df2 = self._empty_partition.assign(**dict((k, []) for k in kwargs))
         return elemwise(_assign, self, *pairs, columns=list(df2.columns))
 
-    @wraps(pd.DataFrame.rename)
+    @derived_from(pd.DataFrame)
     def rename(self, index=None, columns=None):
         if index is not None:
             raise ValueError("Cannot rename index.")
@@ -1281,7 +1295,7 @@ class DataFrame(_Frame):
         return self._constructor(merge(dsk, self.dask), name,
                                        self.columns, self.divisions)
 
-    @wraps(pd.DataFrame.dropna)
+    @derived_from(pd.DataFrame)
     def dropna(self, how='any', subset=None):
         def f(df, how=how, subset=subset):
             return df.dropna(how=how, subset=subset)
@@ -1312,7 +1326,12 @@ class DataFrame(_Frame):
         from .io import to_bag
         return to_bag(self, index)
 
-    @wraps(pd.DataFrame._get_numeric_data)
+    @cache_readonly
+    def _numeric_columns(self):
+        # Cache to avoid repeated calls
+        dummy = self._get(self.dask, self._keys()[0])._get_numeric_data()
+        return dummy.columns.tolist()
+
     def _get_numeric_data(self, how='any', subset=None):
         numeric_columns = [c for c, dtype in zip(self.columns, self.dtypes)
                            if issubclass(dtype.type, np.number)]
@@ -1341,7 +1360,7 @@ class DataFrame(_Frame):
                    aggregate=lambda x: aggfunc(x.groupby(level=0)),
                    columns=None, token=self._token_prefix + token)
 
-    @wraps(pd.DataFrame.drop)
+    @derived_from(pd.DataFrame)
     def drop(self, labels, axis=0):
         if axis != 1:
             raise NotImplementedError("Drop currently only works for axis=1")
@@ -1349,7 +1368,7 @@ class DataFrame(_Frame):
         columns = list(self._empty_partition.drop(labels, axis=axis).columns)
         return elemwise(pd.DataFrame.drop, self, labels, axis, columns=columns)
 
-    @wraps(pd.DataFrame.merge)
+    @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
               left_index=False, right_index=False,
               suffixes=('_x', '_y'), npartitions=None):
@@ -1363,7 +1382,7 @@ class DataFrame(_Frame):
                      left_index=left_index, right_index=right_index,
                      suffixes=suffixes, npartitions=npartitions)
 
-    @wraps(pd.DataFrame.join)
+    @derived_from(pd.DataFrame)
     def join(self, other, on=None, how='left',
              lsuffix='', rsuffix='', npartitions=None):
 
@@ -1708,27 +1727,28 @@ class _GroupBy(object):
             return aca(self.df, chunk=chunk, aggregate=agg,
                        columns=self.key, token=token)
 
-    @wraps(pd.core.groupby.GroupBy.sum)
+    @derived_from(pd.core.groupby.GroupBy)
     def sum(self):
         return self._aca_agg(token='sum', func=lambda x: x.sum())
 
-    @wraps(pd.core.groupby.GroupBy.min)
+    @derived_from(pd.core.groupby.GroupBy)
     def min(self):
         return self._aca_agg(token='min', func=lambda x: x.min())
 
-    @wraps(pd.core.groupby.GroupBy.max)
+    @derived_from(pd.core.groupby.GroupBy)
     def max(self):
         return self._aca_agg(token='max', func=lambda x: x.max())
 
-    @wraps(pd.core.groupby.GroupBy.count)
+    @derived_from(pd.core.groupby.GroupBy)
     def count(self):
         return self._aca_agg(token='count', func=lambda x: x.count(),
                              aggfunc=lambda x: x.sum())
 
-    @wraps(pd.core.groupby.GroupBy.mean)
+    @derived_from(pd.core.groupby.GroupBy)
     def mean(self):
         return 1.0 * self.sum() / self.count()
 
+    @derived_from(pd.core.groupby.GroupBy)
     def get_group(self, key):
         token = self._token_prefix + 'get_group'
         return map_partitions(_groupby_get_group, self.column_info,
@@ -1967,9 +1987,12 @@ def _get_return_type(arg, columns):
 def map_partitions(func, columns, *args, **kwargs):
     """ Apply Python function on each DataFrame block
 
-    column_info: tuple or string
+    Parameters
+    ----------
+
+    column_info : tuple or string
         Column names or name of the output
-    targets: list
+    targets : list
         List of target DataFrame / Series.
     """
     assert callable(func)
@@ -2167,20 +2190,25 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
     Parameters
     ----------
-    a: tuple
+
+    a : tuple
         old divisions
-    b: tuple, list
+    b : tuple, list
         new divisions
-    name: str
+    name : str
         name of old dataframe
-    out1: str
+    out1 : str
         name of temporary splits
-    out2: str
+    out2 : str
         name of new dataframe
-    force: bool, default False
+    force : bool, default False
         Allows the expansion of the existing divisions.
         If False then the new divisions lower and upper bounds must be
         the same as the old divisions.
+
+
+    Examples
+    --------
 
     >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
     {('b', 0): (<function _loc at ...>, ('a', 0), 1, 3, False),
@@ -2321,12 +2349,16 @@ def repartition(df, divisions, force=False):
     Parameters
     ----------
 
-    divisions: list
+    divisions : list
         List of partitions to be used
-    force: bool, default False
+    force : bool, default False
         Allows the expansion of the existing divisions.
         If False then the new divisions lower and upper bounds must be
         the same as the old divisions.
+
+
+    Examples
+    --------
 
     >>> df = df.repartition([0, 5, 10, 20])  # doctest: +SKIP
 
@@ -2344,7 +2376,8 @@ def repartition(df, divisions, force=False):
                                df.column_info, divisions)
     elif isinstance(df, (pd.Series, pd.DataFrame)):
         name = 'repartition-dataframe-' + token
-        dfs = utils.shard_df_on_index(df, divisions[1:-1])
+        from .utils import shard_df_on_index
+        dfs = shard_df_on_index(df, divisions[1:-1])
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
         return _Frame(dsk, name, df, divisions)
     raise ValueError('Data must be DataFrame or Series')

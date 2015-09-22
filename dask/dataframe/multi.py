@@ -437,32 +437,38 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     """ Concatenate DataFrames along rows.
 
     - When axis=0 (default), concatenate DataFrames row-wise:
+
       - If all divisions are known and ordered, concatenate DataFrames keeping
         divisions. When divisions are not ordered, specifying
         interleave_partition=True allows concatenate divisions each by each.
+
       - If any of division is unknown, concatenate DataFrames resetting its
         division to unknown (None)
+
     - When axis=1, concatenate DataFrames column-wise:
+
       - Allowed if all divisions are known.
+
       - If any of division is unknown, it raises ValueError.
 
     Parameters
     ----------
 
-    dfs: list
+    dfs : list
         List of dask.DataFrames to be concatenated
-    axis: {0, 1, 'index', 'columns'}, default 0
+    axis : {0, 1, 'index', 'columns'}, default 0
         The axis to concatenate along
     join : {'inner', 'outer'}, default 'outer'
         How to handle indexes on other axis
-    interleave_partitions: bool, default False
+    interleave_partitions : bool, default False
         Whether to concatenate DataFrames ignoring its order. If True, every
         divisions are concatenated each by each.
 
     Examples
     --------
 
-    # If all divisions are known and ordered, divisions are kept.
+    If all divisions are known and ordered, divisions are kept.
+
     >>> a                                               # doctest: +SKIP
     dd.DataFrame<x, divisions=(1, 3, 5)>
     >>> b                                               # doctest: +SKIP
@@ -470,7 +476,8 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     >>> dd.concat([a, b])                               # doctest: +SKIP
     dd.DataFrame<concat-..., divisions=(1, 3, 6, 8, 10)>
 
-    # Unable to concatenate if divisions are not ordered.
+    Unable to concatenate if divisions are not ordered.
+
     >>> a                                               # doctest: +SKIP
     dd.DataFrame<x, divisions=(1, 3, 5)>
     >>> b                                               # doctest: +SKIP
@@ -479,11 +486,13 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     ValueError: All inputs have known divisions which cannnot be concatenated
     in order. Specify interleave_partitions=True to ignore order
 
-    # Specify interleave_partitions=True to ignore the division order.
+    Specify interleave_partitions=True to ignore the division order.
+
     >>> dd.concat([a, b], interleave_partitions=True)   # doctest: +SKIP
     dd.DataFrame<concat-..., divisions=(1, 2, 3, 5, 6)>
 
-    # If any of division is unknown, the result division will be unknown
+    If any of division is unknown, the result division will be unknown
+
     >>> a                                               # doctest: +SKIP
     dd.DataFrame<x, divisions=(None, None)>
     >>> b                                               # doctest: +SKIP

@@ -10,7 +10,8 @@ from .slicing import insert_many
 from .numpy_compat import divide
 from ..core import flatten
 from . import chunk
-from ..utils import ignoring, getargspec
+from ..compatibility import getargspec
+from ..utils import ignoring
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
