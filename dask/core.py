@@ -289,7 +289,7 @@ def subs(task, key, val):
         try:
             if task == key:
                 return val
-        except ValueError:
+        except Exception:
             pass
         if isinstance(task, list):
             return [subs(x, key, val) for x in task]
