@@ -59,6 +59,16 @@ def test_tokenize_discontiguous_numpy_array():
     tokenize(np.random.random(8)[::2])
 
 
+def test_tokenize_numpy_datetime():
+    np = pytest.importorskip('numpy')
+    tokenize(np.array(['2000-01-01T12:00:00'], dtype='M8[ns]'))
+
+
+def test_tokenize_numpy_scalar():
+    np = pytest.importorskip('numpy')
+    tokenize(np.array(1.0, dtype='f8'))
+
+
 def test_tokenize_numpy_array_on_object_dtype():
     np = pytest.importorskip('numpy')
     assert tokenize(np.array(['a', 'aa', 'aaa'], dtype=object)) == \

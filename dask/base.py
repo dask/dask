@@ -159,17 +159,18 @@ with ignoring(ImportError):
     import numpy as np
     @partial(normalize_token.register, np.ndarray)
     def normalize_array(x):
+        if not x.shape:
+            return (str(x), x.dtype)
         if x.dtype.hasobject:
             try:
                 data = md5('-'.join(x.flat)).hexdigest()
             except TypeError:
-                data = md5('-'.join(map(str, x.flat))).hexdigest()
+                data = md5(b'-'.join([str(item).encode() for item in x.flat])).hexdigest()
         else:
             try:
-                buffer = x.data
-            except AttributeError:
-                buffer = np.array(x).data  # force a copy
-            data = md5(buffer).hexdigest()
+                data = md5(x.view('i1').data).hexdigest()
+            except (BufferError, AttributeError, ValueError):
+                data = md5(x.copy().view('i1').data).hexdigest()
         return (data, x.dtype, x.shape, x.strides)
 
 
