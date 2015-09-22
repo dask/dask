@@ -1,3 +1,4 @@
+from itertools import chain
 from dask.order import dfs, child_max, ndependents, order, inc, get_deps
 
 
@@ -131,3 +132,36 @@ def test_prefer_deep():
 
     o = order(dsk)
     assert o == {'c': 0, 'b': 1, 'a': 2, 'y': 3, 'x': 4}
+
+
+def test_stacklimit():
+    dsk = dict(('x%s' % (i+1), (inc, 'x%s' % i)) for i in range(10000))
+    dependencies, dependents = get_deps(dsk)
+    scores = dict.fromkeys(dsk, 1)
+    child_max(dependencies, dependents, scores)
+    ndependents(dependencies, dependents)
+
+
+def test_ndependents():
+    from operator import add
+    a, b, c = 'abc'
+    dsk = dict(chain((((a, i), i * 2) for i in range(5)),
+                     (((b, i), (add, i, (a, i))) for i in range(5)),
+                     (((c, i), (add, i, (b, i))) for i in range(5))))
+    result = ndependents(*get_deps(dsk))
+    expected = dict(chain((((a, i), 3) for i in range(5)),
+                          (((b, i), 2) for i in range(5)),
+                          (((c, i), 1) for i in range(5))))
+    assert result == expected
+
+    dsk = {a: 1, b: 1}
+    deps = get_deps(dsk)
+    assert ndependents(*deps) == dsk
+
+    dsk = {a: 1, b: (add, a, 1), c: (add, b, a)}
+    assert ndependents(*get_deps(dsk)) == {a: 4, b: 2, c: 1}
+
+    dsk = {a: 1, b: a, c: b}
+    deps = get_deps(dsk)
+    assert ndependents(*deps) == {a: 3, b: 2, c: 1}
+
