@@ -87,6 +87,19 @@ def test_resource_profiler():
 
 
 @pytest.mark.skipif("not bokeh")
+def test_unquote():
+    from dask.diagnostics.profile_visualize import unquote
+    from dask.imperative import to_task_dasks
+    f = lambda x: to_task_dasks(x)[0]
+    t = {'a': 1, 'b': 2, 'c': 3}
+    assert unquote(f(t)) == t
+    t = {'a': [1, 2, 3], 'b': 2, 'c': 3}
+    assert unquote(f(t)) == t
+    t = [1, 2, 3]
+    assert unquote(f(t)) == t
+
+
+@pytest.mark.skipif("not bokeh")
 def test_pprint_task():
     from dask.diagnostics.profile_visualize import pprint_task
     keys = set(['a', 'b', 'c', 'd', 'e'])
@@ -100,8 +113,17 @@ def test_pprint_task():
     assert pprint_task((sum, list(keys) * 100), keys) == 'sum([_, _, _, ...])'
     assert pprint_task((sum, [1, 2, (sum, ['a', 4]), 5, 6] * 100), keys) == \
             'sum([*, *, sum([_, *]), ...])'
-    assert pprint_task((sum, [1, 2, (sum, ['a', (sum, [1, 2, 3])]), 5, 6])
-                      , keys) == 'sum([*, *, sum([_, sum(...)]), ...])'
+    assert pprint_task((sum, [1, 2, (sum, ['a', (sum, [1, 2, 3])]), 5, 6]),
+                       keys) == 'sum([*, *, sum([_, sum(...)]), ...])'
+    # With kwargs
+    def foo(w, x, y=(), z=3):
+        return w + x + sum(y) + z
+    task = (apply, foo, (tuple, ['a', 'b']), (dict, (list,
+            [(list, ['y', (list, ['a', 'b'])]), (list, ['z', 'c'])])))
+    assert pprint_task(task, keys) == 'foo(_, _, y=[_, _], z=_)'
+    task = (apply, foo, (tuple, ['a', 'b']), (dict, (list,
+            [(list, ['y', (list, ['a', 1])]), (list, ['z', 1])])))
+    assert pprint_task(task, keys) == 'foo(_, _, y=[_, *], z=*)'
 
 
 @pytest.mark.skipif("not bokeh")

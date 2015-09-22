@@ -11,6 +11,16 @@ from bokeh.models import HoverTool, LinearAxis, Range1d
 
 from ..dot import funcname
 from ..core import istask
+from ..compatibility import apply
+
+
+def unquote(expr):
+    if istask(expr):
+        if expr[0] in (tuple, list, set):
+            return expr[0](map(unquote, expr[1]))
+        elif expr[0] == dict and expr[1][0] == list:
+            return dict(map(unquote, expr[1][1]))
+    return expr
 
 
 def pprint_task(task, keys, label_size=60):
@@ -49,22 +59,39 @@ def pprint_task(task, keys, label_size=60):
     """
     if istask(task):
         func = task[0]
-        if hasattr(func, 'funcs'):
-            head = '('.join(funcname(f) for f in func.funcs)
-            tail = ')'*len(func.funcs)
-        else:
-            head = funcname(task[0])
+        if func is apply:
+            head = funcname(task[1])
             tail = ')'
-        if task[1:]:
-            label_size2 = int((label_size - len(head) - len(tail)) / len(task[1:]))
+            args = unquote(task[2]) if len(task) > 2 else ()
+            kwargs = unquote(task[3]) if len(task) > 3 else {}
+        else:
+            if hasattr(func, 'funcs'):
+                head = '('.join(funcname(f) for f in func.funcs)
+                tail = ')'*len(func.funcs)
+            else:
+                head = funcname(task[0])
+                tail = ')'
+            args = task[1:]
+            kwargs = {}
+        label_size2 = int((label_size - len(head) - len(tail)) //
+                          (len(args) + len(kwargs)))
+        pprint = lambda t: pprint_task(t, keys, label_size2)
+        if args:
             if label_size2 > 5:
-                args = ', '.join(pprint_task(t, keys, label_size2)
-                                 for t in task[1:])
+                args = ', '.join(pprint(t) for t in args)
             else:
                 args = '...'
         else:
             args = ''
-        return '{0}({1}{2}'.format(head, args, tail)
+        if kwargs:
+            if label_size2 > 5:
+                kwargs = ', ' + ', '.join('{0}={1}'.format(k, pprint(v))
+                                          for k, v in kwargs.items())
+            else:
+                kwargs = ', ...'
+        else:
+            kwargs = ''
+        return '{0}({1}{2}{3}'.format(head, args, kwargs, tail)
     elif isinstance(task, list):
         if not task:
             return '[]'
@@ -72,7 +99,7 @@ def pprint_task(task, keys, label_size=60):
             result = pprint_task(task[:3], keys, label_size)
             return result[:-1] + ', ...]'
         else:
-            label_size2 = int((label_size - 2 - 2*len(task)) / len(task))
+            label_size2 = int((label_size - 2 - 2*len(task)) // len(task))
             args = ', '.join(pprint_task(t, keys, label_size2) for t in task)
             return '[{0}]'.format(args)
     else:
