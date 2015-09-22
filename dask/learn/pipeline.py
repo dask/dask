@@ -37,22 +37,26 @@ class Pipeline(sklearn.pipeline.Pipeline):
     def named_steps(self):
         return dict(self.steps)
 
-    def get_fit_keys(self, X, y):
+    def get_fit_keys(self, X, y, data_token=None):
         name, est = self.steps[0]
-        L = [('fit', name, tokenize(type(est), est.get_params(), X, y))]
+        data_token = data_token or tokenize(X, y)
+        L = [('fit', name, tokenize(type(est), est.get_params(), data_token))]
         for name, est in self.steps[1:]:
-            L.append(('fit', name, tokenize(type(est), est.get_params(), X, y, L[-1])))
+            L.append(('fit', name, tokenize(type(est), est.get_params(),
+                                            data_token, L[-1])))
         return L
 
-    def get_predict_keys(self, X):
-        L = [('transform', self.steps[0][0], tokenize(self._fit_estimators[0], X))]
+    def get_predict_keys(self, X, data_token=None):
+        data_token = data_token or tokenize(X)
+        L = [('transform', self.steps[0][0], tokenize(self._fit_estimators[0],
+                                                      data_token))]
         for (name, est), fit in zip(self.steps[1:], self._fit_estimators[1:]):
-            L.append(('transform', name, tokenize(fit, X)))
-        L[-1] = ('predict', name, tokenize(fit, X))
+            L.append(('transform', name, tokenize(fit, data_token)))
+        L[-1] = ('predict', name, tokenize(fit, data_token))
         return L
 
-    def fit(self, X, y=None):
-        names = self.get_fit_keys(X, y)
+    def fit(self, X, y=None, data_token=None):
+        names = self.get_fit_keys(X, y, data_token=data_token)
         self._fit_estimators = [(k[0] + '-estimator',) + k[1:] for k in names]
         self._fit_data = [(k[0] + '-data',) + k[1:] for k in names[:-1]]
         dsk = dict()
@@ -80,8 +84,8 @@ class Pipeline(sklearn.pipeline.Pipeline):
 
         return self
 
-    def predict(self, X):
-        names = self.get_predict_keys(X)
+    def predict(self, X, data_token=None):
+        names = self.get_predict_keys(X, data_token=data_token)
 
         self._predict_keys = names
 
@@ -95,9 +99,9 @@ class Pipeline(sklearn.pipeline.Pipeline):
 
         return Value(names[-1], [self.dask])
 
-    def score(self, X, y):
+    def score(self, X, y, data_token=None):
         self.predict(X)
-        names = self.get_predict_keys(X)
+        names = self.get_predict_keys(X, data_token=data_token)
         name = ('score', tokenize(names[-1], y))
         dsk = {name: (accuracy_score, names[-1], y)}
 
