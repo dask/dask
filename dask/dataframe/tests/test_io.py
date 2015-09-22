@@ -614,15 +614,15 @@ def test_to_bag():
 def test_csv_expands_dtypes():
     with filetext(text) as fn:
         a = dd.read_csv(fn, chunkbytes=30, dtype={})
-        a_kwargs = list(a.dask.values())[0][-1]
+        a_kwargs = list(a.dask.values())[0][-2]
 
         b = dd.read_csv(fn, chunkbytes=30)
-        b_kwargs = list(b.dask.values())[0][-1]
+        b_kwargs = list(b.dask.values())[0][-2]
 
         assert a_kwargs['dtype'] == b_kwargs['dtype']
 
         a = dd.read_csv(fn, chunkbytes=30, dtype={'amount': float})
-        a_kwargs = list(a.dask.values())[0][-1]
+        a_kwargs = list(a.dask.values())[0][-2]
 
         assert a_kwargs['dtype']['amount'] == float
 
