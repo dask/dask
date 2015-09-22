@@ -142,7 +142,7 @@ def get_bom(fn):
     """
     Get the Byte Order Mark (BOM) if it exists.
     """
-    boms = {codecs.BOM_UTF16, codecs.BOM_UTF16_BE, codecs.BOM_UTF16_LE}
+    boms = set((codecs.BOM_UTF16, codecs.BOM_UTF16_BE, codecs.BOM_UTF16_LE))
     with open(fn, 'rb') as f:
         f.seek(0)
         bom = f.read(2)
