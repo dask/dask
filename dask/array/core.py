@@ -1777,8 +1777,33 @@ def elemwise(op, *args, **kwargs):
                 dtype=dt, name=name)
 
 
+def count_required_args(func):
+    """
+    >>> f = lambda x, y: None
+    >>> g = lambda z=None: None
+    >>> count_required_args(f)
+    2
+    >>> count_required_args(g)
+    0
+    """
+    try:
+        # for numpy.ufunc
+        return func.nin
+    except AttributeError:
+        try:
+            spec = inspect.getargspec(func)
+        except Exception:
+            raise ValueError(
+                'cannot wrap_elemwise without inspectable signature')
+        len_kwargs = len(spec.defaults) if spec.defaults is not None else 0
+        return len(spec.args) - len_kwargs
+
+
 def wrap_elemwise(func, **kwargs):
     """ Wrap up numpy function into dask.array """
+    from .optimization import add_elemwise_getitem_swap_rule
+    nargs = count_required_args(func)
+    add_elemwise_getitem_swap_rule(func, nargs)
     f = partial(elemwise, func, **kwargs)
     f.__doc__ = func.__doc__
     f.__name__ = func.__name__
@@ -1921,9 +1946,7 @@ def modf(x):
 modf.__doc__ = np.modf
 
 
-@wraps(np.around)
-def around(x, decimals=0):
-    return map_blocks(partial(np.around, decimals=decimals), x, dtype=x.dtype)
+around = wrap_elemwise(np.around)
 
 
 def isnull(values):
