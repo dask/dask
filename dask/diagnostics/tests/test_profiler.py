@@ -11,6 +11,10 @@ try:
     import bokeh
 except:
     bokeh = None
+try:
+    import psutil
+except:
+    psutil = None
 
 
 prof = Profiler()
@@ -69,6 +73,7 @@ def test_two_gets():
     assert len(prof.results) == n + m + n
 
 
+@pytest.mark.skipif("not psutil")
 def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
         out = get(dsk2, 'c')
@@ -143,6 +148,7 @@ def test_profiler_plot():
 
 
 @pytest.mark.skipif("not bokeh")
+@pytest.mark.skipif("not psutil")
 def test_resource_profiler_plot():
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, 'c')
@@ -159,6 +165,7 @@ def test_resource_profiler_plot():
 
 
 @pytest.mark.skipif("not bokeh")
+@pytest.mark.skipif("not psutil")
 def test_plot_both():
     from dask.diagnostics.profile_visualize import visualize
     from bokeh.plotting import GridPlot
