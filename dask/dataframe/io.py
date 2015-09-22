@@ -11,10 +11,9 @@ from toolz import merge, assoc, dissoc
 from operator import getitem
 from fnmatch import fnmatch
 import uuid
-import codecs
 
 from ..compatibility import BytesIO, unicode, range, apply
-from ..utils import textblock, file_size
+from ..utils import textblock, file_size, get_bom
 from ..base import compute, tokenize
 from .. import array as da
 from ..async import get_sync
@@ -27,36 +26,10 @@ from .shuffle import set_partition
 csv_defaults = {'compression': None}
 
 
-encoding_from_bom = {codecs.BOM_UTF16: 'utf-16',
-                     codecs.BOM_UTF16_BE: 'utf-16-be',
-                     codecs.BOM_UTF16_LE: 'utf-16-le',
-                     codecs.BOM_UTF32: 'utf-32',
-                     codecs.BOM_UTF32_BE: 'utf-32-be',
-                     codecs.BOM_UTF32_LE: 'utf-32-le'}
-
-
-def get_bom(fn):
-    with open(fn, 'rb') as f:
-        f.seek(0)
-        bom = f.read(2)
-        f.seek(0)
-        return bom
-
-
-def add_endianess_to_encoding(fn, my_encoding):
-    bom = get_bom(fn)
-    file_encoding = encoding_from_bom.get(bom)
-    if file_encoding is None:
-        return my_encoding
-    elif file_encoding.startswith(my_encoding):
-        return file_encoding
-    else:
-        return my_encoding
-
-
-def _read_csv(fn, i, chunkbytes, compression, kwargs):
-    block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression)
-    block = BytesIO(block)
+def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
+    block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression,
+                      encoding=kwargs.get('encoding'))
+    block = BytesIO(bom + block)
     try:
         return pd.read_csv(block, **kwargs)
     except ValueError as e:
@@ -164,10 +137,6 @@ def fill_kwargs(fn, args, kwargs):
             raise ValueError("No files found matching name %s" % fn)
         fn = filenames[0]
 
-    encoding = kwargs.get('encoding')
-    encoding = add_endianess_to_encoding(fn, encoding)
-    if encoding is not None:
-        kwargs['encoding'] = encoding
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)
     if 'header' not in kwargs:
@@ -221,6 +190,7 @@ def read_csv(fn, *args, **kwargs):
 
     token = tokenize(os.path.getmtime(fn), args, kwargs)
     name = 'read-csv-%s-%s' % (fn, token)
+    bom = get_bom(fn)
 
     columns = kwargs.pop('columns')
     header = kwargs.pop('header')
@@ -235,11 +205,12 @@ def read_csv(fn, *args, **kwargs):
 
     # Create dask graph
     dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
-                                       kwargs['compression'], rest_kwargs))
+                                       kwargs['compression'], rest_kwargs,
+                                       bom))
                for i in range(1, nchunks))
 
     dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
-                                 first_kwargs)
+                                 first_kwargs, b'')
 
     result = DataFrame(dsk, name, columns, divisions)
 
