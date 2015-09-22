@@ -20,9 +20,7 @@ def test_grid_search():
     param_grid = {'select_k__k': [1, 2, 3, 4],
                   'svm__C': np.logspace(-3, 2, 3)}
     grid = dl.GridSearchCV(pipeline, param_grid)
+
     grid.fit(X_train, y_train)
-
     result = grid.score(X_test, y_test)
-
-    assert isinstance(result, di.Value)
-    assert isinstance(result.compute(), float)
+    assert isinstance(result, float)

@@ -6,13 +6,13 @@ from sklearn.utils.validation import _num_samples
 from sklearn.base import clone, is_classifier
 from sklearn.grid_search import _CVScoreTuple, _check_param_grid, ParameterGrid
 
-from ..base import compute
+from ..base import compute, tokenize
 from ..imperative import value
 
 
 def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
                    parameters, fit_params, return_train_score=False,
-                   return_parameters=False, error_score='raise'):
+                   return_parameters=False, error_score='raise', xy_token=None):
 
     if parameters is not None:
         estimator.set_params(**parameters)
@@ -22,11 +22,15 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
     X_train, y_train = _safe_split(estimator, X, y, train)
     X_test, y_test = _safe_split(estimator, X, y, test, train)
 
+    xy_token = xy_token or tokenize(X, y)
+    train_token = tokenize(xy_token, train)
+    test_token = tokenize(xy_token, test)
+
     if y_train is None:
-        estimator.fit(X_train, **fit_params)
+        estimator.fit(X_train, data_token=train_token, **fit_params)
     else:
-        estimator.fit(X_train, y_train, **fit_params)
-    test_score = estimator.score(X_test, y_test)
+        estimator.fit(X_train, y_train, data_token=train_token, **fit_params)
+    test_score = estimator.score(X_test, y_test, data_token=None)
 
     scoring_time = time.time() - start_time
 
@@ -64,10 +68,12 @@ class BaseSearchCV(object):
         cv = check_cv(cv, X, y, classifier=is_classifier(self.estimator))
 
         base_estimator = clone(self.estimator)
+        xy_token = tokenize(X, y)
         out = [_fit_and_score(clone(base_estimator), X, y, self.scorer_, train,
                               test, self.verbose, parameters, self.fit_params,
                               return_parameters=True,
-                              error_score=self.error_score)
+                              error_score=self.error_score,
+                              xy_token=xy_token)
                for parameters in parameter_iterable
                for train, test in cv]
         self._dask_value = value(out)
@@ -148,7 +154,7 @@ class BaseSearchCV(object):
            ``scoring`` parameter was set when fitting.
 
         """
-        return self.best_estimator_.score(X, y)
+        return compute(self.best_estimator_.score(X, y))[0]
 
 
 class GridSearchCV(BaseSearchCV):
