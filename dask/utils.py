@@ -155,9 +155,9 @@ def get_bom(fn):
 
 def get_bin_linesep(encoding, linesep):
     """
-    Simply doing linesep.encode(encoding) does not always give you
+    Simply doing `linesep.encode(encoding)` does not always give you
     *just* the linesep bytes, for some encodings this prefix's the
-    linesep bytes with the BOM. This function ensures we just get the 
+    linesep bytes with the BOM. This function ensures we just get the
     linesep bytes.
     """
     if encoding == 'utf-16':
@@ -206,7 +206,8 @@ def textblock(file, start, stop, compression=None, encoding=None,
         myopen = opens.get(compression, open)
         f = myopen(file, 'rb')
         try:
-            result = textblock(f, start, stop)
+            result = textblock(f, start, stop, compression=None,
+                               encoding=encoding, linesep=linesep)
         finally:
             f.close()
         return result
