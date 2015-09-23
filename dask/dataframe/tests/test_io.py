@@ -746,5 +746,5 @@ def test_encoding_gh601():
             a = pd.read_csv(fn, encoding=encoding)
             d = dd.read_csv(fn, encoding=encoding, chunkbytes=1000)
             d = d.compute()
-            d.index = range(100)
+            d.index = range(len(d.index))
             assert eq(d, a)
