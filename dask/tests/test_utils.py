@@ -92,10 +92,13 @@ def test_gh606():
     encoding = 'utf-16-le'
     euro = u'\u20ac'
     yen = u'\u00a5'
+    linesep = os.linesep
+
     bin_euro = u'\u20ac'.encode(encoding)
     bin_yen = u'\u00a5'.encode(encoding)
+    bin_linesep = linesep.encode(encoding)
 
-    data = (euro * 10) + '\n' + (yen * 10) + '\n' + (euro * 10)
+    data = (euro * 10) + linesep + (yen * 10) + linesep + (euro * 10)
     bin_data = data.encode(encoding)
 
     with tmpfile() as fn:
@@ -103,10 +106,10 @@ def test_gh606():
             f.write(bin_data)
             f.seek(0)
 
-            stop = len(bin_euro) * 10 + len('\n'.encode(encoding))
+            stop = len(bin_euro) * 10 + len(bin_linesep)
             res = textblock(f, 1, stop, encoding=encoding)
-            assert res == ((yen * 10) + '\n').encode(encoding)
+            assert res == ((yen * 10) + linesep).encode(encoding)
 
-            stop = len(bin_euro) * 10 + len('\n'.encode(encoding))
+            stop = len(bin_euro) * 10 + len(bin_linesep)
             res = textblock(f, 0, stop, encoding=encoding)
-            assert res == ((euro * 10) + '\n' + (yen * 10) + '\n').encode(encoding)
+            assert res == ((euro * 10) + linesep + (yen * 10) + linesep).encode(encoding)
