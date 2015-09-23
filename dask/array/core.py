@@ -25,7 +25,7 @@ from . import numpy_compat
 from ..base import Base, compute, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
         IndexCallable)
-from ..compatibility import unicode, long, getargspec
+from ..compatibility import unicode, long, getargspec, zip_longest
 from .. import threaded, core
 
 
@@ -1722,6 +1722,35 @@ def is_scalar_for_elemwise(arg):
             or (isinstance(arg, np.ndarray) and arg.ndim == 0))
 
 
+def broadcast_shapes(*shapes):
+    """Determines output shape from broadcasting arrays.
+
+    Parameters
+    ----------
+    shapes : tuples
+        The shapes of the arguments.
+
+    Returns
+    -------
+    output_shape : tuple
+
+    Raises
+    ------
+    ValueError
+        If the input shapes cannot be succesfully broadcast together.
+    """
+    if len(shapes) == 1:
+        return shapes[0]
+    out = []
+    for sizes in zip_longest(*map(reversed, shapes), fillvalue=1):
+        dim = max(sizes)
+        if any(i != 1 and i != dim for i in sizes):
+            raise ValueError("operands could not be broadcast together with "
+                             "shapes {0}".format(' '.join(map(str, shapes))))
+        out.append(dim)
+    return tuple(reversed(out))
+
+
 def elemwise(op, *args, **kwargs):
     """ Apply elementwise function across arguments
 
@@ -1740,7 +1769,8 @@ def elemwise(op, *args, **kwargs):
         raise TypeError("%s does not take the following keyword arguments %s" %
             (op.__name__, str(sorted(set(kwargs) - set(['name', 'dtype'])))))
 
-    out_ndim = max(len(getattr(arg, 'shape', ())) for arg in args)
+    shapes = [getattr(arg, 'shape', ()) for arg in args]
+    out_ndim = len(broadcast_shapes(*shapes))   # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
 
     arrays = [asarray(a) for a in args if not is_scalar_for_elemwise(a)]
