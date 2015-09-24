@@ -213,38 +213,42 @@ def plot_tasks(results, dsk, palette='GnBu', label_size=60, **kwargs):
     The completed bokeh plot object.
     """
 
-    keys, tasks, starts, ends, ids = zip(*results)
-
-    id_group = groupby(itemgetter(4), results)
-    timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
-                   id_group.items())
-    id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
-                 key=itemgetter(1), reverse=True)))
-
-    left = min(starts)
-    right = max(ends)
-
     defaults = dict(title="Profile Results",
                     tools="hover,save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     bp.Figure.properties())
 
-    p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
-                  x_range=[0, right - left], **defaults)
+    if results:
+        keys, tasks, starts, ends, ids = zip(*results)
 
-    data = {}
-    data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
-    data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
-    data['y'] = [id_lk[i] + 1 for i in ids]
-    data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
-    data['color'] = get_colors(palette, funcs)
-    data['key'] = [str(i) for i in keys]
+        id_group = groupby(itemgetter(4), results)
+        timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
+                    id_group.items())
+        id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
+                    key=itemgetter(1), reverse=True)))
 
-    source = bp.ColumnDataSource(data=data)
+        left = min(starts)
+        right = max(ends)
 
-    p.rect(source=source, x='x', y='y', height=1, width='width',
-           color='color', line_color='gray')
+        p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
+                    x_range=[0, right - left], **defaults)
+
+        data = {}
+        data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
+        data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
+        data['y'] = [id_lk[i] + 1 for i in ids]
+        data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
+        data['color'] = get_colors(palette, funcs)
+        data['key'] = [str(i) for i in keys]
+
+        source = bp.ColumnDataSource(data=data)
+
+        p.rect(source=source, x='x', y='y', height=1, width='width',
+            color='color', line_color='gray')
+    else:
+        p = bp.figure(y_range=[str(i) for i in range(8)], x_range=[0, 10],
+                      **defaults)
     p.grid.grid_line_color = None
     p.axis.axis_line_color = None
     p.axis.major_tick_line_color = None
@@ -284,19 +288,23 @@ def plot_resources(results, palette='GnBu', **kwargs):
     -------
     The completed bokeh plot object.
     """
-    t, mem, cpu = zip(*results)
-    left, right = min(t), max(t)
-    t = [i - left for i in t]
     defaults = dict(title="Profile Results",
                     tools="save,reset,resize,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     bp.Figure.properties())
-    p = bp.figure(y_range=(0, max(cpu)), x_range=(0, right - left), **defaults)
+    if results:
+        t, mem, cpu = zip(*results)
+        left, right = min(t), max(t)
+        t = [i - left for i in t]
+        p = bp.figure(y_range=(0, max(cpu)), x_range=(0, right - left), **defaults)
+    else:
+        t = mem = cpu = []
+        p = bp.figure(y_range=(0, 100), x_range=(0, 10), **defaults)
     colors = brewer[palette][6]
     p.line(t, cpu, color=colors[0], line_width=4, legend='% CPU')
     p.yaxis.axis_label = "% CPU"
-    p.extra_y_ranges = {'memory': Range1d(start=0, end=max(mem))}
+    p.extra_y_ranges = {'memory': Range1d(start=0, end=(max(mem) if mem else 100))}
     p.line(t, mem, color=colors[2], y_range_name='memory', line_width=4,
            legend='Memory')
     p.add_layout(LinearAxis(y_range_name='memory', axis_label='Memory (MB)'),
