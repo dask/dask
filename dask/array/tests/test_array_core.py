@@ -356,6 +356,14 @@ def test_isclose():
               np.isclose(x, y, equal_nan=True))
 
 
+def test_broadcast_shapes():
+    assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
+    assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
+    assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
+    assert raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
+    assert raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
+
+
 def test_elemwise_on_scalars():
     x = np.arange(10)
     a = from_array(x, chunks=(5,))
@@ -394,6 +402,9 @@ def test_elemwise_with_ndarrays():
     assert eq(b + x, x + y)
     assert eq(a + y, x + y)
     assert eq(y + a, x + y)
+    # Error on shape mismatch
+    assert raises(ValueError, lambda: a + y.T)
+    assert raises(ValueError, lambda: a + np.arange(2))
 
 
 def test_elemwise_differently_chunked():
