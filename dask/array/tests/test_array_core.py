@@ -1438,16 +1438,19 @@ def test_cov():
 def test_memmap():
     with tmpfile('npy') as fn_1:
         with tmpfile('npy') as fn_2:
-            x = da.arange(100, chunks=15)
-            target = np.memmap(fn_1, shape=x.shape, mode='w+', dtype=x.dtype)
+            try:
+                x = da.arange(100, chunks=15)
+                target = np.memmap(fn_1, shape=x.shape, mode='w+', dtype=x.dtype)
 
-            x.store(target)
+                x.store(target)
 
-            assert eq(target, x)
+                assert eq(target, x)
 
-            np.save(fn_2, target)
+                np.save(fn_2, target)
 
-            assert eq(np.load(fn_2, mmap_mode='r'), x)
+                assert eq(np.load(fn_2, mmap_mode='r'), x)
+            finally:
+                target._mmap.close()
 
 
 def test_to_npy_stack():
