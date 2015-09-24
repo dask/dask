@@ -12,6 +12,7 @@ import types
 import gzip
 import tempfile
 import inspect
+import codecs
 
 from .compatibility import unicode, long, getargspec
 
@@ -137,8 +138,36 @@ def filetexts(d, open=open):
 opens = {'gzip': gzip.open}
 
 
+def get_bom(fn):
+    """
+    Get the Byte Order Mark (BOM) if it exists.
+    """
+    boms = set((codecs.BOM_UTF16, codecs.BOM_UTF16_BE, codecs.BOM_UTF16_LE))
+    with open(fn, 'rb') as f:
+        f.seek(0)
+        bom = f.read(2)
+        f.seek(0)
+    if bom in boms:
+        return bom
+    else:
+        return b''
+
+
+def get_bin_linesep(encoding, linesep):
+    """
+    Simply doing `linesep.encode(encoding)` does not always give you
+    *just* the linesep bytes, for some encodings this prefix's the
+    linesep bytes with the BOM. This function ensures we just get the
+    linesep bytes.
+    """
+    if encoding == 'utf-16':
+        return linesep.encode('utf-16')[2:]  # [2:] strips bom
+    else:
+        return linesep.encode(encoding)
+
+
 def next_linesep(fo, seek, encoding, linesep):
-    bin_linesep = linesep.encode(encoding)
+    bin_linesep = get_bin_linesep(encoding, linesep)
     data = b''
     data_len = 0
 
@@ -177,7 +206,8 @@ def textblock(file, start, stop, compression=None, encoding=None,
         myopen = opens.get(compression, open)
         f = myopen(file, 'rb')
         try:
-            result = textblock(f, start, stop)
+            result = textblock(f, start, stop, compression=None,
+                               encoding=encoding, linesep=linesep)
         finally:
             f.close()
         return result

@@ -13,7 +13,7 @@ from fnmatch import fnmatch
 import uuid
 
 from ..compatibility import BytesIO, unicode, range, apply
-from ..utils import textblock, file_size
+from ..utils import textblock, file_size, get_bom
 from ..base import compute, tokenize
 from .. import array as da
 from ..async import get_sync
@@ -26,10 +26,10 @@ from .shuffle import set_partition
 csv_defaults = {'compression': None}
 
 
-
-def _read_csv(fn, i, chunkbytes, compression, kwargs):
-    block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression)
-    block = BytesIO(block)
+def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
+    block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression,
+                      encoding=kwargs.get('encoding'))
+    block = BytesIO(bom + block)
     try:
         return pd.read_csv(block, **kwargs)
     except ValueError as e:
@@ -190,6 +190,7 @@ def read_csv(fn, *args, **kwargs):
 
     token = tokenize(os.path.getmtime(fn), args, kwargs)
     name = 'read-csv-%s-%s' % (fn, token)
+    bom = get_bom(fn)
 
     columns = kwargs.pop('columns')
     header = kwargs.pop('header')
@@ -204,11 +205,12 @@ def read_csv(fn, *args, **kwargs):
 
     # Create dask graph
     dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
-                                       kwargs['compression'], rest_kwargs))
+                                       kwargs['compression'], rest_kwargs,
+                                       bom))
                for i in range(1, nchunks))
 
     dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
-                                 first_kwargs)
+                                 first_kwargs, b'')
 
     result = DataFrame(dsk, name, columns, divisions)
 

@@ -614,15 +614,15 @@ def test_to_bag():
 def test_csv_expands_dtypes():
     with filetext(text) as fn:
         a = dd.read_csv(fn, chunkbytes=30, dtype={})
-        a_kwargs = list(a.dask.values())[0][-1]
+        a_kwargs = list(a.dask.values())[0][-2]
 
         b = dd.read_csv(fn, chunkbytes=30)
-        b_kwargs = list(b.dask.values())[0][-1]
+        b_kwargs = list(b.dask.values())[0][-2]
 
         assert a_kwargs['dtype'] == b_kwargs['dtype']
 
         a = dd.read_csv(fn, chunkbytes=30, dtype={'amount': float})
-        a_kwargs = list(a.dask.values())[0][-1]
+        a_kwargs = list(a.dask.values())[0][-2]
 
         assert a_kwargs['dtype']['amount'] == float
 
@@ -729,3 +729,22 @@ def test_from_pandas_with_datetime_index():
                          parse_dates=['Date'])
         ddf = dd.from_pandas(df, 2)
         eq(df, ddf)
+
+
+def test_encoding_gh601():
+    encodings = ('utf-16', 'utf-16-le', 'utf-16-be')
+    ar = pd.Series(range(0, 100))
+    br = ar % 7
+    cr = br * 3.3
+    dr = br / 1.9836
+    test_df = pd.concat([ar, br, cr, dr], axis=1)
+
+    for encoding in encodings:
+        with tmpfile('.csv') as fn:
+            test_df.to_csv(fn, encoding=encoding)
+
+            a = pd.read_csv(fn, encoding=encoding)
+            d = dd.read_csv(fn, encoding=encoding, chunkbytes=1000)
+            d = d.compute()
+            d.index = range(len(d.index))
+            assert eq(d, a)
