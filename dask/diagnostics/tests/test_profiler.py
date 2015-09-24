@@ -146,6 +146,9 @@ def test_profiler_plot():
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert p.title == "Not the default"
+    # Test empty, checking for errors
+    prof.clear()
+    prof.visualize(show=False, save=False)
 
 
 @pytest.mark.skipif("not bokeh")
@@ -163,6 +166,9 @@ def test_resource_profiler_plot():
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert p.title == "Not the default"
+    # Test empty, checking for errors
+    rprof.clear()
+    rprof.visualize(show=False, save=False)
 
 
 @pytest.mark.skipif("not bokeh")
@@ -181,6 +187,10 @@ def test_plot_both():
     assert p.children[0][0].xaxis[0].axis_label is None
     assert p.children[1][0].title is None
     assert p.children[1][0].xaxis[0].axis_label == 'Time (s)'
+    # Test empty, checking for errors
+    prof.clear()
+    rprof.clear()
+    visualize([prof, rprof], show=False, save=False)
 
 
 @pytest.mark.skipif("not bokeh")
