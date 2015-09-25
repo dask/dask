@@ -2413,3 +2413,10 @@ def test_groupby_index_array():
 
     eq(df.A.groupby(df.index.month).nunique(),
        ddf.A.groupby(ddf.index.month).nunique(), check_names=False)
+
+
+def test_groupby_set_index():
+    df = tm.makeTimeDataFrame()
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert raises(NotImplementedError,
+                  lambda: ddf.groupby(df.index.month, as_index=False))
