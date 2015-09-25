@@ -25,7 +25,7 @@ from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import unicode, apply, operator_div, bind_method
 from ..utils import (repr_long_list, IndexCallable,
-                     pseudorandom, derived_from)
+                     pseudorandom, derived_from, different_seeds)
 from ..base import Base, compute, tokenize, normalize_token
 
 no_default = '__no_default__'
@@ -296,8 +296,7 @@ class _Frame(Base):
 
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
         """
-        seeds = np.random.RandomState(seed).randint(0, np.iinfo(np.int32).max,
-                                                    self.npartitions)
+        seeds = different_seeds(self.npartitions, seed)
         dsk_full = dict(((self._name + '-split-full', i),
                          (pd_split, (self._name, i), p, seed))
                        for i, seed in enumerate(seeds))
@@ -468,10 +467,7 @@ class _Frame(Base):
         name = 'sample-' + tokenize(self, frac, random_state)
         func = getattr(self._partition_type, 'sample')
 
-        if not isinstance(random_state, np.random.RandomState):
-            random_state = np.random.RandomState(random_state)
-        seeds = random_state.randint(np.iinfo(np.int32).max,
-                                     size=self.npartitions)
+        seeds = different_seeds(self.npartitions, random_state)
 
         dsk = dict(((name, i),
                    (apply, func, (tuple, [(self._name, i)]),
