@@ -1,11 +1,15 @@
-from ..optimize import cull, fuse
-from ..core import flatten
-from ..optimize import dealias, inline_functions
-from .core import getarray
+import operator
 from operator import getitem
-from dask.rewrite import RuleSet, RewriteRule
+
 from toolz import valmap, partial
 import numpy as np
+
+from ..core import flatten, istask
+from ..base import tokenize
+from ..compatibility import PY2
+from ..optimize import cull, fuse, dealias, inline_functions
+from ..rewrite import RuleSet, RewriteRule
+from .core import getarray
 
 
 def optimize(dsk, keys, **kwargs):
@@ -19,6 +23,7 @@ def optimize(dsk, keys, **kwargs):
                              set([getarray, getitem, np.transpose]))
     dsk2 = cull(dsk, list(flatten(keys)))
     dsk3 = remove_full_slices(dsk2)
+    dsk3 = swap_getitem_elemwise(dsk3, list(flatten(keys)))
     dsk4 = fuse(dsk3)
     dsk5 = valmap(rewrite_rules.rewrite, dsk4)
     dsk6 = inline_functions(dsk5, fast_functions=fast_functions)
@@ -206,3 +211,60 @@ def fuse_slice(a, b):
             j += 1
         return tuple(result)
     raise NotImplementedError()
+
+
+def getitem_broadcast(arr, ind):
+    if not hasattr(arr, 'shape') or arr.shape == ():
+        return arr
+    ndim = len(arr.shape)
+    if ndim < len(ind):
+        ind = ind[-ndim:]
+    ind = tuple(i if s > 1 else 0 if isinstance(i, int) else slice(None)
+                for (i, s) in zip(ind, arr.shape))
+    return arr[tuple(ind)]
+
+
+# Create a dict of {func: nargs}
+binops = ('lt le eq ne ge gt add and_ floordiv lshift mod or_ pow rshift sub '
+          'truediv xor').split()
+PY2 and binops.append('div')
+func_lookup = dict.fromkeys((getattr(operator, o) for o in binops), 2)
+func_lookup.update((getattr(operator, o), 1) for o in ('invert', 'neg', 'pos'))
+
+
+def iselemwise(f):
+    return hasattr(f, 'nin') and hasattr(f, 'ntypes') or f in func_lookup
+
+
+def getargs(task):
+    """Get array arguments from an elementwise tasks"""
+    func = task[0]
+    if hasattr(func, 'nin'):
+        n = func.nin
+    elif func in func_lookup:
+        n = func_lookup[func]
+    else:
+        raise ValueError('Unknown function {0}'.format(func))
+    return task[1:n + 1]
+
+
+def swap_getitem_elemwise(dsk, keys):
+    dsk2 = dict()
+    for k, v in dsk.items():
+        try:
+            if (istask(v) and v[0] == getitem and v[1] in dsk and
+                    istask(dsk[v[1]]) and iselemwise(dsk[v[1]][0]) and
+                    isinstance(v[2], tuple)):
+                elemwise_task = dsk[v[1]]
+                args = []
+                for arg in getargs(elemwise_task):
+                    key = tokenize(arg, v[2])
+                    dsk2[key] = (getitem_broadcast, arg, v[2])
+                    args.append(key)
+                args = tuple(args) + elemwise_task[len(args) + 1:]
+                dsk2[k] = (elemwise_task[0],) + args
+            else:
+                dsk2[k] = v
+        except TypeError:
+            dsk2[k] = v
+    return cull(dsk2, keys)
