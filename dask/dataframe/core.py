@@ -1823,6 +1823,11 @@ class GroupBy(_GroupBy):
         self.index = index
         self.kwargs = kwargs
 
+        if not kwargs.get('as_index', True):
+            msg = ("The keyword argument `as_index=False` is not supported in "
+                   "dask.dataframe.groupby")
+            raise NotImplementedError(msg)
+
         if isinstance(index, list):
             for i in index:
                 if i not in df.columns:
