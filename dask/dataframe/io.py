@@ -15,7 +15,7 @@ import numpy as np
 from toolz import merge, assoc, dissoc
 
 from ..compatibility import BytesIO, unicode, range, apply
-from ..utils import textblock, file_size, get_bom
+from ..utils import textblock, file_size, get_bom, derived_from
 from ..base import compute, tokenize
 from .. import array as da
 from ..async import get_sync
@@ -25,10 +25,7 @@ from .core import DataFrame, Series, categorize_block
 from .shuffle import set_partition
 
 
-csv_defaults = {'compression': None}
-
-
-def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
+def _read_csv_chunk(fn, i, chunkbytes, compression, kwargs, bom):
     block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression,
                       encoding=kwargs.get('encoding'))
     block = BytesIO(bom + block)
@@ -69,32 +66,7 @@ def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
         raise ValueError(msg)
 
 
-def clean_kwargs(kwargs):
-    """ Do some sanity checks on kwargs
-
-    >>> clean_kwargs({'parse_dates': ['a', 'b'], 'usecols': ['b', 'c']})
-    {'parse_dates': ['b'], 'usecols': ['b', 'c']}
-
-    >>> clean_kwargs({'names': ['a', 'b'], 'usecols': [1]})
-    {'parse_dates': [], 'names': ['a', 'b'], 'usecols': ['b']}
-    """
-    kwargs = kwargs.copy()
-
-    if 'usecols' in kwargs and 'names' in kwargs:
-        kwargs['usecols'] = [kwargs['names'][c]
-                              if isinstance(c, int) and c not in kwargs['names']
-                              else c
-                              for c in kwargs['usecols']]
-
-    kwargs['parse_dates'] = [col for col in kwargs.get('parse_dates', ())
-            if kwargs.get('usecols') is None
-            or isinstance(col, (tuple, list)) and all(c in kwargs['usecols']
-                                                      for c in col)
-            or col in kwargs['usecols']]
-    return kwargs
-
-
-def fill_kwargs(fn, args, kwargs):
+def fill_kwargs(fn, kwargs, sample_nrows):
     """ Read a csv file and fill up kwargs
 
     This normalizes kwargs against a sample file.  It does the following:
@@ -119,19 +91,6 @@ def fill_kwargs(fn, args, kwargs):
         keyword arguments to give to pd.read_csv
     """
 
-    if 'index_col' in kwargs:
-        msg = """
-        The index column cannot be set at dataframe creation time. Instead use
-        the `set_index` method on the dataframe after it is created.
-        """
-        raise ValueError(msg)
-
-    kwargs = merge(csv_defaults, kwargs)
-    sample_nrows = kwargs.pop('sample_nrows', 1000)
-    essentials = ['columns', 'names', 'header', 'parse_dates', 'dtype']
-    if set(essentials).issubset(kwargs):
-        return kwargs
-
     # Let pandas infer on the first 100 rows
     if '*' in fn:
         filenames = sorted(glob(fn))
@@ -139,62 +98,139 @@ def fill_kwargs(fn, args, kwargs):
             raise ValueError("No files found matching name %s" % fn)
         fn = filenames[0]
 
-    if 'names' not in kwargs:
+    if kwargs['names'] is None:
         kwargs['names'] = csv_names(fn, **kwargs)
-    if 'header' not in kwargs:
+    if kwargs['header'] == 'infer':
         kwargs['header'] = infer_header(fn, **kwargs)
         if kwargs['header'] is True:
             kwargs['header'] = 0
 
-    kwargs = clean_kwargs(kwargs)
+    usecols = kwargs['usecols']
+    names = kwargs['names']
+    if usecols is not None and names is not None:
+        usecols = [names[c] if isinstance(c, int) and c not in names
+                   else c for c in usecols]
+        kwargs['usecols'] = usecols
+
     try:
-        head = pd.read_csv(fn, *args, **assoc(kwargs, 'nrows', sample_nrows))
+        head = pd.read_csv(fn, **assoc(kwargs, 'nrows', sample_nrows))
     except StopIteration:
-        head = pd.read_csv(fn, *args, **kwargs)
+        head = pd.read_csv(fn, **kwargs)
 
-    if 'parse_dates' not in kwargs:
-        kwargs['parse_dates'] = [col for col in head.dtypes.index
-                           if np.issubdtype(head.dtypes[col], np.datetime64)]
+    parse_dates = kwargs['parse_dates']
+    if parse_dates is None:
+        parse_dates = [col for col in head.dtypes.index
+                       if np.issubdtype(head.dtypes[col], np.datetime64)]
+    else:
+        parse_dates = [col for col in parse_dates
+                       if (usecols is None or
+                           isinstance(col, (tuple, list)) and
+                           all(c in usecols for c in col) or col in usecols)]
 
-    new_dtype = dict(head.dtypes)
-    dtype = kwargs.get('dtype', dict())
+    dtype = kwargs['dtype']
+    if dtype is None:
+        dtype = dict()
+
     for k, v in dict(head.dtypes).items():
-        if k not in dtype:
+        if k not in dtype and k not in parse_dates:
             dtype[k] = v
 
-    if kwargs.get('parse_dates'):
-        for col in kwargs['parse_dates']:
-            del dtype[col]
-
     kwargs['dtype'] = dtype
+    kwargs['parse_dates'] = parse_dates
 
-    kwargs['columns'] = list(head.columns)
-
-    return kwargs
+    return kwargs, head.columns.tolist()
 
 
-@wraps(pd.read_csv)
-def read_csv(fn, *args, **kwargs):
-    if 'nrows' in kwargs:  # Just create single partition
-        df = read_csv(fn, *args, **dissoc(kwargs, 'nrows'))
-        return df.head(kwargs['nrows'], compute=False)
+@derived_from(pd)
+def read_csv(filepath_or_buffer, sep=', ', dialect=None,
+             compression=None, doublequote=True, escapechar=None,
+             quotechar='"', quoting=0, skipinitialspace=False,
+             lineterminator=None, header='infer', index_col=None,
+             names=None, prefix=None, na_values=None,
+             true_values=None, false_values=None,
+             delimiter=None, converters=None, dtype=None, usecols=None,
+             engine=None, delim_whitespace=False, as_recarray=False,
+             na_filter=True, compact_ints=False, use_unsigned=False,
+             low_memory=True, buffer_lines=None, warn_bad_lines=True,
+             error_bad_lines=True, keep_default_na=True, thousands=None,
+             comment=None, decimal='.', parse_dates=None, keep_date_col=False,
+             dayfirst=False, date_parser=None, memory_map=False,
+             float_precision=None, nrows=None, iterator=False,
+             chunksize=None, verbose=False, encoding=None, squeeze=False,
+             mangle_dupe_cols=True, tupleize_cols=False,
+             infer_datetime_format=False, skip_blank_lines=True,
+             chunkbytes=2**25, index=None, sample_nrows=1000):
 
-    chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
-    index = kwargs.pop('index', None)
+    # Following keywords are unsupported.
+    # Removed from definition to add note to API doc using ``derived_from``:
+    # - skiprows = None
+    # - skipfooter = None
+    # - skip_footer = 0
+
+    # Default changed
+    # - compression = None
+    # - parse_dates = None
+
+    # Added
+    # - chunkbytes = 2**25 # 50 MB
+    # - index = None
+    # - sample_nrows = 1000
+
+    if index_col is not None:
+        msg = """
+        The index column cannot be set at dataframe creation time. Instead use
+        the `set_index` method on the dataframe after it is created.
+        """
+        raise ValueError(msg)
+
+    return _read_csv(filepath_or_buffer, sep=sep, dialect=dialect,
+                     compression=compression, doublequote=doublequote,
+                     escapechar=escapechar, quotechar=quotechar, quoting=quoting,
+                     skipinitialspace=skipinitialspace,
+                     lineterminator=lineterminator, header=header,
+                     names=names, prefix=prefix, na_values=na_values,
+                     true_values=true_values,
+                     false_values=false_values, delimiter=delimiter,
+                     converters=converters, dtype=dtype, usecols=usecols,
+                     engine=engine, delim_whitespace=delim_whitespace,
+                     as_recarray=as_recarray, na_filter=na_filter,
+                     compact_ints=compact_ints, use_unsigned=use_unsigned,
+                     low_memory=low_memory, buffer_lines=buffer_lines,
+                     warn_bad_lines=warn_bad_lines, error_bad_lines=error_bad_lines,
+                     keep_default_na=keep_default_na, thousands=thousands,
+                     comment=comment, decimal=decimal, parse_dates=parse_dates,
+                     keep_date_col=keep_date_col, dayfirst=dayfirst,
+                     date_parser=date_parser, memory_map=memory_map,
+                     float_precision=float_precision, nrows=nrows, iterator=iterator,
+                     chunksize=chunksize, verbose=verbose, encoding=encoding,
+                     squeeze=squeeze, mangle_dupe_cols=mangle_dupe_cols,
+                     tupleize_cols=tupleize_cols,
+                     infer_datetime_format=infer_datetime_format,
+                     skip_blank_lines=skip_blank_lines,
+                     chunkbytes=chunkbytes, index=index,
+                     sample_nrows=sample_nrows)
+
+
+def _read_csv(fn, nrows=None, chunkbytes=2**25, index=None,
+              sample_nrows=1000, **kwargs):
+    # args can't exist
+
+    if nrows is not None:  # Just create single partition
+        df = _read_csv(fn, **kwargs)
+        return df.head(nrows, compute=False)
+
     kwargs = kwargs.copy()
-
-    kwargs = fill_kwargs(fn, args, kwargs)
+    kwargs, columns = fill_kwargs(fn, kwargs, sample_nrows)
 
     # Handle glob strings
     if '*' in fn:
         from .multi import concat
-        return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
+        return concat([_read_csv(f, **kwargs) for f in sorted(glob(fn))])
 
-    token = tokenize(os.path.getmtime(fn), args, kwargs)
+    token = tokenize(os.path.getmtime(fn), kwargs)
     name = 'read-csv-%s-%s' % (fn, token)
     bom = get_bom(fn)
 
-    columns = kwargs.pop('columns')
     header = kwargs.pop('header')
 
     # Chunk sizes and numbers
@@ -206,13 +242,12 @@ def read_csv(fn, *args, **kwargs):
     rest_kwargs = merge(kwargs, dict(header=None, compression=None))
 
     # Create dask graph
-    dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
-                                       kwargs['compression'], rest_kwargs,
-                                       bom))
-               for i in range(1, nchunks))
-
-    dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
-                                 first_kwargs, b'')
+    dsk = {}
+    dsk[(name, 0)] = (_read_csv_chunk, fn, 0, chunkbytes,
+                      kwargs['compression'], first_kwargs, b'')
+    for i in range(1, nchunks):
+        dsk[(name, i)] = (_read_csv_chunk, fn, i, chunkbytes,
+                          kwargs['compression'], rest_kwargs, bom)
 
     result = DataFrame(dsk, name, columns, divisions)
 
@@ -571,7 +606,7 @@ def _link(token, result):
     return None
 
 
-@wraps(pd.DataFrame.to_hdf)
+@derived_from(pd.DataFrame)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
            complib=None, fletcher32=False, get=get_sync, **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
@@ -680,7 +715,7 @@ def _pd_read_hdf(path, key, lock, kwargs):
     return result
 
 
-@wraps(pd.read_hdf)
+@derived_from(pd)
 def read_hdf(pattern, key, start=0, stop=None, columns=None,
              chunksize=1000000, lock=True):
     """
