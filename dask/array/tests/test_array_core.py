@@ -639,6 +639,26 @@ def test_unravel():
     assert unravel(a, a.shape) is a
 
 
+def test_reshape():
+    shapes = [(24,), (2, 12), (2, 3, 4)]
+    for original_shape in shapes:
+        for new_shape in shapes:
+            for chunks in [2, 4, 12]:
+                x = np.random.randint(10, size=original_shape)
+                a = from_array(x, chunks)
+                assert eq(x.reshape(new_shape), a.reshape(new_shape))
+
+    assert raises(ValueError, lambda: reshape(a, (100,)))
+    assert eq(np.reshape(x, new_shape), reshape(a, new_shape))
+
+    # verify we can reshape a single chunk array without too many tasks
+    x = np.random.randint(10, size=(10, 20))
+    a = from_array(x, 20)  # all one chunk
+    reshaped = a.reshape((20, 10))
+    assert eq(x.reshape((20, 10)), reshaped)
+    assert len(reshaped.dask) == len(a.dask) + 2
+
+
 def test_full():
     d = da.full((3, 4), 2, chunks=((2, 1), (2, 2)))
     assert d.chunks == ((2, 1), (2, 2))

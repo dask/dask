@@ -883,6 +883,10 @@ class Array(Base):
 
     flatten = ravel
 
+    @wraps(np.reshape)
+    def reshape(self, shape):
+        return reshape(self, shape)
+
     @wraps(topk)
     def topk(self, k):
         return topk(k, self)
@@ -2143,6 +2147,14 @@ def unravel(array, shape):
             return stack([unravel(array[n * trailing_size
                                         : (n + 1) * trailing_size], shape[1:])
                           for n in range(shape[0])])
+
+
+@wraps(np.reshape)
+def reshape(array, shape):
+    shape = tuple(shape)
+    if np.prod(shape) != array.size:
+        raise ValueError('total size of new array must be unchanged')
+    return unravel(ravel(array), shape)
 
 
 def offset_func(func, offset, *args):
