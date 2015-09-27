@@ -385,6 +385,17 @@ def test_from_dask_array_raises():
         assert '3' in str(e)
 
 
+def test_from_dask_array_struct_dtype():
+    x = np.array([(1, 'a'), (2, 'b')], dtype=[('a', 'i4'), ('b', 'object')])
+    y = da.from_array(x, chunks=(1,))
+    df = dd.from_dask_array(y)
+    assert tuple(df.columns) == y.dtype.names
+    eq(df, pd.DataFrame(x))
+
+    eq(dd.from_dask_array(y, columns=['b', 'a']),
+       pd.DataFrame(x, columns=['b', 'a']))
+
+
 def test_to_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
