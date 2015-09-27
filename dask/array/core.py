@@ -884,7 +884,9 @@ class Array(Base):
     flatten = ravel
 
     @wraps(np.reshape)
-    def reshape(self, shape):
+    def reshape(self, *shape):
+        if len(shape) == 1 and not isinstance(shape[0], Number):
+            shape = shape[0]
         return reshape(self, shape)
 
     @wraps(topk)

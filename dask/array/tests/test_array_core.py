@@ -649,6 +649,7 @@ def test_reshape():
                 assert eq(x.reshape(new_shape), a.reshape(new_shape))
 
     assert raises(ValueError, lambda: reshape(a, (100,)))
+    assert eq(x.reshape(*new_shape), a.reshape(*new_shape))
     assert eq(np.reshape(x, new_shape), reshape(a, new_shape))
 
     # verify we can reshape a single chunk array without too many tasks
