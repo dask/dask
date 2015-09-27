@@ -517,9 +517,16 @@ def from_dask_array(x, columns=None):
     divisions[-1] -= 1
 
     if x.ndim == 1:
-        dsk = dict(((name, i), (pd.Series, chunk, ind, x.dtype, columns))
-                for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
-        return Series(merge(x.dask, dsk), name, columns, divisions)
+        if x.dtype.names is None:
+            dsk = dict(((name, i), (pd.Series, chunk, ind, x.dtype, columns))
+                    for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
+            return Series(merge(x.dask, dsk), name, columns, divisions)
+        else:
+            if columns is None:
+                columns = x.dtype.names
+            dsk = dict(((name, i), (pd.DataFrame, chunk, ind, columns))
+                    for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
+            return DataFrame(merge(x.dask, dsk), name, columns, divisions)
 
     elif x.ndim == 2:
         if columns is None:
