@@ -877,6 +877,12 @@ class Array(Base):
     def transpose(self, axes=None):
         return transpose(self, axes)
 
+    @wraps(np.ravel)
+    def ravel(self):
+        return ravel(self)
+
+    flatten = ravel
+
     @wraps(topk)
     def topk(self, k):
         return topk(k, self)
@@ -2093,6 +2099,25 @@ def broadcast_to(x, shape):
                  tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:]))))
                for key in core.flatten(x._keys()))
     return Array(merge(dsk, x.dask), name, chunks, dtype=x.dtype)
+
+
+@wraps(np.ravel)
+def ravel(array):
+    if array.ndim == 0:
+        return array[None]
+    elif array.ndim == 1:
+        return array
+    elif all(len(c) == 1 for c in array.chunks[1:]):
+        # we can simply map np.ravel over the chunks
+        name = 'ravel-' + tokenize(array)
+        trailing_size = int(np.prod([c[0] for c in array.chunks[1:]]))
+        chunks = (tuple(c * trailing_size for c in array.chunks[0]),)
+        dsk = dict(((name, key[1]), (np.ravel, key))
+                   for key in core.flatten(array._keys()))
+        return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
+    else:
+        # we need to do an expensive shuffling of the data
+        return concatenate([ravel(a) for a in array])
 
 
 def offset_func(func, offset, *args):

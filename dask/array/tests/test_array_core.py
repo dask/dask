@@ -579,6 +579,38 @@ def test_broadcast_to():
     assert raises(ValueError, lambda: broadcast_to(a, (3,)))
 
 
+def test_ravel():
+    x = np.random.randint(10, size=(4, 6))
+
+    # 2d
+    # these should use the shortcut
+    for chunks in [(4, 6), (2, 6)]:
+        a = from_array(x, chunks=chunks)
+        assert eq(x.ravel(), a.ravel())
+        assert len(a.ravel().dask) == len(a.dask) + len(a.chunks[0])
+    # these cannot
+    for chunks in [(4, 2), (2, 2)]:
+        a = from_array(x, chunks=chunks)
+        assert eq(x.ravel(), a.ravel())
+        assert len(a.ravel().dask) > len(a.dask) + len(a.chunks[0])
+
+    # 0d
+    assert eq(x[0, 0].ravel(), a[0, 0].ravel())
+
+    # 1d
+    a_flat = a.ravel()
+    assert a_flat.ravel() is a_flat
+
+    # 3d
+    x = np.random.randint(10, size=(2, 3, 4))
+    for chunks in [2, 4, (2, 3, 2), (1, 3, 4)]:
+        a = from_array(x, chunks=chunks)
+        assert eq(x.ravel(), a.ravel())
+
+    assert eq(x.flatten(), a.flatten())
+    assert eq(np.ravel(x), da.ravel(a))
+
+
 def test_full():
     d = da.full((3, 4), 2, chunks=((2, 1), (2, 2)))
     assert d.chunks == ((2, 1), (2, 2))
