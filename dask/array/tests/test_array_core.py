@@ -660,6 +660,16 @@ def test_reshape():
     assert len(reshaped.dask) == len(a.dask) + 2
 
 
+def test_reshape_unknown_dimensions():
+    for original_shape in [(24,), (2, 12), (2, 3, 4)]:
+        for new_shape in [(-1,), (2, -1), (-1, 3, 4)]:
+            x = np.random.randint(10, size=original_shape)
+            a = from_array(x, 4)
+            assert eq(x.reshape(new_shape), a.reshape(new_shape))
+
+    assert raises(ValueError, lambda: reshape(a, (-1, -1)))
+
+
 def test_full():
     d = da.full((3, 4), 2, chunks=((2, 1), (2, 2)))
     assert d.chunks == ((2, 1), (2, 2))
