@@ -590,6 +590,97 @@ def test_broadcast_to():
     assert raises(ValueError, lambda: broadcast_to(a, (3,)))
 
 
+def test_ravel():
+    x = np.random.randint(10, size=(4, 6))
+
+    # 2d
+    # these should use the shortcut
+    for chunks in [(4, 6), (2, 6)]:
+        a = from_array(x, chunks=chunks)
+        assert eq(x.ravel(), a.ravel())
+        assert len(a.ravel().dask) == len(a.dask) + len(a.chunks[0])
+    # these cannot
+    for chunks in [(4, 2), (2, 2)]:
+        a = from_array(x, chunks=chunks)
+        assert eq(x.ravel(), a.ravel())
+        assert len(a.ravel().dask) > len(a.dask) + len(a.chunks[0])
+
+    # 0d
+    assert eq(x[0, 0].ravel(), a[0, 0].ravel())
+
+    # 1d
+    a_flat = a.ravel()
+    assert a_flat.ravel() is a_flat
+
+    # 3d
+    x = np.random.randint(10, size=(2, 3, 4))
+    for chunks in [2, 4, (2, 3, 2), (1, 3, 4)]:
+        a = from_array(x, chunks=chunks)
+        assert eq(x.ravel(), a.ravel())
+
+    assert eq(x.flatten(), a.flatten())
+    assert eq(np.ravel(x), da.ravel(a))
+
+
+def test_unravel():
+    x = np.random.randint(10, size=24)
+
+    # these should use the shortcut
+    for chunks, shape in [(24, (3, 8)),
+                          (24, (12, 2)),
+                          (6, (4, 6)),
+                          (6, (4, 3, 2)),
+                          (6, (4, 6, 1)),
+                          (((6, 12, 6),), (4, 6))]:
+        a = from_array(x, chunks=chunks)
+        unraveled = unravel(a, shape)
+        assert eq(x.reshape(*shape), unraveled)
+        assert len(unraveled.dask) == len(a.dask) + len(a.chunks[0])
+
+    # these cannot
+    for chunks, shape in [(6, (2, 12)),
+                          (6, (1, 4, 6)),
+                          (6, (2, 1, 12))]:
+        a = from_array(x, chunks=chunks)
+        unraveled = unravel(a, shape)
+        assert eq(x.reshape(*shape), unraveled)
+        assert len(unraveled.dask) > len(a.dask) + len(a.chunks[0])
+
+    assert raises(AssertionError, lambda: unravel(unraveled, (3, 8)))
+    assert unravel(a, a.shape) is a
+
+
+def test_reshape():
+    shapes = [(24,), (2, 12), (2, 3, 4)]
+    for original_shape in shapes:
+        for new_shape in shapes:
+            for chunks in [2, 4, 12]:
+                x = np.random.randint(10, size=original_shape)
+                a = from_array(x, chunks)
+                assert eq(x.reshape(new_shape), a.reshape(new_shape))
+
+    assert raises(ValueError, lambda: reshape(a, (100,)))
+    assert eq(x.reshape(*new_shape), a.reshape(*new_shape))
+    assert eq(np.reshape(x, new_shape), reshape(a, new_shape))
+
+    # verify we can reshape a single chunk array without too many tasks
+    x = np.random.randint(10, size=(10, 20))
+    a = from_array(x, 20)  # all one chunk
+    reshaped = a.reshape((20, 10))
+    assert eq(x.reshape((20, 10)), reshaped)
+    assert len(reshaped.dask) == len(a.dask) + 2
+
+
+def test_reshape_unknown_dimensions():
+    for original_shape in [(24,), (2, 12), (2, 3, 4)]:
+        for new_shape in [(-1,), (2, -1), (-1, 3, 4)]:
+            x = np.random.randint(10, size=original_shape)
+            a = from_array(x, 4)
+            assert eq(x.reshape(new_shape), a.reshape(new_shape))
+
+    assert raises(ValueError, lambda: reshape(a, (-1, -1)))
+
+
 def test_full():
     d = da.full((3, 4), 2, chunks=((2, 1), (2, 2)))
     assert d.chunks == ((2, 1), (2, 2))

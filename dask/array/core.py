@@ -877,6 +877,18 @@ class Array(Base):
     def transpose(self, axes=None):
         return transpose(self, axes)
 
+    @wraps(np.ravel)
+    def ravel(self):
+        return ravel(self)
+
+    flatten = ravel
+
+    @wraps(np.reshape)
+    def reshape(self, *shape):
+        if len(shape) == 1 and not isinstance(shape[0], Number):
+            shape = shape[0]
+        return reshape(self, shape)
+
     @wraps(topk)
     def topk(self, k):
         return topk(k, self)
@@ -2123,6 +2135,65 @@ def broadcast_to(x, shape):
                  tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:]))))
                for key in core.flatten(x._keys()))
     return Array(merge(dsk, x.dask), name, chunks, dtype=x.dtype)
+
+
+@wraps(np.ravel)
+def ravel(array):
+    if array.ndim == 0:
+        return array[None]
+    elif array.ndim == 1:
+        return array
+    elif all(len(c) == 1 for c in array.chunks[1:]):
+        # we can simply map np.ravel over the chunks
+        name = 'ravel-' + tokenize(array)
+        trailing_size = int(np.prod([c[0] for c in array.chunks[1:]]))
+        chunks = (tuple(c * trailing_size for c in array.chunks[0]),)
+        dsk = dict(((name, key[1]), (np.ravel, key))
+                   for key in core.flatten(array._keys()))
+        return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
+    else:
+        # we need to do an expensive shuffling of the data
+        return concatenate([ravel(a) for a in array])
+
+
+def unravel(array, shape):
+    """ Given a 1D array, reshape it to the given shape
+    """
+    assert array.ndim == 1
+    if len(shape) == 1:
+        return array
+    else:
+        trailing_size = int(np.prod(shape[1:]))
+        if all(c % trailing_size == 0 for c in array.chunks[0]):
+            # we can call np.reshape on each chunk
+            name = 'unravel-' + tokenize(array)
+            chunks = ((tuple(c // trailing_size for c in array.chunks[0]),)
+                      + tuple((c,) for c in shape[1:]))
+            dsk = dict(((name, key[1]) + (0,) * (len(shape) - 1),
+                        (np.reshape, key, (c,) + shape[1:]))
+                       for key, c in zip(array._keys(), chunks[0]))
+            return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
+        else:
+            # we need to shuffle
+            # nb. this doesn't always work, stack requires aligned chunks
+            return stack([unravel(array[n * trailing_size
+                                        : (n + 1) * trailing_size], shape[1:])
+                          for n in range(shape[0])])
+
+
+@wraps(np.reshape)
+def reshape(array, shape):
+    shape = tuple(shape)
+    known_sizes = [s for s in shape if s != -1]
+    if len(known_sizes) < len(shape):
+        if len(known_sizes) - len(shape) > 1:
+            raise ValueError('can only specify one unknown dimension')
+        missing_size = int(array.size / np.prod(known_sizes))
+        shape = tuple(missing_size if s == -1 else s for s in shape)
+
+    if np.prod(shape) != array.size:
+        raise ValueError('total size of new array must be unchanged')
+    return unravel(ravel(array), shape)
 
 
 def offset_func(func, offset, *args):
