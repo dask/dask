@@ -611,6 +611,34 @@ def test_ravel():
     assert eq(np.ravel(x), da.ravel(a))
 
 
+def test_unravel():
+    x = np.random.randint(10, size=24)
+
+    # these should use the shortcut
+    for chunks, shape in [(24, (3, 8)),
+                          (24, (12, 2)),
+                          (6, (4, 6)),
+                          (6, (4, 3, 2)),
+                          (6, (4, 6, 1)),
+                          (((6, 12, 6),), (4, 6))]:
+        a = from_array(x, chunks=chunks)
+        unraveled = unravel(a, shape)
+        assert eq(x.reshape(*shape), unraveled)
+        assert len(unraveled.dask) == len(a.dask) + len(a.chunks[0])
+
+    # these cannot
+    for chunks, shape in [(6, (2, 12)),
+                          (6, (1, 4, 6)),
+                          (6, (2, 1, 12))]:
+        a = from_array(x, chunks=chunks)
+        unraveled = unravel(a, shape)
+        assert eq(x.reshape(*shape), unraveled)
+        assert len(unraveled.dask) > len(a.dask) + len(a.chunks[0])
+
+    assert raises(AssertionError, lambda: unravel(unraveled, (3, 8)))
+    assert unravel(a, a.shape) is a
+
+
 def test_full():
     d = da.full((3, 4), 2, chunks=((2, 1), (2, 2)))
     assert d.chunks == ((2, 1), (2, 2))

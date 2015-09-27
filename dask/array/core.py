@@ -2120,6 +2120,31 @@ def ravel(array):
         return concatenate([ravel(a) for a in array])
 
 
+def unravel(array, shape):
+    """ Given a 1D array, reshape it to the given shape
+    """
+    assert array.ndim == 1
+    if len(shape) == 1:
+        return array
+    else:
+        trailing_size = int(np.prod(shape[1:]))
+        if all(c % trailing_size == 0 for c in array.chunks[0]):
+            # we can call np.reshape on each chunk
+            name = 'unravel-' + tokenize(array)
+            chunks = ((tuple(c // trailing_size for c in array.chunks[0]),)
+                      + tuple((c,) for c in shape[1:]))
+            dsk = dict(((name, key[1]) + (0,) * (len(shape) - 1),
+                        (np.reshape, key, (c,) + shape[1:]))
+                       for key, c in zip(array._keys(), chunks[0]))
+            return Array(merge(dsk, array.dask), name, chunks, dtype=array.dtype)
+        else:
+            # we need to shuffle
+            # nb. this doesn't always work, stack requires aligned chunks
+            return stack([unravel(array[n * trailing_size
+                                        : (n + 1) * trailing_size], shape[1:])
+                          for n in range(shape[0])])
+
+
 def offset_func(func, offset, *args):
     """  Offsets inputs by offset
 
