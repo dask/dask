@@ -6,23 +6,39 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from distributed3 import Center, Worker
+from distributed3.utils import ignoring
 from distributed3.client import (scatter_to_center, scatter_to_workers,
         gather_from_center, RemoteData)
 
 
-def test_scatter_delete():
+def _test_cluster(f):
     @gen.coroutine
-    def f():
-        c = Center('127.0.0.1', 8007)
+    def g():
+        c = Center('127.0.0.1', 8017)
         c.listen(c.port)
-        a = Worker('127.0.0.1', 8008, c.ip, c.port, ncores=1)
+        a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=1)
         yield a._start()
-        b = Worker('127.0.0.1', 8009, c.ip, c.port, ncores=1)
+        b = Worker('127.0.0.1', 8019, c.ip, c.port, ncores=1)
         yield b._start()
 
         while len(c.ncores) < 2:
-            yield gen.sleep(0.01, loop=loop)
+            yield gen.sleep(0.01)
 
+        try:
+            yield f(c, a, b)
+        finally:
+            with ignoring():
+                yield a._close()
+            with ignoring():
+                yield b._close()
+            c.stop()
+
+    IOLoop.current().run_sync(g)
+
+
+def test_scatter_delete():
+    @gen.coroutine
+    def f(c, a, b):
         data = yield scatter_to_center(c.ip, c.port, [1, 2, 3])
 
         assert c.ip in str(data[0])
@@ -58,27 +74,12 @@ def test_scatter_delete():
                                           dict(zip('abc', data)))
         assert result == {'a': 4, 'b': 5, 'c': 6}
 
-        yield a._close()
-        yield b._close()
-        c.stop()
-
-    IOLoop.current().run_sync(f)
+    _test_cluster(f)
 
 
 def test_garbage_collection():
     @gen.coroutine
-    def f():
-
-        c = Center('127.0.0.1', 8007)
-        c.listen(c.port)
-        a = Worker('127.0.0.1', 8008, c.ip, c.port, ncores=1)
-        yield a._start()
-        b = Worker('127.0.0.1', 8009, c.ip, c.port, ncores=1)
-        yield b._start()
-
-        while len(c.ncores) < 2:
-            yield gen.sleep(0.01, loop=loop)
-
+    def f(c, a, b):
         import gc; gc.collect()
         RemoteData.trash[(c.ip, c.port)].clear()
 
@@ -96,4 +97,4 @@ def test_garbage_collection():
         assert set() == set(a.data) | set(b.data)
         assert n == len(keys)
 
-    IOLoop.current().run_sync(f)
+    _test_cluster(f)
