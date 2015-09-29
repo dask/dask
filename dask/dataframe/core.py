@@ -483,6 +483,9 @@ class _Frame(Base):
             dask.DataFrame.random_split, pd.DataFrame.sample
         """
 
+        if random_state is None:
+            random_state = np.random.randint(np.iinfo(np.int32).max)
+
         name = 'sample-' + tokenize(self, frac, random_state)
         func = getattr(self._partition_type, 'sample')
 
