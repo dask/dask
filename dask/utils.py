@@ -256,13 +256,13 @@ def skip(func):
     pass
 
 
-def pseudorandom(n, p, key):
+def pseudorandom(n, p, random_state):
     """ Pseudorandom array of integer indexes
 
-    >>> pseudorandom(5, [0.5, 0.5], key=123)
+    >>> pseudorandom(5, [0.5, 0.5], random_state=123)
     array([1, 0, 0, 1, 1], dtype=int8)
 
-    >>> pseudorandom(10, [0.5, 0.2, 0.2, 0.1], key=5)
+    >>> pseudorandom(10, [0.5, 0.2, 0.2, 0.1], random_state=5)
     array([0, 2, 0, 3, 0, 1, 2, 1, 0, 0], dtype=int8)
     """
     import numpy as np
@@ -271,7 +271,10 @@ def pseudorandom(n, p, key):
     assert np.allclose(1, cp[-1])
     assert len(p) < 256
 
-    x = np.random.RandomState(key).random_sample(n)
+    if not isinstance(random_state, np.random.RandomState):
+        random_state = np.random.RandomState(random_state)
+
+    x = random_state.random_sample(n)
     out = np.empty(n, dtype='i1')
 
     for i, (low, high) in enumerate(zip(cp[:-1], cp[1:])):

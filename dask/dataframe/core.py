@@ -282,14 +282,14 @@ class _Frame(Base):
             columns = self.column_info
         return map_partitions(func, columns, self, *args, **kwargs)
 
-    def random_split(self, p, seed=None):
+    def random_split(self, p, random_state=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
         Parameters
         ----------
         frac : float, optional
             Fraction of axis items to return.
-        seed: int or np.random.RandomState
+        random_state: int or np.random.RandomState
             If int create a new RandomState with this as the seed
         Otherwise draw from the passed RandomState
 
@@ -300,16 +300,16 @@ class _Frame(Base):
 
         >>> a, b = df.random_split([0.5, 0.5])  # doctest: +SKIP
 
-        80/10/10 split, consistent seed
+        80/10/10 split, consistent random_state
 
-        >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
+        >>> a, b, c = df.random_split([0.8, 0.1, 0.1], random_state=123)  # doctest: +SKIP
 
         See Also:
         ---------
 
             dask.DataFrame.sample
         """
-        seeds = different_seeds(self.npartitions, seed)
+        seeds = different_seeds(self.npartitions, random_state)
         dsk_full = dict(((self._name + '-split-full', i),
                          (pd_split, (self._name, i), p, seed))
                        for i, seed in enumerate(seeds))
@@ -2138,13 +2138,13 @@ def quantile(df, q):
     return return_type(dsk, name3, df.name, new_divisions)
 
 
-def pd_split(df, p, seed=0):
+def pd_split(df, p, random_state=0):
     """ Split DataFrame into multiple pieces pseudorandomly
 
     >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
     ...                    'b': [2, 3, 4, 5, 6, 7]})
 
-    >>> a, b = pd_split(df, [0.5, 0.5], seed=123)  # roughly 50/50 split
+    >>> a, b = pd_split(df, [0.5, 0.5], random_state=123)  # roughly 50/50 split
     >>> a
        a  b
     1  2  3
@@ -2158,7 +2158,7 @@ def pd_split(df, p, seed=0):
     4  5  6
     """
     p = list(p)
-    index = pseudorandom(len(df), p, seed)
+    index = pseudorandom(len(df), p, random_state)
     return [df.iloc[index == i] for i in range(len(p))]
 
 
