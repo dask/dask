@@ -31,8 +31,8 @@ A special *center* process that keeps track of which data resides on
 which workers. E.g.
 
     {'alice':   {'x', 'y'}
-     'bob':     {'w', 'x'}
-     'charlie': {'a', 'b', 'c'}}
+     'bob':     {'a', 'b', 'c'},
+     'charlie': {'w', 'x', 'b'}}
 
 All worker nodes in the same network have the same center node.  They update
 and query this center node to share and learn what nodes have what data.  The
@@ -43,7 +43,7 @@ Metadata storage is centralized but all data transfer is peer-to-peer.
     Client:  Hey Alice!   Compute `z <- add(x, a)`
 
     Alice:   Hey Center!  Who has a?
-    Center:  Hey Alice!   Charlie has a.
+    Center:  Hey Alice!   Bob has a.
     Alice:   Hey Bob!     Send me a!
     Bob:     Hey Alice!   Here's a!
 
