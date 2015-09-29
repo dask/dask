@@ -759,3 +759,14 @@ def test_encoding_gh601():
             d = d.compute()
             d.index = range(len(d.index))
             assert eq(d, a)
+
+
+def test_read_hdf_doesnt_segfault():
+    with tmpfile('h5') as fn:
+        N = 40
+        df = pd.DataFrame(np.random.randn(N, 3))
+        with pd.HDFStore(fn, mode='w') as store:
+            store.append('/x', df)
+
+        ddf = dd.read_hdf(fn, '/x', chunksize=2)
+        assert len(ddf) == N
