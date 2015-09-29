@@ -27,7 +27,6 @@ def test_start_state():
                'released': set([]),
                'running': set([]),
                'ready': ['z'],
-               'ready-set': set(['z']),
                'waiting': {'w': set(['z'])},
                'waiting_data': {'x': set(['z']),
                                 'y': set(['w']),
@@ -56,7 +55,6 @@ def test_finish_task():
     sortkey = order(dsk).get
     state = start_state_from_dask(dsk)
     state['ready'].remove('z')
-    state['ready-set'].remove('z')
     state['running'] = set(['z', 'other-task'])
     task = 'z'
     result = 2
@@ -79,7 +77,6 @@ def test_finish_task():
                          'y': set(['w']),
                          'z': set(['w'])},
           'ready': ['w'],
-          'ready-set': set(['w']),
           'waiting': {},
           'waiting_data': {'y': set(['w']),
                            'z': set(['w'])}}

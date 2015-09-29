@@ -50,12 +50,11 @@ Changing state
 ### Jobs
 
 1.  ready: A fifo stack of ready-to-run tasks
-2.  ready-set: A set of the data above for rapid access
-3.  running: A set of tasks currently in execution
-4.  finished: A set of finished tasks
-5.  waiting: which tasks are still waiting on others :: {key: {keys}}
+2.  running: A set of tasks currently in execution
+3.  finished: A set of finished tasks
+4.  waiting: which tasks are still waiting on others :: {key: {keys}}
     Real-time equivalent of dependencies
-6.  waiting_data: available data to yet-to-be-run-tasks :: {key: {keys}}
+5.  waiting_data: available data to yet-to-be-run-tasks :: {key: {keys}}
     Real-time equivalent of dependents
 
 
@@ -76,7 +75,6 @@ Example
                 'z': set(['w'])},
  'finished': set([]),
  'ready': ['z'],
- 'ready-set': set(['z']),
  'released': set([]),
  'running': set([]),
  'waiting': {'w': set(['z'])},
@@ -152,7 +150,6 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
                     'z': set(['w'])},
      'finished': set([]),
      'ready': ['z'],
-     'ready-set': set(['z']),
      'released': set([]),
      'running': set([]),
      'waiting': {'w': set(['z'])},
@@ -195,7 +192,6 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
              'waiting_data': waiting_data,
              'cache': cache,
              'ready': ready,
-             'ready-set': ready_set,
              'running': set(),
              'finished': set(),
              'released': set()}
@@ -305,15 +301,11 @@ def finish_task(dsk, key, state, results, sortkey, delete=True,
 
     Mutates.  This should run atomically (with a lock).
     """
-    if key in state['ready-set']:
-        state['ready-set'].remove(key)
-
     for dep in sorted(state['dependents'][key], key=sortkey, reverse=True):
         s = state['waiting'][dep]
         s.remove(key)
         if not s:
             del state['waiting'][dep]
-            state['ready-set'].add(dep)
             state['ready'].append(dep)
 
     for dep in state['dependencies'][key]:
@@ -455,7 +447,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         """ Fire off a task to the thread pool """
         # Choose a good task to compute
         key = state['ready'].pop()
-        state['ready-set'].remove(key)
         state['running'].add(key)
         for f in pretask_cbs:
             f(key, dsk, state)

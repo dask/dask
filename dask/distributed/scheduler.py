@@ -633,7 +633,6 @@ class Scheduler(object):
 
                 # Choose a good task to compute
                 key = dag_state['ready'].pop()
-                dag_state['ready-set'].remove(key)
                 dag_state['running'].add(key)
 
                 self.trigger_task(key, dsk[key],
