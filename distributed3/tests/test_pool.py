@@ -175,6 +175,7 @@ def test_pool_synchronous():
                                         ('127.0.0.1', b['port']): 1}
 
         data = pool.map(lambda x: x * 10, [1, 2, 3])
+        assert data[0].get() == 10
         results = pool.gather(data)
         assert results == [10, 20, 30]
 

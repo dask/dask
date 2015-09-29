@@ -5,6 +5,7 @@ from collections import Iterable, defaultdict
 
 from tornado import gen
 from tornado.gen import Return
+from tornado.ioloop import IOLoop
 
 from toolz import merge, concat, groupby
 
@@ -90,17 +91,15 @@ class RemoteData(object):
         else:
             raise Return(self._result)
 
-    """
     def get(self):
         if self._result is not no_default:
             return self._result
         else:
-            result = sync(self._get(raiseit=False), self.loop)
+            result = IOLoop.current().run_sync(lambda: self._get(raiseit=False))
             if self.status == b'error':
                 raise result
             else:
                 return result
-    """
 
     @gen.coroutine
     def _delete(self):
