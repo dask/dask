@@ -156,6 +156,7 @@ class Pool(object):
 
     @gen.coroutine
     def _scatter(self, data, key=None):
+        yield self._sync_center()
         result = yield scatter_to_workers(self.center_ip,
                 self.center_port, self.ncores, data, key=key)
         raise Return(result)
