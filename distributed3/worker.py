@@ -12,7 +12,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from .core import rpc, connect_sync, read_sync, write_sync, connect, Server
-from .client import gather_from_center
+from .client import gather_strict_from_center, keys_to_data
 
 _ncores = ThreadPool()._processes
 
@@ -107,7 +107,7 @@ class Worker(Server):
         # gather data from peers
         if needed:
             log("gather data from peers: %s" % str(needed))
-            other = yield gather_from_center(center, needed=needed)
+            other = yield gather_strict_from_center(center, needed=needed)
             data2 = merge(self.data, dict(zip(needed, other)))
         else:
             data2 = self.data
@@ -159,28 +159,3 @@ class Worker(Server):
 
 
 job_counter = [0]
-
-
-def keys_to_data(o, data):
-    """ Merge known data into tuple or dict
-
-    >>> data = {'x': 1}
-    >>> keys_to_data(('x', 'y'), data)
-    (1, 'y')
-    >>> keys_to_data({'a': 'x', 'b': 'y'}, data)
-    {'a': 1, 'b': 'y'}
-    >>> keys_to_data({'a': ['x'], 'b': 'y'}, data)
-    {'a': [1], 'b': 'y'}
-    """
-    try:
-        if o in data:
-            return data[o]
-    except (TypeError, KeyError):
-        pass
-
-    if isinstance(o, (tuple, list, set, frozenset)):
-        return type(o)([keys_to_data(x, data) for x in o])
-    elif isinstance(o, dict):
-        return {k: keys_to_data(v, data) for k, v in o.items()}
-    else:
-        return o

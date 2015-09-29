@@ -52,6 +52,12 @@ def test_scatter_delete():
         for d, v in zip(data, [4, 5, 6]):
             assert m[d.key] == v
 
+        result = yield gather_from_center((c.ip, c.port), data)
+        assert result == [4, 5, 6]
+        result = yield gather_from_center((c.ip, c.port),
+                                          dict(zip('abc', data)))
+        assert result == {'a': 4, 'b': 5, 'c': 6}
+
         yield a._close()
         yield b._close()
         c.stop()

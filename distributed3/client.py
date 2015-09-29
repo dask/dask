@@ -16,11 +16,35 @@ no_default = '__no_default__'
 
 
 @gen.coroutine
-def gather_from_center(stream, needed=[]):
-    """ gather data from peers """
+def gather_from_center(stream, needed):
+    """ Gather data from peers
+
+    This accepts any nested collection of data and unpacks RemoteData objects
+    within that nesting.  Keys not found are left as keys.
+
+    See also:
+        gather_strict_from_center
+    """
+    pre_result, needed = unpack_remotedata(needed)
+    who_has = yield rpc(stream).who_has(keys=needed)
+
+    data = yield gather_from_workers(who_has)
+    result = keys_to_data(pre_result, data)
+
+    raise Return(result)
+
+
+@gen.coroutine
+def gather_strict_from_center(stream, needed=[]):
+    """ Gather data from peers
+
+    This accepts an iterable, keys not found will not be in the output
+
+    See also:
+        gather_from_center
+    """
     needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
     who_has = yield rpc(stream).who_has(keys=needed)
-    assert set(who_has) == set(needed)
 
     result = yield gather_from_workers(who_has)
     raise Return([result[key] for key in needed])
@@ -187,3 +211,27 @@ def unpack_remotedata(o):
     else:
         return o, set()
 
+
+def keys_to_data(o, data):
+    """ Merge known data into tuple or dict
+
+    >>> data = {'x': 1}
+    >>> keys_to_data(('x', 'y'), data)
+    (1, 'y')
+    >>> keys_to_data({'a': 'x', 'b': 'y'}, data)
+    {'a': 1, 'b': 'y'}
+    >>> keys_to_data({'a': ['x'], 'b': 'y'}, data)
+    {'a': [1], 'b': 'y'}
+    """
+    try:
+        if o in data:
+            return data[o]
+    except (TypeError, KeyError):
+        pass
+
+    if isinstance(o, (tuple, list, set, frozenset)):
+        return type(o)([keys_to_data(x, data) for x in o])
+    elif isinstance(o, dict):
+        return {k: keys_to_data(v, data) for k, v in o.items()}
+    else:
+        return o

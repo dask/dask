@@ -152,7 +152,7 @@ class Pool(object):
                 lambda: self._apply_async(func, args, kwargs, key))
 
     def apply(self, func, args=(), kwargs={}, key=None):
-        return self.apply(func, args, kwargs, key).get()
+        return self.apply_async(func, args, kwargs, key).get()
 
     @gen.coroutine
     def _scatter(self, data, key=None):

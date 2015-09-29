@@ -14,6 +14,10 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 
+def inc(x):
+    return x
+
+
 def _test_cluster(f):
     @gen.coroutine
     def g():
@@ -249,3 +253,12 @@ def test_job_kills_node():
             results = yield p._map(f, range(20))
 
         IOLoop.current().run_sync(g)
+
+
+def test_apply_with_nested_data():
+    with cluster() as (c, [a, b]):
+        pool = Pool('127.0.0.1', c['port'])
+        results = pool.map(inc, range(10))
+        total = pool.apply(sum, [results])
+        assert total.get() == sum(map(inc, range(10)))
+        pool.close()
