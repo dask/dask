@@ -14,7 +14,8 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
 from .core import read, write, connect, rpc
-from .client import RemoteData, scatter_to_workers, gather_from_center
+from .client import (RemoteData, scatter_to_workers, gather_from_center,
+        unpack_remotedata)
 
 
 log = print
@@ -62,7 +63,7 @@ class Pool(object):
         yield self._sync_center()
         tasks = []
         for i, item in enumerate(seq):
-            needed, args2, kwargs2 = needed_args_kwargs((item,), kwargs)
+            [args2, kwargs2], needed = unpack_remotedata([(item,), kwargs])
             tasks.append(dict(key=str(uuid.uuid1()),
                               function=func, args=args2,
                               kwargs=kwargs2,
@@ -127,7 +128,7 @@ class Pool(object):
         if not isinstance(args, (tuple, list)):
             raise TypeError('args must be a tuple as in:\n'
                     '  pool.apply_async(func, args=(x,))')
-        needed, args2, kwargs2 = needed_args_kwargs(args, kwargs)
+        [args2, kwargs2], needed = unpack_remotedata([args, kwargs])
 
         ip, port = choose_worker(needed, self.who_has, self.has_what,
                                  self.available_cores)
@@ -148,7 +149,7 @@ class Pool(object):
         communicated as necessary among the ``Worker`` peers.
         """
         return IOLoop.current().run_sync(
-                lambda: self._apply_async(args, kwargs, key))
+                lambda: self._apply_async(func, args, kwargs, key))
 
     def apply(self, func, args=(), kwargs={}, key=None):
         return self.apply(func, args, kwargs, key).get()
@@ -243,28 +244,6 @@ def choose_worker(needed, who_has, has_what, available_cores):
         biggest = max(counts.values())
         best = {k: v for k, v in counts.items() if v == biggest}
         return random.choice(list(best))
-
-
-def needed_args_kwargs(args, kwargs):
-    """ Replace RemoteData objects with keys, fill needed """
-    needed = set()
-    args2 = []
-    for arg in args:
-        if isinstance(arg, RemoteData):
-            args2.append(arg.key)
-            needed.add(arg.key)
-        else:
-            args2.append(arg)
-
-    kwargs2 = {}
-    for k, v in kwargs.items():
-        if isinstance(arg, RemoteData):
-            kwargs2[k] = arg.key
-            needed.add(arg.key)
-        else:
-            kwargs2[k] = arg
-
-    return needed, args2, kwargs2
 
 
 def divide_tasks(who_has, needed):

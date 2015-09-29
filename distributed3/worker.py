@@ -169,21 +169,18 @@ def keys_to_data(o, data):
     (1, 'y')
     >>> keys_to_data({'a': 'x', 'b': 'y'}, data)
     {'a': 1, 'b': 'y'}
+    >>> keys_to_data({'a': ['x'], 'b': 'y'}, data)
+    {'a': [1], 'b': 'y'}
     """
-    if isinstance(o, (tuple, list)):
-        result = []
-        for arg in o:
-            try:
-                result.append(data[arg])
-            except (TypeError, KeyError):
-                result.append(arg)
-        result = type(o)(result)
+    try:
+        if o in data:
+            return data[o]
+    except (TypeError, KeyError):
+        pass
 
-    if isinstance(o, dict):
-        result = {}
-        for k, v in o.items():
-            try:
-                result[k] = data[v]
-            except (TypeError, KeyError):
-                result[k] = v
-    return result
+    if isinstance(o, (tuple, list, set, frozenset)):
+        return type(o)([keys_to_data(x, data) for x in o])
+    elif isinstance(o, dict):
+        return {k: keys_to_data(v, data) for k, v in o.items()}
+    else:
+        return o

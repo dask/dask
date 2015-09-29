@@ -154,3 +154,36 @@ def scatter_to_workers(ip, port, ncores, data, key=None):
                 for a, b, c in L]
 
     raise Return(result)
+
+
+def unpack_remotedata(o):
+    """ Unpack RemoteData objects from collection
+
+    Returns original collection and set of all found keys
+
+    >>> rd = RemoteData('mykey', '127.0.0.1', 8787)
+    >>> unpack_remotedata(1)
+    (1, set())
+    >>> unpack_remotedata(rd)
+    ('mykey', {'mykey'})
+    >>> unpack_remotedata([1, rd])
+    ([1, 'mykey'], {'mykey'})
+    >>> unpack_remotedata({1: rd})
+    ({1: 'mykey'}, {'mykey'})
+    >>> unpack_remotedata({1: [rd]})
+    ({1: ['mykey']}, {'mykey'})
+    """
+    if isinstance(o, RemoteData):
+        return o.key, {o.key}
+    elif isinstance(o, (tuple, list, set, frozenset)):
+        out, sets = zip(*map(unpack_remotedata, o))
+        return type(o)(out), set.union(*sets)
+    elif isinstance(o, dict):
+        if o:
+            values, sets = zip(*map(unpack_remotedata, o.values()))
+            return dict(zip(o.keys(), values)), set.union(*sets)
+        else:
+            return dict(), set()
+    else:
+        return o, set()
+

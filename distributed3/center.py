@@ -31,7 +31,6 @@ class Center(Server):
     A center can be run in an event loop
 
     >>> c = Center('192.168.0.123', 8000)
-    >>> TODO
 
     Or separately in a thread
 
