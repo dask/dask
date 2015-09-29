@@ -23,11 +23,11 @@ tcp and generally respond to the following requests
 
         z <- add(x, y)  # can be done with only local data
 
-    Also support getting data from other sources
+    Also support computing on data that must be collected from other workers
 
-        c <- add(x, a)  # need to find out where we can get 'a'
+        z <- add(x, a)  # need to find out where we can get 'a'
 
-A special *center* process that keeps track of what data-keys are on
+A special *center* process that keeps track of which data resides on
 which workers. E.g.
 
     {'alice':   {'x', 'y'}
@@ -36,21 +36,27 @@ which workers. E.g.
 
 All worker nodes in the same network have the same center node.  They update
 and query this center node to share and learn what nodes have what data.  The
-center node could conceptually be replaced by a Redis server.  While metadata
-storage is centralized all data transfer is peer-to-peer.
+center node could conceptually be replaced by a Redis server.
 
-    Alice:  Hey Center!  Who has a?
-    Center: Hey Alice!   Charlie has a.
-    Alice:  Hey Bob!     Send me a!
-    Bob:    Hey Alice!   Here's a!
+Metadata storage is centralized but all data transfer is peer-to-peer.
+
+    Client:  Hey Alice!   Compute `z <- add(x, a)`
+
+    Alice:   Hey Center!  Who has a?
+    Center:  Hey Alice!   Charlie has a.
+    Alice:   Hey Bob!     Send me a!
+    Bob:     Hey Alice!   Here's a!
+
+    Alice:   Hey Client!  I've computed z and am holding on to it!
+    Alice:   Hey Center!  I have z!
 
 
 Client Model
 ------------
 
 In principle one can connect to the worker and center servers with sockets to
-manipulate them.  Convenience functions exist to scatter data, and run remote
-procedures.
+manipulate them.  Convenience functions exist to scatter/gather data, and run
+remote procedures, etc..
 
 In practice though we probably want to wrap this system with various user
 abstractions.  As a proof of concept we've implemented a *pool* abstraction
@@ -59,7 +65,8 @@ where the requisite data already resides.
 
 Our goal isn't to produce a distributed pool though, nor to produce any
 particular distributed client library, but rather to create a substrate upon
-which several such projects could be built with minimal incidental pain.
+which several such projects could be built with minimal incidental pain
+(writing concurrent distributed systems can be painful.)
 
 
 Pool Example
@@ -100,7 +107,7 @@ Out[8]: -285
 ```
 
 The results `A`, `B`, and `total` are kept remotely on the workers until
-recalled explicitly with the `.get()` method.
+recalled explicitly with the `RemoteData.get()` or `Pool.gather(...)` methods.
 
 ```python
 In [9]: A
@@ -120,18 +127,18 @@ In [10]: pool.gather(A)
 Out[10]: [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
 ```
 
-Computations on remote data, e.g. `B = pool.map(lambda x: -x, A)`, keep data on
-the cluster.
+Computations on remote data keep data on the cluster.
 
 ```python
-In [6]: B = pool.map(lambda x: -x, A)
+In [6]: B = pool.map(lambda x: -x, A)  # No transfer to client occurs here
 ```
 
 Moreover they try to avoid worker-to-worker communication by
-performing computations where the inputs are stored.
+performing computations where the inputs are stored.  Idle workers will steal
+data from busy workers though.
 
-Data transfer does happen though when necessary, as in when we compute the sum
-of all of `B`.  In this case we'll probably choose to perform the computation
+Data transfer does happen when necessary, as in when we compute the sum
+of all of `B`.  In this case we choose to perform the computation
 on the node that has the greater number of elements of B on it.  All of the
 other elements will be pulled by peer-to-peer transfer.
 
@@ -147,9 +154,9 @@ The conceptual model of workers and center has persisted since the original
 implementation in `dask.distributed`.  The implementation has evolved
 significantly over the various iterations of this project.
 
-1.  `dask.distributed`:  threads and callbacks
-2.  `dist`:  Actor model with threads and queues
-3.  `distributed`:  Coroutine model with asyncio
+1.  [`dask.distributed`](http://dask.pydata.org/en/latest/distributed.html):  threads and callbacks
+2.  [`dist`](https://github.com/mrocklin/dist):  Actor model with threads and queues
+3.  [`distributed`](https://github.com/mrocklin/distributed):  Coroutine model with asyncio
 4.  `distributed3`:  Coroutine model with tornado
 
 We need a pleasant way to write somewhat complex interactions between nodes.
@@ -157,7 +164,7 @@ These interactions can not block because each node is expected to handle a
 variety of operations concurrently:
 
 1.  Compute several functions at once
-2.  Serve data to other workers
+2.  Serve data to other workers/clients
 3.  Manage heartbeats, etc..
 
 One process should not block the others.  Furthermore we've found that relying
