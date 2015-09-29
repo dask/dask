@@ -101,7 +101,6 @@ class Worker(Server):
     def work(self, stream, function=None, key=None, args=(), kwargs={}, needed=[]):
         """ Execute function """
         center = yield connect(self.center_ip, self.center_port)
-
         needed = [n for n in needed if n not in self.data]
 
         # gather data from peers
@@ -112,9 +111,11 @@ class Worker(Server):
         else:
             data2 = self.data
 
-        # Fill args with data, compute in separate thread
+        # Fill args with data
         args2 = keys_to_data(args, data2)
         kwargs2 = keys_to_data(kwargs, data2)
+
+        # Log and compute in separate thread
         try:
             job_counter[0] += 1
             i = job_counter[0]
@@ -125,9 +126,9 @@ class Worker(Server):
         except Exception as e:
             result = e
             out_response = b'error'
-        self.data[key] = result
 
-        # Tell center about our new data
+        # Store and tell center about our new data
+        self.data[key] = result
         response = yield rpc(center).add_keys(address=(self.ip, self.port),
                                               close=True, keys=[key])
         if not response == b'OK':
