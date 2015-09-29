@@ -1,16 +1,18 @@
 from __future__ import division
 
-import pandas as pd
-import numpy as np
+from fnmatch import fnmatch
 from functools import wraps, partial
-import re
-import os
 from glob import glob
 from math import ceil
-from toolz import merge, assoc, dissoc
 from operator import getitem
-from fnmatch import fnmatch
+import os
+import re
+from threading import Lock
 import uuid
+
+import pandas as pd
+import numpy as np
+from toolz import merge, assoc, dissoc
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size, get_bom
@@ -608,7 +610,7 @@ and stopping index per file, or starting and stopping index of the global
 dataset."""
 
 def _read_single_hdf(path, key, start=0, stop=None, columns=None,
-                     chunksize=int(1e6)):
+                     chunksize=int(1e6), lock=None):
     """
     Read a single hdf file into a dask.dataframe. Used for each file in
     read_hdf.
@@ -633,7 +635,8 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                     stops.append(stop)
         return keys, stops
 
-    def one_path_one_key(path, key, start, stop, columns, chunksize):
+
+    def one_path_one_key(path, key, start, stop, columns, chunksize, lock):
         """
         Get the data frame corresponding to one path and one key (which should
         not contain any wildcards).
@@ -645,26 +648,41 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                           stop, columns, chunksize))
         name = 'read-hdf-' + token
 
-        dsk = dict(((name, i), (apply, pd.read_hdf,
-                                 (path, key),
-                                 {'start': s, 'stop': s + chunksize,
+        dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
+                                 {'start': s,
+                                  'stop': s + chunksize,
                                   'columns': columns}))
                     for i, s in enumerate(range(start, stop, chunksize)))
 
         divisions = [None] * (len(dsk) + 1)
         return DataFrame(dsk, name, columns, divisions)
 
+    if lock is True:
+        lock = Lock()
+
     keys, stops = get_keys_and_stops(path, key, stop)
     if (start != 0 or stop is not None) and len(keys) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     from .multi import concat
-    return concat([one_path_one_key(path, k, start, s, columns, chunksize)
+    return concat([one_path_one_key(path, k, start, s, columns, chunksize, lock)
                    for k, s in zip(keys, stops)])
+
+
+def _pd_read_hdf(path, key, lock, kwargs):
+    """ Read from hdf5 file with a lock """
+    if lock:
+        lock.acquire()
+    try:
+        result = pd.read_hdf(path, key, **kwargs)
+    finally:
+        if lock:
+            lock.release()
+    return result
 
 
 @wraps(pd.read_hdf)
 def read_hdf(pattern, key, start=0, stop=None, columns=None,
-             chunksize=1000000):
+             chunksize=1000000, lock=True):
     """
     Read hdf files into a dask dataframe. Like pandas.read_hdf, except it we
     can read multiple files, and read multiple keys from the same file by using
@@ -704,7 +722,8 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         raise NotImplementedError(read_hdf_error_msg)
     from .multi import concat
     return concat([_read_single_hdf(path, key, start=start, stop=stop,
-                                    columns=columns, chunksize=chunksize)
+                                    columns=columns, chunksize=chunksize,
+                                    lock=lock)
                    for path in paths])
 
 
