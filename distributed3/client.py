@@ -66,6 +66,16 @@ class RemoteData(object):
         self.center_port = center_port
         self._result = result
 
+    def __str__(self):
+        if len(self.key) > 13:
+            key = self.key[:10] + '...'
+        else:
+            key = self.key
+        return "RemoteData<center=%s:%d, key=%s>" % (self.center_ip,
+                self.center_port, key)
+
+    __repr__ = __str__
+
     @gen.coroutine
     def _get(self, raiseit=True):
         who_has = yield rpc(self.center_ip, self.center_port).who_has(

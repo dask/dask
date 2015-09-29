@@ -25,6 +25,9 @@ def test_scatter_delete():
 
         data = yield scatter_to_center(c.ip, c.port, [1, 2, 3])
 
+        assert c.ip in str(data[0])
+        assert c.ip in repr(data[0])
+
         assert merge(a.data, b.data) == \
                 {d.key: i for d, i in zip(data, [1, 2, 3])}
 
