@@ -286,8 +286,9 @@ def different_seeds(n, random_state):
     ----------
     n: int
         Number of distinct seeds to return
-    random_state: int, np.random.RandomState
-        if int, use int as a seed
+    random_state: int or np.random.RandomState
+        If int create a new RandomState with this as the seed
+    Otherwise draw from the passed RandomState
     """
     import numpy as np
 

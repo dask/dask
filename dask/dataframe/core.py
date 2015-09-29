@@ -285,6 +285,14 @@ class _Frame(Base):
     def random_split(self, p, seed=None):
         """ Pseudorandomly split dataframe into different pieces row-wise
 
+        Parameters
+        ----------
+        frac : float, optional
+            Fraction of axis items to return.
+        seed: int or np.random.RandomState
+            If int create a new RandomState with this as the seed
+        Otherwise draw from the passed RandomState
+
         Examples
         --------
 
@@ -295,6 +303,11 @@ class _Frame(Base):
         80/10/10 split, consistent seed
 
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], seed=123)  # doctest: +SKIP
+
+        See Also:
+        ---------
+
+            dask.DataFrame.sample
         """
         seeds = different_seeds(self.npartitions, seed)
         dsk_full = dict(((self._name + '-split-full', i),
@@ -456,10 +469,18 @@ class _Frame(Base):
     def sample(self, frac, random_state=None):
         """ Random sample of items
 
-        This only implements the ``frac`` option from pandas.
+        Parameters
+        ----------
+        frac : float, optional
+            Fraction of axis items to return.
+        random_state: int or np.random.RandomState
+            If int create a new RandomState with this as the seed
+        Otherwise draw from the passed RandomState
 
         See Also:
-            pd.DataFrame.sample
+        ---------
+
+            dask.DataFrame.random_split, pd.DataFrame.sample
         """
         if random_state is None:
             random_state = np.random.randint(np.iinfo(np.int32).max)
