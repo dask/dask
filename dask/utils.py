@@ -256,7 +256,7 @@ def skip(func):
     pass
 
 
-def pseudorandom(n, p, random_state):
+def pseudorandom(n, p, random_state=None):
     """ Pseudorandom array of integer indexes
 
     >>> pseudorandom(5, [0.5, 0.5], random_state=123)
@@ -282,7 +282,7 @@ def pseudorandom(n, p, random_state):
     return out
 
 
-def different_seeds(n, random_state):
+def different_seeds(n, random_state=None):
     """ A list of different 32 bit integer seeds
 
     Parameters

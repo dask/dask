@@ -482,8 +482,6 @@ class _Frame(Base):
 
             dask.DataFrame.random_split, pd.DataFrame.sample
         """
-        if random_state is None:
-            random_state = np.random.randint(np.iinfo(np.int32).max)
 
         name = 'sample-' + tokenize(self, frac, random_state)
         func = getattr(self._partition_type, 'sample')
@@ -2138,7 +2136,7 @@ def quantile(df, q):
     return return_type(dsk, name3, df.name, new_divisions)
 
 
-def pd_split(df, p, random_state=0):
+def pd_split(df, p, random_state=None):
     """ Split DataFrame into multiple pieces pseudorandomly
 
     >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
