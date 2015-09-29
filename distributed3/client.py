@@ -83,6 +83,8 @@ class RemoteData(object):
     >>> rd.get()  # doctest: +SKIP
     10
     """
+    trash = defaultdict(set)
+
     def __init__(self, key, center_ip, center_port, status=None,
                        result=no_default):
         self.key = key
@@ -134,6 +136,30 @@ class RemoteData(object):
     def delete(self):
         sync(self._delete(), self.loop)
     """
+
+    def __del__(self):
+        RemoteData.trash[(self.center_ip, self.center_port)].add(self.key)
+
+    @classmethod
+    @gen.coroutine
+    def _garbage_collect(cls, ip=None, port=None):
+        if ip and port:
+            keys = cls.trash[(ip, port)]
+            cors = [rpc(ip, port).delete_data(keys=keys)]
+            n = len(keys)
+        else:
+            cors = [rpc(ip, port).delete_data(keys=keys)
+                    for (ip, port), keys in cls.trash.items()]
+            n = len(set.union(*cls.trash.values()))
+
+        results = yield cors
+        assert all(result == b'OK' for result in results)
+        raise Return(n)
+
+    @classmethod
+    def garbage_collect(cls, ip=None, port=None):
+        return IOLoop.current().run_sync(lambda: cls._garbage_collect(ip, port))
+
 
 @gen.coroutine
 def scatter_to_center(ip, port, data, key=None):
