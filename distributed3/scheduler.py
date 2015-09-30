@@ -218,7 +218,7 @@ def _get(ip, port, dsk, result, gather=False):
 
 
 def get(ip, port, dsk, keys, gather=False):
-    return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys))
+    return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys, gather))
 
 
 def hashable(x):
