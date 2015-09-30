@@ -137,6 +137,9 @@ class Worker(Server):
             tb = ''.join(traceback.format_tb(exc_traceback))
             log(str(e))
             log(tb)
+            log("Function: %s\n"
+                "args:     %s\n"
+                "kwargs:   %s\n" % (funcname(function), str(args2), str(kwargs2)))
             out_response = b'error'
 
         # Store and tell center about our new data
