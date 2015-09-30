@@ -1,4 +1,5 @@
-from __future__ import division, print_function
+from __future__ import print_function, division, absolute_import
+
 from collections import namedtuple
 import random
 import uuid

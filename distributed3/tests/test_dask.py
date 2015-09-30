@@ -8,7 +8,7 @@ import dask
 from distributed3 import Center, Worker
 from distributed3.utils import ignoring
 from distributed3.client import gather_from_center
-from distributed3.scheduler import _get
+from distributed3.dask import _get
 
 from tornado import gen
 from tornado.ioloop import IOLoop

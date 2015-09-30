@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 from functools import partial
