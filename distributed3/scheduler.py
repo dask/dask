@@ -51,8 +51,25 @@ def _get(ip, port, dsk, keys):
     center_done = Event()
     delete_done = Event()
 
+    """
+    Distribute leaves among workers
+
+    We distribute leaf tasks (tasks with no dependencies) among workers
+    uniformly.  In the future we should use ordering from dask.order.
+    """
+    k = int(ceil(len(ready) / len(workers)))
+    for i, worker in enumerate(workers):
+        stacks[worker].extend(ready[i*k: (i + 1)*k][::-1])
+
     @gen.coroutine
-    def add_key_to_queue(key):
+    def add_key_to_stack(key):
+        """ Add key to a worker's stack once key becomes available
+
+        We choose which stack to add the key/task based on
+
+        1.  Whether or not that worker has *a* data dependency of this task
+        2.  How short that worker's stack is
+        """
         deps = dependencies[key]
         yield [completed[dep].wait() for dep in deps]  # wait until dependencies finish
 
@@ -61,47 +78,73 @@ def _get(ip, port, dsk, keys):
                                 for w in who_has[dep])
         worker = min(workers, key=lambda w: len(stacks[w]))
         stacks[worker].append(key)
+
         if idling.get(worker):
             idling[worker].set()
             del idling[worker]
 
     for key in dsk:
         if dependencies[key]:
-            loop.spawn_callback(add_key_to_queue, key)
+            loop.spawn_callback(add_key_to_stack, key)
 
     @gen.coroutine
     def delete_intermediates():
+        """ Delete intermediates from distributed as they become unnecessary
+
+        This fires off a coroutine for every intermediate, waiting on the
+        events in completed for the right tasks to finish.  Once the dependent
+        tasks finish we add the key to a list ``delete_keys``.  We send this
+        list of keys to the center for deletion once a second
+        """
         delete_keys = list()
 
         @gen.coroutine
         def delete_intermediate(key):
+            """ Wait on appropriate events for a single key """
             deps = dependents[key]
             yield [completed[dep].wait() for dep in deps]
-            delete_keys.append(key)
+            raise Return(key)
 
         intermediates = [key for key in dsk
                              if key not in keys]
         for key in intermediates:
             loop.spawn_callback(delete_intermediate, key)
-
+        wait_iterator = gen.WaitIterator(*[delete_intermediate(key)
+                                            for key in intermediates])
         n = len(intermediates)
         k = 0
 
-        while k < n:
-            start = time()
+        @gen.coroutine
+        def clear_queue():
             if delete_keys:
-                _keys = delete_keys[:]
-                del delete_keys[:]
-                k += len(_keys)
+                _keys = delete_keys[:]  # make a copy
+                del delete_keys[:]      # clear out old list
                 yield center.delete_data(keys=_keys)
-            yield gen.sleep(1 - (time() - start))
-        center_stream.close()
+
+        last = time()
+        while not wait_iterator.done():
+            key = yield wait_iterator.next()
+            delete_keys.append(key)
+            if time() - last > 1:
+                last = time()
+                yield clear_queue()
+        yield clear_queue()
+
+        center_stream.close()           # All done
         center_done.set()
 
     loop.spawn_callback(delete_intermediates)
 
     @gen.coroutine
     def handle_worker(ident):
+        """ Handle all communication with a single worker
+
+        We pull tasks from a list in ``stacks[ident]`` and process each task in
+        turn.  If this list goes empty we wait on an event in ``idling[ident]``
+        which should be triggered to wake us back up again.
+
+        ident :: (ip, port)
+        """
         stack = stacks[ident]
         stream = yield connect(*ident)
         worker = rpc(stream)
@@ -135,10 +178,6 @@ def _get(ip, port, dsk, keys):
 
         stream.close()
         worker_done[ident].set()
-
-    k = int(ceil(len(ready) / len(workers)))
-    for i, worker in enumerate(workers):
-        stacks[worker].extend(ready[i*k: (i + 1)*k][::-1])
 
     for worker in workers:
         loop.spawn_callback(handle_worker, worker)
