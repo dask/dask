@@ -11,9 +11,9 @@ from tornado.locks import Event
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
-from dask.async import start_state_from_dask, nested_get, _execute_task
-from dask.core import istask, flatten
-
+from dask.async import nested_get, _execute_task
+from dask.core import istask, flatten, get_deps
+from dask.order import order
 
 from .core import connect, rpc
 from .client import RemoteData, keys_to_data
@@ -42,10 +42,10 @@ def _get(ip, port, dsk, result):
 
     workers = sorted(ncores)
 
-    state = start_state_from_dask(dsk)
-    dependencies = state['dependencies']
-    dependents = state['dependents']
-    ready = [k for k in dsk if not dependencies[k]]
+    dependencies, dependents = get_deps(dsk)
+    ord = order(dsk)
+    leaves = [k for k in dsk if not dependencies[k]]
+    leaves = sorted(leaves, key=ord.get)
 
     stacks = {w: [] for w in workers}
     idling = dict()
@@ -66,9 +66,9 @@ def _get(ip, port, dsk, result):
     We distribute leaf tasks (tasks with no dependencies) among workers
     uniformly.  In the future we should use ordering from dask.order.
     """
-    k = int(ceil(len(ready) / len(workers)))
+    k = int(ceil(len(leaves) / len(workers)))
     for i, worker in enumerate(workers):
-        stacks[worker].extend(ready[i*k: (i + 1)*k][::-1])
+        stacks[worker].extend(leaves[i*k: (i + 1)*k][::-1])
 
     @gen.coroutine
     def add_key_to_stack(key):
