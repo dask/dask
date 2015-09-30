@@ -59,3 +59,21 @@ def test_scheduler():
         assert set(a.data) | set(b.data) == {'total', 'c', 'z'}
 
     _test_cluster(f)
+
+
+def test_scheduler_errors():
+    def mydiv(x, y):
+        return x / y
+    dsk = {'x': 1, 'y': (mydiv, 'x', 0)}
+    keys = 'y'
+
+    @gen.coroutine
+    def f(c, a, b):
+        try:
+            yield _get(c.ip, c.port, dsk, keys)
+            assert False
+        except ZeroDivisionError as e:
+            # assert 'mydiv' in str(e)
+            pass
+
+    _test_cluster(f)

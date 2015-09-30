@@ -48,10 +48,11 @@ def _get(ip, port, dsk, result):
     ready = [k for k in dsk if not dependencies[k]]
 
     stacks = {w: [] for w in workers}
-    finished_tasks = set()
     idling = dict()
 
     completed = {key: Event() for key in dsk}
+
+    errors = list()
 
     finished = [False]
     finished_event = Event()
@@ -131,6 +132,7 @@ def _get(ip, port, dsk, result):
 
         last = time()
         while not wait_iterator.done():
+            if errors: break
             key = yield wait_iterator.next()
             delete_keys.append(key)
             if time() - last > 1:       # One second batching
@@ -169,20 +171,27 @@ def _get(ip, port, dsk, result):
             task = dsk[key]
             if not istask(task):
                 response = yield worker.update_data(data={key: task})
-                assert response == b'OK'
+                assert response == b'OK', response
             else:
                 needed = [arg for arg in task[1:] if hashable(arg) and arg in dsk]
+                import pdb; pdb.set_trace()
                 response = yield worker.compute(function=task[0],
                                                 args=task[1:],
                                                 needed=needed,
                                                 key=key,
                                                 kwargs={})
-                assert response == 'success'
+                if response == 'error':
+                    finished[0] = True
+                    err = yield worker.get_data(keys=[key])
+                    errors.append(err[key])
+                    for key in results:
+                        completed[key].set()
+                    break
+
 
             completed[key].set()
             who_has[key].add(ident)
             has_what[ident].add(key)
-            finished_tasks.add(key)
 
         stream.close()
         worker_done[ident].set()
@@ -198,6 +207,9 @@ def _get(ip, port, dsk, result):
     remote = {key: RemoteData(key, ip, port) for key in results}
 
     yield [center_done.wait()] + [e.wait() for e in worker_done.values()]
+
+    if errors:
+        raise errors[0]
 
     raise Return(nested_get(result, remote))
 
