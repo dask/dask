@@ -98,12 +98,13 @@ def _get(ip, port, dsk, result):
 
     @gen.coroutine
     def delete_intermediates():
-        """ Delete intermediates from distributed as they become unnecessary
+        """ Delete extraneous intermediates from distributed memory
 
-        This fires off a coroutine for every intermediate, waiting on the
-        events in completed for the right tasks to finish.  Once the dependent
-        tasks finish we add the key to a list ``delete_keys``.  We send this
-        list of keys to the center for deletion once a second
+        This fires off a coroutine for every intermediate key, waiting on the
+        events in ``completed`` for all dependent tasks to finish.
+        Once the dependent tasks finish we add the key to an internal list
+        ``delete_keys``.  We send this list of keys-to-be-deleted to the center
+        for deletion.  We batch communications with the center to once a second
         """
         delete_keys = list()
 
@@ -126,7 +127,7 @@ def _get(ip, port, dsk, result):
         @gen.coroutine
         def clear_queue():
             if delete_keys:
-                keys = delete_keys[:]  # make a copy
+                keys = delete_keys[:]   # make a copy
                 del delete_keys[:]      # clear out old list
                 yield center.delete_data(keys=keys)
 
