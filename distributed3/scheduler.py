@@ -11,18 +11,26 @@ from tornado.locks import Event
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
-from dask.async import start_state_from_dask
-from dask import istask
+from dask.async import start_state_from_dask, nested_get
+from dask.core import istask, flatten
+
 
 from .core import connect, rpc
-from .client import RemoteData
+from .client import RemoteData, keys_to_data
 
 
 log = print
 
 
 @gen.coroutine
-def _get(ip, port, dsk, keys):
+def _get(ip, port, dsk, result):
+
+    if isinstance(result, list):
+        result_flat = set(flatten(result))
+    else:
+        result_flat = set([result])
+    results = set(result_flat)
+
     loop = IOLoop.current()
 
     center_stream = yield connect(ip, port)
@@ -106,7 +114,7 @@ def _get(ip, port, dsk, keys):
             raise Return(key)
 
         intermediates = [key for key in dsk
-                             if key not in keys]
+                             if key not in results]
         for key in intermediates:
             loop.spawn_callback(delete_intermediate, key)
         wait_iterator = gen.WaitIterator(*[delete_intermediate(key)
@@ -117,15 +125,15 @@ def _get(ip, port, dsk, keys):
         @gen.coroutine
         def clear_queue():
             if delete_keys:
-                _keys = delete_keys[:]  # make a copy
+                keys = delete_keys[:]  # make a copy
                 del delete_keys[:]      # clear out old list
-                yield center.delete_data(keys=_keys)
+                yield center.delete_data(keys=keys)
 
         last = time()
         while not wait_iterator.done():
             key = yield wait_iterator.next()
             delete_keys.append(key)
-            if time() - last > 1:
+            if time() - last > 1:       # One second batching
                 last = time()
                 yield clear_queue()
         yield clear_queue()
@@ -182,16 +190,20 @@ def _get(ip, port, dsk, keys):
     for worker in workers:
         loop.spawn_callback(handle_worker, worker)
 
-    # TODO support nested keys
-    yield [completed[key].wait() for key in keys]
+    yield [completed[key].wait() for key in results]
     finished[0] = True
     for event in idling.values():
         event.set()
-    result = [RemoteData(key, ip, port) for key in keys]
+
+    remote = {key: RemoteData(key, ip, port) for key in results}
 
     yield [center_done.wait()] + [e.wait() for e in worker_done.values()]
 
-    raise Return(result)
+    raise Return(nested_get(result, remote))
+
+
+def get(ip, port, dsk, keys):
+    return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys))
 
 
 def hashable(x):

@@ -47,13 +47,15 @@ def test_scheduler():
     dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (add, 'x', 20),
            'a': 1, 'b': (mul, 'a', 10), 'c': (mul, 'a', 20),
            'total': (add, 'c', 'z')}
-    keys = ['total', 'c', 'z']
+    keys = ['total', 'c', ['z']]
 
     @gen.coroutine
     def f(c, a, b):
         result = yield _get(c.ip, c.port, dsk, keys)
         result2 = yield gather_from_center((c.ip, c.port), result)
-        assert tuple(result2) == dask.async.get_sync(dsk, keys)
-        assert merge(a.data, b.data) == dict(zip(keys, result2))
+
+        expected = dask.async.get_sync(dsk, keys)
+        assert tuple(result2) == expected
+        assert set(a.data) | set(b.data) == {'total', 'c', 'z'}
 
     _test_cluster(f)
