@@ -3,8 +3,7 @@ from __future__ import print_function, division
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.pool import ThreadPool
 import traceback
-
-
+import sys
 
 from toolz import merge
 from tornado.gen import Return
@@ -17,6 +16,15 @@ from .client import gather_strict_from_center, keys_to_data
 _ncores = ThreadPool()._processes
 
 log = print
+
+
+def funcname(func):
+    while hasattr(func, 'func'):
+        func = func.func
+    try:
+        return func.__name__
+    except AttributeError:
+        return 'no-name'
 
 
 class Worker(Server):
@@ -119,12 +127,16 @@ class Worker(Server):
         try:
             job_counter[0] += 1
             i = job_counter[0]
-            log("Start job %d: %s" % (i, function.__name__))
+            log("Start job %d: %s" % (i, funcname(function)))
             result = yield self.executor.submit(function, *args2, **kwargs2)
-            log("Finish job %d: %s" % (i, function.__name__))
+            log("Finish job %d: %s" % (i, funcname(function)))
             out_response = b'success'
         except Exception as e:
             result = e
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            tb = ''.join(traceback.format_tb(exc_traceback))
+            log(str(e))
+            log(tb)
             out_response = b'error'
 
         # Store and tell center about our new data
