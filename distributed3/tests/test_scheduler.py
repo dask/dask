@@ -15,7 +15,7 @@ from tornado.ioloop import IOLoop
 
 
 def inc(x):
-    return x
+    return x + 1
 
 
 def _test_cluster(f):
@@ -75,5 +75,17 @@ def test_scheduler_errors():
         except ZeroDivisionError as e:
             # assert 'mydiv' in str(e)
             pass
+
+    _test_cluster(f)
+
+
+def test_gather():
+    dsk = {'x': 1, 'y': (inc, 'x')}
+    keys = 'y'
+
+    @gen.coroutine
+    def f(c, a, b):
+        result = yield _get(c.ip, c.port, dsk, keys, gather=True)
+        assert result == 2
 
     _test_cluster(f)

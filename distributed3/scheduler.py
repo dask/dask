@@ -16,14 +16,14 @@ from dask.core import istask, flatten, get_deps
 from dask.order import order
 
 from .core import connect, rpc
-from .client import RemoteData, keys_to_data
+from .client import RemoteData, keys_to_data, gather_from_center
 
 
 log = print
 
 
 @gen.coroutine
-def _get(ip, port, dsk, result):
+def _get(ip, port, dsk, result, gather=False):
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -211,10 +211,13 @@ def _get(ip, port, dsk, result):
     if errors:
         raise errors[0]
 
+    if gather:
+        remote = yield gather_from_center((ip, port), remote)
+
     raise Return(nested_get(result, remote))
 
 
-def get(ip, port, dsk, keys):
+def get(ip, port, dsk, keys, gather=False):
     return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys))
 
 
