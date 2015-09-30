@@ -44,7 +44,7 @@ def _test_cluster(f):
 
 
 def test_scheduler():
-    dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (add, 'x', 20),
+    dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (add, (inc, 'x'), 20),
            'a': 1, 'b': (mul, 'a', 10), 'c': (mul, 'a', 20),
            'total': (add, 'c', 'z')}
     keys = ['total', 'c', ['z']]

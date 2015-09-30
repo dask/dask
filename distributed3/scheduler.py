@@ -11,7 +11,7 @@ from tornado.locks import Event
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
-from dask.async import start_state_from_dask, nested_get
+from dask.async import start_state_from_dask, nested_get, _execute_task
 from dask.core import istask, flatten
 
 
@@ -173,10 +173,9 @@ def _get(ip, port, dsk, result):
                 response = yield worker.update_data(data={key: task})
                 assert response == b'OK', response
             else:
-                needed = [arg for arg in task[1:] if hashable(arg) and arg in dsk]
-                import pdb; pdb.set_trace()
-                response = yield worker.compute(function=task[0],
-                                                args=task[1:],
+                needed = dependencies[key]
+                response = yield worker.compute(function=_execute_task,
+                                                args=(task, {}),
                                                 needed=needed,
                                                 key=key,
                                                 kwargs={})
