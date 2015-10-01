@@ -99,6 +99,7 @@ class Worker(Server):
     @gen.coroutine
     def terminate(self, stream):
         yield self._close()
+        raise Return(b'OK')
 
     @property
     def address(self):

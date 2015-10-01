@@ -1,4 +1,5 @@
 from operator import add
+import socket
 from time import time, sleep
 from toolz import merge
 
@@ -158,12 +159,15 @@ def cluster():
         yield {'proc': center, 'port': 8010}, [{'proc': a, 'port': 8011},
                                                {'proc': b, 'port': 8012}]
     finally:
-        with ignoring():
-            a.terminate()
-        with ignoring():
-            b.terminate()
-        with ignoring():
-            center.terminate()
+        for port in [8011, 8012, 8010]:
+            with ignoring(socket.error):
+                sock = connect_sync('127.0.0.1', port)
+                write_sync(sock, dict(op='terminate', close=True))
+                response = read_sync(sock)
+                sock.close()
+        for proc in [a, b, center]:
+            with ignoring(Exception):
+                proc.terminate()
 
 
 def test_cluster():

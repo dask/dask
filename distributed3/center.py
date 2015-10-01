@@ -56,6 +56,7 @@ class Center(Server):
     @gen.coroutine
     def terminate(self, stream):
         self.stop()
+        return b'OK'
 
     def register(self, stream, address=None, keys=(), ncores=None):
         self.has_what[address] = set(keys)
