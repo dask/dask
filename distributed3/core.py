@@ -93,32 +93,29 @@ def connect_sync(host, port, timeout=1):
     return s
 
 
-def write_sync(s, msg):
+def write_sync(sock, msg):
     if not isinstance(msg, bytes):
         msg = dumps(msg)
-    s.send(struct.pack('L', len(msg)))
-    s.send(msg)
+    sock.send(msg + sentinel)
 
 
 def read_sync(s):
-    b = b''
-    while len(b) < 8:
-        b += s.recv(8 - len(b))
-    nbytes = struct.unpack('L', b)[0]
-    msg = b''
-    while len(msg) < nbytes:
-        msg += s.recv(nbytes - len(msg))
+    bytes = []
+    while b''.join(bytes[-len(sentinel):]) != sentinel:
+        bytes.append(s.recv(1))
+    msg = b''.join(bytes[:-len(sentinel)])
     try:
         return loads(msg)
     except:
         return msg
 
 
+sentinel = '7f57da0f9202f6b4df78e251058be6f0'
+
 @gen.coroutine
 def read(stream):
-    b = yield stream.read_bytes(8)
-    nbytes = struct.unpack('L', b)[0]
-    msg = yield stream.read_bytes(nbytes)
+    msg = yield stream.read_until(sentinel)
+    msg = msg[:-len(sentinel)]
     try:
         msg = loads(msg)
     except:
@@ -130,12 +127,12 @@ def read(stream):
 def write(stream, msg):
     if not isinstance(msg, bytes):
         msg = dumps(msg)
-    yield stream.write(struct.pack('L', len(msg)))
-    yield stream.write(msg)
+    yield stream.write(msg + sentinel)
 
 
 def pingpong(stream):
     return b'pong'
+
 
 @gen.coroutine
 def connect(ip, port, timeout=1):
@@ -146,6 +143,7 @@ def connect(ip, port, timeout=1):
     except StreamClosedError:
         if time() - start < timeout:
             yield gen.sleep(0.01)
+            print("sleeping on connect")
         else:
             raise
 

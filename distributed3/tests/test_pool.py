@@ -244,11 +244,11 @@ def test_job_kills_node():
             yield gen.sleep(0.5)
             a['proc'].terminate()
 
+        p = Pool('127.0.0.1', c['port'])
+        IOLoop.current().spawn_callback(kill_a)
+
         @gen.coroutine
         def g():
-            p = Pool('127.0.0.1', c['port'])
-
-            IOLoop.current().spawn_callback(kill_a)
 
             results = yield p._map(f, range(20))
 

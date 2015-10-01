@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 from functools import partial
-from time import sleep
 
 from tornado import gen
 from tornado.gen import Return
