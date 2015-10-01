@@ -2,6 +2,7 @@ from operator import add
 from time import sleep
 
 from distributed3.core import read, write, rpc, connect
+from distributed3.utils import ignoring
 from distributed3.center import Center
 from distributed3.worker import Worker
 
@@ -10,19 +11,34 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 
-def test_worker():
+def _test_cluster(f):
     @gen.coroutine
-    def f():
-        c = Center('127.0.0.1', 8007)
+    def g():
+        c = Center('127.0.0.1', 8017)
         c.listen(c.port)
-        a = Worker('127.0.0.1', 8008, c.ip, c.port)
+        a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=1)
         yield a._start()
-        b = Worker('127.0.0.1', 8009, c.ip, c.port)
+        b = Worker('127.0.0.1', 8019, c.ip, c.port, ncores=1)
         yield b._start()
 
         while len(c.ncores) < 2:
             yield gen.sleep(0.01)
 
+        try:
+            yield f(c, a, b)
+        finally:
+            with ignoring():
+                yield a._close()
+            with ignoring():
+                yield b._close()
+            c.stop()
+
+    IOLoop.current().run_sync(g)
+
+
+def test_worker():
+    @gen.coroutine
+    def f(c, a, b):
         a_stream = yield connect(a.ip, a.port)
         b_stream = yield connect(b.ip, b.port)
 
@@ -57,7 +73,9 @@ def test_worker():
         b_stream.close()
         yield b._close()
 
-    IOLoop.current().run_sync(f)
+    _test_cluster(f)
+
+
 
 """
 
