@@ -141,7 +141,7 @@ def _get(ip, port, dsk, result, gather=False):
         yield clear_queue()
 
         yield center.close(close=True)
-        center.stream.close()           # All done
+        center.close_streams()          # All done
         center_done.set()
 
     loop.spawn_callback(delete_intermediates)
@@ -193,7 +193,7 @@ def _get(ip, port, dsk, result, gather=False):
             has_what[ident].add(key)
 
         yield worker.close(close=True)
-        worker.stream.close()
+        worker.close_streams()
         worker_done[ident].set()
 
     for worker in workers:
