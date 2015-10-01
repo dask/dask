@@ -62,8 +62,6 @@ class Worker(Server):
     def __init__(self, ip, port, center_ip, center_port, ncores=None):
         self.ip = ip
         self.port = port
-        self.center_ip = center_ip
-        self.center_port = center_port
         self.ncores = ncores or _ncores
         self.data = dict()
         self.status = None

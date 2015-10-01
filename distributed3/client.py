@@ -99,8 +99,7 @@ class RemoteData(object):
                        result=no_default):
         self.key = key
         self.status = status
-        self.center_ip = center_ip
-        self.center_port = center_port
+        self.center = rpc(ip=center_ip, port=center_port)
         self._result = result
 
     def __str__(self):
@@ -108,14 +107,14 @@ class RemoteData(object):
             key = self.key[:10] + '...'
         else:
             key = self.key
-        return "RemoteData<center=%s:%d, key=%s>" % (self.center_ip,
-                self.center_port, key)
+        return "RemoteData<center=%s:%d, key=%s>" % (self.center.ip,
+                self.center.port, key)
 
     __repr__ = __str__
 
     @gen.coroutine
     def _get(self, raiseit=True):
-        who_has = yield rpc(ip=self.center_ip, port=self.center_port).who_has(
+        who_has = yield self.center.who_has(
                 keys=[self.key], close=True)
         ip, port = random.choice(list(who_has[self.key]))
         result = yield rpc(ip=ip, port=port).get_data(keys=[self.key], close=True)
@@ -139,8 +138,7 @@ class RemoteData(object):
 
     @gen.coroutine
     def _delete(self):
-        yield rpc(ip=self.center_ip, port=self.center_port).delete_data(
-                keys=[self.key], close=True)
+        yield self.center.delete_data(keys=[self.key], close=True)
 
     """
     def delete(self):
@@ -148,7 +146,7 @@ class RemoteData(object):
     """
 
     def __del__(self):
-        RemoteData.trash[(self.center_ip, self.center_port)].add(self.key)
+        RemoteData.trash[(self.center.ip, self.center.port)].add(self.key)
 
     @classmethod
     @gen.coroutine

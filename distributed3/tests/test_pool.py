@@ -100,8 +100,8 @@ def test_pool():
 
 def test_pool_inputs():
     p = Pool('127.0.0.1:8000')
-    assert p.center_ip == '127.0.0.1'
-    assert p.center_port == 8000
+    assert p.center.ip == '127.0.0.1'
+    assert p.center.port == 8000
 
 
 def test_workshare():
