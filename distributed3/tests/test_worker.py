@@ -27,9 +27,9 @@ def _test_cluster(f):
         try:
             yield f(c, a, b)
         finally:
-            with ignoring():
+            with ignoring(Exception):
                 yield a._close()
-            with ignoring():
+            with ignoring(Exception):
                 yield b._close()
             c.stop()
 
@@ -39,18 +39,18 @@ def _test_cluster(f):
 def test_worker():
     @gen.coroutine
     def f(c, a, b):
-        a_stream = yield connect(a.ip, a.port)
-        b_stream = yield connect(b.ip, b.port)
+        aa = rpc(ip=a.ip, port=a.port)
+        bb = rpc(ip=b.ip, port=b.port)
 
-        response = yield rpc(a_stream).compute(key='x', function=add,
-                                               args=[1, 2], needed=[],
-                                               close=True)
+        response = yield aa.compute(key='x', function=add,
+                                    args=[1, 2], needed=[],
+                                    close=True)
         assert response == b'success'
         assert a.data['x'] == 3
         assert c.who_has['x'] == set([(a.ip, a.port)])
 
-        response = yield rpc(b_stream).compute(key='y', function=add,
-                                               args=['x', 10], needed=['x'])
+        response = yield bb.compute(key='y', function=add,
+                                    args=['x', 10], needed=['x'])
         assert response == b'success'
         assert b.data['y'] == 13
         assert c.who_has['y'] == set([(b.ip, b.port)])
@@ -58,23 +58,22 @@ def test_worker():
         def bad_func():
             1 / 0
 
-        response = yield rpc(b_stream).compute(key='z', function=bad_func,
-                                               args=(), needed=(), close=True)
+        response = yield bb.compute(key='z', function=bad_func,
+                                    args=(), needed=(), close=True)
         assert response == b'error'
         assert isinstance(b.data['z'], ZeroDivisionError)
 
-        a_stream.close()
+        aa.stream.close()
         yield a._close()
 
         assert a.address not in c.ncores and b.address in c.ncores
 
         assert list(c.ncores.keys()) == [(b.ip, b.port)]
 
-        b_stream.close()
+        bb.stream.close()
         yield b._close()
 
     _test_cluster(f)
-
 
 
 """

@@ -68,6 +68,7 @@ class Worker(Server):
         self.data = dict()
         self.status = None
         self.executor = ThreadPoolExecutor(10)
+        self.center = rpc(ip=center_ip, port=center_port)
 
         handlers = {'compute': self.work,
                     'get_data': self.get_data,
@@ -82,7 +83,7 @@ class Worker(Server):
     @gen.coroutine
     def _start(self):
         self.listen(self.port)
-        resp = yield rpc(self.center_ip, self.center_port).register(
+        resp = yield self.center.register(
                 ncores=self.ncores, address=(self.ip, self.port))
         assert resp == b'OK'
         log('Registered with center')
@@ -92,8 +93,8 @@ class Worker(Server):
 
     @gen.coroutine
     def _close(self):
-        yield rpc(self.center_ip, self.center_port).unregister(
-                address=(self.ip, self.port))
+        yield self.center.unregister(address=(self.ip, self.port))
+        self.center.stream.close()
         self.stop()
         self.status = 'closed'
 
@@ -108,13 +109,12 @@ class Worker(Server):
     @gen.coroutine
     def work(self, stream, function=None, key=None, args=(), kwargs={}, needed=[]):
         """ Execute function """
-        center = yield connect(self.center_ip, self.center_port)
         needed = [n for n in needed if n not in self.data]
 
         # gather data from peers
         if needed:
             log("gather data from peers: %s" % str(needed))
-            other = yield gather_strict_from_center(center, needed=needed)
+            other = yield gather_strict_from_center(self.center.stream, needed=needed)
             data2 = merge(self.data, dict(zip(needed, other)))
         else:
             data2 = self.data
@@ -144,8 +144,8 @@ class Worker(Server):
 
         # Store and tell center about our new data
         self.data[key] = result
-        response = yield rpc(center).add_keys(address=(self.ip, self.port),
-                                              close=True, keys=[key])
+        response = yield self.center.add_keys(address=(self.ip, self.port),
+                                              keys=[key])
         if not response == b'OK':
             log('Could not report results of work to center: ' + response.decode())
 
@@ -155,8 +155,8 @@ class Worker(Server):
     def update_data(self, stream, data=None, report=True):
         self.data.update(data)
         if report:
-            yield rpc(self.center_ip, self.center_port).add_keys(
-                    address=(self.ip, self.port), keys=list(data))
+            yield self.center.add_keys(address=(self.ip, self.port),
+                                       keys=list(data))
         raise Return(b'OK')
 
 
@@ -166,8 +166,8 @@ class Worker(Server):
             if key in self.data:
                 del self.data[key]
         if report:
-            yield rpc(self.center_ip, self.center_port).remove_keys(
-                    address=(self.ip, self.port), keys=keys)
+            yield self.center.remove_keys(address=(self.ip, self.port),
+                                          keys=keys)
         raise Return(b'OK')
 
     def get_data(self, stream, keys=None):

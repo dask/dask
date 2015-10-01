@@ -118,7 +118,8 @@ class Center(Server):
                 d[worker].append(key)
             del self.who_has[key]
 
-        yield [rpc(*worker).delete_data(keys=keys, report=False)
+        yield [rpc(ip=worker[0], port=worker[1]).delete_data(
+                keys=keys, report=False, close=True)
                       for worker, keys in d.items()]
 
         raise Return(b'OK')

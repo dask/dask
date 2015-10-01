@@ -150,38 +150,34 @@ def connect(ip, port, timeout=1):
             raise
 
 @gen.coroutine
-def send_recv(ip_or_stream, port=None, reply=True, **kwargs):
+def send_recv(stream=None, ip=None, port=None, reply=True, **kwargs):
     """ Send and recv with a stream
 
     Keyword arguments turn into the message
 
     response = yield send_recv(stream, op='ping', reply=True)
     """
-    if isinstance(ip_or_stream, tuple):
-        ip_or_stream, port = ip_or_stream
-    if port is not None:
-        given_ip_port = True
-        stream = yield connect(ip_or_stream, port)
-    else:
-        given_ip_port = False
-        stream = ip_or_stream
+    if stream is None:
+        stream = yield connect(ip, port)
+
     msg = kwargs
     msg['reply'] = reply
-    if 'close' not in msg:
-        msg['close'] = given_ip_port
+
     yield write(stream, msg)
+
     if reply:
         response = yield read(stream)
     else:
         response = None
-    if kwargs['close']:
+    if kwargs.get('close'):
         stream.close()
     raise Return(response)
 
 
-def send_recv_sync(ip_or_stream, port=None, reply=True, **kwargs):
+def send_recv_sync(stream=None, ip=None, port=None, reply=True, **kwargs):
     return IOLoop.current().run_sync(
-            lambda: send_recv(ip_or_stream, port, reply, **kwargs))
+            lambda: send_recv(stream=stream, ip=ip, port=port, reply=reply,
+                              **kwargs))
 
 
 class rpc(object):
@@ -196,17 +192,22 @@ class rpc(object):
     This class uses this convention to provide a Python interface for calling
     remote functions
 
-    >>> remote = rpc(stream)  # doctest: +SKIP
+    >>> remote = rpc(stream=stream)  # doctest: +SKIP
     >>> result = yield remote.func(key1=100, key2=1000)  # doctest: +SKIP
     """
-    def __init__(self, *args):
-        self.args = args
+    def __init__(self, stream=None, ip=None, port=None):
+        self.stream = stream
+        self.ip = ip
+        self.port = port
 
     def __getattr__(self, key):
+        @gen.coroutine
         def _(**kwargs):
-            return send_recv(*self.args, op=key, **kwargs)
+            if self.stream is None or self.stream.closed():
+                self.stream = yield connect(self.ip, self.port)
+            result = yield send_recv(stream=self.stream, op=key, **kwargs)
+            raise Return(result)
         return _
-
 
 
 if __name__ == '__main__':

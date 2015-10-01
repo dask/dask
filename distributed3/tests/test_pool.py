@@ -38,11 +38,11 @@ def _test_cluster(f):
         try:
             yield f(c, a, b, p)
         finally:
-            with ignoring():
+            with ignoring(Exception):
                 yield p._close_connections()
-            with ignoring():
+            with ignoring(Exception):
                 yield a._close()
-            with ignoring():
+            with ignoring(Exception):
                 yield b._close()
             c.stop()
 
@@ -188,9 +188,9 @@ def test_close_worker_cleanly_before_map():
     with cluster() as (c, [a, b]):
         p = Pool('127.0.0.1', c['port'])
 
-        send_recv_sync('127.0.0.1', a['port'], op='terminate')
+        send_recv_sync(ip='127.0.0.1', port=a['port'], op='terminate')
 
-        while len(send_recv_sync('127.0.0.1', c['port'], op='ncores')) > 1:
+        while len(send_recv_sync(ip='127.0.0.1', port=c['port'], op='ncores')) > 1:
             sleep(0.01)
 
         result = p.map(lambda x: x + 1, range(3))

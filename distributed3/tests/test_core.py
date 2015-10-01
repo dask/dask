@@ -32,7 +32,7 @@ def test_rpc():
         server = Server({'ping': pingpong})
         server.listen(8887)
 
-        remote = rpc('127.0.0.1', 8887)
+        remote = rpc(ip='127.0.0.1', port=8887)
 
         response = yield remote.ping()
         assert response == b'pong'

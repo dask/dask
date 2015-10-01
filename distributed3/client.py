@@ -18,7 +18,7 @@ no_default = '__no_default__'
 
 
 @gen.coroutine
-def gather_from_center(stream, needed):
+def gather_from_center(center, needed):
     """ Gather data from peers
 
     This accepts any nested collection of data and unpacks RemoteData objects
@@ -27,8 +27,12 @@ def gather_from_center(stream, needed):
     See also:
         gather_strict_from_center
     """
+    if isinstance(center, tuple):
+        center = dict(ip=center[0], port=center[1])
+    else:
+        center = dict(stream=center)
     pre_result, needed = unpack_remotedata(needed)
-    who_has = yield rpc(stream).who_has(keys=needed)
+    who_has = yield rpc(**center).who_has(keys=needed, close=True)
 
     data = yield gather_from_workers(who_has)
     result = keys_to_data(pre_result, data)
@@ -37,7 +41,7 @@ def gather_from_center(stream, needed):
 
 
 @gen.coroutine
-def gather_strict_from_center(stream, needed=[]):
+def gather_strict_from_center(center, needed=[]):
     """ Gather data from peers
 
     This accepts an iterable, keys not found will not be in the output
@@ -45,8 +49,12 @@ def gather_strict_from_center(stream, needed=[]):
     See also:
         gather_from_center
     """
+    if isinstance(center, tuple):
+        center = dict(ip=center[0], port=center[1])
+    else:
+        center = dict(stream=center)
     needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
-    who_has = yield rpc(stream).who_has(keys=needed)
+    who_has = yield rpc(**center).who_has(keys=needed, close=True)
 
     result = yield gather_from_workers(who_has)
     raise Return([result[key] for key in needed])
@@ -63,8 +71,8 @@ def gather_from_workers(who_has):
             raise KeyError('No workers found that have key: %s' % key)
         d[addr].append(key)
 
-    results = yield [rpc(*addr).get_data(keys=keys)
-                        for addr, keys in d.items()]
+    results = yield [rpc(ip=ip, port=port).get_data(keys=keys, close=True)
+                        for (ip, port), keys in d.items()]
 
     # TODO: make resilient to missing workers
     raise Return(merge(results))
@@ -107,10 +115,10 @@ class RemoteData(object):
 
     @gen.coroutine
     def _get(self, raiseit=True):
-        who_has = yield rpc(self.center_ip, self.center_port).who_has(
+        who_has = yield rpc(ip=self.center_ip, port=self.center_port).who_has(
                 keys=[self.key], close=True)
         ip, port = random.choice(list(who_has[self.key]))
-        result = yield rpc(ip, port).get_data(keys=[self.key], close=True)
+        result = yield rpc(ip=ip, port=port).get_data(keys=[self.key], close=True)
 
         self._result = result[self.key]
 
@@ -131,8 +139,8 @@ class RemoteData(object):
 
     @gen.coroutine
     def _delete(self):
-        yield rpc(self.center_ip, self.center_port).delete_data(
-                keys=[self.key])
+        yield rpc(ip=self.center_ip, port=self.center_port).delete_data(
+                keys=[self.key], close=True)
 
     """
     def delete(self):
@@ -147,10 +155,10 @@ class RemoteData(object):
     def _garbage_collect(cls, ip=None, port=None):
         if ip and port:
             keys = cls.trash[(ip, port)]
-            cors = [rpc(ip, port).delete_data(keys=keys)]
+            cors = [rpc(ip=ip, port=port).delete_data(keys=keys, close=True)]
             n = len(keys)
         else:
-            cors = [rpc(ip, port).delete_data(keys=keys)
+            cors = [rpc(ip=ip, port=port).delete_data(keys=keys, close=True)
                     for (ip, port), keys in cls.trash.items()]
             n = len(set.union(*cls.trash.values()))
 
@@ -170,7 +178,7 @@ def scatter_to_center(ip, port, data, key=None):
     See also:
         scatter_to_workers
     """
-    ncores = yield rpc(ip, port).ncores()
+    ncores = yield rpc(ip=ip, port=port).ncores(close=True)
 
     result = yield scatter_to_workers(ip, port, ncores, data, key=key)
     raise Return(result)
@@ -200,7 +208,8 @@ def scatter_to_workers(ip, port, ncores, data, key=None):
     d = {k: {b: c for a, b, c in v}
           for k, v in d.items()}
 
-    yield [rpc(*w).update_data(data=v) for w, v in d.items()]
+    yield [rpc(ip=w_ip, port=w_port).update_data(data=v, close=True)
+            for (w_ip, w_port), v in d.items()]
 
     result = [RemoteData(b, ip, port, result=c)
                 for a, b, c in L]
