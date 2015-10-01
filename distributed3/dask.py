@@ -33,8 +33,7 @@ def _get(ip, port, dsk, result, gather=False):
 
     loop = IOLoop.current()
 
-    center_stream = yield connect(ip, port)
-    center = rpc(center_stream)
+    center = rpc(ip=ip, port=port)
     who_has = yield center.who_has()
     has_what = yield center.has_what()
     ncores = yield center.ncores()
@@ -141,7 +140,8 @@ def _get(ip, port, dsk, result, gather=False):
                 yield clear_queue()
         yield clear_queue()
 
-        center_stream.close()           # All done
+        yield center.close(close=True)
+        center.stream.close()           # All done
         center_done.set()
 
     loop.spawn_callback(delete_intermediates)
@@ -157,8 +157,7 @@ def _get(ip, port, dsk, result, gather=False):
         ident :: (ip, port)
         """
         stack = stacks[ident]
-        stream = yield connect(*ident)
-        worker = rpc(stream)
+        worker = rpc(ip=ident[0], port=ident[1])
 
         while True:
             if not stack:
@@ -193,7 +192,8 @@ def _get(ip, port, dsk, result, gather=False):
             who_has[key].add(ident)
             has_what[ident].add(key)
 
-        stream.close()
+        yield worker.close(close=True)
+        worker.stream.close()
         worker_done[ident].set()
 
     for worker in workers:
