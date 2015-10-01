@@ -4,6 +4,7 @@ import numpy as np
 from itertools import product
 from .core import normalize_chunks, Array
 from ..base import tokenize
+from ..utils import different_seeds
 
 def doc_wraps(func):
     """ Copy docstring from one function to another """
@@ -56,7 +57,7 @@ class RandomState(object):
 
         # Build graph
         sizes = list(product(*chunks))
-        seeds = [self._numpy_state.randint(np.iinfo(np.int32).max) for i in sizes]
+        seeds = different_seeds(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
         name = 'da.random.{0}-{1}'.format(func.__name__, token)
         keys = product([name], *[range(len(bd)) for bd in chunks])

@@ -256,13 +256,13 @@ def skip(func):
     pass
 
 
-def pseudorandom(n, p, key):
+def pseudorandom(n, p, random_state=None):
     """ Pseudorandom array of integer indexes
 
-    >>> pseudorandom(5, [0.5, 0.5], key=123)
+    >>> pseudorandom(5, [0.5, 0.5], random_state=123)
     array([1, 0, 0, 1, 1], dtype=int8)
 
-    >>> pseudorandom(10, [0.5, 0.2, 0.2, 0.1], key=5)
+    >>> pseudorandom(10, [0.5, 0.2, 0.2, 0.1], random_state=5)
     array([0, 2, 0, 3, 0, 1, 2, 1, 0, 0], dtype=int8)
     """
     import numpy as np
@@ -271,12 +271,41 @@ def pseudorandom(n, p, key):
     assert np.allclose(1, cp[-1])
     assert len(p) < 256
 
-    x = np.random.RandomState(key).random_sample(n)
+    if not isinstance(random_state, np.random.RandomState):
+        random_state = np.random.RandomState(random_state)
+
+    x = random_state.random_sample(n)
     out = np.empty(n, dtype='i1')
 
     for i, (low, high) in enumerate(zip(cp[:-1], cp[1:])):
         out[(x >= low) & (x < high)] = i
     return out
+
+
+def different_seeds(n, random_state=None):
+    """ A list of different 32 bit integer seeds
+
+    Parameters
+    ----------
+    n: int
+        Number of distinct seeds to return
+    random_state: int or np.random.RandomState
+        If int create a new RandomState with this as the seed
+    Otherwise draw from the passed RandomState
+    """
+    import numpy as np
+
+    if not isinstance(random_state, np.random.RandomState):
+        random_state = np.random.RandomState(random_state)
+
+    big_n = np.iinfo(np.int32).max
+
+    seeds = set(random_state.randint(big_n, size=n))
+    while len(seeds) < n:
+        seeds.add(random_state.randint(big_n))
+
+    # Sorting makes it easier to know what seeds are for what chunk
+    return sorted(seeds)
 
 
 def is_integer(i):

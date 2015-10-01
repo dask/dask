@@ -1,9 +1,10 @@
 import os
 from itertools import product
 
+import numpy as np
 
 from dask.utils import (textblock, filetext, takes_multiple_arguments,
-                        Dispatch, tmpfile, next_linesep)
+                        Dispatch, tmpfile, next_linesep, different_seeds)
 
 
 def test_textblock():
@@ -113,3 +114,21 @@ def test_gh606():
             stop = len(bin_euro) * 10 + len(bin_linesep)
             res = textblock(f, 0, stop, encoding=encoding)
             assert res == ((euro * 10) + linesep + (yen * 10) + linesep).encode(encoding)
+
+
+def test_different_seeds():
+    seed = 37
+    state = np.random.RandomState(seed)
+    n = 100000
+
+    # Use an integer
+    seeds = set(different_seeds(n, seed))
+    assert len(seeds) == n
+
+    # Use RandomState object
+    seeds2 = set(different_seeds(n, state))
+    assert seeds == seeds2
+
+    # Should be sorted
+    smallseeds = different_seeds(10, 1234)
+    assert smallseeds == sorted(smallseeds)

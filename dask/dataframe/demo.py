@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 
 from .core import tokenize, DataFrame
+from ..utils import different_seeds
 
 __all__ = ['make_timeseries']
 
@@ -69,16 +70,16 @@ def make_timeseries(start, end, dtypes, freq, partition_freq, seed=None):
     ...                              freq='2H', partition_freq='1D', seed=1)
     >>> df.head()
                            id    name     value
-    2000-01-01 00:00:00   971   Edith -0.053963
-    2000-01-01 02:00:00   937   Kevin -0.625998
-    2000-01-01 04:00:00   965  Xavier -0.922559
-    2000-01-01 06:00:00  1011   Sarah  0.866421
-    2000-01-01 08:00:00  1005   Zelda -0.319609
+    2000-01-01 00:00:00   960     Dan  0.824008
+    2000-01-01 02:00:00  1033  Xavier  0.575390
+    2000-01-01 04:00:00   986  George  0.693842
+    2000-01-01 06:00:00  1073   Sarah  0.900580
+    2000-01-01 08:00:00   976  Hannah -0.373847
     """
     divisions = list(pd.DatetimeIndex(start=start, end=end,
                                       freq=partition_freq))
     state = np.random.RandomState(seed)
-    seeds = state.randint(0, 2**31 - 1, size=len(divisions))
+    seeds = different_seeds(len(divisions), state)
     name = 'make-timeseries-' + tokenize(start, end, dtypes, freq, partition_freq)
     dsk = dict(((name, i), (make_timeseries_part, divisions[i], divisions[i + 1],
                                                  dtypes, freq, seeds[i]))
