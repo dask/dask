@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import defaultdict
 from math import ceil
 from time import time
 
@@ -47,7 +48,7 @@ def _get(ip, port, dsk, result, gather=False):
     leaves = sorted(leaves, key=ord.get)
 
     stacks = {w: [] for w in workers}
-    idling = dict()
+    idling = defaultdict(list)
 
     completed = {key: Event() for key in dsk}
 
@@ -55,7 +56,7 @@ def _get(ip, port, dsk, result, gather=False):
 
     finished = [False]
     finished_event = Event()
-    worker_done = {worker: Event() for worker in workers}
+    worker_done = defaultdict(list)
     center_done = Event()
     delete_done = Event()
 
@@ -88,8 +89,7 @@ def _get(ip, port, dsk, result, gather=False):
         stacks[worker].append(key)
 
         if idling.get(worker):
-            idling[worker].set()
-            del idling[worker]
+            idling[worker].pop().set()
 
     for key in dsk:
         if dependencies[key]:
@@ -156,13 +156,16 @@ def _get(ip, port, dsk, result, gather=False):
 
         ident :: (ip, port)
         """
+        done_event = Event()
+        worker_done[ident].append(done_event)
         stack = stacks[ident]
         worker = rpc(ip=ident[0], port=ident[1])
 
         while True:
             if not stack:
-                idling[ident] = Event()
-                yield idling[ident].wait()
+                event = Event()
+                idling[ident].append(event)
+                yield event.wait()
 
             if finished[0]:
                 break
@@ -187,26 +190,28 @@ def _get(ip, port, dsk, result, gather=False):
                         completed[key].set()
                     break
 
-
             completed[key].set()
             who_has[key].add(ident)
             has_what[ident].add(key)
 
         yield worker.close(close=True)
         worker.close_streams()
-        worker_done[ident].set()
+        done_event.set()
 
     for worker in workers:
-        loop.spawn_callback(handle_worker, worker)
+        for i in range(ncores[worker]):
+            loop.spawn_callback(handle_worker, worker)
 
     yield [completed[key].wait() for key in results]
     finished[0] = True
-    for event in idling.values():
-        event.set()
+    for events in idling.values():
+        for event in events:
+            event.set()
 
     remote = {key: RemoteData(key, ip, port) for key in results}
 
-    yield [center_done.wait()] + [e.wait() for e in worker_done.values()]
+    yield [center_done.wait()] + [e.wait() for L in worker_done.values()
+                                           for e in L]
 
     if errors:
         raise errors[0]
