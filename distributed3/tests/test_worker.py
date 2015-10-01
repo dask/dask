@@ -63,14 +63,14 @@ def test_worker():
         assert response == b'error'
         assert isinstance(b.data['z'], ZeroDivisionError)
 
-        aa.stream.close()
+        aa.close_streams()
         yield a._close()
 
         assert a.address not in c.ncores and b.address in c.ncores
 
         assert list(c.ncores.keys()) == [(b.ip, b.port)]
 
-        bb.stream.close()
+        bb.close_streams()
         yield b._close()
 
     _test_cluster(f)

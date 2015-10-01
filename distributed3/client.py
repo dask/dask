@@ -32,7 +32,7 @@ def gather_from_center(center, needed):
     else:
         center = dict(stream=center)
     pre_result, needed = unpack_remotedata(needed)
-    who_has = yield rpc(**center).who_has(keys=needed, close=True)
+    who_has = yield rpc(**center).who_has(keys=needed)
 
     data = yield gather_from_workers(who_has)
     result = keys_to_data(pre_result, data)
@@ -54,7 +54,11 @@ def gather_strict_from_center(center, needed=[]):
     else:
         center = dict(stream=center)
     needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
-    who_has = yield rpc(**center).who_has(keys=needed, close=True)
+    who_has = yield rpc(**center).who_has(keys=needed)
+
+    if not isinstance(who_has, dict):
+        import pdb; pdb.set_trace()
+        raise TypeError('Bad response from who_has: %s' % who_has)
 
     result = yield gather_from_workers(who_has)
     raise Return([result[key] for key in needed])

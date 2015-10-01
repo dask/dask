@@ -147,6 +147,7 @@ def connect(ip, port, timeout=1):
         else:
             raise
 
+
 @gen.coroutine
 def send_recv(stream=None, ip=None, port=None, reply=True, **kwargs):
     """ Send and recv with a stream
@@ -194,16 +195,57 @@ class rpc(object):
     >>> result = yield remote.func(key1=100, key2=1000)  # doctest: +SKIP
     """
     def __init__(self, stream=None, ip=None, port=None):
-        self.stream = stream
+        self.streams = dict()
+        if stream:
+            self.streams[stream] = True
         self.ip = ip
         self.port = port
+
+    @gen.coroutine
+    def live_stream(self):
+        """ Get an open stream
+
+        Some streams to the ip/port target may be in current use by other
+        coroutines.  We track this with the `streams` dict
+
+            :: {stream: True/False if open and ready for use}
+
+        This function produces an open stream, either by taking one that we've
+        already made or making a new one if they are all taken.  This also
+        removes streams that have been closed.
+
+        When the caller is done with the stream they should set
+
+            self.streams[stream] = True
+
+        As is done in __getattr__ below.
+        """
+        to_clear = set()
+        open = False
+        for stream, open in self.streams.items():
+            if stream.closed():
+                to_clear.add(stream)
+            if open:
+                break
+        if not open or stream.closed():
+            stream = yield connect(self.ip, self.port)
+            self.streams[stream] = True
+        for s in to_clear:
+            del self.streams[s]
+        self.streams[stream] = False     # mark as taken
+        assert not stream.closed()
+        raise Return(stream)
+
+    def close_streams(self):
+        for stream in self.streams:
+            stream.close()
 
     def __getattr__(self, key):
         @gen.coroutine
         def _(**kwargs):
-            if self.stream is None or self.stream.closed():
-                self.stream = yield connect(self.ip, self.port)
-            result = yield send_recv(stream=self.stream, op=key, **kwargs)
+            stream = yield self.live_stream()
+            result = yield send_recv(stream=stream, op=key, **kwargs)
+            self.streams[stream] = True  # mark as open
             raise Return(result)
         return _
 

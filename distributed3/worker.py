@@ -92,7 +92,7 @@ class Worker(Server):
     @gen.coroutine
     def _close(self):
         yield self.center.unregister(address=(self.ip, self.port))
-        self.center.stream.close()
+        self.center.close_streams()
         self.stop()
         self.status = 'closed'
 
@@ -113,7 +113,8 @@ class Worker(Server):
         # gather data from peers
         if needed:
             log("gather data from peers: %s" % str(needed))
-            other = yield gather_strict_from_center(self.center.stream, needed=needed)
+            other = yield gather_strict_from_center((self.center.ip, self.center.port),
+                                                    needed=needed)
             data2 = merge(self.data, dict(zip(needed, other)))
         else:
             data2 = self.data

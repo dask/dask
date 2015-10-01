@@ -113,7 +113,7 @@ class Pool(object):
                 r = rpc(stream)
                 result = yield r.close(close=True)
         yield self.center.close(close=True)
-        self.center.stream.close()
+        self.center.close_streams()
 
     def close_connections(self):
         return IOLoop.current().run_sync(self._close_connections)
