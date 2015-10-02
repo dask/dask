@@ -96,7 +96,27 @@ def test_workers_update_center():
 
     _test_cluster(f)
 
+def test_delete_data_with_missing_worker():
+    @gen.coroutine
+    def f(c, a, b):
+        bad = ('127.0.0.1', 9001)  # this worker doesn't exist
+        c.who_has['z'].add(bad)
+        c.who_has['z'].add(a.address)
+        c.has_what[bad].add('z')
+        c.has_what[a.address].add('z')
+        a.data['z'] = 5
 
+        cc = rpc(ip=c.ip, port=c.port)
+
+        yield cc.delete_data(keys=['z'])
+        assert 'z' not in a.data
+        assert not c.who_has['z']
+        assert not c.has_what[bad]
+        assert not c.has_what[a.address]
+
+        cc.close_streams()
+
+    _test_cluster(f)
 """
 
 def test_close():
