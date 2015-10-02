@@ -76,30 +76,25 @@ def test_worker():
     _test_cluster(f)
 
 
-"""
-
 def test_workers_update_center():
-    c = Center('127.0.0.1', 8007, loop=loop)
-    a = Worker('127.0.0.1', 8008, c.ip, c.port, loop=loop)
+    @gen.coroutine
+    def f(c, a, b):
+        aa = rpc(ip=a.ip, port=a.port)
 
-    @asyncio.coroutine
-    def f():
-        a_reader, a_writer = yield from connect(a.ip, a.port, loop=loop)
-
-        yield from rpc(a_reader, a_writer).update_data(data={'x': 1, 'y': 2})
+        yield aa.update_data(data={'x': 1, 'y': 2})
 
         assert a.data == {'x': 1, 'y': 2}
         assert c.who_has == {'x': {(a.ip, a.port)},
                              'y': {(a.ip, a.port)}}
-        assert c.has_what == {(a.ip, a.port): {'x', 'y'}}
+        assert c.has_what[(a.ip, a.port)] == {'x', 'y'}
 
-        yield from rpc(a_reader, a_writer).delete_data(keys=['x'], close=True)
+        yield aa.delete_data(keys=['x'], close=True)
 
-        yield from a._close()
-        yield from c._close()
+        aa.close_streams()
 
-    loop.run_until_complete(asyncio.gather(c.go(), a.go(), f(), loop=loop))
+    _test_cluster(f)
 
+"""
 
 def test_close():
     c = Center('127.0.0.1', 8007, loop=loop)

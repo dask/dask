@@ -154,8 +154,9 @@ class Worker(Server):
     def update_data(self, stream, data=None, report=True):
         self.data.update(data)
         if report:
-            yield self.center.add_keys(address=(self.ip, self.port),
-                                       keys=list(data))
+            response = yield self.center.add_keys(address=(self.ip, self.port),
+                                                  keys=list(data))
+            assert response == b'OK'
         raise Return(b'OK')
 
 
