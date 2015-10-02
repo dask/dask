@@ -89,10 +89,13 @@ def test_workers_update_center():
         assert c.has_what[(a.ip, a.port)] == {'x', 'y'}
 
         yield aa.delete_data(keys=['x'], close=True)
+        assert not c.who_has['x']
+        assert all('x' not in s for s in c.has_what.values())
 
         aa.close_streams()
 
     _test_cluster(f)
+
 
 """
 
