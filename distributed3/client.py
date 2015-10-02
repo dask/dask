@@ -1,18 +1,20 @@
 from __future__ import print_function, division, absolute_import
 
-import random
-import uuid
-from itertools import count, cycle
 from collections import Iterable, defaultdict
+from itertools import count, cycle
+import random
+import socket
+import uuid
 
 from tornado import gen
 from tornado.gen import Return
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream
+from tornado.iostream import IOStream, StreamClosedError
 
 from toolz import merge, concat, groupby
 
 from .core import rpc
+from .utils import ignore_exceptions
 
 
 no_default = '__no_default__'
@@ -26,6 +28,7 @@ def coerce_to_rpc(o):
         return o
     else:
         raise TypeError()
+
 
 @gen.coroutine
 def gather_from_center(center, needed):
@@ -63,7 +66,6 @@ def gather_strict_from_center(center, needed=[]):
     who_has = yield center.who_has(keys=needed)
 
     if not isinstance(who_has, dict):
-        import pdb; pdb.set_trace()
         raise TypeError('Bad response from who_has: %s' % who_has)
 
     result = yield gather_from_workers(who_has)
@@ -73,19 +75,32 @@ def gather_strict_from_center(center, needed=[]):
 @gen.coroutine
 def gather_from_workers(who_has):
     """ gather data from peers """
-    d = defaultdict(list)
-    for key, addresses in who_has.items():
-        try:
-            addr = random.choice(list(addresses))
-        except IndexError:
-            raise KeyError('No workers found that have key: %s' % key)
-        d[addr].append(key)
+    bad_addresses = set()
+    who_has = who_has.copy()
+    results = dict()
 
-    results = yield [rpc(ip=ip, port=port).get_data(keys=keys, close=True)
-                        for (ip, port), keys in d.items()]
+    while len(results) < len(who_has):
+        d = defaultdict(list)
+        rev = dict()
+        for key, addresses in who_has.items():
+            if key in results:
+                continue
+            try:
+                addr = random.choice(list(addresses - bad_addresses))
+            except IndexError:
+                raise KeyError('No workers found that have key: %s' % key)
+            d[addr].append(key)
+            rev[key] = addr
 
-    # TODO: make resilient to missing workers
-    raise Return(merge(results))
+        coroutines = [rpc(ip=ip, port=port).get_data(keys=keys, close=True)
+                            for (ip, port), keys in d.items()]
+        response = yield ignore_exceptions(coroutines, socket.error,
+                                                       StreamClosedError)
+        response = merge(response)
+        bad_addresses |= {v for k, v in rev.items() if k not in response}
+        results.update(merge(response))
+
+    raise Return(results)
 
 
 class RemoteData(object):
