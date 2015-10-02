@@ -8,6 +8,7 @@ from collections import Iterable, defaultdict
 from tornado import gen
 from tornado.gen import Return
 from tornado.ioloop import IOLoop
+from tornado.iostream import IOStream
 
 from toolz import merge, concat, groupby
 
@@ -16,6 +17,15 @@ from .core import rpc
 
 no_default = '__no_default__'
 
+def coerce_to_rpc(o):
+    if isinstance(o, tuple):
+        return rpc(ip=o[0], port=o[1])
+    elif isinstance(o, IOStream):
+        return rpc(stream=o)
+    elif isinstance(o, rpc):
+        return o
+    else:
+        raise TypeError()
 
 @gen.coroutine
 def gather_from_center(center, needed):
@@ -27,12 +37,10 @@ def gather_from_center(center, needed):
     See also:
         gather_strict_from_center
     """
-    if isinstance(center, tuple):
-        center = dict(ip=center[0], port=center[1])
-    else:
-        center = dict(stream=center)
+    center = coerce_to_rpc(center)
+
     pre_result, needed = unpack_remotedata(needed)
-    who_has = yield rpc(**center).who_has(keys=needed)
+    who_has = yield center.who_has(keys=needed)
 
     data = yield gather_from_workers(who_has)
     result = keys_to_data(pre_result, data)
@@ -49,12 +57,10 @@ def gather_strict_from_center(center, needed=[]):
     See also:
         gather_from_center
     """
-    if isinstance(center, tuple):
-        center = dict(ip=center[0], port=center[1])
-    else:
-        center = dict(stream=center)
+    center = coerce_to_rpc(center)
+
     needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
-    who_has = yield rpc(**center).who_has(keys=needed)
+    who_has = yield center.who_has(keys=needed)
 
     if not isinstance(who_has, dict):
         import pdb; pdb.set_trace()
