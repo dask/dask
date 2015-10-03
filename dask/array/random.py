@@ -4,7 +4,7 @@ import numpy as np
 from itertools import product
 from .core import normalize_chunks, Array
 from ..base import tokenize
-from ..utils import different_seeds
+from ..utils import different_seeds, ignoring
 
 def doc_wraps(func):
     """ Copy docstring from one function to another """
@@ -82,10 +82,11 @@ class RandomState(object):
         return self._wrap(np.random.RandomState.chisquare, df,
                          size=size, chunks=chunks)
 
-    @doc_wraps(np.random.RandomState.choice)
-    def choice(self, a, size=None, replace=True, p=None, chunks=None):
-        return self._wrap(np.random.RandomState.choice, a,
-                         size=size, replace=True, p=None, chunks=chunks)
+    with ignoring(AttributeError):
+        @doc_wraps(np.random.RandomState.choice)
+        def choice(self, a, size=None, replace=True, p=None, chunks=None):
+            return self._wrap(np.random.RandomState.choice, a,
+                             size=size, replace=True, p=None, chunks=chunks)
 
     # @doc_wraps(np.random.RandomState.dirichlet)
     # def dirichlet(self, alpha, size=None, chunks=None):
