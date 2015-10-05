@@ -121,6 +121,8 @@ def decide_worker(dependencies, stacks, who_has, key):
     # TODO: look at args for RemoteData
     workers = frequencies(w for dep in deps
                             for w in who_has[dep])
+    if not workers:
+        workers = stacks
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
 
@@ -203,6 +205,45 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
     yield cleanup()
 
     raise Return(results)
+
+
+def rewind(dependencies, dependents, waiting, waiting_data, finished_results,
+        stacks, who_has, key, worker_queues=None):
+    """ Rewind state to account for lost data from fallen worker
+
+    Returns:
+        dict of {key: worker} pairs of what worker queues should be triggered
+    """
+    result = dict()
+    if who_has.get(key):
+        return result
+    for dep in dependencies[key]:
+        result.update(rewind(dependencies, dependents, waiting, waiting_data,
+                finished_results, stacks, who_has, dep))
+
+    for dep in dependents[key]:
+        if dep in waiting:
+            waiting[dep].add(key)
+
+    for dep in dependencies[key]:
+        assert dep in waiting_data
+        waiting_data[dep].add(key)
+
+    if key in finished_results:
+        finished_results.remove(key)
+
+    waiting[key] = {dep for dep in dependencies[key] if not who_has.get(dep)}
+
+    waiting_data[key] = {dep for dep in dependents[key] if not who_has.get(dep)}
+
+    if all(key in who_has for key in dependencies[key]):  # ready
+        if key in waiting:
+            del waiting[key]
+        worker = decide_worker(dependencies, stacks, who_has, key)
+        stacks[worker].append(key)
+        result.update({key: worker})
+
+    return result
 
 
 @gen.coroutine
