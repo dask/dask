@@ -88,7 +88,7 @@ def gather_from_workers(who_has):
             try:
                 addr = random.choice(list(addresses - bad_addresses))
             except IndexError:
-                raise KeyError('No workers found that have key: %s' % key)
+                raise KeyError('No workers found that have key: %s' % str(key))
             d[addr].append(key)
             rev[key] = addr
 
