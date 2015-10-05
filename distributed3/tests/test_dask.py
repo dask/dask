@@ -20,7 +20,7 @@ def inc(x):
 
 def _test_cluster(f):
     @gen.coroutine
-    def g():
+    def g(get):
         c = Center('127.0.0.1', 8017)
         c.listen(c.port)
         a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=1)
@@ -32,7 +32,7 @@ def _test_cluster(f):
             yield gen.sleep(0.01)
 
         try:
-            yield f(c, a, b)
+            yield f(c, a, b, get)
         finally:
             with ignoring():
                 yield a._close()
@@ -40,36 +40,19 @@ def _test_cluster(f):
                 yield b._close()
             c.stop()
 
-    IOLoop.current().run_sync(g)
+    for get in [_get, _get2]:
+        IOLoop.current().run_sync(lambda: g(get))
 
 
 def test_scheduler():
-    dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (add, (inc, 'x'), 20),
-           'a': 1, 'b': (mul, 'a', 10), 'c': (mul, 'a', 20),
-           'total': (add, 'c', 'z')}
-    keys = ['total', 'c', ['z']]
-
-    @gen.coroutine
-    def f(c, a, b):
-        result = yield _get(c.ip, c.port, dsk, keys)
-        result2 = yield gather_from_center((c.ip, c.port), result)
-
-        expected = dask.async.get_sync(dsk, keys)
-        assert tuple(result2) == expected
-        assert set(a.data) | set(b.data) == {'total', 'c', 'z'}
-
-    _test_cluster(f)
-
-
-def test_scheduler2():
     dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (add, (inc, 'y'), 20),
            'a': 1, 'b': (mul, 'a', 10), 'c': (mul, 'b', 20),
            'total': (add, 'c', 'z')}
     keys = ['total', 'c', ['z']]
 
     @gen.coroutine
-    def f(c, a, b):
-        result = yield _get2(c.ip, c.port, dsk, keys)
+    def f(c, a, b, get):
+        result = yield get(c.ip, c.port, dsk, keys)
         result2 = yield gather_from_center((c.ip, c.port), result)
 
         expected = dask.async.get_sync(dsk, keys)
@@ -86,9 +69,9 @@ def test_scheduler_errors():
     keys = 'y'
 
     @gen.coroutine
-    def f(c, a, b):
+    def f(c, a, b, get):
         try:
-            yield _get(c.ip, c.port, dsk, keys)
+            result = yield get(c.ip, c.port, dsk, keys)
             assert False
         except ZeroDivisionError as e:
             # assert 'mydiv' in str(e)
@@ -102,8 +85,8 @@ def test_gather():
     keys = 'y'
 
     @gen.coroutine
-    def f(c, a, b):
-        result = yield _get(c.ip, c.port, dsk, keys, gather=True)
+    def f(c, a, b, get):
+        result = yield get(c.ip, c.port, dsk, keys, gather=True)
         assert result == 2
 
     _test_cluster(f)

@@ -58,12 +58,12 @@ def worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack):
                                             needed=needed,
                                             key=key,
                                             kwargs={})
-        if response == 'error':
+        if response == b'error':
             err = yield worker.get_data(keys=[key])
             master_queue.put_nowait({'op': 'task-erred',
                                      'key': key,
                                      'worker': ident,
-                                     'exception': err})
+                                     'exception': err[key]})
         else:
             master_queue.put_nowait({'op': 'task-finished',
                                      'worker': ident,
@@ -137,6 +137,17 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
 
     finished_results = set()
 
+    @gen.coroutine
+    def cleanup():
+        n = 0
+        delete_queue.put_nowait({'op': 'close'}); n += 1
+        for w, ncores in workers.items():
+            for i in range(ncores):
+                worker_queues[w].put_nowait({'op': 'close'}); n += 1
+
+        for i in range(n):
+            yield master_queue.get()
+
     """
     Distribute leaves among workers
 
@@ -184,14 +195,12 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
                     break
 
         elif msg['op'] == 'task-erred':
-            raise NotImplementedError()
+            yield cleanup()
+            raise msg['exception']
         elif msg['op'] == 'worker-failed':
             raise NotImplementedError()
 
-    delete_queue.put_nowait({'op': 'close'})
-    for w, ncores in workers.items():
-        for i in range(ncores):
-            worker_queues[w].put_nowait({'op': 'close'})
+    yield cleanup()
 
     raise Return(results)
 
@@ -399,7 +408,7 @@ def _get(ip, port, dsk, result, gather=False):
                                                 needed=needed,
                                                 key=key,
                                                 kwargs={})
-                if response == 'error':
+                if response == b'error':
                     finished[0] = True
                     err = yield worker.get_data(keys=[key])
                     errors.append(err[key])
