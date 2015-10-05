@@ -8,7 +8,7 @@ import dask
 from distributed3 import Center, Worker
 from distributed3.utils import ignoring
 from distributed3.client import gather_from_center
-from distributed3.dask import _get
+from distributed3.dask import _get, _get2
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -52,6 +52,24 @@ def test_scheduler():
     @gen.coroutine
     def f(c, a, b):
         result = yield _get(c.ip, c.port, dsk, keys)
+        result2 = yield gather_from_center((c.ip, c.port), result)
+
+        expected = dask.async.get_sync(dsk, keys)
+        assert tuple(result2) == expected
+        assert set(a.data) | set(b.data) == {'total', 'c', 'z'}
+
+    _test_cluster(f)
+
+
+def test_scheduler2():
+    dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (add, (inc, 'y'), 20),
+           'a': 1, 'b': (mul, 'a', 10), 'c': (mul, 'b', 20),
+           'total': (add, 'c', 'z')}
+    keys = ['total', 'c', ['z']]
+
+    @gen.coroutine
+    def f(c, a, b):
+        result = yield _get2(c.ip, c.port, dsk, keys)
         result2 = yield gather_from_center((c.ip, c.port), result)
 
         expected = dask.async.get_sync(dsk, keys)
