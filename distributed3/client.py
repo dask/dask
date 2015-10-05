@@ -1,22 +1,37 @@
-import random
-import uuid
-from itertools import count, cycle
+from __future__ import print_function, division, absolute_import
+
 from collections import Iterable, defaultdict
+from itertools import count, cycle
+import random
+import socket
+import uuid
 
 from tornado import gen
 from tornado.gen import Return
 from tornado.ioloop import IOLoop
+from tornado.iostream import IOStream, StreamClosedError
 
 from toolz import merge, concat, groupby
 
 from .core import rpc
+from .utils import ignore_exceptions
 
 
 no_default = '__no_default__'
 
+def coerce_to_rpc(o):
+    if isinstance(o, tuple):
+        return rpc(ip=o[0], port=o[1])
+    elif isinstance(o, IOStream):
+        return rpc(stream=o)
+    elif isinstance(o, rpc):
+        return o
+    else:
+        raise TypeError()
+
 
 @gen.coroutine
-def gather_from_center(stream, needed):
+def gather_from_center(center, needed):
     """ Gather data from peers
 
     This accepts any nested collection of data and unpacks RemoteData objects
@@ -25,8 +40,10 @@ def gather_from_center(stream, needed):
     See also:
         gather_strict_from_center
     """
+    center = coerce_to_rpc(center)
+
     pre_result, needed = unpack_remotedata(needed)
-    who_has = yield rpc(stream).who_has(keys=needed)
+    who_has = yield center.who_has(keys=needed)
 
     data = yield gather_from_workers(who_has)
     result = keys_to_data(pre_result, data)
@@ -35,7 +52,7 @@ def gather_from_center(stream, needed):
 
 
 @gen.coroutine
-def gather_strict_from_center(stream, needed=[]):
+def gather_strict_from_center(center, needed=[]):
     """ Gather data from peers
 
     This accepts an iterable, keys not found will not be in the output
@@ -43,8 +60,13 @@ def gather_strict_from_center(stream, needed=[]):
     See also:
         gather_from_center
     """
+    center = coerce_to_rpc(center)
+
     needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
-    who_has = yield rpc(stream).who_has(keys=needed)
+    who_has = yield center.who_has(keys=needed)
+
+    if not isinstance(who_has, dict):
+        raise TypeError('Bad response from who_has: %s' % who_has)
 
     result = yield gather_from_workers(who_has)
     raise Return([result[key] for key in needed])
@@ -53,19 +75,32 @@ def gather_strict_from_center(stream, needed=[]):
 @gen.coroutine
 def gather_from_workers(who_has):
     """ gather data from peers """
-    d = defaultdict(list)
-    for key, addresses in who_has.items():
-        try:
-            addr = random.choice(list(addresses))
-        except IndexError:
-            raise KeyError('No workers found that have key: %s' % key)
-        d[addr].append(key)
+    bad_addresses = set()
+    who_has = who_has.copy()
+    results = dict()
 
-    results = yield [rpc(*addr).get_data(keys=keys)
-                        for addr, keys in d.items()]
+    while len(results) < len(who_has):
+        d = defaultdict(list)
+        rev = dict()
+        for key, addresses in who_has.items():
+            if key in results:
+                continue
+            try:
+                addr = random.choice(list(addresses - bad_addresses))
+            except IndexError:
+                raise KeyError('No workers found that have key: %s' % key)
+            d[addr].append(key)
+            rev[key] = addr
 
-    # TODO: make resilient to missing workers
-    raise Return(merge(results))
+        coroutines = [rpc(ip=ip, port=port).get_data(keys=keys, close=True)
+                            for (ip, port), keys in d.items()]
+        response = yield ignore_exceptions(coroutines, socket.error,
+                                                       StreamClosedError)
+        response = merge(response)
+        bad_addresses |= {v for k, v in rev.items() if k not in response}
+        results.update(merge(response))
+
+    raise Return(results)
 
 
 class RemoteData(object):
@@ -89,8 +124,7 @@ class RemoteData(object):
                        result=no_default):
         self.key = key
         self.status = status
-        self.center_ip = center_ip
-        self.center_port = center_port
+        self.center = rpc(ip=center_ip, port=center_port)
         self._result = result
 
     def __str__(self):
@@ -98,17 +132,17 @@ class RemoteData(object):
             key = self.key[:10] + '...'
         else:
             key = self.key
-        return "RemoteData<center=%s:%d, key=%s>" % (self.center_ip,
-                self.center_port, key)
+        return "RemoteData<center=%s:%d, key=%s>" % (self.center.ip,
+                self.center.port, key)
 
     __repr__ = __str__
 
     @gen.coroutine
     def _get(self, raiseit=True):
-        who_has = yield rpc(self.center_ip, self.center_port).who_has(
+        who_has = yield self.center.who_has(
                 keys=[self.key], close=True)
         ip, port = random.choice(list(who_has[self.key]))
-        result = yield rpc(ip, port).get_data(keys=[self.key], close=True)
+        result = yield rpc(ip=ip, port=port).get_data(keys=[self.key], close=True)
 
         self._result = result[self.key]
 
@@ -129,8 +163,7 @@ class RemoteData(object):
 
     @gen.coroutine
     def _delete(self):
-        yield rpc(self.center_ip, self.center_port).delete_data(
-                keys=[self.key])
+        yield self.center.delete_data(keys=[self.key], close=True)
 
     """
     def delete(self):
@@ -138,17 +171,17 @@ class RemoteData(object):
     """
 
     def __del__(self):
-        RemoteData.trash[(self.center_ip, self.center_port)].add(self.key)
+        RemoteData.trash[(self.center.ip, self.center.port)].add(self.key)
 
     @classmethod
     @gen.coroutine
     def _garbage_collect(cls, ip=None, port=None):
         if ip and port:
             keys = cls.trash[(ip, port)]
-            cors = [rpc(ip, port).delete_data(keys=keys)]
+            cors = [rpc(ip=ip, port=port).delete_data(keys=keys, close=True)]
             n = len(keys)
         else:
-            cors = [rpc(ip, port).delete_data(keys=keys)
+            cors = [rpc(ip=ip, port=port).delete_data(keys=keys, close=True)
                     for (ip, port), keys in cls.trash.items()]
             n = len(set.union(*cls.trash.values()))
 
@@ -168,7 +201,7 @@ def scatter_to_center(ip, port, data, key=None):
     See also:
         scatter_to_workers
     """
-    ncores = yield rpc(ip, port).ncores()
+    ncores = yield rpc(ip=ip, port=port).ncores(close=True)
 
     result = yield scatter_to_workers(ip, port, ncores, data, key=key)
     raise Return(result)
@@ -198,7 +231,8 @@ def scatter_to_workers(ip, port, ncores, data, key=None):
     d = {k: {b: c for a, b, c in v}
           for k, v in d.items()}
 
-    yield [rpc(*w).update_data(data=v) for w, v in d.items()]
+    yield [rpc(ip=w_ip, port=w_port).update_data(data=v, close=True)
+            for (w_ip, w_port), v in d.items()]
 
     result = [RemoteData(b, ip, port, result=c)
                 for a, b, c in L]

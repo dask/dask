@@ -1,4 +1,4 @@
-from __future__ import print_function, division
+from __future__ import print_function, division, absolute_import
 
 import signal
 import socket
@@ -93,32 +93,29 @@ def connect_sync(host, port, timeout=1):
     return s
 
 
-def write_sync(s, msg):
+def write_sync(sock, msg):
     if not isinstance(msg, bytes):
         msg = dumps(msg)
-    s.send(struct.pack('L', len(msg)))
-    s.send(msg)
+    sock.send(msg + sentinel)
 
 
 def read_sync(s):
-    b = b''
-    while len(b) < 8:
-        b += s.recv(8 - len(b))
-    nbytes = struct.unpack('L', b)[0]
-    msg = b''
-    while len(msg) < nbytes:
-        msg += s.recv(nbytes - len(msg))
+    bytes = []
+    while b''.join(bytes[-len(sentinel):]) != sentinel:
+        bytes.append(s.recv(1))
+    msg = b''.join(bytes[:-len(sentinel)])
     try:
         return loads(msg)
     except:
         return msg
 
 
+sentinel = '7f57da0f9202f6b4df78e251058be6f0'
+
 @gen.coroutine
 def read(stream):
-    b = yield stream.read_bytes(8)
-    nbytes = struct.unpack('L', b)[0]
-    msg = yield stream.read_bytes(nbytes)
+    msg = yield stream.read_until(sentinel)
+    msg = msg[:-len(sentinel)]
     try:
         msg = loads(msg)
     except:
@@ -130,12 +127,12 @@ def read(stream):
 def write(stream, msg):
     if not isinstance(msg, bytes):
         msg = dumps(msg)
-    yield stream.write(struct.pack('L', len(msg)))
-    yield stream.write(msg)
+    yield stream.write(msg + sentinel)
 
 
 def pingpong(stream):
     return b'pong'
+
 
 @gen.coroutine
 def connect(ip, port, timeout=1):
@@ -146,42 +143,40 @@ def connect(ip, port, timeout=1):
     except StreamClosedError:
         if time() - start < timeout:
             yield gen.sleep(0.01)
+            print("sleeping on connect")
         else:
             raise
 
+
 @gen.coroutine
-def send_recv(ip_or_stream, port=None, reply=True, **kwargs):
+def send_recv(stream=None, ip=None, port=None, reply=True, **kwargs):
     """ Send and recv with a stream
 
     Keyword arguments turn into the message
 
     response = yield send_recv(stream, op='ping', reply=True)
     """
-    if isinstance(ip_or_stream, tuple):
-        ip_or_stream, port = ip_or_stream
-    if port is not None:
-        given_ip_port = True
-        stream = yield connect(ip_or_stream, port)
-    else:
-        given_ip_port = False
-        stream = ip_or_stream
+    if stream is None:
+        stream = yield connect(ip, port)
+
     msg = kwargs
     msg['reply'] = reply
-    if 'close' not in msg:
-        msg['close'] = given_ip_port
+
     yield write(stream, msg)
+
     if reply:
         response = yield read(stream)
     else:
         response = None
-    if kwargs['close']:
+    if kwargs.get('close'):
         stream.close()
     raise Return(response)
 
 
-def send_recv_sync(ip_or_stream, port=None, reply=True, **kwargs):
+def send_recv_sync(stream=None, ip=None, port=None, reply=True, **kwargs):
     return IOLoop.current().run_sync(
-            lambda: send_recv(ip_or_stream, port, reply, **kwargs))
+            lambda: send_recv(stream=stream, ip=ip, port=port, reply=reply,
+                              **kwargs))
 
 
 class rpc(object):
@@ -196,17 +191,63 @@ class rpc(object):
     This class uses this convention to provide a Python interface for calling
     remote functions
 
-    >>> remote = rpc(stream)  # doctest: +SKIP
+    >>> remote = rpc(stream=stream)  # doctest: +SKIP
     >>> result = yield remote.func(key1=100, key2=1000)  # doctest: +SKIP
     """
-    def __init__(self, *args):
-        self.args = args
+    def __init__(self, stream=None, ip=None, port=None):
+        self.streams = dict()
+        if stream:
+            self.streams[stream] = True
+        self.ip = ip
+        self.port = port
+
+    @gen.coroutine
+    def live_stream(self):
+        """ Get an open stream
+
+        Some streams to the ip/port target may be in current use by other
+        coroutines.  We track this with the `streams` dict
+
+            :: {stream: True/False if open and ready for use}
+
+        This function produces an open stream, either by taking one that we've
+        already made or making a new one if they are all taken.  This also
+        removes streams that have been closed.
+
+        When the caller is done with the stream they should set
+
+            self.streams[stream] = True
+
+        As is done in __getattr__ below.
+        """
+        to_clear = set()
+        open = False
+        for stream, open in self.streams.items():
+            if stream.closed():
+                to_clear.add(stream)
+            if open:
+                break
+        if not open or stream.closed():
+            stream = yield connect(self.ip, self.port)
+            self.streams[stream] = True
+        for s in to_clear:
+            del self.streams[s]
+        self.streams[stream] = False     # mark as taken
+        assert not stream.closed()
+        raise Return(stream)
+
+    def close_streams(self):
+        for stream in self.streams:
+            stream.close()
 
     def __getattr__(self, key):
+        @gen.coroutine
         def _(**kwargs):
-            return send_recv(*self.args, op=key, **kwargs)
+            stream = yield self.live_stream()
+            result = yield send_recv(stream=stream, op=key, **kwargs)
+            self.streams[stream] = True  # mark as open
+            raise Return(result)
         return _
-
 
 
 if __name__ == '__main__':

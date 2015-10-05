@@ -1,4 +1,5 @@
 from operator import add
+import socket
 from time import time, sleep
 from toolz import merge
 
@@ -38,11 +39,11 @@ def _test_cluster(f):
         try:
             yield f(c, a, b, p)
         finally:
-            with ignoring():
+            with ignoring(Exception):
                 yield p._close_connections()
-            with ignoring():
+            with ignoring(Exception):
                 yield a._close()
-            with ignoring():
+            with ignoring(Exception):
                 yield b._close()
             c.stop()
 
@@ -100,8 +101,8 @@ def test_pool():
 
 def test_pool_inputs():
     p = Pool('127.0.0.1:8000')
-    assert p.center_ip == '127.0.0.1'
-    assert p.center_port == 8000
+    assert p.center.ip == '127.0.0.1'
+    assert p.center.port == 8000
 
 
 def test_workshare():
@@ -158,12 +159,15 @@ def cluster():
         yield {'proc': center, 'port': 8010}, [{'proc': a, 'port': 8011},
                                                {'proc': b, 'port': 8012}]
     finally:
-        with ignoring():
-            a.terminate()
-        with ignoring():
-            b.terminate()
-        with ignoring():
-            center.terminate()
+        for port in [8011, 8012, 8010]:
+            with ignoring(socket.error):
+                sock = connect_sync('127.0.0.1', port)
+                write_sync(sock, dict(op='terminate', close=True))
+                response = read_sync(sock)
+                sock.close()
+        for proc in [a, b, center]:
+            with ignoring(Exception):
+                proc.terminate()
 
 
 def test_cluster():
@@ -188,9 +192,9 @@ def test_close_worker_cleanly_before_map():
     with cluster() as (c, [a, b]):
         p = Pool('127.0.0.1', c['port'])
 
-        send_recv_sync('127.0.0.1', a['port'], op='terminate')
+        send_recv_sync(ip='127.0.0.1', port=a['port'], op='terminate')
 
-        while len(send_recv_sync('127.0.0.1', c['port'], op='ncores')) > 1:
+        while len(send_recv_sync(ip='127.0.0.1', port=c['port'], op='ncores')) > 1:
             sleep(0.01)
 
         result = p.map(lambda x: x + 1, range(3))
@@ -244,11 +248,11 @@ def test_job_kills_node():
             yield gen.sleep(0.5)
             a['proc'].terminate()
 
+        p = Pool('127.0.0.1', c['port'])
+        IOLoop.current().spawn_callback(kill_a)
+
         @gen.coroutine
         def g():
-            p = Pool('127.0.0.1', c['port'])
-
-            IOLoop.current().spawn_callback(kill_a)
 
             results = yield p._map(f, range(20))
 

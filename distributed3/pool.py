@@ -1,4 +1,5 @@
-from __future__ import division, print_function
+from __future__ import print_function, division, absolute_import
+
 from collections import namedtuple
 import random
 import uuid
@@ -44,19 +45,15 @@ class Pool(object):
             else:
                 center_port = 8787
         center_port = int(center_port)
-        self.center_ip = center_ip
-        self.center_port = center_port
+        self.center = rpc(ip=center_ip, port=center_port)
         self._open_streams = set()
 
     @gen.coroutine
     def _sync_center(self):
-        stream = yield connect(self.center_ip, self.center_port)
-        center = rpc(stream)
-        self.who_has = yield center.who_has()
-        self.has_what = yield center.has_what()
-        self.ncores = yield center.ncores(close=True)
+        self.who_has = yield self.center.who_has()
+        self.has_what = yield self.center.has_what()
+        self.ncores = yield self.center.ncores()
         self.available_cores = self.ncores
-        stream.close()
 
     @gen.coroutine
     def _map(self, func, seq, **kwargs):
@@ -84,7 +81,7 @@ class Pool(object):
                     self.who_has, self.has_what, tasks, shares, extra, remaining,
                     running, finished, erred,
                     output, worker, computation_done,
-                    self.center_ip, self.center_port)
+                    self.center.ip, self.center.port)
 
         yield computation_done                         # wait until done
         assert all(isinstance(o, RemoteData) for o in output)
@@ -115,6 +112,8 @@ class Pool(object):
             if not stream._closed:
                 r = rpc(stream)
                 result = yield r.close(close=True)
+        yield self.center.close(close=True)
+        self.center.close_streams()
 
     def close_connections(self):
         return IOLoop.current().run_sync(self._close_connections)
@@ -137,7 +136,7 @@ class Pool(object):
             key = str(uuid.uuid1())
 
         pc = PendingComputation(key, func, args2, kwargs2, needed,
-                                self.center_ip, self.center_port)
+                                self.center.ip, self.center.port)
         yield pc._start(ip, port, self.who_has, self.has_what,
                         self.available_cores)
         raise Return(pc)
@@ -157,8 +156,8 @@ class Pool(object):
     @gen.coroutine
     def _scatter(self, data, key=None):
         yield self._sync_center()
-        result = yield scatter_to_workers(self.center_ip,
-                self.center_port, self.ncores, data, key=key)
+        result = yield scatter_to_workers(self.center.ip,
+                self.center.port, self.ncores, data, key=key)
         raise Return(result)
 
     def scatter(self, data, key=None):
@@ -167,7 +166,7 @@ class Pool(object):
 
     @gen.coroutine
     def _gather(self, data):
-        result = yield gather_from_center((self.center_ip, self.center_port),
+        result = yield gather_from_center((self.center.ip, self.center.port),
                                           data)
         raise Return(result)
 

@@ -1,14 +1,15 @@
-from __future__ import print_function
+from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 from functools import partial
-from time import sleep
+import socket
 
 from tornado import gen
 from tornado.gen import Return
+from tornado.iostream import StreamClosedError
 
 from .core import Server, read, write, rpc
-from .utils import ignoring
+from .utils import ignoring, ignore_exceptions
 
 log = print
 
@@ -57,6 +58,7 @@ class Center(Server):
     @gen.coroutine
     def terminate(self, stream):
         self.stop()
+        return b'OK'
 
     def register(self, stream, address=None, keys=(), ncores=None):
         self.has_what[address] = set(keys)
@@ -118,7 +120,10 @@ class Center(Server):
                 d[worker].append(key)
             del self.who_has[key]
 
-        yield [rpc(*worker).delete_data(keys=keys, report=False)
+        # TODO: ignore missing workers
+        coroutines = [rpc(ip=worker[0], port=worker[1]).delete_data(
+                                keys=keys, report=False, close=True)
                       for worker, keys in d.items()]
+        yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
 
         raise Return(b'OK')

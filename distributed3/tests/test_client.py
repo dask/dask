@@ -8,7 +8,7 @@ from tornado.ioloop import IOLoop
 from distributed3 import Center, Worker
 from distributed3.utils import ignoring
 from distributed3.client import (scatter_to_center, scatter_to_workers,
-        gather_from_center, RemoteData)
+        gather_from_center, gather_strict_from_center, RemoteData)
 
 
 def _test_cluster(f):
@@ -96,5 +96,32 @@ def test_garbage_collection():
         n = yield RemoteData._garbage_collect(c.ip, c.port)
         assert set() == set(a.data) | set(b.data)
         assert n == len(keys)
+
+    _test_cluster(f)
+
+
+def test_gather_with_missing_worker():
+    @gen.coroutine
+    def f(c, a, b):
+        bad = ('127.0.0.1', 9001)  # this worker doesn't exist
+        c.who_has['x'].add(bad)
+        c.has_what[bad].add('x')
+
+        c.who_has['z'].add(bad)
+        c.has_what[bad].add('z')
+
+        c.who_has['z'].add(a.address)
+        c.has_what[a.address].add('z')
+
+        a.data['z'] = 5
+
+        result = yield gather_strict_from_center((c.ip, c.port), ['z'])
+        assert result == [5]
+
+        try:
+            yield gather_strict_from_center((c.ip, c.port), ['x'])
+            assert False
+        except KeyError as e:
+            pass
 
     _test_cluster(f)
