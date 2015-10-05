@@ -110,7 +110,7 @@ def read_sync(s):
         return msg
 
 
-sentinel = '7f57da0f9202f6b4df78e251058be6f0'
+sentinel = b'7f57da0f9202f6b4df78e251058be6f0'
 
 @gen.coroutine
 def read(stream):
