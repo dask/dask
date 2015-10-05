@@ -172,9 +172,9 @@ with ignoring(ImportError):
                 data = md5(b'-'.join([str(item).encode() for item in x.flat])).hexdigest()
         else:
             try:
-                data = md5(x.view('i1').data).hexdigest()
+                data = md5(x.ravel().view('i1').data).hexdigest()
             except (BufferError, AttributeError, ValueError):
-                data = md5(x.copy().view('i1').data).hexdigest()
+                data = md5(x.copy().ravel().view('i1').data).hexdigest()
         return (data, x.dtype, x.shape, x.strides)
 
 
