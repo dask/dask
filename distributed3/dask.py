@@ -169,7 +169,7 @@ def decide_worker(dependencies, stacks, who_has, key):
 
     >>> dependencies = {'c': {'b'}, 'b': {'a'}}
     >>> stacks = {'alice': ['z'], 'bob': []}
-    >>> who_has = {'alice': ['a'], 'bob': []}
+    >>> who_has = {'a': {'alice'}}
 
     We choose the worker that has the data on which 'b' depends (alice has 'a')
 
@@ -178,7 +178,7 @@ def decide_worker(dependencies, stacks, who_has, key):
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
 
-    >>> who_has = {'alice': ['a'], 'bob': []}
+    >>> who_has = {'a': {'alice', 'bob'}}
     >>> decide_worker(dependencies, stacks, who_has, 'b')
     'bob'
     """

@@ -278,9 +278,9 @@ def keys_to_data(o, data):
     >>> data = {'x': 1}
     >>> keys_to_data(('x', 'y'), data)
     (1, 'y')
-    >>> keys_to_data({'a': 'x', 'b': 'y'}, data)
+    >>> keys_to_data({'a': 'x', 'b': 'y'}, data)  # doctest: +SKIP
     {'a': 1, 'b': 'y'}
-    >>> keys_to_data({'a': ['x'], 'b': 'y'}, data)
+    >>> keys_to_data({'a': ['x'], 'b': 'y'}, data)  # doctest: +SKIP
     {'a': [1], 'b': 'y'}
     """
     try:
