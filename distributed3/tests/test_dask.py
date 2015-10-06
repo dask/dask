@@ -30,7 +30,7 @@ def _test_cluster(f, gets=[_get, _get2]):
     def g(get):
         c = Center('127.0.0.1', 8017)
         c.listen(c.port)
-        a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=1)
+        a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=2)
         yield a._start()
         b = Worker('127.0.0.1', 8019, c.ip, c.port, ncores=1)
         yield b._start()
@@ -259,7 +259,7 @@ def run_worker(port, center_port, **kwargs):
 def cluster():
     center = Process(target=run_center, args=(8010,))
     a = Process(target=run_worker, args=(8011, 8010), kwargs={'ncores': 1})
-    b = Process(target=run_worker, args=(8012, 8010), kwargs={'ncores': 1})
+    b = Process(target=run_worker, args=(8012, 8010), kwargs={'ncores': 2})
 
     center.start()
     a.start()

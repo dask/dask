@@ -35,8 +35,6 @@ def worker(master_queue, worker_queue, ident, dsk, dependencies, stack,
         log("Worker failed from closed stream", ident)
         master_queue.put_nowait({'op': 'worker-failed',
                                  'worker': ident})
-    master_queue.put_nowait({'op': 'worker-finished',
-                             'worker': ident})
 
 
 @gen.coroutine
@@ -80,6 +78,8 @@ def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
 
     yield worker.close(close=True)
     worker.close_streams()
+    master_queue.put_nowait({'op': 'worker-finished',
+                             'worker': ident})
     log("Close worker core", ident, i)
 
 
@@ -606,7 +606,7 @@ def _get(ip, port, dsk, result, gather=False):
     raise Return(nested_get(result, remote))
 
 
-def get(ip, port, dsk, keys, gather=False):
+def get(ip, port, dsk, keys, gather=False, _get=_get2):
     return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys, gather))
 
 
