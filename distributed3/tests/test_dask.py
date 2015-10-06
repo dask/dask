@@ -294,3 +294,86 @@ def test_rewind():
     assert result == {'b': 'bob'}
 
 
+def slowinc(x):
+    from time import sleep
+    sleep(0.1)
+    print('slowinc', x)
+    return x + 1
+
+
+def run_center(port):
+    from distributed3 import Center
+    from tornado.ioloop import IOLoop
+    center = Center('127.0.0.1', port)
+    center.listen(port)
+    IOLoop.current().start()
+    IOLoop.current().close()
+
+
+def run_worker(port, center_port, **kwargs):
+    from distributed3 import Worker
+    from tornado.ioloop import IOLoop
+    worker = Worker('127.0.0.1', port, '127.0.0.1', center_port, **kwargs)
+    worker.start()
+    IOLoop.current().start()
+    IOLoop.current().close()
+
+
+@contextmanager
+def cluster():
+    center = Process(target=run_center, args=(8010,))
+    a = Process(target=run_worker, args=(8011, 8010), kwargs={'ncores': 1})
+    b = Process(target=run_worker, args=(8012, 8010), kwargs={'ncores': 1})
+
+    center.start()
+    a.start()
+    b.start()
+
+    sock = connect_sync('127.0.0.1', 8010)
+    while True:
+        write_sync(sock, {'op': 'ncores'})
+        ncores = read_sync(sock)
+        if len(ncores) == 2:
+            break
+
+    try:
+        yield {'proc': center, 'port': 8010}, [{'proc': a, 'port': 8011},
+                                               {'proc': b, 'port': 8012}]
+    finally:
+        for port in [8011, 8012, 8010]:
+            with ignoring(socket.error):
+                sock = connect_sync('127.0.0.1', port)
+                write_sync(sock, dict(op='terminate', close=True))
+                response = read_sync(sock)
+                sock.close()
+        for proc in [a, b, center]:
+            with ignoring(Exception):
+                proc.terminate()
+
+
+def test_cluster():
+    with cluster() as (c, [a, b]):
+        pass
+
+
+def test_failing_worker():
+    n = 20
+    dsk = {('x', i, j): (slowinc, ('x', i, j - 1)) for i in range(4)
+                                                   for j in range(1, n)}
+    dsk.update({('x', i, 0): i * 10 for i in range(4)})
+    dsk['z'] = (sum, [('x', i, n - 1) for i in range(4)])
+    keys = 'z'
+
+    with cluster() as (c, [a, b]):
+        def kill_a():
+            sleep(0.5)
+            a['proc'].terminate()
+
+        @gen.coroutine
+        def f():
+            result = yield _get2('127.0.0.1', c['port'], dsk, keys)
+            assert result == dask.get(dsk, keys)
+
+        thread = Thread(target=kill_a)
+        thread.start()
+        IOLoop.current().run_sync(f)
