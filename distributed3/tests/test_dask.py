@@ -101,7 +101,6 @@ def test_gather():
 
 def test_heal():
     dsk = {'x': 1, 'y': (inc, 'x')}
-    keys = ['y']
     dependencies = {'x': set(), 'y': {'x'}}
     dependents = {'x': {'y'}, 'y': set()}
 
@@ -116,7 +115,7 @@ def test_heal():
 
     local = {k: v for k, v in locals().items() if '@' not in k}
 
-    output = heal(dsk, keys, dependencies, dependents,
+    output = heal(dsk, dependencies, dependents,
                   in_memory, stacks, processing, released)
 
     assert output['dsk'] == dsk
@@ -134,36 +133,37 @@ def test_heal():
              'processing': {'alice': set(), 'bob': set()},
              'released': set()}
 
-    heal(dsk, keys, dependencies, dependents, **state)
+    heal(dsk, dependencies, dependents, **state)
 
-    dsk = {'x': 1, 'y': (inc, 'x'),
-           'a': 1, 'b': (inc, 'a'),
-           'z': (add, 'y', 'b')}
-    keys = ['z']
-    dependencies = {'x': set(), 'y': {'x'},
-                    'a': set(), 'b': {'a'},
-                    'z': {'y', 'b'}}
-    dependents = {'x': {'y'}, 'y': {'z'},
-                  'a': {'b'}, 'b': {'z'},
-                  'z': set()}
 
-    state = {'in_memory': set(['x']),  # missing 'a'
-             'stacks': {'alice': ['y'], 'bob': []},
-             'processing': {'alice': set(), 'bob': set(['b'])},
+def test_heal_2():
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y'),
+           'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
+           'result': (add, 'z', 'c')}
+    dependencies = {'x': set(), 'y': {'x'}, 'z': {'y'},
+                    'a': set(), 'b': {'a'}, 'c': {'b'},
+                    'result': {'z', 'c'}}
+    dependents = {'x': {'y'}, 'y': {'z'}, 'z': {'total'},
+                  'a': {'b'}, 'b': {'z'}, 'c': {'total'},
+                  'result': set()}
+
+    state = {'in_memory': {'y', 'a'},  # missing 'b'
+             'stacks': {'alice': ['z'], 'bob': []},
+             'processing': {'alice': set(), 'bob': set(['c'])},
              'released': set()}
 
-    output = heal(dsk, keys, dependencies, dependents, **state)
-    assert output['waiting'] == {'a': set(), 'b': {'a'}, 'z': {'y', 'b'}}
-    assert output['waiting_data'] == {'a': {'b'}, 'x': {'y'},
-                                      'b': {'z'}, 'y': {'z'}}
-    assert output['in_memory'] == set(['x'])
-    assert output['stacks'] == {'alice': ['y'], 'bob': []}
+    output = heal(dsk, dependencies, dependents, **state)
+    assert output['waiting'] == {'b': set(), 'c': {'b'}, 'result': {'c', 'z'}}
+    assert output['waiting_data'] == {'a': {'b'}, 'b': {'c'}, 'c': {'result'},
+                                      'y': {'z'}, 'z': {'result'}}
+    assert output['in_memory'] == set(['y', 'a'])
+    assert output['stacks'] == {'alice': ['z'], 'bob': []}
     assert output['processing'] == {'alice': set(), 'bob': set()}
+    assert output['released'] == {'x'}
 
 
 def test_validate_state():
     dsk = {'x': 1, 'y': (inc, 'x')}
-    keys = ['y']
     dependencies = {'x': set(), 'y': {'x'}}
     waiting = {'y': {'x'}, 'x': set()}
     dependents = {'x': {'y'}, 'y': set()}

@@ -246,10 +246,11 @@ def rewind(dependencies, dependents, waiting, waiting_data, finished_results,
     return result
 
 
-def validate_state(dsk, keys, dependencies, dependents, waiting, waiting_data,
+def validate_state(dsk, dependencies, dependents, waiting, waiting_data,
         in_memory, stacks, processing, finished_results, released, **kwargs):
     in_stacks = {k for v in stacks.values() for k in v}
     in_processing = {k for v in processing.values() for k in v}
+    keys = {key for key in dsk if not dependents[key]}
 
     @memoize
     def check_key(key):
@@ -266,8 +267,9 @@ def validate_state(dsk, keys, dependencies, dependents, waiting, waiting_data,
         if key in in_memory:
             assert not any(key in waiting.get(dep, ())
                            for dep in dependents[key])
+            assert not waiting.get(key)
 
-        if key in in_memory or key in in_stacks:
+        if key in in_stacks or key in in_processing:
             assert all(dep in in_memory for dep in dependencies[key])
             assert not waiting.get(key)
 
@@ -278,13 +280,12 @@ def validate_state(dsk, keys, dependencies, dependents, waiting, waiting_data,
         if key in keys and key in in_memory:
             assert key in finished_results
 
-
         return True
 
     assert all(map(check_key, keys))
 
 
-def heal(dsk, keys, dependencies, dependents, in_memory, stacks, processing,
+def heal(dsk, dependencies, dependents, in_memory, stacks, processing,
         released, **kwargs):
     """ Make a runtime state consistent
 
@@ -293,6 +294,7 @@ def heal(dsk, keys, dependencies, dependents, in_memory, stacks, processing,
     completion.  This function edits runtime state in place to make it
     consistent.  It outputs a full state dict.
     """
+    keys = {key for key in dsk if not dependents[key]}
 
     rev_stacks = reverse_dict(stacks)
     rev_processing = reverse_dict(processing)
@@ -301,10 +303,11 @@ def heal(dsk, keys, dependencies, dependents, in_memory, stacks, processing,
     waiting = defaultdict(set) # deepcopy(dependencies)
     finished_results = set()
 
+    released = set(dsk)
+
     @memoize
     def make_accessible(key):
-        if key in released:
-            released.remove(key)
+        released.remove(key)
 
         if key in in_memory:
             if key in keys:
