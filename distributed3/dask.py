@@ -25,9 +25,11 @@ log = print
 
 
 @gen.coroutine
-def worker(master_queue, worker_queue, ident, dsk, dependencies, stack, ncores):
+def worker(master_queue, worker_queue, ident, dsk, dependencies, stack,
+           processing, ncores):
     try:
-        yield [worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack)
+        yield [worker_core(master_queue, worker_queue, ident, dsk,
+                           dependencies, stack, processing)
                 for i in range(ncores)]
     except StreamClosedError:
         log("Worker failed from closed stream", ident)
@@ -38,7 +40,8 @@ def worker(master_queue, worker_queue, ident, dsk, dependencies, stack, ncores):
 
 
 @gen.coroutine
-def worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack):
+def worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack,
+                processing):
     worker = rpc(ip=ident[0], port=ident[1])
 
     while True:
@@ -48,6 +51,7 @@ def worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack):
         assert msg['op'] == 'compute-task'
 
         key = stack.pop()
+        processing.add(key)
         task = dsk[key]
         if not istask(task):
             response = yield worker.update_data(data={key: task})
@@ -69,6 +73,7 @@ def worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack):
             master_queue.put_nowait({'op': 'task-finished',
                                      'worker': ident,
                                      'key': key})
+        processing.remove(key)
 
     yield worker.close(close=True)
     worker.close_streams()
@@ -130,7 +135,7 @@ def decide_worker(dependencies, stacks, who_has, key):
 
 @gen.coroutine
 def master(master_queue, worker_queues, delete_queue, who_has, has_what,
-           workers, stacks, dsk, results):
+           workers, stacks, processing, released, dsk, results):
     dependencies, dependents = get_deps(dsk)
     waiting = {k: v.copy() for k, v in dependencies.items()}
     waiting_data = {k: v.copy() for k, v in dependents.items()}
@@ -188,6 +193,7 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
                 if not s and dep not in results:
                     delete_queue.put_nowait({'op': 'delete-task',
                                              'key': dep})
+                    released.add(dep)
                     for w in who_has[dep]:
                         has_what[w].remove(dep)
                     del who_has[dep]
@@ -342,12 +348,14 @@ def _get2(ip, port, dsk, result, gather=False):
     delete_queue = Queue()
 
     stacks = {w: [] for w in workers}
+    processing = {w: set() for w in workers}
+    released = set()
 
     coroutines = ([master(master_queue, worker_queues, delete_queue,
                           who_has, has_what, ncores,
-                          stacks, dsk, results)]
+                          stacks, processing, released, dsk, results)]
                 + [worker(master_queue, worker_queues[w], w, dsk, dependencies,
-                          stacks[w], ncores[w])
+                          stacks[w], processing[w], ncores[w])
                    for w in workers]
                 + [delete(master_queue, delete_queue, ip, port)])
 
