@@ -111,12 +111,10 @@ def test_heal():
     waiting = {'x': set(), 'y': {'x'}}
     waiting_data = {'x': {'y'}, 'y': set()}
     finished_results = set()
-    released = set()
 
     local = {k: v for k, v in locals().items() if '@' not in k}
 
-    output = heal(dependencies, dependents,
-                  in_memory, stacks, processing, released)
+    output = heal(dependencies, dependents, in_memory, stacks, processing)
 
     assert output['dependencies'] == dependencies
     assert output['dependents'] == dependents
@@ -125,12 +123,11 @@ def test_heal():
     assert output['stacks'] == stacks
     assert output['waiting'] == waiting
     assert output['waiting_data'] == waiting_data
-    assert output['released'] == released
+    assert output['released'] == set()
 
     state = {'in_memory': set(),
              'stacks': {'alice': ['x'], 'bob': []},
-             'processing': {'alice': set(), 'bob': set()},
-             'released': set()}
+             'processing': {'alice': set(), 'bob': set()}}
 
     heal(dependencies, dependents, **state)
 
@@ -148,8 +145,7 @@ def test_heal_2():
 
     state = {'in_memory': {'y', 'a'},  # missing 'b'
              'stacks': {'alice': ['z'], 'bob': []},
-             'processing': {'alice': set(), 'bob': set(['c'])},
-             'released': set()}
+             'processing': {'alice': set(), 'bob': set(['c'])}}
 
     output = heal(dependencies, dependents, **state)
     assert output['waiting'] == {'b': set(), 'c': {'b'}, 'result': {'c', 'z'}}
@@ -169,8 +165,7 @@ def test_heal_restarts_leaf_tasks():
 
     state = {'in_memory': {},  # missing 'b'
              'stacks': {'alice': ['a'], 'bob': ['x']},
-             'processing': {'alice': set(), 'bob': set()},
-             'released': set()}
+             'processing': {'alice': set(), 'bob': set()}}
 
     del state['stacks']['bob']
     del state['processing']['bob']
@@ -186,8 +181,7 @@ def test_heal_culls():
 
     state = {'in_memory': {'c', 'y'},
              'stacks': {'alice': ['a'], 'bob': []},
-             'processing': {'alice': set(), 'bob': set('y')},
-             'released': set()}
+             'processing': {'alice': set(), 'bob': set('y')}}
 
     output = heal(dependencies, dependents, **state)
     assert 'a' not in output['stacks']['alice']

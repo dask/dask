@@ -332,7 +332,7 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
                 del who_has[k]
 
             state = heal(dependencies, dependents, set(who_has), stacks,
-                         processing, released)
+                         processing)
             waiting_data = state['waiting_data']
             waiting = state['waiting']
             released = state['released']
@@ -340,6 +340,8 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
             trigger_keys = {k for k, v in waiting.items() if not v}
             for key in trigger_keys:
                 trigger_task(key)
+            for key in set(who_has).intersection(released):
+                delete_queue.put_nowait({'op': 'delete-task', 'key': key})
 
         for w in workers:  # This is a kludge and should be removed
             while worker_queues[w].qsize() < len(stacks[w]):
@@ -394,8 +396,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
     assert all(map(check_key, keys))
 
 
-def heal(dependencies, dependents, in_memory, stacks, processing,
-        released, **kwargs):
+def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
     """ Make a runtime state consistent
 
     Sometimes we lose intermediate values.  In these cases it can be tricky to
