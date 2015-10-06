@@ -4,7 +4,7 @@ from collections import defaultdict
 from math import ceil
 from time import time
 
-from toolz import merge, frequencies
+from toolz import merge, frequencies, memoize
 from tornado import gen
 from tornado.gen import Return
 from tornado.concurrent import Future
@@ -244,6 +244,47 @@ def rewind(dependencies, dependents, waiting, waiting_data, finished_results,
         result.update({key: worker})
 
     return result
+
+
+def validate_state(dsk, keys, dependencies, dependents, waiting, waiting_data,
+        in_memory, stacks, processing, finished_results, released, **kwargs):
+    in_stacks = {k for v in stacks.values() for k in v}
+    in_processing = {k for v in processing.values() for k in v}
+
+    @memoize
+    def check_key(key):
+        """ Validate a single key, recurse downards """
+        assert sum([key in waiting,
+                    key in in_stacks,
+                    key in in_processing,
+                    key in in_memory,
+                    key in released]) == 1
+
+        if not all(map(check_key, dependencies[key])):# Recursive case
+            assert False
+
+        if key in in_memory:
+            assert not any(key in waiting.get(dep, ())
+                           for dep in dependents[key])
+
+        if key in in_memory or key in in_stacks:
+            assert all(dep in in_memory for dep in dependencies[key])
+            assert not waiting.get(key)
+            assert not any(key in waiting.get(dep, ())
+                           for dep in dependents[key])
+
+        if key in finished_results:
+            assert key in in_memory
+            assert key in keys
+
+        if key in keys and key in in_memory:
+            assert key in finished_results
+
+
+        return True
+
+    assert all(map(check_key, keys))
+
 
 
 @gen.coroutine

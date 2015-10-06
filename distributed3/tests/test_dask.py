@@ -93,6 +93,57 @@ def test_gather():
     _test_cluster(f)
 
 
+def test_validate_state():
+    dsk = {'x': 1, 'y': (inc, 'x')}
+    keys = ['y']
+    dependencies = {'x': set(), 'y': {'x'}}
+    waiting = {'y': {'x'}, 'x': set()}
+    dependents = {'x': {'y'}, 'y': set()}
+    waiting_data = {'x': {'y'}}
+    in_memory = set()
+    stacks = {'alice': [], 'bob': []}
+    processing = {'alice': set(), 'bob': set()}
+    finished_results = set()
+    released = set()
+
+    validate_state(**locals())
+
+    in_memory.add('x')
+    with pytest.raises(Exception):
+        validate_state(**locals())
+
+    del waiting['x']
+    with pytest.raises(Exception):
+        validate_state(**locals())
+
+    waiting['y'].remove('x')
+    validate_state(**locals())
+
+    stacks['alice'].append('y')
+    with pytest.raises(Exception):
+        validate_state(**locals())
+
+    waiting.pop('y')
+    validate_state(**locals())
+
+    stacks['alice'].pop()
+    with pytest.raises(Exception):
+        validate_state(**locals())
+
+    processing['alice'].add('y')
+    validate_state(**locals())
+
+    processing['alice'].pop()
+    with pytest.raises(Exception):
+        validate_state(**locals())
+
+    in_memory.add('y')
+    with pytest.raises(Exception):
+        validate_state(**locals())
+
+    finished_results.add('y')
+    validate_state(**locals())
+
 
 def test_rewind():
     """
@@ -111,7 +162,7 @@ def test_rewind():
            'x': (add, 'a', 'b'), 'y': (add, 'b', 'c'),
            'alpha': (inc, 'x'), 'beta': (inc, 'y'), 'd': (inc, 'D')}
     dependencies, dependents = get_deps(dsk)
-    waiting = {'alpha': {'x'}, 'beta': 'y',
+    waiting = {'alpha': {'x'}, 'beta': {'y'},
                'y': {'c'}}
     waiting_data = {'x': {'alpha'}, 'y': {'beta'},
                     'b': {'y'}, 'C': {'c'}}  # why is C here and not above?
@@ -123,7 +174,7 @@ def test_rewind():
     result = rewind(dependencies, dependents, waiting, waiting_data,
                     finished_results, stacks, who_has, 'b')
 
-    e_waiting = {'alpha': {'x'}, 'beta': 'y',
+    e_waiting = {'alpha': {'x'}, 'beta': {'y'},
                 'y': {'b', 'c'},
                 'b': {'B'}}
     e_waiting_data = {'x': {'alpha'}, 'y': {'beta'},
