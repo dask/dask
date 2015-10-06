@@ -1815,6 +1815,89 @@ def test_concat5():
         assert eq(dd.concat(case, axis=1, join='inner'),
                   pd.concat(pdcase, axis=1, join='inner'))
 
+def test_append():
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                       'b': [1, 2, 3, 4, 5, 6]})
+    df2 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                        'b': [1, 2, 3, 4, 5, 6]},
+                       index=[6, 7, 8, 9, 10, 11])
+    df3 = pd.DataFrame({'b': [1, 2, 3, 4, 5, 6],
+                        'c': [1, 2, 3, 4, 5, 6]},
+                       index=[6, 7, 8, 9, 10, 11])
+
+    ddf = dd.from_pandas(df, 2)
+    ddf2 = dd.from_pandas(df2, 2)
+    ddf3 = dd.from_pandas(df3, 2)
+    assert eq(ddf.append(ddf2), df.append(df2))
+    assert eq(ddf.a.append(ddf2.a), df.a.append(df2.a))
+    # different columns
+    assert eq(ddf.append(ddf3), df.append(df3))
+    assert eq(ddf.a.append(ddf3.b), df.a.append(df3.b))
+
+    # dask + pandas
+    assert eq(ddf.append(df2), df.append(df2))
+    assert eq(ddf.a.append(df2.a), df.a.append(df2.a))
+
+    assert eq(ddf.append(df3), df.append(df3))
+    assert eq(ddf.a.append(df3.b), df.a.append(df3.b))
+
+    s = pd.Series([7, 8], name=6, index=['a', 'b'])
+    assert eq(ddf.append(s), df.append(s))
+
+
+
+    df4 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                        'b': [1, 2, 3, 4, 5, 6]},
+                       index=[4, 5, 6, 7, 8, 9])
+    ddf4 = dd.from_pandas(df4, 2)
+    msg = ("Unable to append two dataframes to each other with known "
+           "divisions if those divisions are not ordered. "
+           "The divisions/index of the second dataframe must be "
+           "greater than the divisions/index of the first dataframe.")
+    with tm.assertRaisesRegexp(ValueError, msg):
+        ddf.append(ddf4)
+
+def test_append2():
+    dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]}),
+           ('x', 1): pd.DataFrame({'a': [4, 5, 6], 'b': [3, 2, 1]}),
+           ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
+    ddf1 = dd.DataFrame(dsk, 'x', ['a', 'b'], [None, None])
+
+    dsk = {('y', 0): pd.DataFrame({'a': [10, 20, 30], 'b': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'a': [40, 50, 60], 'b': [30, 20, 10]}),
+           ('y', 2): pd.DataFrame({'a': [70, 80, 90], 'b': [0, 0, 0]})}
+    ddf2 = dd.DataFrame(dsk, 'y', ['a', 'b'], [None, None])
+
+    dsk = {('y', 0): pd.DataFrame({'b': [10, 20, 30], 'c': [40, 50, 60]}),
+           ('y', 1): pd.DataFrame({'b': [40, 50, 60], 'c': [30, 20, 10]})}
+    ddf3 = dd.DataFrame(dsk, 'y', ['b', 'c'], [None, None])
+
+    assert eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
+    assert eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
+    assert eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
+
+    # different columns
+    assert eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute()))
+    assert eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
+    assert eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
+
+    # Dask + pandas
+    assert eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute()))
+    assert eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
+    assert eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
+
+    # different columns
+    assert eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute()))
+    assert eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
+    # Series + DataFrame
+    assert eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
+    assert eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
 
 def test_dataframe_series_are_dillable():
     try:
