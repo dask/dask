@@ -30,6 +30,12 @@ def log(*args):
 @gen.coroutine
 def worker(master_queue, worker_queue, ident, dsk, dependencies, stack,
            processing, ncores):
+    """ Manage a single distributed worker node
+
+    This coroutine manages one remote worker.  It spins up several
+    ``worker_core`` coroutines, one for each core.  It reports a closed
+    connection to master if one occurs.
+    """
     try:
         yield [worker_core(master_queue, worker_queue, ident, i, dsk,
                            dependencies, stack, processing)
@@ -43,6 +49,34 @@ def worker(master_queue, worker_queue, ident, dsk, dependencies, stack,
 @gen.coroutine
 def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
                 processing):
+    """ Manage one core on one distributed worker node
+
+    This coroutine listens on worker_queue for the following operations
+
+    Incoming Messages
+    -----------------
+
+    - compute-task:  call worker.compute(...) on remote node, report when done
+    - close: close connection to worker node, report `worker-finished` to master
+
+    Outgoing Messages
+    -----------------
+
+    - task-finished:  sent to master once a task completes
+    - task-erred: sent to master when a task errs
+    - worker-finished: sent to master in response to a close command
+
+    Shared State
+    ------------
+
+    - stack::list should be populated by the master coroutine with tasks to
+      run.  Every task added to task should be accompanied with one
+      'compute-task' operation added to the worker_queue.  Stack is shared with
+      other workers.
+    - processing::set keeps track of what tasks are currently being run on the
+      worker.  One processing set is shared by all worker-cores on the same
+      worker.
+    """
     worker = rpc(ip=ident[0], port=ident[1])
     log("Start worker core", ident, i)
 
@@ -88,7 +122,24 @@ def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
 
 @gen.coroutine
 def delete(master_queue, delete_queue, ip, port):
-    """ Delete extraneous intermediates from distributed memory """
+    """ Delete extraneous intermediates from distributed memory
+
+    This coroutine manages a connection to the center in order to send keys
+    that should be removed from distributed memory.  We batch several keys that
+    come in over the ``delete_queue`` into a list.  Roughly once a second it
+    sends this list of keys over to the center which then handles deleting
+    these keys from workers' memory.
+
+    worker \                             /-> worker node
+    worker -> master -> delete -> center --> worker node
+    worker /                             \-> worker node
+
+    Incoming Messages
+    -----------------
+
+    - delete-task: holds a key to be deleted
+    - close: close this coroutine
+    """
     batch = list()
     last = time()
     center = rpc(ip=ip, port=port)
@@ -144,6 +195,48 @@ def decide_worker(dependencies, stacks, who_has, key):
 @gen.coroutine
 def master(master_queue, worker_queues, delete_queue, who_has, has_what,
            workers, stacks, processing, released, dsk, results):
+    """ The master coroutine for dask scheduling
+
+    This coroutine manages interactions with all worker cores and with the
+    delete coroutine through shared state and queues.
+
+    Parameters
+    ----------
+    master_queue: tornado.queues.Queue
+    worker_queues: dict {worker: tornado.queues.Queue}
+    delete_queue: tornado.queues.Queue
+    who_has: dict {key: set}
+        Mapping key to {set of worker-identities}
+    has_what: dict {worker: set}
+        Mapping worker-identity to {set of keys}
+    workers: dict {worker: int}
+        Mapping worker-identity to number-of-cores
+    stacks: dict {worker: list}
+        One dask.async style stack per worker node
+    processing: dict {worker: set}
+        One set of tasks currently in process on each worker
+    released: set
+        A set of all keys that have been computed, used, and released
+    dsk, results: normal inputs to get
+
+    Queues
+    ------
+
+    -   worker_queues: One queue per worker node.
+        Each queue is listened to by several worker_core coroutiens.
+    -   delete_queue: One queue listened to by ``delete`` which connects to the
+        center to delete unnecessary intermediate data
+
+    Shared State with Workers
+    -------------------------
+
+    -   stacks: a dictionary of lists of ready-to-run tasks, one for each worker
+        e.g. {('192.168.0.1', 8788): ['key1', 'key2'],
+              ('192.168.0.2', 8788): ['key3', 'key4']}
+        Master populates stacks, worker_core depletes them
+    -   processing: a dictionary of sets of running tasks, one for each worker.
+        Worker_core coroutines manage processing mostly on their own.
+    """
     dependencies, dependents = get_deps(dsk)
     waiting = {k: v.copy() for k, v in dependencies.items()}
     waiting_data = {k: v.copy() for k, v in dependents.items()}
@@ -155,6 +248,7 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
 
     @gen.coroutine
     def cleanup():
+        """ Clean up queues and coroutines, prepare to stop """
         n = 0
         delete_queue.put_nowait({'op': 'close'}); n += 1
         for w, ncores in workers.items():
@@ -165,6 +259,7 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
             yield master_queue.get()
 
     def trigger_task(key):
+        """ Send task to an appropriate worker """
         if key in waiting:
             del waiting[key]
         new_worker = decide_worker(dependencies, stacks, who_has, key)
@@ -257,6 +352,11 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
         in_memory, stacks, processing, finished_results, released, **kwargs):
+    """ Validate a current runtime state
+
+    See also:
+        heal - fix a current runtime state
+    """
     in_stacks = {k for v in stacks.values() for k in v}
     in_processing = {k for v in processing.values() for k in v}
     keys = {key for key in dependents if not dependents[key]}
@@ -302,6 +402,9 @@ def heal(dependencies, dependents, in_memory, stacks, processing,
     rewind our runtime state to a point where it can again proceed to
     completion.  This function edits runtime state in place to make it
     consistent.  It outputs a full state dict.
+
+    This function gets run whenever something bad happens, like a worker
+    failure.  It should be idempotent.
     """
     keys = {key for key in dependents if not dependents[key]}
 
@@ -366,6 +469,20 @@ def heal(dependencies, dependents, in_memory, stacks, processing,
 
 @gen.coroutine
 def _get2(ip, port, dsk, result, gather=False):
+    """ Distributed dask scheduler
+
+    This uses a distributed network of Center and Worker nodes.
+
+    Parameters
+    ----------
+    ip/port:
+        address of center
+    dsk/result:
+        normal graph/keys inputs to dask.get
+    gather: bool
+        Collect distributed results from cluster.  If False then return
+        RemoteData objects.
+    """
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
@@ -606,7 +723,7 @@ def _get(ip, port, dsk, result, gather=False):
     raise Return(nested_get(result, remote))
 
 
-def get(ip, port, dsk, keys, gather=False, _get=_get2):
+def get(ip, port, dsk, keys, gather=True, _get=_get2):
     return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys, gather))
 
 
