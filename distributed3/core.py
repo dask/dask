@@ -47,6 +47,9 @@ class Server(TCPServer):
                 except StreamClosedError:
                     log("Lost connection: %s" % str(address))
                     break
+                if not isinstance(msg, dict):
+                    raise TypeError("Bad message type.  Expected dict, got\n  "
+                                    + str(msg))
                 op = msg.pop('op')
                 close = msg.pop('close', False)
                 reply = msg.pop('reply', True)
@@ -94,8 +97,7 @@ def connect_sync(host, port, timeout=1):
 
 
 def write_sync(sock, msg):
-    if not isinstance(msg, bytes):
-        msg = dumps(msg)
+    msg = dumps(msg)
     sock.send(msg + sentinel)
 
 
@@ -104,10 +106,7 @@ def read_sync(s):
     while b''.join(bytes[-len(sentinel):]) != sentinel:
         bytes.append(s.recv(1))
     msg = b''.join(bytes[:-len(sentinel)])
-    try:
-        return loads(msg)
-    except:
-        return msg
+    return loads(msg)
 
 
 sentinel = b'7f57da0f9202f6b4df78e251058be6f0'
@@ -116,17 +115,13 @@ sentinel = b'7f57da0f9202f6b4df78e251058be6f0'
 def read(stream):
     msg = yield stream.read_until(sentinel)
     msg = msg[:-len(sentinel)]
-    try:
-        msg = loads(msg)
-    except:
-        pass
+    msg = loads(msg)
     raise Return(msg)
 
 
 @gen.coroutine
 def write(stream, msg):
-    if not isinstance(msg, bytes):
-        msg = dumps(msg)
+    msg = dumps(msg)
     yield stream.write(msg + sentinel)
 
 

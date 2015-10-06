@@ -113,7 +113,11 @@ class Worker(Server):
         # gather data from peers
         if needed:
             log("gather data from peers: %s" % str(needed))
-            other = yield gather_strict_from_center(self.center, needed=needed)
+            try:
+                other = yield gather_strict_from_center(self.center, needed=needed)
+            except KeyError as e:
+                log("Could not find data during gather in compute", e)
+                raise Return(e)
             data2 = merge(self.data, dict(zip(needed, other)))
         else:
             data2 = self.data
@@ -129,7 +133,7 @@ class Worker(Server):
             log("Start job %d: %s" % (i, funcname(function)))
             result = yield self.executor.submit(function, *args2, **kwargs2)
             log("Finish job %d: %s" % (i, funcname(function)))
-            out_response = b'success'
+            out_response = b'OK'
         except Exception as e:
             result = e
             exc_type, exc_value, exc_traceback = sys.exc_info()

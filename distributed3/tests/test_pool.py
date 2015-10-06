@@ -57,7 +57,7 @@ def test_pool():
         assert computation.status == b'running'
         assert set(p.available_cores.values()) == set([0, 1])
         x = yield computation._get()
-        assert computation.status == x.status == b'success'
+        assert computation.status == x.status == b'OK'
         assert list(p.available_cores.values()) == [1, 1]
         result = yield x._get()
         assert result == 3

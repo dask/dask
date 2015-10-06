@@ -88,7 +88,7 @@ def gather_from_workers(who_has):
             try:
                 addr = random.choice(list(addresses - bad_addresses))
             except IndexError:
-                raise KeyError('No workers found that have key: %s' % key)
+                raise KeyError('No workers found that have key: %s' % str(key))
             d[addr].append(key)
             rev[key] = addr
 
@@ -278,9 +278,9 @@ def keys_to_data(o, data):
     >>> data = {'x': 1}
     >>> keys_to_data(('x', 'y'), data)
     (1, 'y')
-    >>> keys_to_data({'a': 'x', 'b': 'y'}, data)
+    >>> keys_to_data({'a': 'x', 'b': 'y'}, data)  # doctest: +SKIP
     {'a': 1, 'b': 'y'}
-    >>> keys_to_data({'a': ['x'], 'b': 'y'}, data)
+    >>> keys_to_data({'a': ['x'], 'b': 'y'}, data)  # doctest: +SKIP
     {'a': [1], 'b': 'y'}
     """
     try:

@@ -8,7 +8,7 @@ from tornado.ioloop import IOLoop
 from distributed3 import Center, Worker
 from distributed3.utils import ignoring
 from distributed3.client import (scatter_to_center, scatter_to_workers,
-        gather_from_center, gather_strict_from_center, RemoteData)
+        gather_from_center, gather_strict_from_center, RemoteData, keys_to_data)
 
 
 def _test_cluster(f):
@@ -125,3 +125,9 @@ def test_gather_with_missing_worker():
             pass
 
     _test_cluster(f)
+
+def test_keys_to_data():
+    data = {'x': 1}
+    assert keys_to_data(('x', 'y'), data) == (1, 'y')
+    assert keys_to_data({'a': 'x', 'b': 'y'}, data) == {'a': 1, 'b': 'y'}
+    assert keys_to_data({'a': ['x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
