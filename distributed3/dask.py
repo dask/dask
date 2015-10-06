@@ -28,7 +28,7 @@ log = print
 def worker(master_queue, worker_queue, ident, dsk, dependencies, stack,
            processing, ncores):
     try:
-        yield [worker_core(master_queue, worker_queue, ident, dsk,
+        yield [worker_core(master_queue, worker_queue, ident, i, dsk,
                            dependencies, stack, processing)
                 for i in range(ncores)]
     except StreamClosedError:
@@ -40,9 +40,10 @@ def worker(master_queue, worker_queue, ident, dsk, dependencies, stack,
 
 
 @gen.coroutine
-def worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack,
+def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
                 processing):
     worker = rpc(ip=ident[0], port=ident[1])
+    log("Start worker core", ident, i)
 
     while True:
         msg = yield worker_queue.get()
@@ -75,6 +76,7 @@ def worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack,
                                      'key': key})
         processing.remove(key)
 
+    log("Close worker core", ident, i)
     yield worker.close(close=True)
     worker.close_streams()
 
@@ -156,6 +158,13 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
         for i in range(n):
             yield master_queue.get()
 
+    def trigger_task(key):
+        if key in waiting:
+            del waiting[key]
+        new_worker = decide_worker(dependencies, stacks, who_has, key)
+        stacks[new_worker].append(key)
+        worker_queues[new_worker].put_nowait({'op': 'compute-task'})
+
     """
     Distribute leaves among workers
 
@@ -172,6 +181,7 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
     while True:
         msg = yield master_queue.get()
         if msg['op'] == 'task-finished':
+            log("task finished", key, worker)
             key = msg['key']
             worker = msg['worker']
             who_has[key].add(worker)
@@ -181,10 +191,7 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
                 s = waiting[dep]
                 s.remove(key)
                 if not s:  # new task ready to run
-                    del waiting[dep]
-                    new_worker = decide_worker(dependencies, stacks, who_has, dep)
-                    stacks[new_worker].append(dep)
-                    worker_queues[new_worker].put_nowait({'op': 'compute-task'})
+                    trigger_task(dep)
 
             for dep in dependencies[key]:
                 assert dep in waiting_data
@@ -207,7 +214,33 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
             yield cleanup()
             raise msg['exception']
         elif msg['op'] == 'worker-failed':
-            raise NotImplementedError()
+            worker = msg['worker']
+            keys = has_what.pop(worker)
+            del worker_queues[worker]
+            del workers[worker]
+            del stacks[worker]
+            del processing[worker]
+            missing_keys = set()
+            for key in keys:
+                who_has[key].remove(worker)
+                if not who_has[key]:
+                    missing_keys.add(key)
+            gone_data = {k for k, v in who_has.items() if not v}
+            for k in gone_data:
+                del who_has[k]
+
+            state = heal(dsk, dependencies, dependents, set(who_has), stacks,
+                         processing, released)
+            waiting_data = state['waiting_data']
+            waiting = state['waiting']
+            released = state['released']
+            finished_results = state['finished_results']
+            trigger_keys = {k for k, v in waiting.items() if not w}
+            for key in trigger_keys:
+                trigger_task(key)
+
+        if all(q.empty() for q in worker_queues.values()):
+            import pdb; pdb.set_trace()
 
     yield cleanup()
 
@@ -314,10 +347,10 @@ def heal(dsk, dependencies, dependents, in_memory, stacks, processing,
             del waiting[key]
 
     output = {'dsk': dsk, 'keys': keys,
-            'dependencies': dependencies, 'dependents': dependents,
-            'waiting': waiting, 'waiting_data': waiting_data,
-            'in_memory': in_memory, 'processing': processing, 'stacks': stacks,
-            'finished_results': finished_results, 'released': released}
+             'dependencies': dependencies, 'dependents': dependents,
+             'waiting': waiting, 'waiting_data': waiting_data,
+             'in_memory': in_memory, 'processing': processing, 'stacks': stacks,
+             'finished_results': finished_results, 'released': released}
     validate_state(**output)
     return output
 
