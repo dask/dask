@@ -23,6 +23,9 @@ from .client import RemoteData, keys_to_data, gather_from_center
 
 log = print
 
+def log(*args):
+    return
+
 
 @gen.coroutine
 def worker(master_queue, worker_queue, ident, dsk, dependencies, stack,
@@ -233,7 +236,7 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
             for k in gone_data:
                 del who_has[k]
 
-            state = heal(dsk, dependencies, dependents, set(who_has), stacks,
+            state = heal(dependencies, dependents, set(who_has), stacks,
                          processing, released)
             waiting_data = state['waiting_data']
             waiting = state['waiting']
@@ -252,11 +255,11 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
     raise Return(results)
 
 
-def validate_state(dsk, dependencies, dependents, waiting, waiting_data,
+def validate_state(dependencies, dependents, waiting, waiting_data,
         in_memory, stacks, processing, finished_results, released, **kwargs):
     in_stacks = {k for v in stacks.values() for k in v}
     in_processing = {k for v in processing.values() for k in v}
-    keys = {key for key in dsk if not dependents[key]}
+    keys = {key for key in dependents if not dependents[key]}
 
     @memoize
     def check_key(key):
@@ -291,7 +294,7 @@ def validate_state(dsk, dependencies, dependents, waiting, waiting_data,
     assert all(map(check_key, keys))
 
 
-def heal(dsk, dependencies, dependents, in_memory, stacks, processing,
+def heal(dependencies, dependents, in_memory, stacks, processing,
         released, **kwargs):
     """ Make a runtime state consistent
 
@@ -300,7 +303,7 @@ def heal(dsk, dependencies, dependents, in_memory, stacks, processing,
     completion.  This function edits runtime state in place to make it
     consistent.  It outputs a full state dict.
     """
-    keys = {key for key in dsk if not dependents[key]}
+    keys = {key for key in dependents if not dependents[key]}
 
     rev_stacks = reverse_dict(stacks)
     rev_processing = reverse_dict(processing)
@@ -309,7 +312,7 @@ def heal(dsk, dependencies, dependents, in_memory, stacks, processing,
     waiting = defaultdict(set) # deepcopy(dependencies)
     finished_results = set()
 
-    released = set(dsk)
+    released = set(dependents)
 
     @memoize
     def make_accessible(key):
@@ -351,7 +354,7 @@ def heal(dsk, dependencies, dependents, in_memory, stacks, processing,
             assert not waiting[key]
             del waiting[key]
 
-    output = {'dsk': dsk, 'keys': keys,
+    output = {'keys': keys,
              'dependencies': dependencies, 'dependents': dependents,
              'waiting': waiting, 'waiting_data': waiting_data,
              'in_memory': in_memory, 'processing': processing, 'stacks': stacks,
@@ -372,11 +375,9 @@ def _get2(ip, port, dsk, result, gather=False):
     loop = IOLoop.current()
 
     center = rpc(ip=ip, port=port)
-    who_has = yield center.who_has()
-    has_what = yield center.has_what()
-    ncores = yield center.ncores()
-    available_cores = ncores
-
+    who_has, has_what, ncores = yield [center.who_has(),
+                                       center.has_what(),
+                                       center.ncores()]
     workers = sorted(ncores)
 
     dependencies, dependents = get_deps(dsk)
@@ -385,7 +386,7 @@ def _get2(ip, port, dsk, result, gather=False):
     master_queue = Queue()
     delete_queue = Queue()
 
-    stacks = {w: [] for w in workers}
+    stacks = {w: list() for w in workers}
     processing = {w: set() for w in workers}
     released = set()
 
@@ -422,7 +423,6 @@ def _get(ip, port, dsk, result, gather=False):
     who_has = yield center.who_has()
     has_what = yield center.has_what()
     ncores = yield center.ncores()
-    available_cores = ncores
 
     workers = sorted(ncores)
 

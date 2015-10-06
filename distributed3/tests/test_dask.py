@@ -115,10 +115,9 @@ def test_heal():
 
     local = {k: v for k, v in locals().items() if '@' not in k}
 
-    output = heal(dsk, dependencies, dependents,
+    output = heal(dependencies, dependents,
                   in_memory, stacks, processing, released)
 
-    assert output['dsk'] == dsk
     assert output['dependencies'] == dependencies
     assert output['dependents'] == dependents
     assert output['in_memory'] == in_memory
@@ -133,7 +132,7 @@ def test_heal():
              'processing': {'alice': set(), 'bob': set()},
              'released': set()}
 
-    heal(dsk, dependencies, dependents, **state)
+    heal(dependencies, dependents, **state)
 
 
 def test_heal_2():
@@ -152,7 +151,7 @@ def test_heal_2():
              'processing': {'alice': set(), 'bob': set(['c'])},
              'released': set()}
 
-    output = heal(dsk, dependencies, dependents, **state)
+    output = heal(dependencies, dependents, **state)
     assert output['waiting'] == {'b': set(), 'c': {'b'}, 'result': {'c', 'z'}}
     assert output['waiting_data'] == {'a': {'b'}, 'b': {'c'}, 'c': {'result'},
                                       'y': {'z'}, 'z': {'result'}}
@@ -175,7 +174,7 @@ def test_heal_restarts_leaf_tasks():
     del state['stacks']['bob']
     del state['processing']['bob']
 
-    output = heal(dsk, dependencies, dependents, **state)
+    output = heal(dependencies, dependents, **state)
     assert 'x' in output['waiting']
 
 
