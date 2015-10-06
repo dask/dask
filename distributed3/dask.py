@@ -238,13 +238,16 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
         Worker_core coroutines manage processing mostly on their own.
     """
     dependencies, dependents = get_deps(dsk)
-    waiting = {k: v.copy() for k, v in dependencies.items()}
-    waiting_data = {k: v.copy() for k, v in dependents.items()}
-    leaves = [k for k in dsk if not dependencies[k]]
+    state = heal(dependencies, dependents, set(who_has), stacks, processing)
+    waiting = state['waiting']
+    waiting_data = state['waiting_data']
+    finished_results = state['finished_results']
+    released.update(state['released'])
+
+    leaves = [k for k, deps in waiting.items() if not deps]
     keyorder = order(dsk)
     leaves = sorted(leaves, key=keyorder.get)
 
-    finished_results = set()
 
     @gen.coroutine
     def cleanup():

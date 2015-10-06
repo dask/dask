@@ -87,6 +87,24 @@ def test_scheduler_errors():
     _test_cluster(f)
 
 
+def test_avoid_computations_for_data_in_memory():
+    def bad():
+        raise Exception()
+    dsk = {'x': (bad,), 'y': (inc, 'x'), 'z': (inc, 'y')}
+    keys = 'z'
+
+    @gen.coroutine
+    def f(c, a, b, get):
+        a.data['y'] = 10                # manually add 'y' to a
+        c.who_has['y'].add(a.address)
+        c.has_what[a.address].add('y')
+
+        result = yield get(c.ip, c.port, dsk, keys)
+        assert result.key in a.data or result.key in b.data
+
+    _test_cluster(f, gets=[_get2])
+
+
 def test_gather():
     dsk = {'x': 1, 'y': (inc, 'x')}
     keys = 'y'
