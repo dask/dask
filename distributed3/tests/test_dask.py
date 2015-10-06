@@ -109,7 +109,7 @@ def test_heal():
     processing = {'alice': set(), 'bob': set()}
 
     waiting = {'x': set(), 'y': {'x'}}
-    waiting_data = {'x': {'y'}}
+    waiting_data = {'x': {'y'}, 'y': set()}
     finished_results = set()
     released = set()
 
@@ -142,8 +142,8 @@ def test_heal_2():
     dependencies = {'x': set(), 'y': {'x'}, 'z': {'y'},
                     'a': set(), 'b': {'a'}, 'c': {'b'},
                     'result': {'z', 'c'}}
-    dependents = {'x': {'y'}, 'y': {'z'}, 'z': {'total'},
-                  'a': {'b'}, 'b': {'z'}, 'c': {'total'},
+    dependents = {'x': {'y'}, 'y': {'z'}, 'z': {'result'},
+                  'a': {'b'}, 'b': {'c'}, 'c': {'result'},
                   'result': set()}
 
     state = {'in_memory': {'y', 'a'},  # missing 'b'
@@ -154,7 +154,8 @@ def test_heal_2():
     output = heal(dependencies, dependents, **state)
     assert output['waiting'] == {'b': set(), 'c': {'b'}, 'result': {'c', 'z'}}
     assert output['waiting_data'] == {'a': {'b'}, 'b': {'c'}, 'c': {'result'},
-                                      'y': {'z'}, 'z': {'result'}}
+                                      'y': {'z'}, 'z': {'result'},
+                                      'result': set()}
     assert output['in_memory'] == set(['y', 'a'])
     assert output['stacks'] == {'alice': ['z'], 'bob': []}
     assert output['processing'] == {'alice': set(), 'bob': set()}
@@ -177,6 +178,24 @@ def test_heal_restarts_leaf_tasks():
     output = heal(dependencies, dependents, **state)
     assert 'x' in output['waiting']
 
+
+def test_heal_culls():
+    dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
+           'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
+    dependencies, dependents = get_deps(dsk)
+
+    state = {'in_memory': {'c', 'y'},
+             'stacks': {'alice': ['a'], 'bob': []},
+             'processing': {'alice': set(), 'bob': set('y')},
+             'released': set()}
+
+    output = heal(dependencies, dependents, **state)
+    assert 'a' not in output['stacks']['alice']
+    assert output['released'] == {'a', 'b', 'x'}
+    assert output['finished_results'] == {'c'}
+    assert 'y' not in output['processing']['bob']
+
+    assert output['waiting']['z'] == set()
 
 
 def test_validate_state():

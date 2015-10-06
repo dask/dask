@@ -406,62 +406,74 @@ def heal(dependencies, dependents, in_memory, stacks, processing,
     This function gets run whenever something bad happens, like a worker
     failure.  It should be idempotent.
     """
-    keys = {key for key in dependents if not dependents[key]}
+    outputs = {key for key in dependents if not dependents[key]}
 
-    rev_stacks = reverse_dict(stacks)
-    rev_processing = reverse_dict(processing)
+    rev_stacks = {k: v for k, v in reverse_dict(stacks).items() if v}
+    rev_processing = {k: v for k, v in reverse_dict(processing).items() if v}
 
     waiting_data = defaultdict(set) # deepcopy(dependents)
     waiting = defaultdict(set) # deepcopy(dependencies)
     finished_results = set()
 
-    released = set(dependents)
+    def remove_from_stacks(key):
+        if key in rev_stacks:
+            for worker in rev_stacks.pop(key):
+                stacks[worker].remove(key)
+
+    def remove_from_processing(key):
+        if key in rev_processing:
+            for worker in rev_processing.pop(key):
+                processing[worker].remove(key)
+
+    new_released = set(dependents)
+
+    accessible = set()
 
     @memoize
     def make_accessible(key):
-        released.remove(key)
-
+        new_released.remove(key)
         if key in in_memory:
-            if key in keys:
-                finished_results.add(key)
             return
 
-        # Remove in-flight tasks
-        if (key in rev_stacks and
-            any(dep not in in_memory for dep in dependencies[key])):
-            for worker in rev_stacks[key]:
-                stacks[worker].remove(key)
-        if (key in rev_processing and
-            any(dep not in in_memory for dep in dependencies[key])):
-            for worker in rev_processing[key]:
-                processing[worker].remove(key)
-
-        # Recurse
         for dep in dependencies[key]:
-            make_accessible(dep)
+            make_accessible(dep)  # recurse
 
         waiting[key] = {dep for dep in dependencies[key]
                             if dep not in in_memory}
 
-        for dep in dependencies[key]:
-            waiting_data[dep].add(key)
-
-        if key in finished_results:
-            finished_results.remove(key)
-
-    for key in keys:
+    for key in outputs:
         make_accessible(key)
 
-    for seq in list(stacks.values()) + list(processing.values()):
-        for key in seq:
+    waiting_data = {key: {dep for dep in dependents[key]
+                              if dep not in new_released
+                              and dep not in in_memory}
+                    for key in dependents
+                    if key not in new_released}
+
+    def unrunnable(key):
+        return (key in new_released
+             or key in in_memory
+             or waiting.get(key)
+             or not all(dep in in_memory for dep in dependencies[key]))
+
+    for key in list(filter(unrunnable, rev_stacks)):
+        remove_from_stacks(key)
+
+    for key in list(filter(unrunnable, rev_processing)):
+        remove_from_processing(key)
+
+    for key in list(rev_stacks) + list(rev_processing):
+        if key in waiting:
             assert not waiting[key]
             del waiting[key]
 
-    output = {'keys': keys,
+    finished_results = {key for key in outputs if key in in_memory}
+
+    output = {'keys': outputs,
              'dependencies': dependencies, 'dependents': dependents,
              'waiting': waiting, 'waiting_data': waiting_data,
              'in_memory': in_memory, 'processing': processing, 'stacks': stacks,
-             'finished_results': finished_results, 'released': released}
+             'finished_results': finished_results, 'released': new_released}
     validate_state(**output)
     return output
 
