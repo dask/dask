@@ -14,7 +14,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
 from dask.async import nested_get, _execute_task
-from dask.core import istask, flatten, get_deps
+from dask.core import istask, flatten, get_deps, reverse_dict
 from dask.order import order
 
 from .core import connect, rpc
@@ -270,8 +270,6 @@ def validate_state(dsk, keys, dependencies, dependents, waiting, waiting_data,
         if key in in_memory or key in in_stacks:
             assert all(dep in in_memory for dep in dependencies[key])
             assert not waiting.get(key)
-            assert not any(key in waiting.get(dep, ())
-                           for dep in dependents[key])
 
         if key in finished_results:
             assert key in in_memory
@@ -284,6 +282,73 @@ def validate_state(dsk, keys, dependencies, dependents, waiting, waiting_data,
         return True
 
     assert all(map(check_key, keys))
+
+
+def heal(dsk, keys, dependencies, dependents, in_memory, stacks, processing,
+        released, **kwargs):
+    """ Make a runtime state consistent
+
+    Sometimes we lose intermediate values.  In these cases it can be tricky to
+    rewind our runtime state to a point where it can again proceed to
+    completion.  This function edits runtime state in place to make it
+    consistent.  It outputs a full state dict.
+    """
+
+    rev_stacks = reverse_dict(stacks)
+    rev_processing = reverse_dict(processing)
+
+    waiting_data = defaultdict(set) # deepcopy(dependents)
+    waiting = defaultdict(set) # deepcopy(dependencies)
+    finished_results = set()
+
+    @memoize
+    def make_accessible(key):
+        if key in released:
+            released.remove(key)
+
+        if key in in_memory:
+            if key in keys:
+                finished_results.add(key)
+            return
+
+        # Remove in-flight tasks
+        if (key in rev_stacks and
+            any(dep not in in_memory for dep in dependencies[key])):
+            for worker in rev_stacks[key]:
+                stacks[worker].remove(key)
+        if (key in rev_processing and
+            any(dep not in in_memory for dep in dependencies[key])):
+            for worker in rev_processing[key]:
+                processing[worker].remove(key)
+
+        # Recurse
+        for dep in dependencies[key]:
+            make_accessible(dep)
+
+        waiting[key] = {dep for dep in dependencies[key]
+                            if dep not in in_memory}
+
+        for dep in dependencies[key]:
+            waiting_data[dep].add(key)
+
+        if key in finished_results:
+            finished_results.remove(key)
+
+    for key in keys:
+        make_accessible(key)
+
+    for seq in list(stacks.values()) + list(processing.values()):
+        for key in seq:
+            assert not waiting[key]
+            del waiting[key]
+
+    output = {'dsk': dsk, 'keys': keys,
+            'dependencies': dependencies, 'dependents': dependents,
+            'waiting': waiting, 'waiting_data': waiting_data,
+            'in_memory': in_memory, 'processing': processing, 'stacks': stacks,
+            'finished_results': finished_results, 'released': released}
+    validate_state(**output)
+    return output
 
 
 

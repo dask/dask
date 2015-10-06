@@ -1,15 +1,21 @@
+from copy import deepcopy
 from contextlib import contextmanager
 from multiprocessing import Process
 from operator import add, mul
-from time import time
-from toolz import merge
+import socket
+from time import time, sleep
+from threading import Thread
 
 import dask
 from dask.core import get_deps
+from toolz import merge
+import pytest
+
 from distributed3 import Center, Worker
 from distributed3.utils import ignoring
 from distributed3.client import gather_from_center
-from distributed3.dask import _get, _get2, rewind
+from distributed3.core import connect_sync, read_sync, write_sync
+from distributed3.dask import _get, _get2, rewind, validate_state, heal
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -91,6 +97,68 @@ def test_gather():
         assert result == 2
 
     _test_cluster(f)
+
+
+def test_heal():
+    dsk = {'x': 1, 'y': (inc, 'x')}
+    keys = ['y']
+    dependencies = {'x': set(), 'y': {'x'}}
+    dependents = {'x': {'y'}, 'y': set()}
+
+    in_memory = set()
+    stacks = {'alice': [], 'bob': []}
+    processing = {'alice': set(), 'bob': set()}
+
+    waiting = {'x': set(), 'y': {'x'}}
+    waiting_data = {'x': {'y'}}
+    finished_results = set()
+    released = set()
+
+    local = {k: v for k, v in locals().items() if '@' not in k}
+
+    output = heal(dsk, keys, dependencies, dependents,
+                  in_memory, stacks, processing, released)
+
+    assert output['dsk'] == dsk
+    assert output['dependencies'] == dependencies
+    assert output['dependents'] == dependents
+    assert output['in_memory'] == in_memory
+    assert output['processing'] == processing
+    assert output['stacks'] == stacks
+    assert output['waiting'] == waiting
+    assert output['waiting_data'] == waiting_data
+    assert output['released'] == released
+
+    state = {'in_memory': set(),
+             'stacks': {'alice': ['x'], 'bob': []},
+             'processing': {'alice': set(), 'bob': set()},
+             'released': set()}
+
+    heal(dsk, keys, dependencies, dependents, **state)
+
+    dsk = {'x': 1, 'y': (inc, 'x'),
+           'a': 1, 'b': (inc, 'a'),
+           'z': (add, 'y', 'b')}
+    keys = ['z']
+    dependencies = {'x': set(), 'y': {'x'},
+                    'a': set(), 'b': {'a'},
+                    'z': {'y', 'b'}}
+    dependents = {'x': {'y'}, 'y': {'z'},
+                  'a': {'b'}, 'b': {'z'},
+                  'z': set()}
+
+    state = {'in_memory': set(['x']),  # missing 'a'
+             'stacks': {'alice': ['y'], 'bob': []},
+             'processing': {'alice': set(), 'bob': set(['b'])},
+             'released': set()}
+
+    output = heal(dsk, keys, dependencies, dependents, **state)
+    assert output['waiting'] == {'a': set(), 'b': {'a'}, 'z': {'y', 'b'}}
+    assert output['waiting_data'] == {'a': {'b'}, 'x': {'y'},
+                                      'b': {'z'}, 'y': {'z'}}
+    assert output['in_memory'] == set(['x'])
+    assert output['stacks'] == {'alice': ['y'], 'bob': []}
+    assert output['processing'] == {'alice': set(), 'bob': set()}
 
 
 def test_validate_state():
