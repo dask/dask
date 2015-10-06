@@ -51,6 +51,8 @@ def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
             break
         assert msg['op'] == 'compute-task'
 
+        if not stack:
+            continue
         key = stack.pop()
         processing.add(key)
         task = dsk[key]
@@ -76,9 +78,9 @@ def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
                                      'key': key})
         processing.remove(key)
 
-    log("Close worker core", ident, i)
     yield worker.close(close=True)
     worker.close_streams()
+    log("Close worker core", ident, i)
 
 
 @gen.coroutine
@@ -105,6 +107,7 @@ def delete(master_queue, delete_queue, ip, port):
     yield center.close(close=True)
     center.close_streams()          # All done
     master_queue.put_nowait({'op': 'delete-finished'})
+    log('Delete finished')
 
 
 def decide_worker(dependencies, stacks, who_has, key):
@@ -213,6 +216,7 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
         elif msg['op'] == 'task-erred':
             yield cleanup()
             raise msg['exception']
+
         elif msg['op'] == 'worker-failed':
             worker = msg['worker']
             keys = has_what.pop(worker)
@@ -235,12 +239,13 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
             waiting = state['waiting']
             released = state['released']
             finished_results = state['finished_results']
-            trigger_keys = {k for k, v in waiting.items() if not w}
+            trigger_keys = {k for k, v in waiting.items() if not v}
             for key in trigger_keys:
                 trigger_task(key)
 
-        if all(q.empty() for q in worker_queues.values()):
-            import pdb; pdb.set_trace()
+        for w in workers:  # This is a kludge and should be removed
+            while worker_queues[w].qsize() < len(stacks[w]):
+                worker_queues[w].put_nowait({'op': 'compute-task'})
 
     yield cleanup()
 

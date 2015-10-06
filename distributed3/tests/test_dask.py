@@ -162,6 +162,24 @@ def test_heal_2():
     assert output['released'] == {'x'}
 
 
+def test_heal_restarts_leaf_tasks():
+    dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
+           'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
+    dependents, dependencies = get_deps(dsk)
+
+    state = {'in_memory': {},  # missing 'b'
+             'stacks': {'alice': ['a'], 'bob': ['x']},
+             'processing': {'alice': set(), 'bob': set()},
+             'released': set()}
+
+    del state['stacks']['bob']
+    del state['processing']['bob']
+
+    output = heal(dsk, dependencies, dependents, **state)
+    assert 'x' in output['waiting']
+
+
+
 def test_validate_state():
     dsk = {'x': 1, 'y': (inc, 'x')}
     dependencies = {'x': set(), 'y': {'x'}}
@@ -215,8 +233,7 @@ def test_validate_state():
 
 def slowinc(x):
     from time import sleep
-    sleep(0.1)
-    print('slowinc', x)
+    sleep(0.02)
     return x + 1
 
 
@@ -275,8 +292,8 @@ def test_cluster():
         pass
 
 
-def dont_test_failing_worker():
-    n = 20
+def test_failing_worker():
+    n = 10
     dsk = {('x', i, j): (slowinc, ('x', i, j - 1)) for i in range(4)
                                                    for j in range(1, n)}
     dsk.update({('x', i, 0): i * 10 for i in range(4)})
@@ -285,13 +302,13 @@ def dont_test_failing_worker():
 
     with cluster() as (c, [a, b]):
         def kill_a():
-            sleep(0.5)
+            sleep(0.1)
             a['proc'].terminate()
 
         @gen.coroutine
         def f():
-            result = yield _get2('127.0.0.1', c['port'], dsk, keys)
-            assert result == dask.get(dsk, keys)
+            result = yield _get2('127.0.0.1', c['port'], dsk, keys, gather=True)
+            assert result == 96
 
         thread = Thread(target=kill_a)
         thread.start()
