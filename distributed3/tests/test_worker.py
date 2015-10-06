@@ -45,13 +45,13 @@ def test_worker():
         response = yield aa.compute(key='x', function=add,
                                     args=[1, 2], needed=[],
                                     close=True)
-        assert response == b'success'
+        assert response == b'OK'
         assert a.data['x'] == 3
         assert c.who_has['x'] == set([(a.ip, a.port)])
 
         response = yield bb.compute(key='y', function=add,
                                     args=['x', 10], needed=['x'])
-        assert response == b'success'
+        assert response == b'OK'
         assert b.data['y'] == 13
         assert c.who_has['y'] == set([(b.ip, b.port)])
 
