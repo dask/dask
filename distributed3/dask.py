@@ -30,6 +30,7 @@ def worker(master_queue, worker_queue, ident, dsk, dependencies, stack, ncores):
         yield [worker_core(master_queue, worker_queue, ident, dsk, dependencies, stack)
                 for i in range(ncores)]
     except StreamClosedError:
+        log("Worker failed from closed stream", ident)
         master_queue.put_nowait({'op': 'worker-failed',
                                  'worker': ident})
     master_queue.put_nowait({'op': 'worker-finished',

@@ -25,7 +25,7 @@ def inc(x):
     return x + 1
 
 
-def _test_cluster(f):
+def _test_cluster(f, gets=[_get, _get2]):
     @gen.coroutine
     def g(get):
         c = Center('127.0.0.1', 8017)
@@ -47,7 +47,7 @@ def _test_cluster(f):
                 yield b._close()
             c.stop()
 
-    for get in [_get, _get2]:
+    for get in gets:
         IOLoop.current().run_sync(lambda: g(get))
 
 
