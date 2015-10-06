@@ -28,35 +28,25 @@ def funcname(func):
 
 
 class Worker(Server):
-    """ Worker node in a distributed network
+    """ Worker Node
 
-    Workers do the following:
+    Workers perform two functions:
 
-    1.  Manage and serve from a dictionary of local data
-    2.  Perform computations on that data and on data from peers
-    3.  Interact with peers and with a ``Center`` node to acheive 2
+    1.  **Serve data** from a local dictionary
+    2.  **Perform computation** on that data and on data from peers
 
-    A worker should connect to a ``Center`` node.  It can run in an event loop
-    or separately in a thread.
+    Additionally workers keep a Center informed of their data and use that
+    Center to gather data from other workers when necessary to perform a
+    computation.
+
+    You can start a worker with the ``dworker`` command line application.
 
     Example
     -------
 
-    Set up a Center on a separate machine
-
-    >>> c = Center('192.168.0.100', 8000)  # doctest: +SKIP
-
-    Run in an event loop
-
-    >>> w = Worker('192.168.0.101', 8001,
-    ...            center_ip='192.168.0.100', center_port=8000) # doctest: +SKIP
-    >>> coroutine = w.go()  # doctest: +SKIP
-
-    Can run separately in a thread
-
-    >>> w = Worker('192.168.0.101', 8001,
-    ...            center_ip='192.168.0.100', center_port=8000,
-    ...            start=True, block=False)  # doctest: +SKIP
+    >>> c = Center('192.168.0.100', 8000)  # create center on other machine
+    >>> w = Worker('192.168.0.101', 8001,  # create worker, point it to center
+    ...            center_ip='192.168.0.100', center_port=8000)
     """
 
     def __init__(self, ip, port, center_ip, center_port, ncores=None):
@@ -68,7 +58,7 @@ class Worker(Server):
         self.executor = ThreadPoolExecutor(10)
         self.center = rpc(ip=center_ip, port=center_port)
 
-        handlers = {'compute': self.work,
+        handlers = {'compute': self.compute,
                     'get_data': self.get_data,
                     'update_data': self.update_data,
                     'delete_data': self.delete_data,
@@ -84,7 +74,7 @@ class Worker(Server):
         resp = yield self.center.register(
                 ncores=self.ncores, address=(self.ip, self.port))
         assert resp == b'OK'
-        log('Registered with center')
+        # log('Registered with center')
 
     def start(self):
         IOLoop.current().add_callback(self._start)
@@ -106,7 +96,7 @@ class Worker(Server):
         return (self.ip, self.port)
 
     @gen.coroutine
-    def work(self, stream, function=None, key=None, args=(), kwargs={}, needed=[]):
+    def compute(self, stream, function=None, key=None, args=(), kwargs={}, needed=[]):
         """ Execute function """
         needed = [n for n in needed if n not in self.data]
 

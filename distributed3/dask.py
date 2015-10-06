@@ -244,11 +244,6 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
     finished_results = state['finished_results']
     released.update(state['released'])
 
-    leaves = [k for k, deps in waiting.items() if not deps]
-    keyorder = order(dsk)
-    leaves = sorted(leaves, key=keyorder.get)
-
-
     @gen.coroutine
     def cleanup():
         """ Clean up queues and coroutines, prepare to stop """
@@ -275,6 +270,10 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
     We distribute leaf tasks (tasks with no dependencies) among workers
     uniformly.
     """
+    leaves = [k for k, deps in waiting.items() if not deps]
+    keyorder = order(dsk)
+    leaves = sorted(leaves, key=keyorder.get)
+
     k = int(ceil(len(leaves) / len(workers)))
     for i, worker in enumerate(workers):
         keys = leaves[i*k: (i + 1)*k][::-1]

@@ -23,6 +23,42 @@ def handle_signal(sig, frame):
 
 
 class Server(TCPServer):
+    """ Distributed TCP Server
+
+    Superclass for both Worker and Center objects.
+    Inherits from ``tornado.tcpserver.TCPServer``, adding a protocol for RPC.
+
+    Handlers
+    --------
+
+    Servers define operations with a ``handlers`` dict mapping operation names
+    to functions.  The first argument of a handler function must be a stream for
+    the connection to the client.  Other arguments will receive inputs from the
+    keys of the incoming message which will always be a dictionary.
+
+    >>> def pingpong(stream):
+    ...     return b'pong'
+
+    >>> def add(stream, x, y):
+    ...     return x + y
+
+    >>> handlers = {'ping': pingpong}
+
+    >>> server = Server({'ping': pingpong})
+    >>> server.listen(8000)
+
+    Message Format
+    --------------
+
+    The server expects messages to be dictionaries with a special key, `'op'`
+    that corresponds to the name of the operation, and other key-value pairs as
+    required by the function.
+
+    So in the example above the following would be good messages.
+
+    *  ``{'op': 'ping'}``
+    *  ``{'op': 'add': 'x': 10, 'y': 20}``
+    """
     def __init__(self, handlers):
         self.handlers = handlers
         super(Server, self).__init__()
@@ -113,6 +149,7 @@ sentinel = b'7f57da0f9202f6b4df78e251058be6f0'
 
 @gen.coroutine
 def read(stream):
+    """ Read a message from a stream """
     msg = yield stream.read_until(sentinel)
     msg = msg[:-len(sentinel)]
     msg = loads(msg)
@@ -121,6 +158,7 @@ def read(stream):
 
 @gen.coroutine
 def write(stream, msg):
+    """ Write a message to a stream """
     msg = dumps(msg)
     yield stream.write(msg + sentinel)
 
@@ -175,19 +213,23 @@ def send_recv_sync(stream=None, ip=None, port=None, reply=True, **kwargs):
 
 
 class rpc(object):
-    """ Use send_recv to cause rpc computations on client_connected calls
+    """ Conveniently interact with a remote server
 
-    By convention the `client_connected` coroutine looks for operations by name
-    in the `op` key of a message.
+    Normally we construct messages as dictionaries and send them with read/write
 
-    >>> msg = {'op': 'func', 'key1': 100, 'key2': 1000}
-    >>> result = yield send_recv(stream, **msg)  # doctest: +SKIP
+    >>> stream = yield connect(ip, port)  # doctest: +SKIP
+    >>> msg = {'op': 'add', 'x': 10, 'y': 20}  # doctest: +SKIP
+    >>> yield write(stream, msg)  # doctest: +SKIP
+    >>> response = yield read(stream)  # doctest: +SKIP
 
-    This class uses this convention to provide a Python interface for calling
-    remote functions
+    To reduce verbosity we use an ``rpc`` object.
 
-    >>> remote = rpc(stream=stream)  # doctest: +SKIP
-    >>> result = yield remote.func(key1=100, key2=1000)  # doctest: +SKIP
+    >>> remote = rpc(ip=ip, port=port)
+    >>> response = yield rpc.add(x=10, y=20)
+
+    One rpc object can be reused for several interactions.
+    Additionally, this object creates and destroys many streams as necessary
+    and so is safe to use in multiple overlapping communications.
     """
     def __init__(self, stream=None, ip=None, port=None):
         self.streams = dict()
