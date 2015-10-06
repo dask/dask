@@ -23,20 +23,19 @@ class Center(Server):
 
     A Center serves as central point of metadata storage among workers.  It
     maintains dictionaries of which worker has which keys and which keys are
-    owned by which workers.  Computational systems tend to check in with a
-    Center to determine their available resources.
+    owned by which workers.
+
+    *  who_has:   {key: {set of workers}}
+    *  has_what:  {worker: {set of keys}}
+
+    Workers and clients check in with the Center to discover available resources
+
+    You can start a center with the ``dcenter`` command line application.
 
     Example
     -------
 
-    A center can be run in an event loop
-
     >>> c = Center('192.168.0.123', 8000)
-
-    Or separately in a thread
-
-    >>> c = Center('192.168.0.123', 8000, start=True, block=False)  # doctest: +SKIP
-    >>> c.close()  # doctest: +SKIP
     """
     def __init__(self, ip, port):
         self.ip = ip
