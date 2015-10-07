@@ -4,7 +4,7 @@ import os
 from setuptools import setup
 
 setup(name='distributed',
-      version='1.0.0',
+      version='1.0.1',
       description='Distributed computing',
       url='http://distributed.readthedocs.org/en/latest/',
       maintainer='Matthew Rocklin',

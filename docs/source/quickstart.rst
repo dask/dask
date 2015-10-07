@@ -1,6 +1,13 @@
 Basic Model and Quickstart
 ==========================
 
+Install
+-------
+
+::
+
+    $ pip install distributed
+
 Setup Network
 -------------
 
