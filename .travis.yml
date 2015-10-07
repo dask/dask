@@ -16,13 +16,14 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest coverage tornado toolz dill dask
+  - conda install pytest coverage tornado toolz dill
+  - pip install dask
 
   # Install distributed
   - python setup.py install
 
 script:
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage run $(which py.test) dask --doctest-modules --verbose; else py.test dask --verbose; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage run $(which py.test) distributed --doctest-modules --verbose; else py.test distributed --verbose; fi
 
 after_success:
     - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
