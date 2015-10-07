@@ -52,7 +52,7 @@ def gather_from_center(center, needed):
 
 
 def gather(center, needed):
-    func = lambda: gather_to_center(center, needed)
+    func = lambda: gather_from_center(center, needed)
     result = IOLoop.current().run_sync(func)
     return result
 gather.__doc__ = gather_from_center.__doc__
@@ -296,7 +296,10 @@ def scatter_to_workers(center, ncores, data, key=None):
         ncores = {worker: 1 for worker in ncores}
 
     workers = list(concat([w] * nc for w, nc in ncores.items()))
-    names = ('%s-%d' % (key, i) for i in count(0))
+    if isinstance(data, dict):
+        names, data = list(zip(*data.items()))
+    else:
+        names = ('%s-%d' % (key, i) for i in count(0))
 
     L = list(zip(cycle(workers), names, data))
     d = groupby(0, L)
