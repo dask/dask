@@ -51,6 +51,13 @@ def gather_from_center(center, needed):
     raise Return(result)
 
 
+def gather(center, needed):
+    func = lambda: gather_to_center(center, needed)
+    result = IOLoop.current().run_sync(func)
+    return result
+gather.__doc__ = gather_from_center.__doc__
+
+
 @gen.coroutine
 def gather_strict_from_center(center, needed=[]):
     """ Gather data from peers
@@ -262,6 +269,13 @@ def scatter_to_center(center, data, key=None):
 
     result = yield scatter_to_workers(center, ncores, data, key=key)
     raise Return(result)
+
+
+def scatter(center, data, key=None):
+    func = lambda: scatter_to_center(center, data, key)
+    result = IOLoop.current().run_sync(func)
+    return result
+scatter.__doc__ = scatter_to_center.__doc__
 
 
 @gen.coroutine
