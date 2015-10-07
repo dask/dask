@@ -1,0 +1,31 @@
+language: python
+sudo: false
+python:
+    - "2.7"
+    - "3.4"
+    - "3.5"
+
+install:
+  # Install conda
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update conda
+
+  # Install dependencies
+  - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
+  - source activate test-environment
+  - conda install pytest tornado toolz dill dask
+
+  # Install distributed
+  - python setup.py install
+
+script:
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage run $(which py.test) dask --runslow --doctest-modules --verbose; else py.test dask --verbose; fi
+
+after_success:
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
+
+notifications:
+  email: false
