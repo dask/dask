@@ -16,7 +16,7 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install pytest tornado toolz dill dask
+  - conda install pytest coverage tornado toolz dill dask
 
   # Install distributed
   - python setup.py install
