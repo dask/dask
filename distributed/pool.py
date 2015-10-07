@@ -14,7 +14,7 @@ from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
-from .core import read, write, connect, rpc
+from .core import read, write, connect, rpc, coerce_to_rpc
 from .client import (RemoteData, _scatter, _gather, unpack_remotedata)
 
 
@@ -27,24 +27,17 @@ class Pool(object):
     This connects to a metadata ``Center`` and from there learns to where it can
     dispatch jobs, typically through an ``apply_async`` call.
 
-    Example
-    -------
-
-    >>> pool = Pool(center_ip='192.168.0.100', center_port=8000)  # doctest: +SKIP
+    Examples
+    --------
+    >>> pool = Pool('192.168.0.100:8787')  # doctest: +SKIP
 
     >>> pc = pool.apply_async(func, args, kwargs)  # doctest: +SKIP
     >>> rd = pc.get()  # doctest: +SKIP
     >>> rd.get()  # doctest: +SKIP
     10
     """
-    def __init__(self, center_ip, center_port=None):
-        if center_port is None:
-            if ':' in center_ip:
-                center_ip, center_port = center_ip.split(':')
-            else:
-                center_port = 8787
-        center_port = int(center_port)
-        self.center = rpc(ip=center_ip, port=center_port)
+    def __init__(self, center):
+        self.center = coerce_to_rpc(center)
         self._open_streams = set()
 
     @gen.coroutine

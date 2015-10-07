@@ -30,7 +30,7 @@ def _test_cluster(f):
         b = Worker('127.0.0.1', 8019, c.ip, c.port, ncores=1)
         yield b._start()
 
-        p = Pool(c.ip, c.port)
+        p = Pool((c.ip, c.port))
 
         while len(c.ncores) < 2:
             yield gen.sleep(0.01)
@@ -128,7 +128,7 @@ def test_cluster():
 
 def test_pool_synchronous():
     with cluster() as (c, [a, b]):
-        pool = Pool('127.0.0.1', c['port'])
+        pool = Pool(('127.0.0.1', c['port']))
         pool.sync_center()
         assert pool.available_cores == {('127.0.0.1', a['port']): 1,
                                         ('127.0.0.1', b['port']): 1}
@@ -141,7 +141,7 @@ def test_pool_synchronous():
 
 def test_close_worker_cleanly_before_map():
     with cluster() as (c, [a, b]):
-        p = Pool('127.0.0.1', c['port'])
+        p = Pool(('127.0.0.1', c['port']))
 
         send_recv_sync(ip='127.0.0.1', port=a['port'], op='terminate')
 
@@ -199,7 +199,7 @@ def test_job_kills_node():
             yield gen.sleep(0.5)
             a['proc'].terminate()
 
-        p = Pool('127.0.0.1', c['port'])
+        p = Pool(('127.0.0.1', c['port']))
         IOLoop.current().spawn_callback(kill_a)
 
         @gen.coroutine
@@ -212,7 +212,7 @@ def test_job_kills_node():
 
 def test_apply_with_nested_data():
     with cluster() as (c, [a, b]):
-        pool = Pool('127.0.0.1', c['port'])
+        pool = Pool(('127.0.0.1', c['port']))
         results = pool.map(inc, range(10))
         total = pool.apply(sum, [results])
         assert total.get() == sum(map(inc, range(10)))

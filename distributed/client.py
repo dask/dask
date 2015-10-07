@@ -13,24 +13,11 @@ from tornado.iostream import IOStream, StreamClosedError
 
 from toolz import merge, concat, groupby
 
-from .core import rpc
+from .core import rpc, coerce_to_rpc
 from .utils import ignore_exceptions
 
 
 no_default = '__no_default__'
-
-def coerce_to_rpc(o):
-    if isinstance(o, tuple):
-        return rpc(ip=o[0], port=o[1])
-    if isinstance(o, str):
-        ip, port = o.split(':')
-        return rpc(ip=ip, port=int(port))
-    elif isinstance(o, IOStream):
-        return rpc(stream=o)
-    elif isinstance(o, rpc):
-        return o
-    else:
-        raise TypeError()
 
 
 def gather(center, needed):

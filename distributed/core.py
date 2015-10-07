@@ -12,7 +12,7 @@ from tornado.gen import Return
 from tornado.tcpserver import TCPServer
 from tornado.tcpclient import TCPClient
 from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError
+from tornado.iostream import IOStream, StreamClosedError
 
 
 log = print
@@ -288,10 +288,15 @@ class rpc(object):
         return _
 
 
-if __name__ == '__main__':
-    signal.signal(signal.SIGINT, handle_signal)
-    signal.signal(signal.SIGTERM, handle_signal)
-    server = Server({'ping': pingpong})
-    server.listen(8889)
-    IOLoop.current().start()
-    IOLoop.current().close()
+def coerce_to_rpc(o):
+    if isinstance(o, tuple):
+        return rpc(ip=o[0], port=o[1])
+    if isinstance(o, str):
+        ip, port = o.split(':')
+        return rpc(ip=ip, port=int(port))
+    elif isinstance(o, IOStream):
+        return rpc(stream=o)
+    elif isinstance(o, rpc):
+        return o
+    else:
+        raise TypeError()
