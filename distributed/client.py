@@ -136,7 +136,7 @@ class RemoteData(object):
     possible.  Client modules like ``Pool`` often know how to deal with
     RemoteData objects intelligently, keeping data on the cluster.
 
-    >>> pool = Pool('127.0.0.1:8787')
+    >>> pool = Pool('127.0.0.1:8787')  # doctest: +SKIP
     >>> rd2 = pool.apply(lambda x: x * 10, rd)  # doctest: +SKIP
 
     The Pool can also gather several remote data objects at once with a small

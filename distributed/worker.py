@@ -46,8 +46,9 @@ class Worker(Server):
 
     Create centers and workers in Python:
 
-    >>> c = Center('192.168.0.100', 8000)  # create center on other machine
-    >>> w = Worker('192.168.0.101', 8001,  # create worker, point it to center
+    >>> from distributed import Center, Worker
+    >>> c = Center('192.168.0.100', 8000)  # doctest: +SKIP
+    >>> w = Worker('192.168.0.101', 8001,  # doctest: +SKIP
     ...            center_ip='192.168.0.100', center_port=8000)
 
     Or use the command line::

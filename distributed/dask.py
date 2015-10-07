@@ -757,9 +757,9 @@ def get(ip, port, dsk, keys, gather=True, _get=_get):
 
     >>> from functools import partial
     >>> myget = partial(get, '127.0.0.1', 8787)
-    >>> import dask.array as da
-    >>> x = da.ones((1000, 1000), chunks=(100, 100))
-    >>> x.sum().compute(get=myget)
+    >>> import dask.array as da  # doctest: +SKIP
+    >>> x = da.ones((1000, 1000), chunks=(100, 100))  # doctest: +SKIP
+    >>> x.sum().compute(get=myget)  # doctest: +SKIP
     1000000
     """
     return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys, gather))
