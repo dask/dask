@@ -27,8 +27,7 @@ Scatter/Gather
 --------------
 
 Users rarely create RemoteData objects by hand.  They are created by other
-client libraries, like Pool, which themselves use other client functions like
-``gather``and ``scatter``.
+client libraries or functions like ``gather`` and ``scatter``.
 
 .. autofunction:: distributed.client.scatter
 .. autofunction:: distributed.client.gather

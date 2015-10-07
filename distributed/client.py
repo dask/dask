@@ -23,6 +23,13 @@ no_default = '__no_default__'
 def gather(center, needed):
     """ Gather data from distributed workers
 
+    This operates by first asking the center who has all of the state keys and
+    then trying those workers directly.
+
+    Keys not found on the network will not appear in the output.  You should
+    check the length of the output against the input if concerned about missing
+    data.
+
     Parameters
     ----------
     center:
@@ -35,22 +42,16 @@ def gather(center, needed):
     result: dict
         A mapping of the given keys to data values
 
-    Example
-    -------
+    Examples
+    --------
     >>> remote_data = scatter('127.0.0.1:8787', [1, 2, 3])  # doctest: +SKIP
     >>> local_data = gather('127.0.0.1:8787', remote_data)  # doctest: +SKIP
 
-    Keys not found on the network will not appear in the output.  You should
-    check the length of the output against the input if concerned about missing
-    data.
-
-    This operates by first asking the center who has all of the state keys and
-    then trying those workers directly.
-
-    See also:
-        _gather
-        scatter
-        gather_from_workers
+    See also
+    --------
+    distributed.client.scatter:
+    distributed.client._gather:
+    distributed.client.gather_from_workers:
     """
     func = lambda: _gather(center, needed)
     result = IOLoop.current().run_sync(func)
@@ -141,7 +142,7 @@ class RemoteData(object):
     The Pool can also gather several remote data objects at once with a small
     number of connections.
 
-    >>> pool.gather([rd, rd2])
+    >>> pool.gather([rd, rd2])  # doctest: +SKIP
     (123, 1230)
     """
     trash = defaultdict(set)
