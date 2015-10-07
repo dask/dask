@@ -281,6 +281,10 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
         for key in keys:
             worker_queues[worker].put_nowait({'op': 'compute-task'})
 
+    if not leaves:
+        yield cleanup()
+        raise Return(results)
+
     while True:
         msg = yield master_queue.get()
         if msg['op'] == 'task-finished':
@@ -489,8 +493,6 @@ def _get(ip, port, dsk, result, gather=False):
     else:
         result_flat = set([result])
     out_keys = set(result_flat)
-
-    loop = IOLoop.current()
 
     center = rpc(ip=ip, port=port)
     who_has, has_what, ncores = yield [center.who_has(),

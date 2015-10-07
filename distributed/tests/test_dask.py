@@ -288,3 +288,19 @@ def test_failing_worker():
         thread = Thread(target=kill_a)
         thread.start()
         IOLoop.current().run_sync(f)
+
+
+def test_repeated_computation():
+    def func():
+        from random import randint
+        return randint(0, 100)
+
+    dsk = {'x': (func,)}
+
+    @gen.coroutine
+    def f(c, a, b, get):
+        x = yield get(c.ip, c.port, dsk, 'x', gather=True)
+        y = yield get(c.ip, c.port, dsk, 'x', gather=True)
+        assert x == y
+
+    _test_cluster(f, gets=[_get])
