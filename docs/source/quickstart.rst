@@ -36,7 +36,11 @@ data and runs arbitrary functions on that data.  The workers share data with
 each other.  The center knows all of the workers and what data they have.
 
 If you want to do this on your local computer then omit the ``ssh`` commands
-and replace the IP addresses above with ``127.0.0.1``.
+and replace the IP addresses above with ``127.0.0.1``::
+
+   $ dcenter
+   $ dworker 127.0.0.1:8787
+   $ dworker 127.0.0.1:8787
 
 
 User Clients
