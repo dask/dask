@@ -55,10 +55,27 @@ def gather_from_center(center, needed):
 def gather_strict_from_center(center, needed=[]):
     """ Gather data from peers
 
-    This accepts an iterable, keys not found will not be in the output
+    Parameters
+    ----------
+    center:
+        (ip, port) tuple or Stream, or rpc object designating the Center
+    needed: iterable
+        A list of required keys
+
+    Returns
+    -------
+    result: dict
+        A mapping of the given keys to data values
+
+    Keys not found on the network will not appear in the output.  You should
+    check the length of the output against the input if concerned about missing
+    data.
+
+    This operates by first asking the center who has all of the state keys and
+    then trying those workers directly.
 
     See also:
-        gather_from_center
+        gather_from_workers
     """
     center = coerce_to_rpc(center)
 
@@ -74,7 +91,18 @@ def gather_strict_from_center(center, needed=[]):
 
 @gen.coroutine
 def gather_from_workers(who_has):
-    """ gather data from peers """
+    """ Gather data directly from peers
+
+    Parameters
+    ----------
+    who_has: dict
+        Dict mapping keys to sets of workers that may have that key
+
+    Returns dict mapping key to value
+
+    See Also:
+        gather_from_center_strict
+    """
     bad_addresses = set()
     who_has = who_has.copy()
     results = dict()
@@ -106,17 +134,29 @@ def gather_from_workers(who_has):
 class RemoteData(object):
     """ Data living on a remote worker
 
-    This is created by ``PendingComputation.get()`` which is in turn created by
-    ``Pool.apply_async()``.  One can retrive the data from the remote worker by
-    calling the ``.get()`` method on this object
+    ``RemoteData`` objects represent key-value pairs living on remote workers.
+    ``RemoteData`` objects know their center ip/port and the relevant key
 
-    Example
-    -------
+    >>> rd = RemoteData('x', '127.0.0.1', 8787)
 
-    >>> pc = pool.apply_async(func, args, kwargs)  # doctest: +SKIP
-    >>> rd = pc.get()  # doctest: +SKIP
+    One can download the value of a ``RemoteData`` object with the ``get``
+    method or ``_get`` coroutine.
+
     >>> rd.get()  # doctest: +SKIP
-    10
+    123
+
+    However it is often best to leave data on the network for as long as
+    possible.  Client modules like ``Pool`` often know how to deal with
+    RemoteData objects intelligently, keeping data on the cluster.
+
+    >>> pool = Pool('127.0.0.1:8787')
+    >>> rd2 = pool.apply(lambda x: x * 10, rd)  # doctest: +SKIP
+
+    The Pool can also gather several remote data objects at once with a small
+    number of connections.
+
+    >>> pool.gather([rd, rd2])
+    (123, 1230)
     """
     trash = defaultdict(set)
 
@@ -152,6 +192,11 @@ class RemoteData(object):
             raise Return(self._result)
 
     def get(self):
+        """ Get the value of a single RemoteData object
+
+        See also:
+            Pool.gather: gather values from many RemoteData objects at once
+        """
         if self._result is not no_default:
             return self._result
         else:
