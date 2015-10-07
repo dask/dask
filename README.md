@@ -88,7 +88,7 @@ Pool Example
 ### Client Pool
 
 ```python
-In [1]: from distributed3 import Pool
+In [1]: from distributed import Pool
 
 In [2]: pool = Pool('127.0.0.1:8787')
 In [3]: pool.sync_center()
@@ -157,7 +157,7 @@ significantly over the various iterations of this project.
 1.  [`dask.distributed`](http://dask.pydata.org/en/latest/distributed.html):  threads and callbacks
 2.  [`dist`](https://github.com/mrocklin/dist):  Actor model with threads and queues
 3.  [`distributed`](https://github.com/mrocklin/distributed):  Coroutine model with asyncio
-4.  `distributed3`:  Coroutine model with tornado
+4.  `distributed`:  Coroutine model with tornado
 
 We need a pleasant way to write somewhat complex interactions between nodes.
 These interactions can not block because each node is expected to handle a

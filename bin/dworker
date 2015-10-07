@@ -9,7 +9,7 @@ try:
 except IndexError:
     print("Usage: python dworker.py center-ip center-port")
 
-from distributed3.utils import get_ip
+from distributed.utils import get_ip
 ip = get_ip()
 
 
@@ -23,7 +23,7 @@ signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
 
 
-from distributed3 import Worker
+from distributed import Worker
 from tornado.ioloop import IOLoop
 
 port = 8788

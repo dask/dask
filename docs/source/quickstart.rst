@@ -43,7 +43,7 @@ cluster.
 
 .. code-block:: python
 
-   >>> from distributed3 import Pool
+   >>> from distributed import Pool
    >>> pool = Pool('192.168.1.100:8787')  # Provide address of center
 
    >>> A = pool.map(lambda x: x**2, range(10))
@@ -76,7 +76,7 @@ Get works with raw dask graphs:
 
 .. code-block:: python
 
-   >>> from distributed3.dask import get
+   >>> from distributed.dask import get
    >>> inc = lambda x: x + 1
    >>> dsk = {'a': 1, 'b': (inc, 'a')}
    >>> get('192.168.1.100', 8787, dsk, 'b')

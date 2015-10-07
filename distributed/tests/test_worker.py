@@ -1,10 +1,10 @@
 from operator import add
 from time import sleep
 
-from distributed3.core import read, write, rpc, connect
-from distributed3.utils import ignoring
-from distributed3.center import Center
-from distributed3.worker import Worker
+from distributed.core import read, write, rpc, connect
+from distributed.utils import ignoring
+from distributed.center import Center
+from distributed.worker import Worker
 
 
 from tornado import gen

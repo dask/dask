@@ -4,8 +4,8 @@ from tornado.tcpclient import TCPClient
 from tornado import gen
 from tornado.ioloop import IOLoop
 
-from distributed3.core import read, write, rpc
-from distributed3.center import Center
+from distributed.core import read, write, rpc
+from distributed.center import Center
 
 
 def test_metadata():

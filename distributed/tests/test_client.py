@@ -5,9 +5,9 @@ from tornado.tcpclient import TCPClient
 from tornado import gen
 from tornado.ioloop import IOLoop
 
-from distributed3 import Center, Worker
-from distributed3.utils import ignoring
-from distributed3.client import (scatter_to_center, scatter_to_workers,
+from distributed import Center, Worker
+from distributed.utils import ignoring
+from distributed.client import (scatter_to_center, scatter_to_workers,
         gather_from_center, gather_strict_from_center, RemoteData, keys_to_data)
 
 

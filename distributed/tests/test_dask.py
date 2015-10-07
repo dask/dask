@@ -11,11 +11,11 @@ from dask.core import get_deps
 from toolz import merge
 import pytest
 
-from distributed3 import Center, Worker
-from distributed3.utils import ignoring
-from distributed3.client import gather_from_center
-from distributed3.core import connect_sync, read_sync, write_sync
-from distributed3.dask import _get, _get2, validate_state, heal
+from distributed import Center, Worker
+from distributed.utils import ignoring
+from distributed.client import gather_from_center
+from distributed.core import connect_sync, read_sync, write_sync
+from distributed.dask import _get, _get2, validate_state, heal
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -268,7 +268,7 @@ def slowinc(x):
 
 
 def run_center(port):
-    from distributed3 import Center
+    from distributed import Center
     from tornado.ioloop import IOLoop
     center = Center('127.0.0.1', port)
     center.listen(port)
@@ -277,7 +277,7 @@ def run_center(port):
 
 
 def run_worker(port, center_port, **kwargs):
-    from distributed3 import Worker
+    from distributed import Worker
     from tornado.ioloop import IOLoop
     worker = Worker('127.0.0.1', port, '127.0.0.1', center_port, **kwargs)
     worker.start()

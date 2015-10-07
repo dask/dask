@@ -1,6 +1,6 @@
 from tornado import gen, ioloop
 from multiprocessing import Process
-from distributed3.core import (read, write, pingpong, read_sync, write_sync,
+from distributed.core import (read, write, pingpong, read_sync, write_sync,
         Server, connect_sync, rpc, connect)
 from functools import partial
 
@@ -70,7 +70,7 @@ def test_rpc_with_many_connections():
 
 def test_sync():
     def f():
-        from distributed3.core import Server
+        from distributed.core import Server
         from tornado.ioloop import IOLoop
         server = Server({'ping': pingpong})
         server.listen(8887)

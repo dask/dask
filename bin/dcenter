@@ -11,7 +11,7 @@ else:
     ip = None
     port = 8787
 
-from distributed3.utils import get_ip
+from distributed.utils import get_ip
 ip = get_ip()
 
 port = int(port)
@@ -27,7 +27,7 @@ signal.signal(signal.SIGTERM, handle_signal)
 
 
 # Run stuff
-from distributed3 import Center
+from distributed import Center
 from tornado.ioloop import IOLoop
 print("Start center at %s:%d" % (ip, port))
 center = Center(ip, port)

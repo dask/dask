@@ -66,7 +66,7 @@ a quick example of what happens during a call to ``compute``::
    Alice:   Hey Center!  I have z!
 
 
-.. autoclass:: distributed3.worker.Worker
+.. autoclass:: distributed.worker.Worker
 
 
 Center
@@ -91,4 +91,4 @@ All worker nodes in the same network have the same center node.  They update
 and query this center node to share and learn what nodes have what data.  The
 center node could conceptually be replaced by a Redis server.
 
-.. autoclass:: distributed3.center.Center
+.. autoclass:: distributed.center.Center

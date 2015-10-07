@@ -3,10 +3,10 @@ import socket
 from time import time, sleep
 from toolz import merge
 
-from distributed3 import Center, Worker, Pool
-from distributed3.pool import divide_tasks, RemoteData
-from distributed3.utils import ignoring
-from distributed3.core import (connect_sync, read_sync, write_sync,
+from distributed import Center, Worker, Pool
+from distributed.pool import divide_tasks, RemoteData
+from distributed.utils import ignoring
+from distributed.core import (connect_sync, read_sync, write_sync,
         send_recv_sync)
 from contextlib import contextmanager
 from multiprocessing import Process
@@ -121,7 +121,7 @@ def test_workshare():
 
 
 def run_center(port):
-    from distributed3 import Center
+    from distributed import Center
     from tornado.ioloop import IOLoop
     center = Center('127.0.0.1', port)
     center.listen(port)
@@ -130,7 +130,7 @@ def run_center(port):
 
 
 def run_worker(port, center_port, **kwargs):
-    from distributed3 import Worker
+    from distributed import Worker
     from tornado.ioloop import IOLoop
     worker = Worker('127.0.0.1', port, '127.0.0.1', center_port, **kwargs)
     worker.start()

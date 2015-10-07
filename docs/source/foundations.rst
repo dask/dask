@@ -40,8 +40,8 @@ Workers, the Center, and clients must all communicate with each other over the
 network.  We use *raw sockets* as mediated by tornado streams.  We separate
 messages by a sentinel value.
 
-.. autofunction:: distributed3.core.read
-.. autofunction:: distributed3.core.write
+.. autofunction:: distributed.core.read
+.. autofunction:: distributed.core.write
 
 
 Servers
@@ -52,7 +52,7 @@ Center objects inherit from a ``Server`` class.  This Server class thinly wraps
 ``tornado.tcpserver.TCPServer``.  These servers expect requests of a
 particular form.
 
-.. autoclass:: distributed3.core.Server
+.. autoclass:: distributed.core.Server
 
 
 RPC
@@ -60,4 +60,4 @@ RPC
 
 To interact with remote servers we typically use ``rpc`` objects.
 
-.. autoclass:: distributed3.core.rpc
+.. autoclass:: distributed.core.rpc
