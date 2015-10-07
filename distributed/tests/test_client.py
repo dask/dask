@@ -39,7 +39,7 @@ def _test_cluster(f):
 def test_scatter_delete():
     @gen.coroutine
     def f(c, a, b):
-        data = yield scatter_to_center(c.ip, c.port, [1, 2, 3])
+        data = yield scatter_to_center((c.ip, c.port), [1, 2, 3])
 
         assert c.ip in str(data[0])
         assert c.ip in repr(data[0])
@@ -60,7 +60,7 @@ def test_scatter_delete():
 
         assert data[0].key not in c.who_has
 
-        data = yield scatter_to_workers(c.ip, c.port, [a.address, b.address],
+        data = yield scatter_to_workers((c.ip, c.port), [a.address, b.address],
                                         [4, 5, 6])
 
         m = merge(a.data, b.data)
@@ -83,7 +83,7 @@ def test_garbage_collection():
         import gc; gc.collect()
         RemoteData.trash[(c.ip, c.port)].clear()
 
-        remote = yield scatter_to_center(c.ip, c.port, [1, 2, 3])
+        remote = yield scatter_to_center((c.ip, c.port), [1, 2, 3])
 
         keys = [r.key for r in remote]
 

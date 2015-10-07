@@ -240,28 +240,41 @@ class RemoteData(object):
 
 
 @gen.coroutine
-def scatter_to_center(ip, port, data, key=None):
+def scatter_to_center(center, data, key=None):
     """ Scatter data to workers
 
+    Parameters
+    ----------
+    center:
+        (ip, port) tuple or Stream, or rpc object designating the Center
+    data: dict or iterable
+        either a dictionary of key: value pairs or an iterable of values
+    key:
+        if data is an iterable of values then we use the key to generate keys
+        as key-0, key-1, key-2, ...
+
     See also:
+        gather_strict_from_center
         scatter_to_workers
     """
-    ncores = yield rpc(ip=ip, port=port).ncores(close=True)
+    center = coerce_to_rpc(center)
+    ncores = yield center.ncores()
 
-    result = yield scatter_to_workers(ip, port, ncores, data, key=key)
+    result = yield scatter_to_workers(center, ncores, data, key=key)
     raise Return(result)
 
 
 @gen.coroutine
-def scatter_to_workers(ip, port, ncores, data, key=None):
+def scatter_to_workers(center, ncores, data, key=None):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
-    how many cores they have.
+    how many cores they have.  ncores should be a dictionary mapping worker
+    identities to numbers of cores.
 
-    See also:
-        scatter_to_center: check in with center first to find workers
+    See scatter_to_center for parameter docstring
     """
+    center = coerce_to_rpc(center)
     if key is None:
         key = str(uuid.uuid1())
 
@@ -279,7 +292,7 @@ def scatter_to_workers(ip, port, ncores, data, key=None):
     yield [rpc(ip=w_ip, port=w_port).update_data(data=v, close=True)
             for (w_ip, w_port), v in d.items()]
 
-    result = [RemoteData(b, ip, port, result=c)
+    result = [RemoteData(b, center.ip, center.port, result=c)
                 for a, b, c in L]
 
     raise Return(result)
