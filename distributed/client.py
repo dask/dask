@@ -22,6 +22,9 @@ no_default = '__no_default__'
 def coerce_to_rpc(o):
     if isinstance(o, tuple):
         return rpc(ip=o[0], port=o[1])
+    if isinstance(o, str):
+        ip, port = o.split(':')
+        return rpc(ip=ip, port=int(port))
     elif isinstance(o, IOStream):
         return rpc(stream=o)
     elif isinstance(o, rpc):
@@ -44,6 +47,11 @@ def gather(center, needed):
     -------
     result: dict
         A mapping of the given keys to data values
+
+    Example
+    -------
+    >>> remote_data = scatter('127.0.0.1:8787', [1, 2, 3])  # doctest: +SKIP
+    >>> local_data = gather('127.0.0.1:8787', remote_data)  # doctest: +SKIP
 
     Keys not found on the network will not appear in the output.  You should
     check the length of the output against the input if concerned about missing
@@ -243,11 +251,16 @@ def scatter(center, data, key=None):
         if data is an iterable of values then we use the key to generate keys
         as key-0, key-1, key-2, ...
 
+    Examples
+    --------
+    >>> remote_data = scatter('127.0.0.1:8787', [1, 2, 3])  # doctest: +SKIP
+    >>> local_data = gather('127.0.0.1:8787', remote_data)  # doctest: +SKIP
+
     See Also
     --------
-    gather
-    _scatter
-    scatter_to_workers
+    distributed.client.gather:
+    distributed.client._scatter:
+    distributed.client.scatter_to_workers:
     """
     func = lambda: _scatter(center, data, key)
     result = IOLoop.current().run_sync(func)

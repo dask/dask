@@ -30,12 +30,18 @@ class Center(Server):
 
     Workers and clients check in with the Center to discover available resources
 
-    You can start a center with the ``dcenter`` command line application.
+    You can start a center with the ``dcenter`` command line application::
 
-    Example
-    -------
+       $ dcenter
+       Start center at 127.0.0.1:8787
 
+    Examples
+    --------
     >>> c = Center('192.168.0.123', 8000)
+
+    See Also
+    --------
+    distributed.worker.Worker:
     """
     def __init__(self, ip, port):
         self.ip = ip

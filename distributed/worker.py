@@ -41,12 +41,27 @@ class Worker(Server):
 
     You can start a worker with the ``dworker`` command line application.
 
-    Example
-    -------
+    Examples
+    --------
+
+    Create centers and workers in Python:
 
     >>> c = Center('192.168.0.100', 8000)  # create center on other machine
     >>> w = Worker('192.168.0.101', 8001,  # create worker, point it to center
     ...            center_ip='192.168.0.100', center_port=8000)
+
+    Or use the command line::
+
+       $ dcenter
+       Start center at 127.0.0.1:8787
+
+       $ dworker 127.0.0.1:8787
+       Start worker at:            127.0.0.1:8788
+       Registered with center at:  127.0.0.1:8787
+
+    See Also
+    --------
+    distributed.center.Center:
     """
 
     def __init__(self, ip, port, center_ip, center_port, ncores=None):

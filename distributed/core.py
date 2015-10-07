@@ -28,8 +28,7 @@ class Server(TCPServer):
     Superclass for both Worker and Center objects.
     Inherits from ``tornado.tcpserver.TCPServer``, adding a protocol for RPC.
 
-    Handlers
-    --------
+    **Handlers**
 
     Servers define operations with a ``handlers`` dict mapping operation names
     to functions.  The first argument of a handler function must be a stream for
@@ -46,8 +45,7 @@ class Server(TCPServer):
     >>> server = Server(handlers)
     >>> server.listen(8000)
 
-    Message Format
-    --------------
+    **Message Format**
 
     The server expects messages to be dictionaries with a special key, `'op'`
     that corresponds to the name of the operation, and other key-value pairs as

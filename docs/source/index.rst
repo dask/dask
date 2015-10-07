@@ -10,6 +10,7 @@ The Python library ``distributed`` aids distributed computing.  Users of
 ``distributed`` can store data and run functions remotely on a cluster of
 computers.
 
+This library is experimental, broken, and unstable.
 
 .. toctree::
    :maxdepth: 2
@@ -17,3 +18,4 @@ computers.
    quickstart
    foundations
    worker-center
+   clients
