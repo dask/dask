@@ -1,17 +1,15 @@
-User Interaction
-================
+Client Interaction
+==================
 
-You should read through the quickstart_ before reading this document.
-
-We build multiple of user modules on top of the foundations_ of
-``distributed``.
+As discussed in the quickstart_ users can interact with the `worker-center`_
+network with a couple of abstractions:
 
 * ``Pool`` mimics ``multiprocessing.Pool``
 *  ``get`` mimics ``dask.get``
 
-The adventurous reader might consider what other systems might be built on top
-of the `worker-center`_ network.
+Common abstractions shared between these two systems are shared below.
 
+.. _`quickstart`: quickstart.html
 .. _`worker-center`: worker-center.html
 
 
