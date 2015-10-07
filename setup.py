@@ -6,7 +6,7 @@ from setuptools import setup
 setup(name='distributed',
       version='1.0.0',
       description='Distributed computing',
-      url='http://github.com/mrocklin/distributed/',
+      url='http://distributed.readthedocs.org/en/latest/',
       maintainer='Matthew Rocklin',
       maintainer_email='mrocklin@gmail.com',
       license='BSD',
