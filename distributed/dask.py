@@ -484,20 +484,6 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
 
 @gen.coroutine
 def _get(ip, port, dsk, result, gather=False):
-    """ Distributed dask scheduler
-
-    This uses a distributed network of Center and Worker nodes.
-
-    Parameters
-    ----------
-    ip/port:
-        address of center
-    dsk/result:
-        normal graph/keys inputs to dask.get
-    gather: bool
-        Collect distributed results from cluster.  If False then return
-        RemoteData objects.
-    """
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
@@ -747,6 +733,35 @@ def _get_simple(ip, port, dsk, result, gather=False):
 
 
 def get(ip, port, dsk, keys, gather=True, _get=_get):
+    """ Distributed dask scheduler
+
+    This uses a distributed network of Center and Worker nodes.
+
+    Parameters
+    ----------
+    ip/port:
+        address of center
+    dsk/result:
+        normal graph/keys inputs to dask.get
+    gather: bool
+        Collect distributed results from cluster.  If False then return
+        RemoteData objects.
+
+    Examples
+    --------
+    >>> inc = lambda x: x + 1
+    >>> dsk = {'x': 1, 'y': (inc, 'x')}
+    >>> get('127.0.0.1', 8787, dsk, 'y')  # doctest: +SKIP
+
+    Use with dask collections by partialing in the center ip/port
+
+    >>> from functools import partial
+    >>> myget = partial(get, '127.0.0.1', 8787)
+    >>> import dask.array as da
+    >>> x = da.ones((1000, 1000), chunks=(100, 100))
+    >>> x.sum().compute(get=myget)
+    1000000
+    """
     return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys, gather))
 
 

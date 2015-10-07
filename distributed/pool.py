@@ -30,11 +30,12 @@ class Pool(object):
     Examples
     --------
     >>> pool = Pool('192.168.0.100:8787')  # doctest: +SKIP
-
-    >>> pc = pool.apply_async(func, args, kwargs)  # doctest: +SKIP
-    >>> rd = pc.get()  # doctest: +SKIP
+    >>> rd = pool.apply(func, args, kwargs)  # doctest: +SKIP
     >>> rd.get()  # doctest: +SKIP
     10
+
+    >>> results = pool.map(func, sequence)  # doctest: +SKIP
+    >>> pool.gather(results)  # doctest: +SKIP
     """
     def __init__(self, center):
         self.center = coerce_to_rpc(center)
