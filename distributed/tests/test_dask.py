@@ -15,7 +15,7 @@ from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.client import gather_from_center
 from distributed.core import connect_sync, read_sync, write_sync
-from distributed.dask import _get, _get2, validate_state, heal
+from distributed.dask import _get, _get_simple, validate_state, heal
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -25,7 +25,7 @@ def inc(x):
     return x + 1
 
 
-def _test_cluster(f, gets=[_get, _get2]):
+def _test_cluster(f, gets=[_get, _get_simple]):
     @gen.coroutine
     def g(get):
         c = Center('127.0.0.1', 8017)
@@ -102,7 +102,7 @@ def test_avoid_computations_for_data_in_memory():
         result = yield get(c.ip, c.port, dsk, keys)
         assert result.key in a.data or result.key in b.data
 
-    _test_cluster(f, gets=[_get2])
+    _test_cluster(f, gets=[_get])
 
 
 def test_gather():
@@ -337,7 +337,7 @@ def test_failing_worker():
 
         @gen.coroutine
         def f():
-            result = yield _get2('127.0.0.1', c['port'], dsk, keys, gather=True)
+            result = yield _get('127.0.0.1', c['port'], dsk, keys, gather=True)
             assert result == 96
 
         thread = Thread(target=kill_a)

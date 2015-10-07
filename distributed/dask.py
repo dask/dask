@@ -483,7 +483,7 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
 
 
 @gen.coroutine
-def _get2(ip, port, dsk, result, gather=False):
+def _get(ip, port, dsk, result, gather=False):
     """ Distributed dask scheduler
 
     This uses a distributed network of Center and Worker nodes.
@@ -541,7 +541,13 @@ def _get2(ip, port, dsk, result, gather=False):
 
 
 @gen.coroutine
-def _get(ip, port, dsk, result, gather=False):
+def _get_simple(ip, port, dsk, result, gather=False):
+    """ Deprecated dask scheduler
+
+    This scheduler relies heavily on the tornado event loop to manage
+    dependencies.  It is interesting in how small it can be while still
+    maintaining correctness but otherwise should be passed over.
+    """
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -738,7 +744,7 @@ def _get(ip, port, dsk, result, gather=False):
     raise Return(nested_get(result, remote))
 
 
-def get(ip, port, dsk, keys, gather=True, _get=_get2):
+def get(ip, port, dsk, keys, gather=True, _get=_get):
     return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys, gather))
 
 
