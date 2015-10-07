@@ -42,9 +42,8 @@ class Server(TCPServer):
     >>> def add(stream, x, y):
     ...     return x + y
 
-    >>> handlers = {'ping': pingpong}
-
-    >>> server = Server({'ping': pingpong})
+    >>> handlers = {'ping': pingpong, 'add': add}
+    >>> server = Server(handlers)
     >>> server.listen(8000)
 
     Message Format
@@ -224,12 +223,16 @@ class rpc(object):
 
     To reduce verbosity we use an ``rpc`` object.
 
-    >>> remote = rpc(ip=ip, port=port)
-    >>> response = yield rpc.add(x=10, y=20)
+    >>> remote = rpc(ip=ip, port=port)  # doctest: +SKIP
+    >>> response = yield rpc.add(x=10, y=20)  # doctest: +SKIP
 
     One rpc object can be reused for several interactions.
     Additionally, this object creates and destroys many streams as necessary
     and so is safe to use in multiple overlapping communications.
+
+    When done, close streams explicitly.
+
+    >>> remote.close_streams()  # doctest: +SKIP
     """
     def __init__(self, stream=None, ip=None, port=None):
         self.streams = dict()

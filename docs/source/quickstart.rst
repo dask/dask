@@ -18,7 +18,8 @@ command on one of them::
    $ dcenter
    Start center at 192.168.1.100:8787
 
-We run ``dworker`` on the others::
+We run ``dworker`` on the others, passing the address of the first as a command
+line argument::
 
    $ ssh 192.168.1.101
    $ dworker 192.168.1.100:8787
@@ -30,9 +31,9 @@ We run ``dworker`` on the others::
    Start worker at:            192.168.1.102:8788
    Registered with center at:  192.168.1.100:8787
 
-These processes talk to each other.  Each worker can serve data and run
-arbitrary functions on that data.  The workers can share data with each other.
-The center knows who all of the workers are and what data they have.
+These processes talk to each other over the network.  Each worker serves
+data and runs arbitrary functions on that data.  The workers share data with
+each other.  The center knows all of the workers and what data they have.
 
 If you want to do this on your local computer then omit the ``ssh`` commands
 and replace the IP addresses above with ``127.0.0.1``.

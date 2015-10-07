@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to distributed's documentation!
-=======================================
+distributed
+===========
 
 The Python library ``distributed`` aids distributed computing.  Users of
 ``distributed`` can store data and run functions remotely on a cluster of
