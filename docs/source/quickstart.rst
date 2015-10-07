@@ -11,12 +11,14 @@ Install
 Setup Network
 -------------
 
-Given a network of computers you run the ``dcenter`` command on one of them::
+Given a network of computers ``192.168.0.{100,101,102}`` we run the ``dcenter``
+command on one of them::
 
+   $ ssh 192.168.1.100
    $ dcenter
    Start center at 192.168.1.100:8787
 
-You run ``dworker`` on several others::
+We run ``dworker`` on the others::
 
    $ ssh 192.168.1.101
    $ dworker 192.168.1.100:8787
@@ -31,6 +33,9 @@ You run ``dworker`` on several others::
 These processes talk to each other.  Each worker can serve data and run
 arbitrary functions on that data.  The workers can share data with each other.
 The center knows who all of the workers are and what data they have.
+
+If you want to do this on your local computer then omit the ``ssh`` commands
+and replace the IP addresses above with ``127.0.0.1``.
 
 
 User Clients
