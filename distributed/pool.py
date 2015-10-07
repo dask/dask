@@ -15,8 +15,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
 from .core import read, write, connect, rpc
-from .client import (RemoteData, scatter_to_workers, gather_from_center,
-        unpack_remotedata)
+from .client import (RemoteData, _scatter, _gather, unpack_remotedata)
 
 
 log = print
@@ -156,18 +155,15 @@ class Pool(object):
     @gen.coroutine
     def _scatter(self, data, key=None):
         yield self._sync_center()
-        result = yield scatter_to_workers(self.center, self.ncores, data,
-                                          key=key)
+        result = yield _scatter(self.center, data, key=key)
         raise Return(result)
 
     def scatter(self, data, key=None):
-        return IOLoop.current().run_sync(
-                lambda: self._scatter(data, key))
+        return IOLoop.current().run_sync(lambda: self._scatter(data, key))
 
     @gen.coroutine
     def _gather(self, data):
-        result = yield gather_from_center((self.center.ip, self.center.port),
-                                          data)
+        result = yield _gather(self.center, data)
         raise Return(result)
 
     def gather(self, data):

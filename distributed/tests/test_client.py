@@ -8,9 +8,8 @@ from tornado.ioloop import IOLoop
 from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.utils_test import cluster
-from distributed.client import (scatter_to_center, scatter_to_workers,
-        gather_from_center, gather_strict_from_center, RemoteData,
-        keys_to_data, gather, scatter)
+from distributed.client import (RemoteData, _gather, _scatter,
+        scatter_to_workers, pack_data, gather, scatter)
 
 
 def _test_cluster(f):
@@ -41,7 +40,7 @@ def _test_cluster(f):
 def test_scatter_delete():
     @gen.coroutine
     def f(c, a, b):
-        data = yield scatter_to_center((c.ip, c.port), [1, 2, 3])
+        data = yield _scatter((c.ip, c.port), [1, 2, 3])
 
         assert c.ip in str(data[0])
         assert c.ip in repr(data[0])
@@ -70,11 +69,8 @@ def test_scatter_delete():
         for d, v in zip(data, [4, 5, 6]):
             assert m[d.key] == v
 
-        result = yield gather_from_center((c.ip, c.port), data)
+        result = yield _gather((c.ip, c.port), data)
         assert result == [4, 5, 6]
-        result = yield gather_from_center((c.ip, c.port),
-                                          dict(zip('abc', data)))
-        assert result == {'a': 4, 'b': 5, 'c': 6}
 
     _test_cluster(f)
 
@@ -85,7 +81,7 @@ def test_garbage_collection():
         import gc; gc.collect()
         RemoteData.trash[(c.ip, c.port)].clear()
 
-        remote = yield scatter_to_center((c.ip, c.port), [1, 2, 3])
+        remote = yield _scatter((c.ip, c.port), [1, 2, 3])
 
         keys = [r.key for r in remote]
 
@@ -117,22 +113,22 @@ def test_gather_with_missing_worker():
 
         a.data['z'] = 5
 
-        result = yield gather_strict_from_center((c.ip, c.port), ['z'])
+        result = yield _gather((c.ip, c.port), ['z'])
         assert result == [5]
 
         try:
-            yield gather_strict_from_center((c.ip, c.port), ['x'])
+            yield _gather((c.ip, c.port), ['x'])
             assert False
         except KeyError as e:
             pass
 
     _test_cluster(f)
 
-def test_keys_to_data():
+def test_pack_data():
     data = {'x': 1}
-    assert keys_to_data(('x', 'y'), data) == (1, 'y')
-    assert keys_to_data({'a': 'x', 'b': 'y'}, data) == {'a': 1, 'b': 'y'}
-    assert keys_to_data({'a': ['x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
+    assert pack_data(('x', 'y'), data) == (1, 'y')
+    assert pack_data({'a': 'x', 'b': 'y'}, data) == {'a': 1, 'b': 'y'}
+    assert pack_data({'a': ['x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
 
 
 def test_gather_scatter():

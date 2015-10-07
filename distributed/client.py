@@ -30,37 +30,8 @@ def coerce_to_rpc(o):
         raise TypeError()
 
 
-@gen.coroutine
-def gather_from_center(center, needed):
-    """ Gather data from peers
-
-    This accepts any nested collection of data and unpacks RemoteData objects
-    within that nesting.  Keys not found are left as keys.
-
-    See also:
-        gather_strict_from_center
-    """
-    center = coerce_to_rpc(center)
-
-    pre_result, needed = unpack_remotedata(needed)
-    who_has = yield center.who_has(keys=needed)
-
-    data = yield gather_from_workers(who_has)
-    result = keys_to_data(pre_result, data)
-
-    raise Return(result)
-
-
 def gather(center, needed):
-    func = lambda: gather_from_center(center, needed)
-    result = IOLoop.current().run_sync(func)
-    return result
-gather.__doc__ = gather_from_center.__doc__
-
-
-@gen.coroutine
-def gather_strict_from_center(center, needed=[]):
-    """ Gather data from peers
+    """ Gather data from distributed workers
 
     Parameters
     ----------
@@ -82,8 +53,17 @@ def gather_strict_from_center(center, needed=[]):
     then trying those workers directly.
 
     See also:
+        _gather
+        scatter
         gather_from_workers
     """
+    func = lambda: _gather(center, needed)
+    result = IOLoop.current().run_sync(func)
+    return result
+
+
+@gen.coroutine
+def _gather(center, needed=[]):
     center = coerce_to_rpc(center)
 
     needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
@@ -94,6 +74,8 @@ def gather_strict_from_center(center, needed=[]):
 
     result = yield gather_from_workers(who_has)
     raise Return([result[key] for key in needed])
+
+_gather.__doc__ = gather.__doc__
 
 
 @gen.coroutine
@@ -107,8 +89,10 @@ def gather_from_workers(who_has):
 
     Returns dict mapping key to value
 
-    See Also:
-        gather_from_center_strict
+    See Also
+    --------
+    gather
+    _gather
     """
     bad_addresses = set()
     who_has = who_has.copy()
@@ -246,8 +230,7 @@ class RemoteData(object):
         return IOLoop.current().run_sync(lambda: cls._garbage_collect(ip, port))
 
 
-@gen.coroutine
-def scatter_to_center(center, data, key=None):
+def scatter(center, data, key=None):
     """ Scatter data to workers
 
     Parameters
@@ -260,10 +243,19 @@ def scatter_to_center(center, data, key=None):
         if data is an iterable of values then we use the key to generate keys
         as key-0, key-1, key-2, ...
 
-    See also:
-        gather_strict_from_center
-        scatter_to_workers
+    See Also
+    --------
+    gather
+    _scatter
+    scatter_to_workers
     """
+    func = lambda: _scatter(center, data, key)
+    result = IOLoop.current().run_sync(func)
+    return result
+
+
+@gen.coroutine
+def _scatter(center, data, key=None):
     center = coerce_to_rpc(center)
     ncores = yield center.ncores()
 
@@ -271,11 +263,7 @@ def scatter_to_center(center, data, key=None):
     raise Return(result)
 
 
-def scatter(center, data, key=None):
-    func = lambda: scatter_to_center(center, data, key)
-    result = IOLoop.current().run_sync(func)
-    return result
-scatter.__doc__ = scatter_to_center.__doc__
+_scatter.__doc__ = scatter.__doc__
 
 
 @gen.coroutine
@@ -286,7 +274,7 @@ def scatter_to_workers(center, ncores, data, key=None):
     how many cores they have.  ncores should be a dictionary mapping worker
     identities to numbers of cores.
 
-    See scatter_to_center for parameter docstring
+    See scatter for parameter docstring
     """
     center = coerce_to_rpc(center)
     if key is None:
@@ -347,26 +335,35 @@ def unpack_remotedata(o):
         return o, set()
 
 
-def keys_to_data(o, data):
+def pack_data(o, d):
     """ Merge known data into tuple or dict
 
+    Parameters
+    ----------
+    o:
+        core data structures containing literals and keys
+    d: dict
+        mapping of keys to data
+
+    Examples
+    --------
     >>> data = {'x': 1}
-    >>> keys_to_data(('x', 'y'), data)
+    >>> pack_data(('x', 'y'), data)
     (1, 'y')
-    >>> keys_to_data({'a': 'x', 'b': 'y'}, data)  # doctest: +SKIP
+    >>> pack_data({'a': 'x', 'b': 'y'}, data)  # doctest: +SKIP
     {'a': 1, 'b': 'y'}
-    >>> keys_to_data({'a': ['x'], 'b': 'y'}, data)  # doctest: +SKIP
+    >>> pack_data({'a': ['x'], 'b': 'y'}, data)  # doctest: +SKIP
     {'a': [1], 'b': 'y'}
     """
     try:
-        if o in data:
-            return data[o]
+        if o in d:
+            return d[o]
     except (TypeError, KeyError):
         pass
 
     if isinstance(o, (tuple, list, set, frozenset)):
-        return type(o)([keys_to_data(x, data) for x in o])
+        return type(o)([pack_data(x, d) for x in o])
     elif isinstance(o, dict):
-        return {k: keys_to_data(v, data) for k, v in o.items()}
+        return {k: pack_data(v, d) for k, v in o.items()}
     else:
         return o

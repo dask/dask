@@ -18,7 +18,7 @@ from dask.core import istask, flatten, get_deps, reverse_dict
 from dask.order import order
 
 from .core import connect, rpc
-from .client import RemoteData, keys_to_data, gather_from_center
+from .client import RemoteData, _gather
 
 
 log = print
@@ -502,7 +502,7 @@ def _get(ip, port, dsk, result, gather=False):
         result_flat = set(flatten(result))
     else:
         result_flat = set([result])
-    results = set(result_flat)
+    out_keys = set(result_flat)
 
     loop = IOLoop.current()
 
@@ -524,7 +524,7 @@ def _get(ip, port, dsk, result, gather=False):
 
     coroutines = ([master(master_queue, worker_queues, delete_queue,
                           who_has, has_what, ncores,
-                          stacks, processing, released, dsk, results)]
+                          stacks, processing, released, dsk, out_keys)]
                 + [worker(master_queue, worker_queues[w], w, dsk, dependencies,
                           stacks[w], processing[w], ncores[w])
                    for w in workers]
@@ -532,12 +532,13 @@ def _get(ip, port, dsk, result, gather=False):
 
     yield coroutines
 
-    remote = {key: RemoteData(key, ip, port) for key in results}
-
     if gather:
-        remote = yield gather_from_center((ip, port), remote)
+        out_data = yield _gather(center, out_keys)
+        d = dict(zip(out_keys, out_data))
+    else:
+        d = {key: RemoteData(key, ip, port) for key in out_keys}
 
-    raise Return(nested_get(result, remote))
+    raise Return(nested_get(result, d))
 
 
 @gen.coroutine
@@ -553,7 +554,7 @@ def _get_simple(ip, port, dsk, result, gather=False):
         result_flat = set(flatten(result))
     else:
         result_flat = set([result])
-    results = set(result_flat)
+    out_keys = set(result_flat)
 
     loop = IOLoop.current()
 
@@ -637,7 +638,7 @@ def _get_simple(ip, port, dsk, result, gather=False):
             raise Return(key)
 
         intermediates = [key for key in dsk
-                             if key not in results]
+                             if key not in out_keys]
         for key in intermediates:
             loop.spawn_callback(delete_intermediate, key)
         wait_iterator = gen.WaitIterator(*[delete_intermediate(key)
@@ -708,7 +709,7 @@ def _get_simple(ip, port, dsk, result, gather=False):
                     finished[0] = True
                     err = yield worker.get_data(keys=[key])
                     errors.append(err[key])
-                    for key in results:
+                    for key in out_keys:
                         completed[key].set()
                     break
 
@@ -724,13 +725,11 @@ def _get_simple(ip, port, dsk, result, gather=False):
         for i in range(ncores[worker]):
             loop.spawn_callback(handle_worker, worker)
 
-    yield [completed[key].wait() for key in results]
+    yield [completed[key].wait() for key in out_keys]
     finished[0] = True
     for events in idling.values():
         for event in events:
             event.set()
-
-    remote = {key: RemoteData(key, ip, port) for key in results}
 
     yield [center_done.wait()] + [e.wait() for L in worker_done.values()
                                            for e in L]
@@ -739,9 +738,12 @@ def _get_simple(ip, port, dsk, result, gather=False):
         raise errors[0]
 
     if gather:
-        remote = yield gather_from_center((ip, port), remote)
+        out_data = yield _gather(center, out_keys)
+        d = dict(zip(out_keys, out_data))
+    else:
+        d = {key: RemoteData(key, ip, port) for key in out_keys}
 
-    raise Return(nested_get(result, remote))
+    raise Return(nested_get(result, d))
 
 
 def get(ip, port, dsk, keys, gather=True, _get=_get):

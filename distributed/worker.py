@@ -11,7 +11,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from .core import rpc, connect_sync, read_sync, write_sync, connect, Server
-from .client import gather_strict_from_center, keys_to_data
+from .client import _gather, pack_data
 
 _ncores = ThreadPool()._processes
 
@@ -104,7 +104,7 @@ class Worker(Server):
         if needed:
             log("gather data from peers: %s" % str(needed))
             try:
-                other = yield gather_strict_from_center(self.center, needed=needed)
+                other = yield _gather(self.center, needed=needed)
             except KeyError as e:
                 log("Could not find data during gather in compute", e)
                 raise Return(e)
@@ -113,8 +113,8 @@ class Worker(Server):
             data2 = self.data
 
         # Fill args with data
-        args2 = keys_to_data(args, data2)
-        kwargs2 = keys_to_data(kwargs, data2)
+        args2 = pack_data(args, data2)
+        kwargs2 = pack_data(kwargs, data2)
 
         # Log and compute in separate thread
         try:

@@ -13,7 +13,7 @@ import pytest
 
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.client import gather_from_center
+from distributed.client import _gather
 from distributed.core import connect_sync, read_sync, write_sync
 from distributed.dask import _get, _get_simple, validate_state, heal
 from distributed.utils_test import cluster
@@ -60,11 +60,10 @@ def test_scheduler():
 
     @gen.coroutine
     def f(c, a, b, get):
-        result = yield get(c.ip, c.port, dsk, keys)
-        result2 = yield gather_from_center((c.ip, c.port), result)
+        result = yield get(c.ip, c.port, dsk, keys, gather=True)
 
         expected = dask.async.get_sync(dsk, keys)
-        assert tuple(result2) == expected
+        assert tuple(result) == expected
         assert set(a.data) | set(b.data) == {'total', 'c', 'z'}
 
     _test_cluster(f)
