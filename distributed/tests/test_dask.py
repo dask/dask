@@ -16,7 +16,7 @@ from distributed.utils import ignoring
 from distributed.client import _gather, RemoteData
 from distributed.core import connect_sync, read_sync, write_sync
 from distributed.dask import (_get, _get_simple, validate_state, heal,
-        insert_remote_deps)
+        insert_remote_deps, decide_worker)
 from distributed.utils_test import cluster
 
 from tornado import gen
@@ -209,6 +209,24 @@ def test_heal_culls():
     assert 'y' not in output['processing']['bob']
 
     assert output['waiting']['z'] == set()
+
+
+def test_decide_worker_with_many_independent_leaves():
+    dsk = merge({('y', i): (inc, ('x', i)) for i in range(100)},
+                {('x', i): i for i in range(100)})
+    dependencies, dependents = get_deps(dsk)
+    stacks = {'alice': [], 'bob': []}
+    who_has = merge({('x', i * 2): {'alice'} for i in range(50)},
+                    {('x', i * 2 + 1): {'bob'} for i in range(50)})
+
+    for key in dsk:
+        worker = decide_worker(dependencies, stacks, who_has, key)
+        stacks[worker].append(key)
+
+    nhits = (len([k for k in stacks['alice'] if 'alice' in who_has[('x', k[1])]])
+             + len([k for k in stacks['bob'] if 'bob' in who_has[('x', k[1])]]))
+
+    assert nhits > 90
 
 
 def test_validate_state():

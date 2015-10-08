@@ -300,7 +300,16 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
     We distribute leaf tasks (tasks with no dependencies) among workers
     uniformly.
     """
-    leaves = [k for k, deps in waiting.items() if not deps]
+    leaves = list()  # ready tasks without data dependencies
+    ready = list()   # ready tasks with data dependencies
+    for k, deps in waiting.items():
+        if deps:
+            continue
+        if not dependencies[k]:
+            leaves.append(k)
+        else:
+            ready.append(k)
+
     keyorder = order(dsk)
     leaves = sorted(leaves, key=keyorder.get)
 
@@ -311,7 +320,10 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
         for key in keys:
             worker_queues[worker].put_nowait({'op': 'compute-task'})
 
-    if not leaves:
+    for key in ready:
+        trigger_task(key)
+
+    if not leaves and not ready:
         yield cleanup()
         raise Return(results)
 
