@@ -4,7 +4,7 @@ from collections import defaultdict
 from math import ceil
 from time import time
 
-from toolz import merge, frequencies, memoize
+from toolz import merge, frequencies, memoize, concat
 from tornado import gen
 from tornado.gen import Return
 from tornado.concurrent import Future
@@ -218,13 +218,57 @@ def insert_remote_deps(dsk, dependencies, dependents):
         if keys:
             dependencies[key] |= keys
             dsk[key] = vv
+        for k in keys:
+            dependencies[k] = set()
 
     return dsk, dependencies, dependents
 
 
+def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
+    """ Assign many new ready tasks to workers
+
+    Often at the beginning of computation we have to assign many new leaves to
+    several workers.  This initial seeding of work can have dramatic effects on
+    total runtime.
+
+    This takes some typical state variables (dependencies, waiting, keyorder,
+    who_has, stacks) as well as a list of keys to assign to stacks.
+
+    This mutates waiting and stacks in place and returns a dictionary,
+    new_stacks, that serves as a diff between the old and new stacks.  These
+    new tasks have yet to be put on worker queues.
+    """
+    leaves = list()  # ready tasks without data dependencies
+    ready = list()   # ready tasks with data dependencies
+    new_stacks = defaultdict(list)
+
+    for k in keys:
+        assert not waiting.pop(k)
+        if not dependencies[k]:
+            leaves.append(k)
+        else:
+            ready.append(k)
+
+    leaves = sorted(leaves, key=keyorder.get)
+
+    k = int(ceil(len(leaves) / len(stacks)))
+    for i, worker in enumerate(stacks):
+        keys = leaves[i*k: (i + 1)*k][::-1]
+        new_stacks[worker].extend(keys)
+        stacks[worker].extend(keys)
+
+    for key in ready:
+        worker = decide_worker(dependencies, stacks, who_has, key)
+        new_stacks[worker].append(key)
+        stacks[worker].append(key)
+
+    return new_stacks
+
+
 @gen.coroutine
-def master(master_queue, worker_queues, delete_queue, who_has, has_what,
-           workers, stacks, processing, released, dsk, results):
+def master(master_queue, worker_queues, delete_queue,
+           dsk, dependencies, dependents, results,
+           who_has, has_what, workers, stacks, processing, released):
     """ The master coroutine for dask scheduling
 
     This coroutine manages interactions with all worker cores and with the
@@ -267,12 +311,12 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
     -   processing: a dictionary of sets of running tasks, one for each worker.
         Worker_core coroutines manage processing mostly on their own.
     """
-    dependencies, dependents = get_deps(dsk)
     state = heal(dependencies, dependents, set(who_has), stacks, processing)
     waiting = state['waiting']
     waiting_data = state['waiting_data']
     finished_results = state['finished_results']
     released.update(state['released'])
+    keyorder = order(dsk)
 
     @gen.coroutine
     def cleanup():
@@ -294,65 +338,42 @@ def master(master_queue, worker_queues, delete_queue, who_has, has_what,
         stacks[new_worker].append(key)
         worker_queues[new_worker].put_nowait({'op': 'compute-task'})
 
-    """
-    Distribute leaves among workers
+    """ Distribute leaves among workers """
+    new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
+                                   [k for k, deps in waiting.items() if not deps])
+    for worker, stack in new_stacks.items():
+        worker_queues[worker].put_nowait({'op': 'compute-task'})
 
-    We distribute leaf tasks (tasks with no dependencies) among workers
-    uniformly.
-    """
-    leaves = list()  # ready tasks without data dependencies
-    ready = list()   # ready tasks with data dependencies
-    for k, deps in waiting.items():
-        if deps:
-            continue
-        if not dependencies[k]:
-            leaves.append(k)
-        else:
-            ready.append(k)
-
-    keyorder = order(dsk)
-    leaves = sorted(leaves, key=keyorder.get)
-
-    k = int(ceil(len(leaves) / len(workers)))
-    for i, worker in enumerate(workers):
-        keys = leaves[i*k: (i + 1)*k][::-1]
-        stacks[worker].extend(keys)
-        for key in keys:
-            worker_queues[worker].put_nowait({'op': 'compute-task'})
-
-    for key in ready:
-        trigger_task(key)
-
-    if not leaves and not ready:
+    if not list(concat(new_stacks.values())):
         yield cleanup()
         raise Return(results)
 
     while True:
         msg = yield master_queue.get()
         if msg['op'] == 'task-finished':
-            log("task finished", key, worker)
             key = msg['key']
             worker = msg['worker']
+            log("task finished", key, worker)
             who_has[key].add(worker)
             has_what[worker].add(key)
 
-            for dep in sorted(dependents[key], key=keyorder.get, reverse=True):
+            for dep in sorted(dependents.get(key, ()), key=keyorder.get, reverse=True):
                 s = waiting[dep]
                 s.remove(key)
                 if not s:  # new task ready to run
                     trigger_task(dep)
 
             for dep in dependencies[key]:
-                assert dep in waiting_data
-                s = waiting_data[dep]
-                s.remove(key)
-                if not s and dep not in results:
-                    delete_queue.put_nowait({'op': 'delete-task',
-                                             'key': dep})
-                    released.add(dep)
-                    for w in who_has[dep]:
-                        has_what[w].remove(dep)
-                    del who_has[dep]
+                if dep in waiting_data:
+                    s = waiting_data[dep]
+                    s.remove(key)
+                    if not s and dep not in results:
+                        delete_queue.put_nowait({'op': 'delete-task',
+                                                 'key': dep})
+                        released.add(dep)
+                        for w in who_has[dep]:
+                            has_what[w].remove(dep)
+                        del who_has[dep]
 
             if key in results:
                 finished_results.add(key)
@@ -425,7 +446,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
 
         if key in in_memory:
             assert not any(key in waiting.get(dep, ())
-                           for dep in dependents[key])
+                           for dep in dependents.get(key, ()))
             assert not waiting.get(key)
 
         if key in in_stacks or key in in_processing:
@@ -480,7 +501,8 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
 
     @memoize
     def make_accessible(key):
-        new_released.remove(key)
+        if key in new_released:
+            new_released.remove(key)
         if key in in_memory:
             return
 
@@ -543,8 +565,8 @@ def _get(ip, port, dsk, result, gather=False):
     workers = sorted(ncores)
 
     dependencies, dependents = get_deps(dsk)
-    dsk, dependencies, dependents = insert_remote_deps(dsk, dependencies,
-            dependents)
+    dsk, dependencies, dependents = insert_remote_deps(
+            dsk, dependencies, dependents)
 
     worker_queues = {worker: Queue() for worker in workers}
     master_queue = Queue()
@@ -555,8 +577,8 @@ def _get(ip, port, dsk, result, gather=False):
     released = set()
 
     coroutines = ([master(master_queue, worker_queues, delete_queue,
-                          who_has, has_what, ncores,
-                          stacks, processing, released, dsk, out_keys)]
+                          dsk, dependencies, dependents, out_keys,
+                          who_has, has_what, ncores, stacks, processing, released)]
                 + [worker(master_queue, worker_queues[w], w, dsk, dependencies,
                           stacks[w], processing[w], ncores[w])
                    for w in workers]

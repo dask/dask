@@ -8,7 +8,7 @@ from threading import Thread
 
 import dask
 from dask.core import get_deps
-from toolz import merge
+from toolz import merge, concat
 import pytest
 
 from distributed import Center, Worker
@@ -16,7 +16,7 @@ from distributed.utils import ignoring
 from distributed.client import _gather, RemoteData
 from distributed.core import connect_sync, read_sync, write_sync
 from distributed.dask import (_get, _get_simple, validate_state, heal,
-        insert_remote_deps, decide_worker)
+        insert_remote_deps, decide_worker, assign_many_tasks)
 from distributed.utils_test import cluster
 
 from tornado import gen
@@ -351,3 +351,22 @@ def test_RemoteData_interaction():
         assert 'x' in a.data  # don't delete input data
 
     _test_cluster(f, gets=[_get])
+
+
+def test_assign_many_tasks():
+    dependencies = {'y': {'x'}, 'b': {'a'}, 'x': set(), 'a': set()}
+    waiting = {'y': set(), 'b': {'a'}, 'a': set()}
+    keyorder = {c: 1 for c in 'abxy'}
+    who_has = {'x': {'alice'}}
+    stacks = {'alice': [], 'bob': []}
+    keys = ['y', 'a']
+
+    new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
+                                   stacks, ['y', 'a'])
+
+    assert 'y' in stacks['alice']
+    assert 'a' in stacks['alice'] + stacks['bob']
+    assert 'a' not in waiting
+    assert 'y' not in waiting
+
+    assert set(concat(new_stacks.values())) == set(concat(stacks.values()))
