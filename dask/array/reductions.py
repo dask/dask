@@ -149,14 +149,14 @@ with ignoring(AttributeError):
 
 @wraps(chunk.nanmin)
 def nanmin(a, axis=None, keepdims=False):
-    return reduction(a, chunk.nanmin, chunk.min, axis=axis, keepdims=keepdims,
+    return reduction(a, chunk.nanmin, chunk.nanmin, axis=axis, keepdims=keepdims,
                      dtype=a._dtype)
 
 
 @wraps(chunk.nanmax)
 def nanmax(a, axis=None, keepdims=False):
-    return reduction(a, chunk.nanmax, chunk.max, axis=axis, keepdims=keepdims,
-                     dtype=a._dtype)
+    return reduction(a, chunk.nanmax, chunk.nanmax, axis=axis,
+                     keepdims=keepdims, dtype=a._dtype)
 
 
 def numel(x, **kwargs):
@@ -226,7 +226,7 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     return result
 
 
-def moment_agg(data, order=2, ddof=0, dtype='f8', **kwargs):
+def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     totals = data['total']
     ns = data['n']
     Ms = data['M']
@@ -237,7 +237,7 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', **kwargs):
     keepdim_kw = kwargs.copy()
     keepdim_kw['keepdims'] = True
 
-    n = ns.sum(**keepdim_kw)
+    n = sum(ns, **keepdim_kw)
     mu = divide(totals.sum(**keepdim_kw), n, dtype=dtype)
     inner_term = divide(totals, ns, dtype=dtype) - mu
 
@@ -245,10 +245,10 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', **kwargs):
 
     for k in range(1, order - 1):
         coeff = factorial(order)/(factorial(k)*factorial(order - k))
-        result += coeff * (Ms[..., order - k - 2] * inner_term**k).sum(**kwargs)
+        result += coeff * sum(Ms[..., order - k - 2] * inner_term**k, **kwargs)
 
-    result += (ns * inner_term**order).sum(**kwargs)
-    result = divide(result, (n.sum(**kwargs) - ddof), dtype=dtype)
+    result += sum(ns * inner_term**order, **kwargs)
+    result = divide(result, sum(n, **kwargs) - ddof, dtype=dtype)
     return result
 
 
@@ -286,7 +286,7 @@ def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0):
     else:
         dt = None
     return reduction(a, partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
-                     partial(moment_agg, ddof=ddof), axis=axis,
+                     partial(moment_agg, sum=np.nansum, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt)
 
 with ignoring(AttributeError):
