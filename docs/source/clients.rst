@@ -31,6 +31,7 @@ client libraries or functions like ``gather`` and ``scatter``.
 
 .. autofunction:: distributed.client.scatter
 .. autofunction:: distributed.client.gather
+.. autofunction:: distributed.client.delete
 
 Pool
 ----

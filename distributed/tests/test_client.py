@@ -1,5 +1,6 @@
 from time import sleep
 
+import pytest
 from toolz import merge
 from tornado.tcpclient import TCPClient
 from tornado import gen
@@ -8,8 +9,8 @@ from tornado.ioloop import IOLoop
 from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.utils_test import cluster
-from distributed.client import (RemoteData, _gather, _scatter,
-        scatter_to_workers, pack_data, gather, scatter)
+from distributed.client import (RemoteData, _gather, _scatter, _delete, _clear,
+        scatter_to_workers, pack_data, gather, scatter, delete, clear)
 
 
 def _test_cluster(f):
@@ -124,6 +125,7 @@ def test_gather_with_missing_worker():
 
     _test_cluster(f)
 
+
 def test_pack_data():
     data = {'x': 1}
     assert pack_data(('x', 'y'), data) == (1, 'y')
@@ -142,3 +144,25 @@ def test_gather_scatter():
         data2 = gather(addr, rds)
         data2 = dict(zip([rd.key for rd in rds], data2))
         assert data == data2
+
+        delete(addr, ['x'])
+        with pytest.raises(KeyError):
+            gather(addr, ['x'])
+        clear(addr)
+        with pytest.raises(KeyError):
+            gather(addr, ['y'])
+
+
+def test_clear():
+    @gen.coroutine
+    def f(c, a, b):
+        data = yield _scatter((c.ip, c.port), [1, 2, 3])
+        assert set(a.data.values()) | set(b.data.values()) == {1, 2, 3}
+
+        yield _delete((c.ip, c.port), [data[0]])
+        assert set(a.data.values()) | set(b.data.values()) == {2, 3}
+
+        yield _clear((c.ip, c.port))
+        assert not a.data and not b.data
+
+    _test_cluster(f)

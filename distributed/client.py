@@ -304,6 +304,33 @@ def scatter_to_workers(center, ncores, data, key=None):
     raise Return(result)
 
 
+@gen.coroutine
+def _delete(center, keys):
+    keys = [k.key if isinstance(k, RemoteData) else k for k in keys]
+    center = coerce_to_rpc(center)
+    yield center.delete_data(keys=keys)
+
+def delete(center, keys):
+    """ Delete keys from all workers """
+    return IOLoop.current().run_sync(lambda: _delete(center, keys))
+
+
+@gen.coroutine
+def _clear(center):
+    center = coerce_to_rpc(center)
+    who_has = yield center.who_has()
+    yield center.delete_data(keys=list(who_has))
+
+def clear(center):
+    """ Clear all data from all workers' memory
+
+    See Also
+    --------
+    distributed.client.delete
+    """
+    return IOLoop.current().run_sync(lambda: _clear(center))
+
+
 def unpack_remotedata(o):
     """ Unpack RemoteData objects from collection
 
