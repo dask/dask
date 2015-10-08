@@ -18,7 +18,7 @@ from dask.core import istask, flatten, get_deps, reverse_dict
 from dask.order import order
 
 from .core import connect, rpc
-from .client import RemoteData, _gather
+from .client import RemoteData, _gather, unpack_remotedata
 
 
 log = print
@@ -190,6 +190,36 @@ def decide_worker(dependencies, stacks, who_has, key):
         workers = stacks
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
+
+def insert_remote_deps(dsk, dependencies, dependents):
+    """ Find RemoteData objects, replace with keys and insert dependencies
+
+    Examples
+    --------
+
+    >>> from operator import add
+    >>> x = RemoteData('x', '127.0.0.1', 8787)
+    >>> dsk = {'y': (add, x, 10)}
+    >>> dependencies, dependents = get_deps(dsk)
+    >>> dsk, dependencies, depdendents = insert_remote_deps(dsk, dependencies, dependents)
+    >>> dsk
+    {'y': (<built-in function add>, 'x', 10)}
+    >>> dependencies
+    {'y': {'x'}}
+    >>> dependents
+    {'y': set()}
+    """
+    dsk = dsk.copy()
+    dependencies = dependencies.copy()
+    dependents = dependents.copy()
+
+    for key, value in dsk.items():
+        vv, keys = unpack_remotedata(value)
+        if keys:
+            dependencies[key] |= keys
+            dsk[key] = vv
+
+    return dsk, dependencies, dependents
 
 
 @gen.coroutine
@@ -501,6 +531,8 @@ def _get(ip, port, dsk, result, gather=False):
     workers = sorted(ncores)
 
     dependencies, dependents = get_deps(dsk)
+    dsk, dependencies, dependents = insert_remote_deps(dsk, dependencies,
+            dependents)
 
     worker_queues = {worker: Queue() for worker in workers}
     master_queue = Queue()

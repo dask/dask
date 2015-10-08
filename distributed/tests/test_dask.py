@@ -13,9 +13,10 @@ import pytest
 
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.client import _gather
+from distributed.client import _gather, RemoteData
 from distributed.core import connect_sync, read_sync, write_sync
-from distributed.dask import _get, _get_simple, validate_state, heal
+from distributed.dask import (_get, _get_simple, validate_state, heal,
+        insert_remote_deps)
 from distributed.utils_test import cluster
 
 from tornado import gen
@@ -302,5 +303,33 @@ def test_repeated_computation():
         x = yield get(c.ip, c.port, dsk, 'x', gather=True)
         y = yield get(c.ip, c.port, dsk, 'x', gather=True)
         assert x == y
+
+    _test_cluster(f, gets=[_get])
+
+
+def test_insert_remote_deps():
+    x = RemoteData('x', None, None)
+    dsk = {'y': (inc, x)}
+    dependencies, dependents = get_deps(dsk)
+
+    dsk, dependencies, depdendents = insert_remote_deps(dsk, dependencies, dependents)
+
+    assert dsk == {'y': (inc, x.key)}
+    assert x.key in dependencies['y']
+
+
+def test_RemoteData_interaction():
+    @gen.coroutine
+    def f(c, a, b, get):
+        a.data['x'] = 10
+        c.who_has['x'].add(a.address)
+        c.has_what[a.address].add('x')
+        x = RemoteData('x', c.ip, c.port)
+
+        dsk = {'y': (inc, x)}
+
+        result = yield get(c.ip, c.port, dsk, 'y', gather=True)
+        assert result == 11
+        assert 'x' in a.data  # don't delete input data
 
     _test_cluster(f, gets=[_get])
