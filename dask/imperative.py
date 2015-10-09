@@ -6,7 +6,7 @@ from collections import Iterator
 from toolz import merge, unique, curry
 
 from .optimize import cull, fuse
-from .utils import concrete
+from .utils import concrete, funcname
 from . import base
 from .compatibility import apply
 from . import threaded
@@ -120,7 +120,7 @@ def applyfunc(func, args, kwargs, pure=False):
         task = (apply, func, (list, list(args)), dask_kwargs)
     else:
         task = (func,) + args
-    name = tokenize(*task, pure=pure)
+    name = funcname(func) + '-' + tokenize(*task, pure=pure)
     dasks = flat_unique(dasks)
     dasks.append({name: task})
     return Value(name, dasks)

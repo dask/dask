@@ -209,3 +209,10 @@ def test_array_bag_imperative():
     seq = [arr1, arr2, darr1, darr2, b]
     out = do(sum)([i.sum() for i in seq])
     assert out.compute() == 2*arr1.sum() + 2*arr2.sum() + sum([1, 2, 3])
+
+
+def test_key_names_include_function_names():
+    def myfunc(x):
+        return x + 1
+
+    assert do(myfunc)(1).key.startswith('myfunc')
