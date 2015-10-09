@@ -262,7 +262,7 @@ class Value(base.Base):
         raise TypeError("Value objects are not iterable")
 
     def __call__(self, *args, **kwargs):
-        return do(apply)(self, args, kwargs)
+        return do(apply, pure=True)(self, args, kwargs)
 
     def __bool__(self):
         raise TypeError("Truth of Value objects is not supported")
