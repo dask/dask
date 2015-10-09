@@ -6,6 +6,7 @@ from functools import partial
 from graphviz import Digraph
 
 from .core import istask, get_dependencies, ishashable
+from .utils import funcname
 
 
 def task_label(task):
@@ -41,13 +42,6 @@ def has_sub_tasks(task):
         return any(has_sub_tasks(i) for i in task)
     else:
         return False
-
-
-def funcname(func):
-    """Get the name of a function."""
-    while hasattr(func, 'func'):
-        func = func.func
-    return func.__name__
 
 
 def name(x):

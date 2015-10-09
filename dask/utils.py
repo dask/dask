@@ -498,3 +498,13 @@ def derived_from(original_klass, version=None, ua_args=[]):
                 raise NotImplementedError(msg)
             return wrapped
     return wrapper
+
+
+def funcname(func):
+    """Get the name of a function."""
+    while hasattr(func, 'func'):
+        func = func.func
+    try:
+        return func.__name__
+    except:
+        return str(func)
