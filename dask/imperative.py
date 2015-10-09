@@ -347,10 +347,9 @@ def value(val, name=None):
     >>> res.compute()  # doctest: +SKIP
     AttributeError("'list' object has no attribute 'not_a_real_method'")
     """
-
     if isinstance(val, Value):
         return val
-    name = name or tokenize(val, True)
+    name = name or (type(val).__name__ + '-' + tokenize(val, True))
     task, dasks = to_task_dasks(val)
     dasks.append({name: task})
     return Value(name, dasks)

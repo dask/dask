@@ -214,5 +214,8 @@ def test_array_bag_imperative():
 def test_key_names_include_function_names():
     def myfunc(x):
         return x + 1
-
     assert do(myfunc)(1).key.startswith('myfunc')
+
+
+def test_key_names_include_type_names():
+    assert value(1).key.startswith('int')
