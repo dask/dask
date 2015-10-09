@@ -201,27 +201,34 @@ def insert_remote_deps(dsk, dependencies, dependents):
     >>> x = RemoteData('x', '127.0.0.1', 8787)
     >>> dsk = {'y': (add, x, 10)}
     >>> dependencies, dependents = get_deps(dsk)
-    >>> dsk, dependencies, depdendents = insert_remote_deps(dsk, dependencies, dependents)
+    >>> dsk, dependencies, depdendents, held_data = insert_remote_deps(dsk, dependencies, dependents)
     >>> dsk
     {'y': (<built-in function add>, 'x', 10)}
-    >>> dependencies
-    {'y': {'x'}}
-    >>> dependents
-    {'y': set()}
+    >>> dependencies  # doctest: +SKIP
+    {'x': set(), 'y': {'x'}}
+    >>> dependents  # doctest: +SKIP
+    {'x': {'y'}, 'y': set()}
+    >>> held_data
+    {'x'}
     """
     dsk = dsk.copy()
     dependencies = dependencies.copy()
     dependents = dependents.copy()
+    held_data = set()
 
     for key, value in dsk.items():
         vv, keys = unpack_remotedata(value)
         if keys:
             dependencies[key] |= keys
             dsk[key] = vv
-        for k in keys:
-            dependencies[k] = set()
+            for k in keys:
+                held_data.add(k)
+                dependencies[k] = set()
+                if not k in dependents:
+                    dependents[k] = set()
+                dependents[k].add(key)
 
-    return dsk, dependencies, dependents
+    return dsk, dependencies, dependents, held_data
 
 
 def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
@@ -267,7 +274,7 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
 
 @gen.coroutine
 def master(master_queue, worker_queues, delete_queue,
-           dsk, dependencies, dependents, results,
+           dsk, dependencies, dependents, held_data, results,
            who_has, has_what, workers, stacks, processing, released):
     """ The master coroutine for dask scheduling
 
@@ -357,28 +364,28 @@ def master(master_queue, worker_queues, delete_queue,
             who_has[key].add(worker)
             has_what[worker].add(key)
 
-            for dep in sorted(dependents.get(key, ()), key=keyorder.get, reverse=True):
+            for dep in sorted(dependents[key], key=keyorder.get, reverse=True):
                 s = waiting[dep]
                 s.remove(key)
                 if not s:  # new task ready to run
                     trigger_task(dep)
 
-            for dep in dependencies[key]:
-                if dep in waiting_data:
-                    s = waiting_data[dep]
-                    s.remove(key)
-                    if not s and dep not in results:
-                        delete_queue.put_nowait({'op': 'delete-task',
-                                                 'key': dep})
-                        released.add(dep)
-                        for w in who_has[dep]:
-                            has_what[w].remove(dep)
-                        del who_has[dep]
-
             if key in results:
                 finished_results.add(key)
+                held_data.add(key)
                 if len(finished_results) == len(results):
                     break
+
+            for dep in dependencies[key]:
+                s = waiting_data[dep]
+                s.remove(key)
+                if not s and dep not in held_data:
+                    delete_queue.put_nowait({'op': 'delete-task',
+                                             'key': dep})
+                    released.add(dep)
+                    for w in who_has[dep]:
+                        has_what[w].remove(dep)
+                    del who_has[dep]
 
         elif msg['op'] == 'task-erred':
             yield cleanup()
@@ -409,7 +416,7 @@ def master(master_queue, worker_queues, delete_queue,
             trigger_keys = {k for k, v in waiting.items() if not v}
             for key in trigger_keys:
                 trigger_task(key)
-            for key in set(who_has).intersection(released):
+            for key in set(who_has) & released - held_data:
                 delete_queue.put_nowait({'op': 'delete-task', 'key': key})
 
         for w in workers:  # This is a kludge and should be removed
@@ -565,7 +572,7 @@ def _get(ip, port, dsk, result, gather=False):
     workers = sorted(ncores)
 
     dependencies, dependents = get_deps(dsk)
-    dsk, dependencies, dependents = insert_remote_deps(
+    dsk, dependencies, dependents, held_data = insert_remote_deps(
             dsk, dependencies, dependents)
 
     worker_queues = {worker: Queue() for worker in workers}
@@ -577,7 +584,7 @@ def _get(ip, port, dsk, result, gather=False):
     released = set()
 
     coroutines = ([master(master_queue, worker_queues, delete_queue,
-                          dsk, dependencies, dependents, out_keys,
+                          dsk, dependencies, dependents, held_data, out_keys,
                           who_has, has_what, ncores, stacks, processing, released)]
                 + [worker(master_queue, worker_queues[w], w, dsk, dependencies,
                           stacks[w], processing[w], ncores[w])
