@@ -54,6 +54,7 @@ def test_methods():
     a = value("a b c d e")
     assert a.split(' ').compute() == ['a', 'b', 'c', 'd', 'e']
     assert a.upper().replace('B', 'A').split().count('A').compute() == 2
+    assert a.split(' ', pure=True).key == a.split(' ', pure=True).key
 
 
 def test_attributes():
