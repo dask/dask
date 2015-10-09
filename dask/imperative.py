@@ -6,7 +6,7 @@ from collections import Iterator
 from toolz import merge, unique, curry
 
 from .optimize import cull, fuse
-from .utils import concrete
+from .utils import concrete, funcname
 from . import base
 from .compatibility import apply
 from . import threaded
@@ -65,7 +65,7 @@ def to_task_dasks(expr):
     if isinstance(expr, Value):
         return expr.key, expr._dasks
     if isinstance(expr, base.Base):
-        name = tokenize(expr, True)
+        name = tokenize(expr, pure=True)
         keys = expr._keys()
         dsk = expr._optimize(expr.dask, keys)
         dsk[name] = (expr._finalize, expr, (concrete, keys))
@@ -120,7 +120,7 @@ def applyfunc(func, args, kwargs, pure=False):
         task = (apply, func, (list, list(args)), dask_kwargs)
     else:
         task = (func,) + args
-    name = tokenize(*task, pure=pure)
+    name = funcname(func) + '-' + tokenize(*task, pure=pure)
     dasks = flat_unique(dasks)
     dasks.append({name: task})
     return Value(name, dasks)
@@ -248,7 +248,7 @@ class Value(base.Base):
 
     def __getattr__(self, attr):
         if not attr.startswith('_'):
-            return do(getattr, True)(self, attr)
+            return do(getattr, pure=True)(self, attr)
         else:
             raise AttributeError("Attribute {0} not found".format(attr))
 
@@ -262,7 +262,7 @@ class Value(base.Base):
         raise TypeError("Value objects are not iterable")
 
     def __call__(self, *args, **kwargs):
-        return do(apply)(self, args, kwargs)
+        return do(apply, kwargs.pop('pure', False))(self, args, kwargs)
 
     def __bool__(self):
         raise TypeError("Truth of Value objects is not supported")
@@ -346,11 +346,17 @@ def value(val, name=None):
     >>> res = a.not_a_real_method()
     >>> res.compute()  # doctest: +SKIP
     AttributeError("'list' object has no attribute 'not_a_real_method'")
-    """
 
+    Methods are assumed to be impure by default, meaning that subsequent calls
+    may return different results. To assume purity, set `pure=True`. This
+    allows sharing of any intermediate values.
+
+    >>> a.count(2, pure=True).key == a.count(2, pure=True).key
+    True
+    """
     if isinstance(val, Value):
         return val
-    name = name or tokenize(val, True)
     task, dasks = to_task_dasks(val)
+    name = name or (type(val).__name__ + '-' + tokenize(task, pure=True))
     dasks.append({name: task})
     return Value(name, dasks)
