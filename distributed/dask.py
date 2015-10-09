@@ -205,7 +205,7 @@ def insert_remote_deps(dsk, dependencies, dependents):
     >>> dsk
     {'y': (<built-in function add>, 'x', 10)}
     >>> dependencies
-    {'y': {'x'}}
+    {'y': {'x'}, 'x': set()}
     >>> dependents
     {'y': set()}
     """
