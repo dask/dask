@@ -14,7 +14,7 @@ from tornado.iostream import StreamClosedError
 from toolz import merge, concat, groupby
 
 from .core import rpc, coerce_to_rpc
-from .utils import ignore_exceptions
+from .utils import ignore_exceptions, ignoring
 
 
 no_default = '__no_default__'
@@ -339,6 +339,8 @@ def unpack_remotedata(o):
     >>> rd = RemoteData('mykey', '127.0.0.1', 8787)
     >>> unpack_remotedata(1)
     (1, set())
+    >>> unpack_remotedata(())
+    ((), set())
     >>> unpack_remotedata(rd)
     ('mykey', {'mykey'})
     >>> unpack_remotedata([1, rd])
@@ -350,7 +352,10 @@ def unpack_remotedata(o):
     """
     if isinstance(o, RemoteData):
         return o.key, {o.key}
-    elif isinstance(o, (tuple, list, set, frozenset)):
+    with ignoring(Exception):
+        if not o:
+            return o, set()
+    if isinstance(o, (tuple, list, set, frozenset)):
         out, sets = zip(*map(unpack_remotedata, o))
         return type(o)(out), set.union(*sets)
     elif isinstance(o, dict):
