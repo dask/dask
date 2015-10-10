@@ -316,25 +316,21 @@ def scheduler(scheduler_queue, worker_queues, delete_queue,
             del waiting[key]
         new_worker = decide_worker(dependencies, stacks, who_has, key)
         stacks[new_worker].append(key)
-        if len(processing[new_worker]) < ncores[new_worker]:
-            trigger_worker(new_worker)
+        ensure_occupied(new_worker)
 
-    def trigger_worker(worker):
+    def ensure_occupied(worker):
         """ If worker is free, spin up a task on that worker """
-        if stacks[worker] and ncores[worker] > len(processing[worker]):
+        while stacks[worker] and ncores[worker] > len(processing[worker]):
             key = stacks[worker].pop()
             processing[worker].add(key)
             worker_queues[worker].put_nowait({'op': 'compute-task',
                                               'key': key})
-            return True
-        else:
-            return False
 
     """ Distribute leaves among workers """
     new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
                                    [k for k, deps in waiting.items() if not deps])
     for worker in ncores:
-        while trigger_worker(worker): pass
+        ensure_occupied(worker)
 
     if not list(concat(new_stacks.values())):
         yield cleanup()
@@ -373,7 +369,7 @@ def scheduler(scheduler_queue, worker_queues, delete_queue,
                         has_what[w].remove(dep)
                     del who_has[dep]
 
-            trigger_worker(worker)
+            ensure_occupied(worker)
 
         elif msg['op'] == 'task-erred':
             yield cleanup()
