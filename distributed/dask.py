@@ -28,25 +28,25 @@ def log(*args):
 
 
 @gen.coroutine
-def worker(master_queue, worker_queue, ident, dsk, dependencies, ncores):
+def worker(scheduler_queue, worker_queue, ident, dsk, dependencies, ncores):
     """ Manage a single distributed worker node
 
     This coroutine manages one remote worker.  It spins up several
     ``worker_core`` coroutines, one for each core.  It reports a closed
-    connection to master if one occurs.
+    connection to scheduler if one occurs.
     """
     try:
-        yield [worker_core(master_queue, worker_queue, ident, i, dsk,
+        yield [worker_core(scheduler_queue, worker_queue, ident, i, dsk,
                            dependencies)
                 for i in range(ncores)]
     except StreamClosedError:
         log("Worker failed from closed stream", ident)
-        master_queue.put_nowait({'op': 'worker-failed',
-                                 'worker': ident})
+        scheduler_queue.put_nowait({'op': 'worker-failed',
+                                    'worker': ident})
 
 
 @gen.coroutine
-def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies):
+def worker_core(scheduler_queue, worker_queue, ident, i, dsk, dependencies):
     """ Manage one core on one distributed worker node
 
     This coroutine listens on worker_queue for the following operations
@@ -55,14 +55,15 @@ def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies):
     -----------------
 
     - compute-task:  call worker.compute(...) on remote node, report when done
-    - close: close connection to worker node, report `worker-finished` to master
+    - close: close connection to worker node, report `worker-finished` to
+      scheduler
 
     Outgoing Messages
     -----------------
 
-    - task-finished:  sent to master once a task completes
-    - task-erred: sent to master when a task errs
-    - worker-finished: sent to master in response to a close command
+    - task-finished:  sent to scheduler once a task completes
+    - task-erred: sent to scheduler when a task errs
+    - worker-finished: sent to scheduler in response to a close command
     """
     worker = rpc(ip=ident[0], port=ident[1])
     log("Start worker core", ident, i)
@@ -86,24 +87,24 @@ def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies):
                                                 kwargs={})
             if response == b'error':
                 err = yield worker.get_data(keys=[key])
-                master_queue.put_nowait({'op': 'task-erred',
-                                         'key': key,
-                                         'worker': ident,
-                                         'exception': err[key]})
+                scheduler_queue.put_nowait({'op': 'task-erred',
+                                            'key': key,
+                                            'worker': ident,
+                                            'exception': err[key]})
             else:
-                master_queue.put_nowait({'op': 'task-finished',
-                                         'worker': ident,
-                                         'key': key})
+                scheduler_queue.put_nowait({'op': 'task-finished',
+                                            'worker': ident,
+                                            'key': key})
 
     yield worker.close(close=True)
     worker.close_streams()
-    master_queue.put_nowait({'op': 'worker-finished',
-                             'worker': ident})
+    scheduler_queue.put_nowait({'op': 'worker-finished',
+                                'worker': ident})
     log("Close worker core", ident, i)
 
 
 @gen.coroutine
-def delete(master_queue, delete_queue, ip, port):
+def delete(scheduler_queue, delete_queue, ip, port):
     """ Delete extraneous intermediates from distributed memory
 
     This coroutine manages a connection to the center in order to send keys
@@ -112,9 +113,9 @@ def delete(master_queue, delete_queue, ip, port):
     sends this list of keys over to the center which then handles deleting
     these keys from workers' memory.
 
-    worker \                             /-> worker node
-    worker -> master -> delete -> center --> worker node
-    worker /                             \-> worker node
+    worker \                                /-> worker node
+    worker -> scheduler -> delete -> center --> worker node
+    worker /                                \-> worker node
 
     Incoming Messages
     -----------------
@@ -142,7 +143,7 @@ def delete(master_queue, delete_queue, ip, port):
 
     yield center.close(close=True)
     center.close_streams()          # All done
-    master_queue.put_nowait({'op': 'delete-finished'})
+    scheduler_queue.put_nowait({'op': 'delete-finished'})
     log('Delete finished')
 
 
@@ -255,17 +256,17 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
 
 
 @gen.coroutine
-def master(master_queue, worker_queues, delete_queue,
-           dsk, dependencies, dependents, held_data, results,
-           who_has, has_what, ncores, stacks, processing, released):
-    """ The master coroutine for dask scheduling
+def scheduler(scheduler_queue, worker_queues, delete_queue,
+              dsk, dependencies, dependents, held_data, results,
+              who_has, has_what, ncores, stacks, processing, released):
+    """ The scheduler coroutine for dask scheduling
 
     This coroutine manages interactions with all worker cores and with the
     delete coroutine through queues.
 
     Parameters
     ----------
-    master_queue: tornado.queues.Queue
+    scheduler_queue: tornado.queues.Queue
     worker_queues: dict {worker: tornado.queues.Queue}
     delete_queue: tornado.queues.Queue
     who_has: dict {key: set}
@@ -307,7 +308,7 @@ def master(master_queue, worker_queues, delete_queue,
                 worker_queues[w].put_nowait({'op': 'close'}); n += 1
 
         for i in range(n):
-            yield master_queue.get()
+            yield scheduler_queue.get()
 
     def add_task(key):
         """ Send task to an appropriate worker, trigger worker if idle """
@@ -340,7 +341,7 @@ def master(master_queue, worker_queues, delete_queue,
         raise Return(results)
 
     while True:
-        msg = yield master_queue.get()
+        msg = yield scheduler_queue.get()
         if msg['op'] == 'task-finished':
             key = msg['key']
             worker = msg['worker']
@@ -559,19 +560,19 @@ def _get(ip, port, dsk, result, gather=False):
             dsk, dependencies, dependents)
 
     worker_queues = {worker: Queue() for worker in workers}
-    master_queue = Queue()
+    scheduler_queue = Queue()
     delete_queue = Queue()
 
     stacks = {w: list() for w in workers}
     processing = {w: set() for w in workers}
     released = set()
 
-    coroutines = ([master(master_queue, worker_queues, delete_queue,
-                          dsk, dependencies, dependents, held_data, out_keys,
-                          who_has, has_what, ncores, stacks, processing,
-                          released),
-                   delete(master_queue, delete_queue, ip, port)]
-                + [worker(master_queue, worker_queues[w], w, dsk, dependencies, ncores[w])
+    coroutines = ([scheduler(scheduler_queue, worker_queues, delete_queue,
+                             dsk, dependencies, dependents, held_data, out_keys,
+                             who_has, has_what, ncores, stacks, processing,
+                             released),
+                   delete(scheduler_queue, delete_queue, ip, port)]
+                + [worker(scheduler_queue, worker_queues[w], w, dsk, dependencies, ncores[w])
                    for w in workers])
 
     yield coroutines
