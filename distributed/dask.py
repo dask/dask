@@ -28,27 +28,25 @@ def log(*args):
 
 
 @gen.coroutine
-def worker(master_queue, worker_queue, ident, dsk, dependencies, stack,
-           processing, ncores):
+def worker(scheduler_queue, worker_queue, ident, dsk, dependencies, ncores):
     """ Manage a single distributed worker node
 
     This coroutine manages one remote worker.  It spins up several
     ``worker_core`` coroutines, one for each core.  It reports a closed
-    connection to master if one occurs.
+    connection to scheduler if one occurs.
     """
     try:
-        yield [worker_core(master_queue, worker_queue, ident, i, dsk,
-                           dependencies, stack, processing)
+        yield [worker_core(scheduler_queue, worker_queue, ident, i, dsk,
+                           dependencies)
                 for i in range(ncores)]
     except StreamClosedError:
         log("Worker failed from closed stream", ident)
-        master_queue.put_nowait({'op': 'worker-failed',
-                                 'worker': ident})
+        scheduler_queue.put_nowait({'op': 'worker-failed',
+                                    'worker': ident})
 
 
 @gen.coroutine
-def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
-                processing):
+def worker_core(scheduler_queue, worker_queue, ident, i, dsk, dependencies):
     """ Manage one core on one distributed worker node
 
     This coroutine listens on worker_queue for the following operations
@@ -57,25 +55,15 @@ def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
     -----------------
 
     - compute-task:  call worker.compute(...) on remote node, report when done
-    - close: close connection to worker node, report `worker-finished` to master
+    - close: close connection to worker node, report `worker-finished` to
+      scheduler
 
     Outgoing Messages
     -----------------
 
-    - task-finished:  sent to master once a task completes
-    - task-erred: sent to master when a task errs
-    - worker-finished: sent to master in response to a close command
-
-    Shared State
-    ------------
-
-    - stack::list should be populated by the master coroutine with tasks to
-      run.  Every task added to task should be accompanied with one
-      'compute-task' operation added to the worker_queue.  Stack is shared with
-      other workers.
-    - processing::set keeps track of what tasks are currently being run on the
-      worker.  One processing set is shared by all worker-cores on the same
-      worker.
+    - task-finished:  sent to scheduler once a task completes
+    - task-erred: sent to scheduler when a task errs
+    - worker-finished: sent to scheduler in response to a close command
     """
     worker = rpc(ip=ident[0], port=ident[1])
     log("Start worker core", ident, i)
@@ -84,44 +72,39 @@ def worker_core(master_queue, worker_queue, ident, i, dsk, dependencies, stack,
         msg = yield worker_queue.get()
         if msg['op'] == 'close':
             break
-        assert msg['op'] == 'compute-task'
-
-        if not stack:
-            continue
-        key = stack.pop()
-        processing.add(key)
-        task = dsk[key]
-        if not istask(task):
-            response = yield worker.update_data(data={key: task})
-            assert response == b'OK', response
-        else:
-            needed = dependencies[key]
-            response = yield worker.compute(function=_execute_task,
-                                            args=(task, {}),
-                                            needed=needed,
-                                            key=key,
-                                            kwargs={})
-        if response == b'error':
-            err = yield worker.get_data(keys=[key])
-            master_queue.put_nowait({'op': 'task-erred',
-                                     'key': key,
-                                     'worker': ident,
-                                     'exception': err[key]})
-        else:
-            master_queue.put_nowait({'op': 'task-finished',
-                                     'worker': ident,
-                                     'key': key})
-        processing.remove(key)
+        if msg['op'] == 'compute-task':
+            key = msg['key']
+            task = dsk[key]
+            if not istask(task):
+                response = yield worker.update_data(data={key: task})
+                assert response == b'OK', response
+            else:
+                needed = dependencies[key]
+                response = yield worker.compute(function=_execute_task,
+                                                args=(task, {}),
+                                                needed=needed,
+                                                key=key,
+                                                kwargs={})
+            if response == b'error':
+                err = yield worker.get_data(keys=[key])
+                scheduler_queue.put_nowait({'op': 'task-erred',
+                                            'key': key,
+                                            'worker': ident,
+                                            'exception': err[key]})
+            else:
+                scheduler_queue.put_nowait({'op': 'task-finished',
+                                            'worker': ident,
+                                            'key': key})
 
     yield worker.close(close=True)
     worker.close_streams()
-    master_queue.put_nowait({'op': 'worker-finished',
-                             'worker': ident})
+    scheduler_queue.put_nowait({'op': 'worker-finished',
+                                'worker': ident})
     log("Close worker core", ident, i)
 
 
 @gen.coroutine
-def delete(master_queue, delete_queue, ip, port):
+def delete(scheduler_queue, delete_queue, ip, port):
     """ Delete extraneous intermediates from distributed memory
 
     This coroutine manages a connection to the center in order to send keys
@@ -130,9 +113,9 @@ def delete(master_queue, delete_queue, ip, port):
     sends this list of keys over to the center which then handles deleting
     these keys from workers' memory.
 
-    worker \                             /-> worker node
-    worker -> master -> delete -> center --> worker node
-    worker /                             \-> worker node
+    worker \                                /-> worker node
+    worker -> scheduler -> delete -> center --> worker node
+    worker /                                \-> worker node
 
     Incoming Messages
     -----------------
@@ -160,7 +143,7 @@ def delete(master_queue, delete_queue, ip, port):
 
     yield center.close(close=True)
     center.close_streams()          # All done
-    master_queue.put_nowait({'op': 'delete-finished'})
+    scheduler_queue.put_nowait({'op': 'delete-finished'})
     log('Delete finished')
 
 
@@ -201,27 +184,34 @@ def insert_remote_deps(dsk, dependencies, dependents):
     >>> x = RemoteData('x', '127.0.0.1', 8787)
     >>> dsk = {'y': (add, x, 10)}
     >>> dependencies, dependents = get_deps(dsk)
-    >>> dsk, dependencies, depdendents = insert_remote_deps(dsk, dependencies, dependents)
+    >>> dsk, dependencies, depdendents, held_data = insert_remote_deps(dsk, dependencies, dependents)
     >>> dsk
     {'y': (<built-in function add>, 'x', 10)}
-    >>> dependencies
-    {'y': {'x'}, 'x': set()}
-    >>> dependents
-    {'y': set()}
+    >>> dependencies  # doctest: +SKIP
+    {'x': set(), 'y': {'x'}}
+    >>> dependents  # doctest: +SKIP
+    {'x': {'y'}, 'y': set()}
+    >>> held_data
+    {'x'}
     """
     dsk = dsk.copy()
     dependencies = dependencies.copy()
     dependents = dependents.copy()
+    held_data = set()
 
     for key, value in dsk.items():
         vv, keys = unpack_remotedata(value)
         if keys:
             dependencies[key] |= keys
             dsk[key] = vv
-        for k in keys:
-            dependencies[k] = set()
+            for k in keys:
+                held_data.add(k)
+                dependencies[k] = set()
+                if not k in dependents:
+                    dependents[k] = set()
+                dependents[k].add(key)
 
-    return dsk, dependencies, dependents
+    return dsk, dependencies, dependents, held_data
 
 
 def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
@@ -266,24 +256,24 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
 
 
 @gen.coroutine
-def master(master_queue, worker_queues, delete_queue,
-           dsk, dependencies, dependents, results,
-           who_has, has_what, workers, stacks, processing, released):
-    """ The master coroutine for dask scheduling
+def scheduler(scheduler_queue, worker_queues, delete_queue,
+              dsk, dependencies, dependents, held_data, results,
+              who_has, has_what, ncores, stacks, processing, released):
+    """ The scheduler coroutine for dask scheduling
 
     This coroutine manages interactions with all worker cores and with the
-    delete coroutine through shared state and queues.
+    delete coroutine through queues.
 
     Parameters
     ----------
-    master_queue: tornado.queues.Queue
+    scheduler_queue: tornado.queues.Queue
     worker_queues: dict {worker: tornado.queues.Queue}
     delete_queue: tornado.queues.Queue
     who_has: dict {key: set}
         Mapping key to {set of worker-identities}
     has_what: dict {worker: set}
         Mapping worker-identity to {set of keys}
-    workers: dict {worker: int}
+    ncores: dict {worker: int}
         Mapping worker-identity to number-of-cores
     stacks: dict {worker: list}
         One dask.async style stack per worker node
@@ -300,16 +290,6 @@ def master(master_queue, worker_queues, delete_queue,
         Each queue is listened to by several worker_core coroutiens.
     -   delete_queue: One queue listened to by ``delete`` which connects to the
         center to delete unnecessary intermediate data
-
-    Shared State with Workers
-    -------------------------
-
-    -   stacks: a dictionary of lists of ready-to-run tasks, one for each worker
-        e.g. {('192.168.0.1', 8788): ['key1', 'key2'],
-              ('192.168.0.2', 8788): ['key3', 'key4']}
-        Master populates stacks, worker_core depletes them
-    -   processing: a dictionary of sets of running tasks, one for each worker.
-        Worker_core coroutines manage processing mostly on their own.
     """
     state = heal(dependencies, dependents, set(who_has), stacks, processing)
     waiting = state['waiting']
@@ -323,62 +303,77 @@ def master(master_queue, worker_queues, delete_queue,
         """ Clean up queues and coroutines, prepare to stop """
         n = 0
         delete_queue.put_nowait({'op': 'close'}); n += 1
-        for w, ncores in workers.items():
-            for i in range(ncores):
+        for w, nc in ncores.items():
+            for i in range(nc):
                 worker_queues[w].put_nowait({'op': 'close'}); n += 1
 
         for i in range(n):
-            yield master_queue.get()
+            yield scheduler_queue.get()
 
-    def trigger_task(key):
-        """ Send task to an appropriate worker """
+    def add_task(key):
+        """ Send task to an appropriate worker, trigger worker if idle """
         if key in waiting:
             del waiting[key]
         new_worker = decide_worker(dependencies, stacks, who_has, key)
         stacks[new_worker].append(key)
-        worker_queues[new_worker].put_nowait({'op': 'compute-task'})
+        if len(processing[new_worker]) < ncores[new_worker]:
+            trigger_worker(new_worker)
+
+    def trigger_worker(worker):
+        """ If worker is free, spin up a task on that worker """
+        if stacks[worker] and ncores[worker] > len(processing[worker]):
+            key = stacks[worker].pop()
+            processing[worker].add(key)
+            worker_queues[worker].put_nowait({'op': 'compute-task',
+                                              'key': key})
+            return True
+        else:
+            return False
 
     """ Distribute leaves among workers """
     new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
                                    [k for k, deps in waiting.items() if not deps])
-    for worker, stack in new_stacks.items():
-        worker_queues[worker].put_nowait({'op': 'compute-task'})
+    for worker in ncores:
+        while trigger_worker(worker): pass
 
     if not list(concat(new_stacks.values())):
         yield cleanup()
         raise Return(results)
 
     while True:
-        msg = yield master_queue.get()
+        msg = yield scheduler_queue.get()
         if msg['op'] == 'task-finished':
             key = msg['key']
             worker = msg['worker']
             log("task finished", key, worker)
             who_has[key].add(worker)
             has_what[worker].add(key)
+            processing[worker].remove(key)
 
-            for dep in sorted(dependents.get(key, ()), key=keyorder.get, reverse=True):
+            for dep in sorted(dependents[key], key=keyorder.get, reverse=True):
                 s = waiting[dep]
                 s.remove(key)
                 if not s:  # new task ready to run
-                    trigger_task(dep)
-
-            for dep in dependencies[key]:
-                if dep in waiting_data:
-                    s = waiting_data[dep]
-                    s.remove(key)
-                    if not s and dep not in results:
-                        delete_queue.put_nowait({'op': 'delete-task',
-                                                 'key': dep})
-                        released.add(dep)
-                        for w in who_has[dep]:
-                            has_what[w].remove(dep)
-                        del who_has[dep]
+                    add_task(dep)
 
             if key in results:
                 finished_results.add(key)
+                held_data.add(key)
                 if len(finished_results) == len(results):
                     break
+
+            for dep in dependencies[key]:
+                s = waiting_data[dep]
+                s.remove(key)
+                if not s and dep not in held_data:
+                    delete_queue.put_nowait({'op': 'delete-task',
+                                             'key': dep})
+                    released.add(dep)
+                    for w in who_has[dep]:
+                        has_what[w].remove(dep)
+                    del who_has[dep]
+
+            trigger_worker(worker)
 
         elif msg['op'] == 'task-erred':
             yield cleanup()
@@ -388,7 +383,7 @@ def master(master_queue, worker_queues, delete_queue,
             worker = msg['worker']
             keys = has_what.pop(worker)
             del worker_queues[worker]
-            del workers[worker]
+            del ncores[worker]
             del stacks[worker]
             del processing[worker]
             missing_keys = set()
@@ -406,15 +401,11 @@ def master(master_queue, worker_queues, delete_queue,
             waiting = state['waiting']
             released = state['released']
             finished_results = state['finished_results']
-            trigger_keys = {k for k, v in waiting.items() if not v}
-            for key in trigger_keys:
-                trigger_task(key)
-            for key in set(who_has).intersection(released):
+            add_keys = {k for k, v in waiting.items() if not v}
+            for key in add_keys:
+                add_task(key)
+            for key in set(who_has) & released - held_data:
                 delete_queue.put_nowait({'op': 'delete-task', 'key': key})
-
-        for w in workers:  # This is a kludge and should be removed
-            while worker_queues[w].qsize() < len(stacks[w]):
-                worker_queues[w].put_nowait({'op': 'compute-task'})
 
     yield cleanup()
 
@@ -565,24 +556,24 @@ def _get(ip, port, dsk, result, gather=False):
     workers = sorted(ncores)
 
     dependencies, dependents = get_deps(dsk)
-    dsk, dependencies, dependents = insert_remote_deps(
+    dsk, dependencies, dependents, held_data = insert_remote_deps(
             dsk, dependencies, dependents)
 
     worker_queues = {worker: Queue() for worker in workers}
-    master_queue = Queue()
+    scheduler_queue = Queue()
     delete_queue = Queue()
 
     stacks = {w: list() for w in workers}
     processing = {w: set() for w in workers}
     released = set()
 
-    coroutines = ([master(master_queue, worker_queues, delete_queue,
-                          dsk, dependencies, dependents, out_keys,
-                          who_has, has_what, ncores, stacks, processing, released)]
-                + [worker(master_queue, worker_queues[w], w, dsk, dependencies,
-                          stacks[w], processing[w], ncores[w])
-                   for w in workers]
-                + [delete(master_queue, delete_queue, ip, port)])
+    coroutines = ([scheduler(scheduler_queue, worker_queues, delete_queue,
+                             dsk, dependencies, dependents, held_data, out_keys,
+                             who_has, has_what, ncores, stacks, processing,
+                             released),
+                   delete(scheduler_queue, delete_queue, ip, port)]
+                + [worker(scheduler_queue, worker_queues[w], w, dsk, dependencies, ncores[w])
+                   for w in workers])
 
     yield coroutines
 

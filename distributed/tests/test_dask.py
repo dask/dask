@@ -330,10 +330,11 @@ def test_insert_remote_deps():
     dsk = {'y': (inc, x)}
     dependencies, dependents = get_deps(dsk)
 
-    dsk, dependencies, depdendents = insert_remote_deps(dsk, dependencies, dependents)
+    dsk, dependencies, depdendents, held_data = insert_remote_deps(dsk, dependencies, dependents)
 
     assert dsk == {'y': (inc, x.key)}
     assert x.key in dependencies['y']
+    assert held_data == {'x'}
 
 
 def test_RemoteData_interaction():
