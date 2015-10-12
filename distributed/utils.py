@@ -33,3 +33,21 @@ def ignore_exceptions(coroutines, *exceptions):
             result = yield wait_iterator.next()
             results.append(result)
     raise gen.Return(results)
+
+
+@gen.coroutine
+def All(*args):
+    """ Wait on many tasks at the same time
+
+    Err once any of the tasks err.
+
+    See https://github.com/tornadoweb/tornado/issues/1546
+    """
+    if len(args) == 1 and isinstance(args[0], list):
+        args = args[0]
+    tasks = gen.WaitIterator(*args)
+    results = []
+    while not tasks.done():
+        result = yield tasks.next()
+        results.append(result)
+    raise gen.Return(results)
