@@ -29,7 +29,7 @@ def log(*args):
 
 
 @gen.coroutine
-def worker(scheduler_queue, worker_queue, ident, dsk, dependencies, ncores):
+def worker(scheduler_queue, worker_queue, ident, ncores):
     """ Manage a single distributed worker node
 
     This coroutine manages one remote worker.  It spins up several
@@ -37,8 +37,7 @@ def worker(scheduler_queue, worker_queue, ident, dsk, dependencies, ncores):
     connection to scheduler if one occurs.
     """
     try:
-        yield All([worker_core(scheduler_queue, worker_queue, ident, i, dsk,
-                           dependencies)
+        yield All([worker_core(scheduler_queue, worker_queue, ident, i)
                 for i in range(ncores)])
     except StreamClosedError:
         log("Worker failed from closed stream", ident)
@@ -47,7 +46,7 @@ def worker(scheduler_queue, worker_queue, ident, dsk, dependencies, ncores):
 
 
 @gen.coroutine
-def worker_core(scheduler_queue, worker_queue, ident, i, dsk, dependencies):
+def worker_core(scheduler_queue, worker_queue, ident, i):
     """ Manage one core on one distributed worker node
 
     This coroutine listens on worker_queue for the following operations
@@ -75,12 +74,12 @@ def worker_core(scheduler_queue, worker_queue, ident, i, dsk, dependencies):
             break
         if msg['op'] == 'compute-task':
             key = msg['key']
-            task = dsk[key]
+            needed = msg['needed']
+            task = msg['task']
             if not istask(task):
                 response = yield worker.update_data(data={key: task})
                 assert response == b'OK', response
             else:
-                needed = dependencies[key]
                 response = yield worker.compute(function=_execute_task,
                                                 args=(task, {}),
                                                 needed=needed,
@@ -175,7 +174,7 @@ def decide_worker(dependencies, stacks, who_has, key):
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
 
-def insert_remote_deps(dsk, dependencies, dependents):
+def insert_remote_deps(dsk, dependencies, dependents, copy=True, keys=None):
     """ Find RemoteData objects, replace with keys and insert dependencies
 
     Examples
@@ -195,12 +194,16 @@ def insert_remote_deps(dsk, dependencies, dependents):
     >>> held_data
     {'x'}
     """
-    dsk = dsk.copy()
-    dependencies = dependencies.copy()
-    dependents = dependents.copy()
+    if keys is None:
+        keys = list(dsk)
+    if copy:
+        dsk = dsk.copy()
+        dependencies = dependencies.copy()
+        dependents = dependents.copy()
     held_data = set()
 
-    for key, value in dsk.items():
+    for key in keys:
+        value = dsk[key]
         vv, keys = unpack_remotedata(value)
         if keys:
             dependencies[key] |= keys
@@ -257,9 +260,33 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
 
 
 @gen.coroutine
-def scheduler(scheduler_queue, worker_queues, delete_queue,
-              dsk, dependencies, dependents, held_data, results,
-              who_has, has_what, ncores, stacks, processing, released):
+def interact(interact_queue, scheduler_queue, dsk, result):
+    if isinstance(result, list):
+        result_flat = set(flatten(result))
+    else:
+        result_flat = set([result])
+    out_keys = set(result_flat)
+
+    scheduler_queue.put_nowait({'op': 'update-graph',
+                                'dsk': dsk,
+                                'keys': out_keys})
+
+    finished_results = set()
+
+    while finished_results != out_keys:
+        msg = yield interact_queue.get()
+        if msg['op'] == 'task-finished':
+            if msg['key'] in out_keys:
+                finished_results.add(msg['key'])
+
+    scheduler_queue.put_nowait({'op': 'close'})
+
+    raise Return(out_keys)
+
+
+@gen.coroutine
+def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
+              who_has, has_what, ncores):
     """ The scheduler coroutine for dask scheduling
 
     This coroutine manages interactions with all worker cores and with the
@@ -292,12 +319,13 @@ def scheduler(scheduler_queue, worker_queues, delete_queue,
     -   delete_queue: One queue listened to by ``delete`` which connects to the
         center to delete unnecessary intermediate data
     """
-    state = heal(dependencies, dependents, set(who_has), stacks, processing)
-    waiting = state['waiting']
-    waiting_data = state['waiting_data']
-    finished_results = state['finished_results']
-    released.update(state['released'])
-    keyorder = order(dsk)
+    stacks = {worker: list() for worker in ncores}
+    processing = {worker: set() for worker in ncores}
+    held_data = set()
+    released = set()
+    dsk = dict()
+    keyorder = dict()
+    generation = 0
 
     @gen.coroutine
     def cleanup():
@@ -325,24 +353,53 @@ def scheduler(scheduler_queue, worker_queues, delete_queue,
             key = stacks[worker].pop()
             processing[worker].add(key)
             worker_queues[worker].put_nowait({'op': 'compute-task',
-                                              'key': key})
+                                              'key': key,
+                                              'task': dsk[key],
+                                              'needed': dependencies[key]})
 
-    """ Distribute leaves among workers """
-    new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
-                                   [k for k, deps in waiting.items() if not deps])
-    for worker in ncores:
-        ensure_occupied(worker)
-
-    if not list(concat(new_stacks.values())):
-        yield cleanup()
-        raise Return(results)
+    def seed_ready_tasks():
+        """ Distribute leaves among workers """
+        new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
+                                       [k for k, deps in waiting.items() if not deps])
+        for worker in ncores:
+            ensure_occupied(worker)
 
     while True:
         msg = yield scheduler_queue.get()
+        if msg['op'] == 'close':
+            break
+        if msg['op'] == 'update-graph':
+            new_dsk = msg['dsk']
+            dsk.update(new_dsk)
+            dependencies, dependents = get_deps(dsk)  # TODO: https://github.com/blaze/dask/issues/781
+
+            _, _, _, new_held_data = insert_remote_deps(
+                    dsk, dependencies, dependents, copy=False,
+                    keys=list(new_dsk))
+
+            held_data.update(msg['keys'])
+            held_data.update(new_held_data)
+
+            # TODO: replace heal with agglomerate function
+            state = heal(dependencies, dependents, set(who_has), stacks, processing)
+            waiting = state['waiting']
+            waiting_data = state['waiting_data']
+            finished_results = state['finished_results']
+            released.update(state['released'])
+
+            new_keyorder = order(dsk)
+            for key in new_keyorder:
+                if key not in keyorder:
+                    keyorder[key] = (generation, new_keyorder[key]) # prefer old
+            generation += 1  # older graph generations take precedence
+
+            seed_ready_tasks()
+
         if msg['op'] == 'task-finished':
             key = msg['key']
             worker = msg['worker']
             log("task finished", key, worker)
+            interact_queue.put_nowait(msg)# {'op': 'key-acquired', 'key': key})
             who_has[key].add(worker)
             has_what[worker].add(key)
             processing[worker].remove(key)
@@ -352,12 +409,6 @@ def scheduler(scheduler_queue, worker_queues, delete_queue,
                 s.remove(key)
                 if not s:  # new task ready to run
                     add_task(dep)
-
-            if key in results:
-                finished_results.add(key)
-                held_data.add(key)
-                if len(finished_results) == len(results):
-                    break
 
             for dep in dependencies[key]:
                 s = waiting_data[dep]
@@ -398,6 +449,7 @@ def scheduler(scheduler_queue, worker_queues, delete_queue,
             waiting = state['waiting']
             released = state['released']
             finished_results = state['finished_results']
+            # TODO: report out lost keys
             add_keys = {k for k, v in waiting.items() if not v}
             for key in add_keys:
                 add_task(key)
@@ -405,8 +457,6 @@ def scheduler(scheduler_queue, worker_queues, delete_queue,
                 delete_queue.put_nowait({'op': 'delete-task', 'key': key})
 
     yield cleanup()
-
-    raise Return(results)
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
@@ -540,39 +590,26 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
 
 @gen.coroutine
 def _get(ip, port, dsk, result, gather=False):
-    if isinstance(result, list):
-        result_flat = set(flatten(result))
-    else:
-        result_flat = set([result])
-    out_keys = set(result_flat)
-
     center = rpc(ip=ip, port=port)
     who_has, has_what, ncores = yield [center.who_has(),
                                        center.has_what(),
                                        center.ncores()]
     workers = sorted(ncores)
 
-    dependencies, dependents = get_deps(dsk)
-    dsk, dependencies, dependents, held_data = insert_remote_deps(
-            dsk, dependencies, dependents)
-
     worker_queues = {worker: Queue() for worker in workers}
     scheduler_queue = Queue()
     delete_queue = Queue()
+    interact_queue = Queue()
 
-    stacks = {w: list() for w in workers}
-    processing = {w: set() for w in workers}
-    released = set()
-
-    coroutines = ([scheduler(scheduler_queue, worker_queues, delete_queue,
-                             dsk, dependencies, dependents, held_data, out_keys,
-                             who_has, has_what, ncores, stacks, processing,
-                             released),
+    coroutines = ([interact(interact_queue, scheduler_queue, dsk, result),
+                   scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
+                             who_has, has_what, ncores),
                    delete(scheduler_queue, delete_queue, ip, port)]
-                + [worker(scheduler_queue, worker_queues[w], w, dsk, dependencies, ncores[w])
+                + [worker(scheduler_queue, worker_queues[w], w, ncores[w])
                    for w in workers])
 
-    yield All(coroutines)
+    results = yield All(coroutines)
+    out_keys = results[0]
 
     if gather:
         out_data = yield _gather(center, out_keys)
