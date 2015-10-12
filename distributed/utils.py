@@ -46,8 +46,8 @@ def All(*args):
     if len(args) == 1 and isinstance(args[0], list):
         args = args[0]
     tasks = gen.WaitIterator(*args)
-    results = []
+    results = [None for _ in args]
     while not tasks.done():
         result = yield tasks.next()
-        results.append(result)
+        results[tasks.current_index] = result
     raise gen.Return(results)

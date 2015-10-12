@@ -150,6 +150,11 @@ def delete(scheduler_queue, delete_queue, ip, port):
 
 @gen.coroutine
 def interact(interact_queue, scheduler_queue, who_has, dsk, result):
+    """ Interact with outside world
+
+    For a normal get function this coroutine is almost non-essential.
+    It just starts and stops the scheduler coroutine.
+    """
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
@@ -167,6 +172,9 @@ def interact(interact_queue, scheduler_queue, who_has, dsk, result):
         if msg['op'] == 'task-finished':
             if msg['key'] in out_keys:
                 finished_results.add(msg['key'])
+        if msg['op'] == 'lost-data':
+            if msg['key'] in finished_results:
+                finished_results.remove(msg['key'])
 
     scheduler_queue.put_nowait({'op': 'close'})
 
@@ -336,6 +344,8 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             finished_results = state['finished_results']
             # TODO: report out lost keys
             add_keys = {k for k, v in waiting.items() if not v}
+            for key in held_data & released:
+                interact_queue.put_nowait({'op': 'lost-key', 'key': key})
             for key in add_keys:
                 mark_ready_to_run(key)
             for key in set(who_has) & released - held_data:
