@@ -15,7 +15,7 @@ from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.client import _gather, RemoteData
 from distributed.core import connect_sync, read_sync, write_sync
-from distributed.dask import (_get, _get_simple, validate_state, heal,
+from distributed.dask import (_get, validate_state, heal,
         insert_remote_deps, decide_worker, assign_many_tasks)
 from distributed.utils_test import cluster
 
@@ -27,9 +27,9 @@ def inc(x):
     return x + 1
 
 
-def _test_cluster(f, gets=[_get, _get_simple]):
+def _test_cluster(f):
     @gen.coroutine
-    def g(get):
+    def g():
         c = Center('127.0.0.1', 8017)
         c.listen(c.port)
         a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=2)
@@ -41,7 +41,7 @@ def _test_cluster(f, gets=[_get, _get_simple]):
             yield gen.sleep(0.01)
 
         try:
-            yield f(c, a, b, get)
+            yield f(c, a, b)
         finally:
             with ignoring():
                 yield a._close()
@@ -49,8 +49,7 @@ def _test_cluster(f, gets=[_get, _get_simple]):
                 yield b._close()
             c.stop()
 
-    for get in gets:
-        IOLoop.current().run_sync(lambda: g(get))
+    IOLoop.current().run_sync(g)
 
 
 def test_scheduler():
@@ -60,8 +59,8 @@ def test_scheduler():
     keys = ['total', 'c', ['z']]
 
     @gen.coroutine
-    def f(c, a, b, get):
-        result = yield get(c.ip, c.port, dsk, keys, gather=True)
+    def f(c, a, b):
+        result = yield _get(c.ip, c.port, dsk, keys, gather=True)
 
         expected = dask.async.get_sync(dsk, keys)
         assert tuple(result) == expected
@@ -77,9 +76,9 @@ def test_scheduler_errors():
     keys = 'y'
 
     @gen.coroutine
-    def f(c, a, b, get):
+    def f(c, a, b):
         try:
-            result = yield get(c.ip, c.port, dsk, keys)
+            result = yield _get(c.ip, c.port, dsk, keys)
             assert False
         except ZeroDivisionError as e:
             # assert 'mydiv' in str(e)
@@ -95,15 +94,15 @@ def test_avoid_computations_for_data_in_memory():
     keys = 'z'
 
     @gen.coroutine
-    def f(c, a, b, get):
+    def f(c, a, b):
         a.data['y'] = 10                # manually add 'y' to a
         c.who_has['y'].add(a.address)
         c.has_what[a.address].add('y')
 
-        result = yield get(c.ip, c.port, dsk, keys)
+        result = yield _get(c.ip, c.port, dsk, keys)
         assert result.key in a.data or result.key in b.data
 
-    _test_cluster(f, gets=[_get])
+    _test_cluster(f)
 
 
 def test_gather():
@@ -111,8 +110,8 @@ def test_gather():
     keys = 'y'
 
     @gen.coroutine
-    def f(c, a, b, get):
-        result = yield get(c.ip, c.port, dsk, keys, gather=True)
+    def f(c, a, b):
+        result = yield _get(c.ip, c.port, dsk, keys, gather=True)
         assert result == 2
 
     _test_cluster(f)
@@ -317,12 +316,12 @@ def test_repeated_computation():
     dsk = {'x': (func,)}
 
     @gen.coroutine
-    def f(c, a, b, get):
-        x = yield get(c.ip, c.port, dsk, 'x', gather=True)
-        y = yield get(c.ip, c.port, dsk, 'x', gather=True)
+    def f(c, a, b):
+        x = yield _get(c.ip, c.port, dsk, 'x', gather=True)
+        y = yield _get(c.ip, c.port, dsk, 'x', gather=True)
         assert x == y
 
-    _test_cluster(f, gets=[_get])
+    _test_cluster(f)
 
 
 def test_insert_remote_deps():
@@ -339,7 +338,7 @@ def test_insert_remote_deps():
 
 def test_RemoteData_interaction():
     @gen.coroutine
-    def f(c, a, b, get):
+    def f(c, a, b):
         a.data['x'] = 10
         c.who_has['x'].add(a.address)
         c.has_what[a.address].add('x')
@@ -347,11 +346,11 @@ def test_RemoteData_interaction():
 
         dsk = {'y': (inc, x)}
 
-        result = yield get(c.ip, c.port, dsk, 'y', gather=True)
+        result = yield _get(c.ip, c.port, dsk, 'y', gather=True)
         assert result == 11
         assert 'x' in a.data  # don't delete input data
 
-    _test_cluster(f, gets=[_get])
+    _test_cluster(f)
 
 
 def test_assign_many_tasks():
