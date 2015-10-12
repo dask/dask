@@ -19,6 +19,7 @@ from dask.order import order
 
 from .core import connect, rpc
 from .client import RemoteData, _gather, unpack_remotedata
+from .utils import All
 
 
 log = print
@@ -36,9 +37,9 @@ def worker(scheduler_queue, worker_queue, ident, dsk, dependencies, ncores):
     connection to scheduler if one occurs.
     """
     try:
-        yield [worker_core(scheduler_queue, worker_queue, ident, i, dsk,
+        yield All([worker_core(scheduler_queue, worker_queue, ident, i, dsk,
                            dependencies)
-                for i in range(ncores)]
+                for i in range(ncores)])
     except StreamClosedError:
         log("Worker failed from closed stream", ident)
         scheduler_queue.put_nowait({'op': 'worker-failed',
@@ -571,7 +572,7 @@ def _get(ip, port, dsk, result, gather=False):
                 + [worker(scheduler_queue, worker_queues[w], w, dsk, dependencies, ncores[w])
                    for w in workers])
 
-    yield coroutines
+    yield All(coroutines)
 
     if gather:
         out_data = yield _gather(center, out_keys)
