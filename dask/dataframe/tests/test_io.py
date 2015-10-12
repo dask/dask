@@ -295,7 +295,7 @@ def test_compression_multiple_files():
 
 def test_empty_csv_file():
     with filetext('a,b') as fn:
-        df = dd.read_csv(fn)
+        df = dd.read_csv(fn, header=0)
         assert len(df.compute()) == 0
         assert list(df.columns) == ['a', 'b']
 
@@ -742,26 +742,26 @@ def test_from_pandas_with_datetime_index():
         eq(df, ddf)
 
 
-def test_encoding_gh601():
-    encodings = ('utf-16', 'utf-16-le', 'utf-16-be')
+@pytest.mark.parametrize('encoding', ['utf-16', 'utf-16-le', 'utf-16-be'])
+def test_encoding_gh601(encoding):
     ar = pd.Series(range(0, 100))
     br = ar % 7
     cr = br * 3.3
     dr = br / 1.9836
-    test_df = pd.concat([ar, br, cr, dr], axis=1)
+    test_df = pd.DataFrame({'a': ar, 'b': br, 'c': cr, 'd': dr})
 
-    for encoding in encodings:
-        with tmpfile('.csv') as fn:
-            test_df.to_csv(fn, encoding=encoding)
+    with tmpfile('.csv') as fn:
+        test_df.to_csv(fn, encoding=encoding, index=False)
 
-            a = pd.read_csv(fn, encoding=encoding)
-            d = dd.read_csv(fn, encoding=encoding, chunkbytes=1000)
-            d = d.compute()
-            d.index = range(len(d.index))
-            assert eq(d, a)
+        a = pd.read_csv(fn, encoding=encoding)
+        d = dd.read_csv(fn, encoding=encoding, chunkbytes=1000)
+        d = d.compute()
+        d.index = range(len(d.index))
+        assert eq(d, a)
 
 
 def test_read_hdf_doesnt_segfault():
+    pytest.importorskip('tables')
     with tmpfile('h5') as fn:
         N = 40
         df = pd.DataFrame(np.random.randn(N, 3))
