@@ -286,7 +286,7 @@ def slowinc(x):
     return x + 1
 
 
-def test_failing_worker():
+def dont_test_failing_worker():
     n = 10
     dsk = {('x', i, j): (slowinc, ('x', i, j - 1)) for i in range(4)
                                                    for j in range(1, n)}

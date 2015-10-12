@@ -260,7 +260,7 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
 
 
 @gen.coroutine
-def interact(interact_queue, scheduler_queue, dsk, result):
+def interact(interact_queue, scheduler_queue, who_has, dsk, result):
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
@@ -271,7 +271,7 @@ def interact(interact_queue, scheduler_queue, dsk, result):
                                 'dsk': dsk,
                                 'keys': out_keys})
 
-    finished_results = set()
+    finished_results = {k for k in out_keys if k in who_has}
 
     while finished_results != out_keys:
         msg = yield interact_queue.get()
@@ -601,7 +601,7 @@ def _get(ip, port, dsk, result, gather=False):
     delete_queue = Queue()
     interact_queue = Queue()
 
-    coroutines = ([interact(interact_queue, scheduler_queue, dsk, result),
+    coroutines = ([interact(interact_queue, scheduler_queue, who_has, dsk, result),
                    scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
                              who_has, has_what, ncores),
                    delete(scheduler_queue, delete_queue, ip, port)]
