@@ -307,8 +307,6 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         One dask.async style stack per worker node
     processing: dict {worker: set}
         One set of tasks currently in process on each worker
-    released: set
-        A set of all keys that have been computed, used, and released
     dsk, results: normal inputs to get
 
     Queues
@@ -322,7 +320,6 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
     stacks = {worker: list() for worker in ncores}
     processing = {worker: set() for worker in ncores}
     held_data = set()
-    released = set()
     dsk = dict()
     keyorder = dict()
     generation = 0
@@ -385,7 +382,6 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             waiting = state['waiting']
             waiting_data = state['waiting_data']
             finished_results = state['finished_results']
-            released.update(state['released'])
 
             new_keyorder = order(dsk)
             for key in new_keyorder:
@@ -416,7 +412,6 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
                 if not s and dep not in held_data:
                     delete_queue.put_nowait({'op': 'delete-task',
                                              'key': dep})
-                    released.add(dep)
                     for w in who_has[dep]:
                         has_what[w].remove(dep)
                     del who_has[dep]
