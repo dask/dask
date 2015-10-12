@@ -8,9 +8,12 @@ Create DataFrames
 
 .. autosummary::
    read_csv
+   read_hdf
    from_array
    from_pandas
    from_bcolz
+   from_castra
+   from_dask_array
 
 .. currentmodule:: dask.dataframe.core
 
@@ -57,6 +60,9 @@ Other functions
 .. currentmodule:: dask.dataframe.io
 
 .. autofunction:: read_csv
+.. autofunction:: read_hdf
 .. autofunction:: from_array
 .. autofunction:: from_pandas
 .. autofunction:: from_bcolz
+.. autofunction:: from_castra
+.. autofunction:: from_dask_array
