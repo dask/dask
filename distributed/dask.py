@@ -336,7 +336,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         for i in range(n):
             yield scheduler_queue.get()
 
-    def add_task(key):
+    def mark_ready_to_run(key):
         """ Send task to an appropriate worker, trigger worker if idle """
         if key in waiting:
             del waiting[key]
@@ -383,9 +383,10 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             waiting_data = state['waiting_data']
             finished_results = state['finished_results']
 
-            new_keyorder = order(dsk)
+            new_keyorder = order(new_dsk)
             for key in new_keyorder:
                 if key not in keyorder:
+                    # TODO: add test for this
                     keyorder[key] = (generation, new_keyorder[key]) # prefer old
             generation += 1  # older graph generations take precedence
 
@@ -395,16 +396,16 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             key = msg['key']
             worker = msg['worker']
             log("task finished", key, worker)
-            interact_queue.put_nowait(msg)# {'op': 'key-acquired', 'key': key})
             who_has[key].add(worker)
             has_what[worker].add(key)
             processing[worker].remove(key)
+            interact_queue.put_nowait(msg)
 
             for dep in sorted(dependents[key], key=keyorder.get, reverse=True):
                 s = waiting[dep]
                 s.remove(key)
                 if not s:  # new task ready to run
-                    add_task(dep)
+                    mark_ready_to_run(dep)
 
             for dep in dependencies[key]:
                 s = waiting_data[dep]
@@ -419,7 +420,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             ensure_occupied(worker)
 
         elif msg['op'] == 'task-erred':
-            yield cleanup()
+            yield cleanup()  # TODO: move to interact?
             raise msg['exception']
 
         elif msg['op'] == 'worker-failed':
@@ -447,7 +448,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             # TODO: report out lost keys
             add_keys = {k for k, v in waiting.items() if not v}
             for key in add_keys:
-                add_task(key)
+                mark_ready_to_run(key)
             for key in set(who_has) & released - held_data:
                 delete_queue.put_nowait({'op': 'delete-task', 'key': key})
 
