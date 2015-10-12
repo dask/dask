@@ -24,6 +24,7 @@ from .utils import All
 
 log = print
 
+
 def log(*args):
     return
 
@@ -145,118 +146,6 @@ def delete(scheduler_queue, delete_queue, ip, port):
     center.close_streams()          # All done
     scheduler_queue.put_nowait({'op': 'delete-finished'})
     log('Delete finished')
-
-
-def decide_worker(dependencies, stacks, who_has, key):
-    """ Decide which worker should take task
-
-    >>> dependencies = {'c': {'b'}, 'b': {'a'}}
-    >>> stacks = {'alice': ['z'], 'bob': []}
-    >>> who_has = {'a': {'alice'}}
-
-    We choose the worker that has the data on which 'b' depends (alice has 'a')
-
-    >>> decide_worker(dependencies, stacks, who_has, 'b')
-    'alice'
-
-    If both Alice and Bob have dependencies then we choose the less-busy worker
-
-    >>> who_has = {'a': {'alice', 'bob'}}
-    >>> decide_worker(dependencies, stacks, who_has, 'b')
-    'bob'
-    """
-    deps = dependencies[key]
-    # TODO: look at args for RemoteData
-    workers = frequencies(w for dep in deps
-                            for w in who_has[dep])
-    if not workers:
-        workers = stacks
-    worker = min(workers, key=lambda w: len(stacks[w]))
-    return worker
-
-def insert_remote_deps(dsk, dependencies, dependents, copy=True, keys=None):
-    """ Find RemoteData objects, replace with keys and insert dependencies
-
-    Examples
-    --------
-
-    >>> from operator import add
-    >>> x = RemoteData('x', '127.0.0.1', 8787)
-    >>> dsk = {'y': (add, x, 10)}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> dsk, dependencies, depdendents, held_data = insert_remote_deps(dsk, dependencies, dependents)
-    >>> dsk
-    {'y': (<built-in function add>, 'x', 10)}
-    >>> dependencies  # doctest: +SKIP
-    {'x': set(), 'y': {'x'}}
-    >>> dependents  # doctest: +SKIP
-    {'x': {'y'}, 'y': set()}
-    >>> held_data
-    {'x'}
-    """
-    if keys is None:
-        keys = list(dsk)
-    if copy:
-        dsk = dsk.copy()
-        dependencies = dependencies.copy()
-        dependents = dependents.copy()
-    held_data = set()
-
-    for key in keys:
-        value = dsk[key]
-        vv, keys = unpack_remotedata(value)
-        if keys:
-            dependencies[key] |= keys
-            dsk[key] = vv
-            for k in keys:
-                held_data.add(k)
-                dependencies[k] = set()
-                if not k in dependents:
-                    dependents[k] = set()
-                dependents[k].add(key)
-
-    return dsk, dependencies, dependents, held_data
-
-
-def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
-    """ Assign many new ready tasks to workers
-
-    Often at the beginning of computation we have to assign many new leaves to
-    several workers.  This initial seeding of work can have dramatic effects on
-    total runtime.
-
-    This takes some typical state variables (dependencies, waiting, keyorder,
-    who_has, stacks) as well as a list of keys to assign to stacks.
-
-    This mutates waiting and stacks in place and returns a dictionary,
-    new_stacks, that serves as a diff between the old and new stacks.  These
-    new tasks have yet to be put on worker queues.
-    """
-    leaves = list()  # ready tasks without data dependencies
-    ready = list()   # ready tasks with data dependencies
-    new_stacks = defaultdict(list)
-
-    for k in keys:
-        assert not waiting.pop(k)
-        if not dependencies[k]:
-            leaves.append(k)
-        else:
-            ready.append(k)
-
-    leaves = sorted(leaves, key=keyorder.get)
-
-    k = int(ceil(len(leaves) / len(stacks)))
-    for i, worker in enumerate(stacks):
-        keys = leaves[i*k: (i + 1)*k][::-1]
-        new_stacks[worker].extend(keys)
-        stacks[worker].extend(keys)
-
-    for key in ready:
-        worker = decide_worker(dependencies, stacks, who_has, key)
-        new_stacks[worker].append(key)
-        stacks[worker].append(key)
-
-    return new_stacks
 
 
 @gen.coroutine
@@ -649,9 +538,116 @@ def get(ip, port, dsk, keys, gather=True, _get=_get):
     return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys, gather))
 
 
-def hashable(x):
-    try:
-        hash(x)
-        return True
-    except TypeError:
-        return False
+def decide_worker(dependencies, stacks, who_has, key):
+    """ Decide which worker should take task
+
+    >>> dependencies = {'c': {'b'}, 'b': {'a'}}
+    >>> stacks = {'alice': ['z'], 'bob': []}
+    >>> who_has = {'a': {'alice'}}
+
+    We choose the worker that has the data on which 'b' depends (alice has 'a')
+
+    >>> decide_worker(dependencies, stacks, who_has, 'b')
+    'alice'
+
+    If both Alice and Bob have dependencies then we choose the less-busy worker
+
+    >>> who_has = {'a': {'alice', 'bob'}}
+    >>> decide_worker(dependencies, stacks, who_has, 'b')
+    'bob'
+    """
+    deps = dependencies[key]
+    # TODO: look at args for RemoteData
+    workers = frequencies(w for dep in deps
+                            for w in who_has[dep])
+    if not workers:
+        workers = stacks
+    worker = min(workers, key=lambda w: len(stacks[w]))
+    return worker
+
+
+def insert_remote_deps(dsk, dependencies, dependents, copy=True, keys=None):
+    """ Find RemoteData objects, replace with keys and insert dependencies
+
+    Examples
+    --------
+
+    >>> from operator import add
+    >>> x = RemoteData('x', '127.0.0.1', 8787)
+    >>> dsk = {'y': (add, x, 10)}
+    >>> dependencies, dependents = get_deps(dsk)
+    >>> dsk, dependencies, depdendents, held_data = insert_remote_deps(dsk, dependencies, dependents)
+    >>> dsk
+    {'y': (<built-in function add>, 'x', 10)}
+    >>> dependencies  # doctest: +SKIP
+    {'x': set(), 'y': {'x'}}
+    >>> dependents  # doctest: +SKIP
+    {'x': {'y'}, 'y': set()}
+    >>> held_data
+    {'x'}
+    """
+    if keys is None:
+        keys = list(dsk)
+    if copy:
+        dsk = dsk.copy()
+        dependencies = dependencies.copy()
+        dependents = dependents.copy()
+    held_data = set()
+
+    for key in keys:
+        value = dsk[key]
+        vv, keys = unpack_remotedata(value)
+        if keys:
+            dependencies[key] |= keys
+            dsk[key] = vv
+            for k in keys:
+                held_data.add(k)
+                dependencies[k] = set()
+                if not k in dependents:
+                    dependents[k] = set()
+                dependents[k].add(key)
+
+    return dsk, dependencies, dependents, held_data
+
+
+def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
+    """ Assign many new ready tasks to workers
+
+    Often at the beginning of computation we have to assign many new leaves to
+    several workers.  This initial seeding of work can have dramatic effects on
+    total runtime.
+
+    This takes some typical state variables (dependencies, waiting, keyorder,
+    who_has, stacks) as well as a list of keys to assign to stacks.
+
+    This mutates waiting and stacks in place and returns a dictionary,
+    new_stacks, that serves as a diff between the old and new stacks.  These
+    new tasks have yet to be put on worker queues.
+    """
+    leaves = list()  # ready tasks without data dependencies
+    ready = list()   # ready tasks with data dependencies
+    new_stacks = defaultdict(list)
+
+    for k in keys:
+        assert not waiting.pop(k)
+        if not dependencies[k]:
+            leaves.append(k)
+        else:
+            ready.append(k)
+
+    leaves = sorted(leaves, key=keyorder.get)
+
+    k = int(ceil(len(leaves) / len(stacks)))
+    for i, worker in enumerate(stacks):
+        keys = leaves[i*k: (i + 1)*k][::-1]
+        new_stacks[worker].extend(keys)
+        stacks[worker].extend(keys)
+
+    for key in ready:
+        worker = decide_worker(dependencies, stacks, who_has, key)
+        new_stacks[worker].append(key)
+        stacks[worker].append(key)
+
+    return new_stacks
+
+
