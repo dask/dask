@@ -54,13 +54,17 @@ class Future(WrappedKey):
         return self.event.is_set()
 
     def result(self):
-        return sync(self.executor.loop, self._result)
+        result = sync(self.executor.loop, self._result, raiseit=False)
+        if self.status == 'error':
+            raise result
+        else:
+            return result
 
     @gen.coroutine
-    def _result(self):
+    def _result(self, raiseit=True):
         yield self.event.wait()
         result = yield _gather(self.executor.center, [self.key])
-        if self.status == 'error':
+        if self.status == 'error' and raiseit:
             raise result[0]
         else:
             raise gen.Return(result[0])
@@ -122,7 +126,7 @@ class Executor(object):
                 break
             if msg['op'] == 'task-finished':
                 if msg['key'] in self.futures:
-                    self.futures[msg['key']]._set_ready(True)
+                    self.futures[msg['key']]._set_ready('finished')
             if msg['op'] == 'lost-data':
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]._set_ready(False)

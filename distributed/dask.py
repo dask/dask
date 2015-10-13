@@ -361,6 +361,10 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
                 held_data.remove(key)
                 release_key(msg['key'])
 
+        else:
+            log("Bad message", msg)
+
+    log('Finished scheduling')
     yield cleanup()
 
 
@@ -668,5 +672,3 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
         stacks[worker].append(key)
 
     return new_stacks
-
-

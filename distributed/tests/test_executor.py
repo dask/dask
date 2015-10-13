@@ -15,6 +15,10 @@ def inc(x):
     return x + 1
 
 
+def div(x, y):
+    return x / y
+
+
 def _test_cluster(f):
     @gen.coroutine
     def g():
@@ -96,8 +100,6 @@ def test_map():
 
 
 def test_exceptions():
-    def div(x, y):
-        return x / y
 
     @gen.coroutine
     def f(c, a, b):
@@ -147,5 +149,26 @@ def test_thread():
 
         x = e.submit(inc, 1)
         assert x.result() == 2
+
+        e.shutdown()
+
+
+def dont_test_sync_exceptions():
+    with cluster() as (c, [a, b]):
+        e = Executor(('127.0.0.1', c['port']))
+        e.start()
+
+        x = e.submit(div, 10, 2)
+        assert x.result() == 5
+
+        y = e.submit(div, 10, 0)
+        try:
+            y.result()
+            assert False
+        except ZeroDivisionError:
+            pass
+
+        z = e.submit(div, 10, 5)
+        assert z.result() == 2
 
         e.shutdown()
