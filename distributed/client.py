@@ -62,7 +62,7 @@ def gather(center, needed):
 def _gather(center, needed=[]):
     center = coerce_to_rpc(center)
 
-    needed = [n.key if isinstance(n, RemoteData) else n for n in needed]
+    needed = [n.key if isinstance(n, WrappedKey) else n for n in needed]
     who_has = yield center.who_has(keys=needed)
 
     if not isinstance(who_has, dict):
@@ -118,7 +118,20 @@ def gather_from_workers(who_has):
     raise Return(results)
 
 
-class RemoteData(object):
+class WrappedKey(object):
+    """ Interface for a key in a dask graph.
+
+    Subclasses must have .key attribute that refers to a key in a dask graph.
+
+    Sometimes we want to associate metadata to keys in a dask graph.  For
+    example we might know that that key lives on a particular machine or can
+    only be accessed in a certain way.  Schedulers may have particular needs
+    that can only be addressed by additional metadata.
+    """
+    pass
+
+
+class RemoteData(WrappedKey):
     """ Data living on a remote worker
 
     ``RemoteData`` objects represent key-value pairs living on remote workers.
@@ -306,7 +319,7 @@ def scatter_to_workers(center, ncores, data, key=None):
 
 @gen.coroutine
 def _delete(center, keys):
-    keys = [k.key if isinstance(k, RemoteData) else k for k in keys]
+    keys = [k.key if isinstance(k, WrappedKey) else k for k in keys]
     center = coerce_to_rpc(center)
     yield center.delete_data(keys=keys)
 
@@ -332,7 +345,7 @@ def clear(center):
 
 
 def unpack_remotedata(o):
-    """ Unpack RemoteData objects from collection
+    """ Unpack WrappedKey objects from collection
 
     Returns original collection and set of all found keys
 
@@ -350,7 +363,7 @@ def unpack_remotedata(o):
     >>> unpack_remotedata({1: [rd]})
     ({1: ['mykey']}, {'mykey'})
     """
-    if isinstance(o, RemoteData):
+    if isinstance(o, WrappedKey):
         return o.key, {o.key}
     with ignoring(Exception):
         if not o:
