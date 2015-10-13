@@ -41,8 +41,10 @@ class Future(WrappedKey):
         self.key = key
         self.executor = executor
         self.event = Event()
+        self.status = None
 
     def _set_ready(self, status):
+        self.status = status
         if status:
             self.event.set()
         else:
@@ -58,7 +60,10 @@ class Future(WrappedKey):
     def _result(self):
         yield self.event.wait()
         result = yield _gather(self.executor.center, [self.key])
-        raise gen.Return(result[0])
+        if self.status == 'error':
+            raise result[0]
+        else:
+            raise gen.Return(result[0])
 
     def __del__(self):
         self.executor._release_key(self.key)
@@ -121,6 +126,9 @@ class Executor(object):
             if msg['op'] == 'lost-data':
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]._set_ready(False)
+            if msg['op'] == 'task-erred':
+                if msg['key'] in self.futures:
+                    self.futures[msg['key']]._set_ready('error')
 
     @gen.coroutine
     def _shutdown(self):

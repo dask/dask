@@ -1,5 +1,6 @@
 from operator import add
 
+import pytest
 from toolz import isdistinct
 from tornado.ioloop import IOLoop
 from tornado import gen
@@ -62,6 +63,7 @@ def test_submit():
 
     _test_cluster(f)
 
+
 def test_map():
     @gen.coroutine
     def f(c, a, b):
@@ -87,6 +89,32 @@ def test_map():
         total = e.submit(sum, L2)
         result = yield total._result()
         assert result == sum(map(inc, map(inc, range(5))))
+
+        yield e._shutdown()
+
+    _test_cluster(f)
+
+
+def test_exceptions():
+    def div(x, y):
+        return x / y
+
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(div, 1, 2)
+        result = yield x._result()
+        assert result == 1 / 2
+
+        x = e.submit(div, 1, 0)
+        with pytest.raises(ZeroDivisionError):
+            result = yield x._result()
+
+        x = e.submit(div, 10, 2)  # continues to operate
+        result = yield x._result()
+        assert result == 10 / 2
 
         yield e._shutdown()
 
