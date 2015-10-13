@@ -110,6 +110,13 @@ class Executor(object):
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.start()
 
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.shutdown()
+
     def _release_key(self, key):
         self.futures[key].event.clear()
         del self.futures[key]

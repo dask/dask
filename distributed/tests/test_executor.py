@@ -100,7 +100,6 @@ def test_map():
 
 
 def test_exceptions():
-
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port))
@@ -144,13 +143,9 @@ def test_gc():
 
 def test_thread():
     with cluster() as (c, [a, b]):
-        e = Executor(('127.0.0.1', c['port']))
-        e.start()
-
-        x = e.submit(inc, 1)
-        assert x.result() == 2
-
-        e.shutdown()
+        with Executor(('127.0.0.1', c['port'])) as e:
+            x = e.submit(inc, 1)
+            assert x.result() == 2
 
 
 def dont_test_sync_exceptions():
