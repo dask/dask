@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from dask.base import tokenize
+from dask.utils import funcname
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
@@ -68,6 +69,7 @@ class Executor(object):
     def __init__(self, center):
         self.center = coerce_to_rpc(center)
         self.futures = dict()
+        self.dask = dict()
         self.interact_queue = Queue()
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
@@ -105,7 +107,7 @@ class Executor(object):
 
         coroutines = ([self.interact(),
                        scheduler(self.scheduler_queue, self.interact_queue, worker_queues, delete_queue,
-                                 self.who_has, self.has_what, self.ncores),
+                                 self.who_has, self.has_what, self.ncores, self.dask),
                        delete(self.scheduler_queue, delete_queue, self.center.ip, self.center.port)]
                     + [worker(self.scheduler_queue, worker_queues[w], w, n)
                        for w, n in self.ncores.items()])
@@ -120,10 +122,14 @@ class Executor(object):
         Returns
         -------
         Future
+
+        See Also
+        --------
+        distributed.executor.Executor.submit:
         """
         key = kwargs.pop('key', None)
         if key is None:
-            key = tokenize(func, *args, **kwargs)
+            key = funcname(func) + '-' + tokenize(func, *args, **kwargs)
 
         if kwargs:
             task = (apply, func, args, kwargs)
@@ -138,3 +144,32 @@ class Executor(object):
                                          'keys': [key]})
 
         return f
+
+    def map(self, func, seq, key=None):
+        """ Map a function on a sequence of arguments
+
+        Arguments can be normal objects or Futures
+
+        Returns
+        -------
+        list of futures
+
+        See also
+        --------
+        distributed.executor.Executor.submit
+        """
+        if key is None:
+            keys = [funcname(func) + '-' + tokenize(func, arg) for arg in seq]
+        else:
+            keys = [key + '-%d' % i for i in range(len(seq))]
+
+        dsk = {key: (func, arg) for key, arg in zip(keys, seq)}
+
+        futures = [Future(key, Event(), self.center) for key in keys]
+        self.futures.update(dict(zip(keys, futures)))
+
+        self.scheduler_queue.put_nowait({'op': 'update-graph',
+                                         'dsk': dsk,
+                                         'keys': keys})
+
+        return futures

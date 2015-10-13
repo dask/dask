@@ -1,5 +1,6 @@
 from operator import add
 
+from toolz import isdistinct
 from tornado.ioloop import IOLoop
 from tornado import gen
 
@@ -37,7 +38,7 @@ def _test_cluster(f):
     IOLoop.current().run_sync(g)
 
 
-def test_Executor():
+def test_submit():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port))
@@ -55,6 +56,35 @@ def test_Executor():
         z = e.submit(add, x, y)
         result = yield z._result()
         assert result == 11 + 21
+        yield e._shutdown()
+
+    _test_cluster(f)
+
+def test_map():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+
+        L1 = e.map(inc, range(5))
+        assert len(L1) == 5
+        assert isdistinct(x.key for x in L1)
+        assert all(isinstance(x, Future) for x in L1)
+
+        result = yield L1[0]._result()
+        assert result == inc(0)
+        assert len(e.dask) == 5
+
+        L2 = e.map(inc, L1)
+
+        result = yield L2[1]._result()
+        assert result == inc(inc(1))
+        assert len(e.dask) == 10
+        assert L1[0].key in e.dask[L2[0].key]
+
+        total = e.submit(sum, L2)
+        result = yield total._result()
+        assert result == sum(map(inc, map(inc, range(5))))
 
         yield e._shutdown()
 

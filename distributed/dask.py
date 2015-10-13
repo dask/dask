@@ -183,7 +183,7 @@ def interact(interact_queue, scheduler_queue, who_has, dsk, result):
 
 @gen.coroutine
 def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
-              who_has, has_what, ncores):
+              who_has, has_what, ncores, dsk=None):
     """ The scheduler coroutine for dask scheduling
 
     This coroutine manages interactions with all worker cores and with the
@@ -214,7 +214,8 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
     stacks = {worker: list() for worker in ncores}
     processing = {worker: set() for worker in ncores}
     held_data = set()
-    dsk = dict()
+    if dsk is None:
+        dsk = dict()
     keyorder = dict()
     generation = 0
 
