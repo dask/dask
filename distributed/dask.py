@@ -192,6 +192,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
     Parameters
     ----------
     scheduler_queue: tornado.queues.Queue
+    interact_queue: tornado.queues.Queue
     worker_queues: dict {worker: tornado.queues.Queue}
     delete_queue: tornado.queues.Queue
     who_has: dict {key: set}
@@ -200,15 +201,11 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         Mapping worker-identity to {set of keys}
     ncores: dict {worker: int}
         Mapping worker-identity to number-of-cores
-    stacks: dict {worker: list}
-        One dask.async style stack per worker node
-    processing: dict {worker: set}
-        One set of tasks currently in process on each worker
-    dsk, results: normal inputs to get
 
     Queues
     ------
 
+    -   interact_queue: get graphs from outside, report tasks done
     -   worker_queues: One queue per worker node.
         Each queue is listened to by several worker_core coroutiens.
     -   delete_queue: One queue listened to by ``delete`` which connects to the
@@ -342,7 +339,6 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             waiting = state['waiting']
             released = state['released']
             finished_results = state['finished_results']
-            # TODO: report out lost keys
             add_keys = {k for k, v in waiting.items() if not v}
             for key in held_data & released:
                 interact_queue.put_nowait({'op': 'lost-key', 'key': key})
@@ -567,7 +563,6 @@ def decide_worker(dependencies, stacks, who_has, key):
     'bob'
     """
     deps = dependencies[key]
-    # TODO: look at args for RemoteData
     workers = frequencies(w for dep in deps
                             for w in who_has[dep])
     if not workers:
