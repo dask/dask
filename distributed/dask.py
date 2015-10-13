@@ -175,7 +175,9 @@ def interact(interact_queue, scheduler_queue, who_has, dsk, result):
         if msg['op'] == 'lost-data':
             if msg['key'] in finished_results:
                 finished_results.remove(msg['key'])
-
+        if msg['op'] == 'task-erred':
+            scheduler_queue.put_nowait({'op': 'close'})
+            raise msg['exception']
     scheduler_queue.put_nowait({'op': 'close'})
 
     raise Return(out_keys)
@@ -322,8 +324,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             ensure_occupied(worker)
 
         elif msg['op'] == 'task-erred':
-            yield cleanup()  # TODO: move to interact?
-            raise msg['exception']
+            interact_queue.put_nowait(msg)
 
         elif msg['op'] == 'worker-failed':
             worker = msg['worker']
