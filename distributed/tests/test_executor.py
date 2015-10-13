@@ -47,7 +47,7 @@ def test_submit():
         assert not x.done()
 
         assert isinstance(x, Future)
-        assert e.center is x.center
+        assert x.executor is e
         result = yield x._result()
         assert result == 11
         assert x.done()
@@ -57,6 +57,7 @@ def test_submit():
         result = yield z._result()
         assert result == 11 + 21
         yield e._shutdown()
+        assert c.who_has[z.key]
 
     _test_cluster(f)
 
@@ -87,5 +88,24 @@ def test_map():
         assert result == sum(map(inc, map(inc, range(5))))
 
         yield e._shutdown()
+
+    _test_cluster(f)
+
+
+def test_gc():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+        x = e.submit(inc, 10)
+        result = yield x._result()
+
+        assert c.who_has[x.key]
+
+        x.__del__()
+
+        yield e._shutdown()
+
+        assert not c.who_has[x.key]
 
     _test_cluster(f)

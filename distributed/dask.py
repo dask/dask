@@ -256,6 +256,17 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         for worker in ncores:
             ensure_occupied(worker)
 
+
+    def release_key(key):
+        if key not in held_data and not waiting_data.get(key):
+            delete_queue.put_nowait({'op': 'delete-task',
+                                     'key': key})
+            for w in who_has[key]:
+                has_what[w].remove(key)
+            del who_has[key]
+            if key in waiting_data:
+                del waiting_data[key]
+
     while True:
         msg = yield scheduler_queue.get()
         if msg['op'] == 'close':
@@ -305,12 +316,8 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             for dep in dependencies[key]:
                 s = waiting_data[dep]
                 s.remove(key)
-                if not s and dep not in held_data:
-                    delete_queue.put_nowait({'op': 'delete-task',
-                                             'key': dep})
-                    for w in who_has[dep]:
-                        has_what[w].remove(dep)
-                    del who_has[dep]
+                if not s and dep:
+                    release_key(dep)
 
             ensure_occupied(worker)
 
@@ -347,6 +354,11 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
                 mark_ready_to_run(key)
             for key in set(who_has) & released - held_data:
                 delete_queue.put_nowait({'op': 'delete-task', 'key': key})
+
+        elif msg['op'] == 'release-held-data':
+            if msg['key'] in held_data:
+                held_data.remove(key)
+                release_key(msg['key'])
 
     yield cleanup()
 

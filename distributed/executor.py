@@ -21,10 +21,10 @@ log = print
 
 class Future(WrappedKey):
     """ The result of a remotely running computation """
-    def __init__(self, key, event, center):
+    def __init__(self, key, event, executor):
         self.key = key
         self.event = event
-        self.center = center
+        self.executor = executor
         self.status = None
         self.event = Event()
 
@@ -40,8 +40,11 @@ class Future(WrappedKey):
     @gen.coroutine
     def _result(self):
         yield self.event.wait()
-        result = yield _gather(self.center, [self.key])
+        result = yield _gather(self.executor.center, [self.key])
         raise gen.Return(result[0])
+
+    def __del__(self):
+        self.executor._release_key(self.key)
 
 
 class Executor(object):
@@ -73,6 +76,12 @@ class Executor(object):
         self.interact_queue = Queue()
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
+
+    def _release_key(self, key):
+        self.futures[key].event.clear()
+        del self.futures[key]
+        self.scheduler_queue.put_nowait({'op': 'release-held-data',
+                                         'key': key})
 
     @gen.coroutine
     def interact(self):
@@ -136,7 +145,7 @@ class Executor(object):
         else:
             task = (func,) + args
 
-        f = Future(key, Event(), self.center)
+        f = Future(key, Event(), self)
         self.futures[key] = f
 
         self.scheduler_queue.put_nowait({'op': 'update-graph',
@@ -165,7 +174,7 @@ class Executor(object):
 
         dsk = {key: (func, arg) for key, arg in zip(keys, seq)}
 
-        futures = [Future(key, Event(), self.center) for key in keys]
+        futures = [Future(key, Event(), self) for key in keys]
         self.futures.update(dict(zip(keys, futures)))
 
         self.scheduler_queue.put_nowait({'op': 'update-graph',
