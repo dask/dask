@@ -60,6 +60,7 @@ def ipcluster():
     finally:
         teardown_cluster()
 
+@pytest.mark.xfail
 @pytest.mark.slow
 def test_dask_client_from_ipclient():
     with ipcluster() as c:

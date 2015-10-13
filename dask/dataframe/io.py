@@ -142,9 +142,7 @@ def fill_kwargs(fn, args, kwargs):
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)
     if 'header' not in kwargs:
-        kwargs['header'] = infer_header(fn, **kwargs)
-        if kwargs['header'] is True:
-            kwargs['header'] = 0
+        kwargs['header'] = 0 if infer_header(fn, **kwargs) else None
 
     kwargs = clean_kwargs(kwargs)
     try:

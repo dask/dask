@@ -24,6 +24,7 @@ except AttributeError:
 try:
     if (not np.allclose(np.divide(.4, 1, casting="unsafe"),
                         np.divide(.4, 1, casting="unsafe", dtype=np.float))
+            or not np.allclose(np.divide(1, .5, dtype='i8'), 2)
             or not np.allclose(np.divide(.4, 1), .4)):
         raise TypeError('Divide not working with dtype: '
                         'https://github.com/numpy/numpy/issues/3484')
