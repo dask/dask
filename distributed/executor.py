@@ -1,5 +1,8 @@
 from __future__ import print_function, division, absolute_import
 
+import itertools
+import uuid
+
 from dask.base import tokenize
 from dask.utils import funcname
 from tornado import gen
@@ -18,6 +21,8 @@ from .utils import All
 
 log = print
 
+
+tokens = (str(i) for i in itertools.count(1))
 
 def sync(loop, func, *args, **kwargs):
     """ Run coroutine in loop running in separate thread """
@@ -185,8 +190,16 @@ class Executor(object):
         distributed.executor.Executor.submit:
         """
         key = kwargs.pop('key', None)
+        pure = kwargs.pop('pure', True)
+
         if key is None:
-            key = funcname(func) + '-' + tokenize(func, *args, **kwargs)
+            if pure:
+                key = funcname(func) + '-' + tokenize(func, *args, **kwargs)
+            else:
+                key = funcname(func) + '-' + next(tokens)
+
+        if key in self.futures:
+            return self.futures[key]
 
         if kwargs:
             task = (apply, func, args, kwargs)
@@ -202,7 +215,7 @@ class Executor(object):
 
         return f
 
-    def map(self, func, seq, key=None):
+    def map(self, func, seq, pure=True):
         """ Map a function on a sequence of arguments
 
         Arguments can be normal objects or Futures
@@ -215,18 +228,19 @@ class Executor(object):
         --------
         distributed.executor.Executor.submit
         """
-        if key is None:
+        if pure:
             keys = [funcname(func) + '-' + tokenize(func, arg) for arg in seq]
         else:
-            keys = [key + '-%d' % i for i in range(len(seq))]
+            uid = str(uuid.uuid1())
+            keys = [funcname(func) + '-' + uid + '-' + next(tokens) for arg in seq]
 
         dsk = {key: (func, arg) for key, arg in zip(keys, seq)}
 
-        futures = [Future(key, self) for key in keys]
-        self.futures.update(dict(zip(keys, futures)))
+        futures = {key: Future(key, self) for key in dsk}
+        self.futures.update(futures)
 
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': dsk,
                                          'keys': keys})
 
-        return futures
+        return [futures[key] for key in keys]

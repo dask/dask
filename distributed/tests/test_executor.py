@@ -99,6 +99,41 @@ def test_map():
     _test_cluster(f)
 
 
+def test_map_naming():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+
+        L1 = e.map(inc, range(5))
+        L2 = e.map(inc, range(5))
+
+        assert [x.key for x in L1] == [x.key for x in L2]
+
+        L3 = e.map(inc, [1, 1, 1, 1])
+        assert len(set(map(id, L3))) == 1
+
+        L3 = e.map(inc, [1, 1, 1, 1], pure=False)
+        assert len(set(map(id, L3))) == 4
+
+    _test_cluster(f)
+
+
+def test_submit_naming():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+
+        a = e.submit(inc, 1)
+        b = e.submit(inc, 1)
+
+        assert a is b
+
+        c = e.submit(inc, 1, pure=False)
+        assert c.key != a.key
+
+    _test_cluster(f)
+
+
 def test_exceptions():
     @gen.coroutine
     def f(c, a, b):

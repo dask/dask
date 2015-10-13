@@ -360,7 +360,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
 
         elif msg['op'] == 'release-held-data':
             if msg['key'] in held_data:
-                held_data.remove(key)
+                held_data.remove(msg['key'])
                 release_key(msg['key'])
 
         else:
