@@ -19,6 +19,22 @@ from .utils import All
 log = print
 
 
+def sync(loop, func, *args, **kwargs):
+    """ Run coroutine in loop running in separate thread """
+    from threading import Event
+    e = Event()
+    result = [None]
+
+    @gen.coroutine
+    def f():
+        result[0] = yield func(*args, **kwargs)
+        e.set()
+
+    a = loop.add_callback(f)
+    e.wait()
+    return result[0]
+
+
 class Future(WrappedKey):
     """ The result of a remotely running computation """
     def __init__(self, key, event, executor):
@@ -36,6 +52,9 @@ class Future(WrappedKey):
 
     def done(self):
         return self.event.is_set()
+
+    def result(self):
+        return sync(self.executor.loop, self._result)
 
     @gen.coroutine
     def _result(self):
@@ -77,6 +96,13 @@ class Executor(object):
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
 
+    def start(self):
+        from threading import Thread
+        self.loop = IOLoop()
+        self.loop.add_callback(self._go)
+        self._loop_thread = Thread(target=self.loop.start)
+        self._loop_thread.start()
+
     def _release_key(self, key):
         self.futures[key].event.clear()
         del self.futures[key]
@@ -103,6 +129,11 @@ class Executor(object):
         """ Send shutdown signal and wait until _go completes """
         self.interact_queue.put_nowait({'op': 'close'})
         yield self._shutdown_event.wait()
+
+    def shutdown(self):
+        self.interact_queue.put_nowait({'op': 'close'})
+        self.loop.stop()
+        self._loop_thread.join()
 
     @gen.coroutine
     def _go(self):

@@ -7,6 +7,7 @@ from tornado import gen
 from distributed.executor import Executor, Future
 from distributed import Center, Worker
 from distributed.utils import ignoring
+from distributed.utils_test import cluster
 
 
 def inc(x):
@@ -109,3 +110,14 @@ def test_gc():
         assert not c.who_has[x.key]
 
     _test_cluster(f)
+
+
+def test_thread():
+    with cluster() as (c, [a, b]):
+        e = Executor(('127.0.0.1', c['port']))
+        e.start()
+
+        x = e.submit(inc, 1)
+        assert x.result() == 2
+
+        e.shutdown()
