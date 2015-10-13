@@ -65,6 +65,10 @@ def test_to_graphviz():
     assert set(labels).difference(dsk) == funcs
     assert set(labels).difference(funcs) == set(dsk)
 
+def test_to_graphviz_attributes():
+    assert to_graphviz(dsk).graph_attr['rankdir'] == 'BT'
+    assert to_graphviz(dsk, rankdir='LR').graph_attr['rankdir'] == 'LR'
+
 
 def test_aliases():
     g = to_graphviz({'x': 1, 'y': 'x'})
