@@ -37,11 +37,9 @@ def sync(loop, func, *args, **kwargs):
 
 class Future(WrappedKey):
     """ The result of a remotely running computation """
-    def __init__(self, key, event, executor):
+    def __init__(self, key, executor):
         self.key = key
-        self.event = event
         self.executor = executor
-        self.status = None
         self.event = Event()
 
     def _set_ready(self, status):
@@ -176,7 +174,7 @@ class Executor(object):
         else:
             task = (func,) + args
 
-        f = Future(key, Event(), self)
+        f = Future(key, self)
         self.futures[key] = f
 
         self.scheduler_queue.put_nowait({'op': 'update-graph',
@@ -205,7 +203,7 @@ class Executor(object):
 
         dsk = {key: (func, arg) for key, arg in zip(keys, seq)}
 
-        futures = [Future(key, Event(), self) for key in keys]
+        futures = [Future(key, self) for key in keys]
         self.futures.update(dict(zip(keys, futures)))
 
         self.scheduler_queue.put_nowait({'op': 'update-graph',
