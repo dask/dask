@@ -148,7 +148,7 @@ def test_thread():
             assert x.result() == 2
 
 
-def dont_test_sync_exceptions():
+def test_sync_exceptions():
     with cluster() as (c, [a, b]):
         e = Executor(('127.0.0.1', c['port']))
         e.start()

@@ -255,8 +255,9 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         """ Distribute leaves among workers """
         new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
                                        [k for k, deps in waiting.items() if not deps])
-        for worker in ncores:
-            ensure_occupied(worker)
+        for worker, stack in new_stacks.items():
+            if stack:
+                ensure_occupied(worker)
 
 
     def release_key(key):
@@ -273,7 +274,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         msg = yield scheduler_queue.get()
         if msg['op'] == 'close':
             break
-        if msg['op'] == 'update-graph':
+        elif msg['op'] == 'update-graph':
             new_dsk = msg['dsk']
             dsk.update(new_dsk)
             dependencies, dependents = get_deps(dsk)  # TODO: https://github.com/blaze/dask/issues/781
@@ -300,7 +301,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
 
             seed_ready_tasks()
 
-        if msg['op'] == 'task-finished':
+        elif msg['op'] == 'task-finished':
             key = msg['key']
             worker = msg['worker']
             log("task finished", key, worker)
@@ -324,6 +325,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             ensure_occupied(worker)
 
         elif msg['op'] == 'task-erred':
+            processing[msg['worker']].remove(msg['key'])
             interact_queue.put_nowait(msg)
 
         elif msg['op'] == 'worker-failed':
