@@ -46,7 +46,8 @@ Concatenation and Stacking
 --------------------------
 
 Often we store data in several different locations and want to stitch them
-together.  For this case please see docs on `concatenation and stacking`_.
+together.  For this case please see docs on
+:doc:`concatenation and stacking <stack>`.
 
 
 Complex case
@@ -54,8 +55,8 @@ Complex case
 
 If your format does not provide a convenient slicing solution you will need to
 dive down one layer to interact with dask dictionaries.  Your goal is to create
-a dictionary with tasks that create NumPy arrays, see docs on `array design`_
-before continuing with this subsection.
+a dictionary with tasks that create NumPy arrays, see docs on
+:doc:`array design <array-design>` before continuing with this subsection.
 
 To construct a dask array manually you need a dict with tasks that form numpy
 arrays
@@ -118,6 +119,3 @@ by 1000 NumPy arrays
     chunks = ((1000, 1000), (1000, 1000, 1000))
 
     x = da.Array(dsk, 'x', chunks)
-
-.. _`concatenation and stacking`: stack.html
-.. _`array design`: array-design.html

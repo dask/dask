@@ -40,7 +40,7 @@ run in standalone mode on a single machine.
 Dask began its life building out parallel algorithms for numerical array
 computations on a single computer.  As such it thinks well about low-latency
 scheduling, low memory footprints, shared memory, and efficient use of local
-disk.  That being said dask can run on a `distributed cluster`_.
+disk.  That being said dask can run on a :doc:`distributed cluster <distributed>`.
 
 
 Java Python Performance
@@ -156,7 +156,6 @@ Spark and Dask and use Postgres_ or MongoDB_.
 .. _PySpark: https://spark.apache.org/docs/latest/api/python/
 .. _Hadoop: https://hadoop.apache.org/
 .. _MRJob: https://mrjob.readthedocs.org
-.. _`distributed cluster`: distributed.html
 .. _`surprisingly fast`: https://www.youtube.com/watch?v=PpBK4zIaFLE
 .. _cytoolz: https://toolz.readthedocs.org
 .. _py4j: http://py4j.sourceforge.net/

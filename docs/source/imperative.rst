@@ -1,17 +1,17 @@
 Imperative
 ==========
 
-As discussed in the `custom graphs`_ section, sometimes problems don't fit into
-one of the collections like ``dask.bag`` or ``dask.array``. Instead of creating
-a dask directly using a dictionary, one can use the ``dask.imperative``
-interface. This allows one to create graphs directly with a light annotation of
-normal python code.
+As discussed in the :ref:`custom graphs <custom-graph-example>` section,
+sometimes problems don't fit into one of the collections like ``dask.bag`` or
+``dask.array``. Instead of creating a dask directly using a dictionary, one can
+use the ``dask.imperative`` interface. This allows one to create graphs
+directly with a light annotation of normal python code.
 
 
 Example
 -------
 
-Rebuilding the example from `custom graphs`_:
+Rebuilding the example from :ref:`custom graphs <custom-graph-example>`:
 
 .. code-block:: python
 
@@ -144,5 +144,3 @@ Definitions
 .. autofunction:: value
 .. autofunction:: do
 .. autofunction:: compute
-
-.. _`custom graphs`: custom-graphs.html#Example

@@ -209,7 +209,7 @@ Known Limitations
 Additional Notes
 ----------------
 
-There are some more detailed notes on the distributed scheduler here_
+There are some more detailed notes on the distributed scheduler
+:doc:`here <distributed-details>`.
 
 .. _chest: https://github.com/blaze/chest
-.. _here: distributed-details.html

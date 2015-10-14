@@ -12,6 +12,8 @@ those projects have an internal representation for their computations.  As dask
 schedulers improve or expand to distributed memory, code written to use dask
 schedulers will advance as well.
 
+.. _custom-graph-example:
+
 Example
 -------
 
@@ -19,9 +21,9 @@ Example
    :alt: "Dask graph for data pipeline"
    :align: right
 
-As discussed in the motivation_ and specification_ sections, the schedulers
-take a task graph (a dict of tuples of functions) and a list of desired keys
-from that graph
+As discussed in the :doc:`motivation <graphs>` and :doc:`specification <spec>`
+sections, the schedulers take a task graph (a dict of tuples of functions) and
+a list of desired keys from that graph.
 
 Here is a mocked out example building a graph for a traditional clean and
 analyze pipeline.
@@ -81,8 +83,6 @@ Dask schedulers differ in the following ways:
 But the other projects offer different advantages and different programming
 paradigms.  One should inspect all such projects before selecting one.
 
-.. _motivation: graphs.html
-.. _specification: graphs.html
 .. _Joblib: https://pythonhosted.org/joblib/parallel.html
 .. _Multiprocessing: https://docs.python.org/3/library/multiprocessing.html
 .. _`IPython Parallel`: http://ipython.org/ipython-doc/dev/parallel/
