@@ -245,9 +245,10 @@ class Scheduler(object):
     def _worker_finished_task(self, header, payload):
         """ Worker reports back as having finished task, ready for more
 
-        See also:
-            Scheduler.trigger_task
-            Scheduler.schedule
+        See Also
+        --------
+        Scheduler.trigger_task
+        Scheduler.schedule
         """
         with logerrors():
             address = header['address']
@@ -316,9 +317,10 @@ class Scheduler(object):
     def trigger_task(self, key, task, deps, queue):
         """ Send a single task to the next available worker
 
-        See also:
-            Scheduler.schedule
-            Scheduler.worker_finished_task
+        See Also
+        --------
+        Scheduler.schedule
+        Scheduler.worker_finished_task
         """
         worker = self.available_workers.get()
         locations = dict((dep, self.who_has[dep]) for dep in deps)
@@ -332,8 +334,8 @@ class Scheduler(object):
     def release_key(self, key):
         """ Release data from all workers
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> scheduler.release_key('x')  # doctest: +SKIP
 
@@ -359,8 +361,8 @@ class Scheduler(object):
 
         If no address is given we select one worker randomly
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> scheduler.send_data('x', 10)  # doctest: +SKIP
         >>> scheduler.send_data('x', 10, 'tcp://bob:5000', reply=False)  # doctest: +SKIP
@@ -376,10 +378,11 @@ class Scheduler(object):
             {'key': ..., 'queue': ...}
         5.  Scheduler gets from queue, send_data cleans up queue and returns
 
-        See also:
-            Scheduler.setitem_ack
-            Worker.setitem
-            Scheduler.scatter
+        See Also
+        --------
+        Scheduler.setitem_ack
+        Worker.setitem
+        Scheduler.scatter
         """
         if reply:
             queue = Queue()
@@ -408,8 +411,8 @@ class Scheduler(object):
         block: bool
             Block on completion or return immediately (defaults to True)
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> scheduler.scatter({'x': 1, 'y': 2})  # doctest: +SKIP
 
@@ -464,8 +467,8 @@ class Scheduler(object):
         keys: key, list of keys, nested list of lists of keys
             Keys to collect from workers
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> scheduler.gather('x')  # doctest: +SKIP
         >>> scheduler.gather([['x', 'y'], ['z']])  # doctest: +SKIP
@@ -519,9 +522,10 @@ class Scheduler(object):
     def _getitem_ack(self, header, payload):
         """ Receive acknowledgement from worker about a getitem request
 
-        See also:
-            Scheduler.gather
-            Worker.getitem
+        See Also
+        --------
+        Scheduler.gather
+        Worker.getitem
         """
         payload = pickle.loads(payload)
         log(self.address_to_workers, 'Getitem ack', payload['key'],
@@ -534,9 +538,10 @@ class Scheduler(object):
     def _setitem_ack(self, header, payload):
         """ Receive acknowledgement from worker about a setitem request
 
-        See also:
-            Scheduler.scatter
-            Worker.setitem
+        See Also
+        --------
+        Scheduler.scatter
+        Worker.setitem
         """
         address = header['address']
         payload = pickle.loads(payload)
@@ -582,8 +587,8 @@ class Scheduler(object):
         result: list
             keys to return (possibly nested)
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> scheduler.get({'x': 1, 'y': (add, 'x', 2)}, 'y')  # doctest: +SKIP
         3

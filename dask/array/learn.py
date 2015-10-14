@@ -29,8 +29,8 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     kwargs:
         options to pass to partial_fit
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> import dask.array as da
     >>> X = da.random.random((10, 3), chunks=(5, 3))

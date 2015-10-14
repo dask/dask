@@ -68,8 +68,8 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
         Specify the type of interpolation to use to calculate final
         percentiles.  For more information, see numpy.percentile.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> finalq = [10, 20, 30, 40, 50, 60, 70, 80]
     >>> qs = [[20, 40, 60, 80], [20, 40, 60, 80]]

@@ -154,8 +154,7 @@ Dask dataframe also introduces some new API
     *  Approximate quantiles:  ``df.x.quantiles([25, 50, 75])``
     *  Convert object dtypes to categoricals:  ``df.categorize()``
 * Ingest
-    *  Read from bcolz (efficient on-disk column-store):
-      ``from_bcolz(x, index='mycol', categorize=True)``
+    *  Read from bcolz (efficient on-disk column-store): ``from_bcolz(x, index='mycol', categorize=True)``
 
 
 Create Dask DataFrames
@@ -239,4 +238,5 @@ current design and limitations of dask.dataframe.
 
 
 .. _Chest: http://github.com/blaze/chest
+.. _BColz: http://bcolz.blosc.org/
 .. _shared: shared.html

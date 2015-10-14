@@ -8,8 +8,8 @@ from ..core import istask, ishashable
 class Store(MutableMapping):
     """ Store - A storage of data and computation
 
-    Example
-    -------
+    Examples
+    --------
 
     Store data like a dictionary
 

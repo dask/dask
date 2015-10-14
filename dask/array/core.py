@@ -724,7 +724,7 @@ class Array(Base):
 
         >>> x.to_hdf5('myfile.hdf5', '/x', compression='lzf', shuffle=True)  # doctest: +SKIP
 
-        See also
+        See Also
         --------
         da.store
         h5py.File.create_dataset
@@ -1233,8 +1233,8 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     Calling the provided function with func(*args, **kwargs) should return a
     NumPy array of the indicated shape and dtype.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> a = from_func(np.arange, (3,), np.int64, args=(3,))
     >>> a.compute()
@@ -1380,8 +1380,9 @@ def atop(func, out_ind, *args, **kwargs):
     operations cover a broad subset of NumPy and this function has been battle
     tested, supporting tricky concepts like broadcasting.
 
-    See also:
-        top - dict formulation of this function, contains most logic
+    See Also
+    --------
+    top - dict formulation of this function, contains most logic
     """
     out = kwargs.pop('name', None)      # May be None at this point
     dtype = kwargs.pop('dtype', None)
@@ -1773,7 +1774,7 @@ def elemwise(op, *args, **kwargs):
     >>> elemwise(add, x, y)  # doctest: +SKIP
     >>> elemwise(sin, x)  # doctest: +SKIP
 
-    See also
+    See Also
     --------
     atop
     """
@@ -2476,7 +2477,7 @@ def to_hdf5(filename, *args, **kwargs):
 
     >>> x.to_hdf5('myfile.hdf5', '/x')  # doctest: +SKIP
 
-    See also
+    See Also
     --------
     da.store
     h5py.File.create_dataset
@@ -2727,8 +2728,8 @@ def to_npy_stack(dirname, x, axis=0):
     This partitions the dask.array along one axis and stores each block along
     that axis as a single .npy file in the specified directory
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
     >>> da.to_npy_stack('data/', x, axis=0)  # doctest: +SKIP
@@ -2748,8 +2749,9 @@ def to_npy_stack(dirname, x, axis=0):
 
     >>> y = da.from_npy_stack('data/')  # doctest: +SKIP
 
-    See also:
-        from_npy_stack
+    See Also
+    --------
+    from_npy_stack
     """
 
     chunks = tuple((c if i == axis else (sum(c),))

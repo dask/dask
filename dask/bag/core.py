@@ -49,8 +49,8 @@ def lazify_task(task, start=True):
     """
     Given a task, remove unnecessary calls to ``list``
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> task = (sum, (list, (map, inc, [1, 2, 3])))  # doctest: +SKIP
     >>> lazify_task(task)  # doctest: +SKIP
@@ -70,8 +70,9 @@ def lazify(dsk):
     """
     Remove unnecessary calls to ``list`` in tasks
 
-    See Also:
-        ``dask.bag.core.lazify_task``
+    See Also
+    --------
+    ``dask.bag.core.lazify_task``
     """
     return valmap(lazify_task, dsk)
 
@@ -208,8 +209,8 @@ class Item(Base):
 class Bag(Base):
     """ Parallel collection of Python objects
 
-    Example
-    -------
+    Examples
+    --------
 
     Create Bag from sequence
 
@@ -469,8 +470,8 @@ class Bag(Base):
         aggregate: function
             reduction to apply to the results of all partitions
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> b = from_sequence(range(10))
         >>> b.reduction(sum, sum).compute()
@@ -597,8 +598,7 @@ class Bag(Base):
         >>> dict(b.foldby(iseven, add))                         # doctest: +SKIP
         {True: 20, False: 25}
 
-        Key Function
-        ------------
+        **Key Function**
 
         The key function determines how to group the elements in your bag.
         In the common case where your bag holds dictionaries then the key
@@ -614,8 +614,7 @@ class Bag(Base):
         >>> b.foldby(lambda x: x['name'], ...)  # doctest: +SKIP
         >>> b.foldby('name', ...)  # doctest: +SKIP
 
-        Binops
-        ------
+        **Binops**
 
         It can be tricky to construct the right binary operators to perform
         analytic queries.  The ``foldby`` method accepts two binary operators,
@@ -639,7 +638,7 @@ class Bag(Base):
 
         >>> b.foldby('name', binop, 0, combine, 0)  # doctest: +SKIP
 
-        See also
+        See Also
         --------
 
         toolz.reduceby
@@ -765,8 +764,8 @@ class Bag(Base):
         Index will not be particularly meaningful.  Use ``reindex`` afterwards
         if necessary.
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> import dask.bag as db
         >>> b = db.from_sequence([{'name': 'Alice',   'balance': 100},
@@ -844,8 +843,9 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
 
     >>> b = from_filenames('largefile.txt', chunkbytes=1e7)  # doctest: +SKIP
 
-    See also:
-        from_sequence: A more generic bag creation function
+    See Also
+    --------
+    from_sequence: A more generic bag creation function
     """
     if isinstance(filenames, str):
         filenames = sorted(glob(filenames))
@@ -1055,13 +1055,14 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     It is best to provide either ``partition_size`` or ``npartitions``
     (though not both.)
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> b = from_sequence(['Alice', 'Bob', 'Chuck'], partition_size=2)
 
-    See also:
-        from_filenames: Specialized bag creation function for textfiles
+    See Also
+    --------
+    from_filenames: Specialized bag creation function for textfiles
     """
     seq = list(seq)
     if npartitions and not partition_size:
@@ -1218,8 +1219,8 @@ class StringAccessor(object):
     def match(self, pattern):
         """ Filter strings by those that match a pattern
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> import dask.bag as db
         >>> b = db.from_sequence(['Alice Smith', 'Bob Jones', 'Charlie Smith'])

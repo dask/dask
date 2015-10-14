@@ -96,8 +96,8 @@ def coarsen(reduction, x, axes, trim_excess=False):
     axes: dict
         Mapping of axis to coarsening factor
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> x = np.array([1, 2, 3, 4, 5, 6])
     >>> coarsen(np.sum, x, {0: 2})

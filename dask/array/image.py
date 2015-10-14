@@ -29,8 +29,8 @@ def imread(filename, imread=None, preprocess=None):
         Optionally provide custom function to preprocess the image.
         Function should expect a numpy array for a single image.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> from dask.array.image import imread
     >>> im = imread('2015-*-*.png')  # doctest: +SKIP

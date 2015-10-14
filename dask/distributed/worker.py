@@ -162,8 +162,9 @@ class Worker(object):
     def getitem_worker(self, header, payload):
         """ Get data and send to another worker
 
-        See also:
-            Worker.collect
+        See Also
+        --------
+        Worker.collect
         """
         loads = header.get('loads', pickle.loads)
         payload = loads(payload)
@@ -184,9 +185,10 @@ class Worker(object):
     def getitem_ack(self, header, payload):
         """ Receive data after sending a getitem request
 
-        See also:
-            Worker.getitem_worker
-            Worker.collect
+        See Also
+        --------
+        Worker.getitem_worker
+        Worker.collect
         """
         with logerrors():
             loads = header.get('loads', pickle.loads)
@@ -208,9 +210,10 @@ class Worker(object):
     def getitem_scheduler(self, header, payload):
         """ Send local data to scheduler
 
-        See also:
-            Scheduler.gather
-            Scheduler.getitem_ack
+        See Also
+        --------
+        Scheduler.gather
+        Scheduler.getitem_ack
         """
         loads = header.get('loads', pickle.loads)
         payload = loads(payload)
@@ -230,9 +233,10 @@ class Worker(object):
     def setitem(self, header, payload):
         """ Assign incoming data to local dictionary
 
-        See also:
-            Scheduler.scatter
-            Scheduler.send_data
+        See Also
+        --------
+        Scheduler.scatter
+        Scheduler.send_data
             Scheduler.setitem_ack
         """
         loads = header.get('loads', pickle.loads)
@@ -409,8 +413,8 @@ class Worker(object):
         data then blocks on all of the responses, then inserts this data into
         ``self.data``.
 
-        Example
-        -------
+        Examples
+        --------
 
         >>> locations = {'x': ['tcp://alice:5000', 'tcp://bob:5000'],
         ...              'y': ['tcp://bob:5000']}
@@ -432,11 +436,12 @@ class Worker(object):
             up again, releases the queue, and returns control
         6?  This is often called from Worker.compute; control often ends there
 
-        See also:
-            Worker.getitem
-            Worker.getitem_ack
-            Worker.compute
-            Scheduler.trigger_task
+        See Also
+        --------
+        Worker.getitem
+        Worker.getitem_ack
+        Worker.compute
+        Scheduler.trigger_task
         """
         socks = []
 
