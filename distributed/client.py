@@ -54,7 +54,7 @@ def gather(center, needed):
     distributed.client.gather_from_workers:
     """
     func = lambda: _gather(center, needed)
-    result = IOLoop.current().run_sync(func)
+    result = IOLoop().run_sync(func)
     return result
 
 
@@ -201,7 +201,7 @@ class RemoteData(WrappedKey):
         if self._result is not no_default:
             return self._result
         else:
-            result = IOLoop.current().run_sync(lambda: self._get(raiseit=False))
+            result = IOLoop().run_sync(lambda: self._get(raiseit=False))
             if self.status == b'error':
                 raise result
             else:
@@ -237,7 +237,7 @@ class RemoteData(WrappedKey):
 
     @classmethod
     def garbage_collect(cls, ip=None, port=None):
-        return IOLoop.current().run_sync(lambda: cls._garbage_collect(ip, port))
+        return IOLoop().run_sync(lambda: cls._garbage_collect(ip, port))
 
 
 def scatter(center, data, key=None):
@@ -265,7 +265,7 @@ def scatter(center, data, key=None):
     distributed.client.scatter_to_workers:
     """
     func = lambda: _scatter(center, data, key)
-    result = IOLoop.current().run_sync(func)
+    result = IOLoop().run_sync(func)
     return result
 
 
@@ -326,7 +326,7 @@ def _delete(center, keys):
 
 def delete(center, keys):
     """ Delete keys from all workers """
-    return IOLoop.current().run_sync(lambda: _delete(center, keys))
+    return IOLoop().run_sync(lambda: _delete(center, keys))
 
 
 @gen.coroutine
@@ -342,7 +342,7 @@ def clear(center):
     --------
     distributed.client.delete
     """
-    return IOLoop.current().run_sync(lambda: _clear(center))
+    return IOLoop().run_sync(lambda: _clear(center))
 
 
 def unpack_remotedata(o):

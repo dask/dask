@@ -614,7 +614,7 @@ def get(ip, port, dsk, keys, gather=True, _get=_get):
     >>> x.sum().compute(get=myget)  # doctest: +SKIP
     1000000
     """
-    return IOLoop.current().run_sync(lambda: _get(ip, port, dsk, keys, gather))
+    return IOLoop().run_sync(lambda: _get(ip, port, dsk, keys, gather))
 
 
 def decide_worker(dependencies, stacks, who_has, key):
