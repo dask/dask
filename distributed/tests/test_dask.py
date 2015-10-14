@@ -275,6 +275,34 @@ def test_update_state_respects_WrappedKeys():
     assert a == b
 
 
+def test_update_state_respects_data_in_memory():
+    dsk = {'x': 1, 'y': (inc, 'x')}
+    dependencies, dependents = get_deps(dsk)
+
+    waiting = dict()
+    waiting_data = {'y': set()}
+
+    held_data = {'y'}
+    in_memory = {'y'}
+    released = {'x'}
+
+    new_dsk = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
+    new_keys = {'z'}
+
+    e_dsk = new_dsk.copy()
+    e_waiting = {'z': {'x'}, 'x': set()}
+    e_waiting_data = {'x': {'z'}, 'y': {'z'}, 'z': set()}
+    e_held_data = {'y', 'z'}
+
+    update_state(dsk, dependencies, dependents, held_data, in_memory, released,
+                 waiting, waiting_data, new_dsk, new_keys)
+
+    assert dsk == e_dsk
+    assert waiting == e_waiting
+    assert waiting_data == e_waiting_data
+    assert held_data == e_held_data
+
+
 def test_decide_worker_with_many_independent_leaves():
     dsk = merge({('y', i): (inc, ('x', i)) for i in range(100)},
                 {('x', i): i for i in range(100)})
@@ -435,3 +463,23 @@ def test_assign_many_tasks():
     assert 'y' not in waiting
 
     assert set(concat(new_stacks.values())) == set(concat(stacks.values()))
+
+
+def test_get_with_overlapping_keys():
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
+    keys = 'y'
+
+    @gen.coroutine
+    def f(c, a, b):
+        dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
+        keys = 'z'
+        result = yield _get(c.ip, c.port, dsk, keys, gather=True)
+        assert result == dask.get(dsk, keys)
+
+        dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y'),
+               'a': (inc, 'z'), 'b': (add, 'a', 'x')}
+        keys = 'b'
+        result = yield _get(c.ip, c.port, dsk, keys, gather=True)
+        assert result == dask.get(dsk, keys)
+
+    _test_cluster(f)

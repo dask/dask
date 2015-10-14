@@ -303,16 +303,18 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             interact_queue.put_nowait(msg)
 
             for dep in sorted(dependents[key], key=keyorder.get, reverse=True):
-                s = waiting[dep]
-                s.remove(key)
-                if not s:  # new task ready to run
-                    mark_ready_to_run(dep)
+                if dep in waiting:
+                    s = waiting[dep]
+                    s.remove(key)
+                    if not s:  # new task ready to run
+                        mark_ready_to_run(dep)
 
             for dep in dependencies[key]:
-                s = waiting_data[dep]
-                s.remove(key)
-                if not s and dep:
-                    release_key(dep)
+                if dep in waiting_data:
+                    s = waiting_data[dep]
+                    s.remove(key)
+                    if not s and dep:
+                        release_key(dep)
 
             ensure_occupied(worker)
 
@@ -454,52 +456,51 @@ def update_state(dsk, dependencies, dependents, held_data, in_memory, released,
     This should operate in linear time relative to the size of edges of the
     added graph.
     """
-    for k in list(new_dsk):
-        vv, s = unpack_remotedata(new_dsk[k])
-        new_dsk[k] = vv
-        if k not in dependencies:
-            dependencies[k] = set()
-        dependencies[k] |= s
-        for dep in s:
-            if not dep in dependencies:
-                held_data.add(dep)
-                dependencies[dep] = set()
-            if dep not in dependents:
-                dependents[dep] = set()
-                waiting_data[dep] = set()
-            dependents[dep].add(k)
-            waiting_data[dep].add(k)
-
     dsk.update(new_dsk)
-    for key in new_dsk:
-        # add dependencies
+
+    for key in new_dsk:  # add dependencies/dependents
         deps = get_dependencies(dsk, key)
         if key not in dependencies:
             dependencies[key] = set()
         dependencies[key] |= deps
-        if key not in in_memory:
-            if key not in waiting:
-                waiting[key] = set()
-            waiting[key] |= deps - in_memory
-
-        # add dependents
-        if key not in waiting_data and key not in released:
-            waiting_data[key] = set()
 
         for dep in deps:
             if dep not in dependents:
                 dependents[dep] = set()
             dependents[dep].add(key)
-        if key not in released:
-            for dep in deps:
-                if dep not in waiting_data:
-                    waiting_data[dep] = set()
-                waiting_data[dep].add(key)
 
         if key not in dependents:
             dependents[key] = set()
 
-    held_data |= set(new_keys)
+    for key, value in new_dsk.items():  # add in remotedata
+        vv, s = unpack_remotedata(value)
+        if s:
+            dsk[key] = vv
+            if key not in dependencies:
+                dependencies[key] = set()
+            dependencies[key] |= s
+            for dep in s:
+                if not dep in dependencies:
+                    held_data.add(dep)
+                    dependencies[dep] = set()
+                if dep not in dependents:
+                    dependents[dep] = set()
+                dependents[dep].add(key)
+
+    frontier = in_memory | set(waiting)
+    exterior = keys_outside_frontier(dsk, dependencies, new_keys, frontier)
+    for key in exterior:
+        deps = dependencies[key]
+        waiting[key] = deps - in_memory
+        for dep in deps:
+            if dep not in waiting_data:
+                waiting_data[dep] = set()
+            waiting_data[dep].add(key)
+
+        if key not in waiting_data:
+            waiting_data[key] = set()
+
+    held_data |= new_keys
 
     return {'dsk': dsk,
             'dependencies': dependencies,
