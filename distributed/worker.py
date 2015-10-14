@@ -118,7 +118,7 @@ class Worker(Server):
 
         # gather data from peers
         if needed:
-            log("gather data from peers: %s" % str(needed))
+            log("gather %d keys from peers: %s" % (len(needed), str(needed)))
             try:
                 other = yield _gather(self.center, needed=needed)
             except KeyError as e:

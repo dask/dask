@@ -175,7 +175,9 @@ def interact(interact_queue, scheduler_queue, who_has, dsk, result):
         if msg['op'] == 'lost-data':
             if msg['key'] in finished_results:
                 finished_results.remove(msg['key'])
-
+        if msg['op'] == 'task-erred':
+            scheduler_queue.put_nowait({'op': 'close'})
+            raise msg['exception']
     scheduler_queue.put_nowait({'op': 'close'})
 
     raise Return(out_keys)
@@ -183,7 +185,7 @@ def interact(interact_queue, scheduler_queue, who_has, dsk, result):
 
 @gen.coroutine
 def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
-              who_has, has_what, ncores):
+              who_has, has_what, ncores, dsk=None):
     """ The scheduler coroutine for dask scheduling
 
     This coroutine manages interactions with all worker cores and with the
@@ -214,7 +216,8 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
     stacks = {worker: list() for worker in ncores}
     processing = {worker: set() for worker in ncores}
     held_data = set()
-    dsk = dict()
+    if dsk is None:
+        dsk = dict()
     keyorder = dict()
     generation = 0
 
@@ -252,14 +255,26 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         """ Distribute leaves among workers """
         new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
                                        [k for k, deps in waiting.items() if not deps])
-        for worker in ncores:
-            ensure_occupied(worker)
+        for worker, stack in new_stacks.items():
+            if stack:
+                ensure_occupied(worker)
+
+
+    def release_key(key):
+        if key not in held_data and not waiting_data.get(key):
+            delete_queue.put_nowait({'op': 'delete-task',
+                                     'key': key})
+            for w in who_has[key]:
+                has_what[w].remove(key)
+            del who_has[key]
+            if key in waiting_data:
+                del waiting_data[key]
 
     while True:
         msg = yield scheduler_queue.get()
         if msg['op'] == 'close':
             break
-        if msg['op'] == 'update-graph':
+        elif msg['op'] == 'update-graph':
             new_dsk = msg['dsk']
             dsk.update(new_dsk)
             dependencies, dependents = get_deps(dsk)  # TODO: https://github.com/blaze/dask/issues/781
@@ -286,7 +301,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
 
             seed_ready_tasks()
 
-        if msg['op'] == 'task-finished':
+        elif msg['op'] == 'task-finished':
             key = msg['key']
             worker = msg['worker']
             log("task finished", key, worker)
@@ -304,18 +319,14 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             for dep in dependencies[key]:
                 s = waiting_data[dep]
                 s.remove(key)
-                if not s and dep not in held_data:
-                    delete_queue.put_nowait({'op': 'delete-task',
-                                             'key': dep})
-                    for w in who_has[dep]:
-                        has_what[w].remove(dep)
-                    del who_has[dep]
+                if not s and dep:
+                    release_key(dep)
 
             ensure_occupied(worker)
 
         elif msg['op'] == 'task-erred':
-            yield cleanup()  # TODO: move to interact?
-            raise msg['exception']
+            processing[msg['worker']].remove(msg['key'])
+            interact_queue.put_nowait(msg)
 
         elif msg['op'] == 'worker-failed':
             worker = msg['worker']
@@ -347,6 +358,15 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             for key in set(who_has) & released - held_data:
                 delete_queue.put_nowait({'op': 'delete-task', 'key': key})
 
+        elif msg['op'] == 'release-held-data':
+            if msg['key'] in held_data:
+                held_data.remove(msg['key'])
+                release_key(msg['key'])
+
+        else:
+            log("Bad message", msg)
+
+    log('Finished scheduling')
     yield cleanup()
 
 
@@ -654,5 +674,3 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
         stacks[worker].append(key)
 
     return new_stacks
-
-
