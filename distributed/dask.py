@@ -415,18 +415,21 @@ def update_state(dsk, dependencies, dependents, held_data, in_memory, released,
     This should operate in linear time relative to the size of edges of the
     added graph.
     """
-    wrapped_keys = set()
     for k in list(new_dsk):
         vv, s = unpack_remotedata(new_dsk[k])
         new_dsk[k] = vv
-        wrapped_keys |= s
+        if k not in dependencies:
+            dependencies[k] = set()
+        dependencies[k] |= s
         for dep in s:
             if not dep in dependencies:
                 held_data.add(dep)
                 dependencies[dep] = set()
             if dep not in dependents:
                 dependents[dep] = set()
+                waiting_data[dep] = set()
             dependents[dep].add(k)
+            waiting_data[dep].add(k)
 
     dsk.update(new_dsk)
     for key in new_dsk:
