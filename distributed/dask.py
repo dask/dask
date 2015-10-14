@@ -218,6 +218,11 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
     held_data = set()
     if dsk is None:
         dsk = dict()
+    dependencies = dict()
+    dependents = dict()
+    waiting = dict()
+    waiting_data = dict()
+    released = set()
     keyorder = dict()
     generation = 0
 
@@ -276,21 +281,9 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             break
         elif msg['op'] == 'update-graph':
             new_dsk = msg['dsk']
-            dsk.update(new_dsk)
-            dependencies, dependents = get_deps(dsk)  # TODO: https://github.com/blaze/dask/issues/781
-
-            _, _, _, new_held_data = insert_remote_deps(
-                    dsk, dependencies, dependents, copy=False,
-                    keys=list(new_dsk))
-
-            held_data.update(msg['keys'])
-            held_data.update(new_held_data)
-
-            # TODO: replace heal with agglomerate function
-            state = heal(dependencies, dependents, set(who_has), stacks, processing)
-            waiting = state['waiting']
-            waiting_data = state['waiting_data']
-            finished_results = state['finished_results']
+            new_keys = msg['keys']
+            update_state(dsk, dependencies, dependents, held_data, set(who_has),
+                         released, waiting, waiting_data, new_dsk, new_keys)
 
             new_keyorder = order(new_dsk)
             for key in new_keyorder:
