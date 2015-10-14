@@ -143,8 +143,8 @@ class RewriteRule(object):
         any hashable object; a good convention is to use strings. If there are
         no variables, this can be omitted.
 
-    Example
-    -------
+    Examples
+    --------
     Here's a `RewriteRule` to replace all nested calls to `list`, so that
     `(list, (list, 'x'))` is replaced with `(list, 'x')`, where `'x'` is a
     variable.
@@ -323,8 +323,8 @@ class RuleSet(object):
             The rewriting strategy to use. Options are "bottom_up" (default),
             or "top_level".
 
-        Example
-        -------
+        Examples
+        --------
         Suppose there was a function `add` that returned the sum of 2 numbers,
         and another function `double` that returned twice its input:
 

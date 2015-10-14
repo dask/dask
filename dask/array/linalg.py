@@ -285,8 +285,8 @@ def qr(a, name=None):
     """
     Compute the qr factorization of a matrix.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> q, r = da.linalg.qr(x)  # doctest: +SKIP
 
@@ -309,8 +309,8 @@ def svd(a, name=None):
     """
     Compute the singular value decomposition of a matrix.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> u, s, v = da.linalg.svd(x)  # doctest: +SKIP
 

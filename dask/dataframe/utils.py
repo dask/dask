@@ -7,8 +7,8 @@ import toolz
 def shard_df_on_index(df, divisions):
     """ Shard a DataFrame by ranges on its index
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> df = pd.DataFrame({'a': [0, 10, 20, 30, 40], 'b': [5, 4 ,3, 2, 1]})
     >>> df

@@ -133,8 +133,8 @@ DEBUG = False
 def start_state_from_dask(dsk, cache=None, sortkey=None):
     """ Start state from a dask
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     >>> import pprint
@@ -255,8 +255,9 @@ def execute_task(key, task, data, queue, get_id, raise_on_exception=False):
     """
     Compute task and handle all administration
 
-    See also:
-        _execute_task - actually execute task
+    See Also
+    --------
+    _execute_task - actually execute task
     """
     try:
         result = _execute_task(task, data)

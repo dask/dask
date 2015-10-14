@@ -493,8 +493,8 @@ def from_dask_array(x, columns=None):
     columns: list or string
         list of column names if DataFrame, single string if Series
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> import dask.array as da
     >>> import dask.dataframe as dd
@@ -731,8 +731,9 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
 
     See https://github.com/blosc/castra for details
 
-    See Also:
-        Castra.to_dask
+    See Also
+    --------
+    Castra.to_dask
     """
     from castra import Castra
     if isinstance(categories, list):

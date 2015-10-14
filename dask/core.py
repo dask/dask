@@ -9,8 +9,8 @@ def inc(x):
 def ishashable(x):
     """ Is x hashable?
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> ishashable(1)
     True
@@ -29,8 +29,8 @@ def istask(x):
 
     A task is a tuple with a callable first argument
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> inc = lambda x: x + 1
     >>> istask((inc, 1))
@@ -106,8 +106,8 @@ def _get_task(d, task, maxdepth=1000):
 def get(d, key, get=None, concrete=True, **kwargs):
     """ Get value from Dask
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> inc = lambda x: x + 1
     >>> d = {'x': 1, 'y': (inc, 'x')}
@@ -279,8 +279,8 @@ def reverse_dict(d):
 def subs(task, key, val):
     """ Perform a substitution on a task
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
     (inc, 1)
@@ -384,8 +384,8 @@ def getcycle(d, keys):
 
     ``keys`` may be a single key or list of keys.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
     >>> getcycle(d, 'x')
@@ -403,8 +403,8 @@ def isdag(d, keys):
 
     ``keys`` may be a single key or list of keys.
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> inc = lambda x: x + 1
     >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')

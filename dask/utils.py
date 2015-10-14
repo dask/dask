@@ -189,8 +189,8 @@ def textblock(file, start, stop, compression=None, encoding=None,
 
     This gets data starting/ending from the next linesep delimiter
 
-    Example
-    -------
+    Examples
+    --------
 
     >> with open('myfile.txt', 'w') as f:
     ..     f.write('123\n456\n789\nabc')

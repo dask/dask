@@ -304,8 +304,8 @@ class _Frame(Base):
 
         >>> a, b, c = df.random_split([0.8, 0.1, 0.1], random_state=123)  # doctest: +SKIP
 
-        See Also:
-        ---------
+        See Also
+        --------
 
             dask.DataFrame.sample
         """
@@ -477,8 +477,8 @@ class _Frame(Base):
             If int create a new RandomState with this as the seed
         Otherwise draw from the passed RandomState
 
-        See Also:
-        ---------
+        See Also
+        --------
 
             dask.DataFrame.random_split, pd.DataFrame.sample
         """
@@ -1276,8 +1276,9 @@ class DataFrame(_Frame):
 
         >>> df2 = df.set_partition('new-index-column', divisions=[10, 20, 50])  # doctest: +SKIP
 
-        See also:
-            set_index
+        See Also
+        --------
+        set_index
         """
         from .shuffle import set_partition
         return set_partition(self, column, divisions, **kwargs)
@@ -1353,8 +1354,9 @@ class DataFrame(_Frame):
 
         See https://github.com/blosc/castra for details
 
-        See Also:
-            Castra.to_dask
+        See Also
+        --------
+        Castra.to_dask
         """
         from .io import to_castra
         return to_castra(self, fn, categories, sorted_index_column,

@@ -23,8 +23,8 @@ class set_options(object):
             likely to contain functions.  Defaults to dill.loads/dill.dumps
         rerun_exceptions_locally - rerun failed tasks in master process
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> with set_options(get=dask.get):  # doctest: +SKIP
     ...     x = np.array(x)  # uses dask.get internally

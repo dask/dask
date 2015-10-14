@@ -1,4 +1,4 @@
 numpydoc
 toolz
 dill
-pandas
+pandas>=0.16.0

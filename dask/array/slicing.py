@@ -71,8 +71,8 @@ def slice_array(out_name, in_name, blockdims, index):
 
         ((10, 10, 10, 10), (20, 20))
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
     ...                              (slice(10, 35),))  #  doctest: +SKIP
@@ -428,8 +428,9 @@ def take_sorted(outname, inname, blockdims, index, axis=0):
     {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
      ('y', 1): (getitem, ('x', 2), ([7],))}
 
-    See also:
-        take - calls this function
+    See Also
+    --------
+    take - calls this function
     """
     n = len(blockdims)
     sizes = blockdims[axis]  # the blocksizes on the axis that we care about

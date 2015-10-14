@@ -45,9 +45,7 @@ Other functions
 .. autofunction:: compute
 .. autofunction:: map_partitions
 .. autofunction:: categorize
-.. autofunction:: quantiles
-.. autofunction:: set_index
-.. autofunction:: shuffle
+.. autofunction:: quantile
 
 .. currentmodule:: dask.dataframe.multi
 

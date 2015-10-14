@@ -9,7 +9,6 @@ Create and Store Arrays
 .. autosummary::
    from_array
    store
-   Array.to_hdf5
 
 Specialized Functions for Dask.Array
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -34,9 +33,6 @@ Other functions
 
 .. autofunction:: from_array
 .. autofunction:: store
-.. autofunction:: Array.to_hdf5
-.. autofunction:: Array.map_blocks
-.. autofunction:: Array.map_overlap
 .. autofunction:: topk
 .. autofunction:: coarsen
 .. autofunction:: stack

@@ -3,7 +3,8 @@ Frequently Asked Questions
 
 1.  **Q: How do I debug my program when using dask?**
 
-    If you want to inspect the dask graph itself see `inspect docs`_
+    If you want to inspect the dask graph itself see
+    :doc:`inspect docs <inspect>`.
 
     If you want to dive down with a Python debugger a common cause of
     frustration is the asynchronous schedulers which, because they run your
@@ -98,6 +99,5 @@ Frequently Asked Questions
         case you could also report your problem on our `issue tracker`_ and
         work with the dask development team to improve our scheduling policies.
 
-.. _`inspect docs`: inspect.html
 .. _`Chest`: https://github.com/blaze/chest
 .. _`issue tracker`: https://github.com/blaze/dask/issues/new

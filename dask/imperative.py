@@ -185,11 +185,11 @@ def optimize(dsk, keys):
 
 
 def compute(*args, **kwargs):
-    """Evaluate several ``Value``s at once.
+    """Evaluate more than one ``Value`` at once.
 
     Note that the only difference between this function and
-    ``dask.base.compute`` is that this implicitly converts python objects to
-    ``Value``s, allowing for collections of dask objects to be computed.
+    ``dask.base.compute`` is that this implicitly wraps python objects in
+    ``Value``, allowing for collections of dask objects to be computed.
 
     Examples
     --------

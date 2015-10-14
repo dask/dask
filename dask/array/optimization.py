@@ -48,8 +48,8 @@ def remove_full_slices(dsk):
     See Also:
         dask.optimize.inline
 
-    Example
-    -------
+    Examples
+    --------
 
     >>> dsk = {'a': (range, 5),
     ...        'b': (getitem, 'a', (slice(None, None, None),)),

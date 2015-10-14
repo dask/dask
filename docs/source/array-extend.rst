@@ -1,8 +1,8 @@
 Extend Dask Array
 =================
 
-As discussed in the `array design document`_ to create a dask `Array` object
-you need the following:
+As discussed in the :doc:`array design document <array-design>` to create a
+dask `Array` object you need the following:
 
 1.  A dask graph
 2.  A name specifying a set of keys within that graph
@@ -13,7 +13,7 @@ Often ``dask.array`` functions take other ``Array`` objects as inputs along
 with parameters, add tasks to a new dask dictionary, create a new ``chunks``
 tuple, and then construct and return a new ``Array`` object.  The hard parts
 are invariably creating the right tasks and creating a new ``chunks`` tuple.
-Careful review of the `array design document`_ is suggested.
+Careful review of the :doc:`array design document <array-design>` is suggested.
 
 
 Example `eye`
@@ -97,5 +97,3 @@ where the ith block along the diagonal of the output is the result of calling
           [0, 0, 0, 0, 0, 0, 6, 0, 0],
           [0, 0, 0, 0, 0, 0, 0, 7, 0],
           [0, 0, 0, 0, 0, 0, 0, 0, 8]])
-
-.. _`array design document`: array-design.html
