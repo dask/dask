@@ -51,3 +51,19 @@ def All(*args):
         result = yield tasks.next()
         results[tasks.current_index] = result
     raise gen.Return(results)
+
+
+def sync(loop, func, *args, **kwargs):
+    """ Run coroutine in loop running in separate thread """
+    from threading import Event
+    e = Event()
+    result = [None]
+
+    @gen.coroutine
+    def f():
+        result[0] = yield func(*args, **kwargs)
+        e.set()
+
+    a = loop.add_callback(f)
+    e.wait()
+    return result[0]

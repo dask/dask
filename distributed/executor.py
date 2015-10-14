@@ -16,28 +16,13 @@ from tornado.queues import Queue
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .client import WrappedKey, _gather
 from .dask import scheduler, worker, delete
-from .utils import All
+from .utils import All, sync
 
 
 log = print
 
 
 tokens = (str(i) for i in itertools.count(1))
-
-def sync(loop, func, *args, **kwargs):
-    """ Run coroutine in loop running in separate thread """
-    from threading import Event
-    e = Event()
-    result = [None]
-
-    @gen.coroutine
-    def f():
-        result[0] = yield func(*args, **kwargs)
-        e.set()
-
-    a = loop.add_callback(f)
-    e.wait()
-    return result[0]
 
 
 class Future(WrappedKey):
@@ -134,7 +119,6 @@ class Executor(object):
         while True:
             msg = yield self.interact_queue.get()
             if msg['op'] == 'close':
-                self.scheduler_queue.put_nowait(msg)
                 break
             if msg['op'] == 'task-finished':
                 if msg['key'] in self.futures:
@@ -150,10 +134,12 @@ class Executor(object):
     def _shutdown(self):
         """ Send shutdown signal and wait until _go completes """
         self.interact_queue.put_nowait({'op': 'close'})
+        self.scheduler_queue.put_nowait({'op': 'close'})
         yield self._shutdown_event.wait()
 
     def shutdown(self):
         self.interact_queue.put_nowait({'op': 'close'})
+        self.scheduler_queue.put_nowait({'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
 
