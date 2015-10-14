@@ -290,7 +290,8 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
                 if key not in keyorder:
                     # TODO: add test for this
                     keyorder[key] = (generation, new_keyorder[key]) # prefer old
-            generation += 1  # older graph generations take precedence
+            if len(new_dsk) > 1:
+                generation += 1  # older graph generations take precedence
 
             seed_ready_tasks()
 
