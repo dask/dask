@@ -9,8 +9,6 @@ from distributed.utils import ignoring
 from distributed.core import (connect_sync, read_sync, write_sync,
         send_recv_sync)
 from distributed.utils_test import cluster
-from contextlib import contextmanager
-from multiprocessing import Process
 
 from tornado import gen
 from tornado.ioloop import IOLoop

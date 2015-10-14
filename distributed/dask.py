@@ -65,7 +65,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
     - worker-finished: sent to scheduler in response to a close command
     """
     worker = rpc(ip=ident[0], port=ident[1])
-    logger.info("Start worker core", ident, i)
+    logger.info("Start worker core %s, %d", ident, i)
 
     while True:
         msg = yield worker_queue.get()
@@ -99,7 +99,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
     worker.close_streams()
     scheduler_queue.put_nowait({'op': 'worker-finished',
                                 'worker': ident})
-    logger.info("Close worker core", ident, i)
+    logger.info("Close worker core, %s, %d", ident, i)
 
 
 @gen.coroutine

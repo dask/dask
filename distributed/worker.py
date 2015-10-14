@@ -95,7 +95,9 @@ class Worker(Server):
         logger.debug('Registered with center')
 
     def start(self):
-        IOLoop.current().add_callback(self._start)
+        if not self.io_loop:
+            self.io_loop = IOLoop.current()
+        self.io_loop.add_callback(self._start)
 
     @gen.coroutine
     def _close(self):

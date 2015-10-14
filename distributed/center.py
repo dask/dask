@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
+import logging
 from functools import partial
 import socket
 
@@ -10,6 +11,9 @@ from tornado.iostream import StreamClosedError
 
 from .core import Server, read, write, rpc
 from .utils import ignoring, ignore_exceptions
+
+
+logger = logging.getLogger(__name__)
 
 
 class Center(Server):
@@ -62,7 +66,7 @@ class Center(Server):
     def register(self, stream, address=None, keys=(), ncores=None):
         self.has_what[address] = set(keys)
         self.ncores[address] = ncores
-        print("Register %s" % str(address))
+        logger.info("Register %s", str(address))
         return b'OK'
 
     def unregister(self, stream, address=None):
@@ -73,7 +77,7 @@ class Center(Server):
             del self.ncores[address]
         for key in keys:
             self.who_has[key].remove(address)
-        print("Unregister %s" % str(address))
+        logger.info("Unregister %s", str(address))
         return b'OK'
 
     def add_keys(self, stream, address=None, keys=()):

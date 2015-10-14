@@ -9,19 +9,23 @@ from distributed.utils import ignoring
 def run_center(port):
     from distributed import Center
     from tornado.ioloop import IOLoop
+    import logging
+    logging.getLogger("tornado").setLevel(logging.CRITICAL)
     center = Center('127.0.0.1', port)
     center.listen(port)
     IOLoop.current().start()
-    IOLoop.current().close()
+    IOLoop.current().close()  # Never reached. TODO: clean shutdown of IOLoop
 
 
 def run_worker(port, center_port, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop
+    import logging
+    logging.getLogger("tornado").setLevel(logging.CRITICAL)
     worker = Worker('127.0.0.1', port, '127.0.0.1', center_port, **kwargs)
     worker.start()
     IOLoop.current().start()
-    IOLoop.current().close()
+    IOLoop.current().close()  # Never reached. TODO: clean shutdown of IOLoop
 
 
 @contextmanager
