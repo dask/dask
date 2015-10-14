@@ -86,13 +86,15 @@ def label(x, cache=None):
     return s
 
 
-def to_graphviz(dsk, data_attributes=None, function_attributes=None):
+def to_graphviz(dsk, data_attributes=None, function_attributes=None, **kwargs):
     if data_attributes is None:
         data_attributes = {}
     if function_attributes is None:
         function_attributes = {}
 
-    g = Digraph(graph_attr={'rankdir': 'BT'})
+    attributes = {'rankdir': 'BT'}
+    attributes.update(kwargs)
+    g = Digraph(graph_attr=attributes)
 
     seen = set()
     cache = {}
