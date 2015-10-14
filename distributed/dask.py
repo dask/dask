@@ -65,7 +65,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
     - worker-finished: sent to scheduler in response to a close command
     """
     worker = rpc(ip=ident[0], port=ident[1])
-    logger.info("Start worker core %s, %d", ident, i)
+    logger.debug("Start worker core %s, %d", ident, i)
 
     while True:
         msg = yield worker_queue.get()
@@ -99,7 +99,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
     worker.close_streams()
     scheduler_queue.put_nowait({'op': 'worker-finished',
                                 'worker': ident})
-    logger.info("Close worker core, %s, %d", ident, i)
+    logger.debug("Close worker core, %s, %d", ident, i)
 
 
 @gen.coroutine
@@ -143,7 +143,7 @@ def delete(scheduler_queue, delete_queue, ip, port):
     yield center.close(close=True)
     center.close_streams()          # All done
     scheduler_queue.put_nowait({'op': 'delete-finished'})
-    logger.info('Delete finished')
+    logger.debug('Delete finished')
 
 
 @gen.coroutine
@@ -358,7 +358,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         else:
             logger.warn("Bad message: %s", msg)
 
-    logger.info('Finished scheduling')
+    logger.debug('Finished scheduling')
     yield cleanup()
 
 

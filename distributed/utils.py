@@ -71,4 +71,4 @@ def sync(loop, func, *args, **kwargs):
 
 import logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.WARN)
+                    level=logging.INFO)

@@ -122,7 +122,7 @@ class Worker(Server):
 
         # gather data from peers
         if needed:
-            logger.debug("gather %d keys from peers: %s", len(needed), str(needed))
+            logger.info("gather %d keys from peers: %s", len(needed), str(needed))
             try:
                 other = yield _gather(self.center, needed=needed)
             except KeyError as e:
@@ -140,9 +140,9 @@ class Worker(Server):
         try:
             job_counter[0] += 1
             i = job_counter[0]
-            logger.debug("Start job %d: %s", i, funcname(function))
+            logger.info("Start job %d: %s", i, funcname(function))
             result = yield self.executor.submit(function, *args2, **kwargs2)
-            logger.debug("Finish job %d: %s", i, funcname(function))
+            logger.info("Finish job %d: %s", i, funcname(function))
             out_response = b'OK'
         except Exception as e:
             result = e
