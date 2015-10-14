@@ -37,7 +37,7 @@ class Center(Server):
     --------
     distributed.worker.Worker:
     """
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, **kwargs):
         self.ip = ip
         self.port = port
         self.who_has = defaultdict(set)
@@ -52,7 +52,7 @@ class Center(Server):
         d = {k[len('get_'):] if k.startswith('get_') else k: v for k, v in
                 d.items()}
 
-        super(Center, self).__init__(d)
+        super(Center, self).__init__(d, **kwargs)
 
     @gen.coroutine
     def terminate(self, stream):

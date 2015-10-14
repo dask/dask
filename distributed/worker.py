@@ -67,7 +67,7 @@ class Worker(Server):
     distributed.center.Center:
     """
 
-    def __init__(self, ip, port, center_ip, center_port, ncores=None):
+    def __init__(self, ip, port, center_ip, center_port, ncores=None, **kwargs):
         self.ip = ip
         self.port = port
         self.ncores = ncores or _ncores
@@ -82,7 +82,7 @@ class Worker(Server):
                     'delete_data': self.delete_data,
                     'terminate': self.terminate}
 
-        super(Worker, self).__init__(handlers)
+        super(Worker, self).__init__(handlers, **kwargs)
         logger.info('Start worker')
         self.status = 'running'
 

@@ -57,9 +57,9 @@ class Server(TCPServer):
     *  ``{'op': 'ping'}``
     *  ``{'op': 'add': 'x': 10, 'y': 20}``
     """
-    def __init__(self, handlers):
+    def __init__(self, handlers, **kwargs):
         self.handlers = handlers
-        super(Server, self).__init__()
+        super(Server, self).__init__(**kwargs)
 
     @gen.coroutine
     def handle_stream(self, stream, address):
