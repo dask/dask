@@ -14,7 +14,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
 from dask.async import nested_get, _execute_task
-from dask.core import istask, flatten, get_deps, reverse_dict
+from dask.core import istask, flatten, get_deps, reverse_dict, get_dependencies
 from dask.order import order
 
 from .core import connect, rpc
@@ -412,6 +412,53 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
         return True
 
     assert all(map(check_key, keys))
+
+
+def update_state(dsk, dependencies, dependents, held_data, in_memory, released,
+                 waiting, waiting_data, new_dsk, new_keys):
+    """ Update state given new dsk, keys pair
+
+    This should operate in linear time relative to the size of edges of the
+    added graph.
+    """
+    new_dsk = {k: unpack_remotedata(v)[0] for k, v in new_dsk.items()}
+    dsk.update(new_dsk)
+    for key in new_dsk:
+        # add dependencies
+        deps = get_dependencies(dsk, key)
+        if key not in dependencies:
+            dependencies[key] = set()
+        dependencies[key] |= deps
+        if key not in in_memory:
+            if key not in waiting:
+                waiting[key] = set()
+            waiting[key] |= deps - in_memory
+
+        # add dependents
+        if key not in waiting_data and key not in released:
+            waiting_data[key] = set()
+
+        for dep in deps:
+            if dep not in dependents:
+                dependents[dep] = set()
+            dependents[dep].add(key)
+        if key not in released:
+            for dep in deps:
+                if dep not in waiting_data:
+                    waiting_data[dep] = set()
+                waiting_data[dep].add(key)
+
+        if key not in dependents:
+            dependents[key] = set()
+
+    held_data |= set(new_keys)
+
+    return {'dsk': dsk,
+            'dependencies': dependencies,
+            'dependents': dependents,
+            'held_data': held_data,
+            'waiting': waiting,
+            'waiting_data': waiting_data}
 
 
 def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
