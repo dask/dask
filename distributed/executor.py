@@ -71,17 +71,17 @@ class Executor(object):
 
     Provide center address on initialization
 
-    >>> executor = Executor(('127.0.0.1', 8787))
+    >>> executor = Executor(('127.0.0.1', 8787))  # doctest: +SKIP
 
     Use ``submit`` method like normal
 
-    >>> a = executor.submit(add, 1, 2)
-    >>> b = executor.submit(add, 10, 20)
+    >>> a = executor.submit(add, 1, 2)  # doctest: +SKIP
+    >>> b = executor.submit(add, 10, 20)  # doctest: +SKIP
 
     Additionally, provide results of submit calls (futures) to further submit
     calls:
 
-    >>> c = executor.submit(add, a, b)
+    >>> c = executor.submit(add, a, b)  # doctest: +SKIP
 
     This allows for the dynamic creation of complex dependencies.
     """
