@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
+import logging
 from math import ceil
 from time import time
 
@@ -22,11 +23,7 @@ from .client import RemoteData, _gather, unpack_remotedata
 from .utils import All
 
 
-log = print
-
-
-def log(*args):
-    return
+logger = logging.getLogger(__name__)
 
 
 @gen.coroutine
@@ -41,7 +38,8 @@ def worker(scheduler_queue, worker_queue, ident, ncores):
         yield All([worker_core(scheduler_queue, worker_queue, ident, i)
                 for i in range(ncores)])
     except StreamClosedError:
-        log("Worker failed from closed stream", ident)
+        logger.warn("Worker failed from closed stream: %s", ident,
+                    exc_info=True)
         scheduler_queue.put_nowait({'op': 'worker-failed',
                                     'worker': ident})
 
@@ -67,7 +65,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
     - worker-finished: sent to scheduler in response to a close command
     """
     worker = rpc(ip=ident[0], port=ident[1])
-    log("Start worker core", ident, i)
+    logger.info("Start worker core", ident, i)
 
     while True:
         msg = yield worker_queue.get()
@@ -101,7 +99,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
     worker.close_streams()
     scheduler_queue.put_nowait({'op': 'worker-finished',
                                 'worker': ident})
-    log("Close worker core", ident, i)
+    logger.info("Close worker core", ident, i)
 
 
 @gen.coroutine
@@ -145,7 +143,7 @@ def delete(scheduler_queue, delete_queue, ip, port):
     yield center.close(close=True)
     center.close_streams()          # All done
     scheduler_queue.put_nowait({'op': 'delete-finished'})
-    log('Delete finished')
+    logger.info('Delete finished')
 
 
 @gen.coroutine
@@ -298,7 +296,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         elif msg['op'] == 'task-finished':
             key = msg['key']
             worker = msg['worker']
-            log("task finished", key, worker)
+            logger.debug("task finished", key, worker)
             who_has[key].add(worker)
             has_what[worker].add(key)
             processing[worker].remove(key)
@@ -358,9 +356,9 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
                 release_key(msg['key'])
 
         else:
-            log("Bad message", msg)
+            logger.warn("Bad message: %s", msg)
 
-    log('Finished scheduling')
+    logger.info('Finished scheduling')
     yield cleanup()
 
 

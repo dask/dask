@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple
+import logging
 import random
 import uuid
 from itertools import cycle, count
@@ -18,7 +19,7 @@ from .core import read, write, connect, rpc, coerce_to_rpc
 from .client import (RemoteData, _scatter, _gather, unpack_remotedata)
 
 
-log = print
+logger = logging.getLogger(__name__)
 
 
 class Pool(object):
@@ -368,7 +369,7 @@ def handle_worker(who_has, has_what, tasks, shares, extra,
             continue
         if i in running:
             passed.add(i)
-            log("%s: Pass on %s" % (str(ident), str(i)))
+            log.debug("%s: Pass on %s", str(ident), str(i))
             continue
 
         running.add(i)
@@ -405,7 +406,7 @@ def handle_worker(who_has, has_what, tasks, shares, extra,
         if i in finished:                       # We're redundant here
             continue
 
-        log("%s: Redundantly compute %s" % (str(ident), str(i)))
+        logger.debug("%s: Redundantly compute %s", str(ident), str(i))
         try:
             yield _handle_task(tasks[i])
         except StreamClosedError:
@@ -431,7 +432,7 @@ def handle_worker(who_has, has_what, tasks, shares, extra,
         # If we found one then run it
         if j < len(jobs):
             i = jobs[-j]
-            log("%s <- %s: Steal %s" % (str(ident), str(worker), str(i)))
+            logger.debug("%s <- %s: Steal %s", str(ident), str(worker), str(i))
         else:
             break
 

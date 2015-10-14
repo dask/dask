@@ -11,12 +11,6 @@ from tornado.iostream import StreamClosedError
 from .core import Server, read, write, rpc
 from .utils import ignoring, ignore_exceptions
 
-log = print
-
-def log(*args):
-    with open('worker.log', 'a') as f:
-        f.write(', '.join(list(map(str, args))))
-
 
 class Center(Server):
     """ Central metadata storage

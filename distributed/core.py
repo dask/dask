@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import logging
 import signal
 import socket
 import struct
@@ -15,7 +16,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
 
-log = print
+logger = logging.getLogger(__name__)
 
 
 def handle_signal(sig, frame):
@@ -72,13 +73,13 @@ class Server(TCPServer):
 
         Coroutines should expect a single IOStream object.
         """
-        log("Connection from %s:%d" % address)
+        logger.info("Connection from %s:%d" % address)
         try:
             while True:
                 try:
                     msg = yield read(stream)
                 except StreamClosedError:
-                    log("Lost connection: %s" % str(address))
+                    logger.info("Lost connection: %s", str(address))
                     break
                 if not isinstance(msg, dict):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
@@ -94,14 +95,14 @@ class Server(TCPServer):
                     handler = self.handlers[op]
                 except KeyError:
                     result = b'No handler found: ' + op.encode()
-                    log(result)
+                    logger.warn(result)
                 else:
                     result = yield gen.maybe_future(handler(stream, **msg))
                 if reply:
                     try:
                         yield write(stream, result)
                     except StreamClosedError:
-                        log("Lost connection: %s" % str(address))
+                        logger.info("Lost connection: %s" % str(address))
                         break
                 if close:
                     break
@@ -109,8 +110,7 @@ class Server(TCPServer):
             try:
                 stream.close()
             except Exception as e:
-                log("Failed while closing writer")
-                log(str(e))
+                logger.warn("Failed while closing writer",  exc_info=True)
 
 
 def connect_sync(host, port, timeout=1):

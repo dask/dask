@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import itertools
+import logging
 import uuid
 
 from dask.base import tokenize
@@ -18,8 +19,7 @@ from .client import WrappedKey, _gather
 from .dask import scheduler, worker, delete
 from .utils import All, sync
 
-
-log = print
+logger = logging.getLogger(__name__)
 
 
 tokens = (str(i) for i in itertools.count(1))

@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import ThreadPoolExecutor
+import logging
 from multiprocessing.pool import ThreadPool
 import traceback
 import sys
@@ -15,7 +16,8 @@ from .client import _gather, pack_data
 
 _ncores = ThreadPool()._processes
 
-log = print
+
+logger = logging.getLogger(__name__)
 
 
 def funcname(func):
@@ -81,7 +83,7 @@ class Worker(Server):
                     'terminate': self.terminate}
 
         super(Worker, self).__init__(handlers)
-        log('Start worker')
+        logger.info('Start worker')
         self.status = 'running'
 
     @gen.coroutine
@@ -90,7 +92,7 @@ class Worker(Server):
         resp = yield self.center.register(
                 ncores=self.ncores, address=(self.ip, self.port))
         assert resp == b'OK'
-        # log('Registered with center')
+        logger.debug('Registered with center')
 
     def start(self):
         IOLoop.current().add_callback(self._start)
@@ -118,11 +120,11 @@ class Worker(Server):
 
         # gather data from peers
         if needed:
-            log("gather %d keys from peers: %s" % (len(needed), str(needed)))
+            logger.debug("gather %d keys from peers: %s", len(needed), str(needed))
             try:
                 other = yield _gather(self.center, needed=needed)
             except KeyError as e:
-                log("Could not find data during gather in compute", e)
+                logger.warn("Could not find data during gather in compute", e)
                 raise Return(e)
             data2 = merge(self.data, dict(zip(needed, other)))
         else:
@@ -136,19 +138,19 @@ class Worker(Server):
         try:
             job_counter[0] += 1
             i = job_counter[0]
-            log("Start job %d: %s" % (i, funcname(function)))
+            logger.debug("Start job %d: %s", i, funcname(function))
             result = yield self.executor.submit(function, *args2, **kwargs2)
-            log("Finish job %d: %s" % (i, funcname(function)))
+            logger.debug("Finish job %d: %s", i, funcname(function))
             out_response = b'OK'
         except Exception as e:
             result = e
             exc_type, exc_value, exc_traceback = sys.exc_info()
             tb = ''.join(traceback.format_tb(exc_traceback))
-            log(str(e))
-            log(tb)
-            log("Function: %s\n"
+            logger.warn(" Compute Failed\n"
+                "Function: %s\n"
                 "args:     %s\n"
-                "kwargs:   %s\n" % (funcname(function), str(args2), str(kwargs2)))
+                "kwargs:   %s\n", funcname(function), str(args2), str(kwargs2),
+                exc_info=True)
             out_response = b'error'
 
         # Store and tell center about our new data
@@ -156,7 +158,7 @@ class Worker(Server):
         response = yield self.center.add_keys(address=(self.ip, self.port),
                                               keys=[key])
         if not response == b'OK':
-            log('Could not report results of work to center: ' + response.decode())
+            logger.warn('Could not report results of work to center: ' + response.decode())
 
         raise Return(out_response)
 

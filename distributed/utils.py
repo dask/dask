@@ -67,3 +67,7 @@ def sync(loop, func, *args, **kwargs):
     a = loop.add_callback(f)
     e.wait()
     return result[0]
+
+
+import logging
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s')
