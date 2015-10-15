@@ -5,6 +5,7 @@ import logging
 import uuid
 
 from dask.base import tokenize
+from dask.core import flatten
 from dask.utils import funcname
 from tornado import gen
 from tornado.gen import Return
@@ -260,3 +261,31 @@ class Executor(object):
         [3, [3], 3]
         """
         return sync(self.loop, self._gather, futures)
+
+    @gen.coroutine
+    def _get(self, dsk, keys):
+        flatkeys = list(flatten(keys))
+        for key in flatkeys:
+            if key not in self.futures:
+                self.futures[key] = Future(key, self)
+        futures = {key: self.futures[key] for key in flatkeys}
+
+        self.scheduler_queue.put_nowait({'op': 'update-graph',
+                                         'dsk': dsk,
+                                         'keys': flatkeys})
+
+        packed = pack_data(keys, futures)
+        result = yield self._gather(packed)
+        raise gen.Return(result)
+
+    def get(self, dsk, keys):
+        """ Gather futures from distributed memory
+
+        Accepts a future or any nested core container of futures
+
+        >>> from operator import add  # doctest: +SKIP
+        >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
+        >>> e.get({'x': (add, 1, 2)}, 'x')  # doctest: +SKIP
+        3
+        """
+        return sync(self.loop, self._get, dsk, keys)

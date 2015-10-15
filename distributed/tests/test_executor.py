@@ -240,6 +240,8 @@ def test_gather():
         result = yield e._gather({'x': x, 'y': [y]})
         assert result == {'x': 11, 'y': [12]}
 
+        yield e._shutdown()
+
     _test_cluster(f)
 
 
@@ -248,3 +250,25 @@ def test_gather_sync():
         with Executor(('127.0.0.1', c['port'])) as e:
             x = e.submit(inc, 1)
             assert e.gather(x) == 2
+
+
+def test_get():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+        result = yield e._get({'x': (inc, 1)}, 'x')
+        assert result == 2
+
+        result = yield e._get({'x': (inc, 1)}, ['x'])
+        assert result == [2]
+
+        yield e._shutdown()
+
+    _test_cluster(f)
+
+
+def test_get_sync():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            assert e.get({'x': (inc, 1)}, 'x') == 2
