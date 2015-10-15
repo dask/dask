@@ -247,37 +247,30 @@ def test_update_state():
 
 
 def test_update_state_with_processing():
-    dsk = {'x': 1, 'y': (inc, 'x')}
-    dependencies = {'x': set(), 'y': {'x'}}
-    dependents = {'x': {'y'}, 'y': set()}
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
+    dependencies, dependents = get_deps(dsk)
 
-    waiting = {'y': {'x'}}
-    waiting_data = {'x': {'y'}, 'y': set()}
+    waiting = {'z': {'y'}}
+    waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
 
-    held_data = {'y'}
-    in_memory = set()
-    processing = {'x'}
+    held_data = {'z'}
+    in_memory = {'x'}
+    processing = {'y'}
     released = set()
 
-    new_dsk = {'a': 1, 'z': (add, 'y', 'a')}
-    new_keys = {'z'}
+    new_dsk = {'a': (inc, 'x'), 'b': (add, 'a', 'y'), 'c': (inc, 'z')}
+    new_keys = {'b', 'c'}
 
-    e_dsk = {'x': 1, 'y': (inc, 'x'), 'a': 1, 'z': (add, 'y', 'a')}
-    e_dependencies = {'x': set(), 'a': set(), 'y': {'x'}, 'z': {'a', 'y'}}
-    e_dependents = {'z': set(), 'y': {'z'}, 'a': {'z'}, 'x': {'y'}}
+    e_waiting = {'z': {'y'}, 'a': set(), 'b': {'a', 'y'}, 'c': {'z'}}
+    e_waiting_data = {'x': {'y', 'a'}, 'y': {'z', 'b'}, 'z': {'c'},
+                      'a': {'b'}, 'b': set(), 'c': set()}
 
-    e_waiting = {'y': {'x'}, 'a': set(), 'z': {'a', 'y'}}
-    e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'a': {'z'}, 'z': set()}
-
-    e_held_data = {'y', 'z'}
+    e_held_data = {'b', 'c', 'z'}
 
     update_state(dsk, dependencies, dependents, held_data,
                  in_memory, processing, released,
                  waiting, waiting_data, new_dsk, new_keys)
 
-    assert dsk == e_dsk
-    assert dependencies == e_dependencies
-    assert dependents == e_dependents
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
     assert held_data == e_held_data

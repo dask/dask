@@ -20,7 +20,7 @@ from dask.order import order
 
 from .core import connect, rpc
 from .client import RemoteData, _gather, unpack_remotedata
-from .utils import All
+from .utils import All, ignoring
 
 
 logger = logging.getLogger(__name__)
@@ -302,20 +302,23 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             logger.debug("task finished: %s, %s", key, worker)
             who_has[key].add(worker)
             has_what[worker].add(key)
-            processing[worker].remove(key)
+            with ignoring(KeyError):
+                processing[worker].remove(key)
             interact_queue.put_nowait(msg)
 
             for dep in sorted(dependents[key], key=keyorder.get, reverse=True):
                 if dep in waiting:
                     s = waiting[dep]
-                    s.remove(key)
+                    with ignoring(KeyError):
+                        s.remove(key)
                     if not s:  # new task ready to run
                         mark_ready_to_run(dep)
 
             for dep in dependencies[key]:
                 if dep in waiting_data:
                     s = waiting_data[dep]
-                    s.remove(key)
+                    with ignoring(KeyError):
+                        s.remove(key)
                     if not s and dep:
                         release_key(dep)
 
@@ -346,7 +349,6 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
             waiting_data = state['waiting_data']
             waiting = state['waiting']
             released = state['released']
-            finished_results = state['finished_results']
             add_keys = {k for k, v in waiting.items() if not v}
             for key in held_data & released:
                 interact_queue.put_nowait({'op': 'lost-key', 'key': key})

@@ -214,6 +214,7 @@ def test_stress_1():
 
         seq = e.map(inc, range(n))
         while len(seq) > 1:
+            yield gen.sleep(0.1)
             seq = [e.submit(add, seq[i], seq[i + 1])
                     for i in range(0, len(seq), 2)]
         result = yield seq[0]._result()
