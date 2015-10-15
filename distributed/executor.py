@@ -195,6 +195,7 @@ class Executor(object):
         f = Future(key, self)
         self.futures[key] = f
 
+        logger.debug("Submit %s(...), %s", funcname(func), key)
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': {key: task},
                                          'keys': [key]})
@@ -225,6 +226,7 @@ class Executor(object):
         futures = {key: Future(key, self) for key in dsk}
         self.futures.update(futures)
 
+        logger.debug("map(%s, ...)", funcname(func))
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': dsk,
                                          'keys': keys})

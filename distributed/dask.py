@@ -249,6 +249,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         while stacks[worker] and ncores[worker] > len(processing[worker]):
             key = stacks[worker].pop()
             processing[worker].add(key)
+            logger.debug("Send job to worker: %s, %s, %s", worker, key, dsk[key])
             worker_queues[worker].put_nowait({'op': 'compute-task',
                                               'key': key,
                                               'task': dsk[key],
@@ -280,8 +281,10 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         elif msg['op'] == 'update-graph':
             new_dsk = msg['dsk']
             new_keys = msg['keys']
-            update_state(dsk, dependencies, dependents, held_data, set(who_has),
-                         released, waiting, waiting_data, new_dsk, new_keys)
+            all_processing = set.union(*processing.values())
+            update_state(dsk, dependencies, dependents, held_data,
+                         set(who_has), all_processing, released,
+                         waiting, waiting_data, new_dsk, new_keys)
 
             new_keyorder = order(new_dsk)
             for key in new_keyorder:
@@ -296,7 +299,7 @@ def scheduler(scheduler_queue, interact_queue, worker_queues, delete_queue,
         elif msg['op'] == 'task-finished':
             key = msg['key']
             worker = msg['worker']
-            logger.debug("task finished", key, worker)
+            logger.debug("task finished: %s, %s", key, worker)
             who_has[key].add(worker)
             has_what[worker].add(key)
             processing[worker].remove(key)
@@ -449,7 +452,8 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
     return result
 
 
-def update_state(dsk, dependencies, dependents, held_data, in_memory, released,
+def update_state(dsk, dependencies, dependents, held_data,
+                 in_memory, processing, released,
                  waiting, waiting_data, new_dsk, new_keys):
     """ Update state given new dsk, keys pair
 
@@ -487,7 +491,7 @@ def update_state(dsk, dependencies, dependents, held_data, in_memory, released,
                     dependents[dep] = set()
                 dependents[dep].add(key)
 
-    frontier = in_memory | set(waiting)
+    frontier = in_memory | set(waiting) | processing
     exterior = keys_outside_frontier(dsk, dependencies, new_keys, frontier)
     for key in exterior:
         deps = dependencies[key]
@@ -500,7 +504,7 @@ def update_state(dsk, dependencies, dependents, held_data, in_memory, released,
         if key not in waiting_data:
             waiting_data[key] = set()
 
-    held_data |= new_keys
+    held_data |= set(new_keys)
 
     return {'dsk': dsk,
             'dependencies': dependencies,
