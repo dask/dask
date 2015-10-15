@@ -245,3 +245,18 @@ class Executor(object):
 
         result = pack_data(futures2, data)
         raise gen.Return(result)
+
+    def gather(self, futures):
+        """ Gather futures from distributed memory
+
+        Accepts a future or any nested core container of futures
+
+        >>> from operator import add  # doctest: +SKIP
+        >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
+        >>> x = e.submit(add, 1, 2)  # doctest: +SKIP
+        >>> e.gather(x)  # doctest: +SKIP
+        3
+        >>> e.gather([x, [x], x])  # doctest: +SKIP
+        [3, [3], 3]
+        """
+        return sync(self.loop, self._gather, futures)

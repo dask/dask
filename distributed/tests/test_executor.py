@@ -241,3 +241,10 @@ def test_gather():
         assert result == {'x': 11, 'y': [12]}
 
     _test_cluster(f)
+
+
+def test_gather_sync():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            x = e.submit(inc, 1)
+            assert e.gather(x) == 2
