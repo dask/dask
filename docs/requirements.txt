@@ -1,5 +1,5 @@
 tornado
 toolz
 dill
-git+git://github.com/blaze/dask.git#egg=dask
+dask
 numpydoc
