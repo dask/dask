@@ -6,6 +6,8 @@ We build a distributed network from two kinds of nodes
 *  A single Center node
 *  Several Worker nodes
 
+.. image:: images/network.png
+   :alt: distributed network
 
 Worker
 ------

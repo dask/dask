@@ -19,3 +19,4 @@ This library is experimental, broken, and unstable.
    foundations
    worker-center
    clients
+   scheduler
