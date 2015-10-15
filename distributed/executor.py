@@ -6,7 +6,6 @@ import uuid
 
 from dask.base import tokenize
 from dask.core import flatten
-from dask.utils import funcname
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
@@ -18,7 +17,7 @@ from tornado.queues import Queue
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .client import WrappedKey, _gather, unpack_remotedata, pack_data
 from .dask import scheduler, worker, delete
-from .utils import All, sync
+from .utils import All, sync, funcname
 
 logger = logging.getLogger(__name__)
 

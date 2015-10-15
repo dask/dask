@@ -13,20 +13,12 @@ from tornado.ioloop import IOLoop
 
 from .core import rpc, connect_sync, read_sync, write_sync, connect, Server
 from .client import _gather, pack_data
+from .utils import funcname
 
 _ncores = ThreadPool()._processes
 
 
 logger = logging.getLogger(__name__)
-
-
-def funcname(func):
-    while hasattr(func, 'func'):
-        func = func.func
-    try:
-        return func.__name__
-    except AttributeError:
-        return 'no-name'
 
 
 class Worker(Server):
