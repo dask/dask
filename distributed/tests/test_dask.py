@@ -15,7 +15,7 @@ from distributed.utils import ignoring
 from distributed.client import _gather, RemoteData, WrappedKey
 from distributed.core import connect_sync, read_sync, write_sync
 from distributed.dask import (_get, validate_state, heal, update_state,
-        insert_remote_deps, decide_worker, assign_many_tasks)
+        decide_worker, assign_many_tasks)
 from distributed.utils_test import cluster
 
 from tornado import gen
@@ -450,18 +450,6 @@ def test_repeated_computation():
         assert x == y
 
     _test_cluster(f)
-
-
-def test_insert_remote_deps():
-    x = RemoteData('x', None, None)
-    dsk = {'y': (inc, x)}
-    dependencies, dependents = get_deps(dsk)
-
-    dsk, dependencies, depdendents, held_data = insert_remote_deps(dsk, dependencies, dependents)
-
-    assert dsk == {'y': (inc, x.key)}
-    assert x.key in dependencies['y']
-    assert held_data == {'x'}
 
 
 def test_RemoteData_interaction():

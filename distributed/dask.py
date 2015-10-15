@@ -693,50 +693,6 @@ def decide_worker(dependencies, stacks, who_has, key):
     return worker
 
 
-def insert_remote_deps(dsk, dependencies, dependents, copy=True, keys=None):
-    """ Find RemoteData objects, replace with keys and insert dependencies
-
-    Examples
-    --------
-
-    >>> from operator import add
-    >>> x = RemoteData('x', '127.0.0.1', 8787)
-    >>> dsk = {'y': (add, x, 10)}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> dsk, dependencies, depdendents, held_data = insert_remote_deps(dsk, dependencies, dependents)
-    >>> dsk
-    {'y': (<built-in function add>, 'x', 10)}
-    >>> dependencies  # doctest: +SKIP
-    {'x': set(), 'y': {'x'}}
-    >>> dependents  # doctest: +SKIP
-    {'x': {'y'}, 'y': set()}
-    >>> held_data
-    {'x'}
-    """
-    if keys is None:
-        keys = list(dsk)
-    if copy:
-        dsk = dsk.copy()
-        dependencies = dependencies.copy()
-        dependents = dependents.copy()
-    held_data = set()
-
-    for key in keys:
-        value = dsk[key]
-        vv, keys = unpack_remotedata(value)
-        if keys:
-            dependencies[key] |= keys
-            dsk[key] = vv
-            for k in keys:
-                held_data.add(k)
-                dependencies[k] = set()
-                if not k in dependents:
-                    dependents[k] = set()
-                dependents[k].add(key)
-
-    return dsk, dependencies, dependents, held_data
-
-
 def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
     """ Assign many new ready tasks to workers
 
