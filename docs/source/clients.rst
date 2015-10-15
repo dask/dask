@@ -2,12 +2,9 @@ Client Interaction
 ==================
 
 As discussed in the quickstart_ users can interact with the `worker-center`_
-network with a couple of abstractions:
+network with the Executor abstraction.
 
-* ``Pool`` mimics ``multiprocessing.Pool``
-*  ``get`` mimics ``dask.get``
-
-Common abstractions shared between these two systems are shared below.
+This is built with lower level functions described below.
 
 .. _`quickstart`: quickstart.html
 .. _`worker-center`: worker-center.html

@@ -43,79 +43,71 @@ and replace the IP addresses above with ``127.0.0.1``::
    $ dworker 127.0.0.1:8787
 
 
-User Clients
-------------
+Executor
+--------
 
-We use our network with two client modules:
-
-*  ``Pool`` - mimics ``multiprocessing.Pool``
-*  ``get`` - mimics ``dask.get``.
-
-Pool
-````
-
-The pool provides ``map``, ``apply``, and ``apply_async`` functions.  Results
-of these functions are ``RemoteData`` objects, proxies that live on the
-cluster.
+Locally we launch an Executor to interact with the distributed network.
 
 .. code-block:: python
 
-   >>> from distributed import Pool
-   >>> pool = Pool('192.168.1.100:8787')  # Provide address of center
+   >>> from distributed import Executor
+   >>> executor = Executor('192.168.1.100:8787')  # Provide address of center
+   >>> executor.start()
 
-   >>> A = pool.map(lambda x: x**2, range(10))
-   >>> B = pool.map(lambda x: -x, A)
-   >>> total = pool.apply(sum, [B])
+The executor provides ``map``, ``submit`` functions like
+``concurrent.futures.Executor``.  Results of these functions are ``Future``
+objects, proxies for data that lives on the cluster.
+
+.. code-block:: python
+
+   >>> A = executor.map(lambda x: x**2, range(10))
+   >>> B = executor.map(lambda x: -x, A)
+   >>> total = executor.submit(sum, [B])
    >>> total.get()
    -285
 
-By default pool does not bring results back to your local computer but leaves
-them on the distributed network.  As a result, computations on returned results
-like the following don't require any data transfer.
+By default the executor does not bring results back to your local computer but
+leaves them on the distributed network.  As a result, computations on returned
+results like the following don't require any data transfer.
 
 .. code-block:: python
 
-   >>> B = pool.map(lambda x: -x, A)
+   >>> B = executor.map(lambda x: -x, A)
 
 Gather results to your local machine with the gather method
 
 .. code-block:: python
 
-   >>> pool.gather(A)
+   >>> executor.gather(A)
    [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
 
 get
 ```
 
-The ``distributed.dask.get`` function operates like a typical dask scheduler.
+The ``Executor.get`` method operates like a typical dask scheduler.
 
 Get works with raw dask graphs:
 
 .. code-block:: python
 
-   >>> from distributed.dask import get
-   >>> inc = lambda x: x + 1
    >>> dsk = {'a': 1, 'b': (inc, 'a')}
-   >>> get('192.168.1.100', 8787, dsk, 'b')
+   >>> executor.get(dsk, 'b')
    2
 
 Get works with dask collections (like dask.array or dask.dataframe):
 
 .. code-block:: python
 
-   >>> from functools import partial
-   >>> get2 = partial(get, '192.168.1.100', 8787)
-
    >>> import dask.array as da
    >>> x = da.arange(10, chunks=(5,))
-   >>> x.sum().compute(get=get2)
+   >>> x.sum().compute(get=executor.get)
    45
 
 
 Benefits
 --------
 
-Both the Pool and get scheduler provide data
+The executor provides:
 
 *  Data locality: computations prefer to run on workers that have the inputs
 *  Limited resilience:  computations can recover from catastrophic failures of
