@@ -185,8 +185,7 @@ def test_thread():
 
 def test_sync_exceptions():
     with cluster() as (c, [a, b]):
-        e = Executor(('127.0.0.1', c['port']))
-        e.start()
+        e = Executor(('127.0.0.1', c['port']), start=True)
 
         x = e.submit(div, 10, 2)
         assert x.result() == 5

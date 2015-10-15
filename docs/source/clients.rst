@@ -29,39 +29,20 @@ client libraries or functions like ``gather`` and ``scatter``.
 .. autofunction:: distributed.client.scatter
 .. autofunction:: distributed.client.gather
 .. autofunction:: distributed.client.delete
+.. autofunction:: distributed.client.clear
 
-Pool
-----
+Executor
+--------
 
-As described in the `pool example in the quickstart`_, the Pool mimics the
-``multiprocessing.Pool`` object, providing functions like ``map`` and
-``apply``.  These functions produce ``RemoteData`` objects so that repeated
-applications of ``map`` or ``apply`` leave data on the remote network.
+As described in the `executor example in the quickstart`_, the Executor mimics the
+``concurrent.futures.Executor`` object, providing the functions ``map`` and
+``submit``.  These functions produce ``Future`` objects so that repeated
+applications of ``map`` and ``submit`` leave data on the remote network.
 
-Additionally, the Pool attempts to run computations on nodes that already have
+Additionally, Executor attempts to run computations on nodes that already have
 the data, further avoiding unnecessary communication.
 
-.. autoclass:: distributed.pool.Pool
-   :members: map
-             apply
-             apply_async
-             scatter
-             gather
+.. autoclass:: distributed.executor.Executor
+   :members: map, submit, gather, get
 
-.. _`pool example in the quickstart`: quickstart.html#pool
-
-
-get
----
-
-As described in the `dask example in the quickstart`_, the get function mimics
-the ``dask.get`` function, allowing computation of arbitrary directed acyclic
-graphs of tasks.
-
-.. _`dask example in the quickstart`: quickstart.html#get
-
-Like the Pool, the get function also attempts to run computations on nodes that
-already have the relevant data.  It does this in a greedy (but
-cheap-to-schedule) fashion and so will make mistakes.
-
-.. autofunction:: distributed.dask.get
+.. _`executor example in the quickstart`: quickstart.html#executor

@@ -42,9 +42,11 @@ class Future(WrappedKey):
             self.event.clear()
 
     def done(self):
+        """ Is the computation complete? """
         return self.event.is_set()
 
     def result(self):
+        """ Wait until computation completes. Gather result to local process """
         result = sync(self.executor.loop, self._result, raiseit=False)
         if self.status == 'error':
             raise result
@@ -86,15 +88,19 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center):
+    def __init__(self, center, start=False):
         self.center = coerce_to_rpc(center)
         self.futures = dict()
         self.dask = dict()
-        self.interact_queue = Queue()
+        self.report_queue = Queue()
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
 
+        if start:
+            self.start()
+
     def start(self):
+        """ Start scheduler running in separate thread """
         from threading import Thread
         self.loop = IOLoop()
         self.loop.add_callback(self._go)
@@ -109,16 +115,17 @@ class Executor(object):
         self.shutdown()
 
     def _release_key(self, key):
+        """ Release key from distributed memory """
         self.futures[key].event.clear()
         del self.futures[key]
         self.scheduler_queue.put_nowait({'op': 'release-held-data',
                                          'key': key})
 
     @gen.coroutine
-    def interact(self):
+    def report(self):
         """ Listen to scheduler """
         while True:
-            msg = yield self.interact_queue.get()
+            msg = yield self.report_queue.get()
             if msg['op'] == 'close':
                 break
             if msg['op'] == 'task-finished':
@@ -134,12 +141,13 @@ class Executor(object):
     @gen.coroutine
     def _shutdown(self):
         """ Send shutdown signal and wait until _go completes """
-        self.interact_queue.put_nowait({'op': 'close'})
+        self.report_queue.put_nowait({'op': 'close'})
         self.scheduler_queue.put_nowait({'op': 'close'})
         yield self._shutdown_event.wait()
 
     def shutdown(self):
-        self.interact_queue.put_nowait({'op': 'close'})
+        """ Send shutdown signal and wait until scheduler terminates """
+        self.report_queue.put_nowait({'op': 'close'})
         self.scheduler_queue.put_nowait({'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
@@ -154,19 +162,25 @@ class Executor(object):
         worker_queues = {worker: Queue() for worker in self.ncores}
         delete_queue = Queue()
 
-        coroutines = ([self.interact(),
-                       scheduler(self.scheduler_queue, self.interact_queue, worker_queues, delete_queue,
-                                 self.who_has, self.has_what, self.ncores, self.dask),
-                       delete(self.scheduler_queue, delete_queue, self.center.ip, self.center.port)]
-                    + [worker(self.scheduler_queue, worker_queues[w], w, n)
-                       for w, n in self.ncores.items()])
+        coroutines = ([
+            self.report(),
+            scheduler(self.scheduler_queue, self.report_queue, worker_queues,
+                      delete_queue, self.who_has, self.has_what, self.ncores,
+                      self.dask),
+            delete(self.scheduler_queue, delete_queue,
+                   self.center.ip, self.center.port)]
+         + [worker(self.scheduler_queue, worker_queues[w], w, n)
+            for w, n in self.ncores.items()])
 
         results = yield All(coroutines)
         self._shutdown_event.set()
 
-
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler
+
+        Examples
+        --------
+        >>> c = executor.submit(add, a, b)  # doctest: +SKIP
 
         Returns
         -------
@@ -207,6 +221,10 @@ class Executor(object):
         """ Map a function on a sequence of arguments
 
         Arguments can be normal objects or Futures
+
+        Examples
+        --------
+        >>> L = executor.map(func, sequence)  # doctest: +SKIP
 
         Returns
         -------
@@ -252,6 +270,8 @@ class Executor(object):
 
         Accepts a future or any nested core container of futures
 
+        Examples
+        --------
         >>> from operator import add  # doctest: +SKIP
         >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
         >>> x = e.submit(add, 1, 2)  # doctest: +SKIP
@@ -283,6 +303,8 @@ class Executor(object):
 
         Accepts a future or any nested core container of futures
 
+        Examples
+        --------
         >>> from operator import add  # doctest: +SKIP
         >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
         >>> e.get({'x': (add, 1, 2)}, 'x')  # doctest: +SKIP
