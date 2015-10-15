@@ -15,7 +15,7 @@ from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
 from .core import read, write, connect, rpc, coerce_to_rpc
-from .client import WrappedKey, _gather
+from .client import WrappedKey, _gather, unpack_remotedata, pack_data
 from .dask import scheduler, worker, delete
 from .utils import All, sync
 
@@ -232,3 +232,16 @@ class Executor(object):
                                          'keys': keys})
 
         return [futures[key] for key in keys]
+
+    @gen.coroutine
+    def _gather(self, futures):
+        futures2, keys = unpack_remotedata(futures)
+        keys = list(keys)
+
+        yield All([self.futures[key].event.wait() for key in keys])
+
+        data = yield _gather(self.center, keys)
+        data = dict(zip(keys, data))
+
+        result = pack_data(futures2, data)
+        raise gen.Return(result)

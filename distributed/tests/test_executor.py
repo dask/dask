@@ -223,3 +223,21 @@ def test_stress_1():
         yield e._shutdown()
 
     _test_cluster(f)
+
+
+def test_gather():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+        x = e.submit(inc, 10)
+        y = e.submit(inc, x)
+
+        result = yield e._gather(x)
+        assert result == 11
+        result = yield e._gather([x])
+        assert result == [11]
+        result = yield e._gather({'x': x, 'y': [y]})
+        assert result == {'x': 11, 'y': [12]}
+
+    _test_cluster(f)
