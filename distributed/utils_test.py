@@ -6,6 +6,10 @@ from distributed.core import connect_sync, write_sync, read_sync
 from distributed.utils import ignoring
 
 
+def inc(x):
+    return x + 1
+
+
 def run_center(port):
     from distributed import Center
     from tornado.ioloop import IOLoop
