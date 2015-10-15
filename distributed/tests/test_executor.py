@@ -202,3 +202,23 @@ def test_sync_exceptions():
         assert z.result() == 2
 
         e.shutdown()
+
+
+def test_stress_1():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+
+        n = 2**6
+
+        seq = e.map(inc, range(n))
+        while len(seq) > 1:
+            seq = [e.submit(add, seq[i], seq[i + 1])
+                    for i in range(0, len(seq), 2)]
+        result = yield seq[0]._result()
+        assert result == sum(map(inc, range(n)))
+
+        yield e._shutdown()
+
+    _test_cluster(f)
