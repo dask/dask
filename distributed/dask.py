@@ -8,11 +8,12 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop
 
 from dask.async import nested_get
+from dask.core import flatten
 
 from .core import rpc
 from .client import RemoteData, _gather
 from .utils import All
-from .scheduler import report, scheduler, delete, worker
+from .scheduler import scheduler, delete, worker
 
 
 logger = logging.getLogger(__name__)
@@ -81,3 +82,38 @@ def get(ip, port, dsk, keys, gather=True, _get=_get):
     1000000
     """
     return IOLoop().run_sync(lambda: _get(ip, port, dsk, keys, gather))
+
+
+@gen.coroutine
+def report(report_queue, scheduler_queue, who_has, dsk, result):
+    """ Report to outside world
+
+    For a normal get function this coroutine is almost non-essential.
+    It just starts and stops the scheduler coroutine.
+    """
+    if isinstance(result, list):
+        result_flat = set(flatten(result))
+    else:
+        result_flat = set([result])
+    out_keys = set(result_flat)
+
+    scheduler_queue.put_nowait({'op': 'update-graph',
+                                'dsk': dsk,
+                                'keys': out_keys})
+
+    finished_results = {k for k in out_keys if k in who_has}
+
+    while finished_results != out_keys:
+        msg = yield report_queue.get()
+        if msg['op'] == 'task-finished':
+            if msg['key'] in out_keys:
+                finished_results.add(msg['key'])
+        if msg['op'] == 'lost-data':
+            if msg['key'] in finished_results:
+                finished_results.remove(msg['key'])
+        if msg['op'] == 'task-erred':
+            scheduler_queue.put_nowait({'op': 'close'})
+            raise msg['exception']
+    scheduler_queue.put_nowait({'op': 'close'})
+
+    raise Return(out_keys)
