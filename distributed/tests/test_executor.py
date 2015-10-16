@@ -110,10 +110,10 @@ def test_map_naming():
         assert [x.key for x in L1] == [x.key for x in L2]
 
         L3 = e.map(inc, [1, 1, 1, 1])
-        assert len(set(map(id, L3))) == 1
+        assert len({x.event for x in L3}) == 1
 
-        L3 = e.map(inc, [1, 1, 1, 1], pure=False)
-        assert len(set(map(id, L3))) == 4
+        L4 = e.map(inc, [1, 1, 1, 1], pure=False)
+        assert len({x.event for x in L4}) == 4
 
     _test_cluster(f)
 
@@ -126,7 +126,7 @@ def test_submit_naming():
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
 
-        assert a is b
+        assert a.event is b.event
 
         c = e.submit(inc, 1, pure=False)
         assert c.key != a.key

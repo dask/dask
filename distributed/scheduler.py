@@ -323,6 +323,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
         elif msg['op'] == 'release-held-data':
             if msg['key'] in held_data:
+                logger.debug("Release key: %s", msg['key'])
                 held_data.remove(msg['key'])
                 release_key(msg['key'])
 

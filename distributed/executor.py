@@ -30,15 +30,14 @@ class Future(WrappedKey):
     def __init__(self, key, executor):
         self.key = key
         self.executor = executor
-        self.event = Event()
-        self.status = None
 
-    def _set_ready(self, status):
-        self.status = status
-        if status:
-            self.event.set()
-        else:
-            self.event.clear()
+    @property
+    def status(self):
+        return self.executor.futures[self.key]['status']
+
+    @property
+    def event(self):
+        return self.executor.futures[self.key]['event']
 
     def done(self):
         """ Is the computation complete? """
@@ -115,7 +114,7 @@ class Executor(object):
 
     def _release_key(self, key):
         """ Release key from distributed memory """
-        self.futures[key].event.clear()
+        self.futures[key]['event'].clear()
         del self.futures[key]
         self.scheduler_queue.put_nowait({'op': 'release-held-data',
                                          'key': key})
@@ -129,13 +128,16 @@ class Executor(object):
                 break
             if msg['op'] == 'task-finished':
                 if msg['key'] in self.futures:
-                    self.futures[msg['key']]._set_ready('finished')
+                    self.futures[msg['key']]['status'] = 'finished'
+                    self.futures[msg['key']]['event'].set()
             if msg['op'] == 'lost-data':
                 if msg['key'] in self.futures:
-                    self.futures[msg['key']]._set_ready(False)
+                    self.futures[msg['key']]['status'] = 'lost'
+                    self.futures[msg['key']]['event'].clear()
             if msg['op'] == 'task-erred':
                 if msg['key'] in self.futures:
-                    self.futures[msg['key']]._set_ready('error')
+                    self.futures[msg['key']]['status'] = 'error'
+                    self.futures[msg['key']]['event'].set()
 
     @gen.coroutine
     def _shutdown(self):
@@ -199,22 +201,22 @@ class Executor(object):
                 key = funcname(func) + '-' + next(tokens)
 
         if key in self.futures:
-            return self.futures[key]
+            return Future(key, self)
 
         if kwargs:
             task = (apply, func, args, kwargs)
         else:
             task = (func,) + args
 
-        f = Future(key, self)
-        self.futures[key] = f
+        if key not in self.futures:
+            self.futures[key] = {'event': Event(), 'status': None}
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': {key: task},
                                          'keys': [key]})
 
-        return f
+        return Future(key, self)
 
     def map(self, func, seq, pure=True):
         """ Map a function on a sequence of arguments
@@ -241,22 +243,23 @@ class Executor(object):
 
         dsk = {key: (func, arg) for key, arg in zip(keys, seq)}
 
-        futures = {key: Future(key, self) for key in dsk}
-        self.futures.update(futures)
+        for key in dsk:
+            if key not in self.futures:
+                self.futures[key] = {'event': Event(), 'status': None}
 
         logger.debug("map(%s, ...)", funcname(func))
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': dsk,
                                          'keys': keys})
 
-        return [futures[key] for key in keys]
+        return [Future(key, self) for key in keys]
 
     @gen.coroutine
     def _gather(self, futures):
         futures2, keys = unpack_remotedata(futures)
         keys = list(keys)
 
-        yield All([self.futures[key].event.wait() for key in keys])
+        yield All([self.futures[key]['event'].wait() for key in keys])
 
         data = yield _gather(self.center, keys)
         data = dict(zip(keys, data))
@@ -286,8 +289,8 @@ class Executor(object):
         flatkeys = list(flatten(keys))
         for key in flatkeys:
             if key not in self.futures:
-                self.futures[key] = Future(key, self)
-        futures = {key: self.futures[key] for key in flatkeys}
+                self.futures[key] = {'event': Event(), 'status': None}
+        futures = {key: Future(key, self) for key in flatkeys}
 
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': dsk,
