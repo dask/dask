@@ -1,9 +1,9 @@
 from __future__ import division, absolute_import
 
 from itertools import cycle
-from operator import itemgetter
+from operator import itemgetter, add
 
-from toolz import unique, groupby
+from toolz import unique, groupby, accumulate, pluck
 import bokeh.plotting as bp
 from bokeh.io import _state
 from bokeh.palettes import brewer
@@ -310,4 +310,75 @@ def plot_resources(results, palette='GnBu', **kwargs):
     p.add_layout(LinearAxis(y_range_name='memory', axis_label='Memory (MB)'),
                  'right')
     p.xaxis.axis_label = "Time (s)"
+    return p
+
+
+def plot_cache(results, dsk, start_time, metric_name, palette='GnBu',
+               label_size=60, **kwargs):
+    """Visualize the results of profiling in a bokeh plot.
+
+    Parameters
+    ----------
+    results : sequence
+        Output of CacheProfiler.results
+    dsk : dict
+        The dask graph being profiled.
+    start_time : float
+        Start time of the profile.
+    metric_name : string
+        Metric used to measure cache size
+    palette : string, optional
+        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
+    label_size: int (optional)
+        Maximum size of output labels in plot, defaults to 60
+    **kwargs
+        Other keyword arguments, passed to bokeh.figure. These will override
+        all defaults set by visualize.
+
+    Returns
+    -------
+    The completed bokeh plot object.
+    """
+
+    defaults = dict(title="Profile Results",
+                    tools="hover,save,reset,resize,wheel_zoom,xpan",
+                    plot_width=800, plot_height=300)
+    defaults.update((k, v) for (k, v) in kwargs.items() if k in
+                    bp.Figure.properties())
+
+    if results:
+        starts, ends = list(zip(*results))[3:]
+        tics = list(sorted(unique(starts + ends)))
+        groups = groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
+        data = {}
+        for k, vals in groups.items():
+            cnts = dict.fromkeys(tics, 0)
+            for v in vals:
+                cnts[v.cache_time] += v.metric
+                cnts[v.free_time] -= v.metric
+            data[k] = list(accumulate(add, pluck(1, sorted(cnts.items()))))
+
+        tics = [i - start_time for i in tics]
+        p = bp.figure(x_range=[0, max(tics)], **defaults)
+
+        for (key, val), color in zip(data.items(), get_colors(palette, data.keys())):
+            p.line('x', 'y', line_color=color, line_width=3,
+                   source=bp.ColumnDataSource({'x': tics, 'y': val,
+                                               'label': [key for i in val]}))
+
+    else:
+        p = bp.figure(y_range=[0, 10], x_range=[0, 10], **defaults)
+    p.grid.grid_line_color = None
+    p.axis.axis_line_color = None
+    p.axis.major_tick_line_color = None
+    p.yaxis.axis_label = "Cache Size ({0})".format(metric_name)
+    p.xaxis.axis_label = "Time (s)"
+
+    hover = p.select(HoverTool)
+    hover.tooltips = """
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Task:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@label</span>
+    </div>
+    """
     return p
