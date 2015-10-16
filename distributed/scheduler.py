@@ -48,15 +48,13 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
 
     This coroutine listens on worker_queue for the following operations
 
-    Incoming Messages
-    -----------------
+    **Incoming Messages**:
 
     - compute-task:  call worker.compute(...) on remote node, report when done
     - close: close connection to worker node, report `worker-finished` to
       scheduler
 
-    Outgoing Messages
-    -----------------
+    **Outgoing Messages**:
 
     - task-finished:  sent to scheduler once a task completes
     - task-erred: sent to scheduler when a task errs
@@ -106,16 +104,15 @@ def delete(scheduler_queue, delete_queue, ip, port):
 
     This coroutine manages a connection to the center in order to send keys
     that should be removed from distributed memory.  We batch several keys that
-    come in over the ``delete_queue`` into a list.  Roughly once a second it
-    sends this list of keys over to the center which then handles deleting
+    come in over the ``delete_queue`` into a list.  Roughly once a second we
+    send this list of keys over to the center which then handles deleting
     these keys from workers' memory.
 
     worker \                                /-> worker node
     worker -> scheduler -> delete -> center --> worker node
     worker /                                \-> worker node
 
-    Incoming Messages
-    -----------------
+    **Incoming Messages**
 
     - delete-task: holds a key to be deleted
     - close: close this coroutine
@@ -155,25 +152,21 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     Parameters
     ----------
     scheduler_queue: tornado.queues.Queue
+        Get information from outside
     report_queue: tornado.queues.Queue
+        Report tasks done
     worker_queues: dict {worker: tornado.queues.Queue}
+        One queue per worker node.
+        Each queue is listened to by several worker_core coroutiens.
     delete_queue: tornado.queues.Queue
+        One queue listened to by ``delete`` which connects to the
+        center to delete unnecessary intermediate data
     who_has: dict {key: set}
         Mapping key to {set of worker-identities}
     has_what: dict {worker: set}
         Mapping worker-identity to {set of keys}
     ncores: dict {worker: int}
         Mapping worker-identity to number-of-cores
-
-    Queues
-    ------
-
-    -   scheduler_queue: Get information from outside
-    -   report_queue: report tasks done
-    -   worker_queues: One queue per worker node.
-        Each queue is listened to by several worker_core coroutiens.
-    -   delete_queue: One queue listened to by ``delete`` which connects to the
-        center to delete unnecessary intermediate data
     """
     stacks = {worker: list() for worker in ncores}
     processing = {worker: set() for worker in ncores}
@@ -338,8 +331,12 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
         in_memory, stacks, processing, finished_results, released, **kwargs):
     """ Validate a current runtime state
 
-    See also:
-        heal - fix a current runtime state
+    This performs a sequence of checks on the entire graph, running in about
+    linear time.  This raises assert errors if anything doesn't check out.
+
+    See Also
+    --------
+    distributed.scheduler.heal: fix a broken runtime state
     """
     in_stacks = {k for v in stacks.values() for k in v}
     in_processing = {k for v in processing.values() for k in v}
@@ -381,10 +378,11 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
 def keys_outside_frontier(dsk, dependencies, keys, frontier):
     """ All keys required by terminal keys within graph up to frontier
 
-    Given
-    1. a graph
-    2. a set of desired keys
-    3. a frontier/set of already-computed (or already-about-to-be-computed) keys
+    Given:
+
+    1. A graph
+    2. A set of desired keys
+    3. A frontier/set of already-computed (or already-about-to-be-computed) keys
 
     Find all keys necessary to compute the desired set that are outside of the
     frontier.
@@ -422,10 +420,10 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
 def update_state(dsk, dependencies, dependents, held_data,
                  in_memory, processing, released,
                  waiting, waiting_data, new_dsk, new_keys):
-    """ Update state given new dsk, keys pair
+    """ Update state given new dask graph and output keys
 
     This should operate in linear time relative to the size of edges of the
-    added graph.
+    added graph.  It assumes that the current runtime state is valid.
     """
     dsk.update(new_dsk)
 
@@ -482,7 +480,7 @@ def update_state(dsk, dependencies, dependents, held_data,
 
 
 def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
-    """ Make a runtime state consistent
+    """ Make a possibly broken runtime state consistent
 
     Sometimes we lose intermediate values.  In these cases it can be tricky to
     rewind our runtime state to a point where it can again proceed to
