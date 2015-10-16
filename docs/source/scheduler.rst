@@ -58,3 +58,17 @@ This scheduling system is intended to be run constantly, forever listening to
 and responding to events.  It accepts input through the scheduler queue and
 pushes output through the report queue.  Client systems generally spin up a
 scheduler system and then put and get from those queues respectively.
+
+
+Internal API
+------------
+
+.. autofunction:: distributed.scheduler.scheduler
+.. autofunction:: distributed.scheduler.worker
+.. autofunction:: distributed.scheduler.worker_core
+.. autofunction:: distributed.scheduler.delete
+
+.. autofunction:: distributed.scheduler.heal
+.. autofunction:: distributed.scheduler.update_state
+.. autofunction:: distributed.scheduler.validate_state
+.. autofunction:: distributed.scheduler.decide_worker
