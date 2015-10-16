@@ -131,6 +131,7 @@ help make debugging and profiling graph execution easier.
 * For user questions please tag StackOverflow questions with the `#dask tag`_.
 * For bug reports and feature requests please use the `GitHub issue tracker`_
 * For community discussion please use `blaze-dev@continuum.io`_
+* For chat, see `gitter chat room`_
 
 Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 
@@ -140,3 +141,4 @@ Dask is part of the Blaze_ project supported by `Continuum Analytics`_
 .. _`#dask tag`: http://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/blaze/dask/issues
 .. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
+.. _`gitter chat room`: https://gitter.im/blaze/dask
