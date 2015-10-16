@@ -242,11 +242,11 @@ class CacheProfiler(Callback):
 
     The default is to count each task (``metric`` is 1 for all tasks). Other
     functions may used as a metric instead through the ``metric`` keyword. For
-    example, the ``nbytes`` function found in ``chest`` can be used to measure
+    example, the ``nbytes`` function found in ``cachey`` can be used to measure
     the number of bytes in the cache.
 
-    >>> from chest.core import nbytes    # doctest: +SKIP
-    >>> with CacheProfiler(metric=nbytes):  # doctest: +SKIP
+    >>> from cachey import nbytes    # doctest: +SKIP
+    >>> with CacheProfiler(metric=nbytes) as prof:  # doctest: +SKIP
     ...     get(dsk, 'z')
 
     The profiling results can be visualized in a bokeh plot using the

@@ -341,7 +341,7 @@ def plot_cache(results, dsk, start_time, metric_name, palette='GnBu',
     """
 
     defaults = dict(title="Profile Results",
-                    tools="hover,save,reset,resize,xwheel_zoom,xpan",
+                    tools="hover,save,reset,resize,wheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     bp.Figure.properties())

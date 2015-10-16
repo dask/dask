@@ -2,7 +2,7 @@ from operator import add, mul
 import os
 from time import sleep
 
-from dask.diagnostics import Profiler, ResourceProfiler
+from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
 from dask.compatibility import apply
@@ -92,6 +92,29 @@ def test_resource_profiler():
             get(dsk, 'e')
 
 
+def test_cache_profiler():
+    with CacheProfiler() as cprof:
+        out = get(dsk2, 'c')
+    results = cprof.results
+    assert all(isinstance(i, tuple) and len(i) == 5 for i in results)
+
+    cprof.clear()
+    assert cprof.results == []
+
+    tics = [0]
+    def nbytes(res):
+        tics[0] += 1
+        return tics[0]
+
+    with CacheProfiler(nbytes) as cprof:
+        out = get(dsk2, 'c')
+    results = cprof.results
+    assert tics[-1] == len(results)
+    assert tics[-1] == results[-1].metric
+    assert cprof._metric_name == 'nbytes'
+    assert CacheProfiler(metric=nbytes, metric_name='foo')._metric_name == 'foo'
+
+
 @pytest.mark.skipif("not bokeh")
 def test_unquote():
     from dask.diagnostics.profile_visualize import unquote
@@ -172,8 +195,28 @@ def test_resource_profiler_plot():
 
 
 @pytest.mark.skipif("not bokeh")
+def test_cache_profiler_plot():
+    with CacheProfiler(metric_name='non-standard') as cprof:
+        get(dsk, 'e')
+    p = cprof.visualize(plot_width=500,
+                        plot_height=300,
+                        tools="hover",
+                        title="Not the default",
+                        show=False, save=False)
+    assert p.plot_width == 500
+    assert p.plot_height == 300
+    assert len(p.tools) == 1
+    assert isinstance(p.tools[0], bokeh.models.HoverTool)
+    assert p.title == "Not the default"
+    assert p.axis[1].axis_label == 'Cache Size (non-standard)'
+    # Test empty, checking for errors
+    cprof.clear()
+    cprof.visualize(show=False, save=False)
+
+
+@pytest.mark.skipif("not bokeh")
 @pytest.mark.skipif("not psutil")
-def test_plot_both():
+def test_plot_multiple():
     from dask.diagnostics.profile_visualize import visualize
     from bokeh.plotting import GridPlot
     with ResourceProfiler(dt=0.01) as rprof:
