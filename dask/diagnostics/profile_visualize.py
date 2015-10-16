@@ -9,7 +9,7 @@ from bokeh.io import _state
 from bokeh.palettes import brewer
 from bokeh.models import HoverTool, LinearAxis, Range1d
 
-from ..dot import funcname
+from ..utils import funcname
 from ..core import istask
 from ..compatibility import apply
 
