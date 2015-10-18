@@ -94,6 +94,14 @@ def test_map():
         result = yield total._result()
         assert result == sum(map(inc, map(inc, range(5))))
 
+        L3 = e.map(add, L1, L2)
+        result = yield L3[1]._result()
+        assert result == inc(1) + inc(inc(1))
+
+        L4 = e.map(add, range(3), range(4))
+        results = yield e._gather(L4)
+        assert results == list(map(add, range(3), range(4)))
+
         yield e._shutdown()
 
     _test_cluster(f)

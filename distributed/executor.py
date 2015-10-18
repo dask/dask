@@ -218,7 +218,7 @@ class Executor(object):
 
         return Future(key, self)
 
-    def map(self, func, seq, pure=True):
+    def map(self, func, *iterables, pure=True):
         """ Map a function on a sequence of arguments
 
         Arguments can be normal objects or Futures
@@ -235,13 +235,16 @@ class Executor(object):
         --------
         distributed.executor.Executor.submit
         """
+        iterables = [list(it) for it in iterables]
         if pure:
-            keys = [funcname(func) + '-' + tokenize(func, arg) for arg in seq]
+            keys = [funcname(func) + '-' + tokenize(func, *args)
+                    for args in zip(*iterables)]
         else:
             uid = str(uuid.uuid1())
-            keys = [funcname(func) + '-' + uid + '-' + next(tokens) for arg in seq]
+            keys = [funcname(func) + '-' + uid + '-' + next(tokens)
+                    for i in range(min(map(len, iterables)))]
 
-        dsk = {key: (func, arg) for key, arg in zip(keys, seq)}
+        dsk = {key: (func,) + args for key, args in zip(keys, zip(*iterables))}
 
         for key in dsk:
             if key not in self.futures:
