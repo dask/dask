@@ -125,6 +125,7 @@ help make debugging and profiling graph execution easier.
    install.rst
    faq.rst
    spark.rst
+   caching.rst
 
 **Contact**
 
