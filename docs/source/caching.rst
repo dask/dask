@@ -1,10 +1,14 @@
 Opportunistic Caching
 =====================
 
-Storing intermediate results in memory can be both good and bad.
+Usually dask removes intermediate values as quickly as possible in order to
+make space for more data to flow through your computation.  However, in some
+cases we may want to hold on to intermediate values because they might be
+useful for future computations in an interactive session.
 
-1.  Intermediate results might be useful in future unknown computations, so we
-    should hold onto them.
+We have to balance between the following concerns:
+
+1.  Intermediate results might be useful in future unknown computations
 2.  Intermediate results fill up memory, reducing space for the rest of our
     current computation.
 
@@ -13,13 +17,13 @@ have to speedup future, unanticipated computations.  Which intermediate results
 should we keep?
 
 This document explains an opportunistic caching mechanism that automatically
-picks out useful tasks run in the dask schedulers.
+picks out and stores useful tasks.
 
 
 Motivating Example
 ------------------
 
-Consider computing the maximum value of a column in a CSV file
+Consider computing the maximum value of a column in a CSV file:
 
 .. code-block:: python
 
@@ -32,10 +36,10 @@ Consider computing the maximum value of a column in a CSV file
    1000
 
 Even though our full dataset may be too large to fit in memory, the single
-``amount`` column may be small enough to hold in memory just in case it might
-be useful in the future.  This is typically the case.  We often iterate on the
-same subset of our data repeatedly before moving on.  For example we may now
-want to find the minimum of the amount column.
+``df.amount`` column may be small enough to hold in memory just in case it
+might be useful in the future.  This is often the case during data exploration
+because we investigate the same subset of our data repeatedly before moving on.
+For example we may now want to find the minimum of the amount column.
 
 .. code-block:: python
 
@@ -43,14 +47,14 @@ want to find the minimum of the amount column.
    -1000
 
 Under normal operation this would need to read through the whole CSV file over
-again.
+again.  This is somewhat wasteful and stymies interactive data exploration.
 
 
 Two Simple Solutions
 --------------------
 
 If we know ahead of time that we want both the maximum and minimum we can
-compute them both at once.  Dask will share intermediates intelligently,
+compute them simultaneously.  Dask will share intermediates intelligently,
 reading through the dataset only once.
 
 .. code-block:: python
@@ -76,7 +80,7 @@ Automatic Opportunistic Caching
 
 A third approach is to watch *all* intermediate computations and *guess* which
 ones might be valuable to keep for the future.  Dask has an *opportunistic
-caching* mechanism that stores intermediate tasks with the following
+caching* mechanism that stores intermediate tasks that show the following
 characteristics
 
 1.  Expensive to compute
@@ -90,16 +94,17 @@ We can activate a fixed sized cache as a callback_.
 .. code-block:: python
 
    >>> from dask.cache import Cache
-   >>> cache = Cache(2e9)  # use two gigabytes of space
+   >>> cache = Cache(2e9)  # Leverage two gigabytes of memory
    >>> cache.register()    # Turn cache on globally
 
 Now the cache will watch every small part of the computation and judge the
 value of that part based on the three characteristics listed above, expensive
 to compute, cheap to store, and frequently used.  It will hold on to 2GB of the
-best intermediate results it can find.  If the ``df.amount`` column fits in 2GB
-then probably all of it will be stored while we keep working on it.  If we move
-and work on something else, then that column will likely be evicted for other
-results.
+best intermediate results it can find, evicting older results as better results
+come in.  If the ``df.amount`` column fits in 2GB then probably all of it will
+be stored while we keep working on it.  If we start work on something else,
+then the ``df.amount`` column will likely be evicted to make space for other
+more timely results.
 
 .. code-block:: python
 
@@ -107,19 +112,24 @@ results.
    1000
    >>> df.amount.min().compute()  # fast because df.amount is in the cache
    -1000
+   >>> df.id.nunique().compute()  # starts to push out df.amount from cache
 
 
 Cache tasks, not expressions
 ----------------------------
 
 This caching happens at the low-level scheduling layer, not the high-level
-dask.dataframe or dask.array layer.  We don't actually cache the column
-``df.amount``, we cache the hundreds of small pieces of that column that form
-the dask graph.  It could be that we end up caching only a fraction of the
-column.
+dask.dataframe or dask.array layer.  We don't explicitly cache the column
+``df.amount``.  Instead we cache the hundreds of small pieces of that column
+that form the dask graph.  It could be that we end up caching only a fraction
+of the column.
+
+This means that the caching system described above works for *all* dask
+computations, as long as those computations employ a consistent naming scheme
+(as all of dask.dataframe, dask.array, and dask.imperative do.)
 
 You can see which tasks are held by the cache by inspecting the following
-dictionary and list
+attributes of the cache object.
 
 .. code-block:: python
 
@@ -129,6 +139,11 @@ dictionary and list
    <scores of items in cache>
    >>> cache.cache.nbytes
    <number of bytes per item in cache>
+
+The cache object is powered by cachey_, a tiny library for opportunistic
+caching.
+
+.. _cachey: https://github.com/blaze/cachey
 
 
 Disclaimer
