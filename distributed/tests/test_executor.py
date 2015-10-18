@@ -6,7 +6,8 @@ from toolz import isdistinct
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from distributed.executor import Executor, Future, _wait, as_completed
+from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
+        as_completed)
 from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.utils_test import cluster
@@ -315,13 +316,47 @@ def test_wait():
     _test_cluster(f)
 
 
+def test__as_completed():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+
+        a = e.submit(inc, 1)
+        b = e.submit(inc, 1)
+        c = e.submit(inc, 2)
+
+        from distributed.compatibility import Queue
+        queue = Queue()
+        yield _as_completed([a, b, c], queue)
+
+        assert queue.qsize() == 3
+        assert {queue.get(), queue.get(), queue.get()} == {a, b, c}
+
+        yield e._shutdown()
+
+    _test_cluster(f)
+
+
 def test_as_completed():
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
-            a = e.submit(inc, 1)
-            b = e.submit(inc, 2)
-            c = e.submit(inc, 3)
+            x = e.submit(inc, 1)
+            y = e.submit(inc, 2)
+            z = e.submit(inc, 1)
 
-            seq = as_completed([a, b, c])
+            seq = as_completed([x, y, z])
             assert isinstance(seq, Iterator)
-            assert set(seq) == {a, b, c}
+            assert set(seq) == {x, y, z}
+
+
+def test_wait_sync():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            x = e.submit(inc, 1)
+            y = e.submit(inc, 2)
+
+            done, not_done = wait([x, y])
+            assert done == {x, y}
+            assert not_done == set()
+            assert x.status == y.status == 'finished'

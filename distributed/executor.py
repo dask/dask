@@ -1,13 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
 from concurrent.futures._base import DoneAndNotDoneFutures
+from concurrent import futures
+from functools import wraps
 import itertools
 import logging
 import uuid
 
 from dask.base import tokenize
 from dask.core import flatten
-from toolz import first
+from toolz import first, groupby, valmap
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
@@ -116,10 +118,11 @@ class Executor(object):
 
     def _release_key(self, key):
         """ Release key from distributed memory """
-        self.futures[key]['event'].clear()
-        del self.futures[key]
-        self.scheduler_queue.put_nowait({'op': 'release-held-data',
-                                         'key': key})
+        if key in self.futures:
+            self.futures[key]['event'].clear()
+            del self.futures[key]
+            self.scheduler_queue.put_nowait({'op': 'release-held-data',
+                                             'key': key})
 
     @gen.coroutine
     def report(self):
@@ -341,17 +344,32 @@ def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
 ALL_COMPLETED = 'ALL_COMPLETED'
 
 
+@wraps(futures.wait)
+def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
+    if len(set(f.executor for f in fs)) == 1:
+        loop = first(fs).executor.loop
+    else:
+        # TODO: Groupby executor, spawn many _as_completed coroutines
+        raise NotImplementedError("wait on many event loops not yet supported")
+
+    return sync(loop, _wait, fs, timeout, return_when)
+
+
 @gen.coroutine
 def _as_completed(fs, queue):
-    wait_iterator = gen.WaitIterator(*[f.event.wait() for f in fs])
+    groups = groupby(lambda f: f.key, fs)
+    firsts = [v[0] for v in groups.values()]
+    wait_iterator = gen.WaitIterator(*[f.event.wait() for f in firsts])
 
     while not wait_iterator.done():
         result = yield wait_iterator.next()
         # TODO: handle case of restarted futures
-        future = fs[wait_iterator.current_index]
-        queue.put_nowait(future)
+        future = firsts[wait_iterator.current_index]
+        for f in groups[future.key]:
+            queue.put_nowait(f)
 
 
+@wraps(futures.as_completed)
 def as_completed(fs):
     if len(set(f.executor for f in fs)) == 1:
         loop = first(fs).executor.loop
@@ -360,13 +378,10 @@ def as_completed(fs):
         raise NotImplementedError(
         "as_completed on many event loops not yet supported")
 
-    loop = loop or IOLoop.instance()
     from .compatibility import Queue
-
     queue = Queue()
 
-    coroutine = _as_completed(fs, queue)
-
+    coroutine = lambda: _as_completed(fs, queue)
     loop.add_callback(coroutine)
 
     for i in range(len(fs)):
