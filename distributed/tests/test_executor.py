@@ -5,7 +5,7 @@ from toolz import isdistinct
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from distributed.executor import Executor, Future
+from distributed.executor import Executor, Future, _wait
 from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.utils_test import cluster
@@ -291,3 +291,24 @@ def test_submit_errors():
         e.submit(1, 2, 3)
     with pytest.raises(TypeError):
         e.map([1, 2, 3])
+
+
+def test_wait():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+
+        a = e.submit(inc, 1)
+        b = e.submit(inc, 1)
+        c = e.submit(inc, 2)
+
+        done, not_done = yield _wait([a, b, c])
+
+        assert done == {a, b, c}
+        assert not_done == set()
+        assert a.status == b.status == 'finished'
+
+        yield e._shutdown()
+
+    _test_cluster(f)

@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from concurrent.futures._base import DoneAndNotDoneFutures
 import itertools
 import logging
 import uuid
@@ -321,3 +322,19 @@ class Executor(object):
         3
         """
         return sync(self.loop, self._get, dsk, keys)
+
+
+@gen.coroutine
+def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
+    if timeout is not None:
+        raise NotImplementedError("Timeouts not yet supported")
+    if return_when == 'ALL_COMPLETED':
+        yield All({f.event.wait() for f in fs})
+        done, not_done = set(fs), set()
+    else:
+        raise NotImplementedError("Only return_when='ALL_COMPLETED' supported")
+
+    raise gen.Return(DoneAndNotDoneFutures(done, not_done))
+
+
+ALL_COMPLETED = 'ALL_COMPLETED'
