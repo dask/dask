@@ -7,6 +7,7 @@ import uuid
 
 from dask.base import tokenize
 from dask.core import flatten
+from toolz import first
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
@@ -338,3 +339,35 @@ def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
 
 
 ALL_COMPLETED = 'ALL_COMPLETED'
+
+
+@gen.coroutine
+def _as_completed(fs, queue):
+    wait_iterator = gen.WaitIterator(*[f.event.wait() for f in fs])
+
+    while not wait_iterator.done():
+        result = yield wait_iterator.next()
+        # TODO: handle case of restarted futures
+        future = fs[wait_iterator.current_index]
+        queue.put_nowait(future)
+
+
+def as_completed(fs):
+    if len(set(f.executor for f in fs)) == 1:
+        loop = first(fs).executor.loop
+    else:
+        # TODO: Groupby executor, spawn many _as_completed coroutines
+        raise NotImplementedError(
+        "as_completed on many event loops not yet supported")
+
+    loop = loop or IOLoop.instance()
+    from .compatibility import Queue
+
+    queue = Queue()
+
+    coroutine = _as_completed(fs, queue)
+
+    loop.add_callback(coroutine)
+
+    for i in range(len(fs)):
+        yield queue.get()

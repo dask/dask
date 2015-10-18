@@ -1,11 +1,12 @@
 from operator import add
 
+from collections import Iterator
 import pytest
 from toolz import isdistinct
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from distributed.executor import Executor, Future, _wait
+from distributed.executor import Executor, Future, _wait, as_completed
 from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.utils_test import cluster
@@ -312,3 +313,15 @@ def test_wait():
         yield e._shutdown()
 
     _test_cluster(f)
+
+
+def test_as_completed():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            a = e.submit(inc, 1)
+            b = e.submit(inc, 2)
+            c = e.submit(inc, 3)
+
+            seq = as_completed([a, b, c])
+            assert isinstance(seq, Iterator)
+            assert set(seq) == {a, b, c}
