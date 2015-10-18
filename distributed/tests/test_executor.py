@@ -279,3 +279,15 @@ def test_get_sync():
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             assert e.get({'x': (inc, 1)}, 'x') == 2
+
+
+def test_submit_errors():
+    def f(a, b, c):
+        pass
+
+    e = Executor('127.0.0.1:8787')
+
+    with pytest.raises(TypeError):
+        e.submit(1, 2, 3)
+    with pytest.raises(TypeError):
+        e.map([1, 2, 3])

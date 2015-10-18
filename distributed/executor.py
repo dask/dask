@@ -191,6 +191,9 @@ class Executor(object):
         --------
         distributed.executor.Executor.submit:
         """
+        if not callable(func):
+            raise TypeError("First input to submit must be a callable function")
+
         key = kwargs.pop('key', None)
         pure = kwargs.pop('pure', True)
 
@@ -235,6 +238,8 @@ class Executor(object):
         --------
         distributed.executor.Executor.submit
         """
+        if not callable(func):
+            raise TypeError("First input to map must be a callable function")
         iterables = [list(it) for it in iterables]
         if pure:
             keys = [funcname(func) + '-' + tokenize(func, *args)
