@@ -5,7 +5,7 @@ import logging
 from math import ceil
 from time import time
 
-from toolz import frequencies, memoize
+from toolz import frequencies, memoize, concat
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -177,6 +177,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     dependents = dict()
     waiting = dict()
     waiting_data = dict()
+    in_play = set(who_has)  # keys in memory, stacks, processing, or waiting
     released = set()
     keyorder = dict()
     generation = 0
@@ -230,6 +231,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             del who_has[key]
             if key in waiting_data:
                 del waiting_data[key]
+            if key in in_play:
+                in_play.remove(key)
 
     while True:
         msg = yield scheduler_queue.get()
@@ -238,9 +241,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         elif msg['op'] == 'update-graph':
             new_dsk = msg['dsk']
             new_keys = msg['keys']
-            all_processing = set.union(*processing.values())
             update_state(dsk, dependencies, dependents, held_data,
-                         set(who_has), all_processing, released,
+                         set(who_has), in_play,
                          waiting, waiting_data, new_dsk, new_keys)
 
             new_keyorder = order(new_dsk)
@@ -283,6 +285,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
         elif msg['op'] == 'task-erred':
             processing[msg['worker']].remove(msg['key'])
+            in_play.remove(msg['key'])
             report_queue.put_nowait(msg)
 
         elif msg['op'] == 'worker-failed':
@@ -298,6 +301,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                 if not who_has[key]:
                     missing_keys.add(key)
             gone_data = {k for k, v in who_has.items() if not v}
+            in_play -= missing_keys
             for k in gone_data:
                 del who_has[k]
 
@@ -306,6 +310,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             waiting_data = state['waiting_data']
             waiting = state['waiting']
             released = state['released']
+            in_play = state['in_play']
             add_keys = {k for k, v in waiting.items() if not v}
             for key in held_data & released:
                 report_queue.put_nowait({'op': 'lost-key', 'key': key})
@@ -328,7 +333,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
-        in_memory, stacks, processing, finished_results, released, **kwargs):
+        in_memory, stacks, processing, finished_results, released, in_play,
+        **kwargs):
     """ Validate a current runtime state
 
     This performs a sequence of checks on the entire graph, running in about
@@ -350,6 +356,8 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
                     key in in_processing,
                     key in in_memory,
                     key in released]) == 1
+
+        assert (key in released) != (key in in_play)
 
         if not all(map(check_key, dependencies[key])):# Recursive case
             assert False
@@ -403,8 +411,8 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
     >>> list(sorted(keys_outside_frontier(dsk, dependencies, keys, frontier)))
     ['b', 'z']
     """
-    keys = set(keys)
-    frontier = set(frontier)
+    assert isinstance(keys, set)
+    assert isinstance(frontier, set)
     stack = list(keys - frontier)
     result = set()
     while stack:
@@ -418,7 +426,7 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
 
 
 def update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, processing, released,
+                 in_memory, in_play,
                  waiting, waiting_data, new_dsk, new_keys):
     """ Update state given new dask graph and output keys
 
@@ -426,6 +434,8 @@ def update_state(dsk, dependencies, dependents, held_data,
     added graph.  It assumes that the current runtime state is valid.
     """
     dsk.update(new_dsk)
+    if not isinstance(new_keys, set):
+        new_keys = set(new_keys)
 
     for key in new_dsk:  # add dependencies/dependents
         deps = get_dependencies(dsk, key)
@@ -444,6 +454,7 @@ def update_state(dsk, dependencies, dependents, held_data,
     for key, value in new_dsk.items():  # add in remotedata
         vv, s = unpack_remotedata(value)
         if s:
+            # TODO: check against in-memory, maybe add to in_play
             dsk[key] = vv
             if key not in dependencies:
                 dependencies[key] = set()
@@ -456,8 +467,8 @@ def update_state(dsk, dependencies, dependents, held_data,
                     dependents[dep] = set()
                 dependents[dep].add(key)
 
-    frontier = in_memory | set(waiting) | processing
-    exterior = keys_outside_frontier(dsk, dependencies, new_keys, frontier)
+    exterior = keys_outside_frontier(dsk, dependencies, new_keys, in_play)
+    in_play |= exterior
     for key in exterior:
         deps = dependencies[key]
         waiting[key] = deps - in_memory
@@ -469,7 +480,7 @@ def update_state(dsk, dependencies, dependents, held_data,
         if key not in waiting_data:
             waiting_data[key] = set()
 
-    held_data |= set(new_keys)
+    held_data |= new_keys
 
     return {'dsk': dsk,
             'dependencies': dependencies,
@@ -554,11 +565,15 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
 
     finished_results = {key for key in outputs if key in in_memory}
 
+    in_play = (in_memory | set(waiting) | set.union(*processing.values())
+              | set(concat(stacks.values())))
+
     output = {'keys': outputs,
              'dependencies': dependencies, 'dependents': dependents,
              'waiting': waiting, 'waiting_data': waiting_data,
              'in_memory': in_memory, 'processing': processing, 'stacks': stacks,
-             'finished_results': finished_results, 'released': new_released}
+             'finished_results': finished_results, 'released': new_released,
+             'in_play': in_play}
     validate_state(**output)
     return output
 
