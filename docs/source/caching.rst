@@ -129,3 +129,16 @@ dictionary and list
    <scores of items in cache>
    >>> cache.cache.nbytes
    <number of bytes per item in cache>
+
+
+Disclaimer
+----------
+
+This feature is experimental and can cause your computation to fill up RAM.
+
+Restricting our cache to a fixed size like 2GB requires us to accurately count
+the size of each of our objects in memory.  This can be tricky, particularly
+for Pythonic objects like lists and tuples and for DataFrames that contain
+object dtypes.  It is entirely possible that the caching mechanism will
+*undercount* the size of objects, causing it to use up more memory than
+anticipated which can lead to blowing up RAM and crashing your session.
