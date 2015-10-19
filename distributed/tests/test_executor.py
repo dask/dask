@@ -393,7 +393,7 @@ def test_garbage_collection():
 def test_recompute_released_key():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), batch_time=0)
+        e = Executor((c.ip, c.port), delete_batch_time=0)
         IOLoop.current().spawn_callback(e._go)
 
         x = e.submit(inc, 100)
@@ -422,9 +422,35 @@ def test_stress_gc():
         return x + 1
 
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), batch_time=0.5) as e:
+        with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5) as e:
             x = e.submit(slowinc, 1)
             for i in range(10):  # this could be increased
                 x = e.submit(slowinc, x)
 
             assert x.result() == 12
+
+
+def test_missing_data_heals():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), delete_batch_time=0)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(inc, 1)
+        y = e.submit(inc, x)
+        z = e.submit(inc, y)
+
+        yield _wait([x, y, z])
+
+        # Secretly delete y's key
+        if y.key in a.data:
+            del a.data[y.key]
+        if y.key in b.data:
+            del b.data[y.key]
+
+        w = e.submit(add, y, z)
+
+        result = yield w._result()
+        assert result == 3 + 4
+
+    _test_cluster(f)

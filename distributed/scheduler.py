@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
+from functools import partial
 import logging
 from math import ceil
 from time import time
@@ -36,8 +37,7 @@ def worker(scheduler_queue, worker_queue, ident, ncores):
         yield All([worker_core(scheduler_queue, worker_queue, ident, i)
                 for i in range(ncores)])
     except StreamClosedError:
-        logger.warn("Worker failed from closed stream: %s", ident,
-                    exc_info=True)
+        logger.info("Worker failed from closed stream: %s", ident)
         scheduler_queue.put_nowait({'op': 'worker-failed',
                                     'worker': ident})
 
@@ -86,6 +86,13 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
                                             'key': key,
                                             'worker': ident,
                                             'exception': err[key]})
+
+            elif isinstance(response, KeyError):
+                scheduler_queue.put_nowait({'op': 'task-missing-data',
+                                            'key': key,
+                                            'worker': ident,
+                                            'missing': response.args})
+
             else:
                 scheduler_queue.put_nowait({'op': 'task-finished',
                                             'worker': ident,
@@ -236,6 +243,10 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             if key in in_play:
                 in_play.remove(key)
 
+    my_heal_missing_data = partial(heal_missing_data,
+            dsk, dependencies, dependents, held_data, who_has, in_play,
+            waiting, waiting_data)
+
     while True:
         msg = yield scheduler_queue.get()
         if msg['op'] == 'close':
@@ -289,6 +300,21 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             processing[msg['worker']].remove(msg['key'])
             in_play.remove(msg['key'])
             report_queue.put_nowait(msg)
+
+        elif msg['op'] == 'task-missing-data':
+            key = msg['key']
+            missing = set(msg['missing'])
+            logger.debug("Recovering missing data: %s", missing)
+            with ignoring(KeyError):
+                processing[worker].remove(key)
+            for k in missing:
+                workers = who_has.pop(k)
+                for worker in workers:
+                    has_what[worker].remove(k)
+            my_heal_missing_data(missing)
+            waiting[key] = missing
+
+            seed_ready_tasks()
 
         elif msg['op'] == 'worker-failed':
             worker = msg['worker']
@@ -648,3 +674,31 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
         stacks[worker].append(key)
 
     return new_stacks
+
+
+def heal_missing_data(dsk, dependencies, dependents, held_data,
+                      in_memory, in_play,
+                      waiting, waiting_data, missing):
+    """ Return to healthy state after discovering missing data
+
+    When we identify that we're missing certain keys we rewind runtime state to
+    evaluate those keys.
+    """
+    for key in missing:
+        if key in in_play:
+            in_play.remove(key)
+    def ensure_key(key):
+        if key in in_play:
+            return
+        for dep in dependencies[key]:
+            ensure_key(dep)
+            waiting_data[dep].add(key)
+        waiting[key] = {dep for dep in dependencies[key] if dep not in in_memory}
+        waiting_data[key] = {dep for dep in dependents[key] if dep in in_play
+                                                    and dep not in in_memory}
+        in_play.add(key)
+
+    for key in missing:
+        ensure_key(key)
+
+    assert set(missing).issubset(in_play)

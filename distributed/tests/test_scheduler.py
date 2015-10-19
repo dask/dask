@@ -7,7 +7,7 @@ import pytest
 
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
-        decide_worker, assign_many_tasks)
+        decide_worker, assign_many_tasks, heal_missing_data)
 from distributed.utils_test import inc
 
 
@@ -360,3 +360,32 @@ def test_assign_many_tasks():
 
     assert set(concat(new_stacks.values())) == set(concat(stacks.values()))
 
+
+def test_fill_missing_data():
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
+    dependencies, dependents = get_deps(dsk)
+
+    waiting = {}
+    waiting_data = {'z': set()}
+
+    held_data = {'z'}
+    in_memory = {'z'}
+    processing = set()
+    released = set()
+    in_play = {'z'}
+
+    e_waiting = {'x': set(), 'y': {'x'}, 'z': {'y'}}
+    e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
+    e_in_play = {'x', 'y', 'z'}
+
+    lost = {'z'}
+    in_memory.remove('z')
+    in_play.remove('z')
+
+    heal_missing_data(dsk, dependencies, dependents, held_data,
+                      in_memory, in_play,
+                      waiting, waiting_data, lost)
+
+    assert waiting == e_waiting
+    assert waiting_data == e_waiting_data
+    assert in_play == e_in_play
