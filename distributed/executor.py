@@ -69,6 +69,11 @@ class Future(WrappedKey):
     def __del__(self):
         self.executor._dec_ref(self.key)
 
+    def __str__(self):
+        return '<Future - key: %s>' % self.key
+
+    __repr__ = __str__
+
 
 class Executor(object):
     """ Distributed executor with data dependencies
