@@ -121,7 +121,7 @@ def test_gather_with_missing_worker():
             yield _gather((c.ip, c.port), ['x'])
             assert False
         except KeyError as e:
-            pass
+            assert 'x' in e.args
 
     _test_cluster(f)
 
