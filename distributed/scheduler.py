@@ -567,8 +567,10 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
 
     finished_results = {key for key in outputs if key in in_memory}
 
-    in_play = (in_memory | set(waiting) | set.union(*processing.values())
-              | set(concat(stacks.values())))
+    in_play = (in_memory
+            | set(waiting)
+            | (set.union(*processing.values()) if processing else set())
+            | set(concat(stacks.values())))
 
     output = {'keys': outputs,
              'dependencies': dependencies, 'dependents': dependents,

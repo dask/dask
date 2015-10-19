@@ -240,6 +240,38 @@ def test_update_state_respects_data_in_memory():
     assert in_play == {'x', 'y', 'z'}
 
 
+def test_update_state_supports_recomputing_released_results():
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x')}
+    dependencies, dependents = get_deps(dsk)
+
+    waiting = dict()
+    waiting_data = {'z': set()}
+
+    held_data = {'z'}
+    in_memory = {'z'}
+    processing = set()
+    released = {'x', 'y'}
+    in_play = {'z'}
+
+    new_dsk = {'x': 1, 'y': (inc, 'x')}
+    new_keys = {'y'}
+
+    e_dsk = dsk.copy()
+    e_waiting = {'x': set(), 'y': {'x'}}
+    e_waiting_data = {'x': {'y'}, 'y': set(), 'z': set()}
+    e_held_data = {'y', 'z'}
+
+    update_state(dsk, dependencies, dependents, held_data,
+                 in_memory, in_play,
+                 waiting, waiting_data, new_dsk, new_keys)
+
+    assert dsk == e_dsk
+    assert waiting == e_waiting
+    assert waiting_data == e_waiting_data
+    assert held_data == e_held_data
+    assert in_play == {'x', 'y', 'z'}
+
+
 def test_decide_worker_with_many_independent_leaves():
     dsk = merge({('y', i): (inc, ('x', i)) for i in range(100)},
                 {('x', i): i for i in range(100)})

@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import defaultdict
 from concurrent.futures._base import DoneAndNotDoneFutures
 from concurrent import futures
 from functools import wraps
@@ -34,6 +35,7 @@ class Future(WrappedKey):
     def __init__(self, key, executor):
         self.key = key
         self.executor = executor
+        self.executor._inc_ref(key)
 
     @property
     def status(self):
@@ -65,7 +67,7 @@ class Future(WrappedKey):
             raise gen.Return(result[0])
 
     def __del__(self):
-        self.executor._release_key(self.key)
+        self.executor._dec_ref(self.key)
 
 
 class Executor(object):
@@ -93,7 +95,9 @@ class Executor(object):
     def __init__(self, center, start=False, delete_batch_time=1):
         self.center = coerce_to_rpc(center)
         self.futures = dict()
+        self.refcount = defaultdict(lambda: 0)
         self.dask = dict()
+        self.loop = IOLoop()
         self.report_queue = Queue()
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
@@ -105,7 +109,6 @@ class Executor(object):
     def start(self):
         """ Start scheduler running in separate thread """
         from threading import Thread
-        self.loop = IOLoop()
         self.loop.add_callback(self._go)
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.start()
@@ -117,13 +120,22 @@ class Executor(object):
     def __exit__(self, type, value, traceback):
         self.shutdown()
 
+    def _inc_ref(self, key):
+        self.refcount[key] += 1
+
+    def _dec_ref(self, key):
+        self.refcount[key] -= 1
+        if self.refcount[key] == 0:
+            del self.refcount[key]
+            self._release_key(key)
+
     def _release_key(self, key):
         """ Release key from distributed memory """
-        if key in self.futures:
-            self.futures[key]['event'].clear()
-            del self.futures[key]
-            self.scheduler_queue.put_nowait({'op': 'release-held-data',
-                                             'key': key})
+        self.futures[key]['event'].clear()
+        logger.debug("Release key %s", key)
+        del self.futures[key]
+        self.scheduler_queue.put_nowait({'op': 'release-held-data',
+                                         'key': key})
 
     @gen.coroutine
     def report(self):

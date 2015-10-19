@@ -360,3 +360,71 @@ def test_wait_sync():
             assert done == {x, y}
             assert not_done == set()
             assert x.status == y.status == 'finished'
+
+
+def test_garbage_collection():
+    import gc
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+
+        a = e.submit(inc, 1)
+        b = e.submit(inc, 1)
+
+        assert e.refcount[a.key] == 2
+        a.__del__()
+        assert e.refcount[a.key] == 1
+
+        c = e.submit(inc, b)
+        b.__del__()
+
+        IOLoop.current().spawn_callback(e._go)
+
+        result = yield c._result()
+        assert result == 3
+
+        bkey = b.key
+        b.__del__()
+        assert bkey not in e.futures
+
+    _test_cluster(f)
+
+
+def test_recompute_released_key():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), batch_time=0)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(inc, 100)
+        result1 = yield x._result()
+        xkey = x.key
+        del x
+        import gc; gc.collect()
+        assert e.refcount[xkey] == 0
+
+        # 1 second batching needs a second action to trigger
+        while xkey in c.who_has or xkey in a.data or xkey in b.data:
+            yield gen.sleep(0.1)
+
+        x = e.submit(inc, 100)
+        assert x.key in e.futures
+        result2 = yield x._result()
+        assert result1 == result2
+
+    _test_cluster(f)
+
+
+def test_stress_gc():
+    def slowinc(x):
+        from time import sleep
+        sleep(0.02)
+        return x + 1
+
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), batch_time=0.5) as e:
+            x = e.submit(slowinc, 1)
+            for i in range(10):  # this could be increased
+                x = e.submit(slowinc, x)
+
+            assert x.result() == 12
