@@ -90,13 +90,14 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center, start=False):
+    def __init__(self, center, start=False, delete_batch_time=1):
         self.center = coerce_to_rpc(center)
         self.futures = dict()
         self.dask = dict()
         self.report_queue = Queue()
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
+        self._delete_batch_time = delete_batch_time
 
         if start:
             self.start()
@@ -174,7 +175,7 @@ class Executor(object):
                       delete_queue, self.who_has, self.has_what, self.ncores,
                       self.dask),
             delete(self.scheduler_queue, delete_queue,
-                   self.center.ip, self.center.port)]
+                   self.center.ip, self.center.port, self._delete_batch_time)]
          + [worker(self.scheduler_queue, worker_queues[w], w, n)
             for w, n in self.ncores.items()])
 

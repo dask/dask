@@ -99,7 +99,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
 
 
 @gen.coroutine
-def delete(scheduler_queue, delete_queue, ip, port):
+def delete(scheduler_queue, delete_queue, ip, port, batch_time=1):
     """ Delete extraneous intermediates from distributed memory
 
     This coroutine manages a connection to the center in order to send keys
@@ -126,8 +126,10 @@ def delete(scheduler_queue, delete_queue, ip, port):
         if msg['op'] == 'close':
             break
 
+        # TODO: trigger coroutine to go off in a second if no activity
         batch.append(msg['key'])
-        if batch and time() - last > 1:       # One second batching
+        if batch and time() - last > batch_time:  # One second batching
+            logger.debug("Ask center to delete %d keys", len(batch))
             last = time()
             yield center.delete_data(keys=batch)
             batch = list()
