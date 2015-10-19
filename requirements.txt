@@ -2,3 +2,5 @@ tornado
 toolz
 dill
 dask
+paramiko
+click

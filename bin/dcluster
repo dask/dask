@@ -1,0 +1,28 @@
+#!/usr/bin/env python
+
+from distributed.cluster import Cluster
+import click
+
+@click.command()
+@click.option('--center', default=None, type=str,
+              help="Specify center node.  Defaults to first address")
+@click.argument('hostnames', nargs=-1, type=str)
+@click.option('--hostfile', default=None, type=click.Path(exists=True),
+              help="Textfile with hostnames/IP addresses")
+def start(center, hostnames, hostfile):
+    hostnames = list(hostnames)
+    if hostfile:
+        with open(hostfile) as f:
+            hosts = f.read().split()
+        hostnames.extend(hosts)
+
+    if not center:
+        center, hostnames = hostnames[0], hostnames[1:]
+
+    c = Cluster(center, hostnames)
+    from time import sleep
+    while True:
+        sleep(1)
+
+if __name__ == '__main__':
+    start()
