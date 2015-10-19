@@ -131,7 +131,8 @@ def connect_sync(host, port, timeout=1):
 
 def write_sync(sock, msg):
     msg = dumps(msg)
-    sock.send(msg + sentinel)
+    sock.send(msg)
+    sock.send(sentinel)
 
 
 def read_sync(s):
