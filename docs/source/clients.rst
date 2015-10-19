@@ -30,19 +30,3 @@ client libraries or functions like ``gather`` and ``scatter``.
 .. autofunction:: distributed.client.gather
 .. autofunction:: distributed.client.delete
 .. autofunction:: distributed.client.clear
-
-Executor
---------
-
-As described in the `executor example in the quickstart`_, the Executor mimics the
-``concurrent.futures.Executor`` object, providing the functions ``map`` and
-``submit``.  These functions produce ``Future`` objects so that repeated
-applications of ``map`` and ``submit`` leave data on the remote network.
-
-Additionally, Executor attempts to run computations on nodes that already have
-the data, further avoiding unnecessary communication.
-
-.. autoclass:: distributed.executor.Executor
-   :members: map, submit, gather, get
-
-.. _`executor example in the quickstart`: quickstart.html#executor
