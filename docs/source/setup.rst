@@ -19,7 +19,7 @@ Or you can use normal UNIX grouping::
 
 Or you can specify a hostfile that includes a list of hosts::
 
-   # hostfile.txt
+   $ cat hostfile.txt
    192.168.0.1
    192.168.0.2
    192.168.0.3
@@ -41,7 +41,7 @@ Launch ``dcenter`` on one node::
    Start center at 192.168.0.1:8787
 
 Then launch ``dworker`` on the rest of the nodes, providing the address to the
-node that hosts ``dcenter
+node that hosts ``dcenter``::
 
    $ dworker 192.168.0.1:8787
    Start worker at:            192.168.0.2:8788
