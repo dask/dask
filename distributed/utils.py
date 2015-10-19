@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import Iterable
 import socket
 
 from tornado import gen
@@ -54,7 +55,7 @@ def All(*args):
 
     See https://github.com/tornadoweb/tornado/issues/1546
     """
-    if len(args) == 1 and isinstance(args[0], list):
+    if len(args) == 1 and isinstance(args[0], Iterable):
         args = args[0]
     tasks = gen.WaitIterator(*args)
     results = [None for _ in args]

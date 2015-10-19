@@ -7,7 +7,7 @@ import pytest
 
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
-        decide_worker, assign_many_tasks)
+        decide_worker, assign_many_tasks, heal_missing_data)
 from distributed.utils_test import inc
 
 
@@ -75,7 +75,7 @@ def test_heal_restarts_leaf_tasks():
            'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
     dependents, dependencies = get_deps(dsk)
 
-    state = {'in_memory': {},  # missing 'b'
+    state = {'in_memory': set(),  # missing 'b'
              'stacks': {'alice': ['a'], 'bob': ['x']},
              'processing': {'alice': set(), 'bob': set()}}
 
@@ -116,6 +116,7 @@ def test_update_state():
     in_memory = {'x'}
     processing = set()
     released = set()
+    in_play = {'x', 'y'}
 
     new_dsk = {'a': 1, 'z': (add, 'y', 'a')}
     new_keys = {'z'}
@@ -130,7 +131,7 @@ def test_update_state():
     e_held_data = {'y', 'z'}
 
     update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, processing, released,
+                 in_memory, in_play,
                  waiting, waiting_data, new_dsk, new_keys)
 
     assert dsk == e_dsk
@@ -139,6 +140,7 @@ def test_update_state():
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
     assert held_data == e_held_data
+    assert in_play == {'x', 'y', 'a', 'z'}
 
 
 def test_update_state_with_processing():
@@ -152,6 +154,7 @@ def test_update_state_with_processing():
     in_memory = {'x'}
     processing = {'y'}
     released = set()
+    in_play = {'z', 'x', 'y'}
 
     new_dsk = {'a': (inc, 'x'), 'b': (add, 'a', 'y'), 'c': (inc, 'z')}
     new_keys = {'b', 'c'}
@@ -163,12 +166,13 @@ def test_update_state_with_processing():
     e_held_data = {'b', 'c', 'z'}
 
     update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, processing, released,
+                 in_memory, in_play,
                  waiting, waiting_data, new_dsk, new_keys)
 
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
     assert held_data == e_held_data
+    assert in_play == {'x', 'y', 'z', 'a', 'b', 'c'}
 
 
 def test_update_state_respects_WrappedKeys():
@@ -182,6 +186,7 @@ def test_update_state_respects_WrappedKeys():
     in_memory = {'x'}
     processing = set()
     released = set()
+    in_play = {'x', 'y'}
 
     e_dsk = {'x': 1, 'y': (inc, 'x'), 'a': 1, 'z': (add, 'y', 'a')}
     e_dependencies = {'x': set(), 'a': set(), 'y': {'x'}, 'z': {'a', 'y'}}
@@ -194,11 +199,11 @@ def test_update_state_respects_WrappedKeys():
 
     new_dsk = {'z': (add, WrappedKey('y'), 10)}
     a = update_state(*map(deepcopy, [dsk, dependencies, dependents, held_data,
-                                     in_memory, processing, released,
+                                     in_memory, in_play,
                                      waiting, waiting_data, new_dsk, {'z'}]))
     new_dsk = {'z': (add, 'y', 10)}
     b = update_state(*map(deepcopy, [dsk, dependencies, dependents, held_data,
-                                     in_memory, processing, released,
+                                     in_memory, in_play,
                                      waiting, waiting_data, new_dsk, {'z'}]))
     assert a == b
 
@@ -214,6 +219,7 @@ def test_update_state_respects_data_in_memory():
     in_memory = {'y'}
     processing = set()
     released = {'x'}
+    in_play = {'y'}
 
     new_dsk = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
     new_keys = {'z'}
@@ -224,13 +230,46 @@ def test_update_state_respects_data_in_memory():
     e_held_data = {'y', 'z'}
 
     update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, processing, released,
+                 in_memory, in_play,
                  waiting, waiting_data, new_dsk, new_keys)
 
     assert dsk == e_dsk
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
     assert held_data == e_held_data
+    assert in_play == {'x', 'y', 'z'}
+
+
+def test_update_state_supports_recomputing_released_results():
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x')}
+    dependencies, dependents = get_deps(dsk)
+
+    waiting = dict()
+    waiting_data = {'z': set()}
+
+    held_data = {'z'}
+    in_memory = {'z'}
+    processing = set()
+    released = {'x', 'y'}
+    in_play = {'z'}
+
+    new_dsk = {'x': 1, 'y': (inc, 'x')}
+    new_keys = {'y'}
+
+    e_dsk = dsk.copy()
+    e_waiting = {'x': set(), 'y': {'x'}}
+    e_waiting_data = {'x': {'y'}, 'y': set(), 'z': set()}
+    e_held_data = {'y', 'z'}
+
+    update_state(dsk, dependencies, dependents, held_data,
+                 in_memory, in_play,
+                 waiting, waiting_data, new_dsk, new_keys)
+
+    assert dsk == e_dsk
+    assert waiting == e_waiting
+    assert waiting_data == e_waiting_data
+    assert held_data == e_held_data
+    assert in_play == {'x', 'y', 'z'}
 
 
 def test_decide_worker_with_many_independent_leaves():
@@ -262,6 +301,7 @@ def test_validate_state():
     processing = {'alice': set(), 'bob': set()}
     finished_results = set()
     released = set()
+    in_play = {'x', 'y'}
 
     validate_state(**locals())
 
@@ -320,3 +360,32 @@ def test_assign_many_tasks():
 
     assert set(concat(new_stacks.values())) == set(concat(stacks.values()))
 
+
+def test_fill_missing_data():
+    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
+    dependencies, dependents = get_deps(dsk)
+
+    waiting = {}
+    waiting_data = {'z': set()}
+
+    held_data = {'z'}
+    in_memory = {'z'}
+    processing = set()
+    released = set()
+    in_play = {'z'}
+
+    e_waiting = {'x': set(), 'y': {'x'}, 'z': {'y'}}
+    e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
+    e_in_play = {'x', 'y', 'z'}
+
+    lost = {'z'}
+    in_memory.remove('z')
+    in_play.remove('z')
+
+    heal_missing_data(dsk, dependencies, dependents, held_data,
+                      in_memory, in_play,
+                      waiting, waiting_data, lost)
+
+    assert waiting == e_waiting
+    assert waiting_data == e_waiting_data
+    assert in_play == e_in_play

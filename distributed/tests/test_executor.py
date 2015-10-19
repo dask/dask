@@ -1,11 +1,13 @@
 from operator import add
 
+from collections import Iterator
 import pytest
 from toolz import isdistinct
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from distributed.executor import Executor, Future
+from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
+        as_completed)
 from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.utils_test import cluster
@@ -93,6 +95,14 @@ def test_map():
         total = e.submit(sum, L2)
         result = yield total._result()
         assert result == sum(map(inc, map(inc, range(5))))
+
+        L3 = e.map(add, L1, L2)
+        result = yield L3[1]._result()
+        assert result == inc(1) + inc(inc(1))
+
+        L4 = e.map(add, range(3), range(4))
+        results = yield e._gather(L4)
+        assert results == list(map(add, range(3), range(4)))
 
         yield e._shutdown()
 
@@ -271,3 +281,176 @@ def test_get_sync():
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             assert e.get({'x': (inc, 1)}, 'x') == 2
+
+
+def test_submit_errors():
+    def f(a, b, c):
+        pass
+
+    e = Executor('127.0.0.1:8787')
+
+    with pytest.raises(TypeError):
+        e.submit(1, 2, 3)
+    with pytest.raises(TypeError):
+        e.map([1, 2, 3])
+
+
+def test_wait():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+
+        a = e.submit(inc, 1)
+        b = e.submit(inc, 1)
+        c = e.submit(inc, 2)
+
+        done, not_done = yield _wait([a, b, c])
+
+        assert done == {a, b, c}
+        assert not_done == set()
+        assert a.status == b.status == 'finished'
+
+        yield e._shutdown()
+
+    _test_cluster(f)
+
+
+def test__as_completed():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+        IOLoop.current().spawn_callback(e._go)
+
+        a = e.submit(inc, 1)
+        b = e.submit(inc, 1)
+        c = e.submit(inc, 2)
+
+        from distributed.compatibility import Queue
+        queue = Queue()
+        yield _as_completed([a, b, c], queue)
+
+        assert queue.qsize() == 3
+        assert {queue.get(), queue.get(), queue.get()} == {a, b, c}
+
+        yield e._shutdown()
+
+    _test_cluster(f)
+
+
+def test_as_completed():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            x = e.submit(inc, 1)
+            y = e.submit(inc, 2)
+            z = e.submit(inc, 1)
+
+            seq = as_completed([x, y, z])
+            assert isinstance(seq, Iterator)
+            assert set(seq) == {x, y, z}
+
+
+def test_wait_sync():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            x = e.submit(inc, 1)
+            y = e.submit(inc, 2)
+
+            done, not_done = wait([x, y])
+            assert done == {x, y}
+            assert not_done == set()
+            assert x.status == y.status == 'finished'
+
+
+def test_garbage_collection():
+    import gc
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port))
+
+        a = e.submit(inc, 1)
+        b = e.submit(inc, 1)
+
+        assert e.refcount[a.key] == 2
+        a.__del__()
+        assert e.refcount[a.key] == 1
+
+        c = e.submit(inc, b)
+        b.__del__()
+
+        IOLoop.current().spawn_callback(e._go)
+
+        result = yield c._result()
+        assert result == 3
+
+        bkey = b.key
+        b.__del__()
+        assert bkey not in e.futures
+
+    _test_cluster(f)
+
+
+def test_recompute_released_key():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), delete_batch_time=0)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(inc, 100)
+        result1 = yield x._result()
+        xkey = x.key
+        del x
+        import gc; gc.collect()
+        assert e.refcount[xkey] == 0
+
+        # 1 second batching needs a second action to trigger
+        while xkey in c.who_has or xkey in a.data or xkey in b.data:
+            yield gen.sleep(0.1)
+
+        x = e.submit(inc, 100)
+        assert x.key in e.futures
+        result2 = yield x._result()
+        assert result1 == result2
+
+    _test_cluster(f)
+
+
+def test_stress_gc():
+    def slowinc(x):
+        from time import sleep
+        sleep(0.02)
+        return x + 1
+
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5) as e:
+            x = e.submit(slowinc, 1)
+            for i in range(10):  # this could be increased
+                x = e.submit(slowinc, x)
+
+            assert x.result() == 12
+
+
+def test_missing_data_heals():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), delete_batch_time=0)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(inc, 1)
+        y = e.submit(inc, x)
+        z = e.submit(inc, y)
+
+        yield _wait([x, y, z])
+
+        # Secretly delete y's key
+        if y.key in a.data:
+            del a.data[y.key]
+        if y.key in b.data:
+            del b.data[y.key]
+
+        w = e.submit(add, y, z)
+
+        result = yield w._result()
+        assert result == 3 + 4
+
+    _test_cluster(f)

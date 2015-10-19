@@ -127,6 +127,8 @@ class Center(Server):
         coroutines = [rpc(ip=worker[0], port=worker[1]).delete_data(
                                 keys=keys, report=False, close=True)
                       for worker, keys in d.items()]
+        for worker, keys in d.items():
+            logger.debug("Remove %d keys from worker %s", len(keys), worker)
         yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
 
         raise Return(b'OK')

@@ -1,11 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import defaultdict
+from concurrent.futures._base import DoneAndNotDoneFutures
+from concurrent import futures
+from functools import wraps
 import itertools
 import logging
 import uuid
 
 from dask.base import tokenize
 from dask.core import flatten
+from toolz import first, groupby, valmap
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
@@ -30,6 +35,7 @@ class Future(WrappedKey):
     def __init__(self, key, executor):
         self.key = key
         self.executor = executor
+        self.executor._inc_ref(key)
 
     @property
     def status(self):
@@ -61,7 +67,7 @@ class Future(WrappedKey):
             raise gen.Return(result[0])
 
     def __del__(self):
-        self.executor._release_key(self.key)
+        self.executor._dec_ref(self.key)
 
 
 class Executor(object):
@@ -86,13 +92,16 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center, start=False):
+    def __init__(self, center, start=False, delete_batch_time=1):
         self.center = coerce_to_rpc(center)
         self.futures = dict()
+        self.refcount = defaultdict(lambda: 0)
         self.dask = dict()
+        self.loop = IOLoop()
         self.report_queue = Queue()
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
+        self._delete_batch_time = delete_batch_time
 
         if start:
             self.start()
@@ -100,7 +109,6 @@ class Executor(object):
     def start(self):
         """ Start scheduler running in separate thread """
         from threading import Thread
-        self.loop = IOLoop()
         self.loop.add_callback(self._go)
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.start()
@@ -112,9 +120,19 @@ class Executor(object):
     def __exit__(self, type, value, traceback):
         self.shutdown()
 
+    def _inc_ref(self, key):
+        self.refcount[key] += 1
+
+    def _dec_ref(self, key):
+        self.refcount[key] -= 1
+        if self.refcount[key] == 0:
+            del self.refcount[key]
+            self._release_key(key)
+
     def _release_key(self, key):
         """ Release key from distributed memory """
         self.futures[key]['event'].clear()
+        logger.debug("Release key %s", key)
         del self.futures[key]
         self.scheduler_queue.put_nowait({'op': 'release-held-data',
                                          'key': key})
@@ -169,7 +187,7 @@ class Executor(object):
                       delete_queue, self.who_has, self.has_what, self.ncores,
                       self.dask),
             delete(self.scheduler_queue, delete_queue,
-                   self.center.ip, self.center.port)]
+                   self.center.ip, self.center.port, self._delete_batch_time)]
          + [worker(self.scheduler_queue, worker_queues[w], w, n)
             for w, n in self.ncores.items()])
 
@@ -191,6 +209,9 @@ class Executor(object):
         --------
         distributed.executor.Executor.submit:
         """
+        if not callable(func):
+            raise TypeError("First input to submit must be a callable function")
+
         key = kwargs.pop('key', None)
         pure = kwargs.pop('pure', True)
 
@@ -218,7 +239,7 @@ class Executor(object):
 
         return Future(key, self)
 
-    def map(self, func, seq, pure=True):
+    def map(self, func, *iterables, pure=True):
         """ Map a function on a sequence of arguments
 
         Arguments can be normal objects or Futures
@@ -235,13 +256,18 @@ class Executor(object):
         --------
         distributed.executor.Executor.submit
         """
+        if not callable(func):
+            raise TypeError("First input to map must be a callable function")
+        iterables = [list(it) for it in iterables]
         if pure:
-            keys = [funcname(func) + '-' + tokenize(func, arg) for arg in seq]
+            keys = [funcname(func) + '-' + tokenize(func, *args)
+                    for args in zip(*iterables)]
         else:
             uid = str(uuid.uuid1())
-            keys = [funcname(func) + '-' + uid + '-' + next(tokens) for arg in seq]
+            keys = [funcname(func) + '-' + uid + '-' + next(tokens)
+                    for i in range(min(map(len, iterables)))]
 
-        dsk = {key: (func, arg) for key, arg in zip(keys, seq)}
+        dsk = {key: (func,) + args for key, args in zip(keys, zip(*iterables))}
 
         for key in dsk:
             if key not in self.futures:
@@ -313,3 +339,63 @@ class Executor(object):
         3
         """
         return sync(self.loop, self._get, dsk, keys)
+
+
+@gen.coroutine
+def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
+    if timeout is not None:
+        raise NotImplementedError("Timeouts not yet supported")
+    if return_when == 'ALL_COMPLETED':
+        yield All({f.event.wait() for f in fs})
+        done, not_done = set(fs), set()
+    else:
+        raise NotImplementedError("Only return_when='ALL_COMPLETED' supported")
+
+    raise gen.Return(DoneAndNotDoneFutures(done, not_done))
+
+
+ALL_COMPLETED = 'ALL_COMPLETED'
+
+
+@wraps(futures.wait)
+def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
+    if len(set(f.executor for f in fs)) == 1:
+        loop = first(fs).executor.loop
+    else:
+        # TODO: Groupby executor, spawn many _as_completed coroutines
+        raise NotImplementedError("wait on many event loops not yet supported")
+
+    return sync(loop, _wait, fs, timeout, return_when)
+
+
+@gen.coroutine
+def _as_completed(fs, queue):
+    groups = groupby(lambda f: f.key, fs)
+    firsts = [v[0] for v in groups.values()]
+    wait_iterator = gen.WaitIterator(*[f.event.wait() for f in firsts])
+
+    while not wait_iterator.done():
+        result = yield wait_iterator.next()
+        # TODO: handle case of restarted futures
+        future = firsts[wait_iterator.current_index]
+        for f in groups[future.key]:
+            queue.put_nowait(f)
+
+
+@wraps(futures.as_completed)
+def as_completed(fs):
+    if len(set(f.executor for f in fs)) == 1:
+        loop = first(fs).executor.loop
+    else:
+        # TODO: Groupby executor, spawn many _as_completed coroutines
+        raise NotImplementedError(
+        "as_completed on many event loops not yet supported")
+
+    from .compatibility import Queue
+    queue = Queue()
+
+    coroutine = lambda: _as_completed(fs, queue)
+    loop.add_callback(coroutine)
+
+    for i in range(len(fs)):
+        yield queue.get()

@@ -1,11 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
+from functools import partial
 import logging
 from math import ceil
 from time import time
 
-from toolz import frequencies, memoize
+from toolz import frequencies, memoize, concat
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -36,8 +37,7 @@ def worker(scheduler_queue, worker_queue, ident, ncores):
         yield All([worker_core(scheduler_queue, worker_queue, ident, i)
                 for i in range(ncores)])
     except StreamClosedError:
-        logger.warn("Worker failed from closed stream: %s", ident,
-                    exc_info=True)
+        logger.info("Worker failed from closed stream: %s", ident)
         scheduler_queue.put_nowait({'op': 'worker-failed',
                                     'worker': ident})
 
@@ -86,6 +86,13 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
                                             'key': key,
                                             'worker': ident,
                                             'exception': err[key]})
+
+            elif isinstance(response, KeyError):
+                scheduler_queue.put_nowait({'op': 'task-missing-data',
+                                            'key': key,
+                                            'worker': ident,
+                                            'missing': response.args})
+
             else:
                 scheduler_queue.put_nowait({'op': 'task-finished',
                                             'worker': ident,
@@ -99,7 +106,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
 
 
 @gen.coroutine
-def delete(scheduler_queue, delete_queue, ip, port):
+def delete(scheduler_queue, delete_queue, ip, port, batch_time=1):
     """ Delete extraneous intermediates from distributed memory
 
     This coroutine manages a connection to the center in order to send keys
@@ -126,8 +133,10 @@ def delete(scheduler_queue, delete_queue, ip, port):
         if msg['op'] == 'close':
             break
 
+        # TODO: trigger coroutine to go off in a second if no activity
         batch.append(msg['key'])
-        if batch and time() - last > 1:       # One second batching
+        if batch and time() - last > batch_time:  # One second batching
+            logger.debug("Ask center to delete %d keys", len(batch))
             last = time()
             yield center.delete_data(keys=batch)
             batch = list()
@@ -177,6 +186,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     dependents = dict()
     waiting = dict()
     waiting_data = dict()
+    in_play = set(who_has)  # keys in memory, stacks, processing, or waiting
     released = set()
     keyorder = dict()
     generation = 0
@@ -230,6 +240,12 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             del who_has[key]
             if key in waiting_data:
                 del waiting_data[key]
+            if key in in_play:
+                in_play.remove(key)
+
+    my_heal_missing_data = partial(heal_missing_data,
+            dsk, dependencies, dependents, held_data, who_has, in_play,
+            waiting, waiting_data)
 
     while True:
         msg = yield scheduler_queue.get()
@@ -238,9 +254,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         elif msg['op'] == 'update-graph':
             new_dsk = msg['dsk']
             new_keys = msg['keys']
-            all_processing = set.union(*processing.values())
             update_state(dsk, dependencies, dependents, held_data,
-                         set(who_has), all_processing, released,
+                         set(who_has), in_play,
                          waiting, waiting_data, new_dsk, new_keys)
 
             new_keyorder = order(new_dsk)
@@ -283,7 +298,23 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
         elif msg['op'] == 'task-erred':
             processing[msg['worker']].remove(msg['key'])
+            in_play.remove(msg['key'])
             report_queue.put_nowait(msg)
+
+        elif msg['op'] == 'task-missing-data':
+            key = msg['key']
+            missing = set(msg['missing'])
+            logger.debug("Recovering missing data: %s", missing)
+            with ignoring(KeyError):
+                processing[worker].remove(key)
+            for k in missing:
+                workers = who_has.pop(k)
+                for worker in workers:
+                    has_what[worker].remove(k)
+            my_heal_missing_data(missing)
+            waiting[key] = missing
+
+            seed_ready_tasks()
 
         elif msg['op'] == 'worker-failed':
             worker = msg['worker']
@@ -298,6 +329,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                 if not who_has[key]:
                     missing_keys.add(key)
             gone_data = {k for k, v in who_has.items() if not v}
+            in_play -= missing_keys
             for k in gone_data:
                 del who_has[k]
 
@@ -306,6 +338,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             waiting_data = state['waiting_data']
             waiting = state['waiting']
             released = state['released']
+            in_play = state['in_play']
             add_keys = {k for k, v in waiting.items() if not v}
             for key in held_data & released:
                 report_queue.put_nowait({'op': 'lost-key', 'key': key})
@@ -328,7 +361,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
-        in_memory, stacks, processing, finished_results, released, **kwargs):
+        in_memory, stacks, processing, finished_results, released, in_play,
+        **kwargs):
     """ Validate a current runtime state
 
     This performs a sequence of checks on the entire graph, running in about
@@ -350,6 +384,8 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
                     key in in_processing,
                     key in in_memory,
                     key in released]) == 1
+
+        assert (key in released) != (key in in_play)
 
         if not all(map(check_key, dependencies[key])):# Recursive case
             assert False
@@ -403,8 +439,8 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
     >>> list(sorted(keys_outside_frontier(dsk, dependencies, keys, frontier)))
     ['b', 'z']
     """
-    keys = set(keys)
-    frontier = set(frontier)
+    assert isinstance(keys, set)
+    assert isinstance(frontier, set)
     stack = list(keys - frontier)
     result = set()
     while stack:
@@ -418,7 +454,7 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
 
 
 def update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, processing, released,
+                 in_memory, in_play,
                  waiting, waiting_data, new_dsk, new_keys):
     """ Update state given new dask graph and output keys
 
@@ -426,6 +462,8 @@ def update_state(dsk, dependencies, dependents, held_data,
     added graph.  It assumes that the current runtime state is valid.
     """
     dsk.update(new_dsk)
+    if not isinstance(new_keys, set):
+        new_keys = set(new_keys)
 
     for key in new_dsk:  # add dependencies/dependents
         deps = get_dependencies(dsk, key)
@@ -444,6 +482,7 @@ def update_state(dsk, dependencies, dependents, held_data,
     for key, value in new_dsk.items():  # add in remotedata
         vv, s = unpack_remotedata(value)
         if s:
+            # TODO: check against in-memory, maybe add to in_play
             dsk[key] = vv
             if key not in dependencies:
                 dependencies[key] = set()
@@ -456,8 +495,8 @@ def update_state(dsk, dependencies, dependents, held_data,
                     dependents[dep] = set()
                 dependents[dep].add(key)
 
-    frontier = in_memory | set(waiting) | processing
-    exterior = keys_outside_frontier(dsk, dependencies, new_keys, frontier)
+    exterior = keys_outside_frontier(dsk, dependencies, new_keys, in_play)
+    in_play |= exterior
     for key in exterior:
         deps = dependencies[key]
         waiting[key] = deps - in_memory
@@ -469,7 +508,7 @@ def update_state(dsk, dependencies, dependents, held_data,
         if key not in waiting_data:
             waiting_data[key] = set()
 
-    held_data |= set(new_keys)
+    held_data |= new_keys
 
     return {'dsk': dsk,
             'dependencies': dependencies,
@@ -554,11 +593,17 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
 
     finished_results = {key for key in outputs if key in in_memory}
 
+    in_play = (in_memory
+            | set(waiting)
+            | (set.union(*processing.values()) if processing else set())
+            | set(concat(stacks.values())))
+
     output = {'keys': outputs,
              'dependencies': dependencies, 'dependents': dependents,
              'waiting': waiting, 'waiting_data': waiting_data,
              'in_memory': in_memory, 'processing': processing, 'stacks': stacks,
-             'finished_results': finished_results, 'released': new_released}
+             'finished_results': finished_results, 'released': new_released,
+             'in_play': in_play}
     validate_state(**output)
     return output
 
@@ -629,3 +674,31 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
         stacks[worker].append(key)
 
     return new_stacks
+
+
+def heal_missing_data(dsk, dependencies, dependents, held_data,
+                      in_memory, in_play,
+                      waiting, waiting_data, missing):
+    """ Return to healthy state after discovering missing data
+
+    When we identify that we're missing certain keys we rewind runtime state to
+    evaluate those keys.
+    """
+    for key in missing:
+        if key in in_play:
+            in_play.remove(key)
+    def ensure_key(key):
+        if key in in_play:
+            return
+        for dep in dependencies[key]:
+            ensure_key(dep)
+            waiting_data[dep].add(key)
+        waiting[key] = {dep for dep in dependencies[key] if dep not in in_memory}
+        waiting_data[key] = {dep for dep in dependents[key] if dep in in_play
+                                                    and dep not in in_memory}
+        in_play.add(key)
+
+    for key in missing:
+        ensure_key(key)
+
+    assert set(missing).issubset(in_play)
