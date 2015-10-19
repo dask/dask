@@ -239,10 +239,18 @@ class Executor(object):
 
         return Future(key, self)
 
-    def map(self, func, *iterables, pure=True):
+    def map(self, func, *iterables, **kwargs):
         """ Map a function on a sequence of arguments
 
         Arguments can be normal objects or Futures
+
+        Parameters
+        ----------
+        func: callable
+        iterables: Iterables
+        pure: bool (defaults to True)
+            Whether or not the function is pure.  Set ``pure=False`` for
+            impure functions like ``np.random.random``.
 
         Examples
         --------
@@ -256,6 +264,7 @@ class Executor(object):
         --------
         distributed.executor.Executor.submit
         """
+        pure = kwargs.get('pure', True)
         if not callable(func):
             raise TypeError("First input to map must be a callable function")
         iterables = [list(it) for it in iterables]

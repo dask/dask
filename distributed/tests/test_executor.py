@@ -2,6 +2,7 @@ from operator import add
 
 from collections import Iterator
 import pytest
+import sys
 from toolz import isdistinct
 from tornado.ioloop import IOLoop
 from tornado import gen
@@ -102,7 +103,8 @@ def test_map():
 
         L4 = e.map(add, range(3), range(4))
         results = yield e._gather(L4)
-        assert results == list(map(add, range(3), range(4)))
+        if sys.version_info[0] >= 3:
+            assert results == list(map(add, range(3), range(4)))
 
         yield e._shutdown()
 
