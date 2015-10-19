@@ -92,7 +92,7 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center, start=False, delete_batch_time=1):
+    def __init__(self, center, start=True, delete_batch_time=1):
         self.center = coerce_to_rpc(center)
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
@@ -114,7 +114,8 @@ class Executor(object):
         self._loop_thread.start()
 
     def __enter__(self):
-        self.start()
+        if not self.loop._running:
+            self.start()
         return self
 
     def __exit__(self, type, value, traceback):

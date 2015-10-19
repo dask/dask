@@ -29,7 +29,7 @@ in the ``dcenter`` call.
 .. code-block:: python
 
    >>> from distributed import Executor
-   >>> executor = Executor('127.0.0.1:8787', start=True)
+   >>> executor = Executor('127.0.0.1:8787')
 
 Map and Submit
 --------------

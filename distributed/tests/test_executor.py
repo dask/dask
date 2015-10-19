@@ -50,7 +50,7 @@ def _test_cluster(f):
 def test_submit():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
         x = e.submit(inc, 10)
         assert not x.done()
@@ -74,7 +74,7 @@ def test_submit():
 def test_map():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
 
         L1 = e.map(inc, range(5))
@@ -114,7 +114,7 @@ def test_map():
 def test_map_naming():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
 
         L1 = e.map(inc, range(5))
         L2 = e.map(inc, range(5))
@@ -133,7 +133,7 @@ def test_map_naming():
 def test_submit_naming():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
 
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
@@ -149,7 +149,7 @@ def test_submit_naming():
 def test_exceptions():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
 
         x = e.submit(div, 1, 2)
@@ -172,7 +172,7 @@ def test_exceptions():
 def test_gc():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
         x = e.submit(inc, 10)
         result = yield x._result()
@@ -218,7 +218,7 @@ def test_sync_exceptions():
 def test_stress_1():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
 
         n = 2**6
@@ -239,7 +239,7 @@ def test_stress_1():
 def test_gather():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
         x = e.submit(inc, 10)
         y = e.submit(inc, x)
@@ -266,7 +266,7 @@ def test_gather_sync():
 def test_get():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
         result = yield e._get({'x': (inc, 1)}, 'x')
         assert result == 2
@@ -289,7 +289,7 @@ def test_submit_errors():
     def f(a, b, c):
         pass
 
-    e = Executor('127.0.0.1:8787')
+    e = Executor('127.0.0.1:8787', start=False)
 
     with pytest.raises(TypeError):
         e.submit(1, 2, 3)
@@ -300,7 +300,7 @@ def test_submit_errors():
 def test_wait():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
 
         a = e.submit(inc, 1)
@@ -321,7 +321,7 @@ def test_wait():
 def test__as_completed():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
 
         a = e.submit(inc, 1)
@@ -368,7 +368,7 @@ def test_garbage_collection():
     import gc
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port))
+        e = Executor((c.ip, c.port), start=False)
 
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
@@ -395,7 +395,7 @@ def test_garbage_collection():
 def test_recompute_released_key():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0)
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
         IOLoop.current().spawn_callback(e._go)
 
         x = e.submit(inc, 100)
@@ -435,7 +435,7 @@ def test_stress_gc():
 def test_missing_data_heals():
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0)
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
         IOLoop.current().spawn_callback(e._go)
 
         x = e.submit(inc, 1)
