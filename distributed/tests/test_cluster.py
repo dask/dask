@@ -1,7 +1,9 @@
 from distributed.cluster import Cluster
 from distributed.core import connect_sync, read_sync, write_sync
+import pytest
 
 
+@pytest.mark.avoid_travis
 def test_cluster():
     with Cluster('127.0.0.1', ['127.0.0.1', '127.0.0.1']) as c:
         stream = connect_sync('127.0.0.1', 8787)
