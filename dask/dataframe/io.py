@@ -395,8 +395,8 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     if categorize:
         for name in x.names:
             if (np.issubdtype(x.dtype[name], np.string_) or
-                    np.issubdtype(x.dtype[name], np.unicode_) or
-                    np.issubdtype(x.dtype[name], np.object_)):
+                np.issubdtype(x.dtype[name], np.unicode_) or
+                np.issubdtype(x.dtype[name], np.object_)):
                 a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
                 categories[name] = da.unique(a)
 
@@ -415,7 +415,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
                 (dataframe_from_ctable,
                  x,
                  (slice(i * chunksize, (i + 1) * chunksize),),
-                 None, categories))
+                 columns, categories))
                for i in range(0, int(ceil(len(x) / chunksize))))
 
     result = DataFrame(dsk, new_name, columns, divisions)
@@ -459,20 +459,23 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
 
     """
     import bcolz
-    if columns is not None:
-        if isinstance(columns, tuple):
-            columns = list(columns)
-        x = x[columns]
+    if columns is None:
+        columns = x.dtype.names
+    if isinstance(columns, tuple):
+        columns = list(columns)
+
+    x = x[columns]
 
     if isinstance(x, bcolz.ctable):
-        chunks = [x[name][slc] for name in x.names]
+        chunks = [x[name][slc] for name in columns]
         if categories is not None:
             chunks = [pd.Categorical.from_codes(np.searchsorted(categories[name],
                                                                 chunk),
                                                 categories[name], True)
                        if name in categories else chunk
-                       for name, chunk in zip(x.names, chunks)]
-        return pd.DataFrame(dict(zip(x.names, chunks)))
+                       for name, chunk in zip(columns, chunks)]
+        return pd.DataFrame(dict(zip(columns, chunks)), columns=columns)
+
     elif isinstance(x, bcolz.carray):
         chunk = x[slc]
         if categories is not None and columns and columns in categories:

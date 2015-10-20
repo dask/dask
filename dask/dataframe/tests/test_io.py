@@ -228,6 +228,15 @@ def test_from_bcolz_filename():
         assert list(d.x.compute()) == [1, 2, 3]
 
 
+def test_from_bcolz_column_order():
+    bcolz = pytest.importorskip('bcolz')
+
+    t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
+                     names=['x', 'y', 'a'])
+    df = dd.from_bcolz(t, chunksize=2)
+    assert list(df.loc[0].compute().index) == ['x', 'y', 'a']
+
+
 def test_skipinitialspace():
     text = normalize_text("""
     name, amount
