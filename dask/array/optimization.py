@@ -1,11 +1,15 @@
-from ..optimize import cull, fuse
-from ..core import flatten
-from ..optimize import dealias, inline_functions
-from .core import getarray
+import operator
 from operator import getitem
-from dask.rewrite import RuleSet, RewriteRule
+
 from toolz import valmap, partial
 import numpy as np
+
+from ..core import flatten, istask
+from ..base import tokenize
+from ..compatibility import PY2, long
+from ..optimize import cull, fuse, dealias, inline_functions
+from ..rewrite import RuleSet, RewriteRule
+from .core import getarray
 
 
 def optimize(dsk, keys, **kwargs):
@@ -22,7 +26,7 @@ def optimize(dsk, keys, **kwargs):
     dsk4 = fuse(dsk3)
     dsk5 = valmap(rewrite_rules.rewrite, dsk4)
     dsk6 = inline_functions(dsk5, fast_functions=fast_functions)
-    return dsk6
+    return valmap(swap_getitem_elemwise, dsk6)
 
 
 def is_full_slice(task):
@@ -206,3 +210,99 @@ def fuse_slice(a, b):
             j += 1
         return tuple(result)
     raise NotImplementedError()
+
+
+def getitem_broadcast(a, b, lock=None, asarray=False):
+    """Broadcast slicing"""
+    ndim = len(a.shape)
+    # Newaxis
+    if any(i is None for i in b):
+        b2 = tuple(i for i in b if i is not None)
+        if len(b2) == ndim:
+            b3 = tuple(None if i is None else slice(None)
+                       for i in b if not isinstance(i, (int, long)))
+            return getitem_broadcast(a, b2, lock, asarray)[b3]
+        else:
+            b = b2
+    # Broadcasting
+    if ndim < len(b):
+        b = b[-ndim:]
+    b = tuple(i if s > 1 else 0 if isinstance(i, (int, long)) else slice(None)
+              for (i, s) in zip(b, a.shape))
+    # Locking
+    if lock:
+        lock.acquire()
+    try:
+        c = a[tuple(b)]
+        if asarray and type(c) != np.ndarray:
+            c = np.asarray(c)
+    finally:
+        if lock:
+            lock.release()
+    return c
+
+
+# Create a dict of {func: nargs}
+binops = ('lt le eq ne ge gt add and_ floordiv lshift mod or_ pow rshift sub '
+          'truediv xor').split()
+PY2 and binops.append('div')
+func_lookup = dict.fromkeys((getattr(operator, o) for o in binops), 2)
+func_lookup.update((getattr(operator, o), 1) for o in ('invert', 'neg', 'pos'))
+
+
+def iselemwise(f):
+    from .core import partial_by_order
+    return (hasattr(f, 'nin') and hasattr(f, 'ntypes') or
+            f in func_lookup or isinstance(f, partial_by_order))
+
+
+def get_func_arrs_args(task):
+    """Split elemwise task into `(func, broadcasted, other_args)`"""
+    from .core import partial_by_order
+    func = task[0]
+    if hasattr(func, 'nin'):
+        n = func.nin
+    elif func in func_lookup:
+        n = func_lookup[func]
+    elif isinstance(func, partial_by_order):
+        return func, task[1:], ()
+    else:
+        raise ValueError('Unknown function {0}'.format(func))
+    return func, task[1:n + 1], task[n+1:]
+
+
+def _swap_getitem_elemwise(task, ind):
+    """Bottom-up rewriting of all broadcasted arguments in an elemwise"""
+    if isinstance(task, list):
+        return [_swap_getitem_elemwise(t) for t in task]
+    elif istask(task):
+        if iselemwise(task[0]):
+            func, arrs, args = get_func_arrs_args(task)
+            return (func,) + tuple(_swap_getitem_elemwise(i, ind) for i in arrs) + args
+        elif task[0] in (getitem, getarray):
+            try:
+                return (getitem_broadcast,
+                        task[1],
+                        fuse_slice(ind, task[2]),
+                        task[3] if len(task) == 4 else None,
+                        task[0] is getarray)
+            except NotImplementedError:
+                pass
+    return (getitem_broadcast, task, ind)
+
+
+def swap_getitem_elemwise(task):
+    """Top down search for `(elemwise, (ufunc, ...), ind)` to rewrite"""
+    if isinstance(task, list):
+        return [swap_getitem_elemwise(t) for t in task]
+    elif istask(task):
+        task = (task[0],) + tuple(swap_getitem_elemwise(t) for t in task[1:])
+    else:
+        return task
+    if task[0] is not getitem:
+        return task
+    arr, ind = task[1:]
+    if not (istask(arr) and iselemwise(arr[0]) and isinstance(ind, tuple)):
+        return task
+    func, arrs, args = get_func_arrs_args(arr)
+    return (func,) + tuple(_swap_getitem_elemwise(i, ind) for i in arrs) + args

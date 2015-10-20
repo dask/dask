@@ -1688,29 +1688,27 @@ def asarray(array):
     return array
 
 
-def partial_by_order(op, other):
+class partial_by_order(object):
     """
 
     >>> f = partial_by_order(add, [(1, 10)])
     >>> f(5)
     15
     """
-    if (not isinstance(other, list) or
-        not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
-        raise ValueError('input must be list of tuples')
+    def __init__(self, op, other):
+        if (not isinstance(other, list) or
+            not all(isinstance(o, tuple) and len(o) == 2 for o in other)):
+            raise ValueError('input must be list of tuples')
+        self.op = op
+        self.other = other
+        self.__name__ = '{0}({1})'.format(op.__name__,
+                        other[0][1] if len(other) == 1 else '...')
 
-    def f(*args):
+    def __call__(self, *args):
         args2 = list(args)
-        for i, arg in other:
+        for i, arg in self.other:
             args2.insert(i, arg)
-        return op(*args2)
-
-    if len(other) == 1:
-        other_arg = other[0][1]
-    else:
-        other_arg = '...'
-    f.__name__ = '{0}({1})'.format(op.__name__, other_arg)
-    return f
+        return self.op(*args2)
 
 
 def is_scalar_for_elemwise(arg):
