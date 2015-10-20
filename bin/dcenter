@@ -1,20 +1,10 @@
 #!/usr/bin/env python
 
-from sys import argv
-if len(argv) == 2:
-    if ':' in argv[1]:
-        ip, port = argv[1].split(':')
-    else:
-        ip = None
-        port = argv[1]
-else:
-    ip = None
-    port = 8787
+import click
+from tornado.ioloop import IOLoop
 
 from distributed.utils import get_ip
-ip = get_ip()
-
-port = int(port)
+from distributed import Center
 
 # Set up signal handling
 import signal
@@ -26,12 +16,19 @@ signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
 
 
-# Run stuff
-from distributed import Center
-from tornado.ioloop import IOLoop
-print("Start center at %s:%d" % (ip, port))
-center = Center(ip, port)
-center.listen(port)
-IOLoop.current().start()
-IOLoop.current().close()
-print("End center at %s:%d" % (ip, port))
+
+@click.command()
+@click.option('--port', type=int, default=8787, help="Port on which to serve")
+def go(port):
+    host = get_ip()
+
+    print("Start center at %s:%d" % (host, port))
+    center = Center(host, port)
+    center.listen(port)
+    IOLoop.current().start()
+    IOLoop.current().close()
+    print("End center at %s:%d" % (host, port))
+
+
+if __name__ == '__main__':
+    go()

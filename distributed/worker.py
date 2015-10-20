@@ -75,7 +75,7 @@ class Worker(Server):
                     'terminate': self.terminate}
 
         super(Worker, self).__init__(handlers, **kwargs)
-        logger.info('Start worker')
+        logger.info('Start worker at             %s:%d', ip, port)
         self.status = 'running'
 
     @gen.coroutine
