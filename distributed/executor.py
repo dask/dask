@@ -27,7 +27,7 @@ from .utils import All, sync, funcname
 logger = logging.getLogger(__name__)
 
 
-tokens = (str(i) for i in itertools.count(1))
+tokens = (str(uuid.uuid4()) for i in itertools.count(1))
 
 
 class Future(WrappedKey):
@@ -278,7 +278,7 @@ class Executor(object):
             keys = [funcname(func) + '-' + tokenize(func, *args)
                     for args in zip(*iterables)]
         else:
-            uid = str(uuid.uuid1())
+            uid = str(uuid.uuid4())
             keys = [funcname(func) + '-' + uid + '-' + next(tokens)
                     for i in range(min(map(len, iterables)))]
 
