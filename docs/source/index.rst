@@ -16,6 +16,7 @@ This library is experimental, broken, and unstable.
    :maxdepth: 2
 
    quickstart
+   executor
    foundations
    worker-center
    clients
