@@ -7,5 +7,9 @@ try:
     from .imperative import do, value
 except ImportError:
     pass
+try:
+    from .base import visualize, compute
+except ImportError:
+    pass
 
 __version__ = '0.7.3'
