@@ -16,9 +16,7 @@ command::
 
    $ dcenter 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
 
-See setup_ for more advanced use.
-
-.. _setup: setup.rst
+See :doc:`setup <setup>` for more advanced use.
 
 Launch Executor
 ---------------

@@ -3,10 +3,8 @@ Executor
 
 The Executor is the primary entry point for users of ``distributed``.
 
-After you `setup a cluster`_, initialize an ``Executor`` by pointing it to the
-Center node's address:
-
-.. _`setup a cluster`: setup.rst
+After you :doc:`setup a cluster <setup>`, initialize an ``Executor`` by
+pointing it to the Center node's address:
 
 .. code-block:: python
 

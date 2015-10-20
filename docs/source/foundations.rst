@@ -1,7 +1,7 @@
 Foundations
 ===========
 
-You should read through the quickstart_ before reading this document.
+You should read through the :doc:`quickstart <quickstart>` before reading this document.
 
 .. _quickstart: quickstart.html
 

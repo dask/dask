@@ -1,14 +1,10 @@
 Client Interaction
 ==================
 
-As discussed in the quickstart_ users can interact with the `worker-center`_
+As discussed in the :doc:`quickstart <quickstart>` users can interact with the :doc:`worker-center <worker-center>`
 network with the Executor abstraction.
 
 This is built with lower level functions described below.
-
-.. _`quickstart`: quickstart.html
-.. _`worker-center`: worker-center.html
-
 
 RemoteData
 ----------
