@@ -81,10 +81,16 @@ class Worker(Server):
     @gen.coroutine
     def _start(self):
         self.listen(self.port)
-        resp = yield self.center.register(
-                ncores=self.ncores, address=(self.ip, self.port))
+        while True:
+            try:
+                resp = yield self.center.register(
+                        ncores=self.ncores, address=(self.ip, self.port))
+                break
+            except ConnectionRefusedError:
+                yield gen.sleep(1)
         assert resp == b'OK'
-        logger.debug('Registered with center')
+        logger.info('Registered with center at:  %s:%d',
+                    self.center.ip, self.center.port)
 
     def start(self):
         if not self.io_loop:

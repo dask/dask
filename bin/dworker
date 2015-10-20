@@ -38,9 +38,6 @@ while True:
         sock.close()
         break
 
-print("Start worker at:            %s:%d\n"
-      "Registered with center at:  %s:%d" %
-        (ip, port, center_ip, center_port))
 try:
     worker = Worker(ip, port, center_ip, center_port)
     worker.start()
