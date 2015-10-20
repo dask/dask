@@ -1123,10 +1123,10 @@ class Array(Base):
         >>> depth = {0: 1, 1: 1}
         >>> boundary = {0: 'reflect', 1: 'none'}
         >>> d.map_overlap(func, depth, boundary).compute()  # doctest: +NORMALIZE_WHITESPACE
-        array([[ 12.,  13.,  14.,  15.],
-               [ 16.,  17.,  18.,  19.],
-               [ 20.,  21.,  22.,  23.],
-               [ 24.,  25.,  26.,  27.]])
+        array([[12,  13,  14,  15],
+               [16,  17,  18,  19],
+               [20,  21,  22,  23],
+               [24,  25,  26,  27]])
         """
         from .ghost import map_overlap
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
