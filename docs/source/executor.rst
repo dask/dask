@@ -35,7 +35,7 @@ in further calls to ``submit``:
 
 .. code-block:: python
 
-  >>> y = executor.submit(inc, x)
+   >>> y = executor.submit(inc, x)
 
 Gather results
 ~~~~~~~~~~~~~~
@@ -119,12 +119,55 @@ with existing dask code.
 Internals
 ---------
 
+Data Locality
+~~~~~~~~~~~~~
+
+By default the executor does not bring results back to your local computer but
+leaves them on the distributed network.  As a result, computations on returned
+results like the following don't require any data transfer.
+
+.. code-block:: python
+
+   >>> y = executor.submit(inc, x)  # no data transfer required
+
+Pure Functions by Default
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We associate a key to all computations.
+
+.. code-block:: python
+
+   >>> from operator import add
+   >>> x = executor.submit(add, 1, 2)
+   >>> x.key
+   'add-ebf39f96ad7174656f97097d658f3fa2'
+
+This key should be the same accross all computations with the same inputs and
+across all machines.  If you run the computation above you should get the exact
+same key.
+
+The scheduler will not perform redundant computations.  If the result is already in memory from a previous call then that old result will be returned.
+
+While convenient, this feature may be undesired for impure functions, like
+``random``.  In these cases two calls of the same function with the same inputs
+should produce different results.  We accomplish this with the ``pure=False``
+keyword argument.
+
+.. code-block:: python
+
+   >>> import numpy as np
+   >>> executor.submit(np.random.random, 1000, pure=False).key
+   'random_sample-fc814a39-ee00-42f3-8b6f-cac65bcb5556'
+   >>> executor.submit(np.random.random, 1000, pure=False).key
+   'random_sample-a24e7220-a113-47f2-a030-72209439f093'
+
+
 Garbage Collection
 ~~~~~~~~~~~~~~~~~~
 
 The executor reference counts ``Future`` objects.  When a particular key no
 longer has any Future objects pointing to it it will be released from
-distributed memory *if* no known computations still require it.
+distributed memory if no known computations still require it.
 
 In this way garbage collection in the distributed memory space of your cluster
 mirrors garbage collection within your local Python session.
@@ -139,9 +182,9 @@ Known futures and reference counts can be found in the following dictionaries
 Dask Graph
 ~~~~~~~~~~
 
-The executor, and indeed to core distributed scheduler, maintain a dask graph
-of all known computations.  This graph is accessible via the ``.dask``
-attribute.  At times it may be worth visualizing this object.
+The executor and scheduler maintains a dask graph of all known computations.
+This graph is accessible via the ``.dask`` attribute.  At times it may be worth
+visualizing this object.
 
 .. code-block:: python
 

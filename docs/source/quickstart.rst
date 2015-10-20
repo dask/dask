@@ -20,8 +20,8 @@ See setup_ for more advanced use.
 
 .. _setup: setup.rst
 
-Executor
---------
+Launch Executor
+---------------
 
 Launch an Executor to interact with network.  Provide the first address listed
 in the ``dcenter`` call.
@@ -32,7 +32,7 @@ in the ``dcenter`` call.
    >>> executor = Executor('127.0.0.1:8787')
 
 Map and Submit
---------------
+~~~~~~~~~~~~~~
 
 The executor provides ``map`` and ``submit`` functions like
 ``concurrent.futures.Executor``.  Results of these functions are ``Future``
@@ -46,19 +46,8 @@ objects, proxies for data that lives on the cluster.
    >>> total.result()
    -285
 
-Data Locality
--------------
-
-By default the executor does not bring results back to your local computer but
-leaves them on the distributed network.  As a result, computations on returned
-results like the following don't require any data transfer.
-
-.. code-block:: python
-
-   >>> B = executor.map(lambda x: -x, A)  # no data transfer required
-
 Gather
-------
+~~~~~~
 
 Gather results to your local machine with the gather method
 
@@ -68,7 +57,7 @@ Gather results to your local machine with the gather method
    [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
 
 get
----
+~~~
 
 The ``Executor.get`` method operates like a typical dask scheduler.
 
@@ -88,16 +77,3 @@ Get works with dask collections (like dask.array or dask.dataframe):
    >>> x = da.arange(10, chunks=(5,))
    >>> x.sum().compute(get=executor.get)
    45
-
-
-Benefits
---------
-
-The executor provides:
-
-*  Data locality: computations prefer to run on workers that have the inputs
-*  Limited resilience:  computations can recover from catastrophic failures of
-   worker nodes during computation.
-
-However at the moment there is no provision for worker failure between
-computations.  There is no persistence layer.

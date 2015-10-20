@@ -1,7 +1,7 @@
 Worker-Center
 =============
 
-We build a distributed network from two kinds of nodes
+We build a distributed network from two kinds of nodes.
 
 *  A single Center node
 *  Several Worker nodes

@@ -1,8 +1,7 @@
 Foundations
 ===========
 
-You should read through the quickstart_ before reading this document.  This
-document is for developers of ``distributed``, not users.
+You should read through the quickstart_ before reading this document.
 
 .. _quickstart: quickstart.html
 
