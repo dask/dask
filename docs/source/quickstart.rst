@@ -21,8 +21,8 @@ See :doc:`setup <setup>` for more advanced use.
 Launch Executor
 ---------------
 
-Launch an Executor to interact with network.  Provide the first address listed
-in the ``dcenter`` call.
+Launch an Executor to interact with the network.  Provide the first address
+listed in the ``dcenter`` call with the port ``8787``.
 
 .. code-block:: python
 
@@ -38,8 +38,14 @@ objects, proxies for data that lives on the cluster.
 
 .. code-block:: python
 
-   >>> A = executor.map(lambda x: x**2, range(10))
-   >>> B = executor.map(lambda x: -x, A)
+   >>> def square(x):
+           return x ** 2
+
+   >>> def neg(x):
+           return -x
+
+   >>> A = executor.map(square, range(10))
+   >>> B = executor.map(neg, A)
    >>> total = executor.submit(sum, B)
    >>> total.result()
    -285
@@ -47,7 +53,9 @@ objects, proxies for data that lives on the cluster.
 Gather
 ~~~~~~
 
-Gather results to your local machine with the gather method
+Gather results to your local machine either with the ``Future.result`` method
+as shown below for a single future, or with the ``Executor.gather`` method for
+many futures at once.
 
 .. code-block:: python
 
@@ -75,3 +83,5 @@ Get works with dask collections (like dask.array or dask.dataframe):
    >>> x = da.arange(10, chunks=(5,))
    >>> x.sum().compute(get=executor.get)
    45
+
+See :doc:`executor <executor>` for more advanced use.

@@ -33,6 +33,8 @@ in further calls to ``submit``:
 
 .. code-block:: python
 
+   >>> type(x)
+   Future
    >>> y = executor.submit(inc, x)
 
 Gather results
@@ -131,7 +133,11 @@ results like the following don't require any data transfer.
 Pure Functions by Default
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We associate a key to all computations.
+By default we assume that all functions are pure.  If this is not the case you
+should use the ``pure=False`` keyword argument.
+
+The executor associates a key to all computations.  This key is accessible on
+the Future object.
 
 .. code-block:: python
 
@@ -144,10 +150,12 @@ This key should be the same accross all computations with the same inputs and
 across all machines.  If you run the computation above you should get the exact
 same key.
 
-The scheduler will not perform redundant computations.  If the result is already in memory from a previous call then that old result will be returned.
+The scheduler avoids redundant computations.  If the result is already in
+memory from a previous call then that old result will be used rather than
+recreating it.
 
 While convenient, this feature may be undesired for impure functions, like
-``random``.  In these cases two calls of the same function with the same inputs
+``random``.  In these cases two calls to the same function with the same inputs
 should produce different results.  We accomplish this with the ``pure=False``
 keyword argument.
 
@@ -163,6 +171,9 @@ keyword argument.
 Garbage Collection
 ~~~~~~~~~~~~~~~~~~
 
+Prolonged use of ``distributed`` may allocate a lot of remote data.  The
+executor can clean up unused results by reference counting.
+
 The executor reference counts ``Future`` objects.  When a particular key no
 longer has any Future objects pointing to it it will be released from
 distributed memory if no known computations still require it.
@@ -176,6 +187,10 @@ Known futures and reference counts can be found in the following dictionaries
 
    >>> executor.futures
    >>> executor.refcount
+
+Also note that the scheduler cleans up intermediate results when provided full
+dask graphs.  Also, you can always use the ``delete`` or ``clear`` functions in
+``distributed.client`` to manage data manually.
 
 Dask Graph
 ~~~~~~~~~~
@@ -192,10 +207,12 @@ visualizing this object.
    >>> visualize(executor, filename='executor.pdf')
 
 All functions like ``.submit``, ``.map``, and ``.get`` just add small subgraphs
-to this graph.  Functions like ``.result``, ``as_completed``, or ``gather``,
-just wait until their respective parts of the graph have completed.  All of
+to this graph.  Functions like ``.result``, ``as_completed``, or ``.gather``,
+wait until their respective parts of the graph have completed.  All of
 these actions are asynchronous to the actual execution of the graph, which is
 managed in a background thread.
+
+The dask graph is also used to recover results in case of failure.
 
 Coroutines
 ~~~~~~~~~~
