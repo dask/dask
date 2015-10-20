@@ -2,8 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from ..utils import ignoring
 from .core import (Array, stack, concatenate, take, tensordot, transpose,
-        from_array, choose, where, coarsen, insert, broadcast_to, ravel,
-        reshape, fromfunction, unique, store, squeeze, topk, bincount,
+        from_array, from_value, choose, where, coarsen, insert, broadcast_to,
+        ravel, reshape, fromfunction, unique, store, squeeze, topk, bincount,
         histogram, map_blocks, atop, to_hdf5, dot, cov, array, to_npy_stack,
         from_npy_stack)
 from .core import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
