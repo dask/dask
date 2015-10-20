@@ -115,6 +115,7 @@ def test_future():
     e = Executor('127.0.0.1:8787', start=False)
     x = e.submit(inc, 10)
     assert str(x.key) in repr(x)
+    assert str(x.status) in repr(x)
 
 
 def test_map_naming():

@@ -70,7 +70,7 @@ class Future(WrappedKey):
         self.executor._dec_ref(self.key)
 
     def __str__(self):
-        return '<Future - key: %s>' % self.key
+        return '<Future: status: %s, key: %s>' % (self.status, self.key)
 
     __repr__ = __str__
 
@@ -236,7 +236,7 @@ class Executor(object):
             task = (func,) + args
 
         if key not in self.futures:
-            self.futures[key] = {'event': Event(), 'status': None}
+            self.futures[key] = {'event': Event(), 'status': 'waiting'}
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self.scheduler_queue.put_nowait({'op': 'update-graph',
@@ -286,7 +286,7 @@ class Executor(object):
 
         for key in dsk:
             if key not in self.futures:
-                self.futures[key] = {'event': Event(), 'status': None}
+                self.futures[key] = {'event': Event(), 'status': 'waiting'}
 
         logger.debug("map(%s, ...)", funcname(func))
         self.scheduler_queue.put_nowait({'op': 'update-graph',
