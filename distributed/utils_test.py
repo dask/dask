@@ -70,3 +70,9 @@ def cluster():
         for proc in [a, b, center]:
             with ignoring(Exception):
                 proc.terminate()
+
+
+import pytest
+slow = pytest.mark.skipif(
+            not pytest.config.getoption("--runslow"),
+            reason="need --runslow option to run")
