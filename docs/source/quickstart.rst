@@ -14,7 +14,7 @@ Setup Cluster
 Set up center and worker nodes on your local computer with the ``dcluster``
 command::
 
-   $ dcenter 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
+   $ dcluster 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
 
 See :doc:`setup <setup>` for more advanced use.
 
@@ -71,9 +71,9 @@ Get works with raw dask graphs:
 
 .. code-block:: python
 
-   >>> dsk = {'a': 1, 'b': (inc, 'a')}
+   >>> dsk = {'a': 12, 'b': (square, 'a')}
    >>> executor.get(dsk, 'b')
-   2
+   144
 
 Get works with dask collections (like dask.array or dask.dataframe):
 
