@@ -3,6 +3,7 @@ recursive-include docs *.rst
 
 include bin/dworker
 include bin/dcenter
+include bin/dcluster
 include setup.py
 include README.rst
 include LICENSE.txt
