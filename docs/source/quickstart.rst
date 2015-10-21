@@ -11,18 +11,23 @@ Install
 Setup Cluster
 -------------
 
-Set up center and worker nodes on your local computer with the ``dcluster``
-command::
+Set up a local cluster::
+
+   $ bin/dcenter & \
+     bin/dworker 127.0.0.1:8787 & \
+     bin/dworker 127.0.0.1:8787 & \
+     bin/dworker 127.0.0.1:8787 &
+
+Or if you can ssh into your own computer use the ``dcluster`` command::
 
    $ dcenter 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
 
-See :doc:`setup <setup>` for more advanced use.
+See :doc:`setup <setup>` for advanced use.
 
 Launch Executor
 ---------------
 
-Launch an Executor to interact with the network.  Provide the first address
-listed in the ``dcenter`` call with the port ``8787``.
+Launch an Executor to interact with the network.  Point to the center IP/port.
 
 .. code-block:: python
 
@@ -32,9 +37,9 @@ listed in the ``dcenter`` call with the port ``8787``.
 Map and Submit
 ~~~~~~~~~~~~~~
 
-The executor provides ``map`` and ``submit`` functions like
-``concurrent.futures.Executor``.  Results of these functions are ``Future``
-objects, proxies for data that lives on the cluster.
+Use the ``map`` and ``submit`` methods to launch computation on the cluster.
+Results of these functions are ``Future`` objects that proxy remote data on the
+cluster.
 
 .. code-block:: python
 
@@ -65,7 +70,7 @@ many futures at once.
 get
 ~~~
 
-The ``Executor.get`` method operates like a typical dask scheduler.
+Use the ``Executor.get`` method to interact with dask collections.
 
 Get works with raw dask graphs:
 
@@ -84,4 +89,4 @@ Get works with dask collections (like dask.array or dask.dataframe):
    >>> x.sum().compute(get=executor.get)
    45
 
-See :doc:`executor <executor>` for more advanced use.
+See :doc:`executor <executor>` for advanced use.

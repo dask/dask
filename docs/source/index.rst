@@ -6,11 +6,11 @@
 distributed
 ===========
 
-The Python library ``distributed`` aids distributed computing.  Users of
-``distributed`` can store data and run functions remotely on a cluster of
-computers.
+Distributed is a lightweight library for distributed computing in Python.
+It extends the both the ``concurrent.futures`` and ``dask`` APIs to moderate sized clusters.  See :doc:`quickstart <quickstart>` to get started.
 
 This library is experimental, broken, and unstable.
+
 
 **User Documentation**
 
