@@ -2,6 +2,11 @@
 
 import os
 from setuptools import setup
+import sys
+
+requires = open('requirements.txt').read().strip().split('\n')
+if sys.version_info[0] < 3:
+    requires.append('futures')
 
 setup(name='distributed',
       version='1.2.0',
@@ -10,7 +15,7 @@ setup(name='distributed',
       maintainer='Matthew Rocklin',
       maintainer_email='mrocklin@gmail.com',
       license='BSD',
-      install_requires=open('requirements.txt').read().strip().split('\n'),
+      install_requires=requires,
       packages=['distributed'],
       long_description=(open('README.md').read() if os.path.exists('README.md')
                         else ''),
