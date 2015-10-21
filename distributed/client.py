@@ -97,15 +97,18 @@ def gather_from_workers(who_has):
     while len(results) < len(who_has):
         d = defaultdict(list)
         rev = dict()
+        bad_keys = set()
         for key, addresses in who_has.items():
             if key in results:
                 continue
             try:
                 addr = random.choice(list(addresses - bad_addresses))
+                d[addr].append(key)
+                rev[key] = addr
             except IndexError:
-                raise KeyError(key)
-            d[addr].append(key)
-            rev[key] = addr
+                bad_keys.add(key)
+        if bad_keys:
+            raise KeyError(*bad_keys)
 
         coroutines = [rpc(ip=ip, port=port).get_data(keys=keys, close=True)
                             for (ip, port), keys in d.items()]

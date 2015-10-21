@@ -133,6 +133,14 @@ def test_pack_data():
     assert pack_data({'a': ['x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
 
 
+def test_gather_errors_voluminously():
+    with cluster() as (c, [a, b]):
+        try:
+            gather(('127.0.0.1', c['port']), ['x', 'y', 'z'])
+        except KeyError as e:
+            assert set(e.args) == {'x', 'y', 'z'}
+
+
 def test_gather_scatter():
     with cluster() as (c, [a, b]):
         data = {'x': 1, 'y': 2, 'z': 3}
