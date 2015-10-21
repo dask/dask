@@ -63,7 +63,7 @@ Gather
 ~~~~~~
 
 Gather results to your local machine either with the ``Future.result`` method
-as shown below for a single future, or with the ``Executor.gather`` method for
+as shown above for a single future, or with the ``Executor.gather`` method for
 many futures at once.
 
 .. code-block:: python
