@@ -10,9 +10,10 @@ def start_center(addr):
     ssh.connect(addr)
 
     channel = ssh.invoke_shell()
+    channel.settimeout(20)
     sleep(0.1)
     channel.send('dcenter\n')
-    channel.recv(1000)
+    channel.recv(10000)
 
     return {'client': ssh, 'channel': channel}
 
@@ -23,9 +24,10 @@ def start_worker(center_addr, addr):
     ssh.connect(addr)
 
     channel = ssh.invoke_shell()
+    channel.settimeout(20)
     sleep(0.1)
     channel.send('dworker %s:8787\n' % center_addr)
-    channel.recv(1000)
+    channel.recv(10000)
 
     return {'client': ssh, 'channel': channel}
 
@@ -41,13 +43,13 @@ class Cluster(object):
     def report(self):
         self.center['channel'].settimeout(1)
         print("Center\n------")
-        print(self.center['channel'].recv(1000).decode())
+        print(self.center['channel'].recv(10000).decode())
         for worker in self.workers:
             channel = worker['channel']
             address = worker['address']
             channel.settimeout(1)
             print("Worker: %s\n---------" % address+ '-' * len(address))
-            print(channel.recv(1000).decode())
+            print(channel.recv(10000).decode())
 
     def add_worker(self, address):
         self.workers.append(assoc(start_worker(self.center['address'], address),
