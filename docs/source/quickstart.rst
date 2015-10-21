@@ -13,10 +13,10 @@ Setup Cluster
 
 Set up a fake cluster on your local computer::
 
-   $ bin/dcenter & \
-     bin/dworker 127.0.0.1:8787 & \
-     bin/dworker 127.0.0.1:8787 & \
-     bin/dworker 127.0.0.1:8787 &
+   $ dcenter & \
+     dworker 127.0.0.1:8787 & \
+     dworker 127.0.0.1:8787 & \
+     dworker 127.0.0.1:8787 &
 
 Or if you can ssh into your own computer (or others) then use the ``dcluster``
 command, providing hostnames or IP addresses::
