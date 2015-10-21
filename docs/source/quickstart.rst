@@ -93,4 +93,14 @@ Get works with dask collections (like dask.array or dask.dataframe):
    >>> x.sum().compute(get=executor.get)
    45
 
+Shutdown
+~~~~~~~~
+
+Shut down the executor (and background thread) with the shutdown method.  This
+does not close the worker processes.
+
+.. code-block:: python
+
+   >>> executor.shutdown()
+
 See :doc:`executor <executor>` for advanced use.
