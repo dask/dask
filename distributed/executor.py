@@ -300,9 +300,18 @@ class Executor(object):
         futures2, keys = unpack_remotedata(futures)
         keys = list(keys)
 
-        yield All([self.futures[key]['event'].wait() for key in keys])
+        while True:
+            yield All([self.futures[key]['event'].wait() for key in keys])
+            try:
+                data = yield _gather(self.center, keys)
+            except KeyError as e:
+                self.scheduler_queue.put_nowait({'op': 'missing-data',
+                                                 'missing': e.args})
+                for key in e.args:
+                    self.futures[key]['event'].clear()
+            else:
+                break
 
-        data = yield _gather(self.center, keys)
         data = dict(zip(keys, data))
 
         result = pack_data(futures2, data)

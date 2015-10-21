@@ -474,7 +474,7 @@ def test_missing_worker():
         c.who_has['b'] = {bad}
         c.has_what[bad] = {'b'}
 
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
+        e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
 
         dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
@@ -482,6 +482,29 @@ def test_missing_worker():
         result = yield e._get(dsk, 'c')
         assert result == 3
         assert bad not in e.ncores
+
+        yield e._shutdown()
+
+    _test_cluster(f)
+
+
+def test_gather_robust_to_missing_data():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        x, y, z = e.map(inc, range(3))
+        yield _wait([x, y, z])  # everything computed
+
+        for q in [x, y]:
+            if q.key in a.data:
+                del a.data[q.key]
+            if q.key in b.data:
+                del b.data[q.key]
+
+        xx, yy, zz = yield e._gather([x, y, z])
+        assert (xx, yy, zz) == (1, 2, 3)
 
         yield e._shutdown()
 

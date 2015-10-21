@@ -183,7 +183,7 @@ class Worker(Server):
         raise Return(b'OK')
 
     def get_data(self, stream, keys=None):
-        return {k: self.data[k] for k in keys}
+        return {k: self.data[k] for k in keys if k in self.data}
 
 
 job_counter = [0]

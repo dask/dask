@@ -90,7 +90,6 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
             elif isinstance(response, KeyError):
                 scheduler_queue.put_nowait({'op': 'task-missing-data',
                                             'key': key,
-                                            'worker': ident,
                                             'missing': response.args})
 
             else:
@@ -301,18 +300,20 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             in_play.remove(msg['key'])
             report_queue.put_nowait(msg)
 
-        elif msg['op'] == 'task-missing-data':
-            key = msg['key']
+        elif msg['op'] in ('missing-data', 'task-missing-data'):
             missing = set(msg['missing'])
             logger.debug("Recovering missing data: %s", missing)
-            with ignoring(KeyError):
-                processing[worker].remove(key)
             for k in missing:
                 workers = who_has.pop(k)
                 for worker in workers:
                     has_what[worker].remove(k)
             my_heal_missing_data(missing)
-            waiting[key] = missing
+
+            if msg['op'] == 'task-missing-data':
+                key = msg['key']
+                with ignoring(KeyError):
+                    processing[worker].remove(key)
+                waiting[key] = missing
 
             seed_ready_tasks()
 
