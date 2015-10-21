@@ -11,14 +11,15 @@ Install
 Setup Cluster
 -------------
 
-Set up a local cluster::
+Set up a fake cluster on your local computer::
 
    $ bin/dcenter & \
      bin/dworker 127.0.0.1:8787 & \
      bin/dworker 127.0.0.1:8787 & \
      bin/dworker 127.0.0.1:8787 &
 
-Or if you can ssh into your own computer use the ``dcluster`` command::
+Or if you can ssh into your own computer (or others) then use the ``dcluster``
+command, providing hostnames or IP addresses::
 
    $ dcenter 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
 
@@ -27,15 +28,18 @@ See :doc:`setup <setup>` for advanced use.
 Launch Executor
 ---------------
 
-Launch an Executor to interact with the network.  Point to the center IP/port.
+Launch an Executor to interact with the network.  Point to the center
+IP/port.::
+
+   $ ipython
 
 .. code-block:: python
 
    >>> from distributed import Executor
    >>> executor = Executor('127.0.0.1:8787')
 
-Map and Submit
-~~~~~~~~~~~~~~
+Map and Submit Functions
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Use the ``map`` and ``submit`` methods to launch computation on the cluster.
 Results of these functions are ``Future`` objects that proxy remote data on the
