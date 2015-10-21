@@ -11,7 +11,7 @@ from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed)
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.utils_test import cluster
+from distributed.utils_test import cluster, slow
 
 
 def inc(x):
@@ -461,5 +461,28 @@ def test_missing_data_heals():
 
         result = yield w._result()
         assert result == 3 + 4
+
+    _test_cluster(f)
+
+
+@slow
+def test_missing_worker():
+    @gen.coroutine
+    def f(c, a, b):
+        bad = ('bad-host', 8788)
+        c.ncores[bad] = 4
+        c.who_has['b'] = {bad}
+        c.has_what[bad] = {'b'}
+
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
+
+        result = yield e._get(dsk, 'c')
+        assert result == 3
+        assert bad not in e.ncores
+
+        yield e._shutdown()
 
     _test_cluster(f)

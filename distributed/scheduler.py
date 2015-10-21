@@ -36,7 +36,7 @@ def worker(scheduler_queue, worker_queue, ident, ncores):
     try:
         yield All([worker_core(scheduler_queue, worker_queue, ident, i)
                 for i in range(ncores)])
-    except StreamClosedError:
+    except OSError:
         logger.info("Worker failed from closed stream: %s", ident)
         scheduler_queue.put_nowait({'op': 'worker-failed',
                                     'worker': ident})
