@@ -1,5 +1,5 @@
-Basic Model and Quickstart
-==========================
+Quickstart
+==========
 
 Install
 -------

@@ -6,8 +6,9 @@
 distributed
 ===========
 
-Distributed is a lightweight library for distributed computing in Python.
-It extends the both the ``concurrent.futures`` and ``dask`` APIs to moderate sized clusters.  See :doc:`quickstart <quickstart>` to get started.
+Distributed is a lightweight library for distributed computing in Python.  It
+extends both the ``concurrent.futures`` and ``dask`` APIs to moderate sized
+clusters.  See :doc:`the quickstart <quickstart>` to get started.
 
 This library is experimental, broken, and unstable.
 
