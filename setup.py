@@ -9,7 +9,7 @@ if sys.version_info[0] < 3:
     requires.append('futures')
 
 setup(name='distributed',
-      version='1.2.0',
+      version='1.2.1',
       description='Distributed computing',
       url='http://distributed.readthedocs.org/en/latest/',
       maintainer='Matthew Rocklin',

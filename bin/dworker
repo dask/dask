@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import logging
 from sys import argv, exit
 import socket
 
@@ -7,6 +8,8 @@ import click
 from distributed import Worker
 from distributed.utils import get_ip
 from tornado.ioloop import IOLoop
+
+logger = logging.getLogger('distributed.dworker')
 
 ip = get_ip()
 
@@ -30,7 +33,7 @@ def go(center, host, port):
         try:
             sock.bind(('127.0.0.1', port))
         except socket.error:
-            print("Port %d taken.  Trying %d" % (port, port + 1))
+            logger.info("Port %d taken.  Trying %d", port, port + 1)
             port += 1
         else:
             sock.close()
@@ -40,7 +43,7 @@ def go(center, host, port):
         center_ip, center_port = center.split(':')
         center_port = int(center_port)
     except IndexError:
-        print("Usage:  dworker center_host:center_port")
+        logger.info("Usage:  dworker center_host:center_port")
     try:
         worker = Worker(host, port, center_ip, center_port)
         worker.start()
@@ -49,7 +52,7 @@ def go(center, host, port):
         assert worker.status == 'closed'
 
     IOLoop.current().close()
-    print("\nEnd worker at %s:%d\n" % (ip, port))
+    logger.info("\nEnd worker at %s:%d\n", ip, port)
 
 if __name__ == '__main__':
     go()

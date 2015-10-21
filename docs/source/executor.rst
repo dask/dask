@@ -130,6 +130,10 @@ results like the following don't require any data transfer.
 
    >>> y = executor.submit(inc, x)  # no data transfer required
 
+In addition, the internal scheduler endeavors to run functions on worker
+nodes that already have the necessary input data.  It avoids worker-to-worker
+communication when convenient.
+
 Pure Functions by Default
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -147,17 +151,17 @@ the Future object.
    'add-ebf39f96ad7174656f97097d658f3fa2'
 
 This key should be the same accross all computations with the same inputs and
-across all machines.  If you run the computation above you should get the exact
-same key.
+across all machines.  If you run the computation above on any computer with the
+same environment then you should get the exact same key.
 
 The scheduler avoids redundant computations.  If the result is already in
 memory from a previous call then that old result will be used rather than
-recreating it.
+recomputing it.  Calls to submit or map are idempotent in the common case.
 
 While convenient, this feature may be undesired for impure functions, like
 ``random``.  In these cases two calls to the same function with the same inputs
 should produce different results.  We accomplish this with the ``pure=False``
-keyword argument.
+keyword argument.  In this case keys are randomly generated (by ``uuid4``.)
 
 .. code-block:: python
 
@@ -176,26 +180,27 @@ executor can clean up unused results by reference counting.
 
 The executor reference counts ``Future`` objects.  When a particular key no
 longer has any Future objects pointing to it it will be released from
-distributed memory if no known computations still require it.
+distributed memory if no active computations still require it.
 
 In this way garbage collection in the distributed memory space of your cluster
 mirrors garbage collection within your local Python session.
 
-Known futures and reference counts can be found in the following dictionaries
+Known future keys and reference counts can be found in the following
+dictionaries:
 
 .. code-block:: python
 
    >>> executor.futures
    >>> executor.refcount
 
-Also note that the scheduler cleans up intermediate results when provided full
-dask graphs.  Also, you can always use the ``delete`` or ``clear`` functions in
-``distributed.client`` to manage data manually.
+The scheduler also cleans up intermediate results when provided full dask
+graphs.  You can always use the lower level ``delete`` or ``clear`` functions
+in ``distributed.client`` to manage data manually.
 
 Dask Graph
 ~~~~~~~~~~
 
-The executor and scheduler maintains a dask graph of all known computations.
+The executor and scheduler maintain a dask graph of all known computations.
 This graph is accessible via the ``.dask`` attribute.  At times it may be worth
 visualizing this object.
 
@@ -217,10 +222,10 @@ The dask graph is also used to recover results in case of failure.
 Coroutines
 ~~~~~~~~~~
 
-If you are operating in an asynchronous environment then all functions listed
-here have asynchronous equivalents.  Currently these have the exact same name
-but are prepended with an underscore (``_``) so, ``.result`` is synchronous
-while ``._result`` is asynchronous.  If a function has no asynchronous
-counterpart then that means it does not significantly block.  The ``.submit``
-and ``.map`` functions are examples of this; they return immediately in either
-case.
+If you are operating in an asynchronous environment then all blocking functions
+listed above have asynchronous equivalents.  Currently these have the exact
+same name but are prepended with an underscore (``_``) so, ``.result`` is
+synchronous while ``._result`` is asynchronous.  If a function has no
+asynchronous counterpart then that means it does not significantly block.  The
+``.submit`` and ``.map`` functions are examples of this; they return
+immediately in either case.
