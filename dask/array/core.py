@@ -2327,7 +2327,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     if weights is None:
         dsk = dict(((name, i, 0), (block_hist, k))
                     for i, k in enumerate(core.flatten(a._keys())))
-        dtype = int
+        dtype = np.histogram([])[0].dtype
     else:
         a_keys = core.flatten(a._keys())
         w_keys = core.flatten(weights._keys())
