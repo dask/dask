@@ -647,9 +647,9 @@ def decide_worker(dependencies, stacks, who_has, restrictions, key):
         workers = stacks
     if key in restrictions:
         r = restrictions[key]
-        workers = {w for w in r if w in workers}
+        workers = {w for w in workers if w[0] in r}  # TODO: nonlinear
         if not workers:
-            workers = {w for w in r if w in stacks}
+            workers = {w for w in stacks if w[0] in r}
             if not workers:
                 raise ValueError("Task has no valid workers", key, r)
 

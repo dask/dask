@@ -218,8 +218,8 @@ class Executor(object):
             Whether or not the function is pure.  Set ``pure=False`` for
             impure functions like ``np.random.random``.
         workers: set, iterable of sets
-            A set of workers on which these computations may be performed.
-            Defaults to all workers
+            A set of worker hostnames on which computations may be performed.
+            Leave empty to default to all workers (common case)
 
         Examples
         --------
@@ -283,8 +283,8 @@ class Executor(object):
             Whether or not the function is pure.  Set ``pure=False`` for
             impure functions like ``np.random.random``.
         workers: set, iterable of sets
-            A set of workers on which these computations may be performed.
-            Defaults to all workers
+            A set of worker hostnames on which computations may be performed.
+            Leave empty to default to all workers (common case)
 
         Examples
         --------
@@ -402,8 +402,8 @@ class Executor(object):
         dsk: dict
         keys: object, or nested lists of objects
         restrictions: dict (optional)
-            A mapping of {key: {set of workers}} that restricts where jobs can
-            take place
+            A mapping of {key: {set of worker hostnames}} that restricts where
+            jobs can take place
 
         Examples
         --------

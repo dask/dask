@@ -292,20 +292,21 @@ def test_decide_worker_with_many_independent_leaves():
 
 def test_decide_worker_with_restrictions():
     dependencies = {'x': set()}
-    stacks = {'alice': [], 'bob': [], 'charlie': []}
+    alice, bob, charlie = ('alice', 8000), ('bob', 8000), ('charlie', 8000)
+    stacks = {alice: [], bob: [], charlie: []}
     who_has = {}
     restrictions = {'x': {'alice', 'charlie'}}
     result = decide_worker(dependencies, stacks, who_has, restrictions, 'x')
-    assert result in {'alice', 'charlie'}
+    assert result in {alice, charlie}
 
-    stacks = {'alice': [1, 2, 3], 'bob': [], 'charlie': [4, 5, 6]}
+    stacks = {alice: [1, 2, 3], bob: [], charlie: [4, 5, 6]}
     result = decide_worker(dependencies, stacks, who_has, restrictions, 'x')
-    assert result in {'alice', 'charlie'}
+    assert result in {alice, charlie}
 
     dependencies = {'x': {'y'}}
-    who_has = {'y': {'bob'}}
+    who_has = {'y': {bob}}
     result = decide_worker(dependencies, stacks, who_has, restrictions, 'x')
-    assert result in {'alice', 'charlie'}
+    assert result in {alice, charlie}
 
 
 def test_validate_state():
@@ -361,19 +362,20 @@ def test_validate_state():
 
 
 def test_assign_many_tasks():
+    alice, bob, charlie = ('alice', 8000), ('bob', 8000), ('charlie', 8000)
     dependencies = {'y': {'x'}, 'b': {'a'}, 'x': set(), 'a': set()}
     waiting = {'y': set(), 'b': {'a'}, 'a': set()}
     keyorder = {c: 1 for c in 'abxy'}
-    who_has = {'x': {'alice'}}
-    stacks = {'alice': [], 'bob': []}
+    who_has = {'x': {alice}}
+    stacks = {alice: [], bob: []}
     restrictions = {}
     keys = ['y', 'a']
 
     new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
                                    stacks, restrictions, ['y', 'a'])
 
-    assert 'y' in stacks['alice']
-    assert 'a' in stacks['alice'] + stacks['bob']
+    assert 'y' in stacks[alice]
+    assert 'a' in stacks[alice] + stacks[bob]
     assert 'a' not in waiting
     assert 'y' not in waiting
 
@@ -381,19 +383,20 @@ def test_assign_many_tasks():
 
 
 def test_assign_many_tasks_with_restrictions():
+    alice, bob, charlie = ('alice', 8000), ('bob', 8000), ('charlie', 8000)
     dependencies = {'y': {'x'}, 'b': {'a'}, 'x': set(), 'a': set()}
     waiting = {'y': set(), 'b': {'a'}, 'a': set()}
     keyorder = {c: 1 for c in 'abxy'}
-    who_has = {'x': {'alice'}}
-    stacks = {'alice': [], 'bob': []}
+    who_has = {'x': {alice}}
+    stacks = {alice: [], bob: []}
     restrictions = {'y': {'bob'}, 'a': {'alice'}}
     keys = ['y', 'a']
 
     new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
                                    stacks, restrictions, ['y', 'a'])
 
-    assert 'y' in stacks['bob']
-    assert 'a' in stacks['alice']
+    assert 'y' in stacks[bob]
+    assert 'a' in stacks[alice]
     assert 'a' not in waiting
     assert 'y' not in waiting
 

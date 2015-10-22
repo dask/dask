@@ -27,9 +27,9 @@ def _test_cluster(f):
     def g():
         c = Center('127.0.0.1', 8017)
         c.listen(c.port)
-        a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=2)
+        a = Worker('127.0.0.2', 8018, c.ip, c.port, ncores=2)
         yield a._start()
-        b = Worker('127.0.0.1', 8019, c.ip, c.port, ncores=1)
+        b = Worker('127.0.0.3', 8019, c.ip, c.port, ncores=1)
         yield b._start()
 
         while len(c.ncores) < 2:
@@ -530,14 +530,14 @@ def test_restrictions_submit():
         e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
 
-        x = e.submit(inc, 1, workers={a.address})
-        y = e.submit(inc, x, workers={b.address})
+        x = e.submit(inc, 1, workers={a.ip})
+        y = e.submit(inc, x, workers={b.ip})
         yield _wait([x, y])
 
-        assert e.restrictions[x.key] == {a.address}
+        assert e.restrictions[x.key] == {a.ip}
         assert x.key in a.data
 
-        assert e.restrictions[y.key] == {b.address}
+        assert e.restrictions[y.key] == {b.ip}
         assert y.key in b.data
 
         yield e._shutdown()
@@ -550,25 +550,25 @@ def test_restrictions_map():
         e = Executor((c.ip, c.port), start=False)
         IOLoop.current().spawn_callback(e._go)
 
-        L = e.map(inc, range(5), workers={a.address})
+        L = e.map(inc, range(5), workers={a.ip})
         yield _wait(L)
 
         assert set(a.data) == {x.key for x in L}
         assert not b.data
         for x in L:
-            assert e.restrictions[x.key] == {a.address}
+            assert e.restrictions[x.key] == {a.ip}
 
-        L = e.map(inc, [10, 11, 12], workers=[{a.address},
-                                              {a.address, b.address},
-                                              {b.address}])
+        L = e.map(inc, [10, 11, 12], workers=[{a.ip},
+                                              {a.ip, b.ip},
+                                              {b.ip}])
         yield _wait(L)
 
-        assert e.restrictions[L[0].key] == {a.address}
-        assert e.restrictions[L[1].key] == {a.address, b.address}
-        assert e.restrictions[L[2].key] == {b.address}
+        assert e.restrictions[L[0].key] == {a.ip}
+        assert e.restrictions[L[1].key] == {a.ip, b.ip}
+        assert e.restrictions[L[2].key] == {b.ip}
 
         with pytest.raises(ValueError):
-            e.map(inc, [10, 11, 12], workers=[{a.address}])
+            e.map(inc, [10, 11, 12], workers=[{a.ip}])
 
         yield e._shutdown()
     _test_cluster(f)
@@ -580,7 +580,7 @@ def test_restrictions_get():
         IOLoop.current().spawn_callback(e._go)
 
         dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
-        restrictions = {'y': {a.address}, 'z': {b.address}}
+        restrictions = {'y': {a.ip}, 'z': {b.ip}}
 
         result = yield e._get(dsk, 'z', restrictions)
         assert result == 3
