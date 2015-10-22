@@ -137,7 +137,7 @@ communication when convenient.
 Pure Functions by Default
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By default we assume that all functions are pure.  If this is not the case you
+By default we assume that all functions are pure_.  If this is not the case you
 should use the ``pure=False`` keyword argument.
 
 The executor associates a key to all computations.  This key is accessible on
@@ -171,6 +171,8 @@ keyword argument.  In this case keys are randomly generated (by ``uuid4``.)
    >>> executor.submit(np.random.random, 1000, pure=False).key
    'random_sample-a24e7220-a113-47f2-a030-72209439f093'
 
+
+.. _pure: http://toolz.readthedocs.org/en/latest/purity.html
 
 Garbage Collection
 ~~~~~~~~~~~~~~~~~~
