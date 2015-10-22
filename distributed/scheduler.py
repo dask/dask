@@ -183,6 +183,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         dsk = dict()
     dependencies = dict()
     dependents = dict()
+    restrictions = dict()
     waiting = dict()
     waiting_data = dict()
     in_play = set(who_has)  # keys in memory, stacks, processing, or waiting
@@ -223,7 +224,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
     def seed_ready_tasks():
         """ Distribute leaves among workers """
-        new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
+        new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
+                                       stacks, restrictions,
                                        [k for k, deps in waiting.items() if not deps])
         for worker, stack in new_stacks.items():
             if stack:
@@ -609,34 +611,47 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
     return output
 
 
-def decide_worker(dependencies, stacks, who_has, key):
+def decide_worker(dependencies, stacks, who_has, restrictions, key):
     """ Decide which worker should take task
 
     >>> dependencies = {'c': {'b'}, 'b': {'a'}}
     >>> stacks = {'alice': ['z'], 'bob': []}
     >>> who_has = {'a': {'alice'}}
+    >>> restrictions = {}
 
     We choose the worker that has the data on which 'b' depends (alice has 'a')
 
-    >>> decide_worker(dependencies, stacks, who_has, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
     'alice'
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
 
     >>> who_has = {'a': {'alice', 'bob'}}
-    >>> decide_worker(dependencies, stacks, who_has, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
     'bob'
+
+    Optionally provide restrictions of where jobs are allowed to occur
+
+    >>> restrictions = {'b': {'alice', 'charile'}}
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
+    'alice'
     """
     deps = dependencies[key]
     workers = frequencies(w for dep in deps
                             for w in who_has[dep])
     if not workers:
         workers = stacks
+    if key in restrictions:
+        r = restrictions[key]
+        workers = {w for w in r if w in workers}
+        if not workers:
+            workers = r
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
 
 
-def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
+def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
+        restrictions, keys):
     """ Assign many new ready tasks to workers
 
     Often at the beginning of computation we have to assign many new leaves to
@@ -656,7 +671,7 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
 
     for k in keys:
         assert not waiting.pop(k)
-        if not dependencies[k]:
+        if not dependencies[k] and k not in restrictions:
             leaves.append(k)
         else:
             ready.append(k)
@@ -670,7 +685,7 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks, keys):
         stacks[worker].extend(keys)
 
     for key in ready:
-        worker = decide_worker(dependencies, stacks, who_has, key)
+        worker = decide_worker(dependencies, stacks, who_has, restrictions, key)
         new_stacks[worker].append(key)
         stacks[worker].append(key)
 
