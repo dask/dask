@@ -8,6 +8,7 @@ Create and Store Arrays
 
 .. autosummary::
    from_array
+   from_imperative
    store
 
 Specialized Functions for Dask.Array

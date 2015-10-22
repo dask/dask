@@ -1227,6 +1227,33 @@ def from_array(x, chunks, name=None, lock=False):
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
+def from_imperative(value, shape, dtype=None, name=None):
+    """ Create a dask array from a dask imperative value
+
+    This routine is useful for constructing dask arrays in an ad-hoc fashion
+    using dask imperative, particularly when combined with stack and
+    concatenate.
+
+    The dask array will consist of a single chunk.
+
+    Examples
+    --------
+
+    >>> from dask import do
+    >>> value = do(np.ones)(5)
+    >>> array = from_imperative(value, (5,), dtype=float)
+    >>> array
+    dask.array<from-va..., shape=(5,), dtype=float64, chunksize=(5,)>
+    >>> array.compute()
+    array([ 1.,  1.,  1.,  1.,  1.])
+    """
+    name = name or 'from-value-' + tokenize(value, shape, dtype)
+    dsk = {(name,) + (0,) * len(shape): value.key}
+    dsk.update(value.dask)
+    chunks = tuple((d,) for d in shape)
+    return Array(dsk, name, chunks, dtype)
+
+
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     """ Create dask array in a single block by calling a function
 
