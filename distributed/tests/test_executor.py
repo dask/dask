@@ -573,6 +573,22 @@ def test_restrictions_map():
         yield e._shutdown()
     _test_cluster(f)
 
+def test_restrictions_get():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
+        restrictions = {'y': {a.address}, 'z': {b.address}}
+
+        result = yield e._get(dsk, 'z', restrictions)
+        assert result == 3
+        assert 'y' in a.data
+        assert 'z' in b.data
+
+        yield e._shutdown()
+    _test_cluster(f)
 
 def dont_test_bad_restrictions_raise_exception():
     @gen.coroutine

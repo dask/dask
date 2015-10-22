@@ -378,7 +378,7 @@ class Executor(object):
         return sync(self.loop, self._gather, futures)
 
     @gen.coroutine
-    def _get(self, dsk, keys):
+    def _get(self, dsk, keys, restrictions=None):
         flatkeys = list(flatten(keys))
         for key in flatkeys:
             if key not in self.futures:
@@ -387,16 +387,23 @@ class Executor(object):
 
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': dsk,
-                                         'keys': flatkeys})
+                                         'keys': flatkeys,
+                                         'restrictions': restrictions or {}})
 
         packed = pack_data(keys, futures)
         result = yield self._gather(packed)
         raise gen.Return(result)
 
-    def get(self, dsk, keys):
+    def get(self, dsk, keys, **kwargs):
         """ Gather futures from distributed memory
 
-        Accepts a future or any nested core container of futures
+        Parameters
+        ----------
+        dsk: dict
+        keys: object, or nested lists of objects
+        restrictions: dict (optional)
+            A mapping of {key: {set of workers}} that restricts where jobs can
+            take place
 
         Examples
         --------
@@ -405,7 +412,7 @@ class Executor(object):
         >>> e.get({'x': (add, 1, 2)}, 'x')  # doctest: +SKIP
         3
         """
-        return sync(self.loop, self._get, dsk, keys)
+        return sync(self.loop, self._get, dsk, keys, **kwargs)
 
 
 @gen.coroutine
