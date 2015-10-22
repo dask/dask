@@ -1,6 +1,6 @@
 package:
   name: dask
-  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.7.3') }}
+  version: {{ environ.get('GIT_DESCRIBE_TAG', '0.7.4') }}
 
 build:
   number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
