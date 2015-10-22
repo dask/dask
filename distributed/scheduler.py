@@ -151,7 +151,7 @@ def delete(scheduler_queue, delete_queue, ip, port, batch_time=1):
 
 @gen.coroutine
 def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
-              who_has, has_what, ncores, dsk=None):
+              who_has, has_what, ncores, dsk=None, restrictions=None):
     """ The scheduler coroutine for dask scheduling
 
     This coroutine manages interactions with all worker cores and with the
@@ -181,9 +181,10 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     held_data = set()
     if dsk is None:
         dsk = dict()
+    if restrictions is None:
+        restrictions = dict()
     dependencies = dict()
     dependents = dict()
-    restrictions = dict()
     waiting = dict()
     waiting_data = dict()
     in_play = set(who_has)  # keys in memory, stacks, processing, or waiting
@@ -207,7 +208,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         """ Send task to an appropriate worker, trigger worker if idle """
         if key in waiting:
             del waiting[key]
-        new_worker = decide_worker(dependencies, stacks, who_has, key)
+
+        new_worker = decide_worker(dependencies, stacks, who_has, restrictions, key)
         stacks[new_worker].append(key)
         ensure_occupied(new_worker)
 
@@ -258,6 +260,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             update_state(dsk, dependencies, dependents, held_data,
                          set(who_has), in_play,
                          waiting, waiting_data, new_dsk, new_keys)
+
+            restrictions.update(msg.get('restrictions', {}))
 
             new_keyorder = order(new_dsk)
             for key in new_keyorder:
@@ -645,7 +649,10 @@ def decide_worker(dependencies, stacks, who_has, restrictions, key):
         r = restrictions[key]
         workers = {w for w in r if w in workers}
         if not workers:
-            workers = r
+            workers = {w for w in r if w in stacks}
+            if not workers:
+                raise ValueError("Task has no valid workers", key, r)
+
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
 

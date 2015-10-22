@@ -107,6 +107,7 @@ class Executor(object):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.dask = dict()
+        self.restrictions = dict()
         self.loop = IOLoop()
         self.report_queue = Queue()
         self.scheduler_queue = Queue()
@@ -196,7 +197,7 @@ class Executor(object):
             self.report(),
             scheduler(self.scheduler_queue, self.report_queue, worker_queues,
                       delete_queue, self.who_has, self.has_what, self.ncores,
-                      self.dask),
+                      self.dask, self.restrictions),
             delete(self.scheduler_queue, delete_queue,
                    self.center.ip, self.center.port, self._delete_batch_time)]
          + [worker(self.scheduler_queue, worker_queues[w], w, n)
@@ -225,6 +226,7 @@ class Executor(object):
 
         key = kwargs.pop('key', None)
         pure = kwargs.pop('pure', True)
+        workers = kwargs.pop('workers', None)
 
         if key is None:
             if pure:
@@ -240,13 +242,19 @@ class Executor(object):
         else:
             task = (func,) + args
 
+        if workers is not None:
+            restrictions = {key: workers}
+        else:
+            restrictions = {}
+
         if key not in self.futures:
             self.futures[key] = {'event': Event(), 'status': 'waiting'}
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': {key: task},
-                                         'keys': [key]})
+                                         'keys': [key],
+                                         'restrictions': restrictions})
 
         return Future(key, self)
 

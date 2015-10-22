@@ -522,3 +522,23 @@ def test_tokenize_on_futures():
     e.futures[x.key]['status'] = 'finished'
 
     assert tok == tokenize(y)
+
+
+def test_restrictions():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(inc, 1, workers={a.address})
+        y = e.submit(inc, x, workers={b.address})
+        yield _wait([x, y])
+
+        assert e.restrictions[x.key] == {a.address}
+        assert x.key in a.data
+
+        assert e.restrictions[y.key] == {b.address}
+        assert y.key in b.data
+
+        yield e._shutdown()
+    _test_cluster(f)
