@@ -3,12 +3,12 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 from concurrent.futures._base import DoneAndNotDoneFutures
 from concurrent import futures
-from functools import wraps
+from functools import wraps, partial
 import itertools
 import logging
 import uuid
 
-from dask.base import tokenize
+from dask.base import tokenize, normalize_token
 from dask.core import flatten
 from toolz import first, groupby, valmap
 from tornado import gen
@@ -73,6 +73,11 @@ class Future(WrappedKey):
         return '<Future: status: %s, key: %s>' % (self.status, self.key)
 
     __repr__ = __str__
+
+
+@partial(normalize_token.register, Future)
+def normalize_future(f):
+    return [f.key, type(f)]
 
 
 class Executor(object):

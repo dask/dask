@@ -8,7 +8,7 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
-        as_completed)
+        as_completed, tokenize)
 from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.utils_test import cluster, slow
@@ -509,3 +509,16 @@ def test_gather_robust_to_missing_data():
         yield e._shutdown()
 
     _test_cluster(f)
+
+
+def test_tokenize_on_futures():
+    e = Executor((None, None), start=False)
+    x = e.submit(inc, 1)
+    y = e.submit(inc, 1)
+    tok = tokenize(x)
+    assert tokenize(x) == tokenize(x)
+    assert tokenize(x) == tokenize(y)
+
+    e.futures[x.key]['status'] = 'finished'
+
+    assert tok == tokenize(y)
