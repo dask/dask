@@ -32,6 +32,7 @@ Other functions
 ~~~~~~~~~~~~~~~
 
 .. autofunction:: from_array
+.. autofunction:: from_imperative
 .. autofunction:: store
 .. autofunction:: topk
 .. autofunction:: coarsen
