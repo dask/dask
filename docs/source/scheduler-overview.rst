@@ -7,7 +7,10 @@ implements a few different schedulers:
 - ``dask.threaded.get``: a scheduler backed by a thread pool
 - ``dask.multiprocessing.get``: a scheduler backed by a process pool
 - ``dask.async.get_sync``: a synchronous scheduler, good for debugging
-- ``dask.distributed``: a distributed scheduler for executing graphs on multiple machines
+- ``distributed.Executor.get``: a distributed scheduler for executing graphs
+   on multiple machines.  This lives in the external distributed_ project.
+
+.. _distributed: http://distributed.readthedocs.org/en/latest/
 
 
 The ``get`` function
@@ -167,4 +170,4 @@ More Information
 
 - See :doc:`shared` for information on the design of the shared memory
   (threaded or multiprocessing) schedulers
-- See :doc:`distributed` for documentation on the distributed scheduler
+- See distributed_ for information on the distributed memory scheduler

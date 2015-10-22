@@ -8,7 +8,6 @@ extras_require = {
   'array': ['numpy', 'toolz >= 0.7.2'],
   'bag': ['dill', 'toolz >= 0.7.2', 'partd >= 0.3.2'],
   'dataframe': ['numpy', 'pandas >= 0.16.0', 'toolz >= 0.7.2', 'partd >= 0.3.2'],
-  'distributed': ['pyzmq', 'dill']
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
 
@@ -21,7 +20,7 @@ setup(name='dask',
       license='BSD',
       keywords='task-scheduling parallelism',
       packages=['dask', 'dask.array', 'dask.bag', 'dask.store',
-                'dask.dataframe', 'dask.diagnostics', 'dask.distributed'],
+                'dask.dataframe', 'dask.diagnostics'],
       long_description=(open('README.rst').read() if exists('README.rst')
                         else ''),
       extras_require=extras_require,
