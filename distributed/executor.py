@@ -209,6 +209,18 @@ class Executor(object):
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler
 
+        Parameters
+        ----------
+        func: callable
+        *args:
+        **kwargs:
+        pure: bool (defaults to True)
+            Whether or not the function is pure.  Set ``pure=False`` for
+            impure functions like ``np.random.random``.
+        workers: set, iterable of sets
+            A set of workers on which these computations may be performed.
+            Defaults to all workers
+
         Examples
         --------
         >>> c = executor.submit(add, a, b)  # doctest: +SKIP
@@ -270,6 +282,9 @@ class Executor(object):
         pure: bool (defaults to True)
             Whether or not the function is pure.  Set ``pure=False`` for
             impure functions like ``np.random.random``.
+        workers: set, iterable of sets
+            A set of workers on which these computations may be performed.
+            Defaults to all workers
 
         Examples
         --------
@@ -284,6 +299,7 @@ class Executor(object):
         distributed.executor.Executor.submit
         """
         pure = kwargs.get('pure', True)
+        workers = kwargs.get('workers', None)
         if not callable(func):
             raise TypeError("First input to map must be a callable function")
         iterables = [list(it) for it in iterables]
@@ -301,10 +317,24 @@ class Executor(object):
             if key not in self.futures:
                 self.futures[key] = {'event': Event(), 'status': 'waiting'}
 
+        if isinstance(workers, (list, set)):
+            if workers and isinstance(first(workers), (list, set)):
+                if len(workers) != len(keys):
+                    raise ValueError("You only provided %d worker restrictions"
+                    " for a sequence of length %d" % (len(workers), len(keys)))
+                restrictions = dict(zip(keys, workers))
+            else:
+                restrictions = {key: workers for key in keys}
+        elif workers is None:
+            restrictions = {}
+        else:
+            raise TypeError("Workers must be a list or set of workers or None")
+
         logger.debug("map(%s, ...)", funcname(func))
         self.scheduler_queue.put_nowait({'op': 'update-graph',
                                          'dsk': dsk,
-                                         'keys': keys})
+                                         'keys': keys,
+                                         'restrictions': restrictions})
 
         return [Future(key, self) for key in keys]
 

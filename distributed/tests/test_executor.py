@@ -524,7 +524,7 @@ def test_tokenize_on_futures():
     assert tok == tokenize(y)
 
 
-def test_restrictions():
+def test_restrictions_submit():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
@@ -539,6 +539,54 @@ def test_restrictions():
 
         assert e.restrictions[y.key] == {b.address}
         assert y.key in b.data
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def test_restrictions_map():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        L = e.map(inc, range(5), workers={a.address})
+        yield _wait(L)
+
+        assert set(a.data) == {x.key for x in L}
+        assert not b.data
+        for x in L:
+            assert e.restrictions[x.key] == {a.address}
+
+        L = e.map(inc, [10, 11, 12], workers=[{a.address},
+                                              {a.address, b.address},
+                                              {b.address}])
+        yield _wait(L)
+
+        assert e.restrictions[L[0].key] == {a.address}
+        assert e.restrictions[L[1].key] == {a.address, b.address}
+        assert e.restrictions[L[2].key] == {b.address}
+
+        with pytest.raises(ValueError):
+            e.map(inc, [10, 11, 12], workers=[{a.address}])
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def dont_test_bad_restrictions_raise_exception():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        z = e.submit(inc, 2, workers={'bad-address'})
+        try:
+            yield z._result()
+            assert False
+        except ValueError as e:
+            assert 'bad-address' in str(e)
+            assert z.key in str(e)
 
         yield e._shutdown()
     _test_cluster(f)
