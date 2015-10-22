@@ -1227,8 +1227,8 @@ def from_array(x, chunks, name=None, lock=False):
     return Array(merge({name: x}, dsk), name, chunks, dtype=x.dtype)
 
 
-def from_value(value, shape, dtype=None, name=None):
-    """ Create a dask array from a dask value
+def from_imperative(value, shape, dtype=None, name=None):
+    """ Create a dask array from a dask imperative value
 
     This routine is useful for constructing dask arrays in an ad-hoc fashion
     using dask imperative, particularly when combined with stack and
@@ -1241,7 +1241,7 @@ def from_value(value, shape, dtype=None, name=None):
 
     >>> from dask import do
     >>> value = do(np.ones)(5)
-    >>> array = from_value(value, (5,), dtype=float)
+    >>> array = from_imperative(value, (5,), dtype=float)
     >>> array
     dask.array<from-va..., shape=(5,), dtype=float64, chunksize=(5,)>
     >>> array.compute()
