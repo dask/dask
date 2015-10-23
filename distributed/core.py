@@ -168,15 +168,17 @@ def pingpong(stream):
 @gen.coroutine
 def connect(ip, port, timeout=1):
     client = TCPClient()
-    try:
-        stream = yield client.connect(ip, port)
-        raise Return(stream)
-    except StreamClosedError:
-        if time() - start < timeout:
-            yield gen.sleep(0.01)
-            print("sleeping on connect")
-        else:
-            raise
+    start = time()
+    while True:
+        try:
+            stream = yield client.connect(ip, port)
+            raise Return(stream)
+        except StreamClosedError:
+            if time() - start < timeout:
+                yield gen.sleep(0.01)
+                logger.debug("sleeping on connect")
+            else:
+                raise
 
 
 @gen.coroutine
