@@ -1,9 +1,11 @@
 from operator import add
 
 from collections import Iterator
-import pytest
+from time import sleep
 import sys
-from toolz import isdistinct
+
+import pytest
+from toolz import isdistinct, first
 from tornado.ioloop import IOLoop
 from tornado import gen
 
@@ -433,10 +435,10 @@ def test_stress_gc():
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5) as e:
             x = e.submit(slowinc, 1)
-            for i in range(10):  # this could be increased
+            for i in range(20):  # this could be increased
                 x = e.submit(slowinc, x)
 
-            assert x.result() == 12
+            assert x.result() == 22
 
 
 def test_missing_data_heals():
@@ -511,6 +513,32 @@ def test_gather_robust_to_missing_data():
     _test_cluster(f)
 
 
+def test_gather_robust_to_nested_missing_data():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        w = e.submit(inc, 1)
+        x = e.submit(inc, w)
+        y = e.submit(inc, x)
+        z = e.submit(inc, y)
+
+        yield _wait([z])
+
+        for worker in [a, b]:
+            for datum in [y, z]:
+                if datum.key in worker.data:
+                    del worker.data[datum.key]
+
+        result = yield e._gather([z])
+
+        assert result == [inc(inc(inc(inc(1))))]
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
 def test_tokenize_on_futures():
     e = Executor((None, None), start=False)
     x = e.submit(inc, 1)
@@ -573,6 +601,7 @@ def test_restrictions_map():
         yield e._shutdown()
     _test_cluster(f)
 
+
 def test_restrictions_get():
     @gen.coroutine
     def f(c, a, b):
@@ -589,6 +618,7 @@ def test_restrictions_get():
 
         yield e._shutdown()
     _test_cluster(f)
+
 
 def dont_test_bad_restrictions_raise_exception():
     @gen.coroutine

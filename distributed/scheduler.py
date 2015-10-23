@@ -90,6 +90,7 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
             elif isinstance(response, KeyError):
                 scheduler_queue.put_nowait({'op': 'task-missing-data',
                                             'key': key,
+                                            'worker': ident,
                                             'missing': response.args})
 
             else:
@@ -327,6 +328,11 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                 with ignoring(KeyError):
                     processing[worker].remove(key)
                 waiting[key] = missing
+                logger.info('task missing data, %s, %s', key, waiting)
+                with ignoring(KeyError):
+                    processing[msg['worker']].remove(msg['key'])
+
+                ensure_occupied(msg['worker'])
 
             seed_ready_tasks()
 
