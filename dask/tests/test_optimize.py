@@ -1,9 +1,10 @@
 from itertools import count
 from operator import add, mul, getitem
-from toolz import partial, identity
+from functools import partial
 from dask.utils import raises
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
-        dealias, equivalent, sync_keys, merge_sync, fuse_getitem, fuse_selections)
+        dealias, equivalent, sync_keys, merge_sync, fuse_getitem,
+        fuse_selections, identity)
 
 
 def inc(x):

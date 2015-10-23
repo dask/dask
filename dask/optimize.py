@@ -1,12 +1,16 @@
+from __future__ import absolute_import, division, print_function
+
 from itertools import count
 from operator import getitem
-
-from toolz import identity
 
 from .compatibility import zip_longest
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, add, inc, ishashable, preorder_traversal)
 from .rewrite import END
+
+
+def identity(x):
+    return x
 
 
 def cull(dsk, keys):

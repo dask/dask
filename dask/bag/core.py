@@ -10,29 +10,29 @@ import bz2
 import os
 import codecs
 from sys import getdefaultencoding
-
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
-from dask.utils import takes_multiple_arguments
-from dask.core import list2, quote
+
+from ..utils import ignoring
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
                    remove, pluck, groupby, topk)
 import toolz
-from ..utils import tmpfile, ignoring, file_size, textblock
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
-from ..multiprocessing import get as mpget
-from ..core import istask, get_dependencies, reverse_dict
-from ..optimize import fuse, cull, inline
+from ..base import Base, normalize_token
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
         StringIO)
-from ..base import Base, normalize_token
+from ..core import list2, quote, istask, get_dependencies, reverse_dict
+from ..multiprocessing import get as mpget
+from ..optimize import fuse, cull, inline
+from ..utils import (tmpfile, file_size, textblock,
+        takes_multiple_arguments)
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))

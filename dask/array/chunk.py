@@ -1,5 +1,4 @@
 """ A set of NumPy functions to apply per chunk """
-
 from __future__ import absolute_import, division, print_function
 
 from collections import Container, Iterable, Sequence

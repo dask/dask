@@ -1,6 +1,9 @@
+from __future__ import absolute_import, division, print_function
+
+from toolz import merge, partial
+
 from ..base import tokenize
 from .. import threaded
-from toolz import merge, partial
 
 
 def _partial_fit(model, x, y, kwargs=None):

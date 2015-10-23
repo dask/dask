@@ -1,16 +1,17 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 from functools import partial, wraps
 from math import factorial
+
+import numpy as np
 from toolz import compose
 
-from .core import _concatenate2, Array, atop, sqrt, elemwise
-from .slicing import insert_many
-from .numpy_compat import divide
-from ..core import flatten
 from . import chunk
+from .core import _concatenate2, Array, atop, sqrt, elemwise
+from .numpy_compat import divide
+from .slicing import insert_many
 from ..compatibility import getargspec
+from ..core import flatten
 from ..utils import ignoring
 
 

@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 """
 The rechunk module defines:
     intersect_chunks: a function for
@@ -6,9 +5,11 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
+from __future__ import absolute_import, division, print_function
 
 from itertools import product, chain
 from operator import getitem, add
+
 import numpy as np
 from toolz import merge, accumulate
 

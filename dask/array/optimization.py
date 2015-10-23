@@ -1,11 +1,14 @@
-from ..optimize import cull, fuse
-from ..core import flatten
-from ..optimize import dealias, inline_functions
-from .core import getarray
+from __future__ import absolute_import, division, print_function
+
 from operator import getitem
-from dask.rewrite import RuleSet, RewriteRule
-from toolz import valmap, partial
+
 import numpy as np
+from toolz import valmap, partial
+
+from .core import getarray
+from ..core import flatten
+from ..optimize import cull, fuse, dealias, inline_functions
+from ..rewrite import RuleSet, RewriteRule
 
 
 def optimize(dsk, keys, **kwargs):
