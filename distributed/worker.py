@@ -86,7 +86,7 @@ class Worker(Server):
                 resp = yield self.center.register(
                         ncores=self.ncores, address=(self.ip, self.port))
                 break
-            except ConnectionRefusedError:
+            except OSError:
                 yield gen.sleep(1)
         assert resp == b'OK'
         logger.info('Registered with center at:  %s:%d',
