@@ -636,3 +636,41 @@ def dont_test_bad_restrictions_raise_exception():
 
         yield e._shutdown()
     _test_cluster(f)
+
+
+def test_submit_after_failed_worker():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            L = e.map(inc, range(10))
+            wait(L)
+            a['proc'].terminate()
+            total = e.submit(sum, L)
+            assert total.result() == sum(map(inc, range(10)))
+
+
+def test_gather_after_failed_worker():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            L = e.map(inc, range(10))
+            wait(L)
+            a['proc'].terminate()
+            result = e.gather(L)
+            assert result == list(map(inc, range(10)))
+
+
+def test_gather_then_submit_after_failed_workers():
+    with cluster(nworkers=4) as (c, [w, x, y, z]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            L = e.map(inc, range(20))
+            wait(L)
+            w['proc'].terminate()
+            total = e.submit(sum, L)
+            wait([total])
+
+            (_, port) = first(e.who_has[total.key])
+            for d in [x, y, z]:
+                if d['port'] == port:
+                    d['proc'].terminate()
+
+            result = e.gather([total])
+            assert result == [sum(map(inc, range(20)))]

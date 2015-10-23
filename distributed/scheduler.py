@@ -223,6 +223,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
     def ensure_occupied(worker):
         """ If worker is free, spin up a task on that worker """
+        logger.debug('Ensure worker is occupied: %s', worker)
         while stacks[worker] and ncores[worker] > len(processing[worker]):
             key = stacks[worker].pop()
             processing[worker].add(key)
@@ -237,6 +238,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
                                        stacks, restrictions,
                                        [k for k, deps in waiting.items() if not deps])
+        logger.debug("Seed ready tasks: %s", new_stacks)
         for worker, stack in new_stacks.items():
             if stack:
                 ensure_occupied(worker)
@@ -253,6 +255,12 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                 del waiting_data[key]
             if key in in_play:
                 in_play.remove(key)
+
+    def debug_state(msg=None):
+        if msg:
+            logger.debug(msg)
+        logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
+                'in_play: %s\n\n', waiting, stacks, processing, in_play)
 
     my_heal_missing_data = partial(heal_missing_data,
             dsk, dependencies, dependents, held_data, who_has, in_play,
@@ -318,9 +326,10 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             missing = set(msg['missing'])
             logger.debug("Recovering missing data: %s", missing)
             for k in missing:
-                workers = who_has.pop(k)
-                for worker in workers:
-                    has_what[worker].remove(k)
+                with ignoring(KeyError):
+                    workers = who_has.pop(k)
+                    for worker in workers:
+                        has_what[worker].remove(k)
             my_heal_missing_data(missing)
 
             if msg['op'] == 'task-missing-data':
@@ -354,7 +363,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                 del who_has[k]
 
             state = heal(dependencies, dependents, set(who_has), stacks,
-                         processing)
+                         processing, waiting, waiting_data)
             waiting_data = state['waiting_data']
             waiting = state['waiting']
             released = state['released']
@@ -538,7 +547,8 @@ def update_state(dsk, dependencies, dependents, held_data,
             'waiting_data': waiting_data}
 
 
-def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
+def heal(dependencies, dependents, in_memory, stacks, processing, waiting,
+        waiting_data, **kwargs):
     """ Make a possibly broken runtime state consistent
 
     Sometimes we lose intermediate values.  In these cases it can be tricky to
@@ -554,8 +564,8 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
     rev_stacks = {k: v for k, v in reverse_dict(stacks).items() if v}
     rev_processing = {k: v for k, v in reverse_dict(processing).items() if v}
 
-    waiting_data = defaultdict(set) # deepcopy(dependents)
-    waiting = defaultdict(set) # deepcopy(dependencies)
+    waiting_data.clear()
+    waiting.clear()
     finished_results = set()
 
     def remove_from_stacks(key):
@@ -588,11 +598,11 @@ def heal(dependencies, dependents, in_memory, stacks, processing, **kwargs):
     for key in outputs:
         make_accessible(key)
 
-    waiting_data = {key: {dep for dep in dependents[key]
+    waiting_data.update({key: {dep for dep in dependents[key]
                               if dep not in new_released
                               and dep not in in_memory}
                     for key in dependents
-                    if key not in new_released}
+                    if key not in new_released})
 
     def unrunnable(key):
         return (key in new_released
@@ -720,9 +730,11 @@ def heal_missing_data(dsk, dependencies, dependents, held_data,
     When we identify that we're missing certain keys we rewind runtime state to
     evaluate those keys.
     """
+    logger.debug("Healing missing: %s", missing)
     for key in missing:
         if key in in_play:
             in_play.remove(key)
+
     def ensure_key(key):
         if key in in_play:
             return
@@ -730,6 +742,7 @@ def heal_missing_data(dsk, dependencies, dependents, held_data,
             ensure_key(dep)
             waiting_data[dep].add(key)
         waiting[key] = {dep for dep in dependencies[key] if dep not in in_memory}
+        logger.debug("Added key to waiting: %s", key)
         waiting_data[key] = {dep for dep in dependents[key] if dep in in_play
                                                     and dep not in in_memory}
         in_play.add(key)

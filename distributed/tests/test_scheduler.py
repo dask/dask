@@ -26,7 +26,8 @@ def test_heal():
 
     local = {k: v for k, v in locals().items() if '@' not in k}
 
-    output = heal(dependencies, dependents, in_memory, stacks, processing)
+    output = heal(dependencies, dependents, in_memory, stacks, processing,
+            {}, {})
 
     assert output['dependencies'] == dependencies
     assert output['dependents'] == dependents
@@ -39,7 +40,8 @@ def test_heal():
 
     state = {'in_memory': set(),
              'stacks': {'alice': ['x'], 'bob': []},
-             'processing': {'alice': set(), 'bob': set()}}
+             'processing': {'alice': set(), 'bob': set()},
+             'waiting': {}, 'waiting_data': {}}
 
     heal(dependencies, dependents, **state)
 
@@ -57,7 +59,8 @@ def test_heal_2():
 
     state = {'in_memory': {'y', 'a'},  # missing 'b'
              'stacks': {'alice': ['z'], 'bob': []},
-             'processing': {'alice': set(), 'bob': set(['c'])}}
+             'processing': {'alice': set(), 'bob': set(['c'])},
+             'waiting': {}, 'waiting_data': {}}
 
     output = heal(dependencies, dependents, **state)
     assert output['waiting'] == {'b': set(), 'c': {'b'}, 'result': {'c', 'z'}}
@@ -77,7 +80,8 @@ def test_heal_restarts_leaf_tasks():
 
     state = {'in_memory': set(),  # missing 'b'
              'stacks': {'alice': ['a'], 'bob': ['x']},
-             'processing': {'alice': set(), 'bob': set()}}
+             'processing': {'alice': set(), 'bob': set()},
+             'waiting': {}, 'waiting_data': {}}
 
     del state['stacks']['bob']
     del state['processing']['bob']
@@ -93,7 +97,8 @@ def test_heal_culls():
 
     state = {'in_memory': {'c', 'y'},
              'stacks': {'alice': ['a'], 'bob': []},
-             'processing': {'alice': set(), 'bob': set('y')}}
+             'processing': {'alice': set(), 'bob': set('y')},
+             'waiting': {}, 'waiting_data': {}}
 
     output = heal(dependencies, dependents, **state)
     assert 'a' not in output['stacks']['alice']
