@@ -675,6 +675,8 @@ def decide_worker(dependencies, stacks, who_has, restrictions, key):
             workers = {w for w in stacks if w[0] in r}
             if not workers:
                 raise ValueError("Task has no valid workers", key, r)
+    if not workers:
+        raise ValueError("No workers found")
 
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
