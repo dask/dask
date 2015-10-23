@@ -1,10 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-from itertools import product
 from functools import partial
+from itertools import product
 
-from toolz import curry
 import numpy as np
+from toolz import curry
 
 from ..base import tokenize
 from .core import Array, normalize_chunks

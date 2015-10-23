@@ -1,11 +1,14 @@
-from toolz import merge, merge_sorted
+from __future__ import absolute_import, division, print_function
+
 from itertools import count
 from functools import wraps
 from collections import Iterator
-import numpy as np
 
-from ..base import tokenize
+import numpy as np
+from toolz import merge, merge_sorted
+
 from .core import Array
+from ..base import tokenize
 
 
 @wraps(np.percentile)

@@ -53,6 +53,14 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
+from __future__ import absolute_import, division, print_function
+
+from bisect import bisect_left, bisect_right
+
+from toolz import merge_sorted, unique, partial
+import toolz
+import numpy as np
+import pandas as pd
 
 from ..base import tokenize
 from .core import (_get_return_type, _Frame, Scalar, DataFrame,
@@ -60,13 +68,6 @@ from .core import (_get_return_type, _Frame, Scalar, DataFrame,
 from .io import from_pandas
 from .shuffle import shuffle
 from . import utils
-
-from bisect import bisect_left, bisect_right
-from toolz import merge_sorted, unique, partial
-import toolz
-
-import numpy as np
-import pandas as pd
 
 
 def bound(seq, left, right):

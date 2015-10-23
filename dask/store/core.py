@@ -1,7 +1,10 @@
+from __future__ import absolute_import, division, print_function
+
 from collections import defaultdict, MutableMapping
 from operator import getitem, add
 from datetime import datetime
 from time import time
+
 from ..core import istask, ishashable
 
 

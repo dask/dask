@@ -1,6 +1,8 @@
-from __future__ import absolute_import
-import numpy as np
+from __future__ import absolute_import, division, print_function
+
 from functools import partial
+
+import numpy as np
 
 from .core import Array, normalize_chunks
 from ..base import tokenize

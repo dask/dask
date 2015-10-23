@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
 from itertools import product
+
+import numpy as np
+
 from .core import normalize_chunks, Array
 from ..base import tokenize
 from ..utils import different_seeds, ignoring

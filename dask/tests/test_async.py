@@ -1,7 +1,9 @@
+from __future__ import absolute_import, division, print_function
+
 from operator import add
 from copy import deepcopy
-import dask
 
+import dask
 import pytest
 
 from dask.async import *

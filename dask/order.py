@@ -55,7 +55,9 @@ concern (2) we prefer to traverse down children in the order of which child has
 the descendent on whose result the most tasks depend.
 """
 from __future__ import absolute_import, division, print_function
+
 from operator import add
+
 from .core import get_deps
 
 

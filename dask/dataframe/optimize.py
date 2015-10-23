@@ -1,4 +1,5 @@
 """ Dataframe optimizations """
+from __future__ import absolute_import, division, print_function
 
 from .io import dataframe_from_ctable
 from ..optimize import cull, fuse_getitem, fuse_selections

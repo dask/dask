@@ -1,12 +1,14 @@
+from __future__ import absolute_import, division, print_function
+
 from itertools import product
-from operator import getitem, add
 from math import ceil
+from operator import getitem, add
 
-from toolz import merge, first, accumulate
 import numpy as np
+from toolz import merge, first, accumulate
 
-from ..compatibility import long
 from ..base import tokenize
+from ..compatibility import long
 
 
 def sanitize_index_elements(ind):
