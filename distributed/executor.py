@@ -60,7 +60,7 @@ class Future(WrappedKey):
     @gen.coroutine
     def _result(self, raiseit=True):
         yield self.event.wait()
-        result = yield _gather(self.executor.center, [self.key])
+        result = yield self.executor._gather([self])
         if self.status == 'error' and raiseit:
             raise result[0]
         else:
