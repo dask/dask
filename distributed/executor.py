@@ -189,6 +189,9 @@ class Executor(object):
         self.who_has, self.has_what, self.ncores = yield [self.center.who_has(),
                                                          self.center.has_what(),
                                                          self.center.ncores()]
+        self.waiting = {}
+        self.processing = {}
+        self.stacks = {}
 
         worker_queues = {worker: Queue() for worker in self.ncores}
         delete_queue = Queue()
@@ -197,7 +200,8 @@ class Executor(object):
             self.report(),
             scheduler(self.scheduler_queue, self.report_queue, worker_queues,
                       delete_queue, self.who_has, self.has_what, self.ncores,
-                      self.dask, self.restrictions),
+                      self.dask, self.restrictions, self.waiting, self.stacks,
+                      self.processing),
             delete(self.scheduler_queue, delete_queue,
                    self.center.ip, self.center.port, self._delete_batch_time)]
          + [worker(self.scheduler_queue, worker_queues[w], w, n)
