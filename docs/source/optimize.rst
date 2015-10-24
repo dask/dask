@@ -235,7 +235,7 @@ that transformation. Rewriting can then be done using the ``rewrite`` method.
 .. code-block:: python
 
     >>> rs.rewrite((add, 5, 5))
-    (mul, 1, 2)
+    (mul, 5, 2)
 
     >>> rs.rewrite((mul, 5, 5))
     (pow, 5, 2)
