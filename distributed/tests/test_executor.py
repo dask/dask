@@ -24,6 +24,10 @@ def div(x, y):
     return x / y
 
 
+def throws(x):
+    raise Exception()
+
+
 def _test_cluster(f):
     @gen.coroutine
     def g():
@@ -677,3 +681,30 @@ def test_gather_then_submit_after_failed_workers():
 
             result = e.gather([total])
             assert result == [sum(map(inc, range(20)))]
+
+
+def test_errors_dont_block():
+    c = Center('127.0.0.1', 8017)
+    w = Worker('127.0.0.2', 8018, c.ip, c.port, ncores=1)
+    e = Executor((c.ip, c.port), start=False)
+    @gen.coroutine
+    def f():
+        c.listen(c.port)
+        yield w._start()
+        IOLoop.current().spawn_callback(e._go)
+
+        L = [e.submit(inc, 1),
+             e.submit(throws, 1),
+             e.submit(inc, 2),
+             e.submit(throws, 2)]
+
+        i = 0
+        while not (L[0].status == L[2].status == 'finished'):
+            i += 1
+            if i == 1000:
+                assert False
+            yield gen.sleep(0.01)
+        result = yield e._gather([L[0], L[2]])
+        assert result == [2, 3]
+
+    IOLoop.current().run_sync(f)

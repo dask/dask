@@ -321,6 +321,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             processing[msg['worker']].remove(msg['key'])
             in_play.remove(msg['key'])
             report_queue.put_nowait(msg)
+            ensure_occupied(msg['worker'])
 
         elif msg['op'] in ('missing-data', 'task-missing-data'):
             missing = set(msg['missing'])
