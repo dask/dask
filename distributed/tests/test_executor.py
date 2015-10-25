@@ -283,6 +283,9 @@ def test_get():
         result = yield e._get({'x': (inc, 1)}, ['x'])
         assert result == [2]
 
+        result = yield e._get({}, [])
+        assert result == []
+
         yield e._shutdown()
 
     _test_cluster(f)
