@@ -2,7 +2,10 @@ Overview
 ========
 
 Dask arrays implement a subset of the NumPy interface on large arrays using
-blocked algorithms and task scheduling.
+blocked algorithms and task scheduling. For a live tutorial in your browser,
+visit our Binder_.
+
+.. _Binder: http://mybinder.org/repo/blaze/dask-examples/dask-array-basics.ipynb
 
 Scope
 -----
