@@ -10,6 +10,7 @@ from toolz import valmap
 import tempfile
 import shutil
 from time import sleep
+import threading
 
 import dask.array as da
 import dask.dataframe as dd
@@ -183,6 +184,38 @@ def test_from_array_with_record_dtype():
     assert d.divisions == (0, 4, 8, 9)
 
     assert (d.compute().to_records(index=False) == x).all()
+
+
+def test_from_bcolz_multiple_threads():
+    bcolz = pytest.importorskip('bcolz')
+
+    def check():
+        t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
+                         names=['x', 'y', 'a'])
+        d = dd.from_bcolz(t, chunksize=2)
+        assert d.npartitions == 2
+        assert str(d.dtypes['a']) == 'category'
+        assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
+        assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
+
+        d = dd.from_bcolz(t, chunksize=2, index='x')
+        L = list(d.index.compute(get=get_sync))
+        assert L == [1, 2, 3] or L == [1, 3, 2]
+
+        # Names
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) == \
+               sorted(dd.from_bcolz(t, chunksize=2).dask)
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != \
+               sorted(dd.from_bcolz(t, chunksize=3).dask)
+
+    threads = []
+    for i in range(5):
+        thread = threading.Thread(target=check)
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()
 
 
 def test_from_bcolz():

@@ -16,15 +16,16 @@ from toolz import merge, assoc, dissoc
 
 from ..compatibility import BytesIO, unicode, range, apply
 from ..utils import textblock, file_size, get_bom
-from ..base import compute, tokenize
+from ..base import tokenize
 from .. import array as da
 from ..async import get_sync
 
 from . import core
-from .core import DataFrame, Series, categorize_block
+from .core import DataFrame, Series
 from .shuffle import set_partition
 
 
+lock = Lock()
 csv_defaults = {'compression': None}
 
 
@@ -385,6 +386,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
     """
     import dask.array as da
     import bcolz
+
     if isinstance(x, (str, unicode)):
         x = bcolz.ctable(rootdir=x)
     bc_chunklen = max(x[name].chunklen for name in x.names)
@@ -411,8 +413,9 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
         token = tokenize((id(x), x.shape, x.dtype), chunksize, categorize,
                          index, kwargs)
     new_name = 'from_bcolz-' + token
+
     dsk = dict(((new_name, i),
-                (dataframe_from_ctable,
+                (locked_df_from_ctable,
                  x,
                  (slice(i * chunksize, (i + 1) * chunksize),),
                  columns, categories))
@@ -483,6 +486,12 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
                         np.searchsorted(categories[columns], chunk),
                         categories[columns], True)
         return pd.Series(chunk, name=columns)
+
+
+def locked_df_from_ctable(*args, **kwargs):
+    with lock:
+        result = dataframe_from_ctable(*args, **kwargs)
+    return result
 
 
 def from_dask_array(x, columns=None):
