@@ -8,10 +8,12 @@ use the ``dask.imperative`` interface. This allows one to create graphs
 directly with a light annotation of normal python code.
 
 
-Example
--------
+Examples
+--------
 
-Rebuilding the example from :ref:`custom graphs <custom-graph-example>`:
+Try a live tutorial of dask imperative `here <http://mybinder.org/repo/blaze/dask-examples/do-and-profiler.ipynb>`_.
+
+Now, rebuilding the example from :ref:`custom graphs <custom-graph-example>`:
 
 .. code-block:: python
 
