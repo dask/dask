@@ -12,7 +12,7 @@ def start_center(addr):
     channel = ssh.invoke_shell()
     channel.settimeout(20)
     sleep(0.1)
-    channel.send('dcenter\n')
+    channel.send('dcenter --host %s\n' % addr)
     channel.recv(10000)
 
     return {'client': ssh, 'channel': channel}
@@ -26,7 +26,7 @@ def start_worker(center_addr, addr):
     channel = ssh.invoke_shell()
     channel.settimeout(20)
     sleep(0.1)
-    channel.send('dworker %s:8787\n' % center_addr)
+    channel.send('dworker %s:8787\n --host %s' % (center_addr, addr))
     channel.recv(10000)
 
     return {'client': ssh, 'channel': channel}
