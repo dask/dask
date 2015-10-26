@@ -22,7 +22,6 @@ requirements:
     - toolz
     - numpy
     - pandas
-    - pyzmq
     - dill
     - partd
     - chest

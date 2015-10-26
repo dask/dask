@@ -19,7 +19,6 @@ Different components of dask have different dependencies that are only relevant 
 * ``dask.array``: numpy
 * ``dask.bag``: dill
 * ``dask.dataframe``: pandas, bcolz (in development)
-* ``dask.distributed``: pyzmq (in development)
 
 The base ``pip`` install of dask is fairly minimal.  This is to protect
 lightweight ``dask.bag`` users from having to install heavyweight dependencies

@@ -84,7 +84,6 @@ or using a distributed cluster.
 
 * :doc:`scheduler-overview`
 * :doc:`shared`
-* :doc:`distributed`
 
 .. toctree::
    :maxdepth: 1
@@ -93,7 +92,6 @@ or using a distributed cluster.
 
    scheduler-overview.rst
    shared.rst
-   distributed.rst
 
 **Inspecting and Diagnosing Graphs**
 
