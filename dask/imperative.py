@@ -181,11 +181,6 @@ def do(func, pure=False):
     return _dfunc
 
 
-def optimize(dsk, keys):
-    dsk2 = cull(dsk, keys)
-    return fuse(dsk2)
-
-
 def compute(*args, **kwargs):
     """Evaluate more than one ``Value`` at once.
 
@@ -220,7 +215,7 @@ class Value(base.Base):
     Equivalent to the output from a single key in a dask graph.
     """
     __slots__ = ('_key', '_dasks')
-    _optimize = staticmethod(optimize)
+    _optimize = staticmethod(lambda dsk, keys: dsk)
     _finalize = staticmethod(lambda a, r: r[0])
     _default_get = staticmethod(threaded.get)
 
