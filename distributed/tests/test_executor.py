@@ -707,4 +707,7 @@ def test_errors_dont_block():
         result = yield e._gather([L[0], L[2]])
         assert result == [2, 3]
 
+        yield w._close()
+        c.stop()
+
     IOLoop.current().run_sync(f)
