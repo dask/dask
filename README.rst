@@ -2,6 +2,7 @@ Dask
 ====
 
 |Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |Downloads|
+|Dask Examples|
 
 Dask provides multi-core execution on larger-than-memory datasets using blocked
 algorithms and task scheduling.  It maps high-level NumPy, Pandas, and list
@@ -16,8 +17,8 @@ inconveniently large data in a small amount of space.
 *  ``dask.dataframe`` encodes blocked algorithms on Pandas DataFrames.
 *  ``dask.async`` is a shared-memory asynchronous scheduler efficiently execute ``dask`` dependency graphs on multiple cores.
 
-See full documentation at http://dask.pydata.org or read developer-focused
-blogposts_ about dask's development.
+See full documentation at http://dask.pydata.org. Read developer-focused
+blogposts_ about dask's development. Or try dask in your browser with example notebooks on Binder_.
 
 
 Use ``dask.array``
@@ -231,6 +232,7 @@ includes the following projects:
 .. _Swiftlang: http://swift-lang.org/main/
 .. _PaRSEC: http://icl.eecs.utk.edu/parsec/index.html
 .. _blogposts: http://matthewrocklin.com/blog/tags.html#dask-ref
+.. _Binder: http://mybinder.org/repo/blaze/dask-examples
 .. |Build Status| image:: https://travis-ci.org/blaze/dask.svg
    :target: https://travis-ci.org/blaze/dask
 .. |Version Status| image:: https://img.shields.io/pypi/v/dask.svg
@@ -246,3 +248,6 @@ includes the following projects:
    :target: https://gitter.im/blaze/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 .. |Downloads| image:: https://img.shields.io/pypi/dm/dask.svg
    :target: https://pypi.python.org/pypi/dask/
+.. |Dask Examples| image:: http://mybinder.org/badge.svg
+   :alt: Dask Example Notebooks
+   :target: http://mybinder.org/repo/blaze/dask-examples
