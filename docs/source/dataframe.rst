@@ -12,6 +12,15 @@ one dask DataFrame triggers many pandas operations on the constituent pandas
 DataFrames in a way that is mindful of potential parallelism and memory
 constraints.
 
+Tutorials
+---------
+
+You can try a live tutorial of dask dataframe's basics `here
+<http://mybinder.org/repo/blaze/dask-examples/dask-dataframe-basics.ipynb>`_.
+
+And a tutorial of dask dataframe's timeseries functionality `here
+<http://mybinder.org/repo/blaze/dask-examples/time-series.ipynb>`_.
+
 Dask.dataframe copies the pandas API
 ------------------------------------
 
