@@ -9,10 +9,10 @@ with ignoring(ImportError):
     from snakebite.client import Client
 
 
-def get_locations(filename, name_host, name_port, **kwargs):
+def get_locations(filename, name_host, name_port, data_root='/data/dfs/dn'):
     client = Client(name_host, name_port, use_trash=False)
     files = list(client.ls([filename]))
-    return [pair for file in files for pair in find(file, client, **kwargs)]
+    return [pair for file in files for pair in find(file, client, data_root)]
 
 
 def find(f, client, data_root='/data/dfs/dn'):
@@ -58,7 +58,8 @@ def get_data_root():
             return e.find('value').text
 
 
-def map_blocks(executor, func, location, namenode_host, namenode_port, **kwargs):
+def map_blocks(executor, func, location, namenode_host, namenode_port,
+               data_root='/data/dfs/dn', **kwargs):
     """ Map a function over blocks of a location in HDFS
 
     >>> L = map_blocks(executor, pd.read_csv, '/data/nyctaxi/',
@@ -66,10 +67,10 @@ def map_blocks(executor, func, location, namenode_host, namenode_port, **kwargs)
     >>> type(L)[0]  # doctest: +SKIP
     Future
     """
-    blocks = get_locations(location, namenode_host, namenode_port, **kwargs)
+    blocks = get_locations(location, namenode_host, namenode_port, data_root)
     paths = [blk['path'] for blk in blocks]
     hosts = [blk['hosts'] for blk in blocks]
-    return executor.map(func, paths, workers=hosts)
+    return executor.map(func, paths, workers=hosts, **kwargs)
 
 
 def dask_graph(executor, func, location, namenode_host, namenode_port, **kwargs):
