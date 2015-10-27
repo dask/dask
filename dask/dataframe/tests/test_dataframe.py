@@ -7,6 +7,7 @@ import pandas as pd
 import pandas.util.testing as tm
 import numpy as np
 import pytest
+from numpy.testing import assert_array_almost_equal
 
 import dask
 from dask.async import get_sync
@@ -2413,3 +2414,22 @@ def test_groupby_index_array():
 
     eq(df.A.groupby(df.index.month).nunique(),
        ddf.A.groupby(ddf.index.month).nunique(), check_names=False)
+
+
+def test_groupby_set_index():
+    df = tm.makeTimeDataFrame()
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert raises(NotImplementedError,
+                  lambda: ddf.groupby(df.index.month, as_index=False))
+
+
+def test_reset_index():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    res = ddf.reset_index()
+    exp = df.reset_index()
+
+    assert len(res.index.compute()) == len(exp.index)
+    assert res.columns == tuple(exp.columns)
+    assert_array_almost_equal(res.compute().values, exp.values)

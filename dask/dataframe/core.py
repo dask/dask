@@ -1293,6 +1293,14 @@ class DataFrame(_Frame):
         return nlargest(self, n, columns)
 
     @derived_from(pd.DataFrame)
+    def reset_index(self):
+        new_columns = ['index'] + list(self.columns)
+        reset_index = self._partition_type.reset_index
+        out = self.map_partitions(reset_index, columns=new_columns)
+        out.divisions = [None] * (self.npartitions + 1)
+        return out
+
+    @derived_from(pd.DataFrame)
     def groupby(self, key, **kwargs):
         return GroupBy(self, key, **kwargs)
 
@@ -1822,6 +1830,11 @@ class GroupBy(_GroupBy):
         self.df = df
         self.index = index
         self.kwargs = kwargs
+
+        if not kwargs.get('as_index', True):
+            msg = ("The keyword argument `as_index=False` is not supported in "
+                   "dask.dataframe.groupby")
+            raise NotImplementedError(msg)
 
         if isinstance(index, list):
             for i in index:
