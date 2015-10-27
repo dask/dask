@@ -112,6 +112,18 @@ def test_map():
         if sys.version_info[0] >= 3:
             assert results == list(map(add, range(3), range(4)))
 
+        def f(x, y=10):
+            return x + y
+
+        L5 = e.map(f, range(5), y=5)
+        results = yield e._gather(L5)
+        assert results == list(range(5, 10))
+
+        y = e.submit(f, 10)
+        L6 = e.map(f, range(5), y=y)
+        results = yield e._gather(L6)
+        assert results == list(range(20, 25))
+
         yield e._shutdown()
 
     _test_cluster(f)
@@ -665,6 +677,7 @@ def test_gather_after_failed_worker():
             assert result == list(map(inc, range(10)))
 
 
+@slow
 def test_gather_then_submit_after_failed_workers():
     with cluster(nworkers=4) as (c, [w, x, y, z]):
         with Executor(('127.0.0.1', c['port'])) as e:

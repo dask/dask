@@ -10,6 +10,7 @@ import uuid
 
 from dask.base import tokenize, normalize_token
 from dask.core import flatten
+from dask.compatibility import apply
 from toolz import first, groupby, valmap
 from tornado import gen
 from tornado.gen import Return
@@ -246,7 +247,7 @@ class Executor(object):
 
         if key is None:
             if pure:
-                key = funcname(func) + '-' + tokenize(func, *args, **kwargs)
+                key = funcname(func) + '-' + tokenize(func, kwargs, *args)
             else:
                 key = funcname(func) + '-' + next(tokens)
 
@@ -302,20 +303,25 @@ class Executor(object):
         --------
         distributed.executor.Executor.submit
         """
-        pure = kwargs.get('pure', True)
-        workers = kwargs.get('workers', None)
+        pure = kwargs.pop('pure', True)
+        workers = kwargs.pop('workers', None)
         if not callable(func):
             raise TypeError("First input to map must be a callable function")
         iterables = [list(it) for it in iterables]
         if pure:
-            keys = [funcname(func) + '-' + tokenize(func, *args)
+            keys = [funcname(func) + '-' + tokenize(func, kwargs, *args)
                     for args in zip(*iterables)]
         else:
             uid = str(uuid.uuid4())
             keys = [funcname(func) + '-' + uid + '-' + next(tokens)
                     for i in range(min(map(len, iterables)))]
 
-        dsk = {key: (func,) + args for key, args in zip(keys, zip(*iterables))}
+        if not kwargs:
+            dsk = {key: (func,) + args
+                   for key, args in zip(keys, zip(*iterables))}
+        else:
+            dsk = {key: (apply, func, args, kwargs)
+                   for key, args in zip(keys, zip(*iterables))}
 
         for key in dsk:
             if key not in self.futures:
