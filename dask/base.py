@@ -181,7 +181,7 @@ with ignoring(ImportError):
         return (data, x.dtype, x.shape, x.strides)
 
 
-def tokenize(*args):
+def tokenize(*args, **kwargs):
     """ Deterministic token
 
     >>> tokenize([1, 2, '3'])
@@ -190,4 +190,6 @@ def tokenize(*args):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
+    if kwargs:
+        args = args + (kwargs,)
     return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
