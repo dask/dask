@@ -95,6 +95,12 @@ def test_tokenize_pandas():
     assert tokenize(a) == tokenize(b)
 
 
+def test_tokenize_kwargs():
+    assert tokenize(5, x=1) == tokenize(5, x=1)
+    assert tokenize(5) != tokenize(5, x=1)
+    assert tokenize(5, x=1) != tokenize(5, x=2)
+    assert tokenize(5, x=1) != tokenize(5, y=1)
+
 da = pytest.importorskip('dask.array')
 import numpy as np
 
