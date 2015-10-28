@@ -18,6 +18,12 @@ from tornado.iostream import IOStream, StreamClosedError
 
 logger = logging.getLogger(__name__)
 
+try:
+    import psutil
+    MAX_BUFFER_SIZE = psutil.virtual_memory().total / 2
+except ImportError:
+    MAX_BUFFER_SIZE = 2e9  # 2GB
+
 
 def handle_signal(sig, frame):
     IOLoop.instance().add_callback(IOLoop.instance().stop)
@@ -57,9 +63,9 @@ class Server(TCPServer):
     *  ``{'op': 'ping'}``
     *  ``{'op': 'add': 'x': 10, 'y': 20}``
     """
-    def __init__(self, handlers, **kwargs):
+    def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
         self.handlers = handlers
-        super(Server, self).__init__(**kwargs)
+        super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
     @gen.coroutine
     def handle_stream(self, stream, address):
@@ -171,7 +177,8 @@ def connect(ip, port, timeout=1):
     start = time()
     while True:
         try:
-            stream = yield client.connect(ip, port)
+            stream = yield client.connect(ip, port,
+                    max_buffer_size=MAX_BUFFER_SIZE)
             raise Return(stream)
         except StreamClosedError:
             if time() - start < timeout:

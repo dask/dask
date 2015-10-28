@@ -1,9 +1,11 @@
-from tornado import gen, ioloop
+from functools import partial
 from multiprocessing import Process
+
+from tornado import gen, ioloop
+
 from distributed.core import (read, write, pingpong, read_sync, write_sync,
         Server, connect_sync, rpc, connect)
-from functools import partial
-
+from distributed.utils_test import slow
 
 def test_server():
     @gen.coroutine
@@ -87,3 +89,25 @@ def test_sync():
         assert response == b'pong'
     finally:
         p.terminate()
+
+
+@slow
+def test_large_packets():
+    """ tornado has a 100MB cap by default """
+    def echo(stream, x):
+        return x
+
+    @gen.coroutine
+    def f():
+        server = Server({'echo': echo})
+        server.listen(8887)
+
+        data = b'0' * int(200e6)  # slightly more than 100MB
+
+        conn = rpc(ip='127.0.0.1', port=8887)
+        result = yield conn.echo(x=data)
+        assert result == data
+
+        server.stop()
+
+    ioloop.IOLoop.current().run_sync(f)
