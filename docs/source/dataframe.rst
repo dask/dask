@@ -18,8 +18,10 @@ Tutorials
 You can try a live tutorial of dask dataframe's basics `here
 <http://mybinder.org/repo/blaze/dask-examples/dask-dataframe-basics.ipynb>`_.
 
-And a tutorial of dask dataframe's timeseries functionality `here
-<http://mybinder.org/repo/blaze/dask-examples/time-series.ipynb>`_.
+Dask dataframe's timeseries functionality is demonstrated on `Binder
+<http://mybinder.org/repo/blaze/dask-examples/time-series-binder.ipynb>`_. And
+static notebook with more data and profiling is on `nbviewer
+<http://nbviewer.ipython.org/github/blaze/dask-examples/blob/master/time-series.ipynb>`_.
 
 Dask.dataframe copies the pandas API
 ------------------------------------
