@@ -125,7 +125,6 @@ def test_map():
         assert results == list(range(20, 25))
 
         yield e._shutdown()
-
     _test_cluster(f)
 
 
@@ -724,3 +723,46 @@ def test_errors_dont_block():
         c.stop()
 
     IOLoop.current().run_sync(f)
+
+
+def test_submit_quotes():
+    def assert_list(x, z=None):
+        return isinstance(x, list) and isinstance(z, list)
+
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(assert_list, [1, 2, 3], z=[4, 5, 6])
+        result = yield x._result()
+        assert result
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def test_map_quotes():
+    def assert_list(x):
+        return isinstance(x, list)
+
+    def assert_list_kwarg(x, z=None):
+        print(type(z))
+        print(type(x))
+        return isinstance(x, list) and isinstance(z, list)
+
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        L = e.map(assert_list, [[1, 2, 3], [4]])
+        result = yield e._gather(L)
+        assert all(result)
+
+        L = e.map(assert_list_kwarg, [[1, 2, 3], [4]], z=[10])
+        result = yield e._gather(L)
+        assert all(result)
+
+        yield e._shutdown()
+    _test_cluster(f)

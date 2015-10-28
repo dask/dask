@@ -9,7 +9,7 @@ import logging
 import uuid
 
 from dask.base import tokenize, normalize_token
-from dask.core import flatten
+from dask.core import flatten, quote
 from dask.compatibility import apply
 from toolz import first, groupby, valmap
 from tornado import gen
@@ -254,6 +254,8 @@ class Executor(object):
         if key in self.futures:
             return Future(key, self)
 
+        args = quote(args)
+
         if kwargs:
             task = (apply, func, args, kwargs)
         else:
@@ -317,7 +319,7 @@ class Executor(object):
                     for i in range(min(map(len, iterables)))]
 
         if not kwargs:
-            dsk = {key: (func,) + args
+            dsk = {key: (func,) + tuple(map(quote, args))
                    for key, args in zip(keys, zip(*iterables))}
         else:
             dsk = {key: (apply, func, args, kwargs)
