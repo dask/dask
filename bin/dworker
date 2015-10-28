@@ -27,7 +27,8 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.argument('center', type=str)
 @click.option('--port', type=int, default=8788, help="Serving port")
 @click.option('--host', type=str, default=ip, help="Serving host")
-def go(center, host, port):
+@click.option('--ncores', type=int, default=0, help="Number of cores to serve")
+def go(center, host, port, ncores):
     while True:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -45,7 +46,7 @@ def go(center, host, port):
     except IndexError:
         logger.info("Usage:  dworker center_host:center_port")
     try:
-        worker = Worker(host, port, center_ip, center_port)
+        worker = Worker(host, port, center_ip, center_port, ncores=ncores)
         worker.start()
         IOLoop.current().start()
     except KeyboardInterrupt:
