@@ -185,11 +185,15 @@ class Executor(object):
         self._loop_thread.join()
 
     @gen.coroutine
-    def _go(self):
-        """ Setup and run all other coroutines.  Block until finished. """
+    def _sync_center(self):
         self.who_has, self.has_what, self.ncores = yield [self.center.who_has(),
                                                          self.center.has_what(),
                                                          self.center.ncores()]
+
+    @gen.coroutine
+    def _go(self):
+        """ Setup and run all other coroutines.  Block until finished. """
+        yield self._sync_center()
         self.waiting = {}
         self.processing = {}
         self.stacks = {}

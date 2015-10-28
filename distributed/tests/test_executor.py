@@ -766,3 +766,27 @@ def test_map_quotes():
 
         yield e._shutdown()
     _test_cluster(f)
+
+
+def test_two_consecutive_executors_share_results():
+    from random import randint
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(randint, 0, 1000, pure=True)
+        xx = yield x._result()
+
+        f = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(f._go)
+        yield f._sync_center()
+
+        y = f.submit(randint, 0, 1000, pure=True)
+        yy = yield y._result()
+
+        assert xx == yy
+
+        yield e._shutdown()
+        yield f._shutdown()
+    _test_cluster(f)

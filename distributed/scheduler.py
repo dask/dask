@@ -6,7 +6,7 @@ import logging
 from math import ceil
 from time import time
 
-from toolz import frequencies, memoize, concat
+from toolz import frequencies, memoize, concat, first
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -288,6 +288,11 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                 generation += 1  # older graph generations take precedence
 
             seed_ready_tasks()
+            for key in new_keys:
+                if who_has[key]:
+                    report_queue.put_nowait({'op': 'task-finished',
+                                             'worker': first(who_has[key]),
+                                             'key': key})
 
         elif msg['op'] == 'task-finished':
             key = msg['key']
@@ -336,7 +341,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             if msg['op'] == 'task-missing-data':
                 key = msg['key']
                 with ignoring(KeyError):
-                    processing[worker].remove(key)
+                    processing[msg['worker']].remove(key)
                 waiting[key] = missing
                 logger.info('task missing data, %s, %s', key, waiting)
                 with ignoring(KeyError):
