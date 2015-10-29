@@ -97,3 +97,63 @@ def dask_graph(executor, func, location, namenode_host, namenode_port, **kwargs)
                                          'keys': [],
                                          'restrictions': restrictions})
     return dsk, names
+
+
+def read_csv(executor, location, namenode_host, namenode_port, **kwargs):
+    import pandas as pd
+    import dask.dataframe as dd
+    from dask.compatibility import apply
+
+    blocks = get_locations(location, namenode_host, namenode_port, **kwargs)
+    paths = [blk['path'] for blk in blocks]
+    hosts = [blk['hosts'] for blk in blocks]
+    name = 'hdfs-read-csv-' + location
+    names = [(name, i) for i, _ in enumerate(paths)]
+
+    restrictions = dict(zip(names, hosts))
+    executor.scheduler_queue.put_nowait({'op': 'update-graph',
+                                         'dsk': {},
+                                         'keys': [],
+                                         'restrictions': restrictions})
+
+    future = executor.submit(fill_kwargs, blocks[0]['path'], **kwargs)
+    columns, kwargs = future.result()
+    rest_kwargs = assoc(kwargs, 'header', None)
+
+    dsk = {(name, i): (apply, pd.read_csv, (path,), rest_kwargs)
+           for i, path in enumerate(paths)}
+    dsk[(name, 0)] = (apply, pd.read_csv, (paths[0],), kwargs)
+    divisions = [None] * (len(paths) + 1)
+
+    return dd.DataFrame(dsk, name, columns, divisions)
+
+
+def pandas_to_dask(executor, futures, partitions=None):
+    """ Convert a list of futures into a dask.dataframe
+
+    Parameters
+    ----------
+    executor: Executor
+        Executor through which we access the remote dataframes
+    futures: iterable of Futures
+        Futures that create dataframes to form the partitions
+    partitions: bool
+        Set to True if the data is cleanly partitioned along the index
+    """
+    columns = executor.submit(lambda df: df.columns, futures[0])
+    if partitions is True:
+        partitions = executor.map(lambda df: df.index.min(), futures)
+        partitions.append(executor.map(lambda df: df.index.max(), futures[-1]))
+        partitions = executor.gather(partitions)
+        if sorted(partitions) != partitions:
+            partitions = [None] * (len(futures) + 1)
+    elif partitions in (None, False):
+        partitions = [None] * (len(futures) + 1)
+    else:
+        raise NotImplementedError()
+    columns = columns.result()
+
+    name = 'distributed-pandas-to-dask-' + tokenize(*futures)
+    dsk = {(name, i): f for i, f in enumerate(futures)}
+
+    return dd.DataFrame(dsk, name, columns, divisions)
