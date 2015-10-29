@@ -79,8 +79,11 @@ operations.  Notably, ``distributed.Future`` objects can be used within
 
 The ability to use futures cheaply within ``submit`` and ``map`` methods
 enables the construction of very sophisticated data pipelines with simple code.
-The dynamic task schedulers within ``distributed`` are adapted from the dask_
-task schedulers and so are fairly sophisticated/efficient.
+Additionally, distributed can serve as a full dask task scheduler, enabling
+support for distributed arrays, dataframes, machine learning pipelines, and any
+other application build on dask graphs.  The dynamic task schedulers within
+``distributed`` are adapted from the dask_ task schedulers and so are fairly
+sophisticated/efficient.
 
 IPython Parallel Advantages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -99,5 +102,5 @@ IPython Parallel has the following advantages over ``distributed``
     decorators, etc..
 
 .. _`IPython Parallel`: http://ipython.org/ipython-doc/dev/parallel/
-.. _`a recipe: https://ipython.org/ipython-doc/3/parallel/dag_dependencies.html#dag-dependencies
+.. _`a recipe`: https://ipython.org/ipython-doc/3/parallel/dag_dependencies.html#dag-dependencies
 .. _dask: http://dask.pydata.org/en/latest/
