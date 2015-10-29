@@ -95,7 +95,7 @@ def clean_kwargs(kwargs):
     return kwargs
 
 
-def fill_kwargs(fn, args, kwargs):
+def fill_kwargs(fn, **kwargs):
     """ Read a csv file and fill up kwargs
 
     This normalizes kwargs against a sample file.  It does the following:
@@ -147,9 +147,9 @@ def fill_kwargs(fn, args, kwargs):
 
     kwargs = clean_kwargs(kwargs)
     try:
-        head = pd.read_csv(fn, *args, **assoc(kwargs, 'nrows', sample_nrows))
+        head = pd.read_csv(fn, **assoc(kwargs, 'nrows', sample_nrows))
     except StopIteration:
-        head = pd.read_csv(fn, *args, **kwargs)
+        head = pd.read_csv(fn, **kwargs)
 
     if 'parse_dates' not in kwargs:
         kwargs['parse_dates'] = [col for col in head.dtypes.index
@@ -167,41 +167,36 @@ def fill_kwargs(fn, args, kwargs):
 
     kwargs['dtype'] = dtype
 
-    kwargs['columns'] = list(head.columns)
-
-    return kwargs
+    return head.columns, kwargs
 
 
 @wraps(pd.read_csv)
-def read_csv(fn, *args, **kwargs):
+def read_csv(fn, **kwargs):
     if 'nrows' in kwargs:  # Just create single partition
-        df = read_csv(fn, *args, **dissoc(kwargs, 'nrows'))
+        df = read_csv(fn, **dissoc(kwargs, 'nrows'))
         return df.head(kwargs['nrows'], compute=False)
 
     chunkbytes = kwargs.pop('chunkbytes', 2**25)  # 50 MB
     index = kwargs.pop('index', None)
     kwargs = kwargs.copy()
 
-    kwargs = fill_kwargs(fn, args, kwargs)
+    columns, kwargs = fill_kwargs(fn, **kwargs)
 
     # Handle glob strings
     if '*' in fn:
         from .multi import concat
-        return concat([read_csv(f, *args, **kwargs) for f in sorted(glob(fn))])
+        return concat([read_csv(f, **kwargs) for f in sorted(glob(fn))])
 
-    token = tokenize(os.path.getmtime(fn), args, kwargs)
+    token = tokenize(os.path.getmtime(fn), kwargs)
     name = 'read-csv-%s-%s' % (fn, token)
     bom = get_bom(fn)
-
-    columns = kwargs.pop('columns')
-    header = kwargs.pop('header')
 
     # Chunk sizes and numbers
     total_bytes = file_size(fn, kwargs['compression'])
     nchunks = int(ceil(total_bytes / chunkbytes))
     divisions = [None] * (nchunks + 1)
 
-    first_kwargs = merge(kwargs, dict(header=header, compression=None))
+    first_kwargs = merge(kwargs, dict(compression=None))
     rest_kwargs = merge(kwargs, dict(header=None, compression=None))
 
     # Create dask graph
