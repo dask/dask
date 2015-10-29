@@ -274,7 +274,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             new_dsk = msg['dsk']
             new_keys = msg['keys']
             update_state(dsk, dependencies, dependents, held_data,
-                         set(who_has), in_play,
+                         who_has, in_play,
                          waiting, waiting_data, new_dsk, new_keys)
 
             restrictions.update(msg.get('restrictions', {}))
@@ -489,7 +489,7 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
 
 
 def update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, in_play,
+                 who_has, in_play,
                  waiting, waiting_data, new_dsk, new_keys):
     """ Update state given new dask graph and output keys
 
@@ -534,7 +534,7 @@ def update_state(dsk, dependencies, dependents, held_data,
     in_play |= exterior
     for key in exterior:
         deps = dependencies[key]
-        waiting[key] = deps - in_memory
+        waiting[key] = {d for d in deps if not (d in who_has and who_has[d])}
         for dep in deps:
             if dep not in waiting_data:
                 waiting_data[dep] = set()

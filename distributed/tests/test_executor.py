@@ -418,13 +418,12 @@ def test_recompute_released_key():
 
     _test_cluster(f)
 
+def slowinc(x):
+    from time import sleep
+    sleep(0.02)
+    return x + 1
 
 def test_stress_gc():
-    def slowinc(x):
-        from time import sleep
-        sleep(0.02)
-        return x + 1
-
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5) as e:
             x = e.submit(slowinc, 1)
@@ -764,4 +763,20 @@ def test_two_consecutive_executors_share_results():
 
         yield e._shutdown()
         yield f._shutdown()
+    _test_cluster(f)
+
+
+def test_submit_then_get_with_Future():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(slowinc, 1)
+        dsk = {'y': (inc, x)}
+
+        result = yield e._get(dsk, 'y')
+        assert result == 3
+
+        yield e._shutdown()
     _test_cluster(f)
