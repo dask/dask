@@ -13,7 +13,7 @@ from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize)
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.utils_test import cluster, slow
+from distributed.utils_test import cluster, slow, _test_cluster
 
 
 def inc(x):
@@ -26,31 +26,6 @@ def div(x, y):
 
 def throws(x):
     raise Exception()
-
-
-def _test_cluster(f):
-    @gen.coroutine
-    def g():
-        c = Center('127.0.0.1', 8017)
-        c.listen(c.port)
-        a = Worker('127.0.0.2', 8018, c.ip, c.port, ncores=2)
-        yield a._start()
-        b = Worker('127.0.0.3', 8019, c.ip, c.port, ncores=1)
-        yield b._start()
-
-        while len(c.ncores) < 2:
-            yield gen.sleep(0.01)
-
-        try:
-            yield f(c, a, b)
-        finally:
-            with ignoring():
-                yield a._close()
-            with ignoring():
-                yield b._close()
-            c.stop()
-
-    IOLoop.current().run_sync(g)
 
 
 def test_submit():

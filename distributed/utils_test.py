@@ -77,3 +77,33 @@ import pytest
 slow = pytest.mark.skipif(
             not pytest.config.getoption("--runslow"),
             reason="need --runslow option to run")
+
+
+from tornado import gen
+from tornado.ioloop import IOLoop
+
+def _test_cluster(f):
+    from .center import Center
+    from .worker import Worker
+    @gen.coroutine
+    def g():
+        c = Center('127.0.0.1', 8017)
+        c.listen(c.port)
+        a = Worker('127.0.0.2', 8018, c.ip, c.port, ncores=2)
+        yield a._start()
+        b = Worker('127.0.0.3', 8019, c.ip, c.port, ncores=1)
+        yield b._start()
+
+        while len(c.ncores) < 2:
+            yield gen.sleep(0.01)
+
+        try:
+            yield f(c, a, b)
+        finally:
+            with ignoring():
+                yield a._close()
+            with ignoring():
+                yield b._close()
+            c.stop()
+
+    IOLoop.current().run_sync(g)
