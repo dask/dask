@@ -21,7 +21,7 @@ from .. import array as da
 from ..async import get_sync
 
 from . import core
-from .core import DataFrame, Series
+from .core import DataFrame, Series, empty_like
 from .shuffle import set_partition
 
 
@@ -337,8 +337,9 @@ def from_pandas(data, npartitions, sort=True):
     from_bcolz : Construct a dask.DataFrame from a bcolz ctable
     read_csv : Construct a dask.DataFrame from a CSV file
     """
-    columns = getattr(data, 'columns', getattr(data, 'name', None))
-    if columns is None and not isinstance(data, pd.Series):
+    empty_data = empty_like(data)
+
+    if not isinstance(data, (pd.DataFrame, pd.Series)):
         raise TypeError("Input must be a pandas DataFrame or Series")
     nrows = len(data)
     chunksize = int(ceil(nrows / npartitions))
@@ -355,7 +356,7 @@ def from_pandas(data, npartitions, sort=True):
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))
     dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
-    return getattr(core, type(data).__name__)(dsk, name, columns, divisions)
+    return getattr(core, type(data).__name__)(dsk, name, empty_data, divisions)
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
