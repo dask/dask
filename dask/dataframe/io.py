@@ -337,6 +337,8 @@ def from_pandas(data, npartitions, sort=True):
     from_bcolz : Construct a dask.DataFrame from a bcolz ctable
     read_csv : Construct a dask.DataFrame from a CSV file
     """
+    if isinstance(getattr(data, 'index', None), pd.MultiIndex):
+        raise("Dask does not support MultiIndex Dataframes.")
     columns = getattr(data, 'columns', getattr(data, 'name', None))
     if columns is None and not isinstance(data, pd.Series):
         raise TypeError("Input must be a pandas DataFrame or Series")
