@@ -65,6 +65,8 @@ This limitation is for two reasons:
 1.  The pandas API is *huge*
 2.  Some operations are genuinely hard to do in parallel (e.g. sort)
 
+Notably, there is currently no support for dask.dataframes with `MultiIndex`s.
+
 Additionally, some important operations like ``set_index`` work, but are slower
 than in pandas because they may write out to disk.
 
