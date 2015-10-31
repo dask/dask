@@ -157,7 +157,7 @@ class Executor(object):
             msg = yield self.report_queue.get()
             if msg['op'] == 'close':
                 break
-            if msg['op'] == 'task-finished':
+            if msg['op'] == 'key-in-memory':
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]['status'] = 'finished'
                     self.futures[msg['key']]['event'].set()
@@ -204,9 +204,10 @@ class Executor(object):
         coroutines = ([
             self.report(),
             scheduler(self.scheduler_queue, self.report_queue, worker_queues,
-                      delete_queue, self.who_has, self.has_what, self.ncores,
-                      self.dask, self.restrictions, self.waiting, self.stacks,
-                      self.processing),
+                      delete_queue, who_has=self.who_has, has_what=self.has_what,
+                      ncores=self.ncores, dsk=self.dask,
+                      restrictions=self.restrictions, waiting=self.waiting,
+                      stacks=self.stacks, processing=self.processing),
             delete(self.scheduler_queue, delete_queue,
                    self.center.ip, self.center.port, self._delete_batch_time)]
          + [worker(self.scheduler_queue, worker_queues[w], w, n)
