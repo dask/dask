@@ -863,9 +863,12 @@ class Series(_Frame):
         result.dask = dsk
         result._name = _name
         result.metadata = metadata
-        result.name = metadata.name
         result.divisions = tuple(divisions)
         return result
+
+    @property
+    def name(self):
+        return self.metadata.name
 
     @property
     def _args(self):
