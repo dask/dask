@@ -226,7 +226,7 @@ class _Frame(Base):
         name = self._name + '-index'
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
-        return Index(merge(dsk, self.dask), name, self.metadata, self.divisions)
+        return Index(merge(dsk, self.dask), name, None, self.divisions)
 
     @property
     def known_divisions(self):
