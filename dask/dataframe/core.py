@@ -28,10 +28,37 @@ from ..utils import (repr_long_list, IndexCallable,
                      pseudorandom, derived_from, different_seeds)
 from ..base import Base, compute, tokenize, normalize_token
 
+
 no_default = '__no_default__'
 return_scalar = '__return_scalar__'
 
 pd.computation.expressions.set_use_numexpr(False)
+
+
+def empty_like(x):
+    """Return an empty pandas dataframe or series with the same columns/name
+    and dtype. With an index with the same name and dtype"""
+    if isinstance(x, pd.DataFrame):
+        in_index = x.index
+        index = pd.Index(range(0), dtype=in_index.dtype, name=in_index.name)
+
+        out = pd.DataFrame(columns=x.columns, index=index)
+        for c, d in zip(x.columns, x.dtypes):
+            out[c] = out[c].astype(d)
+        return out
+
+    elif isinstance(x, pd.Series):
+        index = pd.Index(range(0), dtype=in_index.dtype, name=in_index.name)
+        return pd.Series(name=x.name, dtype=x.dtypes, index=x.index)
+
+    elif isinstance(x, Series):
+        index = pd.Index(range(0), name=x.index.name)
+        return pd.Series(name=x.name, index=index)
+
+    elif isinstance(x, DataFrame):
+        index = pd.Index(range(0), name=x.index.name)
+        return pd.DataFrame(columns=x.columns, index=index)
+
 
 def _concat(args, **kwargs):
     """ Generic concat operation """
