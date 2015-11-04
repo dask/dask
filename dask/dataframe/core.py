@@ -183,12 +183,10 @@ class _Frame(Base):
     _finalize = staticmethod(finalize)
 
     def __new__(cls, dsk, _name, metadata, divisions):
-        if isinstance(metadata, (Series, pd.Series)):
-            metadata = metadata.name
-        elif isinstance(metadata, (DataFrame, pd.DataFrame)):
-            metadata = metadata.columns
+        if isinstance(metadata, (DataFrame, Series, pd.Series, pd.DataFrame)):
+            metadata = empty_like(metadata)
 
-        if np.isscalar(metadata) or metadata is None:
+        if isinstance(metadata, pd.Series) or metadata is None:
             return Series(dsk, _name, metadata, divisions)
         else:
             return DataFrame(dsk, _name, metadata, divisions)
@@ -228,7 +226,7 @@ class _Frame(Base):
         name = self._name + '-index'
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
-        return Index(merge(dsk, self.dask), name, None, self.divisions)
+        return Index(merge(dsk, self.dask), name, self.metadata, self.divisions)
 
     @property
     def known_divisions(self):
@@ -854,11 +852,18 @@ class Series(_Frame):
     _partition_type = pd.Series
     _token_prefix = 'series-'
 
-    def __new__(cls, dsk, _name, name, divisions):
+    def __new__(cls, dsk, _name, metadata, divisions):
+        if metadata is None:
+            metadata = pd.Series()
+        elif isinstance(metadata, (int, str, tuple)):
+            metadata = pd.Series(name=metadata)
+        elif isinstance(metadata, pd.DataFrame):
+            metadata = pd.Series(name=metadata.columns[0])
         result = object.__new__(cls)
         result.dask = dsk
         result._name = _name
-        result.name = name
+        result.metadata = metadata
+        result.name = metadata.name
         result.divisions = tuple(divisions)
         return result
 
@@ -1202,13 +1207,20 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _token_prefix = 'dataframe-'
 
-    def __new__(cls, dask, name, columns, divisions):
+    def __new__(cls, dask, name, metadata, divisions):
+        if isinstance(metadata, (list, tuple, pd.Index)):
+            metadata = pd.DataFrame(columns=metadata)
+
         result = object.__new__(cls)
         result.dask = dask
         result._name = name
-        result.columns = tuple(columns)
+        result.metadata = metadata
         result.divisions = tuple(divisions)
         return result
+
+    @property
+    def columns(self):
+        return tuple(self.metadata.columns)
 
     @property
     def _args(self):
@@ -1228,6 +1240,9 @@ class DataFrame(_Frame):
         return self._partition_type(columns=self.columns)
 
     def __getitem__(self, key):
+        if key == 'columns':
+            # hack to avoid recursive loop looking up self.columns
+            return tuple(self.metadata.columns)
         if np.isscalar(key):
             name = '{0}.{1}'.format(self._name, key)
             if key in self.columns:
