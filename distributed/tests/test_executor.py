@@ -884,3 +884,25 @@ def test_global_executors():
                 assert default_executor(f) is f
 
     assert not _global_executors
+
+
+def test_exception_on_exception():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+
+        x = e.submit(lambda: 1 / 0)
+        y = e.submit(inc, x)
+
+        IOLoop.current().spawn_callback(e._go)
+
+        with pytest.raises(ZeroDivisionError):
+            out = yield y._result()
+
+        z = e.submit(inc, y)
+
+        with pytest.raises(ZeroDivisionError):
+            out = yield z._result()
+
+        yield e._shutdown()
+    _test_cluster(f)
