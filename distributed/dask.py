@@ -105,7 +105,7 @@ def report(report_queue, scheduler_queue, who_has, dsk, result):
 
     while finished_results != out_keys:
         msg = yield report_queue.get()
-        if msg['op'] == 'task-finished':
+        if msg['op'] == 'key-in-memory':
             if msg['key'] in out_keys:
                 finished_results.add(msg['key'])
         if msg['op'] == 'lost-data':

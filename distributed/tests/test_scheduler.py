@@ -118,7 +118,7 @@ def test_update_state():
     waiting_data = {'x': {'y'}, 'y': set()}
 
     held_data = {'y'}
-    in_memory = {'x'}
+    who_has = {'x': {'alice'}}
     processing = set()
     released = set()
     in_play = {'x', 'y'}
@@ -136,7 +136,7 @@ def test_update_state():
     e_held_data = {'y', 'z'}
 
     update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, in_play,
+                 who_has, in_play,
                  waiting, waiting_data, new_dsk, new_keys)
 
     assert dsk == e_dsk
@@ -156,7 +156,7 @@ def test_update_state_with_processing():
     waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
 
     held_data = {'z'}
-    in_memory = {'x'}
+    who_has = {'x': {'alice'}}
     processing = {'y'}
     released = set()
     in_play = {'z', 'x', 'y'}
@@ -171,7 +171,7 @@ def test_update_state_with_processing():
     e_held_data = {'b', 'c', 'z'}
 
     update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, in_play,
+                 who_has, in_play,
                  waiting, waiting_data, new_dsk, new_keys)
 
     assert waiting == e_waiting
@@ -188,7 +188,7 @@ def test_update_state_respects_WrappedKeys():
     waiting_data = {'x': {'y'}, 'y': set()}
 
     held_data = {'y'}
-    in_memory = {'x'}
+    who_has = {'x': {'alice'}}
     processing = set()
     released = set()
     in_play = {'x', 'y'}
@@ -204,11 +204,11 @@ def test_update_state_respects_WrappedKeys():
 
     new_dsk = {'z': (add, WrappedKey('y'), 10)}
     a = update_state(*map(deepcopy, [dsk, dependencies, dependents, held_data,
-                                     in_memory, in_play,
+                                     who_has, in_play,
                                      waiting, waiting_data, new_dsk, {'z'}]))
     new_dsk = {'z': (add, 'y', 10)}
     b = update_state(*map(deepcopy, [dsk, dependencies, dependents, held_data,
-                                     in_memory, in_play,
+                                     who_has, in_play,
                                      waiting, waiting_data, new_dsk, {'z'}]))
     assert a == b
 
@@ -221,7 +221,7 @@ def test_update_state_respects_data_in_memory():
     waiting_data = {'y': set()}
 
     held_data = {'y'}
-    in_memory = {'y'}
+    who_has = {'y': {'alice'}}
     processing = set()
     released = {'x'}
     in_play = {'y'}
@@ -235,7 +235,7 @@ def test_update_state_respects_data_in_memory():
     e_held_data = {'y', 'z'}
 
     update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, in_play,
+                 who_has, in_play,
                  waiting, waiting_data, new_dsk, new_keys)
 
     assert dsk == e_dsk
@@ -253,7 +253,7 @@ def test_update_state_supports_recomputing_released_results():
     waiting_data = {'z': set()}
 
     held_data = {'z'}
-    in_memory = {'z'}
+    who_has = {'z': {'alice'}}
     processing = set()
     released = {'x', 'y'}
     in_play = {'z'}
@@ -267,7 +267,7 @@ def test_update_state_supports_recomputing_released_results():
     e_held_data = {'y', 'z'}
 
     update_state(dsk, dependencies, dependents, held_data,
-                 in_memory, in_play,
+                 who_has, in_play,
                  waiting, waiting_data, new_dsk, new_keys)
 
     assert dsk == e_dsk

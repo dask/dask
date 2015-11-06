@@ -13,7 +13,7 @@ from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize)
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.utils_test import cluster, slow
+from distributed.utils_test import cluster, slow, _test_cluster
 
 
 def inc(x):
@@ -26,31 +26,6 @@ def div(x, y):
 
 def throws(x):
     raise Exception()
-
-
-def _test_cluster(f):
-    @gen.coroutine
-    def g():
-        c = Center('127.0.0.1', 8017)
-        c.listen(c.port)
-        a = Worker('127.0.0.2', 8018, c.ip, c.port, ncores=2)
-        yield a._start()
-        b = Worker('127.0.0.3', 8019, c.ip, c.port, ncores=1)
-        yield b._start()
-
-        while len(c.ncores) < 2:
-            yield gen.sleep(0.01)
-
-        try:
-            yield f(c, a, b)
-        finally:
-            with ignoring():
-                yield a._close()
-            with ignoring():
-                yield b._close()
-            c.stop()
-
-    IOLoop.current().run_sync(g)
 
 
 def test_submit():
@@ -443,13 +418,12 @@ def test_recompute_released_key():
 
     _test_cluster(f)
 
+def slowinc(x):
+    from time import sleep
+    sleep(0.02)
+    return x + 1
 
 def test_stress_gc():
-    def slowinc(x):
-        from time import sleep
-        sleep(0.02)
-        return x + 1
-
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5) as e:
             x = e.submit(slowinc, 1)
@@ -789,4 +763,20 @@ def test_two_consecutive_executors_share_results():
 
         yield e._shutdown()
         yield f._shutdown()
+    _test_cluster(f)
+
+
+def test_submit_then_get_with_Future():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(slowinc, 1)
+        dsk = {'y': (inc, x)}
+
+        result = yield e._get(dsk, 'y')
+        assert result == 3
+
+        yield e._shutdown()
     _test_cluster(f)

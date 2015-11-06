@@ -1,4 +1,5 @@
 """ This file is experimental and may disappear without warning """
+from __future__ import print_function, division, absolute_import
 
 import os
 
@@ -124,36 +125,5 @@ def read_csv(executor, location, namenode_host, namenode_port, **kwargs):
            for i, path in enumerate(paths)}
     dsk[(name, 0)] = (apply, pd.read_csv, (paths[0],), kwargs)
     divisions = [None] * (len(paths) + 1)
-
-    return dd.DataFrame(dsk, name, columns, divisions)
-
-
-def pandas_to_dask(executor, futures, partitions=None):
-    """ Convert a list of futures into a dask.dataframe
-
-    Parameters
-    ----------
-    executor: Executor
-        Executor through which we access the remote dataframes
-    futures: iterable of Futures
-        Futures that create dataframes to form the partitions
-    partitions: bool
-        Set to True if the data is cleanly partitioned along the index
-    """
-    columns = executor.submit(lambda df: df.columns, futures[0])
-    if partitions is True:
-        partitions = executor.map(lambda df: df.index.min(), futures)
-        partitions.append(executor.map(lambda df: df.index.max(), futures[-1]))
-        partitions = executor.gather(partitions)
-        if sorted(partitions) != partitions:
-            partitions = [None] * (len(futures) + 1)
-    elif partitions in (None, False):
-        partitions = [None] * (len(futures) + 1)
-    else:
-        raise NotImplementedError()
-    columns = columns.result()
-
-    name = 'distributed-pandas-to-dask-' + tokenize(*futures)
-    dsk = {(name, i): f for i, f in enumerate(futures)}
 
     return dd.DataFrame(dsk, name, columns, divisions)

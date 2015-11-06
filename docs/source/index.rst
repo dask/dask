@@ -31,3 +31,4 @@ This library is experimental, broken, and unstable.
    clients
    scheduler
    related-work
+   comparison
