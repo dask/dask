@@ -61,10 +61,13 @@ class Future(WrappedKey):
     @gen.coroutine
     def _result(self, raiseit=True):
         yield self.event.wait()
-        result = yield self.executor._gather([self])
-        if self.status == 'error' and raiseit:
-            raise result[0]
+        if self.status == 'error':
+            if raiseit:
+                raise self.executor.futures[self.key]['exception']
+            else:
+                raise Return(self.executor.futures[self.key]['exception'])
         else:
+            result = yield self.executor._gather([self])
             raise gen.Return(result[0])
 
     def __del__(self):
@@ -168,6 +171,7 @@ class Executor(object):
             if msg['op'] == 'task-erred':
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]['status'] = 'error'
+                    self.futures[msg['key']]['exception'] = msg['exception']
                     self.futures[msg['key']]['event'].set()
 
     @gen.coroutine

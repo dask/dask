@@ -42,15 +42,15 @@ def test_worker():
         aa = rpc(ip=a.ip, port=a.port)
         bb = rpc(ip=b.ip, port=b.port)
 
-        response = yield aa.compute(key='x', function=add,
-                                    args=[1, 2], needed=[],
-                                    close=True)
+        response, _ = yield aa.compute(key='x', function=add,
+                                       args=[1, 2], needed=[],
+                                       close=True)
         assert response == b'OK'
         assert a.data['x'] == 3
         assert c.who_has['x'] == set([(a.ip, a.port)])
 
-        response = yield bb.compute(key='y', function=add,
-                                    args=['x', 10], needed=['x'])
+        response, _ = yield bb.compute(key='y', function=add,
+                                       args=['x', 10], needed=['x'])
         assert response == b'OK'
         assert b.data['y'] == 13
         assert c.who_has['y'] == set([(b.ip, b.port)])
@@ -58,10 +58,10 @@ def test_worker():
         def bad_func():
             1 / 0
 
-        response = yield bb.compute(key='z', function=bad_func,
-                                    args=(), needed=(), close=True)
+        response, error = yield bb.compute(key='z', function=bad_func,
+                                           args=(), needed=(), close=True)
         assert response == b'error'
-        assert isinstance(b.data['z'], ZeroDivisionError)
+        assert isinstance(error, ZeroDivisionError)
 
         aa.close_streams()
         yield a._close()

@@ -75,23 +75,22 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
                 response = yield worker.update_data(data={key: task})
                 assert response == b'OK', response
             else:
-                response = yield worker.compute(function=_execute_task,
-                                                args=(task, {}),
-                                                needed=needed,
-                                                key=key,
-                                                kwargs={})
+                response, content = yield worker.compute(function=_execute_task,
+                                                         args=(task, {}),
+                                                         needed=needed,
+                                                         key=key,
+                                                         kwargs={})
             if response == b'error':
-                err = yield worker.get_data(keys=[key])
                 scheduler_queue.put_nowait({'op': 'task-erred',
                                             'key': key,
                                             'worker': ident,
-                                            'exception': err[key]})
+                                            'exception': content})
 
-            elif isinstance(response, KeyError):
+            elif response == b'missing-data':
                 scheduler_queue.put_nowait({'op': 'task-missing-data',
                                             'key': key,
                                             'worker': ident,
-                                            'missing': response.args})
+                                            'missing': content.args})
 
             else:
                 scheduler_queue.put_nowait({'op': 'task-finished',

@@ -125,7 +125,7 @@ class Worker(Server):
                 other = yield _gather(self.center, needed=needed)
             except KeyError as e:
                 logger.warn("Could not find data during gather in compute", e)
-                raise Return(e)
+                raise Return((b'missing-data', e))
             data2 = merge(self.data, dict(zip(needed, other)))
         else:
             data2 = self.data
@@ -139,11 +139,15 @@ class Worker(Server):
             job_counter[0] += 1
             i = job_counter[0]
             logger.info("Start job %d: %s", i, funcname(function))
-            result = yield self.executor.submit(function, *args2, **kwargs2)
+            self.data[key] = yield self.executor.submit(function, *args2, **kwargs2)
             logger.info("Finish job %d: %s", i, funcname(function))
-            out_response = b'OK'
+            response = yield self.center.add_keys(address=(self.ip, self.port),
+                                                  keys=[key])
+            if not response == b'OK':
+                logger.warn('Could not report results of work to center: %s',
+                            response.decode())
+            out = (b'OK', None)
         except Exception as e:
-            result = e
             exc_type, exc_value, exc_traceback = sys.exc_info()
             tb = ''.join(traceback.format_tb(exc_traceback))
             logger.warn(" Compute Failed\n"
@@ -151,16 +155,9 @@ class Worker(Server):
                 "args:     %s\n"
                 "kwargs:   %s\n", funcname(function), str(args2), str(kwargs2),
                 exc_info=True)
-            out_response = b'error'
+            out = (b'error', e)
 
-        # Store and tell center about our new data
-        self.data[key] = result
-        response = yield self.center.add_keys(address=(self.ip, self.port),
-                                              keys=[key])
-        if not response == b'OK':
-            logger.warn('Could not report results of work to center: ' + response.decode())
-
-        raise Return(out_response)
+        raise Return(out)
 
     @gen.coroutine
     def update_data(self, stream, data=None, report=True):
