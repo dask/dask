@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 
 import dask.dataframe as dd
 from dask.base import tokenize
-from toolz import identity
 from tornado import gen
 
 from .utils import sync, ignoring
@@ -25,7 +24,7 @@ def _futures_to_dask_dataframe(executor, futures, divisions=None):
     columns = yield columns._result()
 
     name = 'distributed-pandas-to-dask-' + tokenize(*futures)
-    dsk = {(name, i): (identity, f) for i, f in enumerate(futures)}
+    dsk = {(name, i): f for i, f in enumerate(futures)}
 
     raise gen.Return(dd.DataFrame(dsk, name, columns, divisions))
 
