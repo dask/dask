@@ -154,6 +154,15 @@ def test_compute_array_bag():
     assert bb == [1, 2, 3]
 
 
+def test_compute_with_literal():
+    x = da.arange(5, chunks=2)
+    y = 10
+
+    xx, yy = compute(x, y)
+    assert (xx == x.compute()).all()
+    assert yy == y
+
+
 def test_visualize():
     pytest.importorskip('graphviz')
     try:
