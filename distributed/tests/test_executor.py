@@ -780,3 +780,19 @@ def test_submit_then_get_with_Future():
 
         yield e._shutdown()
     _test_cluster(f)
+
+
+def test_aliases():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        x = e.submit(inc, 1)
+
+        dsk = {'y': x}
+        result = yield e._get(dsk, 'y')
+        assert result == 2
+
+        yield e._shutdown()
+    _test_cluster(f)

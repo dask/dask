@@ -6,7 +6,7 @@ import logging
 from math import ceil
 from time import time
 
-from toolz import frequencies, memoize, concat, first
+from toolz import frequencies, memoize, concat, first, identity
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -304,6 +304,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             update_state(dsk, dependencies, dependents, held_data,
                          who_has, in_play,
                          waiting, waiting_data, msg['dsk'], msg['keys'])
+
+            cover_aliases(dsk, msg['dsk'])
 
             restrictions.update(msg.get('restrictions', {}))
 
@@ -761,3 +763,22 @@ def heal_missing_data(dsk, dependencies, dependents, held_data,
         ensure_key(key)
 
     assert set(missing).issubset(in_play)
+
+
+def cover_aliases(dsk, new_keys):
+    """ Replace aliases with calls to identity
+
+    Warning: operates in place
+
+    >>> dsk = {'x': 1, 'y': 'x'}
+    >>> cover_aliases(dsk, ['y'])  # doctest: +SKIP
+    {'x': 1, 'y': (<function identity ...>, 'x')}
+    """
+    for key in new_keys:
+        try:
+            if dsk[key] in dsk:
+                dsk[key] = (identity, dsk[key])
+        except TypeError:
+            pass
+
+    return dsk
