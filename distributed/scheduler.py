@@ -539,10 +539,11 @@ def update_state(dsk, dependencies, dependents, held_data,
         new_keys = set(new_keys)
 
     for key in new_dsk:  # add dependencies/dependents
+        if key in dependencies:
+            continue
+
         deps = get_dependencies(dsk, key)
-        if key not in dependencies:
-            dependencies[key] = set()
-        dependencies[key] |= deps
+        dependencies[key] = deps
 
         for dep in deps:
             if dep not in dependents:
@@ -557,8 +558,6 @@ def update_state(dsk, dependencies, dependents, held_data,
         if s:
             # TODO: check against in-memory, maybe add to in_play
             dsk[key] = vv
-            if key not in dependencies:
-                dependencies[key] = set()
             dependencies[key] |= s
             for dep in s:
                 if not dep in dependencies:
