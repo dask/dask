@@ -4,7 +4,8 @@ import dask.dataframe as dd
 from distributed import Executor
 from distributed.utils_test import cluster, _test_cluster, slow
 from distributed.collections import (_futures_to_dask_dataframe,
-        futures_to_dask_dataframe)
+        futures_to_dask_dataframe, _futures_to_dask_array,
+        futures_to_dask_array)
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -89,3 +90,44 @@ def test_dataframes():
                 local = f(ldf).compute(get=dask.get)
                 remote = f(rdf).compute(get=e.get)
                 assert_equal(local, remote)
+
+
+def test__futures_to_dask_array():
+    import dask.array as da
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        remote_arrays = [[[e.submit(np.full, (2, 3, 4), i + j + k)
+                            for i in range(2)]
+                            for j in range(2)]
+                            for k in range(4)]
+
+        x = yield _futures_to_dask_array(e, remote_arrays)
+        assert x.chunks == ((2, 2, 2, 2), (3, 3), (4, 4))
+        assert x.dtype == np.full((), 0).dtype
+
+        assert isinstance(x, da.Array)
+        expr = x.sum()
+        result = yield e._get(expr.dask, expr._keys())
+        assert isinstance(result[0], np.number)
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def test_futures_to_dask_array():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            remote_arrays = [[e.submit(np.full, (3, 3), i + j)
+                                for i in range(3)]
+                                for j in range(3)]
+
+
+            x = futures_to_dask_array(e, remote_arrays)
+            assert x.chunks == ((3, 3, 3), (3, 3, 3))
+            assert x.dtype == np.full((), 0).dtype
+
+            assert x.sum().compute(get=e.get) == 162
+            assert (x + x.T).sum().compute(get=e.get) == 162 * 2
