@@ -1,7 +1,9 @@
 language: python
 sudo: false
 matrix:
+  fast_finish: true
   include:
+    - python: "2.7"
     - python: "3.4"
     - python: "3.5"
   allow_failures:
