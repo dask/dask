@@ -7,7 +7,8 @@ pytest.importorskip('toolz')
 from toolz import compose, partial, curry
 
 import dask
-from dask.base import compute, tokenize, normalize_token, normalize_function
+from dask.base import (compute, tokenize, normalize_token, normalize_function,
+        visualize)
 from dask.utils import raises
 
 
@@ -172,5 +173,7 @@ def test_visualize():
         assert os.path.exists(os.path.join(d, 'mydask.png'))
         x.visualize(filename=os.path.join(d, 'mydask.pdf'))
         assert os.path.exists(os.path.join(d, 'mydask.pdf'))
+        visualize(x, 1, 2, filename=os.path.join(d, 'mydask.png'))
+        assert os.path.exists(os.path.join(d, 'mydask.png'))
     finally:
         shutil.rmtree(d)

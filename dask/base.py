@@ -111,6 +111,7 @@ def compute(*args, **kwargs):
 
 
 def visualize(*args, **kwargs):
+    args = [arg for arg in args if isinstance(arg, Base)]
     filename = kwargs.pop('filename', 'mydask')
     optimize_graph = kwargs.pop('optimize_graph', False)
     from dask.dot import dot_graph
