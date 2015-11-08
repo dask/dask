@@ -525,6 +525,9 @@ def test_to_hdf():
         out = pd.read_hdf(fn, '/data')
         tm.assert_series_equal(df.x, out[:])
 
+    a = dd.from_pandas(df, 1)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data')
 
 def test_read_hdf():
     pytest.importorskip('tables')

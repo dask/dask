@@ -598,7 +598,8 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                             'complevel': complevel, 'complib': complib,
                             'fletcher32': fletcher32}))
 
-    DataFrame._get(merge(df.dask, dsk), (name, i), get=get_sync, **kwargs)
+    DataFrame._get(merge(df.dask, dsk), (name, df.npartitions - 1),
+                   get=get_sync, **kwargs)
 
 
 dont_use_fixed_error_message = """
