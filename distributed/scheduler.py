@@ -361,6 +361,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             del worker_queues[worker]
             del ncores[worker]
             del stacks[worker]
+            logger.info("Lost all workers")
             del processing[worker]
             missing_keys = set()
             for key in keys:
@@ -685,7 +686,7 @@ def decide_worker(dependencies, stacks, who_has, restrictions, key):
             workers = {w for w in stacks if w[0] in r}
             if not workers:
                 raise ValueError("Task has no valid workers", key, r)
-    if not workers:
+    if not workers or not stacks:
         raise ValueError("No workers found")
 
     worker = min(workers, key=lambda w: len(stacks[w]))
@@ -717,6 +718,9 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
             leaves.append(k)
         else:
             ready.append(k)
+
+    if not stacks:
+        raise ValueError("No workers found")
 
     leaves = sorted(leaves, key=keyorder.get)
 

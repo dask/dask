@@ -314,6 +314,11 @@ def test_decide_worker_with_restrictions():
     assert result in {alice, charlie}
 
 
+def test_decide_worker_without_stacks():
+    with pytest.raises(ValueError):
+        result = decide_worker({'x': []}, [], {}, {}, 'x')
+
+
 def test_validate_state():
     dsk = {'x': 1, 'y': (inc, 'x')}
     dependencies = {'x': set(), 'y': {'x'}}
