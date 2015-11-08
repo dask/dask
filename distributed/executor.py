@@ -117,6 +117,9 @@ class Executor(object):
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
         self._delete_batch_time = delete_batch_time
+        self.ncores = dict()
+        self.who_has = dict()
+        self.has_what = dict()
 
         if start:
             self.start()
@@ -190,9 +193,12 @@ class Executor(object):
 
     @gen.coroutine
     def _sync_center(self):
-        self.who_has, self.has_what, self.ncores = yield [self.center.who_has(),
-                                                         self.center.has_what(),
-                                                         self.center.ncores()]
+        who_has, has_what, ncores = yield [self.center.who_has(),
+                                           self.center.has_what(),
+                                           self.center.ncores()]
+        self.who_has.update(who_has)
+        self.has_what.update(has_what)
+        self.ncores.update(ncores)
 
     @gen.coroutine
     def _go(self):

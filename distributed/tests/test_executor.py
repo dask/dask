@@ -796,3 +796,8 @@ def test_aliases():
 
         yield e._shutdown()
     _test_cluster(f)
+
+
+def test_executor_has_state_on_initialization():
+    e = Executor('127.0.0.1:8787', start=False)
+    assert isinstance(e.ncores, dict)
