@@ -816,3 +816,13 @@ def test_read_hdf_doesnt_segfault():
 
         ddf = dd.read_hdf(fn, '/x', chunksize=2)
         assert len(ddf) == N
+
+
+def test_read_csv_header_issue_823():
+    text = '''a b c\n1 2 3\n4 5 6'''.replace(' ', '\t')
+    with filetext(text) as fn:
+        df = dd.read_csv(fn, sep='\t')
+        eq(df, pd.read_csv(fn, sep='\t'))
+
+        df = dd.read_csv(fn, delimiter='\t')
+        eq(df, pd.read_csv(fn, delimiter='\t'))
