@@ -122,6 +122,7 @@ class Server(TCPServer):
 def connect_sync(host, port, timeout=1):
     start = time()
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
     while True:
         try:
             s.connect((host, port))
@@ -232,7 +233,7 @@ class rpc(object):
     To reduce verbosity we use an ``rpc`` object.
 
     >>> remote = rpc(ip=ip, port=port)  # doctest: +SKIP
-    >>> response = yield rpc.add(x=10, y=20)  # doctest: +SKIP
+    >>> response = yield remote.add(x=10, y=20)  # doctest: +SKIP
 
     One rpc object can be reused for several interactions.
     Additionally, this object creates and destroys many streams as necessary

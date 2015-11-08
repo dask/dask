@@ -1,7 +1,9 @@
 from functools import partial
 from multiprocessing import Process
+import socket
 
 from tornado import gen, ioloop
+import pytest
 
 from distributed.core import (read, write, pingpong, read_sync, write_sync,
         Server, connect_sync, rpc, connect)
@@ -111,3 +113,8 @@ def test_large_packets():
         server.stop()
 
     ioloop.IOLoop.current().run_sync(f)
+
+
+def test_connect_sync_timeouts():
+    with pytest.raises(socket.timeout):
+        s = connect_sync('42.42.245.108', 47248, timeout=0.01)
