@@ -216,7 +216,7 @@ def read_csv(fn, **kwargs):
     return result
 
 
-def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
+def infer_header(fn, **kwargs):
     """ Guess if csv file has a header or not
 
     This uses Pandas to read a sample of the file, then looks at the column
@@ -226,10 +226,12 @@ def infer_header(fn, encoding='utf-8', compression=None, **kwargs):
     Returns True or False
     """
     # See read_csv docs for header for reasoning
+    kwargs.update(dict(nrows=5, names=None, parse_dates=None))
     try:
-        df = pd.read_csv(fn, encoding=encoding, compression=compression,nrows=5)
+        df = pd.read_csv(fn, **kwargs)
     except StopIteration:
-        df = pd.read_csv(fn, encoding=encoding, compression=compression)
+        kwargs['nrows'] = None
+        df = pd.read_csv(fn, **kwargs)
     return (len(df) > 0 and
             all(re.match('^\s*\D[\w ]*\s*$', n) for n in df.columns) and
             not all(dt == 'O' for dt in df.dtypes))
@@ -598,7 +600,8 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
                             'complevel': complevel, 'complib': complib,
                             'fletcher32': fletcher32}))
 
-    DataFrame._get(merge(df.dask, dsk), (name, i), get=get_sync, **kwargs)
+    DataFrame._get(merge(df.dask, dsk), (name, df.npartitions - 1),
+                   get=get_sync, **kwargs)
 
 
 dont_use_fixed_error_message = """

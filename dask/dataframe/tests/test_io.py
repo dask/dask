@@ -525,6 +525,9 @@ def test_to_hdf():
         out = pd.read_hdf(fn, '/data')
         tm.assert_series_equal(df.x, out[:])
 
+    a = dd.from_pandas(df, 1)
+    with tmpfile('h5') as fn:
+        a.to_hdf(fn, '/data')
 
 def test_read_hdf():
     pytest.importorskip('tables')
@@ -813,3 +816,13 @@ def test_read_hdf_doesnt_segfault():
 
         ddf = dd.read_hdf(fn, '/x', chunksize=2)
         assert len(ddf) == N
+
+
+def test_read_csv_header_issue_823():
+    text = '''a b c\n1 2 3\n4 5 6'''.replace(' ', '\t')
+    with filetext(text) as fn:
+        df = dd.read_csv(fn, sep='\t')
+        eq(df, pd.read_csv(fn, sep='\t'))
+
+        df = dd.read_csv(fn, delimiter='\t')
+        eq(df, pd.read_csv(fn, delimiter='\t'))
