@@ -142,8 +142,11 @@ def fill_kwargs(fn, **kwargs):
 
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)
-    if 'header' not in kwargs:
-        kwargs['header'] = 0 if infer_header(fn, **kwargs) else None
+        if 'header' not in kwargs:
+            kwargs['header'] = 0
+    else:
+        if 'header' not in kwargs:
+            kwargs['header'] = None
 
     kwargs = clean_kwargs(kwargs)
     try:
@@ -214,27 +217,6 @@ def read_csv(fn, **kwargs):
         result = result.set_index(index)
 
     return result
-
-
-def infer_header(fn, **kwargs):
-    """ Guess if csv file has a header or not
-
-    This uses Pandas to read a sample of the file, then looks at the column
-    names to see if they are all phrase-like (words, potentially with spaces
-    in between.)
-
-    Returns True or False
-    """
-    # See read_csv docs for header for reasoning
-    kwargs.update(dict(nrows=5, names=None, parse_dates=None))
-    try:
-        df = pd.read_csv(fn, **kwargs)
-    except StopIteration:
-        kwargs['nrows'] = None
-        df = pd.read_csv(fn, **kwargs)
-    return (len(df) > 0 and
-            all(re.match('^\s*\D[\w ]*\s*$', n) for n in df.columns) and
-            not all(dt == 'O' for dt in df.dtypes))
 
 
 def csv_names(fn, encoding='utf-8', compression=None, names=None,
