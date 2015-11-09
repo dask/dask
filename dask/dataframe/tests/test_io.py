@@ -15,7 +15,7 @@ import threading
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
-        from_array, from_bcolz, infer_header, from_dask_array)
+        from_array, from_bcolz, from_dask_array)
 from dask.compatibility import StringIO
 
 from dask.utils import filetext, tmpfile, ignoring
@@ -96,13 +96,6 @@ def test_consistent_dtypes():
     with filetext(text) as fn:
         df = dd.read_csv(fn, chunkbytes=30)
         assert isinstance(df.amount.sum().compute(), float)
-
-
-def test_infer_header():
-    with filetext('name,val\nAlice,100\nNA,200') as fn:
-        assert infer_header(fn) == True
-    with filetext('Alice,100\nNA,200') as fn:
-        assert infer_header(fn) == False
 
 
 def eq(a, b):
@@ -819,7 +812,7 @@ def test_read_hdf_doesnt_segfault():
 
 
 def test_read_csv_header_issue_823():
-    text = '''a b c\n1 2 3\n4 5 6'''.replace(' ', '\t')
+    text = '''a b c-d\n1 2 3\n4 5 6'''.replace(' ', '\t')
     with filetext(text) as fn:
         df = dd.read_csv(fn, sep='\t')
         eq(df, pd.read_csv(fn, sep='\t'))
