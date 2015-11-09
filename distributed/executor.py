@@ -118,8 +118,8 @@ class Executor(object):
         self._shutdown_event = Event()
         self._delete_batch_time = delete_batch_time
         self.ncores = dict()
-        self.who_has = dict()
-        self.has_what = dict()
+        self.who_has = defaultdict(set)
+        self.has_what = defaultdict(set)
 
         if start:
             self.start()
