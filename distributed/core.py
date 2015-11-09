@@ -282,7 +282,7 @@ class rpc(object):
         for s in to_clear:
             del self.streams[s]
         self.streams[stream] = False     # mark as taken
-        assert not stream.closed()
+        # assert not stream.closed()
         raise Return(stream)
 
     def close_streams(self):
