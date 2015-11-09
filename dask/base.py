@@ -85,25 +85,33 @@ def compute(*args, **kwargs):
     >>> compute(a, b)
     (45, 4.5)
     """
-    groups = groupby(attrgetter('_optimize'), args)
+    variables = [a for a in args if isinstance(a, Base)]
+    groups = groupby(attrgetter('_optimize'), variables)
+
     get = kwargs.pop('get', None) or _globals['get']
 
     if not get:
-        get = args[0]._default_get
-        if not all(a._default_get == get for a in args):
+        get = variables[0]._default_get
+        if not all(a._default_get == get for a in variables):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler `get` function using either "
                              "the `get` kwarg or globally with `set_options`.")
 
-    dsk = merge([opt(merge([v.dask for v in val]), [v._keys() for v in val])
+    dsk = merge([opt(merge([v.dask for v in val]),
+                     [v._keys() for v in val])
                 for opt, val in groups.items()])
-    keys = [arg._keys() for arg in args]
+    keys = [var._keys() for var in variables]
     results = get(dsk, keys, **kwargs)
-    return tuple(a._finalize(a, r) for a, r in zip(args, results))
+
+    results_iter = iter(results)
+    return tuple(a if not isinstance(a, Base)
+                   else a._finalize(a, next(results_iter))
+                   for a in args)
 
 
 def visualize(*args, **kwargs):
+    args = [arg for arg in args if isinstance(arg, Base)]
     filename = kwargs.pop('filename', 'mydask')
     optimize_graph = kwargs.pop('optimize_graph', False)
     from dask.dot import dot_graph
