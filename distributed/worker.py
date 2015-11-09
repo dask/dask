@@ -65,7 +65,7 @@ class Worker(Server):
         self.ncores = ncores or _ncores
         self.data = dict()
         self.status = None
-        self.executor = ThreadPoolExecutor(10)
+        self.executor = ThreadPoolExecutor(ncores)
         self.center = rpc(ip=center_ip, port=center_port)
 
         handlers = {'compute': self.compute,
@@ -102,6 +102,7 @@ class Worker(Server):
         yield self.center.unregister(address=(self.ip, self.port))
         self.center.close_streams()
         self.stop()
+        self.executor.shutdown()
         self.status = 'closed'
 
     @gen.coroutine
@@ -168,13 +169,14 @@ class Worker(Server):
             assert response == b'OK'
         raise Return(b'OK')
 
-
     @gen.coroutine
     def delete_data(self, stream, keys=None, report=True):
         for key in keys:
             if key in self.data:
                 del self.data[key]
+        logger.debug("Deleted %d keys", len(keys))
         if report:
+            logger.debug("Reporting loss of keys to center")
             yield self.center.remove_keys(address=(self.ip, self.port),
                                           keys=keys)
         raise Return(b'OK')

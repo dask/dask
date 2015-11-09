@@ -79,7 +79,8 @@ class Server(TCPServer):
 
         Coroutines should expect a single IOStream object.
         """
-        logger.info("Connection from %s:%d" % address)
+        logger.info("Connection from %s:%d to %s", address[0], address[1],
+                    type(self).__name__)
         try:
             while True:
                 try:
@@ -117,6 +118,8 @@ class Server(TCPServer):
                 stream.close()
             except Exception as e:
                 logger.warn("Failed while closing writer",  exc_info=True)
+        logger.info("Close connection from %s:%d to %s", address[0], address[1],
+                    type(self).__name__)
 
 
 def connect_sync(host, port, timeout=1):
