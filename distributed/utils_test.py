@@ -20,7 +20,6 @@ def run_center(port):
     center = Center('127.0.0.1', port)
     center.listen(port)
     IOLoop.current().start()
-    IOLoop.current().close()  # Never reached. TODO: clean shutdown of IOLoop
 
 
 def run_worker(port, center_port, **kwargs):
@@ -31,7 +30,6 @@ def run_worker(port, center_port, **kwargs):
     worker = Worker('127.0.0.1', port, '127.0.0.1', center_port, **kwargs)
     worker.start()
     IOLoop.current().start()
-    IOLoop.current().close()  # Never reached. TODO: clean shutdown of IOLoop
 
 
 _port = [8010]
@@ -106,4 +104,6 @@ def _test_cluster(f):
                 yield b._close()
             c.stop()
 
-    IOLoop.current().run_sync(g)
+    IOLoop.clear_instance()
+    loop = IOLoop().current()
+    loop.run_sync(g)
