@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 import logging
 from multiprocessing.pool import ThreadPool
 import traceback
@@ -140,8 +141,12 @@ class Worker(Server):
             job_counter[0] += 1
             i = job_counter[0]
             logger.info("Start job %d: %s", i, funcname(function))
-            self.data[key] = yield self.executor.submit(function, *args2, **kwargs2)
+            future = self.executor.submit(function, *args2, **kwargs)
+            while not future.done():
+                yield gen.with_timeout(timedelta(seconds=1), future)
+            result = future.result()
             logger.info("Finish job %d: %s", i, funcname(function))
+            self.data[key] = result
             response = yield self.center.add_keys(address=(self.ip, self.port),
                                                   keys=[key])
             if not response == b'OK':

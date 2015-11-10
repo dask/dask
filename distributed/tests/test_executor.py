@@ -423,14 +423,16 @@ def slowinc(x):
     sleep(0.02)
     return x + 1
 
+
 def test_stress_gc():
+    n = 100
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5) as e:
             x = e.submit(slowinc, 1)
-            for i in range(20):  # this could be increased
+            for i in range(n):
                 x = e.submit(slowinc, x)
 
-            assert x.result() == 22
+            assert x.result() == n + 2
 
 
 def test_missing_data_heals():
