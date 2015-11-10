@@ -143,7 +143,11 @@ class Worker(Server):
             logger.info("Start job %d: %s", i, funcname(function))
             future = self.executor.submit(function, *args2, **kwargs)
             while not future.done():
-                yield gen.with_timeout(timedelta(seconds=1), future)
+                try:
+                    yield gen.with_timeout(timedelta(seconds=1), future)
+                    break
+                except gen.TimeoutError:
+                    pass
             result = future.result()
             logger.info("Finish job %d: %s", i, funcname(function))
             self.data[key] = result

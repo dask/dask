@@ -435,6 +435,21 @@ def test_stress_gc():
             assert x.result() == n + 2
 
 
+@slow
+def test_long_tasks_dont_trigger_timeout():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        from time import sleep
+        x = e.submit(sleep, 3)
+        yield x._result()
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
 def test_missing_data_heals():
     @gen.coroutine
     def f(c, a, b):
