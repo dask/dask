@@ -181,3 +181,14 @@ def test_clear():
         assert not a.data and not b.data
 
     _test_cluster(f)
+
+
+def test_scatter_round_robins_between_calls():
+    @gen.coroutine
+    def f(c, a, b):
+        for i in range(10):
+            yield _scatter((c.ip, c.port), [i])
+        assert a.data
+        assert b.data
+
+    _test_cluster(f)

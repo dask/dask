@@ -11,7 +11,7 @@ from tornado.gen import Return
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
-from toolz import merge, concat, groupby
+from toolz import merge, concat, groupby, drop
 
 from .core import rpc, coerce_to_rpc
 from .utils import ignore_exceptions, ignoring
@@ -284,6 +284,9 @@ def _scatter(center, data, key=None):
 _scatter.__doc__ = scatter.__doc__
 
 
+_round_robin_counter = [0]
+
+
 @gen.coroutine
 def scatter_to_workers(center, ncores, data, key=None):
     """ Scatter data directly to workers
@@ -308,7 +311,10 @@ def scatter_to_workers(center, ncores, data, key=None):
     else:
         names = ('%s-%d' % (key, i) for i in count(0))
 
-    L = list(zip(cycle(workers), names, data))
+    worker_iter = drop(_round_robin_counter[0] % len(workers), cycle(workers))
+    _round_robin_counter[0] += len(data)
+
+    L = list(zip(worker_iter, names, data))
     d = groupby(0, L)
     d = {k: {b: c for a, b, c in v}
           for k, v in d.items()}
