@@ -131,6 +131,7 @@ class Executor(object):
     def start(self):
         """ Start scheduler running in separate thread """
         from threading import Thread
+        sync(self.loop, self._sync_center)
         self.loop.add_callback(self._go)
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.start()
@@ -407,6 +408,10 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data):
+        if not self.ncores:
+            raise ValueError("No workers yet found.  "
+                             "Try syncing with center.\n"
+                             "  e.sync_center()")
         remotes, who_has = yield scatter_to_workers(self.center, self.ncores, data)
         self.scheduler_queue.put_nowait({'op': 'update-data',
                                          'who-has': who_has})

@@ -117,13 +117,54 @@ def test__futures_to_dask_array():
     _test_cluster(f)
 
 
+def test__dask_array_collections():
+    import dask.array as da
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+        yield e._sync_center()
+
+        x_dsk = {('x', i, j): np.random.random((3, 3)) for i in range(3)
+                                                       for j in range(2)}
+        y_dsk = {('y', i, j): np.random.random((3, 3)) for i in range(2)
+                                                       for j in range(3)}
+        x_futures = yield e._scatter(x_dsk)
+        y_futures = yield e._scatter(y_dsk)
+
+        dt = np.random.random(0).dtype
+        x_local = da.Array(x_dsk, 'x', ((3, 3, 3), (3, 3)), dt)
+        y_local = da.Array(y_dsk, 'y', ((3, 3), (3, 3, 3)), dt)
+
+        x_remote = da.Array(x_futures, 'x', ((3, 3, 3), (3, 3)), dt)
+        y_remote = da.Array(y_futures, 'y', ((3, 3), (3, 3, 3)), dt)
+
+        exprs = [lambda x, y: x.T + y,
+                 lambda x, y: x.mean() + y.mean(),
+                 lambda x, y: x.dot(y).std(axis=0),
+                 lambda x, y: x - x.mean(axis=1)[:, None]]
+
+        for expr in exprs:
+            local = expr(x_local, y_local)
+            local_results = dask.get(local.dask, local._keys())
+            local_result = da.Array._finalize(local, local_results)
+
+            remote = expr(x_remote, y_remote)
+            remote_results = yield e._get(remote.dask, remote._keys())
+            remote_result = da.Array._finalize(remote, remote_results)
+
+            assert np.all(local_result == remote_result)
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
 def test_futures_to_dask_array():
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             remote_arrays = [[e.submit(np.full, (3, 3), i + j)
                                 for i in range(3)]
                                 for j in range(3)]
-
 
             x = futures_to_dask_array(e, remote_arrays)
             assert x.chunks == ((3, 3, 3), (3, 3, 3))
