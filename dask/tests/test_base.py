@@ -9,7 +9,7 @@ from toolz import compose, partial, curry
 import dask
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
         visualize)
-from dask.utils import raises
+from dask.utils import raises, tmpfile
 
 
 def test_normalize():
@@ -78,6 +78,21 @@ def test_tokenize_numpy_array_on_object_dtype():
            tokenize(np.array(['a', None, 'aaa'], dtype=object))
     assert tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) == \
            tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object))
+
+
+def test_tokenize_numpy_memmap():
+    np = pytest.importorskip('numpy')
+    with tmpfile('.npy') as fn:
+        x = np.arange(5)
+        np.save(fn, x)
+        y = tokenize(np.load(fn, mmap_mode='r'))
+
+    with tmpfile('.npy') as fn:
+        x = np.arange(5)
+        np.save(fn, x)
+        z = tokenize(np.load(fn, mmap_mode='r'))
+
+    assert y != z
 
 
 def test_tokenize_pandas():

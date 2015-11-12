@@ -1,10 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-from operator import attrgetter
-from hashlib import md5
 from functools import partial
+from hashlib import md5
+from operator import attrgetter
+import os
 import uuid
+import warnings
 
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
@@ -186,6 +187,8 @@ with ignoring(ImportError):
     def normalize_array(x):
         if not x.shape:
             return (str(x), x.dtype)
+        if hasattr(x, 'mode') and hasattr(x, 'filename'):
+            return x.filename, os.path.getmtime(x.filename), x.dtype, x.shape
         if x.dtype.hasobject:
             try:
                 data = md5('-'.join(x.flat)).hexdigest()
