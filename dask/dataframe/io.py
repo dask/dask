@@ -81,7 +81,7 @@ def clean_kwargs(kwargs):
     """
     kwargs = kwargs.copy()
 
-    if 'usecols' in kwargs and 'names' in kwargs:
+    if kwargs.get('usecols') and 'names' in kwargs:
         kwargs['usecols'] = [kwargs['names'][c]
                               if isinstance(c, int) and c not in kwargs['names']
                               else c
