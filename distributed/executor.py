@@ -131,10 +131,10 @@ class Executor(object):
     def start(self):
         """ Start scheduler running in separate thread """
         from threading import Thread
-        sync(self.loop, self._sync_center)
-        self.loop.add_callback(self._go)
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.start()
+        sync(self.loop, self._sync_center)
+        self.loop.add_callback(self._go)
 
     def __enter__(self):
         if not self.loop._running:
