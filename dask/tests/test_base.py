@@ -102,6 +102,17 @@ def test_tokenize_kwargs():
     assert tokenize(5, x=1) != tokenize(5, x=2)
     assert tokenize(5, x=1) != tokenize(5, y=1)
 
+
+def test_tokenize_same_repr():
+    class Foo(object):
+        def __init__(self, x):
+            self.x = x
+        def __repr__(self):
+            return 'a foo'
+
+    assert tokenize(Foo(1)) != tokenize(Foo(2))
+
+
 da = pytest.importorskip('dask.array')
 import numpy as np
 

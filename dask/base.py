@@ -4,11 +4,12 @@ import warnings
 from operator import attrgetter
 from hashlib import md5
 from functools import partial
+import uuid
 
-from toolz import merge, groupby, curry
+from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import bind_method
+from .compatibility import bind_method, unicode
 from .context import _globals
 from .utils import Dispatch, ignoring
 
@@ -139,10 +140,19 @@ def normalize_function(func):
 
 
 normalize_token = Dispatch()
-normalize_token.register((int, float, str, tuple, list), lambda a: a)
-normalize_token.register(object,
-        lambda a: normalize_function(a) if callable(a) else a)
+normalize_token.register((int, float, str, unicode, bytes, tuple, list,
+                         type(None)),
+                         identity)
 normalize_token.register(dict, lambda a: tuple(sorted(a.items())))
+
+
+@partial(normalize_token.register, object)
+def normalize_object(o):
+    if callable(o):
+        return normalize_function(o)
+    else:
+        return str(uuid.uuid4())
+
 
 with ignoring(ImportError):
     import pandas as pd
@@ -187,6 +197,8 @@ with ignoring(ImportError):
             except (BufferError, AttributeError, ValueError):
                 data = md5(x.copy().ravel().view('i1').data).hexdigest()
         return (data, x.dtype, x.shape, x.strides)
+
+    normalize_token.register(np.dtype, repr)
 
 
 def tokenize(*args, **kwargs):
