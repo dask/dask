@@ -35,6 +35,12 @@ def _test_cluster(f):
 
     IOLoop.current().run_sync(g)
 
+def test_worker_ncores():
+    from distributed.worker import _ncores
+    w = Worker('127.0.0.1', 8018, '127.0.0.1', 8019)
+    assert w.executor._max_workers == _ncores
+    w.terminate()
+
 
 def test_worker():
     @gen.coroutine

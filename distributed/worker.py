@@ -66,7 +66,7 @@ class Worker(Server):
         self.ncores = ncores or _ncores
         self.data = dict()
         self.status = None
-        self.executor = ThreadPoolExecutor(ncores)
+        self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
 
         handlers = {'compute': self.compute,
@@ -147,7 +147,7 @@ class Worker(Server):
                     yield gen.with_timeout(timedelta(seconds=1), future)
                     break
                 except gen.TimeoutError:
-                    pass
+                    logger.info("Pending job %d: %s", i, future)
             result = future.result()
             logger.info("Finish job %d: %s", i, funcname(function))
             self.data[key] = result
