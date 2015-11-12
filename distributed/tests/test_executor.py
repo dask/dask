@@ -852,3 +852,17 @@ def test__scatter():
 
         yield e._shutdown()
     _test_cluster(f)
+
+
+def test_get_releases_data():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+
+        [x] = yield e._get({'x': (inc, 1)}, ['x'])
+        import gc; gc.collect()
+        assert e.refcount['x'] == 0
+
+        yield e._shutdown()
+    _test_cluster(f)

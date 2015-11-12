@@ -124,6 +124,7 @@ class Executor(object):
         self.waiting = {}
         self.processing = {}
         self.stacks = {}
+        self.held_data = set()
 
         if start:
             self.start()
@@ -155,9 +156,10 @@ class Executor(object):
 
     def _release_key(self, key):
         """ Release key from distributed memory """
-        self.futures[key]['event'].clear()
         logger.debug("Release key %s", key)
-        del self.futures[key]
+        if key in self.futures:
+            self.futures[key]['event'].clear()
+            del self.futures[key]
         self.scheduler_queue.put_nowait({'op': 'release-held-data',
                                          'key': key})
 
@@ -217,8 +219,9 @@ class Executor(object):
             scheduler(self.scheduler_queue, self.report_queue, worker_queues,
                       delete_queue, who_has=self.who_has, has_what=self.has_what,
                       ncores=self.ncores, dsk=self.dask,
-                      restrictions=self.restrictions, waiting=self.waiting,
-                      stacks=self.stacks, processing=self.processing),
+                      held_data=self.held_data, restrictions=self.restrictions,
+                      waiting=self.waiting, stacks=self.stacks,
+                      processing=self.processing),
             delete(self.scheduler_queue, delete_queue,
                    self.center.ip, self.center.port, self._delete_batch_time)]
          + [worker(self.scheduler_queue, worker_queues[w], w, n)

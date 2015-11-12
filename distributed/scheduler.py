@@ -152,7 +152,7 @@ def delete(scheduler_queue, delete_queue, ip, port, batch_time=1):
 @gen.coroutine
 def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
               who_has, has_what, ncores, dsk=None, dependencies=None,
-              dependents=None, restrictions=None,
+              dependents=None, restrictions=None, held_data=None,
               waiting=None, waiting_data=None, stacks=None, processing=None):
     """ The scheduler coroutine for dask scheduling
 
@@ -178,7 +178,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     ncores: dict {worker: int}
         Mapping worker-identity to number-of-cores
     """
-    held_data = set()
+    held_data = set() if held_data is None else held_data
     dsk = dict() if dsk is None else dsk
     dependencies = dict() if dependencies is None else dependencies
     dependents = dict() if dependents is None else dependents
