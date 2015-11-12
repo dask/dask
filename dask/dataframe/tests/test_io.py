@@ -819,3 +819,9 @@ def test_read_csv_header_issue_823():
 
         df = dd.read_csv(fn, delimiter='\t')
         eq(df, pd.read_csv(fn, delimiter='\t'))
+
+
+def test_none_usecols():
+    with filetext(text) as fn:
+        df = dd.read_csv(fn, usecols=None)
+        eq(df, pd.read_csv(fn, usecols=None))
