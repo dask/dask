@@ -2433,3 +2433,10 @@ def test_reset_index():
     assert len(res.index.compute()) == len(exp.index)
     assert res.columns == tuple(exp.columns)
     assert_array_almost_equal(res.compute().values, exp.values)
+
+
+def test_track_index_labels():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert ddf.index.name == df.index.name
