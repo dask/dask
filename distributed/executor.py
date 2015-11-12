@@ -21,7 +21,8 @@ from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
 from .core import read, write, connect, rpc, coerce_to_rpc
-from .client import WrappedKey, _gather, unpack_remotedata, pack_data
+from .client import (WrappedKey, _gather, unpack_remotedata, pack_data,
+        scatter_to_workers)
 from .dask import scheduler, worker, delete
 from .utils import All, sync, funcname
 
@@ -120,6 +121,9 @@ class Executor(object):
         self.ncores = dict()
         self.who_has = defaultdict(set)
         self.has_what = defaultdict(set)
+        self.waiting = {}
+        self.processing = {}
+        self.stacks = {}
 
         if start:
             self.start()
@@ -204,14 +208,10 @@ class Executor(object):
     def _go(self):
         """ Setup and run all other coroutines.  Block until finished. """
         yield self._sync_center()
-        self.waiting = {}
-        self.processing = {}
-        self.stacks = {}
-
         worker_queues = {worker: Queue() for worker in self.ncores}
         delete_queue = Queue()
 
-        coroutines = ([
+        self.coroutines = ([
             self.report(),
             scheduler(self.scheduler_queue, self.report_queue, worker_queues,
                       delete_queue, who_has=self.who_has, has_what=self.has_what,
@@ -223,7 +223,7 @@ class Executor(object):
          + [worker(self.scheduler_queue, worker_queues[w], w, n)
             for w, n in self.ncores.items()])
 
-        results = yield All(coroutines)
+        results = yield All(self.coroutines)
         self._shutdown_event.set()
 
     def submit(self, func, *args, **kwargs):
@@ -371,7 +371,8 @@ class Executor(object):
         keys = list(keys)
 
         while True:
-            yield All([self.futures[key]['event'].wait() for key in keys])
+            yield All([self.futures[key]['event'].wait() for key in keys
+                                                    if key in self.futures])
             try:
                 data = yield _gather(self.center, keys)
             except KeyError as e:
@@ -403,6 +404,32 @@ class Executor(object):
         [3, [3], 3]
         """
         return sync(self.loop, self._gather, futures)
+
+    @gen.coroutine
+    def _scatter(self, data):
+        remotes, who_has = yield scatter_to_workers(self.center, self.ncores, data)
+        self.scheduler_queue.put_nowait({'op': 'update-data',
+                                         'who-has': who_has})
+        raise gen.Return(remotes)
+
+    def scatter(self, data):
+        """ Scatter data into distributed memory
+
+        Accepts a list of data elements or dict of key-value pairs
+
+        Examples
+        --------
+        >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
+        >>> e.scatter([1, 2, 3])  # doctest: +SKIP
+        [RemoteData<center=127.0.0.1:8787, key=d1d26ff2-8...>,
+         RemoteData<center=127.0.0.1:8787, key=d1d26ff2-8...>,
+         RemoteData<center=127.0.0.1:8787, key=d1d26ff2-8...>]
+        >>> e.scatter({'x': 1, 'y': 2, 'z': 3})  # doctest: +SKIP
+        {'x': RemoteData<center=127.0.0.1:8787, key=x>,
+         'y': RemoteData<center=127.0.0.1:8787, key=y>,
+         'z': RemoteData<center=127.0.0.1:8787, key=z>}
+        """
+        return sync(self.loop, self._scatter, data)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None):

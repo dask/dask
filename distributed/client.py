@@ -277,7 +277,7 @@ def _scatter(center, data, key=None):
     center = coerce_to_rpc(center)
     ncores = yield center.ncores()
 
-    result = yield scatter_to_workers(center, ncores, data, key=key)
+    result, who_has = yield scatter_to_workers(center, ncores, data, key=key)
     raise Return(result)
 
 
@@ -302,6 +302,7 @@ def scatter_to_workers(center, ncores, data, key=None):
         ncores = {worker: 1 for worker in ncores}
 
     workers = list(concat([w] * nc for w, nc in ncores.items()))
+    in_type = type(data)
     if isinstance(data, dict):
         names, data = list(zip(*data.items()))
     else:
@@ -312,13 +313,18 @@ def scatter_to_workers(center, ncores, data, key=None):
     d = {k: {b: c for a, b, c in v}
           for k, v in d.items()}
 
-    yield [rpc(ip=w_ip, port=w_port).update_data(data=v, close=True)
+    yield [rpc(ip=w_ip, port=w_port).update_data(data=v, close=True,
+                                                 report=True)
             for (w_ip, w_port), v in d.items()]
+
+    who_has = {k: [w for w, _, _ in v] for k, v in groupby(1, L).items()}
 
     result = [RemoteData(b, center.ip, center.port, result=c)
                 for a, b, c in L]
+    if in_type is dict:
+        result = dict(zip(names, result))
 
-    raise Return(result)
+    raise Return((result, who_has))
 
 
 @gen.coroutine

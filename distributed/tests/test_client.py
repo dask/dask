@@ -1,7 +1,7 @@
 from time import sleep
 
 import pytest
-from toolz import merge
+from toolz import merge, concat
 from tornado.tcpclient import TCPClient
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -62,13 +62,18 @@ def test_scatter_delete():
 
         assert data[0].key not in c.who_has
 
-        data = yield scatter_to_workers((c.ip, c.port), [a.address, b.address],
-                                        [4, 5, 6])
+        data, who_has = yield scatter_to_workers((c.ip, c.port),
+                                                 [a.address, b.address],
+                                                 [4, 5, 6])
 
         m = merge(a.data, b.data)
 
         for d, v in zip(data, [4, 5, 6]):
             assert m[d.key] == v
+
+        assert isinstance(who_has, dict)
+        assert set(concat(who_has.values())) == {a.address, b.address}
+        assert len(who_has) == len(data)
 
         result = yield _gather((c.ip, c.port), data)
         assert result == [4, 5, 6]
@@ -146,11 +151,13 @@ def test_gather_scatter():
         data = {'x': 1, 'y': 2, 'z': 3}
         addr = '127.0.0.1', c['port']
         rds = scatter(addr, data)
-        assert all(isinstance(rd, RemoteData) for rd in rds)
-        assert {rd.key for rd in rds} == set(data)
+        assert all(isinstance(rd, RemoteData) for rd in rds.values())
+        assert set(rds) == set(data)
+        assert all(k == v.key for k, v in rds.items())
 
-        data2 = gather(addr, rds)
-        data2 = dict(zip([rd.key for rd in rds], data2))
+        names = sorted(rds)
+        data2 = gather(addr, [rds[name] for name in names])
+        data2 = dict(zip(names, data2))
         assert data == data2
 
         delete(addr, ['x'])

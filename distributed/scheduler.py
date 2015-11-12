@@ -228,7 +228,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             with ignoring(KeyError):
                 processing[worker].remove(key)
 
-        for dep in sorted(dependents[key], key=keyorder.get, reverse=True):
+        for dep in sorted(dependents.get(key, []), key=keyorder.get, reverse=True):
             if dep in waiting:
                 s = waiting[dep]
                 with ignoring(KeyError):
@@ -236,7 +236,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                 if not s:  # new task ready to run
                     mark_ready_to_run(dep)
 
-        for dep in dependencies[key]:
+        for dep in dependencies.get(key, []):
             if dep in waiting_data:
                 s = waiting_data[dep]
                 with ignoring(KeyError):
@@ -287,6 +287,13 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             if key in in_play:
                 in_play.remove(key)
 
+    def update_data(extra_who_has):
+        for key, workers in extra_who_has.items():
+            mark_key_in_memory(key, workers)
+
+        held_data.update(extra_who_has)
+        in_play.update(extra_who_has)
+
     def log_state(msg=''):
         logger.debug("Runtime State: %s", msg)
         logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
@@ -321,6 +328,9 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             for key in msg['keys']:
                 if who_has[key]:
                     mark_key_in_memory(key)
+
+        elif msg['op'] == 'update-data':
+            update_data(msg['who-has'])
 
         elif msg['op'] == 'task-finished':
             mark_key_in_memory(msg['key'], msg['workers'])

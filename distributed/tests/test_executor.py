@@ -11,6 +11,7 @@ from tornado import gen
 
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize)
+from distributed.client import WrappedKey
 from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.utils_test import cluster, slow, _test_cluster
@@ -818,3 +819,36 @@ def test_aliases():
 def test_executor_has_state_on_initialization():
     e = Executor('127.0.0.1:8787', start=False)
     assert isinstance(e.ncores, dict)
+
+
+def test__scatter():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+        yield e._sync_center()
+
+        d = yield e._scatter({'y': 20})
+        assert isinstance(d['y'], WrappedKey)
+        assert a.data.get('y') == 20 or b.data.get('y') == 20
+        assert a.address in e.who_has['y'] or b.address in e.who_has['y']
+        assert c.who_has['y']
+        yy = yield e._gather([d['y']])
+        assert yy == [20]
+
+        [x] = yield e._scatter([10])
+        assert isinstance(x, WrappedKey)
+        assert a.data.get(x.key) == 10 or b.data.get(x.key) == 10
+        xx = yield e._gather([x])
+        assert c.who_has[x.key]
+        assert a.address in e.who_has[x.key] or b.address in e.who_has[x.key]
+        assert xx == [10]
+
+        z = e.submit(add, x, d['y'])  # submit works on RemoteData
+        result = yield z._result()
+        assert result == 10 + 20
+        result = yield e._gather([z, x])
+        assert result == [30, 10]
+
+        yield e._shutdown()
+    _test_cluster(f)
