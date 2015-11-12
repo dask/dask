@@ -61,7 +61,7 @@ multiple cores.
 Use ``dask.bag``
 ----------------
 
-Dask.bag implements a large collection of Python objects and mimicing the
+Dask.bag implements a large collection of Python objects and mimicking the
 toolz_ interface
 
 .. code-block:: python
