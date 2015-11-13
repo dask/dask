@@ -1,9 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-import operator
+from collections import Iterator
 from functools import wraps
 from itertools import chain, count
-from collections import Iterator
+import operator
+import uuid
 
 from toolz import merge, unique, curry
 
@@ -89,9 +90,6 @@ def to_task_dasks(expr):
     return expr, []
 
 
-tokens = ('_{0}'.format(i) for i in count(1))
-
-
 def tokenize(*args, **kwargs):
     """Mapping function from task -> consistent name.
 
@@ -106,7 +104,8 @@ def tokenize(*args, **kwargs):
     """
     if kwargs.pop('pure', False):
         return base.tokenize(*args)
-    return next(tokens)
+    else:
+        return str(uuid.uuid4())
 
 
 def applyfunc(func, args, kwargs, pure=False):
