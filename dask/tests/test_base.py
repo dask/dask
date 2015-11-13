@@ -9,7 +9,7 @@ from toolz import compose, partial, curry
 import dask
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
         visualize)
-from dask.utils import raises, tmpfile
+from dask.utils import raises, tmpfile, ignoring
 
 
 def test_normalize_function():
@@ -127,11 +127,23 @@ def test_tokenize_same_repr():
 def test_tokenize_sequences():
     assert tokenize([1]) != tokenize([2])
     assert tokenize([1]) != tokenize((1,))
+    assert tokenize([1]) == tokenize([1])
 
     x = np.arange(2000)  # long enough to drop information in repr
     y = np.arange(2000)
     y[1000] = 0  # middle isn't printed in repr
     assert tokenize([x]) != tokenize([y])
+
+
+def test_tokenize_ordered_dict():
+    with ignoring(ImportError):
+        from collections import OrderedDict
+        a = OrderedDict([('a', 1), ('b', 2)])
+        b = OrderedDict([('a', 1), ('b', 2)])
+        c = OrderedDict([('b', 2), ('a', 1)])
+
+        assert tokenize(a) == tokenize(b)
+        assert tokenize(a) != tokenize(c)
 
 
 da = pytest.importorskip('dask.array')

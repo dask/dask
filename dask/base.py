@@ -4,6 +4,7 @@ from functools import partial
 from hashlib import md5
 from operator import attrgetter
 import os
+import sys
 import uuid
 import warnings
 
@@ -141,7 +142,7 @@ def normalize_function(func):
 
 
 normalize_token = Dispatch()
-normalize_token.register((int, float, str, unicode, bytes, type(None)),
+normalize_token.register((int, float, str, unicode, bytes, type(None), type),
                          identity)
 
 @partial(normalize_token.register, dict)
@@ -150,7 +151,7 @@ def normalize_dict(d):
 
 @partial(normalize_token.register, (tuple, list, set))
 def normalize_seq(seq):
-    return type(seq), list(map(normalize_token, seq))
+    return type(seq).__name__, list(map(normalize_token, seq))
 
 @partial(normalize_token.register, object)
 def normalize_object(o):
@@ -207,6 +208,13 @@ with ignoring(ImportError):
         return (data, x.dtype, x.shape, x.strides)
 
     normalize_token.register(np.dtype, repr)
+
+
+with ignoring(ImportError):
+    from collections import OrderedDict
+    @partial(normalize_token.register, OrderedDict)
+    def normalize_ordered_dict(d):
+        return type(d).__name__, normalize_token(list(d.items()))
 
 
 def tokenize(*args, **kwargs):
