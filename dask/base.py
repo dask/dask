@@ -141,11 +141,16 @@ def normalize_function(func):
 
 
 normalize_token = Dispatch()
-normalize_token.register((int, float, str, unicode, bytes, tuple, list,
-                         type(None)),
+normalize_token.register((int, float, str, unicode, bytes, type(None)),
                          identity)
-normalize_token.register(dict, lambda a: tuple(sorted(a.items())))
 
+@partial(normalize_token.register, dict)
+def normalize_dict(d):
+    return normalize_token(sorted(d.items()))
+
+@partial(normalize_token.register, (tuple, list, set))
+def normalize_seq(seq):
+    return type(seq), list(map(normalize_token, seq))
 
 @partial(normalize_token.register, object)
 def normalize_object(o):

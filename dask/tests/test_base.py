@@ -12,13 +12,6 @@ from dask.base import (compute, tokenize, normalize_token, normalize_function,
 from dask.utils import raises, tmpfile
 
 
-def test_normalize():
-    assert normalize_token((1, 2, 3)) == (1, 2, 3)
-    assert normalize_token('a') == 'a'
-    assert normalize_token({'a': 1, 'b': 2, 'c': 3}) ==\
-            (('a', 1), ('b', 2), ('c', 3))
-
-
 def test_normalize_function():
     def f1(a, b, c=1):
         pass
@@ -39,9 +32,7 @@ def test_normalize_function():
 
 def test_tokenize():
     a = (1, 2, 3)
-    b = {'a': 1, 'b': 2, 'c': 3}
-    assert tokenize(a) == '4889c6ccd7099fc2fd19f4be468fcfa0'
-    assert tokenize(a, b) == tokenize(normalize_token(a), normalize_token(b))
+    assert isinstance(tokenize(a), (str, bytes))
 
 
 def test_tokenize_numpy_array_consistent_on_values():
@@ -95,6 +86,11 @@ def test_tokenize_numpy_memmap():
     assert y != z
 
 
+def test_normalize_base():
+    for i in [1, 1.1, '1']:
+        assert normalize_token(i) is i
+
+
 def test_tokenize_pandas():
     a = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
     b = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
@@ -126,6 +122,16 @@ def test_tokenize_same_repr():
             return 'a foo'
 
     assert tokenize(Foo(1)) != tokenize(Foo(2))
+
+
+def test_tokenize_sequences():
+    assert tokenize([1]) != tokenize([2])
+    assert tokenize([1]) != tokenize((1,))
+
+    x = np.arange(2000)  # long enough to drop information in repr
+    y = np.arange(2000)
+    y[1000] = 0  # middle isn't printed in repr
+    assert tokenize([x]) != tokenize([y])
 
 
 da = pytest.importorskip('dask.array')
