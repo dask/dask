@@ -142,7 +142,8 @@ def normalize_function(func):
 
 
 normalize_token = Dispatch()
-normalize_token.register((int, float, str, unicode, bytes, type(None), type),
+normalize_token.register((int, float, str, unicode, bytes, type(None), type,
+                          slice),
                          identity)
 
 @partial(normalize_token.register, dict)
@@ -158,7 +159,11 @@ def normalize_object(o):
     if callable(o):
         return normalize_function(o)
     else:
-        return str(uuid.uuid4())
+        return uuid.uuid4().hex
+
+@partial(normalize_token.register, Base)
+def normalize_base(b):
+    return type(b).__name__, b.key
 
 
 with ignoring(ImportError):
@@ -208,6 +213,7 @@ with ignoring(ImportError):
         return (data, x.dtype, x.shape, x.strides)
 
     normalize_token.register(np.dtype, repr)
+    normalize_token.register(np.generic, repr)
 
 
 with ignoring(ImportError):

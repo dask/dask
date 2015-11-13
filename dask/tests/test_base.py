@@ -58,7 +58,9 @@ def test_tokenize_numpy_datetime():
 
 def test_tokenize_numpy_scalar():
     np = pytest.importorskip('numpy')
-    tokenize(np.array(1.0, dtype='f8'))
+    assert tokenize(np.array(1.0, dtype='f8')) == tokenize(np.array(1.0, dtype='f8'))
+    assert (tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0])
+         == tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0]))
 
 
 def test_tokenize_numpy_array_on_object_dtype():
@@ -87,7 +89,7 @@ def test_tokenize_numpy_memmap():
 
 
 def test_normalize_base():
-    for i in [1, 1.1, '1']:
+    for i in [1, 1.1, '1', slice(1, 2, 3)]:
         assert normalize_token(i) is i
 
 
