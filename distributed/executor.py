@@ -144,6 +144,13 @@ class Executor(object):
         sync(self.loop, self._sync_center)
         self.loop.add_callback(self._go)
 
+    @gen.coroutine
+    def _start(self):
+        yield self._sync_center()
+        IOLoop.current().spawn_callback(self._go)
+        while not len(self.stacks) == len(self.ncores):
+            yield gen.sleep(0.01)
+
     def __enter__(self):
         if not self.loop._running:
             self.start()
@@ -221,7 +228,6 @@ class Executor(object):
     @gen.coroutine
     def _go(self):
         """ Setup and run all other coroutines.  Block until finished. """
-        yield self._sync_center()
         worker_queues = {worker: Queue() for worker in self.ncores}
         delete_queue = Queue()
 

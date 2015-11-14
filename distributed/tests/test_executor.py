@@ -34,7 +34,8 @@ def test_submit():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
+
         x = e.submit(inc, 10)
         assert not x.done()
 
@@ -58,7 +59,7 @@ def test_map():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         L1 = e.map(inc, range(5))
         assert len(L1) == 5
@@ -150,7 +151,7 @@ def test_exceptions():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x = e.submit(div, 1, 2)
         result = yield x._result()
@@ -172,7 +173,8 @@ def test_gc():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
+
         x = e.submit(inc, 10)
         result = yield x._result()
 
@@ -218,7 +220,7 @@ def test_stress_1():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         n = 2**6
 
@@ -239,7 +241,8 @@ def test_gather():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
+
         x = e.submit(inc, 10)
         y = e.submit(inc, x)
 
@@ -266,7 +269,8 @@ def test_get():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
+
         result = yield e._get({'x': (inc, 1)}, 'x')
         assert result == 2
 
@@ -303,7 +307,7 @@ def test_wait():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
@@ -324,7 +328,7 @@ def test__as_completed():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
@@ -382,7 +386,7 @@ def test_garbage_collection():
         c = e.submit(inc, b)
         b.__del__()
 
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         result = yield c._result()
         assert result == 3
@@ -399,7 +403,7 @@ def test_recompute_released_key():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x = e.submit(inc, 100)
         result1 = yield x._result()
@@ -442,7 +446,7 @@ def test_long_tasks_dont_trigger_timeout():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         from time import sleep
         x = e.submit(sleep, 3)
@@ -456,7 +460,7 @@ def test_missing_data_heals():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x = e.submit(inc, 1)
         y = e.submit(inc, x)
@@ -489,7 +493,7 @@ def test_missing_worker():
         c.has_what[bad] = {'b'}
 
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
 
@@ -506,7 +510,7 @@ def test_gather_robust_to_missing_data():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x, y, z = e.map(inc, range(3))
         yield _wait([x, y, z])  # everything computed
@@ -529,7 +533,7 @@ def test_gather_robust_to_nested_missing_data():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         w = e.submit(inc, 1)
         x = e.submit(inc, w)
@@ -568,7 +572,7 @@ def test_restrictions_submit():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x = e.submit(inc, 1, workers={a.ip})
         y = e.submit(inc, x, workers={b.ip})
@@ -588,7 +592,7 @@ def test_restrictions_map():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         L = e.map(inc, range(5), workers={a.ip})
         yield _wait(L)
@@ -618,7 +622,7 @@ def test_restrictions_get():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
         restrictions = {'y': {a.ip}, 'z': {b.ip}}
@@ -636,7 +640,7 @@ def dont_test_bad_restrictions_raise_exception():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         z = e.submit(inc, 2, workers={'bad-address'})
         try:
@@ -697,7 +701,7 @@ def test_errors_dont_block():
     def f():
         c.listen(c.port)
         yield w._start()
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         L = [e.submit(inc, 1),
              e.submit(throws, 1),
@@ -726,7 +730,7 @@ def test_submit_quotes():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x = e.submit(assert_list, [1, 2, 3], z=[4, 5, 6])
         result = yield x._result()
@@ -748,7 +752,7 @@ def test_map_quotes():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         L = e.map(assert_list, [[1, 2, 3], [4]])
         result = yield e._gather(L)
@@ -767,14 +771,13 @@ def test_two_consecutive_executors_share_results():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x = e.submit(randint, 0, 1000, pure=True)
         xx = yield x._result()
 
         f = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(f._go)
-        yield f._sync_center()
+        yield f._start()
 
         y = f.submit(randint, 0, 1000, pure=True)
         yy = yield y._result()
@@ -790,7 +793,7 @@ def test_submit_then_get_with_Future():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x = e.submit(slowinc, 1)
         dsk = {'y': (inc, x)}
@@ -806,7 +809,7 @@ def test_aliases():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         x = e.submit(inc, 1)
 
@@ -827,8 +830,7 @@ def test__scatter():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
-        yield e._sync_center()
+        yield e._start()
 
         d = yield e._scatter({'y': 20})
         assert isinstance(d['y'], WrappedKey)
@@ -862,7 +864,7 @@ def test_get_releases_data():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         [x] = yield e._get({'x': (inc, 1)}, ['x'])
         import gc; gc.collect()
@@ -897,7 +899,7 @@ def test_exception_on_exception():
         x = e.submit(lambda: 1 / 0)
         y = e.submit(inc, x)
 
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         with pytest.raises(ZeroDivisionError):
             out = yield y._result()
@@ -915,8 +917,7 @@ def test_nbytes():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
-        yield e._sync_center()
+        yield e._start()
 
         [x] = yield e._scatter([1])
         assert e.nbytes == {x.key: sizeof(1)}
