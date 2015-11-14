@@ -7,11 +7,13 @@ import dask.dataframe as dd
 from dask.base import tokenize
 from tornado import gen
 
+from .executor import default_executor
 from .utils import sync, ignoring
 
 
 @gen.coroutine
-def _futures_to_dask_dataframe(executor, futures, divisions=None):
+def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
+    executor = default_executor(executor)
     columns = executor.submit(lambda df: df.columns, futures[0])
     if divisions is True:
         divisions = executor.map(lambda df: df.index.min(), futures)
@@ -31,7 +33,7 @@ def _futures_to_dask_dataframe(executor, futures, divisions=None):
     raise gen.Return(dd.DataFrame(dsk, name, columns, divisions))
 
 
-def futures_to_dask_dataframe(executor, futures, divisions=None):
+def futures_to_dask_dataframe(futures, divisions=None, executor=None):
     """ Convert a list of futures into a dask.dataframe
 
     Parameters
@@ -43,8 +45,9 @@ def futures_to_dask_dataframe(executor, futures, divisions=None):
     divisions: bool
         Set to True if the data is cleanly partitioned along the index
     """
-    return sync(executor.loop, _futures_to_dask_dataframe, executor, futures,
-                divisions=divisions)
+    executor = default_executor(executor)
+    return sync(executor.loop, _futures_to_dask_dataframe, futures,
+                divisions=divisions, executor=executor)
 
 def get_dim(x, i):
     return x.shape[i]
@@ -53,9 +56,10 @@ def get_dtype(x):
     return x.dtype
 
 @gen.coroutine
-def _futures_to_dask_array(executor, futures, divisions=None):
+def _futures_to_dask_array(futures, executor=None):
     import dask.array as da
     import numpy as np
+    executor = default_executor(executor)
     futures = np.array(futures, dtype=object)
 
     slices = [((0,) * i + (slice(None, None),) + (0,) * (futures.ndim - i - 1))
@@ -75,7 +79,7 @@ def _futures_to_dask_array(executor, futures, divisions=None):
     raise gen.Return(da.Array(dsk, name, chunks, dtype))
 
 
-def futures_to_dask_array(executor, futures):
+def futures_to_dask_array(futures, executor=None):
     """ Convert a nested list of futures into a dask.array
 
     The futures must satisfy the following:
@@ -90,9 +94,11 @@ def futures_to_dask_array(executor, futures):
 
     Parameters
     ----------
-    executor: Executor
-        Executor through which we access the remote dataframes
     futures: iterable of Futures
         Futures that create arrays
+    executor: Executor (optional)
+        Executor through which we access the remote dataframes
     """
-    return sync(executor.loop, _futures_to_dask_array, executor, futures)
+    executor = default_executor(executor)
+    return sync(executor.loop, _futures_to_dask_array, futures,
+                executor=executor)
