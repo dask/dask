@@ -294,6 +294,24 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         held_data.update(extra_who_has)
         in_play.update(extra_who_has)
 
+    exceptions = dict()
+    exceptions_blame = dict()
+    def mark_failed(key, failing_key=None):
+        """ When a task fails mark it and all dependent task as failed """
+        if key in exceptions_blame:
+            return
+        exceptions_blame[key] = failing_key
+        report_queue.put_nowait({'op': 'task-erred',
+                                 'key': key,
+                                 'exception': exceptions[failing_key]})
+        if key in waiting:
+            del waiting[key]
+        if key in waiting_data:
+            del waiting_data[key]
+        in_play.remove(key)
+        for dep in dependents[key]:
+            mark_failed(dep, failing_key)
+
     def log_state(msg=''):
         logger.debug("Runtime State: %s", msg)
         logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
@@ -324,6 +342,11 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             if len(msg['dsk']) > 1:
                 generation += 1  # older graph generations take precedence
 
+            for key in msg['dsk']:
+                for dep in dependencies[key]:
+                    if dep in exceptions_blame:
+                        mark_failed(key, exceptions_blame[dep])
+
             seed_ready_tasks(msg['dsk'])
             for key in msg['keys']:
                 if who_has[key]:
@@ -338,8 +361,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
         elif msg['op'] == 'task-erred':
             processing[msg['worker']].remove(msg['key'])
-            in_play.remove(msg['key'])
-            report_queue.put_nowait(msg)
+            exceptions[msg['key']] = msg['exception']
+            mark_failed(msg['key'], msg['key'])
             ensure_occupied(msg['worker'])
 
         elif msg['op'] in ('missing-data', 'task-missing-data'):
@@ -516,10 +539,11 @@ def update_state(dsk, dependencies, dependents, held_data,
         new_keys = set(new_keys)
 
     for key in new_dsk:  # add dependencies/dependents
+        if key in dependencies:
+            continue
+
         deps = get_dependencies(dsk, key)
-        if key not in dependencies:
-            dependencies[key] = set()
-        dependencies[key] |= deps
+        dependencies[key] = deps
 
         for dep in deps:
             if dep not in dependents:
@@ -534,8 +558,6 @@ def update_state(dsk, dependencies, dependents, held_data,
         if s:
             # TODO: check against in-memory, maybe add to in_play
             dsk[key] = vv
-            if key not in dependencies:
-                dependencies[key] = set()
             dependencies[key] |= s
             for dep in s:
                 if not dep in dependencies:
