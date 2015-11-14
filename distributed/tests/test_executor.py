@@ -10,7 +10,7 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
-        as_completed, tokenize, _global_executors)
+        as_completed, tokenize, _global_executors, default_executor)
 from distributed.client import WrappedKey
 from distributed import Center, Worker
 from distributed.utils import ignoring
@@ -871,8 +871,16 @@ def test_get_releases_data():
 
 def test_global_executors():
     assert not _global_executors
+    with pytest.raises(ValueError):
+        default_executor()
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             assert _global_executors == {e}
+            assert default_executor() is e
+            with Executor(('127.0.0.1', c['port'])) as f:
+                with pytest.raises(ValueError):
+                    default_executor()
+                assert default_executor(e) is e
+                assert default_executor(f) is f
 
     assert not _global_executors

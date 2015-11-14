@@ -545,3 +545,20 @@ def as_completed(fs):
 
     for i in range(len(fs)):
         yield queue.get()
+
+
+def default_executor(e=None):
+    """ Return an executor if exactly one has started """
+    if e:
+        return e
+    if len(_global_executors) == 1:
+        return first(_global_executors)
+    if len(_global_executors) == 0:
+        raise ValueError("No executors found\n"
+                "Start an executor and point it to the center address\n"
+                "  from distributed import Executor\n"
+                "  executor = Executor('ip-addr-of-center:8787')\n")
+    if len(_global_executors) > 1:
+        raise ValueError("There are %d executors running.\n"
+            "Please specify which executor you want with the executor= \n"
+            "keyword argument." % len(_global_executors))
