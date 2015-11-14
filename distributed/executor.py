@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 tokens = (str(uuid.uuid4()) for i in itertools.count(1))
 
 
+_global_executors = set()
+
+
 class Future(WrappedKey):
     """ The result of a remotely running computation """
     def __init__(self, key, executor):
@@ -135,6 +138,7 @@ class Executor(object):
             return
         from threading import Thread
         self._loop_thread = Thread(target=self.loop.start)
+        _global_executors.add(self)
         self._loop_thread.start()
         sync(self.loop, self._sync_center)
         self.loop.add_callback(self._go)
@@ -191,6 +195,8 @@ class Executor(object):
         """ Send shutdown signal and wait until _go completes """
         self.report_queue.put_nowait({'op': 'close'})
         self.scheduler_queue.put_nowait({'op': 'close'})
+        if self in _global_executors:
+            _global_executors.remove(self)
         yield self._shutdown_event.wait()
 
     def shutdown(self):
@@ -199,6 +205,8 @@ class Executor(object):
         self.scheduler_queue.put_nowait({'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
+        if self in _global_executors:
+            _global_executors.remove(self)
 
     @gen.coroutine
     def _sync_center(self):
