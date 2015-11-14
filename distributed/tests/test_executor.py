@@ -9,10 +9,11 @@ from toolz import isdistinct, first
 from tornado.ioloop import IOLoop
 from tornado import gen
 
+from distributed import Center, Worker
+from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize, _global_executors, default_executor)
-from distributed.client import WrappedKey
-from distributed import Center, Worker
+from distributed.sizeof import sizeof
 from distributed.utils import ignoring
 from distributed.utils_test import cluster, slow, _test_cluster
 
@@ -834,6 +835,7 @@ def test__scatter():
         assert a.data.get('y') == 20 or b.data.get('y') == 20
         assert a.address in e.who_has['y'] or b.address in e.who_has['y']
         assert c.who_has['y']
+        assert e.nbytes == {'y': sizeof(20)}
         yy = yield e._gather([d['y']])
         assert yy == [20]
 
@@ -843,6 +845,7 @@ def test__scatter():
         xx = yield e._gather([x])
         assert c.who_has[x.key]
         assert a.address in e.who_has[x.key] or b.address in e.who_has[x.key]
+        assert e.nbytes == {'y': sizeof(20), x.key: sizeof(10)}
         assert xx == [10]
 
         z = e.submit(add, x, d['y'])  # submit works on RemoteData
@@ -903,6 +906,26 @@ def test_exception_on_exception():
 
         with pytest.raises(ZeroDivisionError):
             out = yield z._result()
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def test_nbytes():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        IOLoop.current().spawn_callback(e._go)
+        yield e._sync_center()
+
+        [x] = yield e._scatter([1])
+        assert e.nbytes == {x.key: sizeof(1)}
+
+        y = e.submit(inc, x)
+        yield y._result()
+
+        assert e.nbytes == {x.key: sizeof(1),
+                            y.key: sizeof(2)}
 
         yield e._shutdown()
     _test_cluster(f)

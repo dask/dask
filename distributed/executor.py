@@ -128,6 +128,7 @@ class Executor(object):
         self.processing = {}
         self.stacks = {}
         self.held_data = set()
+        self.nbytes = dict()
 
         if start:
             self.start()
@@ -231,7 +232,7 @@ class Executor(object):
                       ncores=self.ncores, dsk=self.dask,
                       held_data=self.held_data, restrictions=self.restrictions,
                       waiting=self.waiting, stacks=self.stacks,
-                      processing=self.processing),
+                      processing=self.processing, nbytes=self.nbytes),
             delete(self.scheduler_queue, delete_queue,
                    self.center.ip, self.center.port, self._delete_batch_time)]
          + [worker(self.scheduler_queue, worker_queues[w], w, n)
@@ -426,8 +427,13 @@ class Executor(object):
                              "Try syncing with center.\n"
                              "  e.sync_center()")
         remotes, who_has = yield scatter_to_workers(self.center, self.ncores, data)
+        if isinstance(remotes, list):
+            nbytes = {r.key: sizeof(d) for r, d in zip(remotes, data)}
+        elif isinstance(remotes, dict):
+            nbytes = {k: sizeof(v) for k, v in data.items()}
         self.scheduler_queue.put_nowait({'op': 'update-data',
-                                         'who-has': who_has})
+                                         'who-has': who_has,
+                                         'nbytes': nbytes})
         raise gen.Return(remotes)
 
     def scatter(self, data):

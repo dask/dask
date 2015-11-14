@@ -72,8 +72,9 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
             needed = msg['needed']
             task = msg['task']
             if not istask(task):
-                response = yield worker.update_data(data={key: task})
+                response, content = yield worker.update_data(data={key: task})
                 assert response == b'OK', response
+                nbytes = content['nbytes'][key]
             else:
                 response, content = yield worker.compute(function=_execute_task,
                                                          args=(task, {}),
@@ -93,9 +94,11 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
                                             'missing': content.args})
 
             else:
+                nbytes = content['nbytes']
                 scheduler_queue.put_nowait({'op': 'task-finished',
                                             'workers': [ident],
-                                            'key': key})
+                                            'key': key,
+                                            'nbytes': nbytes})
 
     yield worker.close(close=True)
     worker.close_streams()
@@ -152,7 +155,7 @@ def delete(scheduler_queue, delete_queue, ip, port, batch_time=1):
 @gen.coroutine
 def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
               who_has, has_what, ncores, dsk=None, dependencies=None,
-              dependents=None, restrictions=None, held_data=None,
+              dependents=None, restrictions=None, held_data=None, nbytes=None,
               waiting=None, waiting_data=None, stacks=None, processing=None):
     """ The scheduler coroutine for dask scheduling
 
@@ -182,6 +185,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     dsk = dict() if dsk is None else dsk
     dependencies = dict() if dependencies is None else dependencies
     dependents = dict() if dependents is None else dependents
+    nbytes = dict() if nbytes is None else nbytes
     restrictions = dict() if restrictions is None else restrictions
     waiting = dict() if waiting is None else waiting
     waiting_data = dict() if waiting_data is None else waiting_data
@@ -287,9 +291,11 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             if key in in_play:
                 in_play.remove(key)
 
-    def update_data(extra_who_has):
+    def update_data(extra_who_has, extra_nbytes):
         for key, workers in extra_who_has.items():
             mark_key_in_memory(key, workers)
+
+        nbytes.update(extra_nbytes)
 
         held_data.update(extra_who_has)
         in_play.update(extra_who_has)
@@ -353,11 +359,12 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                     mark_key_in_memory(key)
 
         elif msg['op'] == 'update-data':
-            update_data(msg['who-has'])
+            update_data(msg['who-has'], msg['nbytes'])
 
         elif msg['op'] == 'task-finished':
             mark_key_in_memory(msg['key'], msg['workers'])
             ensure_occupied(msg['workers'][0])
+            nbytes[msg['key']] = msg['nbytes']
 
         elif msg['op'] == 'task-erred':
             processing[msg['worker']].remove(msg['key'])
