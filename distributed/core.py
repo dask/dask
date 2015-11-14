@@ -7,6 +7,7 @@ import struct
 from time import sleep, time
 
 import tornado
+import dill
 from dill import loads, dumps
 from tornado import ioloop, gen
 from tornado.gen import Return
@@ -14,6 +15,8 @@ from tornado.tcpserver import TCPServer
 from tornado.tcpclient import TCPClient
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
+
+dill.settings['recurse'] = True
 
 
 logger = logging.getLogger(__name__)
