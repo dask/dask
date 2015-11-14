@@ -20,10 +20,11 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
-from .core import read, write, connect, rpc, coerce_to_rpc
 from .client import (WrappedKey, _gather, unpack_remotedata, pack_data,
         scatter_to_workers)
+from .core import read, write, connect, rpc, coerce_to_rpc
 from .dask import scheduler, worker, delete
+from .sizeof import sizeof
 from .utils import All, sync, funcname
 
 logger = logging.getLogger(__name__)

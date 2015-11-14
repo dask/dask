@@ -5,7 +5,7 @@ from time import sleep
 import sys
 
 import pytest
-from toolz import isdistinct, first
+from toolz import identity, isdistinct, first
 from tornado.ioloop import IOLoop
 from tornado import gen
 
@@ -927,6 +927,24 @@ def test_nbytes():
 
         assert e.nbytes == {x.key: sizeof(1),
                             y.key: sizeof(2)}
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def test_nbytes_determines_worker():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        yield e._start()
+
+        x = e.submit(identity, 1, workers=[a.address[0]])
+        y = e.submit(identity, tuple(range(100)), workers=[b.address[0]])
+        yield e._gather([x, y])
+
+        z = e.submit(lambda x, y: None, x, y)
+        yield z._result()
+        assert e.who_has[z.key] == {b.address}
 
         yield e._shutdown()
     _test_cluster(f)

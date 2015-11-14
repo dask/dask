@@ -219,7 +219,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             assert not waiting[key]
             del waiting[key]
 
-        new_worker = decide_worker(dependencies, stacks, who_has, restrictions, key)
+        new_worker = decide_worker(dependencies, stacks, who_has, restrictions,
+                nbytes, key)
         stacks[new_worker].append(key)
         ensure_occupied(new_worker)
 
@@ -270,7 +271,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         Takes an iterable of keys to consider for execution
         """
         new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
-                                       stacks, restrictions,
+                                       stacks, restrictions, nbytes,
                                        [k for k in keys if k in waiting and
                                                         not waiting[k]])
         logger.debug("Seed ready tasks: %s", new_stacks)
@@ -688,30 +689,43 @@ def heal(dependencies, dependents, in_memory, stacks, processing, waiting,
     return output
 
 
-def decide_worker(dependencies, stacks, who_has, restrictions, key):
+def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
     """ Decide which worker should take task
 
     >>> dependencies = {'c': {'b'}, 'b': {'a'}}
     >>> stacks = {('alice', 8000): ['z'], ('bob', 8000): []}
     >>> who_has = {'a': {('alice', 8000)}}
+    >>> nbytes = {'a': 100}
     >>> restrictions = {}
 
     We choose the worker that has the data on which 'b' depends (alice has 'a')
 
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
     ('alice', 8000)
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
 
     >>> who_has = {'a': {('alice', 8000), ('bob', 8000)}}
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
     ('bob', 8000)
 
     Optionally provide restrictions of where jobs are allowed to occur
 
     >>> restrictions = {'b': {'alice', 'charile'}}
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
     ('alice', 8000)
+
+    If the task requires data communication, then we choose to minimize the
+    number of bytes sent between workers. This takes precedence over worker
+    occupancy.
+
+    >>> dependencies = {'c': {'a', 'b'}}
+    >>> who_has = {'a': {('alice', 8000)}, 'b': {('bob', 8000)}}
+    >>> nbytes = {'a': 1, 'b': 1000}
+    >>> stacks = {('alice', 8000): [], ('bob', 8000): []}
+
+    >>> decide_worker(dependencies, stacks, who_has, {}, nbytes, 'c')
+    ('bob', 8000)
     """
     deps = dependencies[key]
     workers = frequencies(w for dep in deps
@@ -724,16 +738,24 @@ def decide_worker(dependencies, stacks, who_has, restrictions, key):
         if not workers:
             workers = {w for w in stacks if w[0] in r}
             if not workers:
+                import pdb; pdb.set_trace()
                 raise ValueError("Task has no valid workers", key, r)
     if not workers or not stacks:
         raise ValueError("No workers found")
 
+    commbytes = {w: sum(nbytes.get(k, 1000) for k in dependencies[key]
+                                             if w not in who_has[k])
+                 for w in workers}
+
+    minbytes = min(commbytes.values())
+
+    workers = {w for w, nb in commbytes.items() if nb == minbytes}
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
 
 
 def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
-        restrictions, keys):
+        restrictions, nbytes, keys):
     """ Assign many new ready tasks to workers
 
     Often at the beginning of computation we have to assign many new leaves to
@@ -770,7 +792,8 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
         stacks[worker].extend(keys)
 
     for key in ready:
-        worker = decide_worker(dependencies, stacks, who_has, restrictions, key)
+        worker = decide_worker(dependencies, stacks, who_has, restrictions,
+                nbytes, key)
         new_stacks[worker].append(key)
         stacks[worker].append(key)
 
