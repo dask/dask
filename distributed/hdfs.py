@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 
 import os
 
+from .executor import default_executor
 from .utils import ignoring
 
 with ignoring(ImportError):
@@ -59,22 +60,24 @@ def get_data_root():
             return e.find('value').text
 
 
-def map_blocks(executor, func, location, namenode_host, namenode_port,
-               data_root='/data/dfs/dn', **kwargs):
+def map_blocks(func, location, namenode_host, namenode_port,
+               data_root='/data/dfs/dn', executor=None, **kwargs):
     """ Map a function over blocks of a location in HDFS
 
-    >>> L = map_blocks(executor, pd.read_csv, '/data/nyctaxi/',
+    >>> L = map_blocks(pd.read_csv, '/data/nyctaxi/',
     ...                '192.168.1.100', 9000)  # doctest: +SKIP
     >>> type(L)[0]  # doctest: +SKIP
     Future
     """
+    executor = default_executor(executor)
     blocks = get_locations(location, namenode_host, namenode_port, data_root)
     paths = [blk['path'] for blk in blocks]
     hosts = [blk['hosts'] for blk in blocks]
     return executor.map(func, paths, workers=hosts, **kwargs)
 
 
-def dask_graph(executor, func, location, namenode_host, namenode_port, **kwargs):
+def dask_graph(func, location, namenode_host, namenode_port, executor=None,
+               **kwargs):
     """ Produce dask graph mapping function over blocks in HDFS
 
     Inserts HDFS host restrictions into the executor.
@@ -82,9 +85,10 @@ def dask_graph(executor, func, location, namenode_host, namenode_port, **kwargs)
     Returns a graph and keys corresponding to function applied to blocks.
     Does not trigger execution.
 
-    >>> dsk, keys = dask_graph(executor, pd.read_csv, '/data/nyctaxi/',
+    >>> dsk, keys = dask_graph(pd.read_csv, '/data/nyctaxi/',
     ...                        '192.168.1.100', 9000)  # doctest: +SKIP
     """
+    executor = default_executor(executor)
     blocks = get_locations(location, namenode_host, namenode_port, **kwargs)
     paths = [blk['path'] for blk in blocks]
     hosts = [blk['hosts'] for blk in blocks]
@@ -100,10 +104,11 @@ def dask_graph(executor, func, location, namenode_host, namenode_port, **kwargs)
     return dsk, names
 
 
-def read_csv(executor, location, namenode_host, namenode_port, **kwargs):
+def read_csv(location, namenode_host, namenode_port, executor=None, **kwargs):
     import pandas as pd
     import dask.dataframe as dd
     from dask.compatibility import apply
+    executor = default_executor(executor)
 
     blocks = get_locations(location, namenode_host, namenode_port, **kwargs)
     paths = [blk['path'] for blk in blocks]

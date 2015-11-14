@@ -134,8 +134,8 @@ def dont_test_failing_worker():
 
 
 def test_repeated_computation():
+    from random import randint
     def func():
-        from random import randint
         return randint(0, 100)
 
     dsk = {'x': (func,)}

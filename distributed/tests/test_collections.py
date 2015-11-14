@@ -38,7 +38,8 @@ def test__futures_to_dask_dataframe():
         IOLoop.current().spawn_callback(e._go)
 
         remote_dfs = e.map(lambda x: x, dfs)
-        ddf = yield _futures_to_dask_dataframe(e, remote_dfs, divisions=True)
+        ddf = yield _futures_to_dask_dataframe(remote_dfs, divisions=True,
+                executor=e)
 
         assert isinstance(ddf, dd.DataFrame)
         assert ddf.divisions == (0, 30, 60, 80)
@@ -54,7 +55,7 @@ def test_futures_to_dask_dataframe():
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             remote_dfs = e.map(lambda x: x, dfs)
-            ddf = futures_to_dask_dataframe(e, remote_dfs, divisions=True)
+            ddf = futures_to_dask_dataframe(remote_dfs, divisions=True)
 
             assert isinstance(ddf, dd.DataFrame)
             assert ddf.x.sum().compute(get=e.get) == sum([df.x.sum() for df in dfs])
@@ -69,7 +70,7 @@ def test_dataframes():
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             remote_dfs = e.map(lambda x: x, dfs)
-            rdf = futures_to_dask_dataframe(e, remote_dfs, divisions=True)
+            rdf = futures_to_dask_dataframe(remote_dfs, divisions=True)
             name = 'foo'
             ldf = dd.DataFrame({(name, i): df for i, df in enumerate(dfs)},
                                name, dfs[0].columns,
@@ -104,7 +105,7 @@ def test__futures_to_dask_array():
                             for j in range(2)]
                             for k in range(4)]
 
-        x = yield _futures_to_dask_array(e, remote_arrays)
+        x = yield _futures_to_dask_array(remote_arrays, executor=e)
         assert x.chunks == ((2, 2, 2, 2), (3, 3), (4, 4))
         assert x.dtype == np.full((), 0).dtype
 
@@ -166,7 +167,7 @@ def test_futures_to_dask_array():
                                 for i in range(3)]
                                 for j in range(3)]
 
-            x = futures_to_dask_array(e, remote_arrays)
+            x = futures_to_dask_array(remote_arrays, executor=e)
             assert x.chunks == ((3, 3, 3), (3, 3, 3))
             assert x.dtype == np.full((), 0).dtype
 

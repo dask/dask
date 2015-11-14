@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 tokens = (str(uuid.uuid4()) for i in itertools.count(1))
 
 
+_global_executors = set()
+
+
 class Future(WrappedKey):
     """ The result of a remotely running computation """
     def __init__(self, key, executor):
@@ -131,8 +134,11 @@ class Executor(object):
 
     def start(self):
         """ Start scheduler running in separate thread """
+        if hasattr(self, '_loop_thread'):
+            return
         from threading import Thread
-        self._loop_thread = Thread(target=self.loop.start)
+        self._loop_thread = Thread(target=self.loop.start, daemon=True)
+        _global_executors.add(self)
         self._loop_thread.start()
         sync(self.loop, self._sync_center)
         self.loop.add_callback(self._go)
@@ -189,6 +195,8 @@ class Executor(object):
         """ Send shutdown signal and wait until _go completes """
         self.report_queue.put_nowait({'op': 'close'})
         self.scheduler_queue.put_nowait({'op': 'close'})
+        if self in _global_executors:
+            _global_executors.remove(self)
         yield self._shutdown_event.wait()
 
     def shutdown(self):
@@ -197,6 +205,8 @@ class Executor(object):
         self.scheduler_queue.put_nowait({'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
+        if self in _global_executors:
+            _global_executors.remove(self)
 
     @gen.coroutine
     def _sync_center(self):
@@ -535,3 +545,20 @@ def as_completed(fs):
 
     for i in range(len(fs)):
         yield queue.get()
+
+
+def default_executor(e=None):
+    """ Return an executor if exactly one has started """
+    if e:
+        return e
+    if len(_global_executors) == 1:
+        return first(_global_executors)
+    if len(_global_executors) == 0:
+        raise ValueError("No executors found\n"
+                "Start an executor and point it to the center address\n"
+                "  from distributed import Executor\n"
+                "  executor = Executor('ip-addr-of-center:8787')\n")
+    if len(_global_executors) > 1:
+        raise ValueError("There are %d executors running.\n"
+            "Please specify which executor you want with the executor= \n"
+            "keyword argument." % len(_global_executors))
