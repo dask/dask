@@ -13,20 +13,29 @@ def sizeof(o):
 def _(seq):
     return sys.getsizeof(seq) + sum(map(sizeof, seq))
 
+with ignoring(ImportError):
+    import numpy as np
+    @sizeof.register(np.ndarray)
+    def _(x):
+        return x.nbytes
+
 
 with ignoring(ImportError):
     import pandas as pd
     @sizeof.register(pd.DataFrame)
     def _(df):
+        o = sys.getsizeof(df)
         try:
-            return df.memory_usage(index=True, deep=True).sum()
+            return o + df.memory_usage(index=True, deep=True).sum()
         except:
-            return df.memory_usage(index=True).sum()
+            return o + df.memory_usage(index=True).sum()
 
     @sizeof.register(pd.Series)
     def _(s):
         try:
             return s.memory_usage(index=True, deep=True).sum()
         except:
-            return s.memory_usage(index=True).sum()
-            return s.values.nbytes
+            try:
+                return s.memory_usage(index=True).sum()
+            except:
+                return sizeof(s.values) + sizeof(s.index)
