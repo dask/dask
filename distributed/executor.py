@@ -131,6 +131,8 @@ class Executor(object):
 
     def start(self):
         """ Start scheduler running in separate thread """
+        if hasattr(self, '_loop_thread'):
+            return
         from threading import Thread
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.start()
