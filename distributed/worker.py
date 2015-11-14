@@ -177,7 +177,8 @@ class Worker(Server):
             response = yield self.center.add_keys(address=(self.ip, self.port),
                                                   keys=list(data))
             assert response == b'OK'
-        raise Return(b'OK')
+        info = {'nbytes': {k: sizeof(v) for k, v in data.items()}}
+        raise Return((b'OK', info))
 
     @gen.coroutine
     def delete_data(self, stream, keys=None, report=True):

@@ -90,7 +90,9 @@ def test_workers_update_center():
     def f(c, a, b):
         aa = rpc(ip=a.ip, port=a.port)
 
-        yield aa.update_data(data={'x': 1, 'y': 2})
+        response, content = yield aa.update_data(data={'x': 1, 'y': 2})
+        assert response == b'OK'
+        assert content['nbytes'] == {'x': sizeof(1), 'y': sizeof(2)}
 
         assert a.data == {'x': 1, 'y': 2}
         assert c.who_has == {'x': {(a.ip, a.port)},
