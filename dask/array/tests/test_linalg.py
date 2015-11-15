@@ -102,16 +102,17 @@ def test_linalg_consistent_names():
     assert same_keys(v1, v2)
 
 
+@pytest.mark.slow
 def test_svd_compressed():
-    m, n = 500, 250
+    m, n = 2000, 250
     r = 10
     np.random.seed(4321)
     mat1 = np.random.randn(m, r)
     mat2 = np.random.randn(r, n)
     mat = mat1.dot(mat2)
-    data = da.from_array(mat, chunks=(50, 50))
+    data = da.from_array(mat, chunks=(500, 50))
 
-    u, s, vt = svd_compressed(data, r, seed=4321)
+    u, s, vt = svd_compressed(data, r, seed=4321, n_power_iter=2)
     u, s, vt = da.compute(u, s, vt)
 
     usvt = np.dot(u, np.dot(np.diag(s), vt))
