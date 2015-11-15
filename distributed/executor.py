@@ -139,7 +139,8 @@ class Executor(object):
         if hasattr(self, '_loop_thread'):
             return
         from threading import Thread
-        self._loop_thread = Thread(target=self.loop.start, daemon=True)
+        self._loop_thread = Thread(target=self.loop.start)
+        self._loop_thread.daemon = True
         _global_executors.add(self)
         self._loop_thread.start()
         sync(self.loop, self._sync_center)
