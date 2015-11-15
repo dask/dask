@@ -33,9 +33,6 @@ with ignoring(ImportError):
     @sizeof.register(pd.Series)
     def _(s):
         try:
-            return s.memory_usage(index=True, deep=True).sum()
+            return s.memory_usage(index=True, deep=True).sum() # new in 0.17.1
         except:
-            try:
-                return s.memory_usage(index=True).sum()
-            except:
-                return sizeof(s.values) + sizeof(s.index)
+            return sizeof(s.values) + sizeof(s.index)

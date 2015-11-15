@@ -9,7 +9,6 @@ from toolz import identity, isdistinct, first
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from dask import istask
 from distributed import Center, Worker
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,

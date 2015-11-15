@@ -220,7 +220,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             del waiting[key]
 
         new_worker = decide_worker(dependencies, stacks, who_has, restrictions,
-                nbytes, key)
+                                   nbytes, key)
         stacks[new_worker].append(key)
         ensure_occupied(new_worker)
 
@@ -850,7 +850,7 @@ def cover_aliases(dsk, new_keys):
 
 
 def execute_task(task):
-    """ Do the actual work of collecting data and executing a function """
+    """ Evaluate a nested task """
     if istask(task):
         func, args = task[0], task[1:]
         return func(*map(execute_task, args))

@@ -23,8 +23,8 @@ def test_pandas():
     df = pd.DataFrame({'x': [1, 2, 3], 'y': ['a'*1000, 'b'*1000, 'c'*1000]},
                       index=[10, 20, 30])
 
-    # TODO: change these once pandas memory_usage improves (in PR as of now)
     assert sizeof(df) >= sizeof(df.x) + sizeof(df.y) - sizeof(df.index)
     assert sizeof(df.x) >= sizeof(df.index)
-    # assert sizeof(df.y) >= 1000 * 3
+    if pd.__version__ >= '0.17.1':
+        assert sizeof(df.y) >= 1000 * 3
     assert sizeof(df.index) == 56

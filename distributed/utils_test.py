@@ -83,6 +83,7 @@ from tornado.ioloop import IOLoop
 def _test_cluster(f):
     from .center import Center
     from .worker import Worker
+    from .executor import _global_executors
     @gen.coroutine
     def g():
         c = Center('127.0.0.1', 8017)
@@ -107,3 +108,4 @@ def _test_cluster(f):
     IOLoop.clear_instance()
     loop = IOLoop().current()
     loop.run_sync(g)
+    _global_executors.clear()
