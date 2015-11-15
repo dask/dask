@@ -7,6 +7,8 @@ import sys
 requires = open('requirements.txt').read().strip().split('\n')
 if sys.version_info[0] < 3:
     requires.append('futures')
+if sys.version_info < (3, 4):
+    requires.append('singledispatch')
 
 setup(name='distributed',
       version='1.3.2',
