@@ -75,11 +75,13 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
                 assert response == b'OK', response
                 nbytes = content['nbytes'][key]
             else:
-                response, content = yield worker.compute(function=_execute_task,
-                                                         args=(task, {}),
+                response, content = yield worker.compute(function=execute_task,
+                                                         args=(task,),
                                                          needed=needed,
                                                          key=key,
                                                          kwargs={})
+                if response == b'OK':
+                    nbytes = content['nbytes']
             if response == b'error':
                 scheduler_queue.put_nowait({'op': 'task-erred',
                                             'key': key,
@@ -93,7 +95,6 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
                                             'missing': content.args})
 
             else:
-                nbytes = content['nbytes']
                 scheduler_queue.put_nowait({'op': 'task-finished',
                                             'workers': [ident],
                                             'key': key,
@@ -362,9 +363,9 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             update_data(msg['who-has'], msg['nbytes'])
 
         elif msg['op'] == 'task-finished':
+            nbytes[msg['key']] = msg['nbytes']
             mark_key_in_memory(msg['key'], msg['workers'])
             ensure_occupied(msg['workers'][0])
-            nbytes[msg['key']] = msg['nbytes']
 
         elif msg['op'] == 'task-erred':
             processing[msg['worker']].remove(msg['key'])
@@ -737,13 +738,12 @@ def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
         if not workers:
             workers = {w for w in stacks if w[0] in r}
             if not workers:
-                import pdb; pdb.set_trace()
                 raise ValueError("Task has no valid workers", key, r)
     if not workers or not stacks:
         raise ValueError("No workers found")
 
-    commbytes = {w: sum(nbytes.get(k, 1000) for k in dependencies[key]
-                                             if w not in who_has[k])
+    commbytes = {w: sum(nbytes[k] for k in dependencies[key]
+                                   if w not in who_has[k])
                  for w in workers}
 
     minbytes = min(commbytes.values())

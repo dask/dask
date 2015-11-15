@@ -1,4 +1,4 @@
-from operator import add
+from operator import add, sub
 
 from collections import Iterator
 from time import sleep
@@ -955,6 +955,31 @@ def test_nbytes_determines_worker():
         z = e.submit(lambda x, y: None, x, y)
         yield z._result()
         assert e.who_has[z.key] == {b.address}
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def test_pragmatic_move_small_data_to_large_data():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        yield e._start()
+
+        lists = e.map(lambda n: list(range(n)), [10] * 10, pure=False)
+        sums = e.map(sum, lists)
+        total = e.submit(sum, sums)
+
+        def f(x, y):
+            return None
+        results = e.map(f, lists, [total] * 10)
+
+        yield _wait([total])
+
+        yield _wait(results)
+
+        for l, r in zip(lists, results):
+            assert e.who_has[l.key] == e.who_has[r.key]
 
         yield e._shutdown()
     _test_cluster(f)

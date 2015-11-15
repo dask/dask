@@ -284,9 +284,10 @@ def test_decide_worker_with_many_independent_leaves():
     stacks = {'alice': [], 'bob': []}
     who_has = merge({('x', i * 2): {'alice'} for i in range(50)},
                     {('x', i * 2 + 1): {'bob'} for i in range(50)})
+    nbytes = {k: 0 for k in who_has}
 
     for key in dsk:
-        worker = decide_worker(dependencies, stacks, who_has, {}, {}, key)
+        worker = decide_worker(dependencies, stacks, who_has, {}, nbytes, key)
         stacks[worker].append(key)
 
     nhits = (len([k for k in stacks['alice'] if 'alice' in who_has[('x', k[1])]])
@@ -311,6 +312,7 @@ def test_decide_worker_with_restrictions():
 
     dependencies = {'x': {'y'}}
     who_has = {'y': {bob}}
+    nbytes = {'y': 0}
     result = decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'x')
     assert result in {alice, charlie}
 
@@ -401,7 +403,7 @@ def test_assign_many_tasks_with_restrictions():
     keyorder = {c: 1 for c in 'abxy'}
     who_has = {'x': {alice}}
     stacks = {alice: [], bob: []}
-    nbytes = {}
+    nbytes = {'x': 0}
     restrictions = {'y': {'bob'}, 'a': {'alice'}}
     keys = ['y', 'a']
 
