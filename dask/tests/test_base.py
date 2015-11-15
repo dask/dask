@@ -9,14 +9,7 @@ from toolz import compose, partial, curry
 import dask
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
         visualize)
-from dask.utils import raises
-
-
-def test_normalize():
-    assert normalize_token((1, 2, 3)) == (1, 2, 3)
-    assert normalize_token('a') == 'a'
-    assert normalize_token({'a': 1, 'b': 2, 'c': 3}) ==\
-            (('a', 1), ('b', 2), ('c', 3))
+from dask.utils import raises, tmpfile, ignoring
 
 
 def test_normalize_function():
@@ -39,9 +32,7 @@ def test_normalize_function():
 
 def test_tokenize():
     a = (1, 2, 3)
-    b = {'a': 1, 'b': 2, 'c': 3}
-    assert tokenize(a) == '4889c6ccd7099fc2fd19f4be468fcfa0'
-    assert tokenize(a, b) == tokenize(normalize_token(a), normalize_token(b))
+    assert isinstance(tokenize(a), (str, bytes))
 
 
 def test_tokenize_numpy_array_consistent_on_values():
@@ -67,7 +58,9 @@ def test_tokenize_numpy_datetime():
 
 def test_tokenize_numpy_scalar():
     np = pytest.importorskip('numpy')
-    tokenize(np.array(1.0, dtype='f8'))
+    assert tokenize(np.array(1.0, dtype='f8')) == tokenize(np.array(1.0, dtype='f8'))
+    assert (tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0])
+         == tokenize(np.array([(1, 2)], dtype=[('a', 'i4'), ('b', 'i8')])[0]))
 
 
 def test_tokenize_numpy_array_on_object_dtype():
@@ -78,6 +71,26 @@ def test_tokenize_numpy_array_on_object_dtype():
            tokenize(np.array(['a', None, 'aaa'], dtype=object))
     assert tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) == \
            tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object))
+
+
+def test_tokenize_numpy_memmap():
+    np = pytest.importorskip('numpy')
+    with tmpfile('.npy') as fn:
+        x = np.arange(5)
+        np.save(fn, x)
+        y = tokenize(np.load(fn, mmap_mode='r'))
+
+    with tmpfile('.npy') as fn:
+        x = np.arange(5)
+        np.save(fn, x)
+        z = tokenize(np.load(fn, mmap_mode='r'))
+
+    assert y != z
+
+
+def test_normalize_base():
+    for i in [1, 1.1, '1', slice(1, 2, 3)]:
+        assert normalize_token(i) is i
 
 
 def test_tokenize_pandas():
@@ -101,6 +114,39 @@ def test_tokenize_kwargs():
     assert tokenize(5) != tokenize(5, x=1)
     assert tokenize(5, x=1) != tokenize(5, x=2)
     assert tokenize(5, x=1) != tokenize(5, y=1)
+
+
+def test_tokenize_same_repr():
+    class Foo(object):
+        def __init__(self, x):
+            self.x = x
+        def __repr__(self):
+            return 'a foo'
+
+    assert tokenize(Foo(1)) != tokenize(Foo(2))
+
+
+def test_tokenize_sequences():
+    assert tokenize([1]) != tokenize([2])
+    assert tokenize([1]) != tokenize((1,))
+    assert tokenize([1]) == tokenize([1])
+
+    x = np.arange(2000)  # long enough to drop information in repr
+    y = np.arange(2000)
+    y[1000] = 0  # middle isn't printed in repr
+    assert tokenize([x]) != tokenize([y])
+
+
+def test_tokenize_ordered_dict():
+    with ignoring(ImportError):
+        from collections import OrderedDict
+        a = OrderedDict([('a', 1), ('b', 2)])
+        b = OrderedDict([('a', 1), ('b', 2)])
+        c = OrderedDict([('b', 2), ('a', 1)])
+
+        assert tokenize(a) == tokenize(b)
+        assert tokenize(a) != tokenize(c)
+
 
 da = pytest.importorskip('dask.array')
 import numpy as np

@@ -1,14 +1,17 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-from operator import attrgetter
-from hashlib import md5
 from functools import partial
+from hashlib import md5
+from operator import attrgetter
+import os
+import sys
+import uuid
+import warnings
 
-from toolz import merge, groupby, curry
+from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import bind_method
+from .compatibility import bind_method, unicode
 from .context import _globals
 from .utils import Dispatch, ignoring
 
@@ -139,10 +142,29 @@ def normalize_function(func):
 
 
 normalize_token = Dispatch()
-normalize_token.register((int, float, str, tuple, list), lambda a: a)
-normalize_token.register(object,
-        lambda a: normalize_function(a) if callable(a) else a)
-normalize_token.register(dict, lambda a: tuple(sorted(a.items())))
+normalize_token.register((int, float, str, unicode, bytes, type(None), type,
+                          slice),
+                         identity)
+
+@partial(normalize_token.register, dict)
+def normalize_dict(d):
+    return normalize_token(sorted(d.items()))
+
+@partial(normalize_token.register, (tuple, list, set))
+def normalize_seq(seq):
+    return type(seq).__name__, list(map(normalize_token, seq))
+
+@partial(normalize_token.register, object)
+def normalize_object(o):
+    if callable(o):
+        return normalize_function(o)
+    else:
+        return uuid.uuid4().hex
+
+@partial(normalize_token.register, Base)
+def normalize_base(b):
+    return type(b).__name__, b.key
+
 
 with ignoring(ImportError):
     import pandas as pd
@@ -176,6 +198,8 @@ with ignoring(ImportError):
     def normalize_array(x):
         if not x.shape:
             return (str(x), x.dtype)
+        if hasattr(x, 'mode') and hasattr(x, 'filename'):
+            return x.filename, os.path.getmtime(x.filename), x.dtype, x.shape
         if x.dtype.hasobject:
             try:
                 data = md5('-'.join(x.flat)).hexdigest()
@@ -188,12 +212,22 @@ with ignoring(ImportError):
                 data = md5(x.copy().ravel().view('i1').data).hexdigest()
         return (data, x.dtype, x.shape, x.strides)
 
+    normalize_token.register(np.dtype, repr)
+    normalize_token.register(np.generic, repr)
+
+
+with ignoring(ImportError):
+    from collections import OrderedDict
+    @partial(normalize_token.register, OrderedDict)
+    def normalize_ordered_dict(d):
+        return type(d).__name__, normalize_token(list(d.items()))
+
 
 def tokenize(*args, **kwargs):
     """ Deterministic token
 
     >>> tokenize([1, 2, '3'])
-    '9d71491b50023b06fc76928e6eddb952'
+    '7d6a880cd9ec03506eee6973ff551339'
 
     >>> tokenize('Hello') == tokenize('Hello')
     True
