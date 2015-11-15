@@ -27,4 +27,4 @@ def test_pandas():
     assert sizeof(df.x) >= sizeof(df.index)
     if pd.__version__ >= '0.17.1':
         assert sizeof(df.y) >= 1000 * 3
-    assert sizeof(df.index) == 56
+    assert sizeof(df.index) >= 20
