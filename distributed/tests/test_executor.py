@@ -9,6 +9,7 @@ from toolz import identity, isdistinct, first
 from tornado.ioloop import IOLoop
 from tornado import gen
 
+from dask import istask
 from distributed import Center, Worker
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
@@ -724,7 +725,7 @@ def test_errors_dont_block():
 
 
 def test_submit_quotes():
-    def assert_list(x, z=None):
+    def assert_list(x, z=[]):
         return isinstance(x, list) and isinstance(z, list)
 
     @gen.coroutine
@@ -732,21 +733,29 @@ def test_submit_quotes():
         e = Executor((c.ip, c.port), start=False)
         yield e._start()
 
+        x = e.submit(assert_list, [1, 2, 3])
+        result = yield x._result()
+        assert result
+
         x = e.submit(assert_list, [1, 2, 3], z=[4, 5, 6])
         result = yield x._result()
         assert result
+
+        x = e.submit(inc, 1)
+        y = e.submit(inc, 2)
+        z = e.submit(sum, [x, y])
+        yield z._result()
+
+        task = e.dask[z.key]
+        assert task[0] == sum
+        assert istask(task[1])
 
         yield e._shutdown()
     _test_cluster(f)
 
 
 def test_map_quotes():
-    def assert_list(x):
-        return isinstance(x, list)
-
-    def assert_list_kwarg(x, z=None):
-        print(type(z))
-        print(type(x))
+    def assert_list(x, z=[]):
         return isinstance(x, list) and isinstance(z, list)
 
     @gen.coroutine
@@ -758,7 +767,11 @@ def test_map_quotes():
         result = yield e._gather(L)
         assert all(result)
 
-        L = e.map(assert_list_kwarg, [[1, 2, 3], [4]], z=[10])
+        L = e.map(assert_list, [[1, 2, 3], [4]], z=[10])
+        result = yield e._gather(L)
+        assert all(result)
+
+        L = e.map(assert_list, [[1, 2, 3], [4]], [[]] * 3)
         result = yield e._gather(L)
         assert all(result)
 
