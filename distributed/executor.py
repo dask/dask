@@ -291,10 +291,8 @@ class Executor(object):
         if key in self.futures:
             return Future(key, self)
 
-        args = tuple(map(quote, args))
-
         if kwargs:
-            task = (apply, func, (tuple, list(args)), kwargs)
+            task = (apply, func, args, kwargs)
         else:
             task = (func,) + args
 
@@ -356,10 +354,10 @@ class Executor(object):
                     for i in range(min(map(len, iterables)))]
 
         if not kwargs:
-            dsk = {key: (func,) + tuple(map(quote, args))
+            dsk = {key: (func,) + args
                    for key, args in zip(keys, zip(*iterables))}
         else:
-            dsk = {key: (apply, func, (tuple, list(map(quote, args))), kwargs)
+            dsk = {key: (apply, func, args, kwargs)
                    for key, args in zip(keys, zip(*iterables))}
 
         for key in dsk:

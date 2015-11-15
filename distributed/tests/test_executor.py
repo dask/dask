@@ -743,12 +743,9 @@ def test_submit_quotes():
 
         x = e.submit(inc, 1)
         y = e.submit(inc, 2)
-        z = e.submit(sum, [x, y])
-        yield z._result()
-
-        task = e.dask[z.key]
-        assert task[0] == sum
-        assert istask(task[1])
+        z = e.submit(assert_list, [x, y])
+        result = yield z._result()
+        assert result
 
         yield e._shutdown()
     _test_cluster(f)

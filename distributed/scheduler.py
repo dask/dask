@@ -13,7 +13,6 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
-from dask.async import _execute_task
 from dask.core import istask, get_deps, reverse_dict, get_dependencies
 from dask.order import order
 
@@ -848,3 +847,12 @@ def cover_aliases(dsk, new_keys):
             pass
 
     return dsk
+
+
+def execute_task(task):
+    """ Do the actual work of collecting data and executing a function """
+    if istask(task):
+        func, args = task[0], task[1:]
+        return func(*map(execute_task, args))
+    else:
+        return task
