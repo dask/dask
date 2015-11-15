@@ -13,7 +13,6 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
-from dask.async import _execute_task
 from dask.core import istask, get_deps, reverse_dict, get_dependencies
 from dask.order import order
 
@@ -72,14 +71,17 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
             needed = msg['needed']
             task = msg['task']
             if not istask(task):
-                response = yield worker.update_data(data={key: task})
+                response, content = yield worker.update_data(data={key: task})
                 assert response == b'OK', response
+                nbytes = content['nbytes'][key]
             else:
-                response, content = yield worker.compute(function=_execute_task,
-                                                         args=(task, {}),
+                response, content = yield worker.compute(function=execute_task,
+                                                         args=(task,),
                                                          needed=needed,
                                                          key=key,
                                                          kwargs={})
+                if response == b'OK':
+                    nbytes = content['nbytes']
             if response == b'error':
                 scheduler_queue.put_nowait({'op': 'task-erred',
                                             'key': key,
@@ -95,7 +97,8 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
             else:
                 scheduler_queue.put_nowait({'op': 'task-finished',
                                             'workers': [ident],
-                                            'key': key})
+                                            'key': key,
+                                            'nbytes': nbytes})
 
     yield worker.close(close=True)
     worker.close_streams()
@@ -152,7 +155,7 @@ def delete(scheduler_queue, delete_queue, ip, port, batch_time=1):
 @gen.coroutine
 def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
               who_has, has_what, ncores, dsk=None, dependencies=None,
-              dependents=None, restrictions=None, held_data=None,
+              dependents=None, restrictions=None, held_data=None, nbytes=None,
               waiting=None, waiting_data=None, stacks=None, processing=None):
     """ The scheduler coroutine for dask scheduling
 
@@ -182,6 +185,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     dsk = dict() if dsk is None else dsk
     dependencies = dict() if dependencies is None else dependencies
     dependents = dict() if dependents is None else dependents
+    nbytes = dict() if nbytes is None else nbytes
     restrictions = dict() if restrictions is None else restrictions
     waiting = dict() if waiting is None else waiting
     waiting_data = dict() if waiting_data is None else waiting_data
@@ -215,7 +219,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             assert not waiting[key]
             del waiting[key]
 
-        new_worker = decide_worker(dependencies, stacks, who_has, restrictions, key)
+        new_worker = decide_worker(dependencies, stacks, who_has, restrictions,
+                                   nbytes, key)
         stacks[new_worker].append(key)
         ensure_occupied(new_worker)
 
@@ -266,7 +271,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         Takes an iterable of keys to consider for execution
         """
         new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
-                                       stacks, restrictions,
+                                       stacks, restrictions, nbytes,
                                        [k for k in keys if k in waiting and
                                                         not waiting[k]])
         logger.debug("Seed ready tasks: %s", new_stacks)
@@ -287,9 +292,11 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             if key in in_play:
                 in_play.remove(key)
 
-    def update_data(extra_who_has):
+    def update_data(extra_who_has, extra_nbytes):
         for key, workers in extra_who_has.items():
             mark_key_in_memory(key, workers)
+
+        nbytes.update(extra_nbytes)
 
         held_data.update(extra_who_has)
         in_play.update(extra_who_has)
@@ -353,9 +360,10 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                     mark_key_in_memory(key)
 
         elif msg['op'] == 'update-data':
-            update_data(msg['who-has'])
+            update_data(msg['who-has'], msg['nbytes'])
 
         elif msg['op'] == 'task-finished':
+            nbytes[msg['key']] = msg['nbytes']
             mark_key_in_memory(msg['key'], msg['workers'])
             ensure_occupied(msg['workers'][0])
 
@@ -681,30 +689,43 @@ def heal(dependencies, dependents, in_memory, stacks, processing, waiting,
     return output
 
 
-def decide_worker(dependencies, stacks, who_has, restrictions, key):
+def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
     """ Decide which worker should take task
 
     >>> dependencies = {'c': {'b'}, 'b': {'a'}}
     >>> stacks = {('alice', 8000): ['z'], ('bob', 8000): []}
     >>> who_has = {'a': {('alice', 8000)}}
+    >>> nbytes = {'a': 100}
     >>> restrictions = {}
 
     We choose the worker that has the data on which 'b' depends (alice has 'a')
 
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
     ('alice', 8000)
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
 
     >>> who_has = {'a': {('alice', 8000), ('bob', 8000)}}
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
     ('bob', 8000)
 
     Optionally provide restrictions of where jobs are allowed to occur
 
     >>> restrictions = {'b': {'alice', 'charile'}}
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
     ('alice', 8000)
+
+    If the task requires data communication, then we choose to minimize the
+    number of bytes sent between workers. This takes precedence over worker
+    occupancy.
+
+    >>> dependencies = {'c': {'a', 'b'}}
+    >>> who_has = {'a': {('alice', 8000)}, 'b': {('bob', 8000)}}
+    >>> nbytes = {'a': 1, 'b': 1000}
+    >>> stacks = {('alice', 8000): [], ('bob', 8000): []}
+
+    >>> decide_worker(dependencies, stacks, who_has, {}, nbytes, 'c')
+    ('bob', 8000)
     """
     deps = dependencies[key]
     workers = frequencies(w for dep in deps
@@ -721,12 +742,19 @@ def decide_worker(dependencies, stacks, who_has, restrictions, key):
     if not workers or not stacks:
         raise ValueError("No workers found")
 
+    commbytes = {w: sum(nbytes[k] for k in dependencies[key]
+                                   if w not in who_has[k])
+                 for w in workers}
+
+    minbytes = min(commbytes.values())
+
+    workers = {w for w, nb in commbytes.items() if nb == minbytes}
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
 
 
 def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
-        restrictions, keys):
+        restrictions, nbytes, keys):
     """ Assign many new ready tasks to workers
 
     Often at the beginning of computation we have to assign many new leaves to
@@ -763,7 +791,8 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
         stacks[worker].extend(keys)
 
     for key in ready:
-        worker = decide_worker(dependencies, stacks, who_has, restrictions, key)
+        worker = decide_worker(dependencies, stacks, who_has, restrictions,
+                nbytes, key)
         new_stacks[worker].append(key)
         stacks[worker].append(key)
 
@@ -818,3 +847,12 @@ def cover_aliases(dsk, new_keys):
             pass
 
     return dsk
+
+
+def execute_task(task):
+    """ Evaluate a nested task """
+    if istask(task):
+        func, args = task[0], task[1:]
+        return func(*map(execute_task, args))
+    else:
+        return task

@@ -35,7 +35,7 @@ def test__futures_to_dask_dataframe():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         remote_dfs = e.map(lambda x: x, dfs)
         ddf = yield _futures_to_dask_dataframe(remote_dfs, divisions=True,
@@ -98,7 +98,7 @@ def test__futures_to_dask_array():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
+        yield e._start()
 
         remote_arrays = [[[e.submit(np.full, (2, 3, 4), i + j + k)
                             for i in range(2)]
@@ -123,8 +123,7 @@ def test__dask_array_collections():
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
-        IOLoop.current().spawn_callback(e._go)
-        yield e._sync_center()
+        yield e._start()
 
         x_dsk = {('x', i, j): np.random.random((3, 3)) for i in range(3)
                                                        for j in range(2)}

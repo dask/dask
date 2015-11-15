@@ -12,8 +12,9 @@ from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop
 
-from .core import rpc, connect_sync, read_sync, write_sync, connect, Server
 from .client import _gather, pack_data
+from .core import rpc, connect_sync, read_sync, write_sync, connect, Server
+from .sizeof import sizeof
 from .utils import funcname
 
 _ncores = ThreadPool()._processes
@@ -156,7 +157,7 @@ class Worker(Server):
             if not response == b'OK':
                 logger.warn('Could not report results of work to center: %s',
                             response.decode())
-            out = (b'OK', None)
+            out = (b'OK', {'nbytes': sizeof(result)})
         except Exception as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             tb = ''.join(traceback.format_tb(exc_traceback))
@@ -176,7 +177,8 @@ class Worker(Server):
             response = yield self.center.add_keys(address=(self.ip, self.port),
                                                   keys=list(data))
             assert response == b'OK'
-        raise Return(b'OK')
+        info = {'nbytes': {k: sizeof(v) for k, v in data.items()}}
+        raise Return((b'OK', info))
 
     @gen.coroutine
     def delete_data(self, stream, keys=None, report=True):

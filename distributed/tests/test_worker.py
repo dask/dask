@@ -1,9 +1,10 @@
 from operator import add
 from time import sleep
 
-from distributed.core import read, write, rpc, connect
-from distributed.utils import ignoring
 from distributed.center import Center
+from distributed.core import read, write, rpc, connect
+from distributed.sizeof import sizeof
+from distributed.utils import ignoring
 from distributed.worker import Worker
 
 
@@ -35,6 +36,7 @@ def _test_cluster(f):
 
     IOLoop.current().run_sync(g)
 
+
 def test_worker_ncores():
     from distributed.worker import _ncores
     w = Worker('127.0.0.1', 8018, '127.0.0.1', 8019)
@@ -55,11 +57,12 @@ def test_worker():
         assert a.data['x'] == 3
         assert c.who_has['x'] == set([(a.ip, a.port)])
 
-        response, _ = yield bb.compute(key='y', function=add,
-                                       args=['x', 10], needed=['x'])
+        response, info = yield bb.compute(key='y', function=add,
+                                          args=['x', 10], needed=['x'])
         assert response == b'OK'
         assert b.data['y'] == 13
         assert c.who_has['y'] == set([(b.ip, b.port)])
+        assert info['nbytes'] == sizeof(b.data['y'])
 
         def bad_func():
             1 / 0
@@ -87,7 +90,9 @@ def test_workers_update_center():
     def f(c, a, b):
         aa = rpc(ip=a.ip, port=a.port)
 
-        yield aa.update_data(data={'x': 1, 'y': 2})
+        response, content = yield aa.update_data(data={'x': 1, 'y': 2})
+        assert response == b'OK'
+        assert content['nbytes'] == {'x': sizeof(1), 'y': sizeof(2)}
 
         assert a.data == {'x': 1, 'y': 2}
         assert c.who_has == {'x': {(a.ip, a.port)},

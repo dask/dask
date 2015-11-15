@@ -20,10 +20,11 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
-from .core import read, write, connect, rpc, coerce_to_rpc
 from .client import (WrappedKey, _gather, unpack_remotedata, pack_data,
         scatter_to_workers)
+from .core import read, write, connect, rpc, coerce_to_rpc
 from .dask import scheduler, worker, delete
+from .sizeof import sizeof
 from .utils import All, sync, funcname
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,7 @@ class Executor(object):
         self.processing = {}
         self.stacks = {}
         self.held_data = set()
+        self.nbytes = dict()
 
         if start:
             self.start()
@@ -142,6 +144,13 @@ class Executor(object):
         self._loop_thread.start()
         sync(self.loop, self._sync_center)
         self.loop.add_callback(self._go)
+
+    @gen.coroutine
+    def _start(self):
+        yield self._sync_center()
+        IOLoop.current().spawn_callback(self._go)
+        while not len(self.stacks) == len(self.ncores):
+            yield gen.sleep(0.01)
 
     def __enter__(self):
         if not self.loop._running:
@@ -220,7 +229,6 @@ class Executor(object):
     @gen.coroutine
     def _go(self):
         """ Setup and run all other coroutines.  Block until finished. """
-        yield self._sync_center()
         worker_queues = {worker: Queue() for worker in self.ncores}
         delete_queue = Queue()
 
@@ -231,7 +239,7 @@ class Executor(object):
                       ncores=self.ncores, dsk=self.dask,
                       held_data=self.held_data, restrictions=self.restrictions,
                       waiting=self.waiting, stacks=self.stacks,
-                      processing=self.processing),
+                      processing=self.processing, nbytes=self.nbytes),
             delete(self.scheduler_queue, delete_queue,
                    self.center.ip, self.center.port, self._delete_batch_time)]
          + [worker(self.scheduler_queue, worker_queues[w], w, n)
@@ -282,8 +290,6 @@ class Executor(object):
 
         if key in self.futures:
             return Future(key, self)
-
-        args = quote(args)
 
         if kwargs:
             task = (apply, func, args, kwargs)
@@ -348,7 +354,7 @@ class Executor(object):
                     for i in range(min(map(len, iterables)))]
 
         if not kwargs:
-            dsk = {key: (func,) + tuple(map(quote, args))
+            dsk = {key: (func,) + args
                    for key, args in zip(keys, zip(*iterables))}
         else:
             dsk = {key: (apply, func, args, kwargs)
@@ -426,8 +432,13 @@ class Executor(object):
                              "Try syncing with center.\n"
                              "  e.sync_center()")
         remotes, who_has = yield scatter_to_workers(self.center, self.ncores, data)
+        if isinstance(remotes, list):
+            nbytes = {r.key: sizeof(d) for r, d in zip(remotes, data)}
+        elif isinstance(remotes, dict):
+            nbytes = {k: sizeof(v) for k, v in data.items()}
         self.scheduler_queue.put_nowait({'op': 'update-data',
-                                         'who-has': who_has})
+                                         'who-has': who_has,
+                                         'nbytes': nbytes})
         raise gen.Return(remotes)
 
     def scatter(self, data):
