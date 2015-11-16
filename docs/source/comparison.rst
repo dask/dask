@@ -104,3 +104,21 @@ IPython Parallel has the following advantages over ``distributed``
 .. _`IPython Parallel`: http://ipython.org/ipython-doc/dev/parallel/
 .. _`a recipe`: https://ipython.org/ipython-doc/3/parallel/dag_dependencies.html#dag-dependencies
 .. _dask: http://dask.pydata.org/en/latest/
+
+
+concurrent.futures
+------------------
+
+The ``distributed.Executor`` API is modeled after ``concurrent.futures`` and
+PEP-3184_.  It has a few notable differences:
+
+*  ``distributed`` accepts ``Future`` objects within calls to ``submit/map``.
+   It is preferable to submit Future objects directly rather than wait on them
+   before submission.
+*  The ``map`` function returns ``Future`` objects, not concrete results.  The
+  ``map`` function returns immediately.
+*  It is not yet possible to cancel a ``Future`` (though this is theoretically
+   possible please raise an issue if this is of concrete importance to you.)
+*  Distributed generally does not support timeouts or callbacks
+
+.. _PEP-3184: https://www.python.org/dev/peps/pep-3148/

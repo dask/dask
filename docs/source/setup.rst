@@ -61,3 +61,13 @@ node that hosts ``dcenter``::
 
 Alternatively you can start up the ``distributed.center.Center`` and
 ``distributed.worker.Worker`` objects within a Python session manually.
+
+
+Cleanup
+-------
+
+It is common and safe to terminate the cluster by just killing the processes.
+The workers and center have no persistent state.
+
+Programmatically you can use the client interface (``rpc``) to call the
+``terminate`` methods on the workers and centers.

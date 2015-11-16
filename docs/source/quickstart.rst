@@ -41,9 +41,11 @@ IP/port.::
 Map and Submit Functions
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Use the ``map`` and ``submit`` methods to launch computation on the cluster.
-Results of these functions are ``Future`` objects that proxy remote data on the
-cluster.
+Use the ``map`` and ``submit`` methods to launch computations on the cluster.
+The ``map/submit`` functions send the function and arguments to the remote
+workers for processing.  They return ``Future`` objects that refer to remote
+data on the cluster.  The ``Future`` returns immediately while the computations
+run remotely in the background.
 
 .. code-block:: python
 
@@ -62,13 +64,27 @@ cluster.
 Gather
 ~~~~~~
 
-Gather results to your local machine either with the ``Future.result`` method
-as shown above for a single future, or with the ``Executor.gather`` method for
-many futures at once.
+The ``map/submit`` functions return ``Future`` objects, lightweight tokens that
+refer to results on the cluster.  By default the results of computations
+*stay on the cluster*.
 
 .. code-block:: python
 
-   >>> executor.gather(A)
+   >>> total  # Function hasn't yet completed
+   <Future: status: waiting, key: sum-58999c52e0fa35c7d7346c098f5085c7>
+
+   >>> total  # Function completed, result ready on remote worker
+   <Future: status: finished, key: sum-58999c52e0fa35c7d7346c098f5085c7>
+
+Gather results to your local machine either with the ``Future.result`` method
+for a single future, or with the ``Executor.gather`` method for many futures at
+once.
+
+.. code-block:: python
+
+   >>> total.result()     # result for single future
+   -285
+   >>> executor.gather(A) # gather for many futures
    [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
 
 get
@@ -97,7 +113,9 @@ Shutdown
 ~~~~~~~~
 
 Shut down the executor (and background thread) with the shutdown method.  This
-does not close the worker processes.
+cleanly shuts down your connection to the cluster but does not terminate the
+worker processes on the cluster.  Those remain active for future connections
+from other executors.
 
 .. code-block:: python
 
