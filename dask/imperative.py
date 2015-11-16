@@ -55,13 +55,13 @@ def to_task_dasks(expr):
     >>> b = value(2, 'b')
     >>> task, dasks = to_task_dasks([a, b, 3])
     >>> task # doctest: +SKIP
-    (list, ['a', 'b', 3])
+    ['a', 'b', 3]
     >>> dasks # doctest: +SKIP
     [{'a': 1}, {'b': 2}]
 
     >>> task, dasks = to_task_dasks({a: 1, b: 2})
     >>> task # doctest: +SKIP
-    (dict, (list, [(list, ['a', 1]), (list, ['b', 2])]))
+    (dict, [['a', 1], ['b', 2]])
     >>> dasks # doctest: +SKIP
     [{'a': 1}, {'b': 2}]
     """
@@ -80,12 +80,12 @@ def to_task_dasks(expr):
         args = list(args)
         dasks = flat_unique(dasks)
         # Ensure output type matches input type
-        if isinstance(expr, (list, tuple, set)):
+        if isinstance(expr, (tuple, set)):
             return (type(expr), args), dasks
         else:
             return args, dasks
     if isinstance(expr, dict):
-        args, dasks = to_task_dasks(list([k, v] for k, v in expr.items()))
+        args, dasks = to_task_dasks([[k, v] for k, v in expr.items()])
         return (dict, args), dasks
     return expr, []
 
@@ -118,7 +118,7 @@ def applyfunc(func, args, kwargs, pure=False):
     if kwargs:
         dask_kwargs, dasks2 = to_task_dasks(kwargs)
         dasks = dasks + (dasks2,)
-        task = (apply, func, (list, list(args)), dask_kwargs)
+        task = (apply, func, list(args), dask_kwargs)
     else:
         task = (func,) + args
     name = funcname(func) + '-' + tokenize(*task, pure=pure)

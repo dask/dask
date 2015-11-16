@@ -66,9 +66,6 @@ In cases like ``(add, 'x', 'y')`` functions like ``add`` receive concrete
 values instead of keys.  A dask scheduler replaces keys (like ``'x'`` and ``'y'``) with
 their computed values (like ``1``, and ``2``) *before* calling the ``add`` function.
 
-If the argument is a list then a function should expect an ``Iterator`` of
-concrete values.
-
 
 Entry Point - The ``get`` function
 ----------------------------------

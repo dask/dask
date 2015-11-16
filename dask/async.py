@@ -117,7 +117,8 @@ from __future__ import absolute_import, division, print_function
 import sys
 import traceback
 from operator import add
-from .core import istask, flatten, reverse_dict, get_dependencies, ishashable
+from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
+        _deps)
 from .context import _globals
 from .order import order
 from .callbacks import unpack_callbacks
@@ -165,7 +166,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
         cache = dict()
     data_keys = set()
     for k, v in dsk.items():
-        if not istask(v) and (not ishashable(v) or v not in dsk):
+        if not (istask(v) or _deps(dsk, v)):
             cache[k] = v
             data_keys.add(k)
 
@@ -238,7 +239,7 @@ def _execute_task(arg, cache, dsk=None):
     'foo'
     """
     if isinstance(arg, list):
-        return (_execute_task(a, cache) for a in arg)
+        return [_execute_task(a, cache) for a in arg]
     elif istask(arg):
         func, args = arg[0], arg[1:]
         args2 = [_execute_task(a, cache) for a in args]
@@ -328,7 +329,7 @@ def finish_task(dsk, key, state, results, sortkey, delete=True,
     return state
 
 
-def nested_get(ind, coll, lazy=False):
+def nested_get(ind, coll):
     """ Get nested index from collection
 
     Examples
@@ -342,10 +343,7 @@ def nested_get(ind, coll, lazy=False):
     (('b', 'a'), ('a', 'b'))
     """
     if isinstance(ind, list):
-        if lazy:
-            return (nested_get(i, coll, lazy=lazy) for i in ind)
-        else:
-            return tuple([nested_get(i, coll, lazy=lazy) for i in ind])
+        return tuple([nested_get(i, coll) for i in ind])
     else:
         return coll[ind]
 

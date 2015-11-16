@@ -103,7 +103,7 @@ def _get_task(d, task, maxdepth=1000):
             results.append(v)
 
 
-def get(d, key, get=None, concrete=True, **kwargs):
+def get(d, key, get=None, **kwargs):
     """ Get value from Dask
 
     Examples
@@ -123,9 +123,7 @@ def get(d, key, get=None, concrete=True, **kwargs):
     """
     get = get or _get
     if isinstance(key, list):
-        v = (get(d, k, get=get, concrete=concrete) for k in key)
-        if concrete:
-            v = list(v)
+        v = [get(d, k, get=get) for k in key]
     elif ishashable(key) and key in d:
         v = d[key]
     elif istask(key):
@@ -138,7 +136,7 @@ def get(d, key, get=None, concrete=True, **kwargs):
             # use non-recursive method by default
             return _get_task(d, v)
         func, args = v[0], v[1:]
-        args2 = [get(d, arg, get=get, concrete=False) for arg in args]
+        args2 = [get(d, arg, get=get) for arg in args]
         return func(*[get(d, arg, get=get) for arg in args2])
     else:
         return v
@@ -157,6 +155,8 @@ def _deps(dsk, arg):
     ['x']
     >>> _deps(dsk, (add, 'x', 1))
     ['x']
+    >>> _deps(dsk, ['x', 'y'])
+    ['x', 'y']
 
     >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
     ['x', 'y']
@@ -166,6 +166,8 @@ def _deps(dsk, arg):
         for a in arg[1:]:
             result.extend(_deps(dsk, a))
         return result
+    if isinstance(arg, list):
+        return sum([_deps(dsk, a) for a in arg], [])
     try:
         if arg not in dsk:
             return []
@@ -431,14 +433,12 @@ def quote(x):
     interpreted but remains literal.
 
     >>> quote([1, 2, 3])
-    (<function list2 at ...>, [1, 2, 3])
+    ([1, 2, 3])
 
     >>> from operator import add
     >>> quote((add, 1, 2))  # doctest: +SKIP
     (tuple, [add, 1, 2])
     """
-    if isinstance(x, list):
-        return (list2, list(map(quote, x)))
     if istask(x):
         return (tuple, list(map(quote, x)))
     return x
