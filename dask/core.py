@@ -433,7 +433,7 @@ def quote(x):
     interpreted but remains literal.
 
     >>> quote([1, 2, 3])
-    ([1, 2, 3])
+    [1, 2, 3]
 
     >>> from operator import add
     >>> quote((add, 1, 2))  # doctest: +SKIP
