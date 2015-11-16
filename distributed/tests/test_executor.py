@@ -113,6 +113,33 @@ def test_future():
     assert str(x.status) in repr(x)
 
 
+def test_Future_exception():
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        yield e._start()
+
+        x = e.submit(div, 1, 0)
+        result = yield x._exception()
+        assert isinstance(result, ZeroDivisionError)
+
+        x = e.submit(div, 1, 1)
+        result = yield x._exception()
+        assert result is None
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def test_Future_exception_sync():
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            x = e.submit(div, 1, 0)
+            assert isinstance(x.exception(), ZeroDivisionError)
+
+            x = e.submit(div, 1, 1)
+            assert x.exception() is None
+
+
 def test_map_naming():
     @gen.coroutine
     def f(c, a, b):

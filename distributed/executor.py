@@ -75,6 +75,19 @@ class Future(WrappedKey):
             result = yield self.executor._gather([self])
             raise gen.Return(result[0])
 
+    @gen.coroutine
+    def _exception(self):
+        yield self.event.wait()
+        if self.status == 'error':
+            raise Return(self.executor.futures[self.key]['exception'])
+        else:
+            raise Return(None)
+
+    def exception(self):
+        """ Return the exception of a failed task """
+        return sync(self.executor.loop, self._exception)
+
+
     def __del__(self):
         self.executor._dec_ref(self.key)
 
