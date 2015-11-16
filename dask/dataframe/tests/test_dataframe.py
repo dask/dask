@@ -333,7 +333,8 @@ def test_groupby_multilevel_getitem():
              (ddf.groupby(['a', 'b']), df.groupby(['a', 'b'])),
              (ddf.groupby(['a', 'b'])['c'], df.groupby(['a', 'b'])['c']),
              (ddf.groupby('a')[['b', 'c']], df.groupby('a')[['b', 'c']]),
-             (ddf.groupby('a')[['b']], df.groupby('a')[['b']])]
+             (ddf.groupby('a')[['b']], df.groupby('a')[['b']]),
+             (ddf.groupby(['a', 'b', 'c']), df.groupby(['a', 'b', 'c']))]
 
     for d, p in cases:
         assert isinstance(d, dd.core._GroupBy)
