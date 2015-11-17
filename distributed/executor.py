@@ -448,12 +448,11 @@ class Executor(object):
             raise ValueError("No workers yet found.  "
                              "Try syncing with center.\n"
                              "  e.sync_center()")
-        remotes, who_has = yield scatter_to_workers(self.center, self.ncores, data)
+        remotes, who_has, nbytes = yield scatter_to_workers(
+                                            self.center, self.ncores, data)
         if isinstance(remotes, list):
-            nbytes = {r.key: sizeof(d) for r, d in zip(remotes, data)}
             remotes = [Future(r.key, self) for r in remotes]
         elif isinstance(remotes, dict):
-            nbytes = {k: sizeof(v) for k, v in data.items()}
             remotes = {k: Future(v.key, self) for k, v in remotes.items()}
         self.loop.add_callback(self.scheduler_queue.put_nowait,
                                         {'op': 'update-data',

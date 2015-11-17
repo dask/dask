@@ -63,9 +63,9 @@ def test_scatter_delete(loop):
 
         assert data[0].key not in c.who_has
 
-        data, who_has = yield scatter_to_workers((c.ip, c.port),
-                                                 [a.address, b.address],
-                                                 [4, 5, 6])
+        data, who_has, nbytes = yield scatter_to_workers((c.ip, c.port),
+                                                         [a.address, b.address],
+                                                         [4, 5, 6])
 
         m = merge(a.data, b.data)
 
@@ -75,6 +75,10 @@ def test_scatter_delete(loop):
         assert isinstance(who_has, dict)
         assert set(concat(who_has.values())) == {a.address, b.address}
         assert len(who_has) == len(data)
+
+        assert isinstance(nbytes, dict)
+        assert set(nbytes) == set(who_has)
+        assert all(isinstance(v, int) for v in nbytes.values())
 
         result = yield _gather((c.ip, c.port), data)
         assert result == [4, 5, 6]
