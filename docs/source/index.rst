@@ -60,4 +60,5 @@ Contents
    scheduler
    resilience
    related-work
+   journey
    comparison
