@@ -78,6 +78,7 @@ class Worker(Server):
 
         super(Worker, self).__init__(handlers, **kwargs)
         logger.info('Start worker at             %s:%d', ip, port)
+        logger.info('Waiting to connect to       %s:%d', center_ip, center_port)
         self.status = 'running'
 
     @gen.coroutine
