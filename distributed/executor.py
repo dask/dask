@@ -43,6 +43,9 @@ class Future(WrappedKey):
         self.executor = executor
         self.executor._inc_ref(key)
 
+        if key not in executor.futures:
+            executor.futures[key] = {'event': Event(), 'status': 'pending'}
+
     @property
     def status(self):
         return self.executor.futures[self.key]['status']
@@ -317,9 +320,6 @@ class Executor(object):
         else:
             restrictions = {}
 
-        if key not in self.futures:
-            self.futures[key] = {'event': Event(), 'status': 'pending'}
-
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self.loop.add_callback(self.scheduler_queue.put_nowait,
                                         {'op': 'update-graph',
@@ -376,10 +376,6 @@ class Executor(object):
         else:
             dsk = {key: (apply, func, args, kwargs)
                    for key, args in zip(keys, zip(*iterables))}
-
-        for key in dsk:
-            if key not in self.futures:
-                self.futures[key] = {'event': Event(), 'status': 'pending'}
 
         if isinstance(workers, (list, set)):
             if workers and isinstance(first(workers), (list, set)):
@@ -455,8 +451,10 @@ class Executor(object):
         remotes, who_has = yield scatter_to_workers(self.center, self.ncores, data)
         if isinstance(remotes, list):
             nbytes = {r.key: sizeof(d) for r, d in zip(remotes, data)}
+            remotes = [Future(r.key, self) for r in remotes]
         elif isinstance(remotes, dict):
             nbytes = {k: sizeof(v) for k, v in data.items()}
+            remotes = {k: Future(v.key, self) for k, v in remotes.items()}
         self.loop.add_callback(self.scheduler_queue.put_nowait,
                                         {'op': 'update-data',
                                          'who-has': who_has,
@@ -487,9 +485,6 @@ class Executor(object):
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None):
         flatkeys = list(flatten(keys))
-        for key in flatkeys:
-            if key not in self.futures:
-                self.futures[key] = {'event': Event(), 'status': None}
         futures = {key: Future(key, self) for key in flatkeys}
 
         self.loop.add_callback(self.scheduler_queue.put_nowait,

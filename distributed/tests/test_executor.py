@@ -1,7 +1,7 @@
 from operator import add, sub
 
 from collections import Iterator
-from time import sleep
+from time import sleep, time
 import sys
 
 import pytest
@@ -423,6 +423,33 @@ def test_garbage_collection(loop):
         assert bkey not in e.futures
         yield e._shutdown()
 
+    _test_cluster(f)
+
+
+def test_garbage_collection_with_scatter(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
+        yield e._start()
+
+        [a] = yield e._scatter([1])
+        assert a.key in e.futures
+        assert a.status == 'finished'
+        assert a.event.is_set()
+
+        assert e.refcount[a.key] == 1
+        a.__del__()
+        assert e.refcount[a.key] == 0
+
+        start = time()
+        while True:
+            if a.key not in c.who_has:
+                break
+            else:
+                assert time() < start + 3
+                yield gen.sleep(0.1)
+
+        yield e._shutdown()
     _test_cluster(f)
 
 
@@ -869,7 +896,7 @@ def test__scatter(loop):
         yield e._start()
 
         d = yield e._scatter({'y': 20})
-        assert isinstance(d['y'], WrappedKey)
+        assert isinstance(d['y'], Future)
         assert a.data.get('y') == 20 or b.data.get('y') == 20
         assert a.address in e.who_has['y'] or b.address in e.who_has['y']
         assert c.who_has['y']
@@ -878,7 +905,7 @@ def test__scatter(loop):
         assert yy == [20]
 
         [x] = yield e._scatter([10])
-        assert isinstance(x, WrappedKey)
+        assert isinstance(x, Future)
         assert a.data.get(x.key) == 10 or b.data.get(x.key) == 10
         xx = yield e._gather([x])
         assert c.who_has[x.key]

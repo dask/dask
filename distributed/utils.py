@@ -83,4 +83,4 @@ def sync(loop, func, *args, **kwargs):
 
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
-                    level=logging.DEBUG)
+                    level=logging.INFO)
