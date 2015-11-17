@@ -8,12 +8,12 @@ from tornado.ioloop import IOLoop
 
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.utils_test import cluster
+from distributed.utils_test import cluster, loop
 from distributed.client import (RemoteData, _gather, _scatter, _delete, _clear,
         scatter_to_workers, pack_data, gather, scatter, delete, clear)
 
 
-def _test_cluster(f):
+def _test_cluster(f, loop=None):
     @gen.coroutine
     def g():
         c = Center('127.0.0.1', 8017)
@@ -35,10 +35,11 @@ def _test_cluster(f):
                 yield b._close()
             c.stop()
 
-    IOLoop.current().run_sync(g)
+    loop = loop or IOLoop.current()
+    loop.run_sync(g)
 
 
-def test_scatter_delete():
+def test_scatter_delete(loop):
     @gen.coroutine
     def f(c, a, b):
         data = yield _scatter((c.ip, c.port), [1, 2, 3])
@@ -81,7 +82,7 @@ def test_scatter_delete():
     _test_cluster(f)
 
 
-def test_garbage_collection():
+def test_garbage_collection(loop):
     @gen.coroutine
     def f(c, a, b):
         import gc; gc.collect()
@@ -104,7 +105,7 @@ def test_garbage_collection():
     _test_cluster(f)
 
 
-def test_gather_with_missing_worker():
+def test_gather_with_missing_worker(loop):
     @gen.coroutine
     def f(c, a, b):
         bad = ('127.0.0.1', 9001)  # this worker doesn't exist
@@ -138,7 +139,7 @@ def test_pack_data():
     assert pack_data({'a': ['x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
 
 
-def test_gather_errors_voluminously():
+def test_gather_errors_voluminously(loop):
     with cluster() as (c, [a, b]):
         try:
             gather(('127.0.0.1', c['port']), ['x', 'y', 'z'])
@@ -146,7 +147,7 @@ def test_gather_errors_voluminously():
             assert set(e.args) == {'x', 'y', 'z'}
 
 
-def test_gather_scatter():
+def test_gather_scatter(loop):
     with cluster() as (c, [a, b]):
         data = {'x': 1, 'y': 2, 'z': 3}
         addr = '127.0.0.1', c['port']
@@ -168,7 +169,7 @@ def test_gather_scatter():
             gather(addr, ['y'])
 
 
-def test_clear():
+def test_clear(loop):
     @gen.coroutine
     def f(c, a, b):
         data = yield _scatter((c.ip, c.port), [1, 2, 3])
@@ -183,7 +184,7 @@ def test_clear():
     _test_cluster(f)
 
 
-def test_scatter_round_robins_between_calls():
+def test_scatter_round_robins_between_calls(loop):
     @gen.coroutine
     def f(c, a, b):
         for i in range(10):

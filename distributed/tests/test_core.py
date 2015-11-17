@@ -7,9 +7,9 @@ import pytest
 
 from distributed.core import (read, write, pingpong, read_sync, write_sync,
         Server, connect_sync, rpc, connect)
-from distributed.utils_test import slow
+from distributed.utils_test import slow, loop
 
-def test_server():
+def test_server(loop):
     @gen.coroutine
     def f():
         server = Server({'ping': pingpong})
@@ -27,10 +27,10 @@ def test_server():
 
         server.stop()
 
-    ioloop.IOLoop.current().run_sync(f)
+    loop.run_sync(f)
 
 
-def test_rpc():
+def test_rpc(loop):
     @gen.coroutine
     def f():
         server = Server({'ping': pingpong})
@@ -46,10 +46,10 @@ def test_rpc():
 
         server.stop()
 
-    ioloop.IOLoop.current().run_sync(f)
+    loop.run_sync(f)
 
 
-def test_rpc_with_many_connections():
+def test_rpc_with_many_connections(loop):
     remote = rpc(ip='127.0.0.1', port=8887)
 
     @gen.coroutine
@@ -69,10 +69,10 @@ def test_rpc_with_many_connections():
         remote.close_streams()
         assert all(stream.closed() for stream in remote.streams)
 
-    ioloop.IOLoop.current().run_sync(f)
+    loop.run_sync(f)
 
 
-def test_sync():
+def test_sync(loop):
     def f():
         from distributed.core import Server
         from tornado.ioloop import IOLoop
@@ -94,7 +94,7 @@ def test_sync():
 
 
 @slow
-def test_large_packets():
+def test_large_packets(loop):
     """ tornado has a 100MB cap by default """
     def echo(stream, x):
         return x
@@ -112,7 +112,7 @@ def test_large_packets():
 
         server.stop()
 
-    ioloop.IOLoop.current().run_sync(f)
+    loop.run_sync(f)
 
 
 def test_connect_sync_timeouts():

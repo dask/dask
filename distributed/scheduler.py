@@ -402,8 +402,9 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             del worker_queues[worker]
             del ncores[worker]
             del stacks[worker]
-            logger.info("Lost all workers")
             del processing[worker]
+            if not stacks:
+                logger.critical("Lost all workers")
             missing_keys = set()
             for key in keys:
                 who_has[key].remove(worker)

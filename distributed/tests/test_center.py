@@ -6,9 +6,10 @@ from tornado.ioloop import IOLoop
 
 from distributed.core import read, write, rpc
 from distributed.center import Center
+from distributed.utils_test import loop
 
 
-def test_metadata():
+def test_metadata(loop):
     c = Center('127.0.0.1', 8006)
     c.listen(8006)
 

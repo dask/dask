@@ -6,6 +6,17 @@ import socket
 
 from distributed.core import connect_sync, write_sync, read_sync
 from distributed.utils import ignoring
+import pytest
+
+
+@pytest.yield_fixture
+def loop():
+    IOLoop.clear_instance()
+    loop = IOLoop()
+    loop.make_current()
+    yield loop
+    loop.stop()
+    loop.close()
 
 
 def inc(x):
@@ -16,20 +27,24 @@ def run_center(port):
     from distributed import Center
     from tornado.ioloop import IOLoop
     import logging
+    IOLoop.clear_instance()
+    loop = IOLoop(make_current=True)
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
     center = Center('127.0.0.1', port)
     center.listen(port)
-    IOLoop.current().start()
+    loop.start()
 
 
 def run_worker(port, center_port, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop
     import logging
+    IOLoop.clear_instance()
+    loop = IOLoop(make_current=True)
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
     worker = Worker('127.0.0.1', port, '127.0.0.1', center_port, **kwargs)
     worker.start()
-    IOLoop.current().start()
+    loop.start()
 
 
 _port = [8010]
@@ -80,7 +95,7 @@ slow = pytest.mark.skipif(
 from tornado import gen
 from tornado.ioloop import IOLoop
 
-def _test_cluster(f):
+def _test_cluster(f, loop=None):
     from .center import Center
     from .worker import Worker
     from .executor import _global_executors
@@ -105,7 +120,6 @@ def _test_cluster(f):
                 yield b._close()
             c.stop()
 
-    IOLoop.clear_instance()
-    loop = IOLoop().current()
+    loop = loop or IOLoop.current()
     loop.run_sync(g)
     _global_executors.clear()

@@ -1,9 +1,10 @@
 from distributed.utils import All
+from distributed.utils_test import loop
 from tornado import gen
 from tornado.ioloop import IOLoop
 from time import time
 
-def test_All():
+def test_All(loop):
     @gen.coroutine
     def throws():
         1 / 0
@@ -32,5 +33,4 @@ def test_All():
             end = time()
             assert end - start < 10
 
-    IOLoop.current().run_sync(f)
-
+    loop.run_sync(f)

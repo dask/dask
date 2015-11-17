@@ -2,7 +2,7 @@
 import dask
 import dask.dataframe as dd
 from distributed import Executor
-from distributed.utils_test import cluster, _test_cluster, slow
+from distributed.utils_test import cluster, _test_cluster, slow, loop
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
         futures_to_dask_array)
@@ -31,7 +31,7 @@ def assert_equal(a, b):
         assert a == b
 
 
-def test__futures_to_dask_dataframe():
+def test__futures_to_dask_dataframe(loop):
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False)
@@ -51,7 +51,7 @@ def test__futures_to_dask_dataframe():
     _test_cluster(f)
 
 
-def test_futures_to_dask_dataframe():
+def test_futures_to_dask_dataframe(loop):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             remote_dfs = e.map(lambda x: x, dfs)
@@ -62,7 +62,7 @@ def test_futures_to_dask_dataframe():
 
 
 @slow
-def test_dataframes():
+def test_dataframes(loop):
     dfs = [pd.DataFrame({'x': np.random.random(100),
                          'y': np.random.random(100)},
                         index=list(range(i, i + 100)))
@@ -93,7 +93,7 @@ def test_dataframes():
                 assert_equal(local, remote)
 
 
-def test__futures_to_dask_array():
+def test__futures_to_dask_array(loop):
     import dask.array as da
     @gen.coroutine
     def f(c, a, b):
@@ -118,7 +118,7 @@ def test__futures_to_dask_array():
     _test_cluster(f)
 
 
-def test__dask_array_collections():
+def test__dask_array_collections(loop):
     import dask.array as da
     @gen.coroutine
     def f(c, a, b):
@@ -159,7 +159,7 @@ def test__dask_array_collections():
     _test_cluster(f)
 
 
-def test_futures_to_dask_array():
+def test_futures_to_dask_array(loop):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             remote_arrays = [[e.submit(np.full, (3, 3), i + j)
