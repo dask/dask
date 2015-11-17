@@ -6,6 +6,7 @@ from distributed.core import read, write, rpc, connect
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring
 from distributed.worker import Worker
+from distributed.utils_test import loop
 
 
 from tornado import gen
@@ -44,7 +45,7 @@ def test_worker_ncores():
     w.terminate()
 
 
-def test_worker():
+def test_worker(loop):
     @gen.coroutine
     def f(c, a, b):
         aa = rpc(ip=a.ip, port=a.port)
@@ -85,7 +86,7 @@ def test_worker():
     _test_cluster(f)
 
 
-def test_workers_update_center():
+def test_workers_update_center(loop):
     @gen.coroutine
     def f(c, a, b):
         aa = rpc(ip=a.ip, port=a.port)
@@ -107,7 +108,8 @@ def test_workers_update_center():
 
     _test_cluster(f)
 
-def test_delete_data_with_missing_worker():
+
+def test_delete_data_with_missing_worker(loop):
     @gen.coroutine
     def f(c, a, b):
         bad = ('127.0.0.1', 9001)  # this worker doesn't exist

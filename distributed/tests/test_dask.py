@@ -8,7 +8,7 @@ from distributed import Center, Worker
 from distributed.utils import ignoring
 from distributed.client import RemoteData
 from distributed.dask import _get
-from distributed.utils_test import cluster, inc
+from distributed.utils_test import cluster, inc, loop
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -39,7 +39,7 @@ def _test_cluster(f):
     IOLoop.current().run_sync(g)
 
 
-def test_scheduler():
+def test_scheduler(loop):
     dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (add, (inc, 'y'), 20),
            'a': 1, 'b': (mul, 'a', 10), 'c': (mul, 'b', 20),
            'total': (add, 'c', 'z')}
@@ -56,7 +56,7 @@ def test_scheduler():
     _test_cluster(f)
 
 
-def test_scheduler_errors():
+def test_scheduler_errors(loop):
     def mydiv(x, y):
         return x / y
     dsk = {'x': 1, 'y': (mydiv, 'x', 0)}
@@ -74,7 +74,7 @@ def test_scheduler_errors():
     _test_cluster(f)
 
 
-def test_avoid_computations_for_data_in_memory():
+def test_avoid_computations_for_data_in_memory(loop):
     def bad():
         raise Exception()
     dsk = {'x': (bad,), 'y': (inc, 'x'), 'z': (inc, 'y')}
@@ -92,7 +92,7 @@ def test_avoid_computations_for_data_in_memory():
     _test_cluster(f)
 
 
-def test_gather():
+def test_gather(loop):
     dsk = {'x': 1, 'y': (inc, 'x')}
     keys = 'y'
 
@@ -110,7 +110,7 @@ def slowinc(x):
     return x + 1
 
 
-def dont_test_failing_worker():
+def dont_test_failing_worker(loop):
     n = 10
     dsk = {('x', i, j): (slowinc, ('x', i, j - 1)) for i in range(4)
                                                    for j in range(1, n)}
@@ -133,7 +133,7 @@ def dont_test_failing_worker():
         IOLoop.current().run_sync(f)
 
 
-def test_repeated_computation():
+def test_repeated_computation(loop):
     from random import randint
     def func():
         return randint(0, 100)
@@ -149,7 +149,7 @@ def test_repeated_computation():
     _test_cluster(f)
 
 
-def test_RemoteData_interaction():
+def test_RemoteData_interaction(loop):
     @gen.coroutine
     def f(c, a, b):
         a.data['x'] = 10
@@ -166,7 +166,7 @@ def test_RemoteData_interaction():
     _test_cluster(f)
 
 
-def test_get_with_overlapping_keys():
+def test_get_with_overlapping_keys(loop):
     dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
     keys = 'y'
 

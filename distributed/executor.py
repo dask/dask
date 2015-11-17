@@ -124,13 +124,13 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center, start=True, delete_batch_time=1):
+    def __init__(self, center, start=True, delete_batch_time=1, loop=None):
         self.center = coerce_to_rpc(center)
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.dask = dict()
         self.restrictions = dict()
-        self.loop = IOLoop()
+        self.loop = loop or IOLoop.current()
         self.report_queue = Queue()
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()
@@ -162,7 +162,7 @@ class Executor(object):
     @gen.coroutine
     def _start(self):
         yield self._sync_center()
-        IOLoop.current().spawn_callback(self._go)
+        self.loop.spawn_callback(self._go)
         while not len(self.stacks) == len(self.ncores):
             yield gen.sleep(0.01)
 
@@ -189,8 +189,8 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self.scheduler_queue.put_nowait({'op': 'release-held-data',
-                                         'key': key})
+        self.loop.add_callback(self.scheduler_queue.put_nowait,
+                {'op': 'release-held-data', 'key': key})
 
     @gen.coroutine
     def report(self):
@@ -216,16 +216,18 @@ class Executor(object):
     @gen.coroutine
     def _shutdown(self):
         """ Send shutdown signal and wait until _go completes """
-        self.report_queue.put_nowait({'op': 'close'})
-        self.scheduler_queue.put_nowait({'op': 'close'})
+        self.loop.add_callback(self.report_queue.put_nowait,
+                               {'op': 'close'})
+        self.loop.add_callback(self.scheduler_queue.put_nowait,
+                               {'op': 'close'})
         if self in _global_executors:
             _global_executors.remove(self)
         yield self._shutdown_event.wait()
 
     def shutdown(self):
         """ Send shutdown signal and wait until scheduler terminates """
-        self.report_queue.put_nowait({'op': 'close'})
-        self.scheduler_queue.put_nowait({'op': 'close'})
+        self.loop.add_callback(self.report_queue.put_nowait, {'op': 'close'})
+        self.loop.add_callback(self.scheduler_queue.put_nowait, {'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
         if self in _global_executors:
@@ -319,7 +321,8 @@ class Executor(object):
             self.futures[key] = {'event': Event(), 'status': 'pending'}
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
-        self.scheduler_queue.put_nowait({'op': 'update-graph',
+        self.loop.add_callback(self.scheduler_queue.put_nowait,
+                                        {'op': 'update-graph',
                                          'dsk': {key: task},
                                          'keys': [key],
                                          'restrictions': restrictions})
@@ -392,7 +395,8 @@ class Executor(object):
             raise TypeError("Workers must be a list or set of workers or None")
 
         logger.debug("map(%s, ...)", funcname(func))
-        self.scheduler_queue.put_nowait({'op': 'update-graph',
+        self.loop.add_callback(self.scheduler_queue.put_nowait,
+                                        {'op': 'update-graph',
                                          'dsk': dsk,
                                          'keys': keys,
                                          'restrictions': restrictions})
@@ -405,12 +409,15 @@ class Executor(object):
         keys = list(keys)
 
         while True:
+            logger.debug("Waiting on futures to clear before gather")
             yield All([self.futures[key]['event'].wait() for key in keys
                                                     if key in self.futures])
             try:
                 data = yield _gather(self.center, keys)
             except KeyError as e:
-                self.scheduler_queue.put_nowait({'op': 'missing-data',
+                logger.debug("Couldn't gather keys %s", e)
+                self.loop.add_callback(self.scheduler_queue.put_nowait,
+                                                {'op': 'missing-data',
                                                  'missing': e.args})
                 for key in e.args:
                     self.futures[key]['event'].clear()
@@ -450,9 +457,12 @@ class Executor(object):
             nbytes = {r.key: sizeof(d) for r, d in zip(remotes, data)}
         elif isinstance(remotes, dict):
             nbytes = {k: sizeof(v) for k, v in data.items()}
-        self.scheduler_queue.put_nowait({'op': 'update-data',
+        self.loop.add_callback(self.scheduler_queue.put_nowait,
+                                        {'op': 'update-data',
                                          'who-has': who_has,
                                          'nbytes': nbytes})
+        while not all(k in self.who_has for k in who_has):
+            yield gen.sleep(0.001)
         raise gen.Return(remotes)
 
     def scatter(self, data):
@@ -482,7 +492,8 @@ class Executor(object):
                 self.futures[key] = {'event': Event(), 'status': None}
         futures = {key: Future(key, self) for key in flatkeys}
 
-        self.scheduler_queue.put_nowait({'op': 'update-graph',
+        self.loop.add_callback(self.scheduler_queue.put_nowait,
+                                        {'op': 'update-graph',
                                          'dsk': dsk,
                                          'keys': flatkeys,
                                          'restrictions': restrictions or {}})
