@@ -166,6 +166,7 @@ class Executor(object):
     def _start(self):
         yield self._sync_center()
         self.loop.spawn_callback(self._go)
+        _global_executors.add(self)
         while not len(self.stacks) == len(self.ncores):
             yield gen.sleep(0.01)
 
@@ -408,6 +409,10 @@ class Executor(object):
             logger.debug("Waiting on futures to clear before gather")
             yield All([self.futures[key]['event'].wait() for key in keys
                                                     if key in self.futures])
+            exceptions = [self.futures[key]['exception'] for key in keys
+                          if self.futures[key]['status'] == 'error']
+            if exceptions:
+                raise exceptions[0]
             try:
                 data = yield _gather(self.center, keys)
             except KeyError as e:
@@ -482,7 +487,7 @@ class Executor(object):
         return sync(self.loop, self._scatter, data)
 
     @gen.coroutine
-    def _get(self, dsk, keys, restrictions=None):
+    def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
         flatkeys = list(flatten(keys))
         futures = {key: Future(key, self) for key in flatkeys}
 
@@ -493,7 +498,13 @@ class Executor(object):
                                          'restrictions': restrictions or {}})
 
         packed = pack_data(keys, futures)
-        result = yield self._gather(packed)
+        try:
+            result = yield self._gather(packed)
+        except Exception as e:
+            if raise_on_error:
+                raise
+            else:
+                raise gen.Return(('error', e))
         raise gen.Return(result)
 
     def get(self, dsk, keys, **kwargs):
@@ -514,7 +525,11 @@ class Executor(object):
         >>> e.get({'x': (add, 1, 2)}, 'x')  # doctest: +SKIP
         3
         """
-        return sync(self.loop, self._get, dsk, keys, **kwargs)
+        result = sync(self.loop, self._get, dsk, keys, raise_on_error=False, **kwargs)
+        if isinstance(result, tuple) and result[0] == 'error':
+            raise result[1]
+        else:
+            return result
 
 
 @gen.coroutine

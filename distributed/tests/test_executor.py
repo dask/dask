@@ -1036,3 +1036,25 @@ def test_pragmatic_move_small_data_to_large_data(loop):
 
         yield e._shutdown()
     _test_cluster(f, loop)
+
+
+def test_get_with_error(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False)
+        yield e._start()
+
+        dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
+        with pytest.raises(ZeroDivisionError):
+            y = yield e._get(dsk, 'y')
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
+
+
+def test_get_with_error_sync(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
+            with pytest.raises(ZeroDivisionError):
+                y = e.get(dsk, 'y')
