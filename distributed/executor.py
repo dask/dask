@@ -316,7 +316,7 @@ class Executor(object):
             restrictions = {}
 
         if key not in self.futures:
-            self.futures[key] = {'event': Event(), 'status': 'waiting'}
+            self.futures[key] = {'event': Event(), 'status': 'pending'}
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self.scheduler_queue.put_nowait({'op': 'update-graph',
@@ -376,7 +376,7 @@ class Executor(object):
 
         for key in dsk:
             if key not in self.futures:
-                self.futures[key] = {'event': Event(), 'status': 'waiting'}
+                self.futures[key] = {'event': Event(), 'status': 'pending'}
 
         if isinstance(workers, (list, set)):
             if workers and isinstance(first(workers), (list, set)):
