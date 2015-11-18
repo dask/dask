@@ -2,12 +2,16 @@
 from __future__ import print_function, division, absolute_import
 
 from itertools import product
+from operator import getitem
 
+import dask.array as da
 import dask.dataframe as dd
 from dask.base import tokenize
+import numpy as np
 from tornado import gen
+from toolz import compose
 
-from .executor import default_executor
+from .executor import default_executor, Future
 from .utils import sync, ignoring
 
 
@@ -57,8 +61,6 @@ def get_dtype(x):
 
 @gen.coroutine
 def _futures_to_dask_array(futures, executor=None):
-    import dask.array as da
-    import numpy as np
     executor = default_executor(executor)
     futures = np.array(futures, dtype=object)
 
@@ -102,3 +104,36 @@ def futures_to_dask_array(futures, executor=None):
     executor = default_executor(executor)
     return sync(executor.loop, _futures_to_dask_array, futures,
                 executor=executor)
+
+
+@gen.coroutine
+def _stack(futures, axis=0, executor=None):
+    executor = default_executor(executor)
+    assert isinstance(futures, (list, tuple))
+    assert all(isinstance(f, Future) for f in futures)  # flat list
+
+    shapes = executor.map(lambda x: x.shape, futures)
+    dtype = executor.submit(get_dtype, futures[0])
+
+    shapes, dtype = yield executor._gather([shapes, dtype])
+
+    assert all(shape == shapes[0] for shape in shapes)
+
+    slc = ((slice(None),) * axis
+         + (None,)
+         + (slice(None),) * (len(shapes[0]) - axis))
+
+    chunks = (tuple((shapes[0][i],) for i in range(axis))
+            + ((1,) * len(futures),)
+            + tuple((shapes[0][i],) for i in range(axis, len(shapes[0]))))
+
+    name = 'stack-futures' + tokenize(*futures)
+    keys = list(product([name], *[range(len(c)) for c in chunks]))
+    dsk = {k: (getitem, f, slc) for k, f in zip(keys, futures)}
+
+    raise gen.Return(da.Array(dsk, name, chunks, dtype))
+
+
+def stack(futures, axis=0, executor=None):
+    executor = default_executor(executor)
+    return sync(executor.loop, _stack, futures, executor=executor)

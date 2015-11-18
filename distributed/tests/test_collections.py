@@ -5,7 +5,7 @@ from distributed import Executor
 from distributed.utils_test import cluster, _test_cluster, slow, loop
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
-        futures_to_dask_array)
+        futures_to_dask_array, _stack, stack)
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -116,6 +116,45 @@ def test__futures_to_dask_array(loop):
 
         yield e._shutdown()
     _test_cluster(f)
+
+
+def test__stack(loop):
+    import dask.array as da
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+
+        arrays = e.map(np.ones, [(5, 5)] * 6)
+        y = yield _stack(arrays, axis=0)
+        assert y.shape == (6, 5, 5)
+        assert y.chunks == ((1, 1, 1, 1, 1, 1), (5,), (5,))
+
+        y_results = yield e._get(y.dask, y._keys())
+        yy = da.Array._finalize(y, y_results)
+
+        assert isinstance(yy, np.ndarray)
+        assert yy.shape == y.shape
+        assert (yy == 1).all()
+
+        yield e._shutdown()
+    _test_cluster(f)
+
+
+def test_stack(loop):
+    import dask.array as da
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            arrays = [np.random.random((3, 3)) for i in range(4)]
+            remotes = e.scatter(arrays)
+            local = np.stack(arrays, axis=0)
+            remote = stack(remotes, axis=0)
+
+            assert isinstance(remote, da.Array)
+            assert (remote.compute(get=e.get)
+                == np.stack(arrays, axis=0)).all()
+
+            assert isinstance(remote[2, :, 1].compute(get=e.get), np.ndarray)
 
 
 def test__dask_array_collections(loop):
