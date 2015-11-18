@@ -112,20 +112,21 @@ def _stack(futures, axis=0, executor=None):
     assert isinstance(futures, (list, tuple))
     assert all(isinstance(f, Future) for f in futures)  # flat list
 
-    shapes = executor.map(lambda x: x.shape, futures)
+    shapes = executor.map(lambda x: x.shape, futures[:10])
     dtype = executor.submit(get_dtype, futures[0])
 
     shapes, dtype = yield executor._gather([shapes, dtype])
 
-    assert all(shape == shapes[0] for shape in shapes)
+    shape = shapes[0]
+    assert all(shape == s for s in shapes)
 
     slc = ((slice(None),) * axis
          + (None,)
-         + (slice(None),) * (len(shapes[0]) - axis))
+         + (slice(None),) * (len(shape) - axis))
 
-    chunks = (tuple((shapes[0][i],) for i in range(axis))
+    chunks = (tuple((shape[i],) for i in range(axis))
             + ((1,) * len(futures),)
-            + tuple((shapes[0][i],) for i in range(axis, len(shapes[0]))))
+            + tuple((shape[i],) for i in range(axis, len(shape))))
 
     name = 'stack-futures' + tokenize(*futures)
     keys = list(product([name], *[range(len(c)) for c in chunks]))
