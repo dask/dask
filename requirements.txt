@@ -1,6 +1,6 @@
 tornado
 toolz
-dill
+cloudpickle
 dask
 paramiko
 click
