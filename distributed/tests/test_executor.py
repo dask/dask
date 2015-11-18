@@ -1042,10 +1042,27 @@ def test_pragmatic_move_small_data_to_large_data(loop):
     _test_cluster(f, loop)
 
 
+def test_get_with_non_list_key(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+
+        dsk = {('x', 0): (inc, 1), 5: (inc, 2)}
+
+        x = yield e._get(dsk, ('x', 0))
+        y = yield e._get(dsk, 5)
+        assert x == 2
+        assert y == 3
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
+
+
 def test_get_with_error(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}

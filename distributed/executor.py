@@ -488,7 +488,7 @@ class Executor(object):
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
-        flatkeys = list(flatten(keys))
+        flatkeys = list(flatten([keys]))
         futures = {key: Future(key, self) for key in flatkeys}
 
         self.loop.add_callback(self.scheduler_queue.put_nowait,
@@ -498,13 +498,14 @@ class Executor(object):
                                          'restrictions': restrictions or {}})
 
         packed = pack_data(keys, futures)
-        try:
+        if raise_on_error:
             result = yield self._gather(packed)
-        except Exception as e:
-            if raise_on_error:
-                raise
-            else:
-                raise gen.Return(('error', e))
+        else:
+            try:
+                result = yield self._gather(packed)
+                result = 'OK', result
+            except Exception as e:
+                result = 'error', e
         raise gen.Return(result)
 
     def get(self, dsk, keys, **kwargs):
@@ -525,9 +526,11 @@ class Executor(object):
         >>> e.get({'x': (add, 1, 2)}, 'x')  # doctest: +SKIP
         3
         """
-        result = sync(self.loop, self._get, dsk, keys, raise_on_error=False, **kwargs)
-        if isinstance(result, tuple) and result[0] == 'error':
-            raise result[1]
+        status, result = sync(self.loop, self._get, dsk, keys,
+                              raise_on_error=False, **kwargs)
+
+        if status == 'error':
+            raise result
         else:
             return result
 
