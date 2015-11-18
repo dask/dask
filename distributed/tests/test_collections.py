@@ -34,7 +34,7 @@ def assert_equal(a, b):
 def test__futures_to_dask_dataframe(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         remote_dfs = e.map(lambda x: x, dfs)
@@ -53,7 +53,7 @@ def test__futures_to_dask_dataframe(loop):
 
 def test_futures_to_dask_dataframe(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             remote_dfs = e.map(lambda x: x, dfs)
             ddf = futures_to_dask_dataframe(remote_dfs, divisions=True)
 
@@ -68,7 +68,7 @@ def test_dataframes(loop):
                         index=list(range(i, i + 100)))
            for i in range(0, 100*10, 100)]
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             remote_dfs = e.map(lambda x: x, dfs)
             rdf = futures_to_dask_dataframe(remote_dfs, divisions=True)
             name = 'foo'
@@ -97,7 +97,7 @@ def test__futures_to_dask_array(loop):
     import dask.array as da
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         remote_arrays = [[[e.submit(np.full, (2, 3, 4), i + j + k)
@@ -122,7 +122,7 @@ def test__dask_array_collections(loop):
     import dask.array as da
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x_dsk = {('x', i, j): np.random.random((3, 3)) for i in range(3)
@@ -161,7 +161,7 @@ def test__dask_array_collections(loop):
 
 def test_futures_to_dask_array(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             remote_arrays = [[e.submit(np.full, (3, 3), i + j)
                                 for i in range(3)]
                                 for j in range(3)]

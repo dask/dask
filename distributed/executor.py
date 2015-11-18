@@ -133,7 +133,7 @@ class Executor(object):
         self.refcount = defaultdict(lambda: 0)
         self.dask = dict()
         self.restrictions = dict()
-        self.loop = loop or IOLoop.current()
+        self.loop = loop or IOLoop()
         self.report_queue = Queue()
         self.scheduler_queue = Queue()
         self._shutdown_event = Event()

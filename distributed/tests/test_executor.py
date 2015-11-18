@@ -33,7 +33,7 @@ def throws(x):
 def test_submit(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(inc, 10)
@@ -58,7 +58,7 @@ def test_submit(loop):
 def test_map(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         L1 = e.map(inc, range(5))
@@ -107,7 +107,7 @@ def test_map(loop):
 
 
 def test_future(loop):
-    e = Executor('127.0.0.1:8787', start=False)
+    e = Executor('127.0.0.1:8787', start=False, loop=loop)
     x = e.submit(inc, 10)
     assert str(x.key) in repr(x)
     assert str(x.status) in repr(x)
@@ -116,7 +116,7 @@ def test_future(loop):
 def test_Future_exception(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(div, 1, 0)
@@ -132,7 +132,7 @@ def test_Future_exception(loop):
 
 def test_Future_exception_sync(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             x = e.submit(div, 1, 0)
             assert isinstance(x.exception(), ZeroDivisionError)
 
@@ -143,7 +143,7 @@ def test_Future_exception_sync(loop):
 def test_map_naming(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
 
         L1 = e.map(inc, range(5))
         L2 = e.map(inc, range(5))
@@ -162,7 +162,7 @@ def test_map_naming(loop):
 def test_submit_naming(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
 
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
@@ -177,7 +177,7 @@ def test_submit_naming(loop):
 def test_exceptions(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(div, 1, 2)
@@ -199,7 +199,7 @@ def test_exceptions(loop):
 def test_gc(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(inc, 10)
@@ -218,14 +218,14 @@ def test_gc(loop):
 
 def test_thread(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             x = e.submit(inc, 1)
             assert x.result() == 2
 
 
 def test_sync_exceptions(loop):
     with cluster() as (c, [a, b]):
-        e = Executor(('127.0.0.1', c['port']), start=True)
+        e = Executor(('127.0.0.1', c['port']), start=True, loop=loop)
 
         x = e.submit(div, 10, 2)
         assert x.result() == 5
@@ -246,7 +246,7 @@ def test_sync_exceptions(loop):
 def test_stress_1(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         n = 2**6
@@ -267,7 +267,7 @@ def test_stress_1(loop):
 def test_gather(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(inc, 10)
@@ -287,7 +287,7 @@ def test_gather(loop):
 
 def test_gather_sync(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             x = e.submit(inc, 1)
             assert e.gather(x) == 2
 
@@ -295,7 +295,7 @@ def test_gather_sync(loop):
 def test_get(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         result = yield e._get({'x': (inc, 1)}, 'x')
@@ -314,7 +314,7 @@ def test_get(loop):
 
 def test_get_sync(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             assert e.get({'x': (inc, 1)}, 'x') == 2
 
 
@@ -322,7 +322,7 @@ def test_submit_errors(loop):
     def f(a, b, c):
         pass
 
-    e = Executor('127.0.0.1:8787', start=False)
+    e = Executor('127.0.0.1:8787', start=False, loop=loop)
 
     with pytest.raises(TypeError):
         e.submit(1, 2, 3)
@@ -333,7 +333,7 @@ def test_submit_errors(loop):
 def test_wait(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         a = e.submit(inc, 1)
@@ -354,7 +354,7 @@ def test_wait(loop):
 def test__as_completed(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         a = e.submit(inc, 1)
@@ -375,7 +375,7 @@ def test__as_completed(loop):
 
 def test_as_completed(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             x = e.submit(inc, 1)
             y = e.submit(inc, 2)
             z = e.submit(inc, 1)
@@ -387,7 +387,7 @@ def test_as_completed(loop):
 
 def test_wait_sync(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             x = e.submit(inc, 1)
             y = e.submit(inc, 2)
 
@@ -401,7 +401,7 @@ def test_garbage_collection(loop):
     import gc
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
 
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
@@ -429,7 +429,8 @@ def test_garbage_collection(loop):
 def test_garbage_collection_with_scatter(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False,
+                loop=loop)
         yield e._start()
 
         [a] = yield e._scatter([1])
@@ -456,7 +457,8 @@ def test_garbage_collection_with_scatter(loop):
 def test_recompute_released_key(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False,
+                loop=loop)
         yield e._start()
 
         x = e.submit(inc, 100)
@@ -487,7 +489,7 @@ def slowinc(x):
 def test_stress_gc(loop):
     n = 100
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5) as e:
+        with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5, loop=loop) as e:
             x = e.submit(slowinc, 1)
             for i in range(n):
                 x = e.submit(slowinc, x)
@@ -499,7 +501,8 @@ def test_stress_gc(loop):
 def test_long_tasks_dont_trigger_timeout(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False,
+                loop=loop)
         yield e._start()
 
         from time import sleep
@@ -513,7 +516,8 @@ def test_long_tasks_dont_trigger_timeout(loop):
 def test_missing_data_heals(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False)
+        e = Executor((c.ip, c.port), delete_batch_time=0, start=False,
+                loop=loop)
         yield e._start()
 
         x = e.submit(inc, 1)
@@ -546,7 +550,7 @@ def test_missing_worker(loop):
         c.who_has['b'] = {bad}
         c.has_what[bad] = {'b'}
 
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
@@ -563,7 +567,7 @@ def test_missing_worker(loop):
 def test_gather_robust_to_missing_data(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x, y, z = e.map(inc, range(3))
@@ -586,7 +590,7 @@ def test_gather_robust_to_missing_data(loop):
 def test_gather_robust_to_nested_missing_data(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         w = e.submit(inc, 1)
@@ -610,7 +614,7 @@ def test_gather_robust_to_nested_missing_data(loop):
 
 
 def test_tokenize_on_futures(loop):
-    e = Executor((None, None), start=False)
+    e = Executor((None, None), start=False, loop=loop)
     x = e.submit(inc, 1)
     y = e.submit(inc, 1)
     tok = tokenize(x)
@@ -625,7 +629,7 @@ def test_tokenize_on_futures(loop):
 def test_restrictions_submit(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(inc, 1, workers={a.ip})
@@ -645,7 +649,7 @@ def test_restrictions_submit(loop):
 def test_restrictions_map(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         L = e.map(inc, range(5), workers={a.ip})
@@ -675,7 +679,7 @@ def test_restrictions_map(loop):
 def test_restrictions_get(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
@@ -693,7 +697,7 @@ def test_restrictions_get(loop):
 def dont_test_bad_restrictions_raise_exception(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         z = e.submit(inc, 2, workers={'bad-address'})
@@ -710,7 +714,7 @@ def dont_test_bad_restrictions_raise_exception(loop):
 
 def test_submit_after_failed_worker(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             L = e.map(inc, range(10))
             wait(L)
             a['proc'].terminate()
@@ -720,7 +724,7 @@ def test_submit_after_failed_worker(loop):
 
 def test_gather_after_failed_worker(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             L = e.map(inc, range(10))
             wait(L)
             a['proc'].terminate()
@@ -731,7 +735,7 @@ def test_gather_after_failed_worker(loop):
 @slow
 def test_gather_then_submit_after_failed_workers(loop):
     with cluster(nworkers=4) as (c, [w, x, y, z]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             L = e.map(inc, range(20))
             wait(L)
             w['proc'].terminate()
@@ -750,7 +754,7 @@ def test_gather_then_submit_after_failed_workers(loop):
 def test_errors_dont_block(loop):
     c = Center('127.0.0.1', 8017)
     w = Worker('127.0.0.2', 8018, c.ip, c.port, ncores=1)
-    e = Executor((c.ip, c.port), start=False)
+    e = Executor((c.ip, c.port), start=False, loop=loop)
     @gen.coroutine
     def f():
         c.listen(c.port)
@@ -783,7 +787,7 @@ def test_submit_quotes(loop):
 
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(assert_list, [1, 2, 3])
@@ -810,7 +814,7 @@ def test_map_quotes(loop):
 
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         L = e.map(assert_list, [[1, 2, 3], [4]])
@@ -833,13 +837,13 @@ def test_two_consecutive_executors_share_results(loop):
     from random import randint
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(randint, 0, 1000, pure=True)
         xx = yield x._result()
 
-        f = Executor((c.ip, c.port), start=False)
+        f = Executor((c.ip, c.port), start=False, loop=loop)
         yield f._start()
 
         y = f.submit(randint, 0, 1000, pure=True)
@@ -855,7 +859,7 @@ def test_two_consecutive_executors_share_results(loop):
 def test_submit_then_get_with_Future(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(slowinc, 1)
@@ -871,7 +875,7 @@ def test_submit_then_get_with_Future(loop):
 def test_aliases(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(inc, 1)
@@ -885,14 +889,14 @@ def test_aliases(loop):
 
 
 def test_executor_has_state_on_initialization(loop):
-    e = Executor('127.0.0.1:8787', start=False)
+    e = Executor('127.0.0.1:8787', start=False, loop=loop)
     assert isinstance(e.ncores, dict)
 
 
 def test__scatter(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         d = yield e._scatter({'y': 20})
@@ -926,7 +930,7 @@ def test__scatter(loop):
 def test_get_releases_data(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         [x] = yield e._get({'x': (inc, 1)}, ['x'])
@@ -942,10 +946,10 @@ def test_global_executors(loop):
     with pytest.raises(ValueError):
         default_executor()
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             assert _global_executors == {e}
             assert default_executor() is e
-            with Executor(('127.0.0.1', c['port'])) as f:
+            with Executor(('127.0.0.1', c['port']), loop=loop) as f:
                 with pytest.raises(ValueError):
                     default_executor()
                 assert default_executor(e) is e
@@ -957,7 +961,7 @@ def test_global_executors(loop):
 def test_exception_on_exception(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
 
         x = e.submit(lambda: 1 / 0)
         y = e.submit(inc, x)
@@ -979,7 +983,7 @@ def test_exception_on_exception(loop):
 def test_nbytes(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         [x] = yield e._scatter([1])
@@ -998,7 +1002,7 @@ def test_nbytes(loop):
 def test_nbytes_determines_worker(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         x = e.submit(identity, 1, workers=[a.address[0]])
@@ -1016,7 +1020,7 @@ def test_nbytes_determines_worker(loop):
 def test_pragmatic_move_small_data_to_large_data(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False)
+        e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
         lists = e.map(lambda n: list(range(n)), [10] * 10, pure=False)
@@ -1054,7 +1058,7 @@ def test_get_with_error(loop):
 
 def test_get_with_error_sync(loop):
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
             with pytest.raises(ZeroDivisionError):
                 y = e.get(dsk, 'y')
