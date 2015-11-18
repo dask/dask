@@ -1566,3 +1566,7 @@ def test_view():
 
     assert eq(x.view('i4'), d.view('i4'))
     assert eq(x.view('i2'), d.view('i2'))
+
+    x = np.arange(8, dtype='i1')
+    d = da.from_array(x, chunks=(4,))
+    assert eq(x.view('i4'), d.view('i4'))

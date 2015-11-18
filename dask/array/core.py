@@ -1152,8 +1152,10 @@ class Array(Base):
         return conj(self)
 
     def view(self, dtype):
-        mult = np.empty((1,), dtype=self.dtype).view(dtype=dtype).shape[0]
-        out = elemwise(lambda x, dt: x.copy().view(dt), self, dtype)
+        dtype = np.dtype(dtype)
+        mult = self.dtype.itemsize / dtype.itemsize
+        out = elemwise(lambda x, dt: x.copy().view(dt), self, dtype,
+                       dtype=dtype)
         chunks = out.chunks[:-1] + (tuple(c * mult for c in out.chunks[-1]),)
         out._chunks = chunks
         return out
@@ -1741,6 +1743,7 @@ def partial_by_order(op, other):
 
 def is_scalar_for_elemwise(arg):
     """
+
     >>> is_scalar_for_elemwise(42)
     True
     >>> is_scalar_for_elemwise('foo')
@@ -1755,9 +1758,12 @@ def is_scalar_for_elemwise(arg):
     False
     >>> is_scalar_for_elemwise(from_array(np.array(0), chunks=()))
     False
+    >>> is_scalar_for_elemwise(np.dtype('i4'))
+    True
     """
     return (np.isscalar(arg)
             or not hasattr(arg, 'shape')
+            or isinstance(arg, np.dtype)
             or (isinstance(arg, np.ndarray) and arg.ndim == 0))
 
 
