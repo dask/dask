@@ -1558,3 +1558,11 @@ def test_to_npy_stack():
         assert eq(d, e)
     finally:
         shutil.rmtree(dirname)
+
+
+def test_view():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(2, 3))
+
+    assert eq(x.view('i4'), d.view('i4'))
+    assert eq(x.view('i2'), d.view('i2'))

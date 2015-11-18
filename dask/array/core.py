@@ -1151,6 +1151,12 @@ class Array(Base):
     def conj(self):
         return conj(self)
 
+    def view(self, dtype):
+        mult = np.empty((1,), dtype=self.dtype).view(dtype=dtype).shape[0]
+        out = elemwise(lambda x, dt: x.copy().view(dt), self, dtype)
+        chunks = out.chunks[:-1] + (tuple(c * mult for c in out.chunks[-1]),)
+        out._chunks = chunks
+        return out
 
 normalize_token.register(Array, lambda a: a.name)
 
