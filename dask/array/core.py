@@ -1154,7 +1154,8 @@ class Array(Base):
     def view(self, dtype):
         dtype = np.dtype(dtype)
         mult = self.dtype.itemsize / dtype.itemsize
-        out = elemwise(lambda x, dt: x.copy().view(dt), self, dtype,
+        out = elemwise(lambda x, dt: np.ascontiguousarray(x).view(dt),
+                       self, dtype,
                        dtype=dtype)
         chunks = out.chunks[:-1] + (tuple(c * mult for c in out.chunks[-1]),)
         out._chunks = chunks
