@@ -3,7 +3,7 @@ from operator import add
 
 from dask.utils import raises
 from dask.core import (istask, get, get_dependencies, flatten, subs,
-                       preorder_traversal, quote, list2)
+                       preorder_traversal, quote, list2, _deps)
 
 
 def contains(a, b):
@@ -115,6 +115,11 @@ def test_get_dependencies_empty():
     assert get_dependencies(dsk, 'x') == set()
 
 
+def test_get_dependencies_list():
+    dsk = {'x': 1, 'y': 2, 'z': ['x', [(inc, 'y')]]}
+    assert get_dependencies(dsk, 'z') == set(['x', 'y'])
+
+
 def test_nested_tasks():
     d = {'x': 1,
          'y': (inc, 'x'),
@@ -179,3 +184,9 @@ def test_quote():
 
     for l in literals:
         assert get({'x': quote(l)}, 'x') == l
+
+
+def test__deps():
+    dsk = {'x': 1, 'y': 2}
+
+    assert _deps(dsk, ['x', 'y']) == ['x', 'y']

@@ -147,11 +147,11 @@ def test_pprint_task():
     # With kwargs
     def foo(w, x, y=(), z=3):
         return w + x + sum(y) + z
-    task = (apply, foo, (tuple, ['a', 'b']), (dict, (list,
-            [(list, ['y', (list, ['a', 'b'])]), (list, ['z', 'c'])])))
+    task = (apply, foo, (tuple, ['a', 'b']),
+            (dict, [['y', ['a', 'b']], ['z', 'c']]))
     assert pprint_task(task, keys) == 'foo(_, _, y=[_, _], z=_)'
-    task = (apply, foo, (tuple, ['a', 'b']), (dict, (list,
-            [(list, ['y', (list, ['a', 1])]), (list, ['z', 1])])))
+    task = (apply, foo, (tuple, ['a', 'b']),
+            (dict, [['y', ['a', 1]], ['z', 1]]))
     assert pprint_task(task, keys) == 'foo(_, _, y=[_, *], z=*)'
 
 

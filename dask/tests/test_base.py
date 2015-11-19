@@ -209,6 +209,8 @@ def test_compute_with_literal():
     assert (xx == x.compute()).all()
     assert yy == y
 
+    assert compute(5) == (5,)
+
 
 def test_visualize():
     pytest.importorskip('graphviz')

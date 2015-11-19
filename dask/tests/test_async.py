@@ -34,6 +34,7 @@ def test_start_state():
                                 'y': set(['w']),
                                 'z': set(['w'])}}
 
+
 def test_start_state_looks_at_cache():
     dsk = {'b': (inc, 'a')}
     cache = {'a': 1}

@@ -89,6 +89,8 @@ def compute(*args, **kwargs):
     (45, 4.5)
     """
     variables = [a for a in args if isinstance(a, Base)]
+    if not variables:
+        return args
     groups = groupby(attrgetter('_optimize'), variables)
 
     get = kwargs.pop('get', None) or _globals['get']
