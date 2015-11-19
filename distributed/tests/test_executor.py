@@ -1116,3 +1116,35 @@ def test_many_submits_spread_evenly(loop):
 
         yield e._shutdown()
     _test_cluster(f, loop)
+
+
+def test_traceback(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+
+        x = e.submit(div, 1, 0)
+        tb = yield x._traceback()
+
+        assert any('x / y' in line for line in tb)
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
+
+
+def test_traceback_sync(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            x = e.submit(div, 1, 0)
+            tb = x.traceback()
+            assert any('x / y' in line for line in tb)
+
+            y = e.submit(inc, x)
+            tb2 = y.traceback()
+
+            assert set(tb2).issuperset(set(tb))
+
+            z = e.submit(div, 1, 2)
+            tb = z.traceback()
+            assert tb is None

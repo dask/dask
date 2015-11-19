@@ -83,10 +83,12 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
                 if response == b'OK':
                     nbytes = content['nbytes']
             if response == b'error':
+                error, traceback = content
                 scheduler_queue.put_nowait({'op': 'task-erred',
                                             'key': key,
                                             'worker': ident,
-                                            'exception': content})
+                                            'exception': error,
+                                            'traceback': traceback})
 
             elif response == b'missing-data':
                 scheduler_queue.put_nowait({'op': 'task-missing-data',
@@ -302,6 +304,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         in_play.update(extra_who_has)
 
     exceptions = dict()
+    tracebacks = dict()
     exceptions_blame = dict()
     def mark_failed(key, failing_key=None):
         """ When a task fails mark it and all dependent task as failed """
@@ -310,7 +313,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         exceptions_blame[key] = failing_key
         report_queue.put_nowait({'op': 'task-erred',
                                  'key': key,
-                                 'exception': exceptions[failing_key]})
+                                 'exception': exceptions[failing_key],
+                                 'traceback': tracebacks[failing_key]})
         if key in waiting:
             del waiting[key]
         if key in waiting_data:
@@ -370,6 +374,7 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         elif msg['op'] == 'task-erred':
             processing[msg['worker']].remove(msg['key'])
             exceptions[msg['key']] = msg['exception']
+            tracebacks[msg['key']] = msg['traceback']
             mark_failed(msg['key'], msg['key'])
             ensure_occupied(msg['worker'])
 

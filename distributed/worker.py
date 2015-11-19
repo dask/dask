@@ -161,13 +161,13 @@ class Worker(Server):
             out = (b'OK', {'nbytes': sizeof(result)})
         except Exception as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            tb = ''.join(traceback.format_tb(exc_traceback))
+            tb = traceback.format_tb(exc_traceback)
             logger.warn(" Compute Failed\n"
                 "Function: %s\n"
                 "args:     %s\n"
                 "kwargs:   %s\n", funcname(function), str(args2), str(kwargs2),
                 exc_info=True)
-            out = (b'error', e)
+            out = (b'error', (e, tb))
 
         raise Return(out)
 

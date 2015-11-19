@@ -70,10 +70,12 @@ class Future(WrappedKey):
     def _result(self, raiseit=True):
         yield self.event.wait()
         if self.status == 'error':
+            exception = self.executor.futures[self.key]['exception']
+            traceback = self.executor.futures[self.key]['traceback']  # TODO: use me
             if raiseit:
-                raise self.executor.futures[self.key]['exception']
+                raise exception
             else:
-                raise Return(self.executor.futures[self.key]['exception'])
+                raise Return(exception)
         else:
             result = yield self.executor._gather([self])
             raise gen.Return(result[0])
@@ -82,7 +84,8 @@ class Future(WrappedKey):
     def _exception(self):
         yield self.event.wait()
         if self.status == 'error':
-            raise Return(self.executor.futures[self.key]['exception'])
+            exception = self.executor.futures[self.key]['exception']
+            raise Return(exception)
         else:
             raise Return(None)
 
@@ -90,6 +93,17 @@ class Future(WrappedKey):
         """ Return the exception of a failed task """
         return sync(self.executor.loop, self._exception)
 
+    @gen.coroutine
+    def _traceback(self):
+        yield self.event.wait()
+        if self.status == 'error':
+            raise Return(self.executor.futures[self.key]['traceback'])
+        else:
+            raise Return(None)
+
+    def traceback(self):
+        """ Return the exception of a failed task """
+        return sync(self.executor.loop, self._traceback)
 
     def __del__(self):
         self.executor._dec_ref(self.key)
@@ -215,6 +229,7 @@ class Executor(object):
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]['status'] = 'error'
                     self.futures[msg['key']]['exception'] = msg['exception']
+                    self.futures[msg['key']]['traceback'] = msg['traceback']
                     self.futures[msg['key']]['event'].set()
 
     @gen.coroutine
