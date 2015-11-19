@@ -302,7 +302,8 @@ def scatter_to_workers(center, ncores, data, key=None):
         key = str(uuid.uuid1())
 
     if isinstance(ncores, Iterable) and not isinstance(ncores, dict):
-        ncores = {worker: 1 for worker in ncores}
+        k = len(data) // len(ncores)
+        ncores = {worker: k for worker in ncores}
 
     workers = list(concat([w] * nc for w, nc in ncores.items()))
     in_type = type(data)

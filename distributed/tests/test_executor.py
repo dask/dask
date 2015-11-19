@@ -1079,3 +1079,25 @@ def test_get_with_error_sync(loop):
             dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
             with pytest.raises(ZeroDivisionError):
                 y = e.get(dsk, 'y')
+
+
+def test_directed_scatter(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+
+        yield e._scatter([1, 2, 3], workers=[a.address])
+        assert len(a.data) == 3
+        assert not b.data
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
+
+
+def test_directed_scatter_sync(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            e.scatter([1, 2, 3], workers=[('127.0.0.1', b['port'])])
+            assert len(e.has_what[('127.0.0.1', b['port'])]) == 3
+            assert len(e.has_what[('127.0.0.1', a['port'])]) == 0

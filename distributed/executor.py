@@ -448,13 +448,14 @@ class Executor(object):
         return sync(self.loop, self._gather, futures)
 
     @gen.coroutine
-    def _scatter(self, data):
+    def _scatter(self, data, workers=None):
         if not self.ncores:
             raise ValueError("No workers yet found.  "
                              "Try syncing with center.\n"
                              "  e.sync_center()")
+        ncores = workers if workers is not None else self.ncores
         remotes, who_has, nbytes = yield scatter_to_workers(
-                                            self.center, self.ncores, data)
+                                            self.center, ncores, data)
         if isinstance(remotes, list):
             remotes = [Future(r.key, self) for r in remotes]
         elif isinstance(remotes, dict):
@@ -467,10 +468,14 @@ class Executor(object):
             yield gen.sleep(0.001)
         raise gen.Return(remotes)
 
-    def scatter(self, data):
+    def scatter(self, data, workers=None):
         """ Scatter data into distributed memory
 
         Accepts a list of data elements or dict of key-value pairs
+
+        Optionally provide a set of workers to constrain the scatter.  Specify
+        workers as hostname/port pairs, i.e.  ('127.0.0.1', 8787).
+        Default port is 8788.
 
         Examples
         --------
@@ -483,8 +488,10 @@ class Executor(object):
         {'x': RemoteData<center=127.0.0.1:8787, key=x>,
          'y': RemoteData<center=127.0.0.1:8787, key=y>,
          'z': RemoteData<center=127.0.0.1:8787, key=z>}
+
+        >>> e.scatter([1, 2, 3], workers=[('hostname', 8788)])  # doctest: +SKIP
         """
-        return sync(self.loop, self._scatter, data)
+        return sync(self.loop, self._scatter, data, workers=workers)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
