@@ -754,6 +754,9 @@ def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
     return worker
 
 
+_round_robin = [0]
+
+
 def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
         restrictions, nbytes, keys):
     """ Assign many new ready tasks to workers
@@ -785,8 +788,14 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
 
     leaves = sorted(leaves, key=keyorder.get)
 
-    k = int(ceil(len(leaves) / len(stacks)))
-    for i, worker in enumerate(stacks):
+    workers = list(stacks)
+
+    k = _round_robin[0] % len(workers)
+    workers = workers[k:] + workers[:k]
+    _round_robin[0] += 1
+
+    k = int(ceil(len(leaves) / len(workers)))
+    for i, worker in enumerate(workers):
         keys = leaves[i*k: (i + 1)*k][::-1]
         new_stacks[worker].extend(keys)
         stacks[worker].extend(keys)

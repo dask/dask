@@ -1101,3 +1101,18 @@ def test_directed_scatter_sync(loop):
             e.scatter([1, 2, 3], workers=[('127.0.0.1', b['port'])])
             assert len(e.has_what[('127.0.0.1', b['port'])]) == 3
             assert len(e.has_what[('127.0.0.1', a['port'])]) == 0
+
+
+def test_many_submits_spread_evenly(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+
+        L = [e.submit(inc, i) for i in range(10)]
+        yield _wait(L)
+
+        assert a.data and b.data
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
