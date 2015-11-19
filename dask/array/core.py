@@ -1151,16 +1151,46 @@ class Array(Base):
     def conj(self):
         return conj(self)
 
-    def view(self, dtype):
+    def view(self, dtype, order='C'):
+        """ Get a view of the array as a new data type
+
+        Parameters
+        ----------
+        dtype:
+            The dtype by which to view the array
+        order: string
+            'C' or 'F' (Fortran) ordering
+
+        This reinterprets the bytes of the array under a new dtype.  If that
+        dtype does not have the same size as the original array then the shape
+        will change.
+        """
         dtype = np.dtype(dtype)
         mult = self.dtype.itemsize / dtype.itemsize
-        out = elemwise(lambda x, dt: np.ascontiguousarray(x).view(dt),
-                       self, dtype,
-                       dtype=dtype)
-        chunks = out.chunks[:-1] + (tuple(int(c * mult)
-                                    for c in out.chunks[-1]),)
+
+        if order == 'C':
+            ascontiguousarray = np.ascontiguousarray
+            chunks = self.chunks[:-1] + (tuple(ensure_int(c * mult)
+                                        for c in self.chunks[-1]),)
+        elif order == 'F':
+            ascontiguousarray = np.asfortranarray
+            chunks = ((tuple(ensure_int(c * mult) for c in self.chunks[0]),)
+                     + self.chunks[1:])
+        else:
+            raise ValueError("Order must be one of 'C' or 'F'")
+
+        out = elemwise(ascontiguousarray, self, dtype=dtype)
+        out = elemwise(lambda x, dt: x.view(dt), out, dtype, dtype=dtype)
         out._chunks = chunks
         return out
+
+
+def ensure_int(f):
+    i = int(f)
+    if i != f:
+        raise ValueError("Could not coerce %f to integer" % f)
+    return i
+
 
 normalize_token.register(Array, lambda a: a.name)
 
