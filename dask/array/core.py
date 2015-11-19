@@ -1157,7 +1157,8 @@ class Array(Base):
         out = elemwise(lambda x, dt: np.ascontiguousarray(x).view(dt),
                        self, dtype,
                        dtype=dtype)
-        chunks = out.chunks[:-1] + (tuple(c * mult for c in out.chunks[-1]),)
+        chunks = out.chunks[:-1] + (tuple(int(c * mult)
+                                    for c in out.chunks[-1]),)
         out._chunks = chunks
         return out
 
