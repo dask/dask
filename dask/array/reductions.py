@@ -1,21 +1,24 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import partial, wraps
-from math import factorial
+from itertools import product
+from math import factorial, log, ceil
 
 import numpy as np
-from toolz import compose
+from toolz import compose, partition_all, merge, get
 
 from . import chunk
-from .core import _concatenate2, Array, atop, sqrt, elemwise
+from .core import _concatenate2, Array, atop, sqrt, elemwise, lol_tuples
 from .numpy_compat import divide
 from .slicing import insert_many
-from ..compatibility import getargspec
+from ..compatibility import getargspec, builtins
 from ..core import flatten
+from ..base import tokenize
 from ..utils import ignoring
 
 
-def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
+def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
+              max_leaves=None, combine=None):
     """ General version of reductions
 
     >>> reduction(my_array, np.sum, np.sum, axis=0, keepdims=False)  # doctest: +SKIP
@@ -31,30 +34,73 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None):
     if dtype and 'dtype' in getargspec(aggregate).args:
         aggregate = partial(aggregate, dtype=dtype)
 
-    chunk2 = partial(chunk, axis=axis, keepdims=True)
-    aggregate2 = partial(aggregate, axis=axis, keepdims=keepdims)
+    # Normalize axes
+    if max_leaves is None:
+        max_leaves = dict(zip(range(x.ndim), x.numblocks))
+    if isinstance(max_leaves, int):
+        n = builtins.max(int(len(axis) ** (1/max_leaves)), 2)
+        max_leaves = dict.fromkeys(axis, n)
+    max_leaves = dict((k, v) for (k, v) in max_leaves.items() if k in axis)
 
+    # Map chunk across all blocks
     inds = tuple(range(x.ndim))
-    tmp = atop(chunk2, inds, x, inds)
+    tmp = atop(partial(chunk, axis=axis, keepdims=True), inds, x, inds)
+    tmp._chunks = tuple((1,)*len(c) if i in axis else c for (i, c)
+                        in enumerate(tmp.chunks))
 
-    inds2 = tuple(i for i in inds if i not in axis)
+    # Reduce across intermediates
+    depth = 1
+    for i, n in enumerate(tmp.numblocks):
+        if i in max_leaves and max_leaves[i] != 1:
+            depth = int(builtins.max(depth, ceil(log(n, max_leaves[i]))))
+    func = compose(partial(combine or aggregate, axis=axis, keepdims=True),
+                   partial(_concatenate2, axes=axis))
+    for i in range(depth - 1):
+        tmp = partial_reduce(func, tmp, max_leaves, True, None)
+    func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
+                   partial(_concatenate2, axes=axis))
+    return partial_reduce(func, tmp, max_leaves, keepdims, dtype)
 
-    result = atop(compose(aggregate2, partial(_concatenate2, axes=axis)),
-                  inds2, tmp, inds, dtype=dtype)
 
-    if keepdims:
-        dsk = result.dask.copy()
-        for k in flatten(result._keys()):
-            k2 = (k[0],) + insert_many(k[1:], axis, 0)
-            dsk[k2] = dsk.pop(k)
-        chunks = insert_many(result.chunks, axis, [1])
-        return Array(dsk, result.name, chunks=chunks, dtype=dtype)
-    else:
-        return result
+def partial_reduce(func, x, max_leaves, keepdims=False, dtype=None):
+    """Partial reduction across multiple axes.
+
+    Parameters
+    ----------
+    func : function
+    x : Array
+    max_leaves : dict
+        Maximum reduction block sizes in each dimension.
+
+    Example
+    -------
+    Reduce across axis 0 and 2, merging a maximum of 1 block in the 0th
+    dimension, and 3 blocks in the 2nd dimension:
+
+    >>> partial_reduce(np.min, x, {0: 1, 2: 3})    # doctest: +SKIP
+    """
+    name = tokenize(func, x, max_leaves, keepdims, dtype)
+    parts = [list(partition_all(max_leaves.get(i, 1), range(n))) for (i, n)
+             in enumerate(x.numblocks)]
+    keys = product(*map(range, map(len, parts)))
+    out_chunks = [tuple(1 for p in partition_all(max_leaves[i], c)) if i
+                  in max_leaves else c for (i, c) in enumerate(x.chunks)]
+    if not keepdims:
+        out_axis = [i for i in range(x.ndim) if i not in max_leaves]
+        getter = lambda k: get(out_axis, k)
+        keys = map(getter, keys)
+        out_chunks = list(getter(out_chunks))
+    dsk = {}
+    for k, p in zip(keys, product(*parts)):
+        decided = dict((i, j[0]) for (i, j) in enumerate(p) if len(j) == 1)
+        dummy = dict(i for i in enumerate(p) if i[0] not in decided)
+        g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
+        dsk[(name,) + k] = (func, g)
+    return Array(merge(dsk, x.dask), name, out_chunks, dtype=dtype)
 
 
 @wraps(chunk.sum)
-def sum(a, axis=None, dtype=None, keepdims=False):
+def sum(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -62,11 +108,11 @@ def sum(a, axis=None, dtype=None, keepdims=False):
     else:
         dt = None
     return reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
-                     dtype=dt)
+                     dtype=dt, max_leaves=max_leaves)
 
 
 @wraps(chunk.prod)
-def prod(a, axis=None, dtype=None, keepdims=False):
+def prod(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -74,19 +120,19 @@ def prod(a, axis=None, dtype=None, keepdims=False):
     else:
         dt = None
     return reduction(a, chunk.prod, chunk.prod, axis=axis, keepdims=keepdims,
-                     dtype=dt)
+                     dtype=dt, max_leaves=max_leaves)
 
 
 @wraps(chunk.min)
-def min(a, axis=None, keepdims=False):
+def min(a, axis=None, keepdims=False, max_leaves=None):
     return reduction(a, chunk.min, chunk.min, axis=axis, keepdims=keepdims,
-                     dtype=a._dtype)
+                     dtype=a._dtype, max_leaves=max_leaves)
 
 
 @wraps(chunk.max)
-def max(a, axis=None, keepdims=False):
+def max(a, axis=None, keepdims=False, max_leaves=None):
     return reduction(a, chunk.max, chunk.max, axis=axis, keepdims=keepdims,
-                     dtype=a._dtype)
+                     dtype=a._dtype, max_leaves=max_leaves)
 
 
 @wraps(chunk.argmin)
@@ -112,19 +158,19 @@ def nanargmax(a, axis=None):
 
 
 @wraps(chunk.any)
-def any(a, axis=None, keepdims=False):
+def any(a, axis=None, keepdims=False, max_leaves=None):
     return reduction(a, chunk.any, chunk.any, axis=axis, keepdims=keepdims,
-                     dtype='bool')
+                     dtype='bool', max_leaves=max_leaves)
 
 
 @wraps(chunk.all)
-def all(a, axis=None, keepdims=False):
+def all(a, axis=None, keepdims=False, max_leaves=None):
     return reduction(a, chunk.all, chunk.all, axis=axis, keepdims=keepdims,
-                     dtype='bool')
+                     dtype='bool', max_leaves=max_leaves)
 
 
 @wraps(chunk.nansum)
-def nansum(a, axis=None, dtype=None, keepdims=False):
+def nansum(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -132,12 +178,12 @@ def nansum(a, axis=None, dtype=None, keepdims=False):
     else:
         dt = None
     return reduction(a, chunk.nansum, chunk.sum, axis=axis, keepdims=keepdims,
-                     dtype=dt)
+                     dtype=dt, max_leaves=max_leaves)
 
 
 with ignoring(AttributeError):
     @wraps(chunk.nanprod)
-    def nanprod(a, axis=None, dtype=None, keepdims=False):
+    def nanprod(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
         if dtype is not None:
             dt = dtype
         elif a._dtype is not None:
@@ -145,19 +191,19 @@ with ignoring(AttributeError):
         else:
             dt = None
         return reduction(a, chunk.nanprod, chunk.prod, axis=axis,
-                         keepdims=keepdims, dtype=dt)
+                         keepdims=keepdims, dtype=dt, max_leaves=max_leaves)
 
 
 @wraps(chunk.nanmin)
-def nanmin(a, axis=None, keepdims=False):
-    return reduction(a, chunk.nanmin, chunk.nanmin, axis=axis, keepdims=keepdims,
-                     dtype=a._dtype)
+def nanmin(a, axis=None, keepdims=False, max_leaves=None):
+    return reduction(a, chunk.nanmin, chunk.nanmin, axis=axis,
+                     keepdims=keepdims, dtype=a._dtype, max_leaves=max_leaves)
 
 
 @wraps(chunk.nanmax)
-def nanmax(a, axis=None, keepdims=False):
+def nanmax(a, axis=None, keepdims=False, max_leaves=None):
     return reduction(a, chunk.nanmax, chunk.nanmax, axis=axis,
-                     keepdims=keepdims, dtype=a._dtype)
+                     keepdims=keepdims, dtype=a._dtype, max_leaves=max_leaves)
 
 
 def numel(x, **kwargs):
@@ -180,13 +226,22 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     return result
 
 
+def mean_combine(pair, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
+    n = sum(pair['n'], **kwargs)
+    total = sum(pair['total'], **kwargs)
+    result = np.empty(shape=n.shape, dtype=pair.dtype)
+    result['n'] = n
+    result['total'] = total
+    return result
+
+
 def mean_agg(pair, dtype='f8', **kwargs):
     return divide(pair['total'].sum(dtype=dtype, **kwargs),
                   pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
 
 
 @wraps(chunk.mean)
-def mean(a, axis=None, dtype=None, keepdims=False):
+def mean(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -194,10 +249,10 @@ def mean(a, axis=None, dtype=None, keepdims=False):
     else:
         dt = None
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims,
-                     dtype=dt)
+                     dtype=dt, max_leaves=max_leaves, combine=mean_combine)
 
 
-def nanmean(a, axis=None, dtype=None, keepdims=False):
+def nanmean(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -205,7 +260,9 @@ def nanmean(a, axis=None, dtype=None, keepdims=False):
     else:
         dt = None
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
-                     mean_agg, axis=axis, keepdims=keepdims, dtype=dt)
+                     mean_agg, axis=axis, keepdims=keepdims, dtype=dt,
+                     max_leaves=max_leaves,
+                     combine=partial(mean_combine, sum=chunk.nansum, numel=nannumel))
 
 with ignoring(AttributeError):
     nanmean = wraps(chunk.nanmean)(nanmean)
@@ -311,7 +368,7 @@ with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)
 
 
-def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False):
+def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, max_leaves=None):
     """ Vector norm
 
     See np.linalg.norm
@@ -319,15 +376,18 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False):
     if ord is None or ord == 'fro':
         ord = 2
     if ord == np.inf:
-        return max(abs(a), axis=axis, keepdims=keepdims)
+        return max(abs(a), axis=axis, keepdims=keepdims, max_leaves=max_leaves)
     elif ord == -np.inf:
-        return min(abs(a), axis=axis, keepdims=keepdims)
+        return min(abs(a), axis=axis, keepdims=keepdims, max_leaves=max_leaves)
     elif ord == 1:
-        return sum(abs(a), axis=axis, dtype=dtype, keepdims=keepdims)
+        return sum(abs(a), axis=axis, dtype=dtype, keepdims=keepdims,
+                   max_leaves=max_leaves)
     elif ord % 2 == 0:
-        return sum(a**ord, axis=axis, dtype=dtype, keepdims=keepdims)**(1./ord)
+        return sum(a**ord, axis=axis, dtype=dtype, keepdims=keepdims,
+                   max_leaves=max_leaves)**(1./ord)
     else:
-        return sum(abs(a)**ord, axis=axis, dtype=dtype, keepdims=keepdims)**(1./ord)
+        return sum(abs(a)**ord, axis=axis, dtype=dtype, keepdims=keepdims,
+                   max_leaves=max_leaves)**(1./ord)
 
 
 def arg_aggregate(func, argfunc, dims, pairs):

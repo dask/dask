@@ -36,7 +36,7 @@ def test_arg_reduction():
     assert eq(result, np.array([101, 11, 103]))
 
 
-def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True):
+def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, max_leaves=None):
     assert eq(da_func(darr), np_func(narr))
     assert eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
     assert same_keys(da_func(darr), da_func(darr))
@@ -45,30 +45,35 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True):
         assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
         assert eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
         assert same_keys(da_func(darr, dtype='i8'), da_func(darr, dtype='i8'))
+    if max_leaves:
+        assert eq(da_func(darr, max_leaves=max_leaves), np_func(narr))
+        assert eq(da_func(darr, keepdims=True, max_leaves=max_leaves),
+                  np_func(narr, keepdims=True))
 
 
 def test_reductions_1D_float():
     x = np.arange(5).astype('f4')
     a = da.from_array(x, chunks=(2,))
+    max_leaves = {0: 2}
 
-    reduction_1d_test(da.sum, a, np.sum, x)
-    reduction_1d_test(da.prod, a, np.prod, x)
-    reduction_1d_test(da.mean, a, np.mean, x)
+    reduction_1d_test(da.sum, a, np.sum, x, max_leaves=max_leaves)
+    reduction_1d_test(da.prod, a, np.prod, x, max_leaves=max_leaves)
+    reduction_1d_test(da.mean, a, np.mean, x, max_leaves=max_leaves)
     reduction_1d_test(da.var, a, np.var, x)
     reduction_1d_test(da.std, a, np.std, x)
-    reduction_1d_test(da.min, a, np.min, x, False)
-    reduction_1d_test(da.max, a, np.max, x, False)
-    reduction_1d_test(da.any, a, np.any, x, False)
-    reduction_1d_test(da.all, a, np.all, x, False)
+    reduction_1d_test(da.min, a, np.min, x, False, max_leaves=max_leaves)
+    reduction_1d_test(da.max, a, np.max, x, False, max_leaves=max_leaves)
+    reduction_1d_test(da.any, a, np.any, x, False, max_leaves=max_leaves)
+    reduction_1d_test(da.all, a, np.all, x, False, max_leaves=max_leaves)
 
-    reduction_1d_test(da.nansum, a, np.nansum, x)
+    reduction_1d_test(da.nansum, a, np.nansum, x, max_leaves=max_leaves)
     with ignoring(AttributeError):
-        reduction_1d_test(da.nanprod, a, np.nanprod, x)
-    reduction_1d_test(da.nanmean, a, np.mean, x)
+        reduction_1d_test(da.nanprod, a, np.nanprod, x, max_leaves=max_leaves)
+    reduction_1d_test(da.nanmean, a, np.mean, x, max_leaves=max_leaves)
     reduction_1d_test(da.nanvar, a, np.var, x)
     reduction_1d_test(da.nanstd, a, np.std, x)
-    reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
-    reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
+    reduction_1d_test(da.nanmin, a, np.nanmin, x, False, max_leaves=max_leaves)
+    reduction_1d_test(da.nanmax, a, np.nanmax, x, False, max_leaves=max_leaves)
 
     assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
     assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
@@ -79,25 +84,26 @@ def test_reductions_1D_float():
 def test_reductions_1D_int():
     x = np.arange(5).astype('i4')
     a = da.from_array(x, chunks=(2,))
+    max_leaves = {0: 2}
 
-    reduction_1d_test(da.sum, a, np.sum, x)
-    reduction_1d_test(da.prod, a, np.prod, x)
-    reduction_1d_test(da.mean, a, np.mean, x)
+    reduction_1d_test(da.sum, a, np.sum, x, max_leaves=max_leaves)
+    reduction_1d_test(da.prod, a, np.prod, x, max_leaves=max_leaves)
+    reduction_1d_test(da.mean, a, np.mean, x, max_leaves=max_leaves)
     reduction_1d_test(da.var, a, np.var, x)
     reduction_1d_test(da.std, a, np.std, x)
-    reduction_1d_test(da.min, a, np.min, x, False)
-    reduction_1d_test(da.max, a, np.max, x, False)
-    reduction_1d_test(da.any, a, np.any, x, False)
-    reduction_1d_test(da.all, a, np.all, x, False)
+    reduction_1d_test(da.min, a, np.min, x, False, max_leaves=max_leaves)
+    reduction_1d_test(da.max, a, np.max, x, False, max_leaves=max_leaves)
+    reduction_1d_test(da.any, a, np.any, x, False, max_leaves=max_leaves)
+    reduction_1d_test(da.all, a, np.all, x, False, max_leaves=max_leaves)
 
-    reduction_1d_test(da.nansum, a, np.nansum, x)
+    reduction_1d_test(da.nansum, a, np.nansum, x, max_leaves=max_leaves)
     with ignoring(AttributeError):
-        reduction_1d_test(da.nanprod, a, np.nanprod, x)
-    reduction_1d_test(da.nanmean, a, np.mean, x)
+        reduction_1d_test(da.nanprod, a, np.nanprod, x, max_leaves=max_leaves)
+    reduction_1d_test(da.nanmean, a, np.mean, x, max_leaves=max_leaves)
     reduction_1d_test(da.nanvar, a, np.var, x)
     reduction_1d_test(da.nanstd, a, np.std, x)
-    reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
-    reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
+    reduction_1d_test(da.nanmin, a, np.nanmin, x, False, max_leaves=max_leaves)
+    reduction_1d_test(da.nanmax, a, np.nanmax, x, False, max_leaves=max_leaves)
 
     assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
     assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
@@ -105,7 +111,8 @@ def test_reductions_1D_int():
     assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
 
 
-def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True):
+def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
+                      max_leaves=None):
     assert eq(da_func(darr), np_func(narr))
     assert eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
     assert eq(da_func(darr, axis=0), np_func(narr, axis=0))
@@ -121,32 +128,44 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True):
         assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
         assert eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
 
+    if max_leaves:
+        assert eq(da_func(darr, max_leaves=max_leaves), np_func(narr))
+        assert eq(da_func(darr, keepdims=True, max_leaves=max_leaves),
+                  np_func(narr, keepdims=True))
+        assert eq(da_func(darr, axis=0, max_leaves=max_leaves), np_func(narr, axis=0))
+        assert eq(da_func(darr, axis=0, keepdims=True, max_leaves=max_leaves),
+                  np_func(narr, axis=0, keepdims=True))
+        assert eq(da_func(darr, axis=1, max_leaves=max_leaves), np_func(narr, axis=1))
+        assert eq(da_func(darr, axis=1, keepdims=True, max_leaves=max_leaves),
+                  np_func(narr, axis=1, keepdims=True))
+
 
 def test_reductions_2D_float():
     x = np.arange(1, 122).reshape((11, 11)).astype('f4')
     a = da.from_array(x, chunks=(4, 4))
+    max_leaves = {0: 2, 1: 2}
 
     b = a.sum(keepdims=True)
     assert b._keys() == [[(b.name, 0, 0)]]
 
-    reduction_2d_test(da.sum, a, np.sum, x)
-    reduction_2d_test(da.prod, a, np.prod, x)
-    reduction_2d_test(da.mean, a, np.mean, x)
+    reduction_2d_test(da.sum, a, np.sum, x, max_leaves=max_leaves)
+    reduction_2d_test(da.prod, a, np.prod, x, max_leaves=max_leaves)
+    reduction_2d_test(da.mean, a, np.mean, x, max_leaves=max_leaves)
     reduction_2d_test(da.var, a, np.var, x, False)  # Difference in dtype algo
     reduction_2d_test(da.std, a, np.std, x, False)  # Difference in dtype algo
-    reduction_2d_test(da.min, a, np.min, x, False)
-    reduction_2d_test(da.max, a, np.max, x, False)
-    reduction_2d_test(da.any, a, np.any, x, False)
-    reduction_2d_test(da.all, a, np.all, x, False)
+    reduction_2d_test(da.min, a, np.min, x, False, max_leaves=max_leaves)
+    reduction_2d_test(da.max, a, np.max, x, False, max_leaves=max_leaves)
+    reduction_2d_test(da.any, a, np.any, x, False, max_leaves=max_leaves)
+    reduction_2d_test(da.all, a, np.all, x, False, max_leaves=max_leaves)
 
-    reduction_2d_test(da.nansum, a, np.nansum, x)
+    reduction_2d_test(da.nansum, a, np.nansum, x, max_leaves=max_leaves)
     with ignoring(AttributeError):
-        reduction_2d_test(da.nanprod, a, np.nanprod, x)
-    reduction_2d_test(da.nanmean, a, np.mean, x)
+        reduction_2d_test(da.nanprod, a, np.nanprod, x, max_leaves=max_leaves)
+    reduction_2d_test(da.nanmean, a, np.mean, x, max_leaves=max_leaves)
     reduction_2d_test(da.nanvar, a, np.nanvar, x, False)  # Difference in dtype algo
     reduction_2d_test(da.nanstd, a, np.nanstd, x, False)  # Difference in dtype algo
-    reduction_2d_test(da.nanmin, a, np.nanmin, x, False)
-    reduction_2d_test(da.nanmax, a, np.nanmax, x, False)
+    reduction_2d_test(da.nanmin, a, np.nanmin, x, False, max_leaves=max_leaves)
+    reduction_2d_test(da.nanmax, a, np.nanmax, x, False, max_leaves=max_leaves)
 
     assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
     assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
@@ -157,25 +176,26 @@ def test_reductions_2D_float():
 def test_reductions_2D_int():
     x = np.arange(1, 122).reshape((11, 11)).astype('i4')
     a = da.from_array(x, chunks=(4, 4))
+    max_leaves = {0: 2, 1: 2}
 
-    reduction_2d_test(da.sum, a, np.sum, x)
-    reduction_2d_test(da.prod, a, np.prod, x)
-    reduction_2d_test(da.mean, a, np.mean, x)
+    reduction_2d_test(da.sum, a, np.sum, x, max_leaves=max_leaves)
+    reduction_2d_test(da.prod, a, np.prod, x, max_leaves=max_leaves)
+    reduction_2d_test(da.mean, a, np.mean, x, max_leaves=max_leaves)
     reduction_2d_test(da.var, a, np.var, x, False)  # Difference in dtype algo
     reduction_2d_test(da.std, a, np.std, x, False)  # Difference in dtype algo
-    reduction_2d_test(da.min, a, np.min, x, False)
-    reduction_2d_test(da.max, a, np.max, x, False)
-    reduction_2d_test(da.any, a, np.any, x, False)
-    reduction_2d_test(da.all, a, np.all, x, False)
+    reduction_2d_test(da.min, a, np.min, x, False, max_leaves=max_leaves)
+    reduction_2d_test(da.max, a, np.max, x, False, max_leaves=max_leaves)
+    reduction_2d_test(da.any, a, np.any, x, False, max_leaves=max_leaves)
+    reduction_2d_test(da.all, a, np.all, x, False, max_leaves=max_leaves)
 
-    reduction_2d_test(da.nansum, a, np.nansum, x)
+    reduction_2d_test(da.nansum, a, np.nansum, x, max_leaves=max_leaves)
     with ignoring(AttributeError):
-        reduction_2d_test(da.nanprod, a, np.nanprod, x)
-    reduction_2d_test(da.nanmean, a, np.mean, x)
+        reduction_2d_test(da.nanprod, a, np.nanprod, x, max_leaves=max_leaves)
+    reduction_2d_test(da.nanmean, a, np.mean, x, max_leaves=max_leaves)
     reduction_2d_test(da.nanvar, a, np.nanvar, x, False)  # Difference in dtype algo
     reduction_2d_test(da.nanstd, a, np.nanstd, x, False)  # Difference in dtype algo
-    reduction_2d_test(da.nanmin, a, np.nanmin, x, False)
-    reduction_2d_test(da.nanmax, a, np.nanmax, x, False)
+    reduction_2d_test(da.nanmin, a, np.nanmin, x, False, max_leaves=max_leaves)
+    reduction_2d_test(da.nanmax, a, np.nanmax, x, False, max_leaves=max_leaves)
 
     assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
     assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))

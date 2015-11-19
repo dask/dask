@@ -973,24 +973,24 @@ class Array(Base):
         return elemwise(operator.xor, other, self)
 
     @wraps(np.any)
-    def any(self, axis=None, keepdims=False):
+    def any(self, axis=None, keepdims=False, max_leaves=None):
         from .reductions import any
-        return any(self, axis=axis, keepdims=keepdims)
+        return any(self, axis=axis, keepdims=keepdims, max_leaves=max_leaves)
 
     @wraps(np.all)
-    def all(self, axis=None, keepdims=False):
+    def all(self, axis=None, keepdims=False, max_leaves=None):
         from .reductions import all
-        return all(self, axis=axis, keepdims=keepdims)
+        return all(self, axis=axis, keepdims=keepdims, max_leaves=max_leaves)
 
     @wraps(np.min)
-    def min(self, axis=None, keepdims=False):
+    def min(self, axis=None, keepdims=False, max_leaves=None):
         from .reductions import min
-        return min(self, axis=axis, keepdims=keepdims)
+        return min(self, axis=axis, keepdims=keepdims, max_leaves=max_leaves)
 
     @wraps(np.max)
-    def max(self, axis=None, keepdims=False):
+    def max(self, axis=None, keepdims=False, max_leaves=None):
         from .reductions import max
-        return max(self, axis=axis, keepdims=keepdims)
+        return max(self, axis=axis, keepdims=keepdims, max_leaves=max_leaves)
 
     @wraps(np.argmin)
     def argmin(self, axis=None):
@@ -1003,19 +1003,22 @@ class Array(Base):
         return argmax(self, axis=axis)
 
     @wraps(np.sum)
-    def sum(self, axis=None, dtype=None, keepdims=False):
+    def sum(self, axis=None, dtype=None, keepdims=False, max_leaves=None):
         from .reductions import sum
-        return sum(self, axis=axis, dtype=dtype, keepdims=keepdims)
+        return sum(self, axis=axis, dtype=dtype, keepdims=keepdims,
+                   max_leaves=max_leaves)
 
     @wraps(np.prod)
-    def prod(self, axis=None, dtype=None, keepdims=False):
+    def prod(self, axis=None, dtype=None, keepdims=False, max_leaves=None):
         from .reductions import prod
-        return prod(self, axis=axis, dtype=dtype, keepdims=keepdims)
+        return prod(self, axis=axis, dtype=dtype, keepdims=keepdims,
+                    max_leaves=max_leaves)
 
     @wraps(np.mean)
-    def mean(self, axis=None, dtype=None, keepdims=False):
+    def mean(self, axis=None, dtype=None, keepdims=False, max_leaves=None):
         from .reductions import mean
-        return mean(self, axis=axis, dtype=dtype, keepdims=keepdims)
+        return mean(self, axis=axis, dtype=dtype, keepdims=keepdims,
+                    max_leaves=max_leaves)
 
     @wraps(np.std)
     def std(self, axis=None, dtype=None, keepdims=False, ddof=0):
@@ -1063,12 +1066,14 @@ class Array(Base):
         """
 
         from .reductions import moment
-        return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof)
+        return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims,
+                      ddof=ddof)
 
-    def vnorm(self, ord=None, axis=None, keepdims=False):
+    def vnorm(self, ord=None, axis=None, keepdims=False, max_leaves=None):
         """ Vector norm """
         from .reductions import vnorm
-        return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
+        return vnorm(self, ord=ord, axis=axis, keepdims=keepdims,
+                     max_leaves=max_leaves)
 
     @wraps(map_blocks)
     def map_blocks(self, func, chunks=None, dtype=None, name=None):
