@@ -1,4 +1,4 @@
-from distributed import Nanny, Center
+from distributed import Nanny, Center, rpc
 from distributed.utils_test import loop
 
 from tornado.tcpclient import TCPClient
@@ -11,28 +11,28 @@ def test_metadata(loop):
 
     @gen.coroutine
     def f():
-        stream = yield TCPClient().connect('127.0.0.1', 8006)
+        nn = rpc(ip=n.ip, port=n.port)
         yield n._start()
         assert n.process.is_alive()
         assert c.ncores[n.worker_address] == 2
         assert c.nannies[n.worker_address] > 8000
 
-        yield n._kill()
+        yield nn.kill()
         assert n.worker_address not in c.ncores
         assert n.worker_address not in c.nannies
         assert not n.process
 
-        yield n._kill()
+        yield nn.kill()
         assert n.worker_address not in c.ncores
         assert n.worker_address not in c.nannies
         assert not n.process
 
-        yield n._instantiate()
+        yield nn.instantiate()
         assert n.process.is_alive()
         assert c.ncores[n.worker_address] == 2
         assert c.nannies[n.worker_address] > 8000
 
-        yield n._close()
+        yield nn.terminate()
         assert not n.process
 
         if n.process:
