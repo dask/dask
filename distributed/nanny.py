@@ -1,0 +1,129 @@
+from __future__ import print_function, division, absolute_import
+
+import logging
+from multiprocessing import Process, Queue, queues
+
+from tornado.ioloop import IOLoop
+from tornado import gen
+
+from .core import Server, rpc
+
+
+logger = logging.getLogger(__name__)
+
+class Nanny(Server):
+    def __init__(self, ip, port, worker_port, center_ip, center_port,
+                ncores=None, loop=None, **kwargs):
+        self.ip = ip
+        self.port = port
+        self.worker_port = worker_port
+        self.ncores = ncores or _ncores
+        self.status = None
+        self.process = None
+        self.loop = loop or IOLoop.current()
+        self.center = rpc(ip=center_ip, port=center_port)
+
+        handlers = {'instantiate': self._instantiate,
+                    'kill': self._kill,
+                    'terminate': self.terminate}
+
+        super(Nanny, self).__init__(handlers, **kwargs)
+
+    @gen.coroutine
+    def _start(self):
+        self.listen(self.port)
+        yield self._instantiate()
+        self.loop.add_callback(self._watch)
+        self.status = 'running'
+        logger.info('Start Nanny at:             %s:%d',
+                    self.center.ip, self.center.port)
+
+    @gen.coroutine
+    def _kill(self, stream=None, wait=True):
+        if self.process:
+            self.process.terminate()
+            if wait:
+                yield self._wait_until_unregistered()
+        self.process = None
+        raise gen.Return(b'OK')
+
+    @gen.coroutine
+    def _wait_until_registered(self, wait_seconds=1):
+        while True:
+            ncores = yield self.center.ncores(addresses=[self.worker_address])
+            if ncores[self.worker_address] is not None:
+                break
+            else:
+                yield gen.sleep(wait_seconds)
+
+    @gen.coroutine
+    def _wait_until_unregistered(self, wait_seconds=1):
+        while True:
+            ncores = yield self.center.ncores(addresses=[self.worker_address])
+            if ncores[self.worker_address] is None:
+                break
+            else:
+                yield gen.sleep(wait_seconds)
+
+    @gen.coroutine
+    def _instantiate(self, stream=None, wait=True):
+        q = Queue()
+        self.process = Process(target=run_worker,
+                               args=(q, self.ip, self.worker_port, self.center.ip,
+                                     self.center.port, self.ncores))
+        self.process.daemon = True
+        self.process.start()
+        while True:
+            try:
+                self.worker_port = q.get_nowait()
+                break
+            except queues.Empty:
+                yield gen.sleep(0.1)
+        if wait:
+            yield self._wait_until_registered()
+        raise gen.Return(b'OK')
+
+    @gen.coroutine
+    def _watch(self, wait_seconds=1):
+        while True:
+            if self.process and not self.process.is_alive():
+                yield self.center.unregister(address=self.worker_address)
+                yield self._instantiate()
+                yield self._wait_until_registered(wait_seconds)
+            else:
+                yield gen.sleep(wait_seconds)
+
+    @gen.coroutine
+    def _close(self):
+        yield self._kill()
+        self.center.close_streams()
+        self.stop()
+        self.status = 'closed'
+
+    @gen.coroutine
+    def terminate(self, stream):
+        yield self._close()
+        raise gen.Return(b'OK')
+
+    @property
+    def address(self):
+        return (self.ip, self.port)
+
+    @property
+    def worker_address(self):
+        return (self.ip, self.worker_port)
+
+
+def run_worker(q, ip, port, center_ip, center_port, ncores):
+    from distributed import Worker
+    from tornado.ioloop import IOLoop
+    IOLoop.clear_instance()
+    loop = IOLoop(make_current=True)
+    worker = Worker(ip, port, center_ip, center_port, ncores)
+
+    @gen.coroutine
+    def start():
+        yield worker._start()
+        q.put(worker.port)
+    loop.add_callback(start)
+    loop.start()
