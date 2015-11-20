@@ -10,9 +10,7 @@ from toolz import compose, partition_all, merge, get
 from . import chunk
 from .core import _concatenate2, Array, atop, sqrt, elemwise, lol_tuples
 from .numpy_compat import divide
-from .slicing import insert_many
 from ..compatibility import getargspec, builtins
-from ..core import flatten
 from ..base import tokenize
 from ..utils import ignoring
 
@@ -35,12 +33,13 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
         aggregate = partial(aggregate, dtype=dtype)
 
     # Normalize axes
-    if max_leaves is None:
-        max_leaves = dict(zip(range(x.ndim), x.numblocks))
-    if isinstance(max_leaves, int):
-        n = builtins.max(int(len(axis) ** (1/max_leaves)), 2)
+    if isinstance(max_leaves, dict):
+        max_leaves = dict((k, max_leaves.get(k, 2)) for k in axis)
+    elif isinstance(max_leaves, int):
+        n = builtins.max(int(max_leaves ** (1/len(axis))), 2)
         max_leaves = dict.fromkeys(axis, n)
-    max_leaves = dict((k, v) for (k, v) in max_leaves.items() if k in axis)
+    else:
+        max_leaves = dict((k, v) for (k, v) in enumerate(x.numblocks) if k in axis)
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
@@ -59,10 +58,11 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
         tmp = partial_reduce(func, tmp, max_leaves, True, None)
     func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
                    partial(_concatenate2, axes=axis))
-    return partial_reduce(func, tmp, max_leaves, keepdims, dtype)
+    return partial_reduce(func, tmp, max_leaves, keepdims=keepdims, dtype=dtype,
+                          name=('reduce-' + tokenize(func, x, keepdims, dtype)))
 
 
-def partial_reduce(func, x, max_leaves, keepdims=False, dtype=None):
+def partial_reduce(func, x, max_leaves, keepdims=False, dtype=None, name=None):
     """Partial reduction across multiple axes.
 
     Parameters
@@ -79,7 +79,7 @@ def partial_reduce(func, x, max_leaves, keepdims=False, dtype=None):
 
     >>> partial_reduce(np.min, x, {0: 1, 2: 3})    # doctest: +SKIP
     """
-    name = tokenize(func, x, max_leaves, keepdims, dtype)
+    name = name or 'p_reduce-' + tokenize(func, x, max_leaves, keepdims, dtype)
     parts = [list(partition_all(max_leaves.get(i, 1), range(n))) for (i, n)
              in enumerate(x.numblocks)]
     keys = product(*map(range, map(len, parts)))
