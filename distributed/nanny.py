@@ -12,6 +12,11 @@ from .core import Server, rpc
 logger = logging.getLogger(__name__)
 
 class Nanny(Server):
+    """ A process to manage worker processes
+
+    The nanny spins up Worker processes, watches then, and kills or restarts
+    them as necessary.
+    """
     def __init__(self, ip, port, worker_port, center_ip, center_port,
                 ncores=None, loop=None, **kwargs):
         self.ip = ip
@@ -31,6 +36,7 @@ class Nanny(Server):
 
     @gen.coroutine
     def _start(self):
+        """ Start nanny, start local process, start watching """
         self.listen(self.port)
         yield self._instantiate()
         self.loop.add_callback(self._watch)
@@ -39,7 +45,12 @@ class Nanny(Server):
                     self.center.ip, self.center.port)
 
     @gen.coroutine
-    def _kill(self, stream=None, wait=True):
+    def _kill(self, stream=None):
+        """ Kill the local worker process
+
+        Blocks until both the process is down and the center is properly
+        informed
+        """
         if self.process:
             self.process.terminate()
             logger.info("Nanny %s:%d kills worker process %s:%d",
@@ -52,6 +63,12 @@ class Nanny(Server):
 
     @gen.coroutine
     def _instantiate(self, stream=None):
+        """ Start a local worker process
+
+        Blocks until the process is up and the center is properly informed
+        """
+        if self.process and self.process.is_alive():
+            raise ValueError("Existing process still alive. Please kill first")
         q = Queue()
         self.process = Process(target=run_worker,
                                args=(q, self.ip, self.worker_port, self.center.ip,
@@ -70,6 +87,7 @@ class Nanny(Server):
 
     @gen.coroutine
     def _watch(self, wait_seconds=0.10):
+        """ Watch the local process, if it dies then spin up a new one """
         while True:
             if self.status == 'closed':
                 yield self._close()
@@ -82,6 +100,7 @@ class Nanny(Server):
 
     @gen.coroutine
     def _close(self):
+        """ Close the nanny process, stop listening """
         logger.info("Closing Nanny at %s:%d", self.ip, self.port)
         yield self._kill()
         self.center.close_streams()
@@ -103,6 +122,7 @@ class Nanny(Server):
 
 
 def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port):
+    """ Function run by the Nanny when creating the worker """
     from distributed import Worker
     from tornado.ioloop import IOLoop
     IOLoop.clear_instance()

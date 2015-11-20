@@ -106,6 +106,7 @@ class Future(WrappedKey):
         return sync(self.executor.loop, self._exception)
 
     def cancelled(self):
+        """ Returns True if the future has been cancelled """
         return self.key not in self.executor.futures
 
     @gen.coroutine
@@ -614,6 +615,11 @@ class Executor(object):
         yield self._start()
 
     def restart(self):
+        """ Restart the distributed network
+
+        This kills all active work, deletes all data on the network, and
+        restarts the worker processes.
+        """
         return sync(self.loop, self._restart)
 
 
