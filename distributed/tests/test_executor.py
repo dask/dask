@@ -1175,5 +1175,4 @@ def test_clear(loop):
             assert all(not v for v in d.values())
 
         yield e._shutdown()
-
     _test_cluster(f, loop)

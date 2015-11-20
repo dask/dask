@@ -66,7 +66,7 @@ class Nanny(Server):
         raise gen.Return(b'OK')
 
     @gen.coroutine
-    def _watch(self, wait_seconds=1):
+    def _watch(self, wait_seconds=0.10):
         while True:
             if self.process and not self.process.is_alive():
                 yield self.center.unregister(address=self.worker_address)
