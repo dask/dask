@@ -1225,6 +1225,7 @@ def test_restart(loop):
 def test_restart_sync(loop):
     with cluster(nanny=True) as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            assert len(e.has_what) == 2
             x = e.submit(div, 1, 2)
             x.result()
 

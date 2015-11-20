@@ -54,7 +54,7 @@ def run_nanny(port, center_port, **kwargs):
     IOLoop.clear_instance()
     loop = IOLoop(make_current=True)
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
-    worker = Nanny('127.0.0.1', port, port + 1, '127.0.0.1', center_port, **kwargs)
+    worker = Nanny('127.0.0.1', port, port + 1000, '127.0.0.1', center_port, **kwargs)
     loop.run_sync(worker._start)
     loop.start()
 

@@ -42,8 +42,11 @@ class Nanny(Server):
     def _kill(self, stream=None, wait=True):
         if self.process:
             self.process.terminate()
-            logger.info("Nanny kills worker process %s:%d", self.ip, self.port)
-            yield self.center.unregister(address=self.worker_address)
+            logger.info("Nanny %s:%d kills worker process %s:%d",
+                        self.ip, self.port, self.ip, self.worker_port)
+            result = yield self.center.unregister(address=self.worker_address)
+            if result != b'OK':
+                logger.critical("Unable to unregister with center. %s", result)
         self.process = None
         raise gen.Return(b'OK')
 

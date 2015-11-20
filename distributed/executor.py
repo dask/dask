@@ -596,7 +596,7 @@ class Executor(object):
         for e in events:
             e.set()
 
-        yield All([nanny.instantiate() for nanny in nannies])
+        yield All([nanny.instantiate(close=True) for nanny in nannies])
 
         yield self._sync_center()
         yield self._start()
