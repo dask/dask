@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
-from concurrent.futures._base import DoneAndNotDoneFutures
+from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
 from functools import wraps, partial
 import itertools
@@ -48,7 +48,10 @@ class Future(WrappedKey):
 
     @property
     def status(self):
-        return self.executor.futures[self.key]['status']
+        try:
+            return self.executor.futures[self.key]['status']
+        except KeyError:
+            return 'cancelled'
 
     @property
     def event(self):
@@ -61,17 +64,26 @@ class Future(WrappedKey):
     def result(self):
         """ Wait until computation completes. Gather result to local process """
         result = sync(self.executor.loop, self._result, raiseit=False)
-        if self.status == 'error':
+        if self.status in ('error', 'cancelled'):
             raise result
         else:
             return result
 
     @gen.coroutine
     def _result(self, raiseit=True):
-        yield self.event.wait()
+        try:
+            d = self.executor.futures[self.key]
+        except KeyError:
+            exception = CancelledError(self.key)
+            if raiseit:
+                raise exception
+            else:
+                raise gen.Return(exception)
+
+        yield d['event'].wait()
         if self.status == 'error':
-            exception = self.executor.futures[self.key]['exception']
-            traceback = self.executor.futures[self.key]['traceback']  # TODO: use me
+            exception = d['exception']
+            traceback = d['traceback']  # TODO: use me
             if raiseit:
                 raise exception
             else:

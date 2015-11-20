@@ -1,6 +1,7 @@
 from operator import add, sub
 
 from collections import Iterator
+from concurrent.futures import CancelledError
 from time import sleep, time
 import sys
 
@@ -1233,6 +1234,9 @@ def test_restart_sync(loop):
             e.restart()
             assert not e.who_has
             assert x.cancelled()
+
+            with pytest.raises(CancelledError):
+                x.result()
 
             assert set(e.stacks) == set(e.processing) == set(e.ncores)
             assert len(e.stacks) == 2
