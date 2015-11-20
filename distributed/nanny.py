@@ -42,45 +42,27 @@ class Nanny(Server):
     def _kill(self, stream=None, wait=True):
         if self.process:
             self.process.terminate()
-            if wait:
-                yield self._wait_until_unregistered()
+            logger.info("Nanny kills worker process %s:%d", self.ip, self.port)
+            yield self.center.unregister(address=self.worker_address)
         self.process = None
         raise gen.Return(b'OK')
 
     @gen.coroutine
-    def _wait_until_registered(self, wait_seconds=1):
-        while True:
-            ncores = yield self.center.ncores(addresses=[self.worker_address])
-            if ncores[self.worker_address] is not None:
-                break
-            else:
-                yield gen.sleep(wait_seconds)
-
-    @gen.coroutine
-    def _wait_until_unregistered(self, wait_seconds=1):
-        while True:
-            ncores = yield self.center.ncores(addresses=[self.worker_address])
-            if ncores[self.worker_address] is None:
-                break
-            else:
-                yield gen.sleep(wait_seconds)
-
-    @gen.coroutine
-    def _instantiate(self, stream=None, wait=True):
+    def _instantiate(self, stream=None):
         q = Queue()
         self.process = Process(target=run_worker,
                                args=(q, self.ip, self.worker_port, self.center.ip,
-                                     self.center.port, self.ncores))
+                                     self.center.port, self.ncores,
+                                     self.port))
         self.process.daemon = True
         self.process.start()
+        logger.info("Nanny starts worker process %s:%d", self.ip, self.port)
         while True:
             try:
                 self.worker_port = q.get_nowait()
                 break
             except queues.Empty:
                 yield gen.sleep(0.1)
-        if wait:
-            yield self._wait_until_registered()
         raise gen.Return(b'OK')
 
     @gen.coroutine
@@ -89,7 +71,6 @@ class Nanny(Server):
             if self.process and not self.process.is_alive():
                 yield self.center.unregister(address=self.worker_address)
                 yield self._instantiate()
-                yield self._wait_until_registered(wait_seconds)
             else:
                 yield gen.sleep(wait_seconds)
 
