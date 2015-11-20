@@ -5,7 +5,7 @@ from sys import argv, exit
 import socket
 
 import click
-from distributed import Worker
+from distributed import Nanny, Worker
 from distributed.utils import get_ip
 from tornado.ioloop import IOLoop
 
@@ -29,15 +29,25 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.option('--host', type=str, default=ip, help="Serving host")
 @click.option('--ncores', type=int, default=0, help="Number of cores to serve")
 def go(center, host, port, ncores):
+    while True:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('127.0.0.1', port))
+        except socket.error:
+            port += 1
+        else:
+            sock.close()
+            break
+    loop = IOLoop()
     try:
         center_ip, center_port = center.split(':')
         center_port = int(center_port)
     except IndexError:
         logger.info("Usage:  dworker center_host:center_port")
     try:
-        worker = Worker(host, port, center_ip, center_port, ncores=ncores)
-        worker.start()
-        IOLoop.current().start()
+        worker = Nanny(host, port, port + 1, center_ip, center_port, ncores=ncores)
+        loop.run_sync(worker._start)
+        loop.start()
     except KeyboardInterrupt:
         assert worker.status == 'closed'
 
