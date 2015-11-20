@@ -71,6 +71,9 @@ class Nanny(Server):
     @gen.coroutine
     def _watch(self, wait_seconds=0.10):
         while True:
+            if self.status == 'closed':
+                yield self._close()
+                break
             if self.process and not self.process.is_alive():
                 yield self.center.unregister(address=self.worker_address)
                 yield self._instantiate()
@@ -79,6 +82,7 @@ class Nanny(Server):
 
     @gen.coroutine
     def _close(self):
+        logger.info("Closing Nanny at %s:%d", self.ip, self.port)
         yield self._kill()
         self.center.close_streams()
         self.stop()
@@ -104,7 +108,7 @@ def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port):
     IOLoop.clear_instance()
     loop = IOLoop(make_current=True)
     worker = Worker(ip, port, center_ip, center_port, ncores,
-            nanny_port=nanny_port)
+                    nanny_port=nanny_port)
 
     @gen.coroutine
     def start():

@@ -88,7 +88,7 @@ class Worker(Server):
                 logger.info('Start worker at             %s:%d', self.ip, self.port)
                 self.listen(self.port)
                 break
-            except OSError:
+            except (OSError, IOError):
                 logger.info('Port %d taken. Trying %d', self.port, self.port + 1)
                 self.port += 1
 
