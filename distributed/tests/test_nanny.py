@@ -15,18 +15,22 @@ def test_metadata(loop):
         yield n._start()
         assert n.process.is_alive()
         assert c.ncores[n.worker_address] == 2
+        assert c.nannies[n.worker_address] > 8000
 
         yield n._kill()
         assert n.worker_address not in c.ncores
+        assert n.worker_address not in c.nannies
         assert not n.process
 
         yield n._kill()
         assert n.worker_address not in c.ncores
+        assert n.worker_address not in c.nannies
         assert not n.process
 
         yield n._instantiate()
         assert n.process.is_alive()
         assert c.ncores[n.worker_address] == 2
+        assert c.nannies[n.worker_address] > 8000
 
         yield n._close()
         assert not n.process

@@ -62,9 +62,10 @@ class Worker(Server):
     """
 
     def __init__(self, ip, port, center_ip, center_port, ncores=None,
-                 loop=None, **kwargs):
+                 loop=None, nanny_port=None, **kwargs):
         self.ip = ip
         self.port = port
+        self.nanny_port = nanny_port
         self.ncores = ncores or _ncores
         self.data = dict()
         self.loop = loop or IOLoop.current()
@@ -95,7 +96,8 @@ class Worker(Server):
         while True:
             try:
                 resp = yield self.center.register(
-                        ncores=self.ncores, address=(self.ip, self.port))
+                        ncores=self.ncores, address=(self.ip, self.port),
+                        nanny_port=self.nanny_port)
                 break
             except OSError:
                 yield gen.sleep(1)

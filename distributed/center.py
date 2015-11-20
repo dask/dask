@@ -47,6 +47,7 @@ class Center(Server):
         self.who_has = defaultdict(set)
         self.has_what = defaultdict(set)
         self.ncores = dict()
+        self.nannies = dict()
         self.status = None
 
         d = {func.__name__: func
@@ -63,9 +64,11 @@ class Center(Server):
         self.stop()
         return b'OK'
 
-    def register(self, stream, address=None, keys=(), ncores=None):
+    def register(self, stream, address=None, keys=(), ncores=None,
+                 nanny_port=None):
         self.has_what[address] = set(keys)
         self.ncores[address] = ncores
+        self.nannies[address] = nanny_port
         logger.info("Register %s", str(address))
         return b'OK'
 
@@ -75,6 +78,8 @@ class Center(Server):
         keys = self.has_what.pop(address)
         with ignoring(KeyError):
             del self.ncores[address]
+        with ignoring(KeyError):
+            del self.nannies[address]
         for key in keys:
             s = self.who_has[key]
             s.remove(address)
