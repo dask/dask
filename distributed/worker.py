@@ -61,11 +61,13 @@ class Worker(Server):
     distributed.center.Center:
     """
 
-    def __init__(self, ip, port, center_ip, center_port, ncores=None, **kwargs):
+    def __init__(self, ip, port, center_ip, center_port, ncores=None,
+                 loop=None, **kwargs):
         self.ip = ip
         self.port = port
         self.ncores = ncores or _ncores
         self.data = dict()
+        self.loop = loop or IOLoop.current()
         self.status = None
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
@@ -77,13 +79,19 @@ class Worker(Server):
                     'terminate': self.terminate}
 
         super(Worker, self).__init__(handlers, **kwargs)
-        logger.info('Start worker at             %s:%d', ip, port)
-        logger.info('Waiting to connect to       %s:%d', center_ip, center_port)
-        self.status = 'running'
 
     @gen.coroutine
     def _start(self):
-        self.listen(self.port)
+        while True:
+            try:
+                logger.info('Start worker at             %s:%d', self.ip, self.port)
+                self.listen(self.port)
+                break
+            except OSError:
+                logger.info('Port %d taken. Trying %d', self.port, self.port + 1)
+                self.port += 1
+
+        logger.info('Waiting to connect to       %s:%d', self.center.ip, self.center.port)
         while True:
             try:
                 resp = yield self.center.register(
@@ -94,11 +102,10 @@ class Worker(Server):
         assert resp == b'OK'
         logger.info('Registered with center at:  %s:%d',
                     self.center.ip, self.center.port)
+        self.status = 'running'
 
     def start(self):
-        if not self.io_loop:
-            self.io_loop = IOLoop.current()
-        self.io_loop.add_callback(self._start)
+        self.loop.add_callback(self._start)
 
     @gen.coroutine
     def _close(self):

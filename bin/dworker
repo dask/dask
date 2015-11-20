@@ -29,17 +29,6 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.option('--host', type=str, default=ip, help="Serving host")
 @click.option('--ncores', type=int, default=0, help="Number of cores to serve")
 def go(center, host, port, ncores):
-    while True:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.bind(('127.0.0.1', port))
-        except socket.error:
-            logger.info("Port %d taken.  Trying %d", port, port + 1)
-            port += 1
-        else:
-            sock.close()
-            break
-
     try:
         center_ip, center_port = center.split(':')
         center_port = int(center_port)
