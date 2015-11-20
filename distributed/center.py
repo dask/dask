@@ -76,7 +76,10 @@ class Center(Server):
         with ignoring(KeyError):
             del self.ncores[address]
         for key in keys:
-            self.who_has[key].remove(address)
+            s = self.who_has[key]
+            s.remove(address)
+            if not s:
+                del self.who_has[key]
         logger.info("Unregister %s", str(address))
         return b'OK'
 
