@@ -111,7 +111,7 @@ class Center(Server):
 
     def get_ncores(self, stream, addresses=None):
         if addresses is not None:
-            return {k: self.ncores[k] for k in addresses}
+            return {k: self.ncores.get(k, None) for k in addresses}
         else:
             return self.ncores
 
