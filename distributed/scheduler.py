@@ -367,16 +367,20 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             update_data(msg['who-has'], msg['nbytes'])
 
         elif msg['op'] == 'task-finished':
-            nbytes[msg['key']] = msg['nbytes']
-            mark_key_in_memory(msg['key'], msg['workers'])
-            ensure_occupied(msg['workers'][0])
+            key, worker = msg['key'], msg['workers'][0]
+            if key in processing[worker]:
+                nbytes[key] = msg['nbytes']
+                mark_key_in_memory(key, [worker])
+                ensure_occupied(worker)
 
         elif msg['op'] == 'task-erred':
-            processing[msg['worker']].remove(msg['key'])
-            exceptions[msg['key']] = msg['exception']
-            tracebacks[msg['key']] = msg['traceback']
-            mark_failed(msg['key'], msg['key'])
-            ensure_occupied(msg['worker'])
+            key, worker = msg['key'], msg['worker']
+            if key in processing[worker]:
+                processing[worker].remove(key)
+                exceptions[key] = msg['exception']
+                tracebacks[key] = msg['traceback']
+                mark_failed(key, key)
+                ensure_occupied(worker)
 
         elif msg['op'] in ('missing-data', 'task-missing-data'):
             missing = set(msg['missing'])
@@ -403,6 +407,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
         elif msg['op'] == 'worker-failed':
             worker = msg['worker']
+            if worker not in processing:
+                continue
             keys = has_what.pop(worker)
             del worker_queues[worker]
             del ncores[worker]
