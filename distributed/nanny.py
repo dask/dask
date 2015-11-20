@@ -17,7 +17,7 @@ class Nanny(Server):
         self.ip = ip
         self.port = port
         self.worker_port = worker_port
-        self.ncores = ncores or _ncores
+        self.ncores = ncores
         self.status = None
         self.process = None
         self.loop = loop or IOLoop.current()
@@ -82,7 +82,7 @@ class Nanny(Server):
         self.status = 'closed'
 
     @gen.coroutine
-    def terminate(self, stream):
+    def terminate(self, stream=None):
         yield self._close()
         raise gen.Return(b'OK')
 

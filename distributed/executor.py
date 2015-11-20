@@ -156,6 +156,7 @@ class Executor(object):
         self._shutdown_event = Event()
         self._delete_batch_time = delete_batch_time
         self.ncores = dict()
+        self.nannies = dict()
         self.who_has = defaultdict(set)
         self.has_what = defaultdict(set)
         self.waiting = {}
@@ -264,18 +265,28 @@ class Executor(object):
 
     @gen.coroutine
     def _sync_center(self):
-        who_has, has_what, ncores = yield [self.center.who_has(),
-                                           self.center.has_what(),
-                                           self.center.ncores()]
+        self.who_has.clear()
+        self.has_what.clear()
+        self.ncores.clear()
+        self.nannies.clear()
+
+        who_has, has_what, ncores, nannies = yield [self.center.who_has(),
+                                                    self.center.has_what(),
+                                                    self.center.ncores(),
+                                                    self.center.nannies()]
         self.who_has.update(who_has)
         self.has_what.update(has_what)
         self.ncores.update(ncores)
+        self.nannies.update(nannies)
 
     @gen.coroutine
     def _go(self):
         """ Setup and run all other coroutines.  Block until finished. """
         worker_queues = {worker: Queue() for worker in self.ncores}
         delete_queue = Queue()
+
+        for collection in [self.dask, self.nbytes, self.restrictions]:
+            collection.clear()
 
         self.coroutines = ([
             self.report(),
@@ -571,6 +582,27 @@ class Executor(object):
         self.loop.add_callback(self.scheduler_queue.put_nowait,
                 {'op': 'clear'})
         yield [d['event'].wait() for d in self.futures.values()]
+
+    @gen.coroutine
+    def _restart(self):
+        yield self._shutdown()
+
+        nannies = [rpc(ip=ip, port=n_port)
+                   for (ip, w_port), n_port in self.nannies.items()]
+        yield All([nanny.kill() for nanny in nannies])
+
+        events = [d['event'] for d in self.futures.values()]
+        self.futures.clear()
+        for e in events:
+            e.set()
+
+        yield All([nanny.instantiate() for nanny in nannies])
+
+        yield self._sync_center()
+        yield self._start()
+
+    def restart(self):
+        return sync(self.loop, self._restart)
 
 
 @gen.coroutine

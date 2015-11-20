@@ -53,7 +53,8 @@ class Center(Server):
         d = {func.__name__: func
              for func in [self.add_keys, self.remove_keys, self.get_who_has,
                           self.get_has_what, self.register, self.get_ncores,
-                          self.unregister, self.delete_data, self.terminate]}
+                          self.unregister, self.delete_data, self.terminate,
+                          self.get_nannies]}
         d = {k[len('get_'):] if k.startswith('get_') else k: v for k, v in
                 d.items()}
 
@@ -119,6 +120,12 @@ class Center(Server):
             return {k: self.ncores.get(k, None) for k in addresses}
         else:
             return self.ncores
+
+    def get_nannies(self, stream, addresses=None):
+        if addresses is not None:
+            return {k: self.nannies.get(k, None) for k in addresses}
+        else:
+            return self.nannies
 
     @gen.coroutine
     def delete_data(self, stream, keys=None):

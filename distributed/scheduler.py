@@ -194,10 +194,12 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     stacks = dict() if stacks is None else stacks
     processing = dict() if processing is None else processing
 
+    stacks.clear()
     stacks.update({worker: list() for worker in ncores})
+    processing.clear()
     processing.update({worker: set() for worker in ncores})
 
-    assert (not dsk) == (not dependencies)
+    assert (not dsk) == (not dependencies), (dsk, dependencies)
 
     in_play = set(who_has)  # keys in memory, stacks, processing, or waiting
     keyorder = dict()
