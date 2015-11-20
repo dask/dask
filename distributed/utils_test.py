@@ -47,10 +47,26 @@ def run_worker(port, center_port, **kwargs):
     loop.start()
 
 
+def run_nanny(port, center_port, **kwargs):
+    from distributed import Nanny
+    from tornado.ioloop import IOLoop
+    import logging
+    IOLoop.clear_instance()
+    loop = IOLoop(make_current=True)
+    logging.getLogger("tornado").setLevel(logging.CRITICAL)
+    worker = Nanny('127.0.0.1', port, port + 1, '127.0.0.1', center_port, **kwargs)
+    loop.run_sync(worker._start)
+    loop.start()
+
+
 _port = [8010]
 
 @contextmanager
-def cluster(nworkers=2):
+def cluster(nworkers=2, nanny=False):
+    if nanny:
+        _run_worker = run_nanny
+    else:
+        _run_worker = run_worker
     _port[0] += 1
     cport = _port[0]
     center = Process(target=run_center, args=(cport,))
@@ -58,7 +74,7 @@ def cluster(nworkers=2):
     for i in range(nworkers):
         _port[0] += 1
         port = _port[0]
-        proc = Process(target=run_worker, args=(port, cport), kwargs={'ncores': 1})
+        proc = Process(target=_run_worker, args=(port, cport), kwargs={'ncores': 1})
         workers.append({'port': port, 'proc': proc})
 
     center.start()
