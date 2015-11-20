@@ -93,6 +93,9 @@ class Future(WrappedKey):
         """ Return the exception of a failed task """
         return sync(self.executor.loop, self._exception)
 
+    def cancelled(self):
+        return self.key not in self.executor.futures
+
     @gen.coroutine
     def _traceback(self):
         yield self.event.wait()
@@ -231,6 +234,13 @@ class Executor(object):
                     self.futures[msg['key']]['exception'] = msg['exception']
                     self.futures[msg['key']]['traceback'] = msg['traceback']
                     self.futures[msg['key']]['event'].set()
+            if msg['op'] == 'cancel-data':
+                events = [self.futures[key]['event'] for key in msg['keys']
+                                                      if key in self.futures]
+                for key in msg['keys']:
+                    self.futures.pop(key, None)
+                for e in events:
+                    e.set()
 
     @gen.coroutine
     def _shutdown(self):
@@ -555,6 +565,12 @@ class Executor(object):
             raise result
         else:
             return result
+
+    @gen.coroutine
+    def _clear(self):
+        self.loop.add_callback(self.scheduler_queue.put_nowait,
+                {'op': 'clear'})
+        yield [d['event'].wait() for d in self.futures.values()]
 
 
 @gen.coroutine
