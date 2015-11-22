@@ -28,8 +28,7 @@ from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
-from ..utils import (tmpfile, file_size, textblock,
-        takes_multiple_arguments)
+from ..utils import file_size, get_bin_linesep, takes_multiple_arguments
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
@@ -877,13 +876,38 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
     return Bag(d, name, len(d))
 
 
+def _textblock(filename, start, end, compression, encoding=None):
+    myopen = opens.get(compression, open)
+    f = myopen(filename, 'rb')
+
+    if encoding is None:
+        encoding = getattr(f, 'encoding', 'utf-8')
+
+    linesep = get_bin_linesep(encoding, os.linesep)
+    linesep_len = len(linesep)
+
+    if start > linesep_len:
+        f.seek(start - linesep_len)
+        if f.read(linesep_len) == linesep:
+            f.seek(start)
+        else:
+            f.readline()
+
+    while f.tell() < end:
+        line = f.readline()
+        if line != '':
+            yield line
+        else:
+            break
+
+
 def _chunk_read_file(filename, chunkbytes, encoding):
     extension = os.path.splitext(filename)[1].strip('.')
     compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
 
-    return [(list, (StringIO, (bytes.decode, (textblock, filename,
-                                              i, i + chunkbytes, compression),
-                               encoding)))
+    return [(list, (decode_sequence, encoding, (_textblock, filename,
+                                                i, i + chunkbytes,
+                                                extension, encoding)))
             for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
