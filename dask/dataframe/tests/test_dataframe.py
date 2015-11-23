@@ -16,85 +16,7 @@ import dask.dataframe as dd
 
 from dask.dataframe.core import (repartition_divisions, _loc,
         _coerce_loc_index, aca, reduction, _concat, _Frame)
-
-
-def check_dask(dsk, check_names=True):
-    if hasattr(dsk, 'dask'):
-        result = dsk.compute(get=get_sync)
-        if isinstance(dsk, dd.Index):
-            assert isinstance(result, pd.Index)
-        elif isinstance(dsk, dd.Series):
-            assert isinstance(result, pd.Series)
-            assert isinstance(dsk.columns, tuple)
-            assert len(dsk.columns) == 1
-            if check_names:
-                assert dsk.name == result.name, (dsk.name, result.name)
-        elif isinstance(dsk, dd.DataFrame):
-            assert isinstance(result, pd.DataFrame), type(result)
-            assert isinstance(dsk.columns, tuple)
-            if check_names:
-                columns = pd.Index(dsk.columns)
-                tm.assert_index_equal(columns, result.columns)
-        elif isinstance(dsk, dd.core.Scalar):
-            assert (np.isscalar(result) or
-                    isinstance(result, (pd.Timestamp, pd.Timedelta)))
-        else:
-            msg = 'Unsupported dask instance {0} found'.format(type(dsk))
-            raise AssertionError(msg)
-        return result
-    return dsk
-
-
-def _maybe_sort(a):
-    # sort by value, then index
-    try:
-        if isinstance(a, pd.DataFrame):
-            # ToDo: after v0.17, we can use consistent method
-            # https://github.com/pydata/pandas/pull/10726
-            a = a.sort(columns=a.columns.tolist())
-        else:
-            a = a.order()
-    except (TypeError, IndexError, ValueError):
-        pass
-    return a.sort_index()
-
-
-def eq(a, b, check_names=True):
-    a = check_dask(a, check_names=check_names)
-    b = check_dask(b, check_names=check_names)
-    if isinstance(a, pd.DataFrame):
-        a = _maybe_sort(a)
-        b = _maybe_sort(b)
-        tm.assert_frame_equal(a, b)
-    elif isinstance(a, pd.Series):
-        a = _maybe_sort(a)
-        b = _maybe_sort(b)
-        tm.assert_series_equal(a, b, check_names=check_names)
-    elif isinstance(a, pd.Index):
-        tm.assert_index_equal(a, b)
-    else:
-        if a == b:
-            return True
-        else:
-            if np.isnan(a):
-                assert np.isnan(b)
-            else:
-                assert np.allclose(a, b)
-    return True
-
-
-def assert_dask_graph(dask, label):
-    if hasattr(dask, 'dask'):
-        dask = dask.dask
-    assert isinstance(dask, dict)
-    for k in dask:
-        if isinstance(k, tuple):
-            k = k[0]
-        if k.startswith(label):
-            return True
-    else:
-        msg = "given dask graph doesn't contan label: {0}"
-        raise AssertionError(msg.format(label))
+from dask.dataframe.utils import eq, assert_dask_graph
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -198,16 +120,14 @@ def test_set_index():
 
     d2 = d.set_index('b', npartitions=3)
     assert d2.npartitions == 3
-    # assert eq(d2, full.set_index('b').sort())
-    assert str(d2.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
+    assert eq(d2, full.set_index('b'))
 
     d3 = d.set_index(d.b, npartitions=3)
     assert d3.npartitions == 3
-    # assert eq(d3, full.set_index(full.b).sort())
-    assert str(d3.compute().sort(['a'])) == str(full.set_index(full.b).sort(['a']))
+    assert eq(d3, full.set_index(full.b))
 
     d4 = d.set_index('b')
-    assert str(d4.compute().sort(['a'])) == str(full.set_index('b').sort(['a']))
+    assert eq(d4, full.set_index('b'))
 
 
 def test_set_index_raises_error_on_bad_input():
@@ -1337,8 +1257,8 @@ def test_groupby_on_index():
 def test_set_partition():
     d2 = d.set_partition('b', [0, 2, 9])
     assert d2.divisions == (0, 2, 9)
-    expected = full.set_index('b').sort(ascending=True)
-    assert eq(d2.compute().sort(ascending=True), expected)
+    expected = full.set_index('b')
+    assert eq(d2, expected)
 
 
 def test_set_partition_compute():
