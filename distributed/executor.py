@@ -203,6 +203,7 @@ class Executor(object):
         _global_executors.add(self)
         while not len(self.stacks) == len(self.ncores):
             yield gen.sleep(0.01)
+        logger.debug("Started scheduling coroutines. Synchronized")
 
     def __enter__(self):
         if not self.loop._running:
@@ -290,6 +291,9 @@ class Executor(object):
                                                     self.center.has_what(),
                                                     self.center.ncores(),
                                                     self.center.nannies()]
+        logger.debug("Synchronize with center.  Retrieve %d workers",
+                     len(ncores))
+
         self.who_has.update(who_has)
         self.has_what.update(has_what)
         self.ncores.update(ncores)
@@ -601,10 +605,12 @@ class Executor(object):
 
     @gen.coroutine
     def _restart(self):
+        logger.debug("Sending shutdown signal to workers")
         for addr in self.nannies:
             self.loop.add_callback(self.scheduler_queue.put_nowait,
                     {'op': 'worker-failed', 'worker': addr, 'heal': False})
 
+        logger.debug("Sending kill signal to nannies")
         nannies = [rpc(ip=ip, port=n_port)
                    for (ip, w_port), n_port in self.nannies.items()]
         yield All([nanny.kill() for nanny in nannies])
@@ -621,6 +627,7 @@ class Executor(object):
 
         yield All([nanny.instantiate(close=True) for nanny in nannies])
 
+        logger.info("Restarting executor")
         yield self._start()
 
     def restart(self):
