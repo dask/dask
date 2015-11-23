@@ -598,11 +598,18 @@ class Executor(object):
 
     @gen.coroutine
     def _restart(self):
-        yield self._shutdown()
+        for addr in self.nannies:
+            self.loop.add_callback(self.scheduler_queue.put_nowait,
+                    {'op': 'worker-failed', 'worker': addr, 'heal': False})
 
         nannies = [rpc(ip=ip, port=n_port)
                    for (ip, w_port), n_port in self.nannies.items()]
         yield All([nanny.kill() for nanny in nannies])
+
+        while self.ncores:
+            yield gen.sleep(0.01)
+
+        yield self._shutdown()
 
         events = [d['event'] for d in self.futures.values()]
         self.futures.clear()
@@ -611,7 +618,6 @@ class Executor(object):
 
         yield All([nanny.instantiate(close=True) for nanny in nannies])
 
-        yield self._sync_center()
         yield self._start()
 
     def restart(self):

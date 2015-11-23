@@ -41,8 +41,7 @@ class Nanny(Server):
         yield self._instantiate()
         self.loop.add_callback(self._watch)
         self.status = 'running'
-        logger.info('Start Nanny at:             %s:%d',
-                    self.center.ip, self.center.port)
+        logger.info('Start Nanny at:             %s:%d', self.ip, self.port)
 
     @gen.coroutine
     def _kill(self, stream=None):

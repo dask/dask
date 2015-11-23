@@ -104,8 +104,9 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
 
     yield worker.close(close=True)
     worker.close_streams()
-    scheduler_queue.put_nowait({'op': 'worker-finished',
-                                'worker': ident})
+    if msg.get('report', True):
+        scheduler_queue.put_nowait({'op': 'worker-finished',
+                                    'worker': ident})
     logger.debug("Close worker core, %s, %d", ident, i)
 
 
@@ -334,6 +335,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         if worker not in processing:
             return
         keys = has_what.pop(worker)
+        for i in range(ncores[worker]):  # send close message, in case not dead
+            worker_queues[worker].put_nowait({'op': 'close', 'report': False})
         del worker_queues[worker]
         del ncores[worker]
         del stacks[worker]
@@ -359,8 +362,9 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         add_keys = {k for k, v in waiting.items() if not v}
         for key in held_data & released:
             report_queue.put_nowait({'op': 'lost-key', 'key': key})
-        for key in add_keys:
-            mark_ready_to_run(key)
+        if stacks:
+            for key in add_keys:
+                mark_ready_to_run(key)
         for key in set(who_has) & released - held_data:
             delete_queue.put_nowait({'op': 'delete-task', 'key': key})
 
@@ -446,7 +450,8 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         elif msg['op'] == 'worker-failed':
             worker = msg['worker']
             mark_worker_missing(worker)
-            heal_state()
+            if msg.get('heal', True):
+                heal_state()
 
         elif msg['op'] == 'release-held-data':
             if msg['key'] in held_data:

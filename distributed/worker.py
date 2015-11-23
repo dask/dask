@@ -158,7 +158,7 @@ class Worker(Server):
                     yield gen.with_timeout(timedelta(seconds=1), future)
                     break
                 except gen.TimeoutError:
-                    logger.info("Pending job %d: %s", i, future)
+                    logger.debug("Pending job %d: %s", i, future)
             result = future.result()
             logger.info("Finish job %d: %s", i, funcname(function))
             self.data[key] = result
