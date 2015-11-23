@@ -295,8 +295,9 @@ def test_from_castra():
         default = db.from_castra(c)
         with_columns = db.from_castra(c, 'x')
         with_index = db.from_castra(c, 'x', index=True)
-        assert list(default) == [{'x': i, 'y': str(i)}
-                                 for i in range(100)]
+        assert (list(default) == [{'x': i, 'y': str(i)}
+                                 for i in range(100)] or
+                list(default) == [(i, str(i)) for i in range(100)])
         assert list(with_columns) == list(range(100))
         assert list(with_index) == list(zip(range(100), range(100)))
 
