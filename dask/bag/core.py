@@ -1101,26 +1101,32 @@ def from_castra(x, columns=None, index=False, npartitions=None):
         x = Castra(x.path, readonly=True)
     if columns is None:
         columns = x.columns
-    if npartitions is None:
-        npartitions = len(x.partitions)
-    parts = from_sequence(x.partitions, npartitions=npartitions)
-    func = lambda p: load_castra_partition(x, p, columns, index)
-    return parts.map_partitions(func).map_partitions(reify)
+
+    name = 'from-castra-' + next(tokens)
+    dsk = dict(((name, i), (load_castra_partition, x, part, columns, index))
+                for i, part in enumerate(x.partitions))
+    return Bag(dsk, name, len(x.partitions))
 
 
-def load_castra_partition(castra, parts, columns, index):
+def load_castra_partition(castra, part, columns, index):
     import blosc
     # Due to serialization issues, blosc needs to be manually initialized in
     # each process.
     blosc.init()
-    for part in parts:
-        df = castra.load_partition(part, columns)
-        if isinstance(columns, list):
-            items = df.itertuples(index)
-        else:
-            items = df.iteritems() if index else iter(df)
-        for item in items:
-            yield item
+
+    df = castra.load_partition(part, columns)
+    if isinstance(columns, list):
+        items = df.itertuples(index)
+    else:
+        items = df.iteritems() if index else iter(df)
+
+    items = list(items)
+    if (items and isinstance(items[0], tuple)
+              and type(items[0]) is not tuple):
+        names = items[0]._fields
+        items = [dict(zip(names, item)) for item in items]
+
+    return items
 
 
 def from_url(urls):

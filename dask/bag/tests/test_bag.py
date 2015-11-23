@@ -290,19 +290,15 @@ def test_from_castra():
                        'y': [str(i) for i in range(100)]})
     a = dd.from_pandas(df, 10)
 
-    c = a.to_castra()
-    default = db.from_castra(c)
-    with_columns = db.from_castra(c, 'x')
-    with_index = db.from_castra(c, 'x', index=True)
-    with_nparts = db.from_castra(c, 'x', npartitions=4)
-    try:
-        assert list(default) == list(zip(range(100), map(str, range(100))))
+    with tmpfile('.castra') as fn:
+        c = a.to_castra(fn)
+        default = db.from_castra(c)
+        with_columns = db.from_castra(c, 'x')
+        with_index = db.from_castra(c, 'x', index=True)
+        assert list(default) == [{'x': i, 'y': str(i)}
+                                 for i in range(100)]
         assert list(with_columns) == list(range(100))
         assert list(with_index) == list(zip(range(100), range(100)))
-        assert with_nparts.npartitions == 4
-        assert list(with_nparts) == list(range(100))
-    finally:
-        c.drop()
 
 
 @pytest.mark.slow
