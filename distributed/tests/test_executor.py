@@ -1200,25 +1200,27 @@ def test_restart(loop):
 
         cc = rpc(ip=c.ip, port=c.port)
         who_has = yield cc.who_has()
-        assert e.who_has == who_has
-        assert set(e.who_has) == {x.key, y.key}
+        try:
+            assert e.who_has == who_has
+            assert set(e.who_has) == {x.key, y.key}
 
-        yield e._restart()
+            yield e._restart()
 
-        assert len(e.stacks) == 2
-        assert len(e.processing) == 2
+            assert len(e.stacks) == 2
+            assert len(e.processing) == 2
 
-        who_has = yield cc.who_has()
-        assert not who_has
-        assert not e.who_has
+            who_has = yield cc.who_has()
+            assert not who_has
+            assert not e.who_has
 
-        assert x.cancelled()
-        assert y.cancelled()
+            assert x.cancelled()
+            assert y.cancelled()
 
-        c.stop()
-        yield a.terminate()
-        yield b.terminate()
-        yield e._shutdown()
+        finally:
+            yield a._close()
+            yield b._close()
+            yield e._shutdown()
+            c.stop()
 
     loop.run_sync(f)
 
@@ -1252,7 +1254,7 @@ def test_restart_fast(loop):
 
             start = time()
             e.restart()
-            assert time() - start < 1
+            assert time() - start < 5
 
             assert all(x.status == 'cancelled' for x in L)
 
@@ -1278,19 +1280,22 @@ def test_fast_kill(loop):
 
         L = e.map(sleep, range(10))
 
-        start = time()
-        yield e._restart()
-        assert time() - start < 1
+        try:
 
-        assert all(x.status == 'cancelled' for x in L)
-        c.stop()
+            start = time()
+            yield e._restart()
+            assert time() - start < 5
 
-        x = e.submit(inc, 1)
-        result = yield x._result()
-        assert result == 2
+            assert all(x.status == 'cancelled' for x in L)
+            c.stop()
 
-        yield a.terminate()
-        yield b.terminate()
-        yield e._shutdown()
+            x = e.submit(inc, 1)
+            result = yield x._result()
+            assert result == 2
+        finally:
+            yield a._close()
+            yield b._close()
+            yield e._shutdown()
+            c.stop()
 
     loop.run_sync(f)

@@ -30,7 +30,7 @@ class Nanny(Server):
 
         handlers = {'instantiate': self._instantiate,
                     'kill': self._kill,
-                    'terminate': self.terminate}
+                    'terminate': self._close}
 
         super(Nanny, self).__init__(handlers, **kwargs)
 
@@ -98,17 +98,13 @@ class Nanny(Server):
                 yield gen.sleep(wait_seconds)
 
     @gen.coroutine
-    def _close(self):
+    def _close(self, stream=None):
         """ Close the nanny process, stop listening """
         logger.info("Closing Nanny at %s:%d", self.ip, self.port)
         yield self._kill()
         self.center.close_streams()
         self.stop()
         self.status = 'closed'
-
-    @gen.coroutine
-    def terminate(self, stream=None):
-        yield self._close()
         raise gen.Return(b'OK')
 
     @property
