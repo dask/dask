@@ -50,14 +50,14 @@ class Nanny(Server):
         Blocks until both the process is down and the center is properly
         informed
         """
-        if self.process:
+        if self.process is not None:
             self.process.terminate()
+            self.process = None
             logger.info("Nanny %s:%d kills worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
             result = yield self.center.unregister(address=self.worker_address)
             if result != b'OK':
                 logger.critical("Unable to unregister with center. %s", result)
-        self.process = None
         raise gen.Return(b'OK')
 
     @gen.coroutine
