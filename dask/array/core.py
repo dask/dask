@@ -1179,8 +1179,8 @@ class Array(Base):
         else:
             raise ValueError("Order must be one of 'C' or 'F'")
 
-        out = elemwise(ascontiguousarray, self, dtype=dtype)
-        out = elemwise(lambda x, dt: x.view(dt), out, dtype, dtype=dtype)
+        out = elemwise(ascontiguousarray, self, dtype=self.dtype)
+        out = elemwise(np.ndarray.view, out, dtype, dtype=dtype)
         out._chunks = chunks
         return out
 
