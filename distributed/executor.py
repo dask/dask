@@ -6,6 +6,7 @@ from concurrent import futures
 from functools import wraps, partial
 import itertools
 import logging
+import time
 import uuid
 
 from dask.base import tokenize, normalize_token
@@ -192,6 +193,8 @@ class Executor(object):
         self._loop_thread.start()
         sync(self.loop, self._sync_center)
         self.loop.add_callback(self._go)
+        while not len(self.stacks) == len(self.ncores):
+            time.sleep(0.01)
 
     @gen.coroutine
     def _start(self):
