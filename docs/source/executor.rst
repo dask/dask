@@ -116,6 +116,22 @@ with existing dask code.
    499999359.23511785
 
 
+``restart``
+~~~~~~~~~~~
+
+When things go wrong, restart the cluster with the ``.restart()`` method.
+
+.. code-block:: python
+
+   >>> executor.restart()
+
+This both resets the local scheduler state and restarts all worker processes.
+All current data and computations will be lost.  All existing futures set their
+status to ``'cancelled'``.
+
+See :doc:`resilience <resilence>` for more information.
+
+
 Internals
 ---------
 
