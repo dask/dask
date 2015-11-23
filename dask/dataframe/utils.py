@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import toolz
 
+from dask.async import get_sync
+
 
 def shard_df_on_index(df, divisions):
     """ Shard a DataFrame by ranges on its index
@@ -163,3 +165,100 @@ def get_categories(df):
     if iscategorical(df.index.dtype):
         result['.index'] = df.index.categories
     return result
+
+
+###############################################################
+# Testing
+###############################################################
+
+import pandas.util.testing as tm
+from distutils.version import LooseVersion
+PANDAS_VERSION = LooseVersion(pd.__version__)
+
+if PANDAS_VERSION >= LooseVersion('0.17.0'):
+    PANDAS_0170 = True
+else:
+    PANDAS_0170 = False
+
+
+def _check_dask(dsk, check_names=True):
+    import dask.dataframe as dd
+    if hasattr(dsk, 'dask'):
+        result = dsk.compute(get=get_sync)
+        if isinstance(dsk, dd.Index):
+            assert isinstance(result, pd.Index)
+        elif isinstance(dsk, dd.Series):
+            assert isinstance(result, pd.Series)
+            assert isinstance(dsk.columns, tuple)
+            assert len(dsk.columns) == 1
+            if check_names:
+                assert dsk.name == result.name, (dsk.name, result.name)
+        elif isinstance(dsk, dd.DataFrame):
+            assert isinstance(result, pd.DataFrame), type(result)
+            assert isinstance(dsk.columns, tuple)
+            if check_names:
+                columns = pd.Index(dsk.columns)
+                tm.assert_index_equal(columns, result.columns)
+        elif isinstance(dsk, dd.core.Scalar):
+            assert (np.isscalar(result) or
+                    isinstance(result, (pd.Timestamp, pd.Timedelta)))
+        else:
+            msg = 'Unsupported dask instance {0} found'.format(type(dsk))
+            raise AssertionError(msg)
+        return result
+    return dsk
+
+
+def _maybe_sort(a):
+    # sort by value, then index
+    try:
+        if PANDAS_0170:
+            if isinstance(a, pd.DataFrame):
+                a = a.sort_values(by=a.columns.tolist())
+            else:
+                a = a.sort_values()
+        else:
+            if isinstance(a, pd.DataFrame):
+                a = a.sort(columns=a.columns.tolist())
+            else:
+                a = a.order()
+    except (TypeError, IndexError, ValueError):
+        pass
+    return a.sort_index()
+
+
+def eq(a, b, check_names=True, ignore_index=False):
+    a = _check_dask(a, check_names=check_names)
+    b = _check_dask(b, check_names=check_names)
+    if isinstance(a, pd.DataFrame):
+        a = _maybe_sort(a)
+        b = _maybe_sort(b)
+        tm.assert_frame_equal(a, b)
+    elif isinstance(a, pd.Series):
+        a = _maybe_sort(a)
+        b = _maybe_sort(b)
+        tm.assert_series_equal(a, b, check_names=check_names)
+    elif isinstance(a, pd.Index):
+        tm.assert_index_equal(a, b)
+    else:
+        if a == b:
+            return True
+        else:
+            if np.isnan(a):
+                assert np.isnan(b)
+            else:
+                assert np.allclose(a, b)
+    return True
+
+def assert_dask_graph(dask, label):
+    if hasattr(dask, 'dask'):
+        dask = dask.dask
+    assert isinstance(dask, dict)
+    for k in dask:
+        if isinstance(k, tuple):
+            k = k[0]
+        if k.startswith(label):
+            return True
+    else:
+        msg = "given dask graph doesn't contan label: {0}"
+        raise AssertionError(msg.format(label))

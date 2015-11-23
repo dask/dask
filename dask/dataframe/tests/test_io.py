@@ -21,6 +21,7 @@ from dask.compatibility import StringIO
 from dask.utils import filetext, tmpfile, ignoring
 from dask.async import get_sync
 
+from dask.dataframe.utils import eq
 
 ########
 # CSVS #
@@ -43,8 +44,10 @@ def test_read_csv():
         f = dd.read_csv(fn, chunkbytes=30)
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
-        result = f.compute(get=dask.get).sort('name')
-        assert (result.values == pd.read_csv(fn).sort('name').values).all()
+        result = f.compute(get=dask.get)
+        # index may be different
+        assert eq(result.reset_index(drop=True),
+                  pd.read_csv(fn))
 
 
 def test_read_gzip_csv():
@@ -52,8 +55,9 @@ def test_read_gzip_csv():
         f = dd.read_csv(fn, chunkbytes=30, compression='gzip')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
-        result = f.compute(get=dask.get).sort('name')
-        assert (result.values == pd.read_csv(fn, compression='gzip').sort('name').values).all()
+        result = f.compute(get=dask.get)
+        assert eq(result.reset_index(drop=True),
+                  pd.read_csv(fn, compression='gzip'))
 
 
 def test_file_size():
@@ -96,23 +100,6 @@ def test_consistent_dtypes():
     with filetext(text) as fn:
         df = dd.read_csv(fn, chunkbytes=30)
         assert isinstance(df.amount.sum().compute(), float)
-
-
-def eq(a, b):
-    if hasattr(a, 'dask'):
-        a = a.compute(get=dask.async.get_sync)
-    if hasattr(b, 'dask'):
-        b = b.compute(get=dask.async.get_sync)
-    if isinstance(a, pd.DataFrame):
-        a = a.sort_index()
-        b = b.sort_index()
-        tm.assert_frame_equal(a, b)
-        return True
-    if isinstance(a, pd.Series):
-        tm.assert_series_equal(a, b)
-        return True
-    assert np.allclose(a, b)
-    return True
 
 datetime_csv_file = """
 name,amount,when

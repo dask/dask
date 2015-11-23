@@ -2174,7 +2174,8 @@ def quantile(df, q):
 
     if len(qs) == 0:
         name = 'quantiles-' + token
-        return Series({(name, 0): pd.Series([], name=df.name)},
+        empty_index = pd.Index([], dtype=float)
+        return Series({(name, 0): pd.Series([], name=df.name, index=empty_index)},
                       name, df.name, [None, None])
     else:
         new_divisions = [np.min(q), np.max(q)]
