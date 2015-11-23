@@ -1164,6 +1164,12 @@ class Array(Base):
         This reinterprets the bytes of the array under a new dtype.  If that
         dtype does not have the same size as the original array then the shape
         will change.
+
+        Beware that both numpy and dask.array can behave oddly when taking
+        shape-changing views of arrays under Fortran ordering.  Under some
+        versions of NumPy this function will fail when taking shape-changing
+        views of Fortran ordered arrays if the first dimension has chunks of
+        size one.
         """
         dtype = np.dtype(dtype)
         mult = self.dtype.itemsize / dtype.itemsize
