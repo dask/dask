@@ -625,9 +625,12 @@ class Executor(object):
         for e in events:
             e.set()
 
+
         yield All([nanny.instantiate(close=True) for nanny in nannies])
 
         logger.info("Restarting executor")
+        self.report_queue = Queue()
+        self.scheduler_queue = Queue()
         yield self._start()
 
     def restart(self):
