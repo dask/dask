@@ -1222,6 +1222,25 @@ def test_drop_duplicates():
     assert eq(d.index.drop_duplicates(), full.index.drop_duplicates())
 
 
+def test_drop_duplicates_subset():
+    df = pd.DataFrame({'x': [1, 2, 3, 1, 2, 3],
+                       'y': ['a', 'a', 'b', 'b', 'c', 'c']})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    if pd.__version__ < '0.17':
+        kwargs = [{'take_last': False}, {'take_last': True}]
+    else:
+        kwargs = [{'keep': 'first'}, {'keep': 'last'}]
+
+
+    for kwarg in kwargs:
+        assert eq(df.x.drop_duplicates(**kwarg),
+                  ddf.x.drop_duplicates(**kwarg))
+        for ss in [['x'], 'y', ['x', 'y']]:
+            assert eq(df.drop_duplicates(subset=ss, **kwarg),
+                      ddf.drop_duplicates(subset=ss, **kwarg))
+
+
 def test_full_groupby():
     assert raises(Exception, lambda: d.groupby('does_not_exist'))
     assert raises(Exception, lambda: d.groupby('a').does_not_exist)

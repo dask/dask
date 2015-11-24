@@ -241,8 +241,9 @@ class _Frame(Base):
         return self._constructor(dsk2, name, self.column_info, self.divisions)
 
     @derived_from(pd.DataFrame)
-    def drop_duplicates(self):
-        chunk = lambda s: s.drop_duplicates()
+    def drop_duplicates(self, **kwargs):
+        assert all(k in ('keep', 'subset', 'take_last') for k in kwargs)
+        chunk = lambda s: s.drop_duplicates(**kwargs)
         return aca(self, chunk=chunk, aggregate=chunk, columns=self.column_info,
                    token='drop-duplicates')
 
@@ -1520,6 +1521,7 @@ class DataFrame(_Frame):
 
         return map_partitions(pd.DataFrame.apply, columns, self, func, axis,
                               False, False, None, args, **kwds)
+
 
 
 # bind operators
