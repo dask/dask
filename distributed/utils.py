@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from collections import Iterable
 import socket
+import sys
 
 from tornado import gen
 
@@ -84,3 +85,9 @@ def sync(loop, func, *args, **kwargs):
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
+
+# http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
+stream = logging.StreamHandler(sys.stderr)
+stream.setLevel(logging.CRITICAL)
+logging.getLogger('tornado').addHandler(stream)
+logging.getLogger('tornado').propagate = False
