@@ -1,4 +1,5 @@
 from operator import add
+import sys
 from time import sleep
 
 from distributed.center import Center
@@ -72,7 +73,8 @@ def test_worker(loop):
                 function=bad_func, args=(), needed=(), close=True)
         assert response == b'error'
         assert isinstance(error, ZeroDivisionError)
-        assert any('1 / 0' in line for line in traceback)
+        if sys.version_info[0] >= 3:
+            assert any('1 / 0' in line for line in traceback)
 
         aa.close_streams()
         yield a._close()

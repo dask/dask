@@ -1128,7 +1128,8 @@ def test_traceback(loop):
         x = e.submit(div, 1, 0)
         tb = yield x._traceback()
 
-        assert any('x / y' in line for line in tb)
+        if sys.version_info[0] >= 3:
+            assert any('x / y' in line for line in tb)
 
         yield e._shutdown()
     _test_cluster(f, loop)
@@ -1166,7 +1167,7 @@ def test_clear(loop):
         start = time()
         while not x.cancelled() or not y.cancelled():
             yield gen.sleep(0.01)
-            assert time() - start < 1
+            assert time() - start < 3
 
         for x in [e.dask, e.waiting, e.held_data, e.nbytes, e.restrictions,
                 e.who_has, e.futures]:

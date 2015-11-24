@@ -467,7 +467,9 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                     keyorder]:
                 collection.clear()
 
-            for d in [stacks, processing, has_what]:
+            for v in stacks.values():
+                del v[:]
+            for d in [processing, has_what]:
                 for v in d.values():
                     v.clear()
 
