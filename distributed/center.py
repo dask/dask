@@ -47,12 +47,14 @@ class Center(Server):
         self.who_has = defaultdict(set)
         self.has_what = defaultdict(set)
         self.ncores = dict()
+        self.nannies = dict()
         self.status = None
 
         d = {func.__name__: func
              for func in [self.add_keys, self.remove_keys, self.get_who_has,
                           self.get_has_what, self.register, self.get_ncores,
-                          self.unregister, self.delete_data, self.terminate]}
+                          self.unregister, self.delete_data, self.terminate,
+                          self.get_nannies]}
         d = {k[len('get_'):] if k.startswith('get_') else k: v for k, v in
                 d.items()}
 
@@ -63,9 +65,11 @@ class Center(Server):
         self.stop()
         return b'OK'
 
-    def register(self, stream, address=None, keys=(), ncores=None):
+    def register(self, stream, address=None, keys=(), ncores=None,
+                 nanny_port=None):
         self.has_what[address] = set(keys)
         self.ncores[address] = ncores
+        self.nannies[address] = nanny_port
         logger.info("Register %s", str(address))
         return b'OK'
 
@@ -75,8 +79,13 @@ class Center(Server):
         keys = self.has_what.pop(address)
         with ignoring(KeyError):
             del self.ncores[address]
+        with ignoring(KeyError):
+            del self.nannies[address]
         for key in keys:
-            self.who_has[key].remove(address)
+            s = self.who_has[key]
+            s.remove(address)
+            if not s:
+                del self.who_has[key]
         logger.info("Unregister %s", str(address))
         return b'OK'
 
@@ -108,9 +117,15 @@ class Center(Server):
 
     def get_ncores(self, stream, addresses=None):
         if addresses is not None:
-            return {k: self.ncores[k] for k in addresses}
+            return {k: self.ncores.get(k, None) for k in addresses}
         else:
             return self.ncores
+
+    def get_nannies(self, stream, addresses=None):
+        if addresses is not None:
+            return {k: self.nannies.get(k, None) for k in addresses}
+        else:
+            return self.nannies
 
     @gen.coroutine
     def delete_data(self, stream, keys=None):

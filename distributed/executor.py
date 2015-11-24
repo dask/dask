@@ -1,11 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
-from concurrent.futures._base import DoneAndNotDoneFutures
+from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
 from functools import wraps, partial
 import itertools
 import logging
+import time
 import uuid
 
 from dask.base import tokenize, normalize_token
@@ -48,7 +49,10 @@ class Future(WrappedKey):
 
     @property
     def status(self):
-        return self.executor.futures[self.key]['status']
+        try:
+            return self.executor.futures[self.key]['status']
+        except KeyError:
+            return 'cancelled'
 
     @property
     def event(self):
@@ -61,17 +65,26 @@ class Future(WrappedKey):
     def result(self):
         """ Wait until computation completes. Gather result to local process """
         result = sync(self.executor.loop, self._result, raiseit=False)
-        if self.status == 'error':
+        if self.status in ('error', 'cancelled'):
             raise result
         else:
             return result
 
     @gen.coroutine
     def _result(self, raiseit=True):
-        yield self.event.wait()
+        try:
+            d = self.executor.futures[self.key]
+        except KeyError:
+            exception = CancelledError(self.key)
+            if raiseit:
+                raise exception
+            else:
+                raise gen.Return(exception)
+
+        yield d['event'].wait()
         if self.status == 'error':
-            exception = self.executor.futures[self.key]['exception']
-            traceback = self.executor.futures[self.key]['traceback']  # TODO: use me
+            exception = d['exception']
+            traceback = d['traceback']  # TODO: use me
             if raiseit:
                 raise exception
             else:
@@ -92,6 +105,10 @@ class Future(WrappedKey):
     def exception(self):
         """ Return the exception of a failed task """
         return sync(self.executor.loop, self._exception)
+
+    def cancelled(self):
+        """ Returns True if the future has been cancelled """
+        return self.key not in self.executor.futures
 
     @gen.coroutine
     def _traceback(self):
@@ -153,6 +170,7 @@ class Executor(object):
         self._shutdown_event = Event()
         self._delete_batch_time = delete_batch_time
         self.ncores = dict()
+        self.nannies = dict()
         self.who_has = defaultdict(set)
         self.has_what = defaultdict(set)
         self.waiting = {}
@@ -175,6 +193,8 @@ class Executor(object):
         self._loop_thread.start()
         sync(self.loop, self._sync_center)
         self.loop.add_callback(self._go)
+        while not len(self.stacks) == len(self.ncores):
+            time.sleep(0.01)
 
     @gen.coroutine
     def _start(self):
@@ -183,6 +203,7 @@ class Executor(object):
         _global_executors.add(self)
         while not len(self.stacks) == len(self.ncores):
             yield gen.sleep(0.01)
+        logger.debug("Started scheduling coroutines. Synchronized")
 
     def __enter__(self):
         if not self.loop._running:
@@ -254,18 +275,31 @@ class Executor(object):
 
     @gen.coroutine
     def _sync_center(self):
-        who_has, has_what, ncores = yield [self.center.who_has(),
-                                           self.center.has_what(),
-                                           self.center.ncores()]
+        self.who_has.clear()
+        self.has_what.clear()
+        self.ncores.clear()
+        self.nannies.clear()
+
+        who_has, has_what, ncores, nannies = yield [self.center.who_has(),
+                                                    self.center.has_what(),
+                                                    self.center.ncores(),
+                                                    self.center.nannies()]
+        logger.debug("Synchronize with center.  Retrieve %d workers",
+                     len(ncores))
+
         self.who_has.update(who_has)
         self.has_what.update(has_what)
         self.ncores.update(ncores)
+        self.nannies.update(nannies)
 
     @gen.coroutine
     def _go(self):
         """ Setup and run all other coroutines.  Block until finished. """
         worker_queues = {worker: Queue() for worker in self.ncores}
         delete_queue = Queue()
+
+        for collection in [self.dask, self.nbytes, self.restrictions]:
+            collection.clear()
 
         self.coroutines = ([
             self.report(),
@@ -555,6 +589,44 @@ class Executor(object):
             raise result
         else:
             return result
+
+    @gen.coroutine
+    def _restart(self):
+        logger.debug("Sending shutdown signal to workers")
+        for addr in self.nannies:
+            self.loop.add_callback(self.scheduler_queue.put_nowait,
+                    {'op': 'worker-failed', 'worker': addr, 'heal': False})
+
+        logger.debug("Sending kill signal to nannies")
+        nannies = [rpc(ip=ip, port=n_port)
+                   for (ip, w_port), n_port in self.nannies.items()]
+        yield All([nanny.kill() for nanny in nannies])
+
+        while self.ncores:
+            yield gen.sleep(0.01)
+
+        yield self._shutdown()
+
+        events = [d['event'] for d in self.futures.values()]
+        self.futures.clear()
+        for e in events:
+            e.set()
+
+
+        yield All([nanny.instantiate(close=True) for nanny in nannies])
+
+        logger.info("Restarting executor")
+        self.report_queue = Queue()
+        self.scheduler_queue = Queue()
+        yield self._start()
+
+    def restart(self):
+        """ Restart the distributed network
+
+        This kills all active work, deletes all data on the network, and
+        restarts the worker processes.
+        """
+        return sync(self.loop, self._restart)
 
 
 @gen.coroutine

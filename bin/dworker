@@ -5,7 +5,7 @@ from sys import argv, exit
 import socket
 
 import click
-from distributed import Worker
+from distributed import Nanny, Worker, sync
 from distributed.utils import get_ip
 from tornado.ioloop import IOLoop
 
@@ -15,12 +15,6 @@ ip = get_ip()
 
 # Set up signal handling
 import signal
-
-def handle_signal(sig, frame):
-    IOLoop.instance().add_callback(IOLoop.instance().stop)
-
-signal.signal(signal.SIGINT, handle_signal)
-signal.signal(signal.SIGTERM, handle_signal)
 
 
 @click.command()
@@ -34,7 +28,6 @@ def go(center, host, port, ncores):
         try:
             sock.bind(('127.0.0.1', port))
         except socket.error:
-            logger.info("Port %d taken.  Trying %d", port, port + 1)
             port += 1
         else:
             sock.close()
@@ -45,15 +38,18 @@ def go(center, host, port, ncores):
         center_port = int(center_port)
     except IndexError:
         logger.info("Usage:  dworker center_host:center_port")
-    try:
-        worker = Worker(host, port, center_ip, center_port, ncores=ncores)
-        worker.start()
-        IOLoop.current().start()
-    except KeyboardInterrupt:
-        assert worker.status == 'closed'
 
-    IOLoop.current().close()
-    logger.info("\nEnd worker at %s:%d\n", ip, port)
+    loop = IOLoop.current()
+    worker = Nanny(host, port, port + 1, center_ip, center_port, ncores=ncores)
+    loop.add_callback(worker._start)
+    try:
+        loop.start()
+    except KeyboardInterrupt:
+        result = IOLoop().run_sync(lambda:
+                worker.center.unregister(address=worker.worker_address))
+        if result == b'OK':
+            logger.info("Unregister %s:%d from center", *worker.worker_address)
+        logger.info("End worker at %s:%d", ip, port)
 
 if __name__ == '__main__':
     go()

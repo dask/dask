@@ -40,6 +40,8 @@ def test_metadata(loop):
 
         response = yield cc.ncores()
         assert response == {'alice': 4, 'bob': 4}
+        response = yield cc.ncores(addresses=['alice', 'charlie'])
+        assert response == {'alice': 4, 'charlie': None}
 
         response = yield cc.unregister(address='alice', close=True)
         assert response == b'OK'

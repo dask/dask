@@ -1,6 +1,7 @@
 from operator import add, sub
 
 from collections import Iterator
+from concurrent.futures import CancelledError
 from time import sleep, time
 import sys
 
@@ -1127,7 +1128,8 @@ def test_traceback(loop):
         x = e.submit(div, 1, 0)
         tb = yield x._traceback()
 
-        assert any('x / y' in line for line in tb)
+        if sys.version_info[0] >= 3:
+            assert any('x / y' in line for line in tb)
 
         yield e._shutdown()
     _test_cluster(f, loop)
@@ -1148,3 +1150,125 @@ def test_traceback_sync(loop):
             z = e.submit(div, 1, 2)
             tb = z.traceback()
             assert tb is None
+
+
+def test_restart(loop):
+    from distributed import Nanny, rpc
+    c = Center('127.0.0.1', 8006)
+    a = Nanny('127.0.0.1', 8007, 8008, '127.0.0.1', 8006, ncores=2)
+    b = Nanny('127.0.0.1', 8009, 8010, '127.0.0.1', 8006, ncores=2)
+    c.listen(c.port)
+    @gen.coroutine
+    def f():
+        yield a._start()
+        yield b._start()
+
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+        assert e.ncores == {a.worker_address: 2, b.worker_address: 2}
+
+        x = e.submit(inc, 1)
+        y = e.submit(inc, x)
+        yield y._result()
+
+        cc = rpc(ip=c.ip, port=c.port)
+        who_has = yield cc.who_has()
+        try:
+            assert e.who_has == who_has
+            assert set(e.who_has) == {x.key, y.key}
+
+            yield e._restart()
+
+            assert len(e.stacks) == 2
+            assert len(e.processing) == 2
+
+            who_has = yield cc.who_has()
+            assert not who_has
+            assert not e.who_has
+
+            assert x.cancelled()
+            assert y.cancelled()
+
+        finally:
+            yield a._close()
+            yield b._close()
+            yield e._shutdown()
+            c.stop()
+
+    loop.run_sync(f)
+
+
+def test_restart_sync(loop):
+    with cluster(nanny=True) as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            assert len(e.has_what) == 2
+            x = e.submit(div, 1, 2)
+            x.result()
+
+            assert e.who_has
+            e.restart()
+            assert not e.who_has
+            assert x.cancelled()
+
+            with pytest.raises(CancelledError):
+                x.result()
+
+            assert set(e.stacks) == set(e.processing) == set(e.ncores)
+            assert len(e.stacks) == 2
+
+            y = e.submit(div, 1, 3)
+            assert y.result() == 1 / 3
+
+
+def test_restart_fast(loop):
+    with cluster(nanny=True) as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            L = e.map(sleep, range(10))
+
+            start = time()
+            e.restart()
+            assert time() - start < 5
+
+            assert all(x.status == 'cancelled' for x in L)
+
+            x = e.submit(inc, 1)
+            assert x.result() == 2
+
+
+def test_fast_kill(loop):
+    from distributed import Nanny, rpc
+    c = Center('127.0.0.1', 8006)
+    a = Nanny('127.0.0.1', 8007, 8008, '127.0.0.1', 8006, ncores=2)
+    b = Nanny('127.0.0.1', 8009, 8010, '127.0.0.1', 8006, ncores=2)
+    e = Executor((c.ip, c.port), start=False, loop=loop)
+    c.listen(c.port)
+    @gen.coroutine
+    def f():
+        yield a._start()
+        yield b._start()
+
+        while len(c.ncores) < 2:
+            yield gen.sleep(0.01)
+        yield e._start()
+
+        L = e.map(sleep, range(10))
+
+        try:
+
+            start = time()
+            yield e._restart()
+            assert time() - start < 5
+
+            assert all(x.status == 'cancelled' for x in L)
+            c.stop()
+
+            x = e.submit(inc, 1)
+            result = yield x._result()
+            assert result == 2
+        finally:
+            yield a._close()
+            yield b._close()
+            yield e._shutdown()
+            c.stop()
+
+    loop.run_sync(f)

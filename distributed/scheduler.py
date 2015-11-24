@@ -104,8 +104,9 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
 
     yield worker.close(close=True)
     worker.close_streams()
-    scheduler_queue.put_nowait({'op': 'worker-finished',
-                                'worker': ident})
+    if msg.get('report', True):
+        scheduler_queue.put_nowait({'op': 'worker-finished',
+                                    'worker': ident})
     logger.debug("Close worker core, %s, %d", ident, i)
 
 
@@ -194,10 +195,12 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
     stacks = dict() if stacks is None else stacks
     processing = dict() if processing is None else processing
 
+    stacks.clear()
     stacks.update({worker: list() for worker in ncores})
+    processing.clear()
     processing.update({worker: set() for worker in ncores})
 
-    assert (not dsk) == (not dependencies)
+    assert (not dsk) == (not dependencies), (dsk, dependencies)
 
     in_play = set(who_has)  # keys in memory, stacks, processing, or waiting
     keyorder = dict()
@@ -328,9 +331,48 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
         logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
                 'in_play: %s\n\n', waiting, stacks, processing, in_play)
 
+    def mark_worker_missing(worker):
+        if worker not in processing:
+            return
+        keys = has_what.pop(worker)
+        for i in range(ncores[worker]):  # send close message, in case not dead
+            worker_queues[worker].put_nowait({'op': 'close', 'report': False})
+        del worker_queues[worker]
+        del ncores[worker]
+        del stacks[worker]
+        del processing[worker]
+        if not stacks:
+            logger.critical("Lost all workers")
+        missing_keys = set()
+        for key in keys:
+            who_has[key].remove(worker)
+            if not who_has[key]:
+                missing_keys.add(key)
+        gone_data = {k for k, v in who_has.items() if not v}
+        in_play.difference_update(missing_keys)
+        for k in gone_data:
+            del who_has[k]
+
+    def heal_state():
+        """ Recover from catastrophic change """
+        state = heal(dependencies, dependents, set(who_has), stacks,
+                     processing, waiting, waiting_data)
+        released = state['released']
+        in_play.clear(); in_play.update(state['in_play'])
+        add_keys = {k for k, v in waiting.items() if not v}
+        for key in held_data & released:
+            report_queue.put_nowait({'op': 'lost-key', 'key': key})
+        if stacks:
+            for key in add_keys:
+                mark_ready_to_run(key)
+        for key in set(who_has) & released - held_data:
+            delete_queue.put_nowait({'op': 'delete-task', 'key': key})
+
     my_heal_missing_data = partial(heal_missing_data,
             dsk, dependencies, dependents, held_data, who_has, in_play,
             waiting, waiting_data)
+
+    heal_state()
 
     while True:
         msg = yield scheduler_queue.get()
@@ -367,16 +409,20 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
             update_data(msg['who-has'], msg['nbytes'])
 
         elif msg['op'] == 'task-finished':
-            nbytes[msg['key']] = msg['nbytes']
-            mark_key_in_memory(msg['key'], msg['workers'])
-            ensure_occupied(msg['workers'][0])
+            key, worker = msg['key'], msg['workers'][0]
+            if key in processing[worker]:
+                nbytes[key] = msg['nbytes']
+                mark_key_in_memory(key, [worker])
+                ensure_occupied(worker)
 
         elif msg['op'] == 'task-erred':
-            processing[msg['worker']].remove(msg['key'])
-            exceptions[msg['key']] = msg['exception']
-            tracebacks[msg['key']] = msg['traceback']
-            mark_failed(msg['key'], msg['key'])
-            ensure_occupied(msg['worker'])
+            key, worker = msg['key'], msg['worker']
+            if key in processing[worker]:
+                processing[worker].remove(key)
+                exceptions[key] = msg['exception']
+                tracebacks[key] = msg['traceback']
+                mark_failed(key, key)
+                ensure_occupied(worker)
 
         elif msg['op'] in ('missing-data', 'task-missing-data'):
             missing = set(msg['missing'])
@@ -403,36 +449,9 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
 
         elif msg['op'] == 'worker-failed':
             worker = msg['worker']
-            keys = has_what.pop(worker)
-            del worker_queues[worker]
-            del ncores[worker]
-            del stacks[worker]
-            del processing[worker]
-            if not stacks:
-                logger.critical("Lost all workers")
-            missing_keys = set()
-            for key in keys:
-                who_has[key].remove(worker)
-                if not who_has[key]:
-                    missing_keys.add(key)
-            gone_data = {k for k, v in who_has.items() if not v}
-            in_play -= missing_keys
-            for k in gone_data:
-                del who_has[k]
-
-            state = heal(dependencies, dependents, set(who_has), stacks,
-                         processing, waiting, waiting_data)
-            waiting_data = state['waiting_data']
-            waiting = state['waiting']
-            released = state['released']
-            in_play = state['in_play']
-            add_keys = {k for k, v in waiting.items() if not v}
-            for key in held_data & released:
-                report_queue.put_nowait({'op': 'lost-key', 'key': key})
-            for key in add_keys:
-                mark_ready_to_run(key)
-            for key in set(who_has) & released - held_data:
-                delete_queue.put_nowait({'op': 'delete-task', 'key': key})
+            mark_worker_missing(worker)
+            if msg.get('heal', True):
+                heal_state()
 
         elif msg['op'] == 'release-held-data':
             if msg['key'] in held_data:
