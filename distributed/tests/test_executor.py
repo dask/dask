@@ -15,7 +15,7 @@ from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize, _global_executors, default_executor)
 from distributed.sizeof import sizeof
-from distributed.utils import ignoring
+from distributed.utils import ignoring, sync
 from distributed.utils_test import cluster, slow, _test_cluster, loop
 
 
@@ -1100,8 +1100,9 @@ def test_directed_scatter_sync(loop):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             e.scatter([1, 2, 3], workers=[('127.0.0.1', b['port'])])
-            assert len(e.has_what[('127.0.0.1', b['port'])]) == 3
-            assert len(e.has_what[('127.0.0.1', a['port'])]) == 0
+            has_what = sync(e.loop, e.center.has_what)
+            assert len(has_what[('127.0.0.1', b['port'])]) == 3
+            assert len(has_what[('127.0.0.1', a['port'])]) == 0
 
 
 def test_many_submits_spread_evenly(loop):
