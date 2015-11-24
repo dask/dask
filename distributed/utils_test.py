@@ -87,13 +87,16 @@ def cluster(nworkers=2, nanny=False):
         worker['proc'].start()
 
     sock = connect_sync('127.0.0.1', cport)
-    while True:
-        write_sync(sock, {'op': 'ncores'})
-        ncores = read_sync(sock)
-        if len(ncores) == nworkers:
-            break
-
+    start = time()
     try:
+        while True:
+            write_sync(sock, {'op': 'ncores'})
+            ncores = read_sync(sock)
+            if len(ncores) == nworkers:
+                break
+            if time() - start > 5:
+                raise Exception("Timeout on cluster creation")
+
         yield {'proc': center, 'port': cport}, workers
     finally:
         logger.debug("Closing out test cluster")
@@ -130,10 +133,13 @@ def _test_cluster(f, loop=None):
         b = Worker('127.0.0.3', 8019, c.ip, c.port, ncores=1)
         yield b._start()
 
-        while len(c.ncores) < 2:
-            yield gen.sleep(0.01)
-
+        start = time()
         try:
+            while len(c.ncores) < 2:
+                yield gen.sleep(0.01)
+                if time() - start > 5:
+                    raise Exception("Cluster creation timeout")
+
             yield f(c, a, b)
         finally:
             logger.debug("Closing out test cluster")
