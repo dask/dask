@@ -121,7 +121,8 @@ def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port):
     from distributed import Worker
     from tornado.ioloop import IOLoop
     IOLoop.clear_instance()
-    loop = IOLoop(make_current=True)
+    loop = IOLoop()
+    loop.make_current()
     worker = Worker(ip, port, center_ip, center_port, ncores,
                     nanny_port=nanny_port)
 
