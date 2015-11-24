@@ -87,12 +87,14 @@ class Server(TCPServer):
 
         Coroutines should expect a single IOStream object.
         """
-        logger.info("Connection from %s:%d to %s", address[0], address[1],
+        ip, port = address
+        logger.info("Connection from %s:%d to %s", ip, port,
                     type(self).__name__)
         try:
             while True:
                 try:
                     msg = yield read(stream)
+                    logger.debug("Message from %s:%d: %s", ip, port, msg)
                 except StreamClosedError:
                     logger.info("Lost connection: %s", str(address))
                     break
@@ -112,6 +114,7 @@ class Server(TCPServer):
                     result = b'No handler found: ' + op.encode()
                     logger.warn(result)
                 else:
+                    logger.debug("Calling into handler %s", handler.__name__)
                     result = yield gen.maybe_future(handler(stream, **msg))
                 if reply:
                     try:

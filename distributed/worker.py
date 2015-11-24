@@ -100,7 +100,8 @@ class Worker(Server):
                         nanny_port=self.nanny_port)
                 break
             except OSError:
-                yield gen.sleep(1)
+                logger.debug("Unable to register with center.  Waiting")
+                yield gen.sleep(0.5)
         assert resp == b'OK'
         logger.info('Registered with center at:  %s:%d',
                     self.center.ip, self.center.port)
