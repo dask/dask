@@ -30,10 +30,11 @@ def inc(x):
 
 def run_center(port):
     from distributed import Center
-    from tornado.ioloop import IOLoop
+    from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
     IOLoop.clear_instance()
-    loop = IOLoop(make_current=True)
+    loop = IOLoop(); loop.make_current()
+    PeriodicCallback(lambda: None, 500).start()
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
     center = Center('127.0.0.1', port)
     center.listen(port)
@@ -42,10 +43,11 @@ def run_center(port):
 
 def run_worker(port, center_port, **kwargs):
     from distributed import Worker
-    from tornado.ioloop import IOLoop
+    from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
     IOLoop.clear_instance()
-    loop = IOLoop(make_current=True)
+    loop = IOLoop(); loop.make_current()
+    PeriodicCallback(lambda: None, 500).start()
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
     worker = Worker('127.0.0.1', port, '127.0.0.1', center_port, **kwargs)
     worker.start()
@@ -54,10 +56,11 @@ def run_worker(port, center_port, **kwargs):
 
 def run_nanny(port, center_port, **kwargs):
     from distributed import Nanny
-    from tornado.ioloop import IOLoop
+    from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
     IOLoop.clear_instance()
-    loop = IOLoop(make_current=True)
+    loop = IOLoop(); loop.make_current()
+    PeriodicCallback(lambda: None, 500).start()
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
     worker = Nanny('127.0.0.1', port, port + 1000, '127.0.0.1', center_port, **kwargs)
     loop.run_sync(worker._start)
