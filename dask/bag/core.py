@@ -876,29 +876,79 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
     return Bag(d, name, len(d))
 
 
-def _textblock(filename, start, end, compression, encoding=None):
+def _readlines(fo, encoding, linesep, chunksize=4096):
+    bin_linesep = get_bin_linesep(encoding, linesep)
+    bin_linesep_len = len(bin_linesep)
+    buf = ''
+    fpos = fo.tell()
+    while True:
+        start, end = 0, 0
+        while True:
+            try:
+                pos = buf.index(bin_linesep, start)
+            except ValueError:
+                buf = buf[start:]
+                break
+            else:
+                end = pos + bin_linesep_len
+                yield buf[start:end], fpos + end
+                start = end
+        fpos += end
+        chunk = fo.read(chunksize)
+        if chunk:
+            buf += chunk
+        else:
+            if buf:
+                yield buf, fpos + end + len(buf)
+            break
+
+
+def _textblock(filename, start, end, compression, linesep=None, encoding=None):
     myopen = opens.get(compression, open)
     f = myopen(filename, 'rb')
+    try:
+        # Get line separator.
+        if linesep is None:
+            linesep = os.linesep
+        # Get text file encoding.
+        if encoding is None:
+            encoding = getattr(f, 'encoding', 'utf-8')
+        # Get byte representation of the line separator.
+        bin_linesep = get_bin_linesep(encoding, linesep)
+        bin_linesep_len = len(bin_linesep)
 
-    if encoding is None:
-        encoding = getattr(f, 'encoding', 'utf-8')
-
-    linesep = get_bin_linesep(encoding, os.linesep)
-    linesep_len = len(linesep)
-
-    if start > linesep_len:
-        f.seek(start - linesep_len)
-        if f.read(linesep_len) == linesep:
+        # Determine which of the following cases applies:
+        # (1) skip=False: `start` corresponds to the beginning of a line. We
+        #     can start reading lines of this text block.
+        # (2) skip=True: `start` corresponds to a position in the middle of a
+        #     line. We need to skip characters until we reach the beginning of
+        #     the next line.
+        skip = False
+        if start >= bin_linesep_len:
+            f.seek(start - bin_linesep_len)
+            if f.read(bin_linesep_len) != bin_linesep:
+                skip = True
+        else:
             f.seek(start)
-        else:
-            f.readline()
 
-    while f.tell() < end:
-        line = f.readline()
-        if line != '':
-            yield line
+        # Get line iterator based on the encoding and line separator and skip
+        # characters to reach the beginning of the next line if necessary.
+        lines = _readlines(f, encoding, bin_linesep)
+        if skip:
+            pos = next(lines)[1]
         else:
-            break
+            pos = start
+
+        # Retrieve and yield lines until the file position exceeds the `end`
+        # position.
+        try:
+            while pos < end:
+                line, pos = next(lines)
+                yield line
+        except StopIteration:
+            pass
+    finally:
+        f.close()
 
 
 def _chunk_read_file(filename, chunkbytes, encoding):
@@ -907,7 +957,7 @@ def _chunk_read_file(filename, chunkbytes, encoding):
 
     return [(list, (decode_sequence, encoding, (_textblock, filename,
                                                 i, i + chunkbytes,
-                                                extension, encoding)))
+                                                extension, None, encoding)))
             for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
