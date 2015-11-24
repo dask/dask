@@ -1152,34 +1152,6 @@ def test_traceback_sync(loop):
             assert tb is None
 
 
-def test_clear(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False, loop=loop)
-        yield e._start()
-
-        x = e.submit(inc, 1)
-        y = e.submit(inc, x)
-        yield x._result()
-
-        yield e._clear()
-
-        start = time()
-        while not x.cancelled() or not y.cancelled():
-            yield gen.sleep(0.01)
-            assert time() - start < 3
-
-        for x in [e.dask, e.waiting, e.held_data, e.nbytes, e.restrictions,
-                e.who_has, e.futures]:
-            assert not x
-
-        for d in [e.has_what, e.stacks, e.processing]:
-            assert all(not v for v in d.values())
-
-        yield e._shutdown()
-    _test_cluster(f, loop)
-
-
 def test_restart(loop):
     from distributed import Nanny, rpc
     c = Center('127.0.0.1', 8006)

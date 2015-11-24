@@ -459,23 +459,6 @@ def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
                 held_data.remove(msg['key'])
                 release_key(msg['key'])
 
-        elif msg['op'] == 'clear':
-            keys = set(dsk) | set(who_has)
-
-            for collection in [dsk, dependencies, dependents, in_play, waiting,
-                    waiting_data, held_data, nbytes, restrictions, who_has,
-                    keyorder]:
-                collection.clear()
-
-            for v in stacks.values():
-                del v[:]
-            for d in [processing, has_what]:
-                for v in d.values():
-                    v.clear()
-
-            report_queue.put_nowait({'op': 'cancel-data',
-                                     'keys': keys})
-
         else:
             logger.warn("Bad message: %s", msg)
 
