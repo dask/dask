@@ -1140,7 +1140,8 @@ def test_traceback_sync(loop):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             x = e.submit(div, 1, 0)
             tb = x.traceback()
-            assert any('x / y' in line for line in tb)
+            if sys.version_info[0] >= 3:
+                assert any('x / y' in line for line in tb)
 
             y = e.submit(inc, x)
             tb2 = y.traceback()
