@@ -829,7 +829,8 @@ def decode_sequence(encoding, seq):
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
-def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
+def from_filenames(filenames, chunkbytes=None, encoding=system_encoding,
+                   linesep=os.linesep):
     """ Create dask by loading in lines from many files
 
     Provide list of filenames
@@ -861,7 +862,7 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
 
     if chunkbytes:
         chunkbytes = int(chunkbytes)
-        taskss = [_chunk_read_file(fn, chunkbytes, encoding)
+        taskss = [_chunk_read_file(fn, chunkbytes, encoding, linesep)
                   for fn in full_filenames]
         d = dict(((name, i), task)
                  for i, task in enumerate(toolz.concat(taskss)))
@@ -870,16 +871,26 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding):
         myopen = opens.get(extension, open)
 
         d = dict(((name, i), (list, (decode_sequence, encoding,
-                                     (myopen, fn, 'rb'))))
+                                     (pluck, 0,
+                                      (_readlines, (myopen, fn, 'rb'),
+                                       encoding, linesep)))))
                  for i, fn in enumerate(full_filenames))
 
     return Bag(d, name, len(d))
 
 
 def _readlines(fo, encoding, linesep, chunksize=4096):
+    # Get text file encoding.
+    if encoding is None:
+        encoding = getattr(fo, 'encoding', 'utf-8')
+    # Get line separator.
+    if linesep is None:
+        linesep = os.linesep
+    # Get byte representation of the line separator.
     bin_linesep = get_bin_linesep(encoding, linesep)
     bin_linesep_len = len(bin_linesep)
-    buf = ''
+
+    buf = b''
     fpos = fo.tell()
     while True:
         start, end = 0, 0
@@ -903,16 +914,15 @@ def _readlines(fo, encoding, linesep, chunksize=4096):
             break
 
 
-def _textblock(filename, start, end, compression, linesep=None, encoding=None):
-    myopen = opens.get(compression, open)
-    f = myopen(filename, 'rb')
+def _textblock(filename, start, end, compression, encoding=None, linesep=None):
+    f = opens.get(compression, open)(filename, 'rb')
     try:
-        # Get line separator.
-        if linesep is None:
-            linesep = os.linesep
         # Get text file encoding.
         if encoding is None:
             encoding = getattr(f, 'encoding', 'utf-8')
+        # Get line separator.
+        if linesep is None:
+            linesep = os.linesep
         # Get byte representation of the line separator.
         bin_linesep = get_bin_linesep(encoding, linesep)
         bin_linesep_len = len(bin_linesep)
@@ -933,7 +943,7 @@ def _textblock(filename, start, end, compression, linesep=None, encoding=None):
 
         # Get line iterator based on the encoding and line separator and skip
         # characters to reach the beginning of the next line if necessary.
-        lines = _readlines(f, encoding, bin_linesep)
+        lines = _readlines(f, encoding, linesep)
         if skip:
             pos = next(lines)[1]
         else:
@@ -951,13 +961,13 @@ def _textblock(filename, start, end, compression, linesep=None, encoding=None):
         f.close()
 
 
-def _chunk_read_file(filename, chunkbytes, encoding):
+def _chunk_read_file(filename, chunkbytes, encoding, linesep):
     extension = os.path.splitext(filename)[1].strip('.')
     compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
 
     return [(list, (decode_sequence, encoding, (_textblock, filename,
                                                 i, i + chunkbytes,
-                                                extension, None, encoding)))
+                                                extension, encoding, linesep)))
             for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
