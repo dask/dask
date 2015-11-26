@@ -740,6 +740,13 @@ def test_map_blocks_with_constants():
               10 - np.arange(10))
 
 
+def test_map_blocks_with_kwargs():
+    d = da.arange(10, chunks=5)
+
+    assert eq(d.map_blocks(np.max, axis=0, keepdims=True, dtype=d.dtype),
+              np.array([4, 9]))
+
+
 def test_fromfunction():
     def f(x, y):
         return x + y

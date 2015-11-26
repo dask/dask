@@ -409,6 +409,9 @@ def map_blocks(func, *args, **kwargs):
         Dimensions lost by the function
     new_dims: number or iterable (optional)
         New dimensions created by the function
+    **kwargs:
+        Other keyword arguments to pass to function.
+        Values must be constants (not dask.arrays)
 
     You must also specify the chunks and dtype of the resulting array.  If you
     don't then we assume that the resulting array has the same block structure
@@ -479,6 +482,9 @@ def map_blocks(func, *args, **kwargs):
 
     arrs = [a for a in args if isinstance(a, Array)]
     args = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
+
+    if kwargs:
+        func = partial(func, **kwargs)
 
     if args:
         func = partial_by_order(func, args)
