@@ -452,22 +452,57 @@ from distributed.utils_test import cluster, slow, _test_cluster, loop
 from distributed.utils import All
 from tornado import gen
 
+def div(x, y):
+    return x / y
+
 def test_scheduler(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler()
         done = s._start((c.ip, c.port), c.ncores)
 
+        # Test update graph
         s.scheduler_queue.put_nowait({'op': 'update-graph',
-                                      'dsk': {'x': (inc, 1)},
-                                      'keys': ['x']})
-
+                                      'dsk': {'x': (inc, 1),
+                                              'y': (inc, 'x'),
+                                              'z': (inc, 'y')},
+                                      'keys': ['z']})
         while True:
             msg = yield s.report_queue.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'x':
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
         assert a.data.get('x') == 2 or b.data.get('x') == 2
+
+        # Test erring tasks
+        s.scheduler_queue.put_nowait({'op': 'update-graph',
+                                      'dsk': {'a': (div, 1, 0),
+                                              'b': (inc, 'a')},
+                                      'keys': ['a', 'b']})
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'task-erred' and msg['key'] == 'b':
+                break
+
+        # Test missing data
+        s.scheduler_queue.put_nowait({'op': 'missing-data',
+                                      'missing': ['z']})
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
+
+        # Test missing data without being informed
+        for w in [a, b]:
+            if 'z' in w.data:
+                del w.data['z']
+        s.scheduler_queue.put_nowait({'op': 'update-graph',
+                                      'dsk': {'zz': (inc, 'z')},
+                                      'keys': ['zz']})
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'zz':
+                break
 
         s.scheduler_queue.put_nowait({'op': 'close'})
         yield done

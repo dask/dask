@@ -155,317 +155,6 @@ def delete(scheduler_queue, delete_queue, ip, port, batch_time=1):
     logger.debug('Delete finished')
 
 
-@gen.coroutine
-def scheduler(scheduler_queue, report_queue, worker_queues, delete_queue,
-              who_has, has_what, ncores, dsk=None, dependencies=None,
-              dependents=None, restrictions=None, held_data=None, nbytes=None,
-              waiting=None, waiting_data=None, stacks=None, processing=None):
-    """ The scheduler coroutine for dask scheduling
-
-    This coroutine manages interactions with all worker cores and with the
-    delete coroutine through queues.
-
-    Parameters
-    ----------
-    scheduler_queue: tornado.queues.Queue
-        Get information from outside
-    report_queue: tornado.queues.Queue
-        Report information to outside
-    worker_queues: dict {worker: tornado.queues.Queue}
-        One queue per worker node.
-        Each queue is listened to by several worker_core coroutines.
-    delete_queue: tornado.queues.Queue
-        One queue listened to by ``delete`` which connects to the
-        center to delete unnecessary intermediate data
-    who_has: dict {key: set}
-        Mapping key to {set of worker-identities}
-    has_what: dict {worker: set}
-        Mapping worker-identity to {set of keys}
-    ncores: dict {worker: int}
-        Mapping worker-identity to number-of-cores
-    """
-    held_data = set() if held_data is None else held_data
-    dsk = dict() if dsk is None else dsk
-    dependencies = dict() if dependencies is None else dependencies
-    dependents = dict() if dependents is None else dependents
-    nbytes = dict() if nbytes is None else nbytes
-    restrictions = dict() if restrictions is None else restrictions
-    waiting = dict() if waiting is None else waiting
-    waiting_data = dict() if waiting_data is None else waiting_data
-    stacks = dict() if stacks is None else stacks
-    processing = dict() if processing is None else processing
-
-    stacks.clear()
-    stacks.update({worker: list() for worker in ncores})
-    processing.clear()
-    processing.update({worker: set() for worker in ncores})
-
-    assert (not dsk) == (not dependencies), (dsk, dependencies)
-
-    in_play = set(who_has)  # keys in memory, stacks, processing, or waiting
-    keyorder = dict()
-    generation = 0
-
-    @gen.coroutine
-    def cleanup():
-        """ Clean up queues and coroutines, prepare to stop """
-        n = 0
-        delete_queue.put_nowait({'op': 'close'}); n += 1
-        for w, nc in ncores.items():
-            for i in range(nc):
-                worker_queues[w].put_nowait({'op': 'close'}); n += 1
-
-        for i in range(n):
-            yield scheduler_queue.get()
-
-    def mark_ready_to_run(key):
-        """ Send task to an appropriate worker, trigger worker """
-        if key in waiting:
-            assert not waiting[key]
-            del waiting[key]
-
-        new_worker = decide_worker(dependencies, stacks, who_has, restrictions,
-                                   nbytes, key)
-        stacks[new_worker].append(key)
-        ensure_occupied(new_worker)
-
-    def mark_key_in_memory(key, workers=None):
-        if workers is None:
-            workers = who_has[key]
-        for worker in workers:
-            who_has[key].add(worker)
-            has_what[worker].add(key)
-            with ignoring(KeyError):
-                processing[worker].remove(key)
-
-        for dep in sorted(dependents.get(key, []), key=keyorder.get, reverse=True):
-            if dep in waiting:
-                s = waiting[dep]
-                with ignoring(KeyError):
-                    s.remove(key)
-                if not s:  # new task ready to run
-                    mark_ready_to_run(dep)
-
-        for dep in dependencies.get(key, []):
-            if dep in waiting_data:
-                s = waiting_data[dep]
-                with ignoring(KeyError):
-                    s.remove(key)
-                if not s and dep:
-                    release_key(dep)
-
-        report_queue.put_nowait({'op': 'key-in-memory',
-                                 'key': key,
-                                 'workers': workers})
-
-    def ensure_occupied(worker):
-        """ Spin up tasks on worker while it has tasks and free cores """
-        logger.debug('Ensure worker is occupied: %s', worker)
-        while stacks[worker] and ncores[worker] > len(processing[worker]):
-            key = stacks[worker].pop()
-            processing[worker].add(key)
-            logger.debug("Send job to worker: %s, %s, %s", worker, key, dsk[key])
-            worker_queues[worker].put_nowait({'op': 'compute-task',
-                                              'key': key,
-                                              'task': dsk[key],
-                                              'needed': dependencies[key]})
-
-    def seed_ready_tasks(keys=dsk):
-        """ Distribute leaves among workers
-
-        Takes an iterable of keys to consider for execution
-        """
-        new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
-                                       stacks, restrictions, nbytes,
-                                       [k for k in keys if k in waiting and
-                                                        not waiting[k]])
-        logger.debug("Seed ready tasks: %s", new_stacks)
-        for worker, stack in new_stacks.items():
-            if stack:
-                ensure_occupied(worker)
-
-    def release_key(key):
-        """ Release key from distributed memory if its ready """
-        if key not in held_data and not waiting_data.get(key):
-            delete_queue.put_nowait({'op': 'delete-task',
-                                     'key': key})
-            for w in who_has[key]:
-                has_what[w].remove(key)
-            del who_has[key]
-            if key in waiting_data:
-                del waiting_data[key]
-            if key in in_play:
-                in_play.remove(key)
-
-    def update_data(extra_who_has, extra_nbytes):
-        for key, workers in extra_who_has.items():
-            mark_key_in_memory(key, workers)
-
-        nbytes.update(extra_nbytes)
-
-        held_data.update(extra_who_has)
-        in_play.update(extra_who_has)
-
-    exceptions = dict()
-    tracebacks = dict()
-    exceptions_blame = dict()
-    def mark_failed(key, failing_key=None):
-        """ When a task fails mark it and all dependent task as failed """
-        if key in exceptions_blame:
-            return
-        exceptions_blame[key] = failing_key
-        report_queue.put_nowait({'op': 'task-erred',
-                                 'key': key,
-                                 'exception': exceptions[failing_key],
-                                 'traceback': tracebacks[failing_key]})
-        if key in waiting:
-            del waiting[key]
-        if key in waiting_data:
-            del waiting_data[key]
-        in_play.remove(key)
-        for dep in dependents[key]:
-            mark_failed(dep, failing_key)
-
-    def log_state(msg=''):
-        logger.debug("Runtime State: %s", msg)
-        logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
-                'in_play: %s\n\n', waiting, stacks, processing, in_play)
-
-    def mark_worker_missing(worker):
-        if worker not in processing:
-            return
-        keys = has_what.pop(worker)
-        for i in range(ncores[worker]):  # send close message, in case not dead
-            worker_queues[worker].put_nowait({'op': 'close', 'report': False})
-        del worker_queues[worker]
-        del ncores[worker]
-        del stacks[worker]
-        del processing[worker]
-        if not stacks:
-            logger.critical("Lost all workers")
-        missing_keys = set()
-        for key in keys:
-            who_has[key].remove(worker)
-            if not who_has[key]:
-                missing_keys.add(key)
-        gone_data = {k for k, v in who_has.items() if not v}
-        in_play.difference_update(missing_keys)
-        for k in gone_data:
-            del who_has[k]
-
-    def heal_state():
-        """ Recover from catastrophic change """
-        state = heal(dependencies, dependents, set(who_has), stacks,
-                     processing, waiting, waiting_data)
-        released = state['released']
-        in_play.clear(); in_play.update(state['in_play'])
-        add_keys = {k for k, v in waiting.items() if not v}
-        for key in held_data & released:
-            report_queue.put_nowait({'op': 'lost-key', 'key': key})
-        if stacks:
-            for key in add_keys:
-                mark_ready_to_run(key)
-        for key in set(who_has) & released - held_data:
-            delete_queue.put_nowait({'op': 'delete-task', 'key': key})
-
-    my_heal_missing_data = partial(heal_missing_data,
-            dsk, dependencies, dependents, held_data, who_has, in_play,
-            waiting, waiting_data)
-
-    heal_state()
-
-    while True:
-        msg = yield scheduler_queue.get()
-        if msg['op'] == 'close':
-            break
-        elif msg['op'] == 'update-graph':
-            update_state(dsk, dependencies, dependents, held_data,
-                         who_has, in_play,
-                         waiting, waiting_data, msg['dsk'], msg['keys'])
-
-            cover_aliases(dsk, msg['dsk'])
-
-            restrictions.update(msg.get('restrictions', {}))
-
-            new_keyorder = order(msg['dsk'])  # TODO: define order wrt old graph
-            for key in new_keyorder:
-                if key not in keyorder:
-                    # TODO: add test for this
-                    keyorder[key] = (generation, new_keyorder[key]) # prefer old
-            if len(msg['dsk']) > 1:
-                generation += 1  # older graph generations take precedence
-
-            for key in msg['dsk']:
-                for dep in dependencies[key]:
-                    if dep in exceptions_blame:
-                        mark_failed(key, exceptions_blame[dep])
-
-            seed_ready_tasks(msg['dsk'])
-            for key in msg['keys']:
-                if who_has[key]:
-                    mark_key_in_memory(key)
-
-        elif msg['op'] == 'update-data':
-            update_data(msg['who-has'], msg['nbytes'])
-
-        elif msg['op'] == 'task-finished':
-            key, worker = msg['key'], msg['workers'][0]
-            if key in processing[worker]:
-                nbytes[key] = msg['nbytes']
-                mark_key_in_memory(key, [worker])
-                ensure_occupied(worker)
-
-        elif msg['op'] == 'task-erred':
-            key, worker = msg['key'], msg['worker']
-            if key in processing[worker]:
-                processing[worker].remove(key)
-                exceptions[key] = msg['exception']
-                tracebacks[key] = msg['traceback']
-                mark_failed(key, key)
-                ensure_occupied(worker)
-
-        elif msg['op'] in ('missing-data', 'task-missing-data'):
-            missing = set(msg['missing'])
-            logger.debug("Recovering missing data: %s", missing)
-            for k in missing:
-                with ignoring(KeyError):
-                    workers = who_has.pop(k)
-                    for worker in workers:
-                        has_what[worker].remove(k)
-            my_heal_missing_data(missing)
-
-            if msg['op'] == 'task-missing-data':
-                key = msg['key']
-                with ignoring(KeyError):
-                    processing[msg['worker']].remove(key)
-                waiting[key] = missing
-                logger.info('task missing data, %s, %s', key, waiting)
-                with ignoring(KeyError):
-                    processing[msg['worker']].remove(msg['key'])
-
-                ensure_occupied(msg['worker'])
-
-            seed_ready_tasks()
-
-        elif msg['op'] == 'worker-failed':
-            worker = msg['worker']
-            mark_worker_missing(worker)
-            if msg.get('heal', True):
-                heal_state()
-
-        elif msg['op'] == 'release-held-data':
-            if msg['key'] in held_data:
-                logger.debug("Release key: %s", msg['key'])
-                held_data.remove(msg['key'])
-                release_key(msg['key'])
-
-        else:
-            logger.warn("Bad message: %s", msg)
-
-    logger.debug('Finished scheduling')
-    yield cleanup()
-
-
 def validate_state(dependencies, dependents, waiting, waiting_data,
         in_memory, stacks, processing, finished_results, released, in_play,
         **kwargs):
@@ -901,8 +590,11 @@ class Scheduler(object):
         self.dask = dict()
         self.dependencies = dict()
         self.dependents = dict()
+        self.generation = 0
         self.has_what = defaultdict(set)
         self.held_data = set()
+        self.in_play = set()
+        self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
         self.processing = dict()
@@ -912,27 +604,32 @@ class Scheduler(object):
         self.waiting_data = dict()
         self.who_has = defaultdict(set)
 
+        self.exceptions = dict()
+        self.tracebacks = dict()
+        self.exceptions_blame = dict()
+
         self.delete_batch_time = delete_batch_time
 
     def _start(self, center, ncores):
         self.center = coerce_to_rpc(center)
         self.ncores = ncores
 
+        self.processing = {addr: set() for addr in self.ncores}
+        self.stacks = {addr: list() for addr in self.ncores}
+
         self.worker_queues = {addr: Queue() for addr in self.ncores}
 
         self.coroutines = ([
-         scheduler(self.scheduler_queue, self.report_queue, self.worker_queues,
-                   self.delete_queue, who_has=self.who_has,
-                   has_what=self.has_what, ncores=self.ncores,
-                   dsk=self.dask, held_data=self.held_data,
-                   restrictions=self.restrictions, waiting=self.waiting,
-                   stacks=self.stacks, processing=self.processing,
-                   nbytes=self.nbytes),
+         self.scheduler(),
          delete(self.scheduler_queue, self.delete_queue,
                 self.center.ip, self.center.port,
                 self.delete_batch_time)]
         + [worker(self.scheduler_queue, self.worker_queues[w], w, n)
            for w, n in self.ncores.items()])
+
+        for cor in self.coroutines:
+            if cor.done():
+                raise cor.exception()
 
         return All(self.coroutines)
 
@@ -940,3 +637,311 @@ class Scheduler(object):
     def _close(self):
         self.scheduler_queue.put_nowait({'op': 'close'})
         yield All(self.coroutines)
+
+    @gen.coroutine
+    def cleanup(self):
+        """ Clean up queues and coroutines, prepare to stop """
+        logger.debug("Cleaning up coroutines")
+        n = 0
+        self.delete_queue.put_nowait({'op': 'close'}); n += 1
+        for w, nc in self.ncores.items():
+            for i in range(nc):
+                self.worker_queues[w].put_nowait({'op': 'close'}); n += 1
+
+        for i in range(n):
+            yield self.scheduler_queue.get()
+
+    def mark_ready_to_run(self, key):
+        """ Send task to an appropriate worker, trigger worker """
+        logger.debug("Mark %s ready to run", key)
+        if key in self.waiting:
+            assert not self.waiting[key]
+            del self.waiting[key]
+
+        new_worker = decide_worker(self.dependencies, self.stacks,
+                self.who_has, self.restrictions, self.nbytes, key)
+
+        self.stacks[new_worker].append(key)
+        self.ensure_occupied(new_worker)
+
+    def mark_key_in_memory(self, key, workers=None):
+        logger.debug("Mark %s in memory", key)
+        if workers is None:
+            workers = self.who_has[key]
+        for worker in workers:
+            self.who_has[key].add(worker)
+            self.has_what[worker].add(key)
+            with ignoring(KeyError):
+                self.processing[worker].remove(key)
+
+        for dep in sorted(self.dependents.get(key, []), key=self.keyorder.get,
+                          reverse=True):
+            if dep in self.waiting:
+                s = self.waiting[dep]
+                with ignoring(KeyError):
+                    s.remove(key)
+                if not s:  # new task ready to run
+                    self.mark_ready_to_run(dep)
+
+        for dep in self.dependencies.get(key, []):
+            if dep in self.waiting_data:
+                s = self.waiting_data[dep]
+                with ignoring(KeyError):
+                    s.remove(key)
+                if not s and dep:
+                    self.release_key(dep)
+
+        self.report_queue.put_nowait({'op': 'key-in-memory',
+                                     'key': key,
+                                     'workers': workers})
+
+    def ensure_occupied(self, worker):
+        """ Spin up tasks on worker while it has tasks and free cores """
+        logger.debug('Ensure worker is occupied: %s', worker)
+        while (self.stacks[worker] and
+               self.ncores[worker] > len(self.processing[worker])):
+            key = self.stacks[worker].pop()
+            self.processing[worker].add(key)
+            logger.debug("Send job to worker: %s, %s, %s", worker, key, self.dask[key])
+            self.worker_queues[worker].put_nowait(
+                    {'op': 'compute-task',
+                     'key': key,
+                     'task': self.dask[key],
+                     'needed': self.dependencies[key]})
+
+    def seed_ready_tasks(self, keys=None):
+        """ Distribute leaves among workers
+
+        Takes an iterable of keys to consider for execution
+        """
+        if keys is None:
+            keys = self.dask
+        new_stacks = assign_many_tasks(
+                self.dependencies, self.waiting, self.keyorder, self.who_has,
+                self.stacks, self.restrictions, self.nbytes,
+                [k for k in keys if k in self.waiting and not self.waiting[k]])
+        logger.debug("Seed ready tasks: %s", new_stacks)
+        for worker, stack in new_stacks.items():
+            if stack:
+                self.ensure_occupied(worker)
+
+    def release_key(self, key):
+        """ Release key from distributed memory if its ready """
+        logger.debug("Release key %s", key)
+        if key not in self.held_data and not self.waiting_data.get(key):
+            self.delete_queue.put_nowait({'op': 'delete-task',
+                                          'key': key})
+            for w in self.who_has[key]:
+                self.has_what[w].remove(key)
+            del self.who_has[key]
+            if key in self.waiting_data:
+                del self.waiting_data[key]
+            if key in self.in_play:
+                self.in_play.remove(key)
+
+    def update_data(self, extra_who_has, extra_nbytes):
+        logger.debug("Update data %s", extra_who_has)
+        for key, workers in extra_who_has.items():
+            self.mark_key_in_memory(key, workers)
+
+        self.nbytes.update(extra_nbytes)
+
+        self.held_data.update(extra_who_has)
+        self.in_play.update(extra_who_has)
+
+    def mark_failed(self, key, failing_key=None):
+        """ When a task fails mark it and all dependent task as failed """
+        logger.debug("Mark key as failed %s", key)
+        if key in self.exceptions_blame:
+            return
+        self.exceptions_blame[key] = failing_key
+        self.report_queue.put_nowait({'op': 'task-erred',
+                                     'key': key,
+                                     'exception': self.exceptions[failing_key],
+                                     'traceback': self.tracebacks[failing_key]})
+        if key in self.waiting:
+            del self.waiting[key]
+        if key in self.waiting_data:
+            del self.waiting_data[key]
+        self.in_play.remove(key)
+        for dep in self.dependents[key]:
+            self.mark_failed(dep, failing_key)
+
+    def log_state(self, msg=''):
+        logger.debug("Runtime State: %s", msg)
+        logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
+                'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
+                self.in_play)
+
+    def mark_worker_missing(self, worker):
+        logger.debug("Mark worker as missing %s", worker)
+        if worker not in self.processing:
+            return
+        keys = self.has_what.pop(worker)
+        for i in range(self.ncores[worker]):  # send close message, in case not dead
+            self.worker_queues[worker].put_nowait({'op': 'close', 'report': False})
+        del self.worker_queues[worker]
+        del self.ncores[worker]
+        del self.stacks[worker]
+        del self.processing[worker]
+        if not self.stacks:
+            logger.critical("Lost all workers")
+        missing_keys = set()
+        for key in keys:
+            self.who_has[key].remove(worker)
+            if not self.who_has[key]:
+                missing_keys.add(key)
+        gone_data = {k for k, v in self.who_has.items() if not v}
+        self.in_play.difference_update(missing_keys)
+        for k in gone_data:
+            del self.who_has[k]
+
+    def heal_state(self):
+        """ Recover from catastrophic change """
+        logger.debug("Heal state")
+        state = heal(self.dependencies, self.dependents, set(self.who_has),
+                self.stacks, self.processing, self.waiting, self.waiting_data)
+        released = state['released']
+        self.in_play.clear(); self.in_play.update(state['in_play'])
+        add_keys = {k for k, v in self.waiting.items() if not v}
+        for key in self.held_data & released:
+            self.report_queue.put_nowait({'op': 'lost-key', 'key': key})
+        if self.stacks:
+            for key in add_keys:
+                self.mark_ready_to_run(key)
+        for key in set(self.who_has) & released - self.held_data:
+            self.delete_queue.put_nowait({'op': 'delete-task', 'key': key})
+        self.in_play.update(self.who_has)
+
+    def my_heal_missing_data(self, missing):
+        logger.debug("Heal from missing data")
+        return heal_missing_data(self.dask, self.dependencies, self.dependents,
+                self.held_data, self.who_has, self.in_play, self.waiting,
+                self.waiting_data, missing)
+
+    @gen.coroutine
+    def scheduler(self):
+        """ The scheduler coroutine for dask scheduling
+
+        This coroutine manages interactions with all worker cores and with the
+        delete coroutine through queues.
+
+        Parameters
+        ----------
+        scheduler_queue: tornado.queues.Queue
+            Get information from outside
+        report_queue: tornado.queues.Queue
+            Report information to outside
+        worker_queues: dict {worker: tornado.queues.Queue}
+            One queue per worker node.
+            Each queue is listened to by several worker_core coroutines.
+        delete_queue: tornado.queues.Queue
+            One queue listened to by ``delete`` which connects to the
+            center to delete unnecessary intermediate data
+        who_has: dict {key: set}
+            Mapping key to {set of worker-identities}
+        has_what: dict {worker: set}
+            Mapping worker-identity to {set of keys}
+        ncores: dict {worker: int}
+            Mapping worker-identity to number-of-cores
+        """
+
+        assert (not self.dask) == (not self.dependencies), (self.dask, self.dependencies)
+
+        self.heal_state()
+
+        while True:
+            msg = yield self.scheduler_queue.get()
+            logger.debug("scheduler receives message %s", msg)
+            if msg['op'] == 'close':
+                break
+            elif msg['op'] == 'update-graph':
+                update_state(self.dask, self.dependencies, self.dependents,
+                        self.held_data, self.who_has, self.in_play,
+                        self.waiting, self.waiting_data, msg['dsk'],
+                        msg['keys'])
+
+                cover_aliases(self.dask, msg['dsk'])
+
+                self.restrictions.update(msg.get('restrictions', {}))
+
+                new_keyorder = order(msg['dsk'])  # TODO: define order wrt old graph
+                for key in new_keyorder:
+                    if key not in self.keyorder:
+                        # TODO: add test for this
+                        self.keyorder[key] = (self.generation, new_keyorder[key]) # prefer old
+                if len(msg['dsk']) > 1:
+                    self.generation += 1  # older graph generations take precedence
+
+                for key in msg['dsk']:
+                    for dep in self.dependencies[key]:
+                        if dep in self.exceptions_blame:
+                            self.mark_failed(key, self.exceptions_blame[dep])
+
+                self.seed_ready_tasks(msg['dsk'])
+                for key in msg['keys']:
+                    if self.who_has[key]:
+                        self.mark_key_in_memory(key)
+
+            elif msg['op'] == 'update-data':
+                self.update_data(msg['who-has'], msg['nbytes'])
+
+            elif msg['op'] == 'task-finished':
+                key, worker = msg['key'], msg['workers'][0]
+                if key in self.processing[worker]:
+                    self.nbytes[key] = msg['nbytes']
+                    self.mark_key_in_memory(key, [worker])
+                    self.ensure_occupied(worker)
+
+            elif msg['op'] == 'task-erred':
+                key, worker = msg['key'], msg['worker']
+                if key in self.processing[worker]:
+                    self.processing[worker].remove(key)
+                    self.exceptions[key] = msg['exception']
+                    self.tracebacks[key] = msg['traceback']
+                    self.mark_failed(key, key)
+                    self.ensure_occupied(worker)
+
+            elif msg['op'] in ('missing-data', 'task-missing-data'):
+                missing = set(msg['missing'])
+                logger.debug("Recovering missing data: %s", missing)
+                for k in missing:
+                    with ignoring(KeyError):
+                        workers = self.who_has.pop(k)
+                        for worker in workers:
+                            self.has_what[worker].remove(k)
+                self.my_heal_missing_data(missing)
+
+                if msg['op'] == 'task-missing-data':
+                    key = msg['key']
+                    with ignoring(KeyError):
+                        self.processing[msg['worker']].remove(key)
+                    self.waiting[key] = missing
+                    logger.info('task missing data, %s, %s', key, self.waiting)
+                    with ignoring(KeyError):
+                        self.processing[msg['worker']].remove(msg['key'])
+
+                    self.ensure_occupied(msg['worker'])
+
+                self.seed_ready_tasks()
+
+            elif msg['op'] == 'worker-failed':
+                worker = msg['worker']
+                self.mark_worker_missing(worker)
+                if msg.get('heal', True):
+                    self.heal_state()
+
+            elif msg['op'] == 'release-held-data':
+                if msg['key'] in self.held_data:
+                    logger.debug("Release key: %s", msg['key'])
+                    self.held_data.remove(msg['key'])
+                    self.release_key(msg['key'])
+
+            else:
+                logger.warn("Bad message: %s", msg)
+
+        logger.debug('Finished scheduling')
+        yield self.cleanup()
+
+
+scheduler = 0
