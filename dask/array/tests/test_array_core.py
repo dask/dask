@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 pytest.importorskip('numpy')
 
-from operator import add
+from operator import add, sub
 from tempfile import mkdtemp
 import shutil
 import os
@@ -726,6 +726,18 @@ def test_map_blocks2():
 
     assert eq(out, expected)
     assert same_keys(d.map_blocks(func, dtype='i8'), out)
+
+
+def test_map_blocks_with_constants():
+    d = da.arange(10, chunks=3)
+    e = d.map_blocks(add, 100, dtype=d.dtype)
+
+    assert eq(e, np.arange(10) + 100)
+
+    assert eq(da.map_blocks(sub, d, 10, dtype=d.dtype),
+              np.arange(10) - 10)
+    assert eq(da.map_blocks(sub, 10, d, dtype=d.dtype),
+              10 - np.arange(10))
 
 
 def test_fromfunction():

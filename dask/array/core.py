@@ -393,14 +393,14 @@ def _concatenate2(arrays, axes=[]):
     return np.concatenate(arrays, axis=axes[0])
 
 
-def map_blocks(func, *arrs, **kwargs):
+def map_blocks(func, *args, **kwargs):
     """ Map a function across all blocks of a dask array
 
     Parameters
     ----------
     func: callable
         Function to apply to every block in the array
-    arrs: dask arrays or constants
+    args: dask arrays or constants
     dtype: np.dtype
         Datatype of resulting array
     chunks: tuple (optional)
@@ -476,14 +476,19 @@ def map_blocks(func, *arrs, **kwargs):
     if isinstance(new_dims, Number):
         new_dims = [new_dims]
 
-    assert all(isinstance(arr, Array) for arr in arrs)
+
+    arrs = [a for a in args if isinstance(a, Array)]
+    args = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
+
+    if args:
+        func = partial_by_order(func, args)
 
     inds = [tuple(range(x.ndim))[::-1] for x in arrs]
-    args = list(concat(zip(arrs, inds)))
+    atop_args = list(concat(zip(arrs, inds)))
 
     out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
 
-    result = atop(func, out_ind, *args, name=name, dtype=dtype)
+    result = atop(func, out_ind, *atop_args, name=name, dtype=dtype)
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -1123,10 +1128,8 @@ class Array(Base):
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
 
     @wraps(map_blocks)
-    def map_blocks(self, func, chunks=None, dtype=None, name=None,
-                   drop_dims=None, new_dims=None):
-        return map_blocks(func, self, chunks=chunks, dtype=dtype, name=name,
-                          drop_dims=drop_dims, new_dims=new_dims)
+    def map_blocks(self, func, *args, **kwargs):
+        return map_blocks(func, self, *args, **kwargs)
 
     def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
         """ Map a function over blocks of the array with some overlap
