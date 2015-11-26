@@ -16,7 +16,7 @@ from tornado.iostream import StreamClosedError
 from dask.core import istask, get_deps, reverse_dict, get_dependencies
 from dask.order import order
 
-from .core import rpc
+from .core import rpc, coerce_to_rpc
 from .client import unpack_remotedata
 from .utils import All, ignoring
 
@@ -890,3 +890,53 @@ def execute_task(task):
         return func(*map(execute_task, args))
     else:
         return task
+
+
+class Scheduler(object):
+    def __init__(self, delete_batch_time=1):
+        self.scheduler_queue = Queue()
+        self.report_queue = Queue()
+        self.delete_queue = Queue()
+
+        self.dask = dict()
+        self.dependencies = dict()
+        self.dependents = dict()
+        self.has_what = defaultdict(set)
+        self.held_data = set()
+        self.nbytes = dict()
+        self.ncores = dict()
+        self.processing = dict()
+        self.restrictions = dict()
+        self.stacks = dict()
+        self.waiting = dict()
+        self.waiting_data = dict()
+        self.who_has = defaultdict(set)
+
+        self.delete_batch_time = delete_batch_time
+
+    def _start(self, center, ncores):
+        self.center = coerce_to_rpc(center)
+        self.ncores = ncores
+
+        self.worker_queues = {addr: Queue() for addr in self.ncores}
+
+        self.coroutines = ([
+         scheduler(self.scheduler_queue, self.report_queue, self.worker_queues,
+                   self.delete_queue, who_has=self.who_has,
+                   has_what=self.has_what, ncores=self.ncores,
+                   dsk=self.dask, held_data=self.held_data,
+                   restrictions=self.restrictions, waiting=self.waiting,
+                   stacks=self.stacks, processing=self.processing,
+                   nbytes=self.nbytes),
+         delete(self.scheduler_queue, self.delete_queue,
+                self.center.ip, self.center.port,
+                self.delete_batch_time)]
+        + [worker(self.scheduler_queue, self.worker_queues[w], w, n)
+           for w, n in self.ncores.items()])
+
+        return All(self.coroutines)
+
+    @gen.coroutine
+    def _close(self):
+        self.scheduler_queue.put_nowait({'op': 'close'})
+        yield All(self.coroutines)

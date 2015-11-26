@@ -7,7 +7,7 @@ import pytest
 
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
-        decide_worker, assign_many_tasks, heal_missing_data)
+        decide_worker, assign_many_tasks, heal_missing_data, Scheduler)
 from distributed.utils_test import inc
 
 
@@ -446,3 +446,30 @@ def test_fill_missing_data():
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
     assert in_play == e_in_play
+
+
+from distributed.utils_test import cluster, slow, _test_cluster, loop
+from distributed.utils import All
+from tornado import gen
+
+def test_scheduler(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler()
+        done = s._start((c.ip, c.port), c.ncores)
+
+        s.scheduler_queue.put_nowait({'op': 'update-graph',
+                                      'dsk': {'x': (inc, 1)},
+                                      'keys': ['x']})
+
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'x':
+                break
+
+        assert a.data.get('x') == 2 or b.data.get('x') == 2
+
+        s.scheduler_queue.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
