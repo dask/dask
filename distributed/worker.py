@@ -13,7 +13,8 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from .client import _gather, pack_data
-from .core import rpc, connect_sync, read_sync, write_sync, connect, Server
+from .core import (rpc, connect_sync, read_sync, write_sync, connect, Server,
+        pingpong)
 from .sizeof import sizeof
 from .utils import funcname
 
@@ -77,7 +78,8 @@ class Worker(Server):
                     'get_data': self.get_data,
                     'update_data': self.update_data,
                     'delete_data': self.delete_data,
-                    'terminate': self.terminate}
+                    'terminate': self.terminate,
+                    'ping': pingpong}
 
         super(Worker, self).__init__(handlers, **kwargs)
 
