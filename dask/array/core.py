@@ -396,9 +396,26 @@ def _concatenate2(arrays, axes=[]):
 def map_blocks(func, *arrs, **kwargs):
     """ Map a function across all blocks of a dask array
 
-    You must also specify the chunks of the resulting array.  If you don't then
-    we assume that the resulting array has the same block structure as the
-    input.
+    Parameters
+    ----------
+    func: callable
+        Function to apply to every block in the array
+    arrs: dask arrays or constants
+    dtype: np.dtype
+        Datatype of resulting array
+    chunks: tuple (optional)
+        chunk shape of resulting blocks if the function does not preserve shape
+    drop_dims: number or iterable (optional)
+        Dimensions lost by the function
+    new_dims: number or iterable (optional)
+        New dimensions created by the function
+
+    You must also specify the chunks and dtype of the resulting array.  If you
+    don't then we assume that the resulting array has the same block structure
+    as the input.
+
+    Examples
+    --------
 
     >>> import dask.array as da
     >>> x = da.arange(6, chunks=3)
@@ -426,10 +443,11 @@ def map_blocks(func, *arrs, **kwargs):
     >>> a = da.arange(18, chunks=(6,))
     >>> b = a.map_blocks(lambda x: x[:3], chunks=(3,))
 
-    If the function changes the dimension of the blocks you must specify that
-    new dimension in the chunks tuples.
+    If the function changes the dimension of the blocks you must specify the
+    created or destroyed dimensions.
 
-    >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1))
+    >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1),
+    ...                  new_dims=[0, 2])
 
     Your block function can learn where in the array it is if it supports a
     ``block_id`` keyword argument.  This will receive entries like (2, 0, 1),
