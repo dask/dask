@@ -420,6 +420,17 @@ def map_blocks(func, *arrs, **kwargs):
 
     >>> y = x.map_blocks(lambda x: x[::2], chunks=((2, 2),))
 
+    You have a bit of freedom in specifying chunks.  If all of the output chunk
+    sizes are the same, you can provide just that chunk size as a single tuple.
+
+    >>> a = da.arange(18, chunks=(6,))
+    >>> b = a.map_blocks(lambda x: x[:3], chunks=(3,))
+
+    If the function changes the dimension of the blocks you must specify that
+    new dimension in the chunks tuples.
+
+    >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1))
+
     Your block function can learn where in the array it is if it supports a
     ``block_id`` keyword argument.  This will receive entries like (2, 0, 1),
     the position of the block in the dask array.
@@ -437,7 +448,16 @@ def map_blocks(func, *arrs, **kwargs):
                 "Usage:   da.map_blocks(function, x)\n"
                 "   or:   da.map_blocks(function, x, y, z)" %
                 type(func).__name__)
-    dtype = kwargs.get('dtype')
+    name = kwargs.pop('name', None)
+    dtype = kwargs.pop('dtype', None)
+    chunks = kwargs.pop('chunks', None)
+    drop_dims = kwargs.pop('drop_dims', [])
+    new_dims = kwargs.pop('new_dims', [])
+    if isinstance(drop_dims, Number):
+        drop_dims = [drop_dims]
+    if isinstance(new_dims, Number):
+        new_dims = [new_dims]
+
     assert all(isinstance(arr, Array) for arr in arrs)
 
     inds = [tuple(range(x.ndim))[::-1] for x in arrs]
@@ -445,7 +465,6 @@ def map_blocks(func, *arrs, **kwargs):
 
     out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
 
-    name = kwargs.get('name', None)
     result = atop(func, out_ind, *args, name=name, dtype=dtype)
 
     # If func has block_id as an argument then swap out func
@@ -458,13 +477,28 @@ def map_blocks(func, *arrs, **kwargs):
         for k in core.flatten(result._keys()):
             result.dask[k] = (partial(func, block_id=k[1:]),) + result.dask[k][1:]
 
-    # Assert user specified chunks
-    chunks = kwargs.get('chunks')
+    numblocks = list(result.numblocks)
+
+    if drop_dims:
+        for key in core.flatten(result._keys()):
+            new_key = tuple(k for i, k in enumerate(key)
+                               if i - 1 not in drop_dims)
+            result.dask[new_key] = result.dask.pop(key)
+        numblocks = [n for i, n in enumerate(numblocks) if i not in drop_dims]
+
+    if new_dims:
+        for key in core.flatten(result._keys()):
+            new_key = list(key)
+            for i in new_dims:
+                new_key.insert(i + 1, 0)
+            result.dask[tuple(new_key)] = result.dask.pop(key)
+        for i in sorted(new_dims, reverse=False):
+            numblocks.insert(i, 1)
+
     if chunks is not None and chunks and not isinstance(chunks[0], tuple):
-        chunks = tuple([nb * (bs,)
-                        for nb, bs in zip(result.numblocks, chunks)])
+        chunks = [nb * (bs,) for nb, bs in zip(numblocks, chunks)]
     if chunks is not None:
-        result._chunks = chunks
+        result._chunks = tuple(chunks)
 
     return result
 
@@ -1071,8 +1105,10 @@ class Array(Base):
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
 
     @wraps(map_blocks)
-    def map_blocks(self, func, chunks=None, dtype=None, name=None):
-        return map_blocks(func, self, chunks=chunks, dtype=dtype, name=name)
+    def map_blocks(self, func, chunks=None, dtype=None, name=None,
+                   drop_dims=None, new_dims=None):
+        return map_blocks(func, self, chunks=chunks, dtype=dtype, name=name,
+                          drop_dims=drop_dims, new_dims=new_dims)
 
     def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
         """ Map a function over blocks of the array with some overlap

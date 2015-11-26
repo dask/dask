@@ -1602,3 +1602,22 @@ def test_h5py_tokenize():
             x2 = g['x']
 
             assert tokenize(x1) != tokenize(x2)
+
+
+def test_map_blocks_with_changed_dimension():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(7, 4))
+
+    e = d.map_blocks(lambda b: b.sum(axis=0), chunks=(4,), drop_dims=0,
+                     dtype=d.dtype)
+    assert e.ndim == 1
+    assert e.chunks == ((4, 4),)
+    assert eq(e, x.sum(axis=0))
+
+    x = np.arange(64).reshape((8, 8))
+    d = da.from_array(x, chunks=(4, 4))
+    e = d.map_blocks(lambda b: b[None, :, :, None],
+                     chunks=(1, 4, 4, 1), new_dims=[0, 3], dtype=d.dtype)
+    assert e.ndim == 4
+    assert e.chunks == ((1,), (4, 4), (4, 4), (1,))
+    assert eq(e, x[None, :, :, None])
