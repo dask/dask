@@ -582,10 +582,13 @@ def execute_task(task):
 
 
 class Scheduler(object):
-    def __init__(self, delete_batch_time=1):
+    def __init__(self, center, delete_batch_time=1):
         self.scheduler_queue = Queue()
         self.report_queue = Queue()
         self.delete_queue = Queue()
+        self.status = None
+
+        self.center = coerce_to_rpc(center)
 
         self.dask = dict()
         self.dependencies = dict()
@@ -610,10 +613,14 @@ class Scheduler(object):
 
         self.delete_batch_time = delete_batch_time
 
-    def _start(self, center, ncores):
-        self.center = coerce_to_rpc(center)
-        self.ncores = ncores
+    @gen.coroutine
+    def _sync_center(self):
+        self.ncores, self.who_has, self.has_what = yield [
+                self.center.ncores(),
+                self.center.has_what(),
+                self.center.who_has()]
 
+    def start(self):
         self.processing = {addr: set() for addr in self.ncores}
         self.stacks = {addr: list() for addr in self.ncores}
 
@@ -850,6 +857,7 @@ class Scheduler(object):
 
         self.heal_state()
 
+        self.status = 'running'
         while True:
             msg = yield self.scheduler_queue.get()
             logger.debug("scheduler receives message %s", msg)
@@ -942,6 +950,7 @@ class Scheduler(object):
 
         logger.debug('Finished scheduling')
         yield self.cleanup()
+        self.status = 'done'
 
 
 scheduler = 0

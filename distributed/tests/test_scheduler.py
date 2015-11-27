@@ -458,8 +458,9 @@ def div(x, y):
 def test_scheduler(loop):
     @gen.coroutine
     def f(c, a, b):
-        s = Scheduler()
-        done = s._start((c.ip, c.port), c.ncores)
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
 
         # Test update graph
         s.scheduler_queue.put_nowait({'op': 'update-graph',
