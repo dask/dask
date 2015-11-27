@@ -531,8 +531,8 @@ def map_blocks(func, *args, **kwargs):
         spec = getargspec(func)
     except:
         spec = None
-    if spec and 'block_id' in spec.args:
-        for k in dsk:
+    if spec and 'block_id' in spec.args + spec.kwonlyargs:
+        for k in dsk.keys():
             dsk[k] = (partial(func, block_id=k[1:]),) + dsk[k][1:]
 
     numblocks = list(arrs[0].numblocks)
