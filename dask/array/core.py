@@ -470,6 +470,7 @@ def map_blocks(func, *args, **kwargs):
                 "   or:   da.map_blocks(function, x, y, z)" %
                 type(func).__name__)
     name = kwargs.pop('name', None)
+    name = name or 'map-blocks-%s' % tokenize(func, args, **kwargs)
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_dims = kwargs.pop('drop_dims', [])
@@ -488,14 +489,13 @@ def map_blocks(func, *args, **kwargs):
     if args:
         func = partial_by_order(func, args)
 
-    inds = [tuple(range(x.ndim))[::-1] for x in arrs]
-    atop_args = list(concat(zip(arrs, inds)))
+    arginds = [(a, tuple(range(a.ndim))[::-1]) for a in arrs]
 
-    out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
+    numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
+    argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
+    out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
-    name = name or 'map-blocks-%s' % tokenize(func, args, **kwargs)
-    dsk = dict(((name,) + keys[0][1:], (func,) + keys)
-            for keys in zip(*[core.flatten(a._keys()) for a in arrs]))
+    dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks)
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -510,18 +510,18 @@ def map_blocks(func, *args, **kwargs):
     numblocks = list(arrs[0].numblocks)
 
     if drop_dims:
-        for key in dsk:
-            new_key = tuple(k for i, k in enumerate(key)
-                               if i - 1 not in drop_dims)
-            dsk[new_key] = dsk.pop(key)
+        dsk = dict((tuple(k for i, k in enumerate(k)
+                             if i - 1 not in drop_dims), v)
+                    for k, v in dsk.items())
         numblocks = [n for i, n in enumerate(numblocks) if i not in drop_dims]
 
     if new_dims:
-        for key in dsk:
+        dsk, old_dsk = dict(), dsk
+        for key in old_dsk:
             new_key = list(key)
             for i in new_dims:
                 new_key.insert(i + 1, 0)
-            dsk[tuple(new_key)] = dsk.pop(key)
+            dsk[tuple(new_key)] = old_dsk[key]
         for i in sorted(new_dims, reverse=False):
             numblocks.insert(i, 1)
 
@@ -530,9 +530,48 @@ def map_blocks(func, *args, **kwargs):
     if chunks is not None:
         chunks = tuple(chunks)
     else:
-        chunks = arrs[0].chunks
+        chunks = broadcast_chunks(*[a.chunks for a in arrs])
 
     return Array(merge(dsk, *[a.dask for a in arrs]), name, chunks, dtype)
+
+
+def broadcast_chunks(*chunkss):
+    """ Construct a chunks tuple that broadcasts many chunks tuples
+
+    >>> a = ((5, 5),)
+    >>> b = ((5, 5),)
+    >>> broadcast_chunks(a, b)
+    ((5, 5),)
+
+    >>> a = ((10, 10, 10), (5, 5),)
+    >>> b = ((5, 5),)
+    >>> broadcast_chunks(a, b)
+    ((10, 10, 10), (5, 5))
+
+    >>> a = ((10, 10, 10), (5, 5),)
+    >>> b = ((1,), (5, 5),)
+    >>> broadcast_chunks(a, b)
+    ((10, 10, 10), (5, 5))
+
+    >>> a = ((10, 10, 10), (5, 5),)
+    >>> b = ((3, 3,), (5, 5),)
+    >>> broadcast_chunks(a, b)
+    Traceback (most recent call last):
+        ...
+    ValueError: Chunks do not align: [(10, 10, 10), (3, 3)]
+    """
+    if len(chunkss) == 1:
+        return chunkss[0]
+    n = max(map(len, chunkss))
+    chunkss2 = [((1,),) * (n - len(c)) + c for c in chunkss]
+    result = []
+    for i in range(n):
+        step1 = [c[i] for c in chunkss2]
+        step2 = [c for c in step1 if c != (1,)]
+        if len(set(step2)) != 1:
+            raise ValueError("Chunks do not align: %s" % str(step2))
+        result.append(step2[0])
+    return tuple(result)
 
 
 @wraps(np.squeeze)

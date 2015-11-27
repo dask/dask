@@ -1361,6 +1361,9 @@ def test_map_blocks3():
     assert eq(res, x + 2*z)
     assert same_keys(da.core.map_blocks(func, d, f, dtype=d.dtype), res)
 
+    assert eq(da.map_blocks(func, f, d, dtype=d.dtype),
+              z + 2*x)
+
 
 def test_from_array_with_missing_chunks():
     x = np.random.randn(2, 4, 3)
@@ -1640,3 +1643,21 @@ def test_map_blocks_with_changed_dimension():
     assert e.ndim == 4
     assert e.chunks == ((1,), (4, 4), (4, 4), (1,))
     assert eq(e, x[None, :, :, None])
+
+
+def test_broadcast_chunks():
+    assert broadcast_chunks(((5, 5),), ((5, 5),)) == ((5, 5),)
+
+    a = ((10, 10, 10), (5, 5),)
+    b = ((5, 5),)
+    assert broadcast_chunks(a, b) == ((10, 10, 10), (5, 5),)
+    assert broadcast_chunks(b, a) == ((10, 10, 10), (5, 5),)
+
+    a = ((10, 10, 10), (5, 5),)
+    b = ((1,), (5, 5),)
+    assert broadcast_chunks(a, b) == ((10, 10, 10), (5, 5),)
+
+    a = ((10, 10, 10), (5, 5),)
+    b = ((3, 3,), (5, 5),)
+    with pytest.raises(ValueError):
+        broadcast_chunks(a, b)
