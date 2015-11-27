@@ -479,7 +479,6 @@ def map_blocks(func, *args, **kwargs):
     if isinstance(new_dims, Number):
         new_dims = [new_dims]
 
-
     arrs = [a for a in args if isinstance(a, Array)]
     args = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
 
@@ -494,7 +493,9 @@ def map_blocks(func, *args, **kwargs):
 
     out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
 
-    result = atop(func, out_ind, *atop_args, name=name, dtype=dtype)
+    name = name or 'map-blocks-%s' % tokenize(func, args, **kwargs)
+    dsk = dict(((name,) + keys[0][1:], (func,) + keys)
+            for keys in zip(*[core.flatten(a._keys()) for a in arrs]))
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -503,33 +504,35 @@ def map_blocks(func, *args, **kwargs):
     except:
         spec = None
     if spec and 'block_id' in spec.args:
-        for k in core.flatten(result._keys()):
-            result.dask[k] = (partial(func, block_id=k[1:]),) + result.dask[k][1:]
+        for k in dsk:
+            dsk[k] = (partial(func, block_id=k[1:]),) + dsk[k][1:]
 
-    numblocks = list(result.numblocks)
+    numblocks = list(arrs[0].numblocks)
 
     if drop_dims:
-        for key in core.flatten(result._keys()):
+        for key in dsk:
             new_key = tuple(k for i, k in enumerate(key)
                                if i - 1 not in drop_dims)
-            result.dask[new_key] = result.dask.pop(key)
+            dsk[new_key] = dsk.pop(key)
         numblocks = [n for i, n in enumerate(numblocks) if i not in drop_dims]
 
     if new_dims:
-        for key in core.flatten(result._keys()):
+        for key in dsk:
             new_key = list(key)
             for i in new_dims:
                 new_key.insert(i + 1, 0)
-            result.dask[tuple(new_key)] = result.dask.pop(key)
+            dsk[tuple(new_key)] = dsk.pop(key)
         for i in sorted(new_dims, reverse=False):
             numblocks.insert(i, 1)
 
     if chunks is not None and chunks and not isinstance(chunks[0], tuple):
         chunks = [nb * (bs,) for nb, bs in zip(numblocks, chunks)]
     if chunks is not None:
-        result._chunks = tuple(chunks)
+        chunks = tuple(chunks)
+    else:
+        chunks = arrs[0].chunks
 
-    return result
+    return Array(merge(dsk, *[a.dask for a in arrs]), name, chunks, dtype)
 
 
 @wraps(np.squeeze)
