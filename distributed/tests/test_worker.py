@@ -155,6 +155,18 @@ def test_upload_package(loop):
         aa.close_streams()
 
     _test_cluster(f)
+
+
+def test_broadcast(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        cc = rpc(ip=c.ip, port=c.port)
+        results = yield cc.broadcast(msg={'op': 'ping'})
+        assert results == {a.address: b'pong', b.address: b'pong'}
+
+        cc.close_streams()
+
+    _test_cluster(f)
 """
 
 def test_close():

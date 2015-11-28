@@ -9,8 +9,8 @@ from tornado import gen
 from tornado.gen import Return
 from tornado.iostream import StreamClosedError
 
-from .core import Server, read, write, rpc
-from .utils import ignoring, ignore_exceptions
+from .core import Server, read, write, rpc, pingpong, send_recv
+from .utils import ignoring, ignore_exceptions, All
 
 
 logger = logging.getLogger(__name__)
@@ -54,9 +54,10 @@ class Center(Server):
              for func in [self.add_keys, self.remove_keys, self.get_who_has,
                           self.get_has_what, self.register, self.get_ncores,
                           self.unregister, self.delete_data, self.terminate,
-                          self.get_nannies]}
+                          self.get_nannies, self.broadcast]}
         d = {k[len('get_'):] if k.startswith('get_') else k: v for k, v in
                 d.items()}
+        d['ping'] = pingpong
 
         super(Center, self).__init__(d, **kwargs)
 
@@ -147,3 +148,11 @@ class Center(Server):
         yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
 
         raise Return(b'OK')
+
+    @gen.coroutine
+    def broadcast(self, stream, msg=None):
+        """ Broadcast message to workers, return all results """
+        workers = list(self.ncores)
+        results = yield All([send_recv(ip=ip, port=port, close=True, **msg)
+                             for ip, port in workers])
+        raise Return(dict(zip(workers, results)))
