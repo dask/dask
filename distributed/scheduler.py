@@ -615,24 +615,30 @@ class Scheduler(object):
 
     @gen.coroutine
     def _sync_center(self):
-        self.ncores, self.who_has, self.has_what = yield [
+        self.ncores, self.has_what, self.who_has = yield [
                 self.center.ncores(),
                 self.center.has_what(),
                 self.center.who_has()]
 
     def start(self):
+        collections = [self.dask, self.dependencies, self.dependents,
+                self.waiting, self.waiting_data, self.in_play, self.keyorder,
+                self.nbytes, self.processing, self.restrictions]
+        for collection in collections:
+            collection.clear()
+
         self.processing = {addr: set() for addr in self.ncores}
         self.stacks = {addr: list() for addr in self.ncores}
 
         self.worker_queues = {addr: Queue() for addr in self.ncores}
 
         self.coroutines = ([
-         self.scheduler(),
-         delete(self.scheduler_queue, self.delete_queue,
-                self.center.ip, self.center.port,
-                self.delete_batch_time)]
-        + [worker(self.scheduler_queue, self.worker_queues[w], w, n)
-           for w, n in self.ncores.items()])
+             self.scheduler(),
+             delete(self.scheduler_queue, self.delete_queue,
+                    self.center.ip, self.center.port,
+                    self.delete_batch_time)]
+            + [worker(self.scheduler_queue, self.worker_queues[w], w, n)
+               for w, n in self.ncores.items()])
 
         for cor in self.coroutines:
             if cor.done():

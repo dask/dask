@@ -1238,7 +1238,6 @@ def test_restart_fast(loop):
 
             assert all(x.status == 'cancelled' for x in L)
 
-            import pdb; pdb.set_trace()
             x = e.submit(inc, 1)
             assert x.result() == 2
 
