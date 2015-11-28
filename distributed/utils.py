@@ -84,7 +84,7 @@ def sync(loop, func, *args, **kwargs):
 
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+                    level=logging.DEBUG)
 
 # http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
 stream = logging.StreamHandler(sys.stderr)

@@ -69,14 +69,14 @@ def test_map(loop):
 
         result = yield L1[0]._result()
         assert result == inc(0)
-        assert len(e.dask) == 5
+        assert len(e.scheduler.dask) == 5
 
         L2 = e.map(inc, L1)
 
         result = yield L2[1]._result()
         assert result == inc(inc(1))
-        assert len(e.dask) == 10
-        assert L1[0].key in e.dask[L2[0].key]
+        assert len(e.scheduler.dask) == 10
+        assert L1[0].key in e.scheduler.dask[L2[0].key]
 
         total = e.submit(sum, L2)
         result = yield total._result()
@@ -558,7 +558,7 @@ def test_missing_worker(loop):
 
         result = yield e._get(dsk, 'c')
         assert result == 3
-        assert bad not in e.ncores
+        assert bad not in e.scheduler.ncores
 
         yield e._shutdown()
 
@@ -637,10 +637,10 @@ def test_restrictions_submit(loop):
         y = e.submit(inc, x, workers={b.ip})
         yield _wait([x, y])
 
-        assert e.restrictions[x.key] == {a.ip}
+        assert e.scheduler.restrictions[x.key] == {a.ip}
         assert x.key in a.data
 
-        assert e.restrictions[y.key] == {b.ip}
+        assert e.scheduler.restrictions[y.key] == {b.ip}
         assert y.key in b.data
 
         yield e._shutdown()
@@ -659,16 +659,16 @@ def test_restrictions_map(loop):
         assert set(a.data) == {x.key for x in L}
         assert not b.data
         for x in L:
-            assert e.restrictions[x.key] == {a.ip}
+            assert e.scheduler.restrictions[x.key] == {a.ip}
 
         L = e.map(inc, [10, 11, 12], workers=[{a.ip},
                                               {a.ip, b.ip},
                                               {b.ip}])
         yield _wait(L)
 
-        assert e.restrictions[L[0].key] == {a.ip}
-        assert e.restrictions[L[1].key] == {a.ip, b.ip}
-        assert e.restrictions[L[2].key] == {b.ip}
+        assert e.scheduler.restrictions[L[0].key] == {a.ip}
+        assert e.scheduler.restrictions[L[1].key] == {a.ip, b.ip}
+        assert e.scheduler.restrictions[L[2].key] == {b.ip}
 
         with pytest.raises(ValueError):
             e.map(inc, [10, 11, 12], workers=[{a.ip}])
@@ -743,7 +743,7 @@ def test_gather_then_submit_after_failed_workers(loop):
             total = e.submit(sum, L)
             wait([total])
 
-            (_, port) = first(e.who_has[total.key])
+            (_, port) = first(e.scheduler.who_has[total.key])
             for d in [x, y, z]:
                 if d['port'] == port:
                     d['proc'].terminate()
@@ -891,7 +891,7 @@ def test_aliases(loop):
 
 def test_executor_has_state_on_initialization(loop):
     e = Executor('127.0.0.1:8787', start=False, loop=loop)
-    assert isinstance(e.ncores, dict)
+    assert isinstance(e.scheduler.ncores, dict)
 
 
 def test__scatter(loop):
@@ -903,9 +903,10 @@ def test__scatter(loop):
         d = yield e._scatter({'y': 20})
         assert isinstance(d['y'], Future)
         assert a.data.get('y') == 20 or b.data.get('y') == 20
-        assert a.address in e.who_has['y'] or b.address in e.who_has['y']
+        assert (a.address in e.scheduler.who_has['y'] or
+                b.address in e.scheduler.who_has['y'])
         assert c.who_has['y']
-        assert e.nbytes == {'y': sizeof(20)}
+        assert e.scheduler.nbytes == {'y': sizeof(20)}
         yy = yield e._gather([d['y']])
         assert yy == [20]
 
@@ -914,8 +915,9 @@ def test__scatter(loop):
         assert a.data.get(x.key) == 10 or b.data.get(x.key) == 10
         xx = yield e._gather([x])
         assert c.who_has[x.key]
-        assert a.address in e.who_has[x.key] or b.address in e.who_has[x.key]
-        assert e.nbytes == {'y': sizeof(20), x.key: sizeof(10)}
+        assert (a.address in e.scheduler.who_has[x.key] or
+                b.address in e.scheduler.who_has[x.key])
+        assert e.scheduler.nbytes == {'y': sizeof(20), x.key: sizeof(10)}
         assert xx == [10]
 
         z = e.submit(add, x, d['y'])  # submit works on RemoteData
@@ -988,13 +990,13 @@ def test_nbytes(loop):
         yield e._start()
 
         [x] = yield e._scatter([1])
-        assert e.nbytes == {x.key: sizeof(1)}
+        assert e.scheduler.nbytes == {x.key: sizeof(1)}
 
         y = e.submit(inc, x)
         yield y._result()
 
-        assert e.nbytes == {x.key: sizeof(1),
-                            y.key: sizeof(2)}
+        assert e.scheduler.nbytes == {x.key: sizeof(1),
+                                      y.key: sizeof(2)}
 
         yield e._shutdown()
     _test_cluster(f, loop)
@@ -1012,7 +1014,7 @@ def test_nbytes_determines_worker(loop):
 
         z = e.submit(lambda x, y: None, x, y)
         yield z._result()
-        assert e.who_has[z.key] == {b.address}
+        assert e.scheduler.who_has[z.key] == {b.address}
 
         yield e._shutdown()
     _test_cluster(f, loop)
@@ -1037,7 +1039,7 @@ def test_pragmatic_move_small_data_to_large_data(loop):
         yield _wait(results)
 
         for l, r in zip(lists, results):
-            assert e.who_has[l.key] == e.who_has[r.key]
+            assert e.scheduler.who_has[l.key] == e.scheduler.who_has[r.key]
 
         yield e._shutdown()
     _test_cluster(f, loop)
@@ -1167,7 +1169,7 @@ def test_restart(loop):
 
         e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
-        assert e.ncores == {a.worker_address: 2, b.worker_address: 2}
+        assert e.scheduler.ncores == {a.worker_address: 2, b.worker_address: 2}
 
         x = e.submit(inc, 1)
         y = e.submit(inc, x)
@@ -1176,17 +1178,17 @@ def test_restart(loop):
         cc = rpc(ip=c.ip, port=c.port)
         who_has = yield cc.who_has()
         try:
-            assert e.who_has == who_has
-            assert set(e.who_has) == {x.key, y.key}
+            assert e.scheduler.who_has == who_has
+            assert set(e.scheduler.who_has) == {x.key, y.key}
 
             yield e._restart()
 
-            assert len(e.stacks) == 2
-            assert len(e.processing) == 2
+            assert len(e.scheduler.stacks) == 2
+            assert len(e.scheduler.processing) == 2
 
             who_has = yield cc.who_has()
             assert not who_has
-            assert not e.who_has
+            assert not e.scheduler.who_has
 
             assert x.cancelled()
             assert y.cancelled()
@@ -1194,7 +1196,7 @@ def test_restart(loop):
         finally:
             yield a._close()
             yield b._close()
-            yield e._shutdown()
+            yield e._shutdown(fast=True)
             c.stop()
 
     loop.run_sync(f)
@@ -1203,20 +1205,22 @@ def test_restart(loop):
 def test_restart_sync(loop):
     with cluster(nanny=True) as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            assert len(e.has_what) == 2
+            assert len(e.scheduler.has_what) == 2
             x = e.submit(div, 1, 2)
             x.result()
 
-            assert e.who_has
+            assert e.scheduler.who_has
             e.restart()
-            assert not e.who_has
+            assert not e.scheduler.who_has
             assert x.cancelled()
 
             with pytest.raises(CancelledError):
                 x.result()
 
-            assert set(e.stacks) == set(e.processing) == set(e.ncores)
-            assert len(e.stacks) == 2
+            assert (set(e.scheduler.stacks) ==
+                    set(e.scheduler.processing) ==
+                    set(e.scheduler.ncores))
+            assert len(e.scheduler.stacks) == 2
 
             y = e.submit(div, 1, 3)
             assert y.result() == 1 / 3
@@ -1229,6 +1233,7 @@ def test_restart_fast(loop):
 
             start = time()
             e.restart()
+            assert not e.scheduler.dask
             assert time() - start < 5
 
             assert all(x.status == 'cancelled' for x in L)
@@ -1270,7 +1275,7 @@ def test_fast_kill(loop):
         finally:
             yield a._close()
             yield b._close()
-            yield e._shutdown()
+            yield e._shutdown(fast=True)
             c.stop()
 
     loop.run_sync(f)
