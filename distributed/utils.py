@@ -1,8 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import Iterable
+import os
 import socket
 import sys
+import tempfile
 
 from tornado import gen
 
@@ -80,6 +82,19 @@ def sync(loop, func, *args, **kwargs):
     a = loop.add_callback(f)
     e.wait()
     return result[0]
+
+
+@contextmanager
+def tmp_text(filename, text):
+    fn = os.path.join(tempfile.gettempdir(), filename)
+    with open(fn, 'w') as f:
+        f.write(text)
+
+    try:
+        yield fn
+    finally:
+        if os.path.exists(fn):
+            os.remove(fn)
 
 
 import logging
