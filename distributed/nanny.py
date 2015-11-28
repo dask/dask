@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 from multiprocessing import Process, Queue, queues
-import os
 
 from tornado.ioloop import IOLoop
 from tornado import gen
@@ -31,8 +30,7 @@ class Nanny(Server):
 
         handlers = {'instantiate': self._instantiate,
                     'kill': self._kill,
-                    'terminate': self._close,
-                    'upload_package': self.upload_package}
+                    'terminate': self._close}
 
         super(Nanny, self).__init__(handlers, **kwargs)
 
@@ -109,11 +107,6 @@ class Nanny(Server):
         self.status = 'closed'
         raise gen.Return(b'OK')
 
-    def upload_package(self, stream, filename=None, data=None):
-        with open(os.path.join('pkgs', filename), 'wb') as f:
-            f.write(data)
-        return b'OK'
-
     @property
     def address(self):
         return (self.ip, self.port)
@@ -127,10 +120,6 @@ def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port):
     """ Function run by the Nanny when creating the worker """
     from distributed import Worker
     from tornado.ioloop import IOLoop
-    import sys
-    if not os.path.exists('pkgs'):
-        os.mkdir('pkgs')
-    sys.path.append('pkgs')
     IOLoop.clear_instance()
     loop = IOLoop()
     loop.make_current()

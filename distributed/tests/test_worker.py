@@ -1,4 +1,5 @@
 from operator import add
+import os
 import sys
 from time import sleep
 
@@ -131,6 +132,27 @@ def test_delete_data_with_missing_worker(loop):
         assert not c.has_what[a.address]
 
         cc.close_streams()
+
+    _test_cluster(f)
+
+
+def test_upload_package(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        if os.path.exists(os.path.join('pkgs', 'foobar.py')):
+            os.remove(os.path.join('pkgs', 'foobar.py'))
+        aa = rpc(ip=a.ip, port=a.port)
+        yield aa.upload_package(filename='foobar.py', data=b'x = 123')
+
+        def g():
+            import foobar
+            return foobar.x
+
+        yield aa.compute(function=g, key='x')
+        result = yield aa.get_data(keys=['x'])
+        assert result == {'x': 123}
+
+        aa.close_streams()
 
     _test_cluster(f)
 """

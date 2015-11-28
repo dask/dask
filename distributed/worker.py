@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 import logging
 from multiprocessing.pool import ThreadPool
+import os
 import traceback
 import sys
 
@@ -22,6 +23,11 @@ _ncores = ThreadPool()._processes
 
 
 logger = logging.getLogger(__name__)
+
+if not os.path.exists('pkgs'):
+    os.mkdir('pkgs')
+
+sys.path.append('pkgs')
 
 
 class Worker(Server):
@@ -79,7 +85,8 @@ class Worker(Server):
                     'update_data': self.update_data,
                     'delete_data': self.delete_data,
                     'terminate': self.terminate,
-                    'ping': pingpong}
+                    'ping': pingpong,
+                    'upload_package': self.upload_package}
 
         super(Worker, self).__init__(handlers, **kwargs)
 
@@ -207,6 +214,11 @@ class Worker(Server):
 
     def get_data(self, stream, keys=None):
         return {k: self.data[k] for k in keys if k in self.data}
+
+    def upload_package(self, stream, filename=None, data=None):
+        with open(os.path.join('pkgs', filename), 'wb') as f:
+            f.write(data)
+        return b'OK'
 
 
 job_counter = [0]
