@@ -11,11 +11,12 @@ import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
         _parse_s3_URI, inline_singleton_lists, optimize, decode_sequence,
-        system_encoding, _readlines, pluck)
+        system_encoding)
 from dask.utils import filetexts, tmpfile, raises
 from dask.async import get_sync
 import dask
 import dask.bag as db
+import io
 import shutil
 import os
 import gzip
@@ -326,16 +327,32 @@ def test_from_filenames_gzip():
     b = db.from_filenames(['foo.json.gz', 'bar.json.gz'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (decode_sequence, system_encoding, (pluck, 0, (_readlines, (gzip.open, os.path.abspath('foo.json.gz'), 'rb'), system_encoding, '\n')))),
-                 (list, (decode_sequence, system_encoding, (pluck, 0, (_readlines, (gzip.open, os.path.abspath('bar.json.gz'), 'rb'), system_encoding, '\n'))))]))
+            set([(list,
+                  (io.TextIOWrapper,
+                   (io.BufferedReader,
+                    (gzip.open, os.path.abspath('foo.json.gz'), 'rb')),
+                   system_encoding, None, '\n')),
+                 (list,
+                  (io.TextIOWrapper,
+                   (io.BufferedReader,
+                    (gzip.open, os.path.abspath('bar.json.gz'), 'rb')),
+                   system_encoding, None, '\n'))]))
 
 
 def test_from_filenames_bz2():
     b = db.from_filenames(['foo.json.bz2', 'bar.json.bz2'])
 
     assert (set(b.dask.values()) ==
-            set([(list, (decode_sequence, system_encoding, (pluck, 0, (_readlines, (bz2.BZ2File, os.path.abspath('foo.json.bz2'), 'rb'), system_encoding, '\n')))),
-                 (list, (decode_sequence, system_encoding, (pluck, 0, (_readlines, (bz2.BZ2File, os.path.abspath('bar.json.bz2'), 'rb'), system_encoding, '\n'))))]))
+            set([(list,
+                  (io.TextIOWrapper,
+                   (io.BufferedReader,
+                    (bz2.BZ2File, os.path.abspath('foo.json.bz2'), 'rb')),
+                   system_encoding, None, '\n')),
+                 (list,
+                  (io.TextIOWrapper,
+                   (io.BufferedReader,
+                    (bz2.BZ2File, os.path.abspath('bar.json.bz2'), 'rb')),
+                   system_encoding, None, '\n'))]))
 
 
 def test_from_filenames_large():

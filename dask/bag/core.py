@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import io
 import itertools
 import math
 import gzip
@@ -11,6 +12,7 @@ from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
+from warnings import warn
 
 from ..utils import ignoring
 
@@ -822,10 +824,6 @@ def collect(grouper, group, p, barrier_token):
     return list(d.items())
 
 
-def decode_sequence(encoding, seq):
-    for item in seq:
-        yield item.decode(encoding)
-
 opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
 
 
@@ -868,95 +866,72 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding,
                  for i, task in enumerate(toolz.concat(taskss)))
     else:
         extension = os.path.splitext(filenames[0])[1].strip('.')
-        myopen = opens.get(extension, open)
+        myopen = opens.get(extension, io.open)
 
-        d = dict(((name, i), (list, (decode_sequence, encoding,
-                                     (pluck, 0,
-                                      (_readlines, (myopen, fn, 'rb'),
-                                       encoding, linesep)))))
+        d = dict(((name, i), (list,
+                              (io.TextIOWrapper,
+                               (io.BufferedReader, (myopen, fn, 'rb')),
+                               encoding, None, get_bin_linesep(encoding,
+                                                               linesep))))
                  for i, fn in enumerate(full_filenames))
 
     return Bag(d, name, len(d))
 
 
-def _readlines(fo, encoding, linesep, chunksize=4096):
-    # Get text file encoding.
-    if encoding is None:
-        encoding = getattr(fo, 'encoding', 'utf-8')
-    # Get line separator.
-    if linesep is None:
-        linesep = os.linesep
-    # Get byte representation of the line separator.
-    bin_linesep = get_bin_linesep(encoding, linesep)
-    bin_linesep_len = len(bin_linesep)
-
-    buf = b''
-    fpos = fo.tell()
-    while True:
-        start, end = 0, 0
-        while True:
-            try:
-                pos = buf.index(bin_linesep, start)
-            except ValueError:
-                buf = buf[start:]
-                break
-            else:
-                end = pos + bin_linesep_len
-                yield buf[start:end], fpos + end
-                start = end
-        fpos += end
-        chunk = fo.read(chunksize)
-        if chunk:
-            buf += chunk
-        else:
-            if buf:
-                yield buf, fpos + end + len(buf)
-            break
-
-
-def _textblock(filename, start, end, compression, encoding=None, linesep=None):
-    f = opens.get(compression, open)(filename, 'rb')
+def _textblock(filename, start, end, compression, encoding, linesep):
+    chunksize = end - start + 1
+    f = opens.get(compression, io.open)(filename, 'rb')
     try:
-        # Get text file encoding.
-        if encoding is None:
-            encoding = getattr(f, 'encoding', 'utf-8')
-        # Get line separator.
-        if linesep is None:
-            linesep = os.linesep
-        # Get byte representation of the line separator.
-        bin_linesep = get_bin_linesep(encoding, linesep)
-        bin_linesep_len = len(bin_linesep)
+        with io.BufferedReader(f) as fb:
+            # Get byte representation of the line separator.
+            linesep = get_bin_linesep(encoding, linesep)
+            linesep_len = len(linesep)
 
-        # Determine which of the following cases applies:
-        # (1) skip=False: `start` corresponds to the beginning of a line. We
-        #     can start reading lines of this text block.
-        # (2) skip=True: `start` corresponds to a position in the middle of a
-        #     line. We need to skip characters until we reach the beginning of
-        #     the next line.
-        skip = False
-        if start >= bin_linesep_len:
-            f.seek(start - bin_linesep_len)
-            if f.read(bin_linesep_len) != bin_linesep:
-                skip = True
-        else:
-            f.seek(start)
+            # If `start` does not correspond to the beginning of the file, then
+            # we need to set the file pointer to `start` and keep reading
+            # chunks until we find a line separator. We then set the file
+            # pointer to the position after the line separator.
+            # If `start` corresponds to the first character of a line, the line
+            # is not part of this textblock. This is okay since
+            # io.TextIOWrapper below keeps reading lines until `start` exceeds
+            # `end`, i.e also the line where `start == end` is part of this
+            # textblock. Thus, the line is definitely only part of one
+            # textblock.
+            if start > 0:
+                fb.seek(start)
+                while True:
+                    buf = f.read(4096)
+                    try:
+                        start += buf.index(linesep)
+                        start += linesep_len
+                    except ValueError:
+                        start += len(buf)
+                    else:
+                        f.seek(start)
+                        break
 
-        # Get line iterator based on the encoding and line separator and skip
-        # characters to reach the beginning of the next line if necessary.
-        lines = _readlines(f, encoding, linesep)
-        if skip:
-            pos = next(lines)[1]
-        else:
-            pos = start
+            with io.TextIOWrapper(fb, encoding, newline=linesep) as fbw:
+                try:
+                    # Retrieve and yield lines until the file position
+                    # *exceeds* `end`. See the comment above for why
+                    # `start <= end` is correct and not `start < end`.
+                    while start <= end:
+                        line = next(fbw)
 
-        # Retrieve and yield lines until the file position exceeds the `end`
-        # position.
-        try:
-            while pos < end:
-                line, pos = next(lines)
-                yield line
-        except StopIteration:
-            pass
+                        # We need to encode the line again to get the byte
+                        # length in order to correctly update the byte offset.
+                        line_len = len(line.encode(encoding))
+                        if chunksize < line_len:
+                            warn(('`chunksize` ({:d}) is less than the line '
+                                  'length ({:d}). This may cause duplicate '
+                                  'processing of this line. It is advised '
+                                  'to increase `chunksize`.').format(
+                                  chunksize, line_len))
+
+                        yield line
+                        start += line_len
+                except StopIteration:
+                    pass
     finally:
         f.close()
 
@@ -964,10 +939,8 @@ def _textblock(filename, start, end, compression, encoding=None, linesep=None):
 def _chunk_read_file(filename, chunkbytes, encoding, linesep):
     extension = os.path.splitext(filename)[1].strip('.')
     compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
-
-    return [(list, (decode_sequence, encoding, (_textblock, filename,
-                                                i, i + chunkbytes,
-                                                extension, encoding, linesep)))
+    return [(list, (_textblock, filename, i, i + chunkbytes, extension,
+                    encoding, linesep))
             for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
