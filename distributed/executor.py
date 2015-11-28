@@ -6,6 +6,7 @@ from concurrent import futures
 from functools import wraps, partial
 import itertools
 import logging
+import os
 import time
 import uuid
 
@@ -583,12 +584,12 @@ class Executor(object):
     def _upload_package(self, filename):
         with open(filename, 'rb') as f:
             data = f.read()
+        _, fn = os.path.split(filename)
         d = yield self.center.broadcast(msg={'op': 'upload_package',
-                                             'filename': filename,
+                                             'filename': fn,
                                              'data': data})
 
-        assert all(v == b'OK' for v in d.values())
-        raise gen.Return(b'OK')
+        assert all(len(data) == v for v in d.values())
 
     def upload_package(self, filename):
         """ Upload local package to workers

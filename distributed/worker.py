@@ -218,7 +218,8 @@ class Worker(Server):
     def upload_package(self, stream, filename=None, data=None):
         with open(os.path.join('pkgs', filename), 'wb') as f:
             f.write(data)
-        return b'OK'
+            f.flush()
+        return len(data)
 
 
 job_counter = [0]

@@ -3,8 +3,9 @@ from operator import add, sub
 from collections import Iterator
 from concurrent.futures import CancelledError
 import os
-from time import sleep, time
+import shutil
 import sys
+from time import sleep, time
 
 import pytest
 from toolz import identity, isdistinct, first
@@ -16,7 +17,7 @@ from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize, _global_executors, default_executor)
 from distributed.sizeof import sizeof
-from distributed.utils import ignoring, sync
+from distributed.utils import ignoring, sync, tmp_text
 from distributed.utils_test import cluster, slow, _test_cluster, loop
 
 
@@ -1288,21 +1289,19 @@ def test_upload_package(loop):
         e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
+        shutil.rmtree('pkgs')
+        os.mkdir('pkgs')
+
         def g():
             import myfile
             return myfile.x
 
-        try:
-            fn = 'myfile.py'
-            with open(fn, 'w') as f:
-                f.write('x = 123')
-            yield e._upload_package('myfile.py')
+        with tmp_text('myfile.py', 'x = 123') as fn:
+            yield e._upload_package(fn)
 
             x = e.submit(g)
             result = yield x._result()
             assert result == 123
-        finally:
-            os.remove('myfile.py')
 
         yield e._shutdown()
     _test_cluster(f, loop)
@@ -1311,18 +1310,14 @@ def test_upload_package(loop):
 def test_upload_package_sync(loop):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
-
             def g():
                 import myfile
                 return myfile.x
 
-            try:
-                fn = 'myfile.py'
-                with open(fn, 'w') as f:
-                    f.write('x = 123')
-                e.upload_package('myfile.py')
+            shutil.rmtree('pkgs')
+            os.mkdir('pkgs')
 
+            with tmp_text('myfile.py', 'x = 123') as fn:
+                e.upload_package(fn)
                 x = e.submit(g)
                 assert x.result() == 123
-            finally:
-                os.remove('myfile.py')
