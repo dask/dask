@@ -182,10 +182,10 @@ class Executor(object):
     @gen.coroutine
     def _start(self):
         yield self.scheduler._sync_center()
+        self._scheduler_start_event = Event()
         self.coroutines = [self.scheduler.start(), self.report()]
         _global_executors.add(self)
-        while self.scheduler.status != 'running':
-            yield gen.sleep(0.01)
+        yield self._scheduler_start_event.wait()
         logger.debug("Started scheduling coroutines. Synchronized")
 
     @property
@@ -227,6 +227,8 @@ class Executor(object):
         """ Listen to scheduler """
         while True:
             msg = yield self.report_queue.get()
+            if msg['op'] == 'start':
+                self._scheduler_start_event.set()
             if msg['op'] == 'close':
                 break
             if msg['op'] == 'key-in-memory':

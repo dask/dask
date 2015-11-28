@@ -858,8 +858,10 @@ class Scheduler(object):
         self.heal_state()
 
         self.status = 'running'
+        self.report_queue.put_nowait({'op': 'start'})
         while True:
             msg = yield self.scheduler_queue.get()
+
             logger.debug("scheduler receives message %s", msg)
             if msg['op'] == 'close':
                 break
