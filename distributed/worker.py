@@ -24,11 +24,6 @@ _ncores = ThreadPool()._processes
 
 logger = logging.getLogger(__name__)
 
-if not os.path.exists('pkgs'):
-    os.mkdir('pkgs')
-
-sys.path.append('pkgs')
-
 
 class Worker(Server):
     """ Worker Node
@@ -69,7 +64,7 @@ class Worker(Server):
     """
 
     def __init__(self, ip, port, center_ip, center_port, ncores=None,
-                 loop=None, nanny_port=None, **kwargs):
+                 loop=None, nanny_port=None, local_dir='pkgs', **kwargs):
         self.ip = ip
         self.port = port
         self.nanny_port = nanny_port
@@ -79,6 +74,12 @@ class Worker(Server):
         self.status = None
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
+
+        if not os.path.exists(local_dir):
+            os.mkdir(local_dir)
+
+        if local_dir not in sys.path:
+            sys.path.append(local_dir)
 
         handlers = {'compute': self.compute,
                     'get_data': self.get_data,

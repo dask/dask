@@ -18,11 +18,12 @@ class Nanny(Server):
     them as necessary.
     """
     def __init__(self, ip, port, worker_port, center_ip, center_port,
-                ncores=None, loop=None, **kwargs):
+                ncores=None, loop=None, local_dir='pkgs', **kwargs):
         self.ip = ip
         self.port = port
         self.worker_port = worker_port
         self.ncores = ncores
+        self.local_dir = local_dir
         self.status = None
         self.process = None
         self.loop = loop or IOLoop.current()
@@ -72,7 +73,7 @@ class Nanny(Server):
         self.process = Process(target=run_worker,
                                args=(q, self.ip, self.worker_port, self.center.ip,
                                      self.center.port, self.ncores,
-                                     self.port))
+                                     self.port, self.local_dir))
         self.process.daemon = True
         self.process.start()
         logger.info("Nanny starts worker process %s:%d", self.ip, self.port)
@@ -116,7 +117,8 @@ class Nanny(Server):
         return (self.ip, self.worker_port)
 
 
-def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port):
+def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port,
+        local_dir):
     """ Function run by the Nanny when creating the worker """
     from distributed import Worker
     from tornado.ioloop import IOLoop
@@ -124,7 +126,7 @@ def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port):
     loop = IOLoop()
     loop.make_current()
     worker = Worker(ip, port, center_ip, center_port, ncores,
-                    nanny_port=nanny_port)
+                    nanny_port=nanny_port, local_dir=local_dir)
 
     @gen.coroutine
     def start():
