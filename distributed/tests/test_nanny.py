@@ -84,3 +84,30 @@ def test_nanny_process_failure(loop):
         c.stop()
 
     loop.run_sync(f)
+
+
+def test_upload_package(loop):
+    c = Center('127.0.0.1', 8026)
+    n = Nanny('127.0.0.1', 8027, 8028, '127.0.0.1', 8026, ncores=2)
+    c.listen(c.port)
+
+    @gen.coroutine
+    def f():
+        nn = rpc(ip=n.ip, port=n.port)
+        yield n._start()
+
+        yield nn.upload_package(filename='foobar.py', data=b'x = 123')
+
+        def f():
+            import foobar
+            return foobar.x
+
+        ww = rpc(ip=n.ip, port=n.worker_port)
+        yield ww.compute(function=f, key='x')
+        result = yield ww.get_data(keys=['x'])
+        assert result == {'x': 123}
+
+        yield n._close()
+        c.stop()
+
+    loop.run_sync(f)
