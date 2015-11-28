@@ -10,8 +10,7 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI, inline_singleton_lists, optimize, decode_sequence,
-        system_encoding)
+        _parse_s3_URI, inline_singleton_lists, optimize, system_encoding)
 from dask.utils import filetexts, tmpfile, raises
 from dask.async import get_sync
 import dask
