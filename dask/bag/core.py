@@ -858,6 +858,11 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding,
 
     name = 'from-filename' + next(tokens)
 
+    # Make sure `linesep` is not a byte string because `io.TextIOWrapper` in
+    # python versions other than 2.7 dislike byte strings for the `newline`
+    # argument.
+    linesep = str(linesep)
+
     if chunkbytes:
         chunkbytes = int(chunkbytes)
         taskss = [_chunk_read_file(fn, chunkbytes, encoding, linesep)
@@ -871,21 +876,25 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding,
         d = dict(((name, i), (list,
                               (io.TextIOWrapper,
                                (io.BufferedReader, (myopen, fn, 'rb')),
-                               encoding, None, get_bin_linesep(encoding,
-                                                               linesep))))
+                               encoding, None, linesep)))
                  for i, fn in enumerate(full_filenames))
 
     return Bag(d, name, len(d))
 
 
 def _textblock(filename, start, end, compression, encoding, linesep):
+    # Make sure `linesep` is not a byte string because `io.TextIOWrapper` in
+    # python versions other than 2.7 dislike byte strings for the `newline`
+    # argument.
+    linesep = str(linesep)
+
     chunksize = end - start + 1
     f = opens.get(compression, io.open)(filename, 'rb')
     try:
         with io.BufferedReader(f) as fb:
             # Get byte representation of the line separator.
-            linesep = get_bin_linesep(encoding, linesep)
-            linesep_len = len(linesep)
+            bin_linesep = get_bin_linesep(encoding, linesep)
+            bin_linesep_len = len(bin_linesep)
 
             # If `start` does not correspond to the beginning of the file, then
             # we need to set the file pointer to `start` and keep reading
@@ -902,8 +911,8 @@ def _textblock(filename, start, end, compression, encoding, linesep):
                 while True:
                     buf = f.read(4096)
                     try:
-                        start += buf.index(linesep)
-                        start += linesep_len
+                        start += buf.index(bin_linesep)
+                        start += bin_linesep_len
                     except ValueError:
                         start += len(buf)
                     else:
