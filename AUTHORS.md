@@ -18,6 +18,8 @@
 
 [Olivier Grisel](http://ogrisel.com/)
 
+[Pedro Duarte](https://github.com/PedroMDuarte)
+
 [Peter Steinberg](https://github.com/PeterDSteinberg/)
 
 [Phil Elson](https://github.com/pelson)
