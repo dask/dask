@@ -199,7 +199,7 @@ def dot_graph(dsk, filename='mydask', format=None, **kwargs):
     """
     g = to_graphviz(dsk, **kwargs)
 
-    fmts = ['png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg']
+    fmts = ['.png', '.pdf', '.dot', '.svg', '.jpeg', '.jpg']
     if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
         format = filename.lower().split('.')[-1]
         filename = filename.rsplit('.')[0]
