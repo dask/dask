@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
+from glob import glob
 import logging
 from multiprocessing import Process
 import os
@@ -84,7 +85,8 @@ def cluster(nworkers=2, nanny=False):
     for i in range(nworkers):
         _port[0] += 1
         port = _port[0]
-        proc = Process(target=_run_worker, args=(port, cport), kwargs={'ncores': 1})
+        proc = Process(target=_run_worker, args=(port, cport),
+                        kwargs={'ncores': 1, 'local_dir': '_test_worker-%d' % port})
         workers.append({'port': port, 'proc': proc})
 
     center.start()
@@ -114,6 +116,8 @@ def cluster(nworkers=2, nanny=False):
         for proc in [center] + [w['proc'] for w in workers]:
             with ignoring(Exception):
                 proc.terminate()
+        for fn in glob('_test_worker-*'):
+            shutil.rmtree(fn)
 
 
 import pytest

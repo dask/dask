@@ -8,35 +8,9 @@ from tornado.ioloop import IOLoop
 
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.utils_test import cluster, loop
+from distributed.utils_test import cluster, loop, _test_cluster
 from distributed.client import (RemoteData, _gather, _scatter, _delete, _clear,
         scatter_to_workers, pack_data, gather, scatter, delete, clear)
-
-
-def _test_cluster(f, loop=None):
-    @gen.coroutine
-    def g():
-        c = Center('127.0.0.1', 8017)
-        c.listen(c.port)
-        a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=1)
-        yield a._start()
-        b = Worker('127.0.0.1', 8019, c.ip, c.port, ncores=1)
-        yield b._start()
-
-        while len(c.ncores) < 2:
-            yield gen.sleep(0.01)
-
-        try:
-            yield f(c, a, b)
-        finally:
-            with ignoring():
-                yield a._close()
-            with ignoring():
-                yield b._close()
-            c.stop()
-
-    loop = loop or IOLoop.current()
-    loop.run_sync(g)
 
 
 def test_scatter_delete(loop):

@@ -2,6 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 from multiprocessing import Process, Queue, queues
+import os
+import shutil
 import tempfile
 
 from tornado.ioloop import IOLoop
@@ -25,6 +27,7 @@ class Nanny(Server):
         self.worker_port = worker_port
         self.ncores = ncores
         self.local_dir = local_dir
+        self.worker_dir = ''
         self.status = None
         self.process = None
         self.loop = loop or IOLoop.current()
@@ -60,6 +63,7 @@ class Nanny(Server):
             result = yield self.center.unregister(address=self.worker_address)
             if result != b'OK':
                 logger.critical("Unable to unregister with center. %s", result)
+            self.cleanup()
         raise gen.Return(b'OK')
 
     @gen.coroutine
@@ -80,11 +84,18 @@ class Nanny(Server):
         logger.info("Nanny starts worker process %s:%d", self.ip, self.port)
         while True:
             try:
-                self.worker_port = q.get_nowait()
+                msg = q.get_nowait()
+                self.worker_port = msg['port']
+                self.worker_dir = msg['dir']
                 break
             except queues.Empty:
                 yield gen.sleep(0.1)
         raise gen.Return(b'OK')
+
+    def cleanup(self):
+        if os.path.exists(self.worker_dir):
+            shutil.rmtree(self.worker_dir)
+        self.worker_dir = None
 
     @gen.coroutine
     def _watch(self, wait_seconds=0.10):
@@ -94,6 +105,7 @@ class Nanny(Server):
                 yield self._close()
                 break
             if self.process and not self.process.is_alive():
+                self.cleanup()
                 yield self.center.unregister(address=self.worker_address)
                 yield self._instantiate()
             else:
@@ -132,6 +144,7 @@ def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port,
     @gen.coroutine
     def start():
         yield worker._start()
-        q.put(worker.port)
+        q.put({'port': worker.port, 'dir': worker.local_dir})
+
     loop.add_callback(start)
     loop.start()
