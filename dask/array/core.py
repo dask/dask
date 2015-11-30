@@ -405,9 +405,9 @@ def map_blocks(func, *args, **kwargs):
         Datatype of resulting array
     chunks: tuple (optional)
         chunk shape of resulting blocks if the function does not preserve shape
-    drop_dims: number or iterable (optional)
+    drop_axis: number or iterable (optional)
         Dimensions lost by the function
-    new_dims: number or iterable (optional)
+    new_axis: number or iterable (optional)
         New dimensions created by the function
     **kwargs:
         Other keyword arguments to pass to function.
@@ -450,7 +450,7 @@ def map_blocks(func, *args, **kwargs):
     created or destroyed dimensions.
 
     >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1),
-    ...                  new_dims=[0, 2])
+    ...                  new_axis=[0, 2])
 
 
     Map_blocks aligns blocks by block positions without regard to shape.  In
@@ -501,12 +501,12 @@ def map_blocks(func, *args, **kwargs):
     name = name or 'map-blocks-%s' % tokenize(func, args, **kwargs)
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
-    drop_dims = kwargs.pop('drop_dims', [])
-    new_dims = kwargs.pop('new_dims', [])
-    if isinstance(drop_dims, Number):
-        drop_dims = [drop_dims]
-    if isinstance(new_dims, Number):
-        new_dims = [new_dims]
+    drop_axis = kwargs.pop('drop_axis', [])
+    new_axis = kwargs.pop('new_axis', [])
+    if isinstance(drop_axis, Number):
+        drop_axis = [drop_axis]
+    if isinstance(new_axis, Number):
+        new_axis = [new_axis]
 
     arrs = [a for a in args if isinstance(a, Array)]
     args = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
@@ -537,20 +537,20 @@ def map_blocks(func, *args, **kwargs):
 
     numblocks = list(arrs[0].numblocks)
 
-    if drop_dims:
+    if drop_axis:
         dsk = dict((tuple(k for i, k in enumerate(k)
-                             if i - 1 not in drop_dims), v)
+                             if i - 1 not in drop_axis), v)
                     for k, v in dsk.items())
-        numblocks = [n for i, n in enumerate(numblocks) if i not in drop_dims]
+        numblocks = [n for i, n in enumerate(numblocks) if i not in drop_axis]
 
-    if new_dims:
+    if new_axis:
         dsk, old_dsk = dict(), dsk
         for key in old_dsk:
             new_key = list(key)
-            for i in new_dims:
+            for i in new_axis:
                 new_key.insert(i + 1, 0)
             dsk[tuple(new_key)] = old_dsk[key]
-        for i in sorted(new_dims, reverse=False):
+        for i in sorted(new_axis, reverse=False):
             numblocks.insert(i, 1)
 
     if chunks is not None and chunks and not isinstance(chunks[0], tuple):
