@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 from multiprocessing import Process, Queue, queues
+import tempfile
 
 from tornado.ioloop import IOLoop
 from tornado import gen
@@ -18,7 +19,7 @@ class Nanny(Server):
     them as necessary.
     """
     def __init__(self, ip, port, worker_port, center_ip, center_port,
-                ncores=None, loop=None, local_dir='pkgs', **kwargs):
+                ncores=None, loop=None, local_dir=None, **kwargs):
         self.ip = ip
         self.port = port
         self.worker_port = worker_port

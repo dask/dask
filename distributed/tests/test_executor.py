@@ -1289,9 +1289,6 @@ def test_upload_file(loop):
         e = Executor((c.ip, c.port), start=False, loop=loop)
         yield e._start()
 
-        shutil.rmtree('pkgs')
-        os.mkdir('pkgs')
-
         def g():
             import myfile
             return myfile.x
@@ -1313,9 +1310,6 @@ def test_upload_file_sync(loop):
             def g():
                 import myfile
                 return myfile.x
-
-            shutil.rmtree('pkgs')
-            os.mkdir('pkgs')
 
             with tmp_text('myfile.py', 'x = 123') as fn:
                 e.upload_file(fn)

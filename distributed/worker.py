@@ -5,6 +5,7 @@ from datetime import timedelta
 import logging
 from multiprocessing.pool import ThreadPool
 import os
+import tempfile
 import traceback
 import shutil
 import sys
@@ -65,7 +66,7 @@ class Worker(Server):
     """
 
     def __init__(self, ip, port, center_ip, center_port, ncores=None,
-                 loop=None, nanny_port=None, local_dir='pkgs', **kwargs):
+                 loop=None, nanny_port=None, local_dir=None, **kwargs):
         self.ip = ip
         self.port = port
         self.nanny_port = nanny_port
@@ -73,15 +74,15 @@ class Worker(Server):
         self.data = dict()
         self.loop = loop or IOLoop.current()
         self.status = None
-        self.local_dir = local_dir
+        self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
 
-        if not os.path.exists(local_dir):
-            os.mkdir(local_dir)
+        if not os.path.exists(self.local_dir):
+            os.mkdir(self.local_dir)
 
-        if local_dir not in sys.path:
-            sys.path.append(local_dir)
+        if self.local_dir not in sys.path:
+            sys.path.append(self.local_dir)
 
         handlers = {'compute': self.compute,
                     'get_data': self.get_data,

@@ -3,6 +3,8 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import logging
 from multiprocessing import Process
+import os
+import shutil
 import socket
 from time import time
 
@@ -146,10 +148,11 @@ def _test_cluster(f, loop=None):
             yield f(c, a, b)
         finally:
             logger.debug("Closing out test cluster")
-            with ignoring():
-                yield a._close()
-            with ignoring():
-                yield b._close()
+            for w in [a, b]:
+                with ignoring():
+                    yield w._close()
+                if os.path.exists(w.local_dir):
+                    shutil.rmtree(w.local_dir)
             c.stop()
 
     loop = loop or IOLoop.current()

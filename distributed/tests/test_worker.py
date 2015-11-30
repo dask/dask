@@ -1,5 +1,6 @@
 from operator import add
 import os
+import shutil
 import sys
 from time import sleep
 
@@ -8,43 +9,19 @@ from distributed.core import read, write, rpc, connect
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring
 from distributed.worker import Worker
-from distributed.utils_test import loop
-
+from distributed.utils_test import loop, _test_cluster
 
 from tornado import gen
 from tornado.ioloop import IOLoop
 
 
-def _test_cluster(f):
-    @gen.coroutine
-    def g():
-        c = Center('127.0.0.1', 8017)
-        c.listen(c.port)
-        a = Worker('127.0.0.1', 8018, c.ip, c.port, ncores=1)
-        yield a._start()
-        b = Worker('127.0.0.1', 8019, c.ip, c.port, ncores=1)
-        yield b._start()
-
-        while len(c.ncores) < 2:
-            yield gen.sleep(0.01)
-
-        try:
-            yield f(c, a, b)
-        finally:
-            with ignoring(Exception):
-                yield a._close()
-            with ignoring(Exception):
-                yield b._close()
-            c.stop()
-
-    IOLoop.current().run_sync(g)
-
-
 def test_worker_ncores():
     from distributed.worker import _ncores
     w = Worker('127.0.0.1', 8018, '127.0.0.1', 8019)
-    assert w.executor._max_workers == _ncores
-    w.terminate()
+    try:
+        assert w.executor._max_workers == _ncores
+    finally:
+        shutil.rmtree(w.local_dir)
 
 
 def test_worker(loop):
@@ -141,9 +118,12 @@ def test_upload_file(loop):
     def f(c, a, b):
         assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
         assert not os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
+        assert a.local_dir != b.local_dir
 
         aa = rpc(ip=a.ip, port=a.port)
-        yield aa.upload_file(filename='foobar.py', data=b'x = 123')
+        bb = rpc(ip=b.ip, port=b.port)
+        yield [aa.upload_file(filename='foobar.py', data=b'x = 123'),
+               bb.upload_file(filename='foobar.py', data=b'x = 123')]
 
         assert os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
         assert os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
@@ -157,8 +137,10 @@ def test_upload_file(loop):
         assert result == {'x': 123}
 
         yield a._close()
-        assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
+        yield b._close()
         aa.close_streams()
+        bb.close_streams()
+        assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
 
     _test_cluster(f)
 
