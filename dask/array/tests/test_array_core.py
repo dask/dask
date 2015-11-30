@@ -312,6 +312,16 @@ def test_concatenate():
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
+def test_vstack():
+    x = np.arange(5)
+    y = np.ones(5)
+    a = da.arange(5, chunks=2)
+    b = da.ones(5, chunks=2)
+
+    assert eq(np.vstack((x, y)), da.vstack((a, b)))
+    assert eq(np.vstack((x, y[None, :])), da.vstack((a, b[None, :])))
+
+
 def test_take():
     x = np.arange(400).reshape((20, 20))
     a = from_array(x, chunks=(5, 5))

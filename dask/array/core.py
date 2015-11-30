@@ -1773,6 +1773,12 @@ def concatenate(seq, axis=0):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
+@wraps(np.vstack)
+def vstack(tup):
+    tup = tuple([x[None, :] if x.ndim < 2 else x for x in tup])
+    return concatenate(tup, axis=0)
+
+
 @wraps(np.take)
 def take(a, indices, axis=0):
     if not -a.ndim <= axis < a.ndim:
