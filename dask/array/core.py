@@ -454,7 +454,7 @@ def map_blocks(func, *arrs, **kwargs):
         spec = getargspec(func)
     except:
         spec = None
-    if spec and 'block_id' in spec.args:
+    if spec and 'block_id' in spec.args + spec.kwonlyargs:
         for k in core.flatten(result._keys()):
             result.dask[k] = (partial(func, block_id=k[1:]),) + result.dask[k][1:]
 
