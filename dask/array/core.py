@@ -452,6 +452,34 @@ def map_blocks(func, *args, **kwargs):
     >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1),
     ...                  new_dims=[0, 2])
 
+
+    Map_blocks aligns blocks by block positions without regard to shape.  In
+    the following example we have two arrays with the same number of blocks but
+    with different shape and chunk sizes.
+
+    >>> x = da.arange(1000, chunks=(100,))
+    >>> y = da.arange(100, chunks=(10,))
+
+    The relevant attribute to match in numblocks
+
+    >>> x.numblocks
+    (10,)
+    >>> y.numblocks
+    (10,)
+
+    If these must match (up to broadcasting rules) then we can map arbitray
+    functions across blocks
+
+    >>> def func(a, b):
+    ...     return np.array([a.max(), b.max()])
+
+    >>> da.map_blocks(func, x, y, chunks=(2,), dtype='i8')
+    dask.array<..., shape=(20,), dtype=int64, chunksize=(2,)>
+
+    >>> _.compute()
+    array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
+            69, 799,  79, 899,  89, 999,  99])
+
     Your block function can learn where in the array it is if it supports a
     ``block_id`` keyword argument.  This will receive entries like (2, 0, 1),
     the position of the block in the dask array.
