@@ -322,6 +322,30 @@ def test_vstack():
     assert eq(np.vstack((x, y[None, :])), da.vstack((a, b[None, :])))
 
 
+def test_hstack():
+    x = np.arange(5)
+    y = np.ones(5)
+    a = da.arange(5, chunks=2)
+    b = da.ones(5, chunks=2)
+
+    assert eq(np.hstack((x[None, :], y[None, :])),
+              da.hstack((a[None, :], b[None, :])))
+    assert eq(np.hstack((x, y)), da.hstack((a, b)))
+
+
+def test_dstack():
+    x = np.arange(5)
+    y = np.ones(5)
+    a = da.arange(5, chunks=2)
+    b = da.ones(5, chunks=2)
+
+    assert eq(np.dstack((x[None, None, :], y[None, None, :])),
+              da.dstack((a[None, None, :], b[None, None, :])))
+    assert eq(np.dstack((x[None, :], y[None, :])),
+              da.dstack((a[None, :], b[None, :])))
+    assert eq(np.dstack((x, y)), da.dstack((a, b)))
+
+
 def test_take():
     x = np.arange(400).reshape((20, 20))
     a = from_array(x, chunks=(5, 5))

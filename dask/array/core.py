@@ -1773,10 +1773,44 @@ def concatenate(seq, axis=0):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
+def atleast_3d(x):
+    if x.ndim == 1:
+        return x[None, :, None]
+    elif x.ndim == 2:
+        return x[:, :, None]
+    elif x.ndim > 2:
+        return x
+    else:
+        raise NotImplementedError()
+
+
+def atleast_2d(x):
+    if x.ndim == 1:
+        return x[None, :]
+    elif x.ndim > 1:
+        return x
+    else:
+        raise NotImplementedError()
+
+
 @wraps(np.vstack)
 def vstack(tup):
-    tup = tuple([x[None, :] if x.ndim < 2 else x for x in tup])
+    tup = tuple(atleast_2d(x) for x in tup)
     return concatenate(tup, axis=0)
+
+
+@wraps(np.hstack)
+def hstack(tup):
+    if all(x.ndim == 1 for x in tup):
+        return concatenate(tup, axis=0)
+    else:
+        return concatenate(tup, axis=1)
+
+
+@wraps(np.dstack)
+def dstack(tup):
+    tup = tuple(atleast_3d(x) for x in tup)
+    return concatenate(tup, axis=2)
 
 
 @wraps(np.take)
