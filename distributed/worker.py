@@ -87,7 +87,7 @@ class Worker(Server):
                     'delete_data': self.delete_data,
                     'terminate': self.terminate,
                     'ping': pingpong,
-                    'upload_package': self.upload_package}
+                    'upload_file': self.upload_file}
 
         super(Worker, self).__init__(handlers, **kwargs)
 
@@ -216,7 +216,7 @@ class Worker(Server):
     def get_data(self, stream, keys=None):
         return {k: self.data[k] for k in keys if k in self.data}
 
-    def upload_package(self, stream, filename=None, data=None):
+    def upload_file(self, stream, filename=None, data=None):
         with open(os.path.join('pkgs', filename), 'wb') as f:
             f.write(data)
             f.flush()

@@ -1283,7 +1283,7 @@ def test_fast_kill(loop):
     loop.run_sync(f)
 
 
-def test_upload_package(loop):
+def test_upload_file(loop):
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False, loop=loop)
@@ -1297,7 +1297,7 @@ def test_upload_package(loop):
             return myfile.x
 
         with tmp_text('myfile.py', 'x = 123') as fn:
-            yield e._upload_package(fn)
+            yield e._upload_file(fn)
 
             x = e.submit(g)
             result = yield x._result()
@@ -1307,7 +1307,7 @@ def test_upload_package(loop):
     _test_cluster(f, loop)
 
 
-def test_upload_package_sync(loop):
+def test_upload_file_sync(loop):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             def g():
@@ -1318,6 +1318,6 @@ def test_upload_package_sync(loop):
             os.mkdir('pkgs')
 
             with tmp_text('myfile.py', 'x = 123') as fn:
-                e.upload_package(fn)
+                e.upload_file(fn)
                 x = e.submit(g)
                 assert x.result() == 123

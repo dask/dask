@@ -581,17 +581,17 @@ class Executor(object):
         return sync(self.loop, self._restart)
 
     @gen.coroutine
-    def _upload_package(self, filename):
+    def _upload_file(self, filename):
         with open(filename, 'rb') as f:
             data = f.read()
         _, fn = os.path.split(filename)
-        d = yield self.center.broadcast(msg={'op': 'upload_package',
+        d = yield self.center.broadcast(msg={'op': 'upload_file',
                                              'filename': fn,
                                              'data': data})
 
         assert all(len(data) == v for v in d.values())
 
-    def upload_package(self, filename):
+    def upload_file(self, filename):
         """ Upload local package to workers
 
         Parameters
@@ -599,7 +599,7 @@ class Executor(object):
         filename: string
             Filename of .py file to send to workers
         """
-        return sync(self.loop, self._upload_package, filename)
+        return sync(self.loop, self._upload_file, filename)
 
 
 @gen.coroutine
