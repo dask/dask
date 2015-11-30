@@ -6,6 +6,7 @@ import logging
 from multiprocessing.pool import ThreadPool
 import os
 import traceback
+import shutil
 import sys
 
 from toolz import merge
@@ -72,6 +73,7 @@ class Worker(Server):
         self.data = dict()
         self.loop = loop or IOLoop.current()
         self.status = None
+        self.local_dir = local_dir
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
 
@@ -126,6 +128,8 @@ class Worker(Server):
         self.center.close_streams()
         self.stop()
         self.executor.shutdown()
+        if os.path.exists(self.local_dir):
+            shutil.rmtree(self.local_dir)
         self.status = 'closed'
 
     @gen.coroutine
@@ -217,7 +221,7 @@ class Worker(Server):
         return {k: self.data[k] for k in keys if k in self.data}
 
     def upload_file(self, stream, filename=None, data=None):
-        with open(os.path.join('pkgs', filename), 'wb') as f:
+        with open(os.path.join(self.local_dir, filename), 'wb') as f:
             f.write(data)
             f.flush()
         return len(data)

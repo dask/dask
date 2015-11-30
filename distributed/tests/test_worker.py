@@ -139,10 +139,14 @@ def test_delete_data_with_missing_worker(loop):
 def test_upload_file(loop):
     @gen.coroutine
     def f(c, a, b):
-        if os.path.exists(os.path.join('pkgs', 'foobar.py')):
-            os.remove(os.path.join('pkgs', 'foobar.py'))
+        assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
+        assert not os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
+
         aa = rpc(ip=a.ip, port=a.port)
         yield aa.upload_file(filename='foobar.py', data=b'x = 123')
+
+        assert os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
+        assert os.path.exists(os.path.join(b.local_dir, 'foobar.py'))
 
         def g():
             import foobar
@@ -152,6 +156,8 @@ def test_upload_file(loop):
         result = yield aa.get_data(keys=['x'])
         assert result == {'x': 123}
 
+        yield a._close()
+        assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
         aa.close_streams()
 
     _test_cluster(f)
