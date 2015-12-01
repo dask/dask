@@ -147,12 +147,11 @@ def test_stack(loop):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             arrays = [np.random.random((3, 3)) for i in range(4)]
             remotes = e.scatter(arrays)
-            local = np.stack(arrays, axis=0)
+            local = np.concatenate([a[None, ...] for a in arrays], axis=0) # np.stack(arrays, axis=0)
             remote = stack(remotes, axis=0)
 
             assert isinstance(remote, da.Array)
-            assert (remote.compute(get=e.get)
-                == np.stack(arrays, axis=0)).all()
+            assert (remote.compute(get=e.get) == local).all()
 
             assert isinstance(remote[2, :, 1].compute(get=e.get), np.ndarray)
 
