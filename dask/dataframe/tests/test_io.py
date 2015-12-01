@@ -516,7 +516,7 @@ def test_read_hdf():
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data')
         try:
-            dd.read_hdf(fn, '/data', chunksize=2)
+            dd.read_hdf(fn, 'data', chunksize=2)
             assert False
         except TypeError as e:
             assert "format='table'" in str(e)
