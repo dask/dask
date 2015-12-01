@@ -2,8 +2,10 @@ from operator import add, sub
 
 from collections import Iterator
 from concurrent.futures import CancelledError
-from time import sleep, time
+import os
+import shutil
 import sys
+from time import sleep, time
 
 import pytest
 from toolz import identity, isdistinct, first
@@ -15,7 +17,7 @@ from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize, _global_executors, default_executor)
 from distributed.sizeof import sizeof
-from distributed.utils import ignoring, sync
+from distributed.utils import ignoring, sync, tmp_text
 from distributed.utils_test import cluster, slow, _test_cluster, loop
 
 
@@ -1279,3 +1281,37 @@ def test_fast_kill(loop):
             c.stop()
 
     loop.run_sync(f)
+
+
+def test_upload_file(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+
+        def g():
+            import myfile
+            return myfile.x
+
+        with tmp_text('myfile.py', 'x = 123') as fn:
+            yield e._upload_file(fn)
+
+            x = e.submit(g)
+            result = yield x._result()
+            assert result == 123
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
+
+
+def test_upload_file_sync(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            def g():
+                import myfile
+                return myfile.x
+
+            with tmp_text('myfile.py', 'x = 123') as fn:
+                e.upload_file(fn)
+                x = e.submit(g)
+                assert x.result() == 123

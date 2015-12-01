@@ -2,6 +2,9 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 from multiprocessing import Process, Queue, queues
+import os
+import shutil
+import tempfile
 
 from tornado.ioloop import IOLoop
 from tornado import gen
@@ -18,11 +21,13 @@ class Nanny(Server):
     them as necessary.
     """
     def __init__(self, ip, port, worker_port, center_ip, center_port,
-                ncores=None, loop=None, **kwargs):
+                ncores=None, loop=None, local_dir=None, **kwargs):
         self.ip = ip
         self.port = port
         self.worker_port = worker_port
         self.ncores = ncores
+        self.local_dir = local_dir
+        self.worker_dir = ''
         self.status = None
         self.process = None
         self.loop = loop or IOLoop.current()
@@ -58,6 +63,7 @@ class Nanny(Server):
             result = yield self.center.unregister(address=self.worker_address)
             if result != b'OK':
                 logger.critical("Unable to unregister with center. %s", result)
+            self.cleanup()
         raise gen.Return(b'OK')
 
     @gen.coroutine
@@ -72,17 +78,24 @@ class Nanny(Server):
         self.process = Process(target=run_worker,
                                args=(q, self.ip, self.worker_port, self.center.ip,
                                      self.center.port, self.ncores,
-                                     self.port))
+                                     self.port, self.local_dir))
         self.process.daemon = True
         self.process.start()
         logger.info("Nanny starts worker process %s:%d", self.ip, self.port)
         while True:
             try:
-                self.worker_port = q.get_nowait()
+                msg = q.get_nowait()
+                self.worker_port = msg['port']
+                self.worker_dir = msg['dir']
                 break
             except queues.Empty:
                 yield gen.sleep(0.1)
         raise gen.Return(b'OK')
+
+    def cleanup(self):
+        if os.path.exists(self.worker_dir):
+            shutil.rmtree(self.worker_dir)
+        self.worker_dir = None
 
     @gen.coroutine
     def _watch(self, wait_seconds=0.10):
@@ -92,6 +105,7 @@ class Nanny(Server):
                 yield self._close()
                 break
             if self.process and not self.process.is_alive():
+                self.cleanup()
                 yield self.center.unregister(address=self.worker_address)
                 yield self._instantiate()
             else:
@@ -116,7 +130,8 @@ class Nanny(Server):
         return (self.ip, self.worker_port)
 
 
-def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port):
+def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port,
+        local_dir):
     """ Function run by the Nanny when creating the worker """
     from distributed import Worker
     from tornado.ioloop import IOLoop
@@ -124,11 +139,12 @@ def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port):
     loop = IOLoop()
     loop.make_current()
     worker = Worker(ip, port, center_ip, center_port, ncores,
-                    nanny_port=nanny_port)
+                    nanny_port=nanny_port, local_dir=local_dir)
 
     @gen.coroutine
     def start():
         yield worker._start()
-        q.put(worker.port)
+        q.put({'port': worker.port, 'dir': worker.local_dir})
+
     loop.add_callback(start)
     loop.start()

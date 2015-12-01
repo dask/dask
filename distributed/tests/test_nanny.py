@@ -1,3 +1,4 @@
+import os
 import sys
 from time import time
 
@@ -59,6 +60,9 @@ def test_nanny_process_failure(loop):
     def f():
         nn = rpc(ip=n.ip, port=n.port)
         yield n._start()
+        first_dir = n.worker_dir
+
+        assert os.path.exists(first_dir)
 
         ww = rpc(ip=n.ip, port=n.worker_port)
         yield ww.update_data(data={'x': 1, 'y': 2})
@@ -76,11 +80,17 @@ def test_nanny_process_failure(loop):
             assert time() - start < 2
 
         start = time()
-        while n.worker_address not in c.ncores:
+        while n.worker_address not in c.ncores or n.worker_dir is None:
             yield gen.sleep(0.01)
             assert time() - start < 2
 
+        second_dir = n.worker_dir
+
         yield n._close()
+        assert not os.path.exists(second_dir)
+        assert not os.path.exists(first_dir)
+        assert first_dir != n.worker_dir
         c.stop()
 
     loop.run_sync(f)
+

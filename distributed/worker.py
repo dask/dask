@@ -4,7 +4,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 import logging
 from multiprocessing.pool import ThreadPool
+import os
+import tempfile
 import traceback
+import shutil
 import sys
 
 from toolz import merge
@@ -63,7 +66,7 @@ class Worker(Server):
     """
 
     def __init__(self, ip, port, center_ip, center_port, ncores=None,
-                 loop=None, nanny_port=None, **kwargs):
+                 loop=None, nanny_port=None, local_dir=None, **kwargs):
         self.ip = ip
         self.port = port
         self.nanny_port = nanny_port
@@ -71,15 +74,23 @@ class Worker(Server):
         self.data = dict()
         self.loop = loop or IOLoop.current()
         self.status = None
+        self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
+
+        if not os.path.exists(self.local_dir):
+            os.mkdir(self.local_dir)
+
+        if self.local_dir not in sys.path:
+            sys.path.append(self.local_dir)
 
         handlers = {'compute': self.compute,
                     'get_data': self.get_data,
                     'update_data': self.update_data,
                     'delete_data': self.delete_data,
                     'terminate': self.terminate,
-                    'ping': pingpong}
+                    'ping': pingpong,
+                    'upload_file': self.upload_file}
 
         super(Worker, self).__init__(handlers, **kwargs)
 
@@ -118,6 +129,8 @@ class Worker(Server):
         self.center.close_streams()
         self.stop()
         self.executor.shutdown()
+        if os.path.exists(self.local_dir):
+            shutil.rmtree(self.local_dir)
         self.status = 'closed'
 
     @gen.coroutine
@@ -207,6 +220,12 @@ class Worker(Server):
 
     def get_data(self, stream, keys=None):
         return {k: self.data[k] for k in keys if k in self.data}
+
+    def upload_file(self, stream, filename=None, data=None):
+        with open(os.path.join(self.local_dir, filename), 'wb') as f:
+            f.write(data)
+            f.flush()
+        return len(data)
 
 
 job_counter = [0]

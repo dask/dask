@@ -6,6 +6,7 @@ from concurrent import futures
 from functools import wraps, partial
 import itertools
 import logging
+import os
 import time
 import uuid
 
@@ -578,6 +579,27 @@ class Executor(object):
         restarts the worker processes.
         """
         return sync(self.loop, self._restart)
+
+    @gen.coroutine
+    def _upload_file(self, filename):
+        with open(filename, 'rb') as f:
+            data = f.read()
+        _, fn = os.path.split(filename)
+        d = yield self.center.broadcast(msg={'op': 'upload_file',
+                                             'filename': fn,
+                                             'data': data})
+
+        assert all(len(data) == v for v in d.values())
+
+    def upload_file(self, filename):
+        """ Upload local package to workers
+
+        Parameters
+        ----------
+        filename: string
+            Filename of .py file to send to workers
+        """
+        return sync(self.loop, self._upload_file, filename)
 
 
 @gen.coroutine
