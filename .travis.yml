@@ -6,8 +6,6 @@ matrix:
     - python: "2.7"
     - python: "3.4"
     - python: "3.5"
-  allow_failures:
-    - python: "2.7"
 
 install:
   # Install conda
