@@ -284,6 +284,39 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     return result
 
 
+def _moment_helper(Ms, ns, inner_term, order, sum, kwargs):
+    M = Ms[..., order - 2].sum(**kwargs) + sum(ns * inner_term**order, **kwargs)
+    for k in range(1, order - 1):
+        coeff = factorial(order)/(factorial(k)*factorial(order - k))
+        M += coeff * sum(Ms[..., order - k - 2] * inner_term**k, **kwargs)
+    return M
+
+
+def moment_combine(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
+    kwargs['dtype'] = dtype
+    kwargs['keepdims'] = True
+
+    totals = data['total']
+    ns = data['n']
+    Ms = data['M']
+    total = totals.sum(**kwargs)
+    n = sum(ns, **kwargs)
+    mu = divide(total, n, dtype=dtype)
+    inner_term = divide(totals, ns, dtype=dtype) - mu
+    M = np.empty(shape=n.shape + (order - 1,), dtype=dtype)
+
+    for o in range(2, order + 1):
+        M[..., o - 2] = _moment_helper(Ms, ns, inner_term, o, sum, kwargs)
+
+    result = np.zeros(shape=n.shape, dtype=[('total', total.dtype),
+                                            ('n', n.dtype),
+                                            ('M', Ms.dtype, (order-1,))])
+    result['total'] = total
+    result['n'] = n
+    result['M'] = M
+    return result
+
+
 def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     totals = data['total']
     ns = data['n']
@@ -299,18 +332,12 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     mu = divide(totals.sum(**keepdim_kw), n, dtype=dtype)
     inner_term = divide(totals, ns, dtype=dtype) - mu
 
-    result = Ms[..., -1].sum(**kwargs)
-
-    for k in range(1, order - 1):
-        coeff = factorial(order)/(factorial(k)*factorial(order - k))
-        result += coeff * sum(Ms[..., order - k - 2] * inner_term**k, **kwargs)
-
-    result += sum(ns * inner_term**order, **kwargs)
-    result = divide(result, sum(n, **kwargs) - ddof, dtype=dtype)
-    return result
+    M = _moment_helper(Ms, ns, inner_term, order, sum, kwargs)
+    return divide(M, sum(n, **kwargs) - ddof, dtype=dtype)
 
 
-def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0):
+def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
+           max_leaves=None):
     if not isinstance(order, int) or order < 2:
         raise ValueError("Order must be an integer >= 2")
     if dtype is not None:
@@ -321,11 +348,12 @@ def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0):
         dt = None
     return reduction(a, partial(moment_chunk, order=order), partial(moment_agg,
                      order=order, ddof=ddof), axis=axis, keepdims=keepdims,
-                     dtype=dt)
+                     dtype=dt, max_leaves=max_leaves,
+                     combine=partial(moment_combine, order=order))
 
 
 @wraps(chunk.var)
-def var(a, axis=None, dtype=None, keepdims=False, ddof=0):
+def var(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -333,10 +361,11 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0):
     else:
         dt = None
     return reduction(a, moment_chunk, partial(moment_agg, ddof=ddof), axis=axis,
-                     keepdims=keepdims, dtype=dt)
+                     keepdims=keepdims, dtype=dt, max_leaves=max_leaves,
+                     combine=moment_combine)
 
 
-def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0):
+def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -345,21 +374,24 @@ def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0):
         dt = None
     return reduction(a, partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
                      partial(moment_agg, sum=np.nansum, ddof=ddof), axis=axis,
-                     keepdims=keepdims, dtype=dt)
+                     keepdims=keepdims, dtype=dt, max_leaves=max_leaves,
+                     combine=partial(moment_combine, sum=np.nansum))
 
 with ignoring(AttributeError):
     nanvar = wraps(chunk.nanvar)(nanvar)
 
 @wraps(chunk.std)
-def std(a, axis=None, dtype=None, keepdims=False, ddof=0):
-    result = sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+def std(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
+    result = sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
+                        max_leaves=max_leaves))
     if dtype and dtype != result.dtype:
         result = result.astype(dtype)
     return result
 
 
-def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0):
-    result = sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof))
+def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
+    result = sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims,
+                         ddof=ddof, max_leaves=max_leaves))
     if dtype and dtype != result.dtype:
         result = result.astype(dtype)
     return result

@@ -1021,16 +1021,19 @@ class Array(Base):
                     max_leaves=max_leaves)
 
     @wraps(np.std)
-    def std(self, axis=None, dtype=None, keepdims=False, ddof=0):
+    def std(self, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
         from .reductions import std
-        return std(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof)
+        return std(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
+                   max_leaves=max_leaves)
 
     @wraps(np.var)
-    def var(self, axis=None, dtype=None, keepdims=False, ddof=0):
+    def var(self, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
         from .reductions import var
-        return var(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof)
+        return var(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
+                   max_leaves=max_leaves)
 
-    def moment(self, order, axis=None, dtype=None, keepdims=False, ddof=0):
+    def moment(self, order, axis=None, dtype=None, keepdims=False, ddof=0,
+               max_leaves=None):
         """Calculate the nth centralized moment.
 
         Parameters
@@ -1067,7 +1070,7 @@ class Array(Base):
 
         from .reductions import moment
         return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims,
-                      ddof=ddof)
+                      ddof=ddof, max_leaves=max_leaves)
 
     def vnorm(self, ord=None, axis=None, keepdims=False, max_leaves=None):
         """ Vector norm """
