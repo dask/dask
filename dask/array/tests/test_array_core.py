@@ -322,6 +322,25 @@ def test_take():
     assert same_keys(take(a, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
 
 
+def test_compress():
+    x = np.arange(25).reshape((5, 5))
+    a = from_array(x, chunks=(2, 2))
+
+    assert eq(np.compress([True, False, True, False, True], x, axis=0),
+              da.compress([True, False, True, False, True], a, axis=0))
+    assert eq(np.compress([True, False, True, False, True], x, axis=1),
+              da.compress([True, False, True, False, True], a, axis=1))
+    assert eq(np.compress([True, False], x, axis=1),
+              da.compress([True, False], a, axis=1))
+
+    with pytest.raises(NotImplementedError):
+        da.compress([True, False], a)
+    with pytest.raises(ValueError):
+        da.compress([True, False], a, axis=100)
+    with pytest.raises(ValueError):
+        da.compress([[True], [False]], a, axis=100)
+
+
 def test_binops():
     a = Array(dict((('a', i), np.array([''])) for i in range(3)),
               'a', chunks=((1, 1, 1),))
