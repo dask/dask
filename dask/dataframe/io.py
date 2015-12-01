@@ -709,6 +709,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
 
     >>> dd.read_hdf('myfile.1.hdf5', '/*')  # doctest: +SKIP
     """
+    key = key if key.startswith('/')  else '/' + key
     paths = sorted(glob(pattern))
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
