@@ -96,6 +96,10 @@ def test_nested_get():
     assert get_sync(dsk, ['a', 'b']) == (3, 3)
 
 
+def test_get_sync_num_workers():
+    get_sync({'x': (inc, 'y'), 'y': 1}, 'x', num_workers=2)
+
+
 def test_cache_options():
     try:
         from chest import Chest
