@@ -510,6 +510,7 @@ def apply_sync(func, args=(), kwds={}):
 
 def get_sync(dsk, keys, **kwargs):
     from .compatibility import Queue
+    kwargs.pop('num_workers', None)    # if num_workers present, remove it
     queue = Queue()
     return get_async(apply_sync, 1, dsk, keys, queue=queue,
                      raise_on_exception=True, **kwargs)
