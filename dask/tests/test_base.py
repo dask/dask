@@ -2,6 +2,7 @@ import tempfile
 import os
 import shutil
 import pytest
+from operator import add, mul
 
 pytest.importorskip('toolz')
 from toolz import compose, partial, curry
@@ -222,6 +223,9 @@ def test_visualize():
         x.visualize(filename=os.path.join(d, 'mydask.pdf'))
         assert os.path.exists(os.path.join(d, 'mydask.pdf'))
         visualize(x, 1, 2, filename=os.path.join(d, 'mydask.png'))
+        assert os.path.exists(os.path.join(d, 'mydask.png'))
+        dsk = {'a': 1, 'b': (add, 'a', 2), 'c': (mul, 'a', 1)}
+        visualize(x, dsk, filename=os.path.join(d, 'mydask.png'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
     finally:
         shutil.rmtree(d)
