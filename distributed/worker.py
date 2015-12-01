@@ -2,9 +2,11 @@ from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from importlib import import_module
 import logging
 from multiprocessing.pool import ThreadPool
 import os
+import pkg_resources
 import tempfile
 import traceback
 import shutil
@@ -16,6 +18,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 
 from .client import _gather, pack_data
+from .compatibility import reload
 from .core import (rpc, connect_sync, read_sync, write_sync, connect, Server,
         pingpong)
 from .sizeof import sizeof
@@ -82,7 +85,7 @@ class Worker(Server):
             os.mkdir(self.local_dir)
 
         if self.local_dir not in sys.path:
-            sys.path.append(self.local_dir)
+            sys.path.insert(0, self.local_dir)
 
         handlers = {'compute': self.compute,
                     'get_data': self.get_data,
@@ -231,10 +234,23 @@ class Worker(Server):
     def get_data(self, stream, keys=None):
         return {k: self.data[k] for k in keys if k in self.data}
 
-    def upload_file(self, stream, filename=None, data=None):
+    def upload_file(self, stream, filename=None, data=None, load=True):
         with open(os.path.join(self.local_dir, filename), 'wb') as f:
             f.write(data)
             f.flush()
+
+        if load:
+            try:
+                name, ext = os.path.splitext(filename)
+                logger.info("Reloading module %s", name)
+                if ext in ('.py', '.pyc'):
+                    name = name.split('-')[0]
+                    reload(import_module(name))
+                if ext == '.egg':
+                    for pkg in pkg_resources.find_distributions(filename):
+                        reload(import_module(pkg.project_name))
+            except Exception as e:
+                logger.exception(e)
         return len(data)
 
 
