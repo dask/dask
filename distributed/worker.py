@@ -251,6 +251,7 @@ class Worker(Server):
                         reload(import_module(pkg.project_name))
             except Exception as e:
                 logger.exception(e)
+                return e
         return len(data)
 
 
