@@ -194,6 +194,7 @@ class Worker(Server):
                 exc_info=True)
             out = (b'error', (e, tb))
 
+        logger.debug("Send compute response to client: %s, %s", key, out)
         raise Return(out)
 
     @gen.coroutine

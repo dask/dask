@@ -65,6 +65,8 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
     while True:
         msg = yield worker_queue.get()
         if msg['op'] == 'close':
+            logger.debug("Worker core receives close message %s, %s",
+                    ident, msg)
             break
         if msg['op'] == 'compute-task':
             key = msg['key']
@@ -82,6 +84,8 @@ def worker_core(scheduler_queue, worker_queue, ident, i):
                                                          kwargs={})
                 if response == b'OK':
                     nbytes = content['nbytes']
+            logger.debug("Compute response from worker %s, %s, %s, %s",
+                         ident, key, response, content)
             if response == b'error':
                 error, traceback = content
                 scheduler_queue.put_nowait({'op': 'task-erred',
@@ -812,6 +816,7 @@ class Scheduler(object):
     def heal_state(self):
         """ Recover from catastrophic change """
         logger.debug("Heal state")
+        self.log_state("Before Heal")
         state = heal(self.dependencies, self.dependents, set(self.who_has),
                 self.stacks, self.processing, self.waiting, self.waiting_data)
         released = state['released']
@@ -825,6 +830,7 @@ class Scheduler(object):
         for key in set(self.who_has) & released - self.held_data:
             self.delete_queue.put_nowait({'op': 'delete-task', 'key': key})
         self.in_play.update(self.who_has)
+        self.log_state("After Heal")
 
     def my_heal_missing_data(self, missing):
         logger.debug("Heal from missing data")
@@ -904,10 +910,14 @@ class Scheduler(object):
 
             elif msg['op'] == 'task-finished':
                 key, worker = msg['key'], msg['workers'][0]
+                logger.debug("Mark task as finished %s, %s", key, worker)
                 if key in self.processing[worker]:
                     self.nbytes[key] = msg['nbytes']
                     self.mark_key_in_memory(key, [worker])
                     self.ensure_occupied(worker)
+                else:
+                    logger.debug("Key not found in processing, %s, %s, %s",
+                            key, worker, self.processing[worker])
 
             elif msg['op'] == 'task-erred':
                 key, worker = msg['key'], msg['worker']
