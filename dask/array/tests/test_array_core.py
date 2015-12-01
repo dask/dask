@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 import pytest
 pytest.importorskip('numpy')
 
-from operator import add
+from operator import add, sub
 from tempfile import mkdtemp
 import shutil
 import os
@@ -728,6 +728,25 @@ def test_map_blocks2():
     assert same_keys(d.map_blocks(func, dtype='i8'), out)
 
 
+def test_map_blocks_with_constants():
+    d = da.arange(10, chunks=3)
+    e = d.map_blocks(add, 100, dtype=d.dtype)
+
+    assert eq(e, np.arange(10) + 100)
+
+    assert eq(da.map_blocks(sub, d, 10, dtype=d.dtype),
+              np.arange(10) - 10)
+    assert eq(da.map_blocks(sub, 10, d, dtype=d.dtype),
+              10 - np.arange(10))
+
+
+def test_map_blocks_with_kwargs():
+    d = da.arange(10, chunks=5)
+
+    assert eq(d.map_blocks(np.max, axis=0, keepdims=True, dtype=d.dtype),
+              np.array([4, 9]))
+
+
 def test_fromfunction():
     def f(x, y):
         return x + y
@@ -1342,6 +1361,9 @@ def test_map_blocks3():
     assert eq(res, x + 2*z)
     assert same_keys(da.core.map_blocks(func, d, f, dtype=d.dtype), res)
 
+    assert eq(da.map_blocks(func, f, d, dtype=d.dtype),
+              z + 2*x)
+
 
 def test_from_array_with_missing_chunks():
     x = np.random.randn(2, 4, 3)
@@ -1602,3 +1624,40 @@ def test_h5py_tokenize():
             x2 = g['x']
 
             assert tokenize(x1) != tokenize(x2)
+
+
+def test_map_blocks_with_changed_dimension():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(7, 4))
+
+    e = d.map_blocks(lambda b: b.sum(axis=0), chunks=(4,), drop_axis=0,
+                     dtype=d.dtype)
+    assert e.ndim == 1
+    assert e.chunks == ((4, 4),)
+    assert eq(e, x.sum(axis=0))
+
+    x = np.arange(64).reshape((8, 8))
+    d = da.from_array(x, chunks=(4, 4))
+    e = d.map_blocks(lambda b: b[None, :, :, None],
+                     chunks=(1, 4, 4, 1), new_axis=[0, 3], dtype=d.dtype)
+    assert e.ndim == 4
+    assert e.chunks == ((1,), (4, 4), (4, 4), (1,))
+    assert eq(e, x[None, :, :, None])
+
+
+def test_broadcast_chunks():
+    assert broadcast_chunks(((5, 5),), ((5, 5),)) == ((5, 5),)
+
+    a = ((10, 10, 10), (5, 5),)
+    b = ((5, 5),)
+    assert broadcast_chunks(a, b) == ((10, 10, 10), (5, 5),)
+    assert broadcast_chunks(b, a) == ((10, 10, 10), (5, 5),)
+
+    a = ((10, 10, 10), (5, 5),)
+    b = ((1,), (5, 5),)
+    assert broadcast_chunks(a, b) == ((10, 10, 10), (5, 5),)
+
+    a = ((10, 10, 10), (5, 5),)
+    b = ((3, 3,), (5, 5),)
+    with pytest.raises(ValueError):
+        broadcast_chunks(a, b)

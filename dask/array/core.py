@@ -393,12 +393,32 @@ def _concatenate2(arrays, axes=[]):
     return np.concatenate(arrays, axis=axes[0])
 
 
-def map_blocks(func, *arrs, **kwargs):
+def map_blocks(func, *args, **kwargs):
     """ Map a function across all blocks of a dask array
 
-    You must also specify the chunks of the resulting array.  If you don't then
-    we assume that the resulting array has the same block structure as the
-    input.
+    Parameters
+    ----------
+    func: callable
+        Function to apply to every block in the array
+    args: dask arrays or constants
+    dtype: np.dtype
+        Datatype of resulting array
+    chunks: tuple (optional)
+        chunk shape of resulting blocks if the function does not preserve shape
+    drop_axis: number or iterable (optional)
+        Dimensions lost by the function
+    new_axis: number or iterable (optional)
+        New dimensions created by the function
+    **kwargs:
+        Other keyword arguments to pass to function.
+        Values must be constants (not dask.arrays)
+
+    You must also specify the chunks and dtype of the resulting array.  If you
+    don't then we assume that the resulting array has the same block structure
+    as the input.
+
+    Examples
+    --------
 
     >>> import dask.array as da
     >>> x = da.arange(6, chunks=3)
@@ -420,6 +440,46 @@ def map_blocks(func, *arrs, **kwargs):
 
     >>> y = x.map_blocks(lambda x: x[::2], chunks=((2, 2),))
 
+    You have a bit of freedom in specifying chunks.  If all of the output chunk
+    sizes are the same, you can provide just that chunk size as a single tuple.
+
+    >>> a = da.arange(18, chunks=(6,))
+    >>> b = a.map_blocks(lambda x: x[:3], chunks=(3,))
+
+    If the function changes the dimension of the blocks you must specify the
+    created or destroyed dimensions.
+
+    >>> b = a.map_blocks(lambda x: x[None, :, None], chunks=(1, 6, 1),
+    ...                  new_axis=[0, 2])
+
+
+    Map_blocks aligns blocks by block positions without regard to shape.  In
+    the following example we have two arrays with the same number of blocks but
+    with different shape and chunk sizes.
+
+    >>> x = da.arange(1000, chunks=(100,))
+    >>> y = da.arange(100, chunks=(10,))
+
+    The relevant attribute to match in numblocks
+
+    >>> x.numblocks
+    (10,)
+    >>> y.numblocks
+    (10,)
+
+    If these must match (up to broadcasting rules) then we can map arbitray
+    functions across blocks
+
+    >>> def func(a, b):
+    ...     return np.array([a.max(), b.max()])
+
+    >>> da.map_blocks(func, x, y, chunks=(2,), dtype='i8')
+    dask.array<..., shape=(20,), dtype=int64, chunksize=(2,)>
+
+    >>> _.compute()
+    array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
+            69, 799,  79, 899,  89, 999,  99])
+
     Your block function can learn where in the array it is if it supports a
     ``block_id`` keyword argument.  This will receive entries like (2, 0, 1),
     the position of the block in the dask array.
@@ -437,16 +497,33 @@ def map_blocks(func, *arrs, **kwargs):
                 "Usage:   da.map_blocks(function, x)\n"
                 "   or:   da.map_blocks(function, x, y, z)" %
                 type(func).__name__)
-    dtype = kwargs.get('dtype')
-    assert all(isinstance(arr, Array) for arr in arrs)
+    name = kwargs.pop('name', None)
+    name = name or 'map-blocks-%s' % tokenize(func, args, **kwargs)
+    dtype = kwargs.pop('dtype', None)
+    chunks = kwargs.pop('chunks', None)
+    drop_axis = kwargs.pop('drop_axis', [])
+    new_axis = kwargs.pop('new_axis', [])
+    if isinstance(drop_axis, Number):
+        drop_axis = [drop_axis]
+    if isinstance(new_axis, Number):
+        new_axis = [new_axis]
 
-    inds = [tuple(range(x.ndim))[::-1] for x in arrs]
-    args = list(concat(zip(arrs, inds)))
+    arrs = [a for a in args if isinstance(a, Array)]
+    args = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
 
-    out_ind = tuple(range(max(x.ndim for x in arrs)))[::-1]
+    if kwargs:
+        func = partial(func, **kwargs)
 
-    name = kwargs.get('name', None)
-    result = atop(func, out_ind, *args, name=name, dtype=dtype)
+    if args:
+        func = partial_by_order(func, args)
+
+    arginds = [(a, tuple(range(a.ndim))[::-1]) for a in arrs]
+
+    numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
+    argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
+    out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
+
+    dsk = top(func, name, out_ind, *argindsstr, numblocks=numblocks)
 
     # If func has block_id as an argument then swap out func
     # for func with block_id partialed in
@@ -455,18 +532,74 @@ def map_blocks(func, *arrs, **kwargs):
     except:
         spec = None
     if spec and 'block_id' in spec.args:
-        for k in core.flatten(result._keys()):
-            result.dask[k] = (partial(func, block_id=k[1:]),) + result.dask[k][1:]
+        for k in dsk:
+            dsk[k] = (partial(func, block_id=k[1:]),) + dsk[k][1:]
 
-    # Assert user specified chunks
-    chunks = kwargs.get('chunks')
+    numblocks = list(arrs[0].numblocks)
+
+    if drop_axis:
+        dsk = dict((tuple(k for i, k in enumerate(k)
+                             if i - 1 not in drop_axis), v)
+                    for k, v in dsk.items())
+        numblocks = [n for i, n in enumerate(numblocks) if i not in drop_axis]
+
+    if new_axis:
+        dsk, old_dsk = dict(), dsk
+        for key in old_dsk:
+            new_key = list(key)
+            for i in new_axis:
+                new_key.insert(i + 1, 0)
+            dsk[tuple(new_key)] = old_dsk[key]
+        for i in sorted(new_axis, reverse=False):
+            numblocks.insert(i, 1)
+
     if chunks is not None and chunks and not isinstance(chunks[0], tuple):
-        chunks = tuple([nb * (bs,)
-                        for nb, bs in zip(result.numblocks, chunks)])
+        chunks = [nb * (bs,) for nb, bs in zip(numblocks, chunks)]
     if chunks is not None:
-        result._chunks = chunks
+        chunks = tuple(chunks)
+    else:
+        chunks = broadcast_chunks(*[a.chunks for a in arrs])
 
-    return result
+    return Array(merge(dsk, *[a.dask for a in arrs]), name, chunks, dtype)
+
+
+def broadcast_chunks(*chunkss):
+    """ Construct a chunks tuple that broadcasts many chunks tuples
+
+    >>> a = ((5, 5),)
+    >>> b = ((5, 5),)
+    >>> broadcast_chunks(a, b)
+    ((5, 5),)
+
+    >>> a = ((10, 10, 10), (5, 5),)
+    >>> b = ((5, 5),)
+    >>> broadcast_chunks(a, b)
+    ((10, 10, 10), (5, 5))
+
+    >>> a = ((10, 10, 10), (5, 5),)
+    >>> b = ((1,), (5, 5),)
+    >>> broadcast_chunks(a, b)
+    ((10, 10, 10), (5, 5))
+
+    >>> a = ((10, 10, 10), (5, 5),)
+    >>> b = ((3, 3,), (5, 5),)
+    >>> broadcast_chunks(a, b)
+    Traceback (most recent call last):
+        ...
+    ValueError: Chunks do not align: [(10, 10, 10), (3, 3)]
+    """
+    if len(chunkss) == 1:
+        return chunkss[0]
+    n = max(map(len, chunkss))
+    chunkss2 = [((1,),) * (n - len(c)) + c for c in chunkss]
+    result = []
+    for i in range(n):
+        step1 = [c[i] for c in chunkss2]
+        step2 = [c for c in step1 if c != (1,)]
+        if len(set(step2)) != 1:
+            raise ValueError("Chunks do not align: %s" % str(step2))
+        result.append(step2[0])
+    return tuple(result)
 
 
 @wraps(np.squeeze)
@@ -1071,8 +1204,8 @@ class Array(Base):
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims)
 
     @wraps(map_blocks)
-    def map_blocks(self, func, chunks=None, dtype=None, name=None):
-        return map_blocks(func, self, chunks=chunks, dtype=dtype, name=name)
+    def map_blocks(self, func, *args, **kwargs):
+        return map_blocks(func, self, *args, **kwargs)
 
     def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
         """ Map a function over blocks of the array with some overlap
