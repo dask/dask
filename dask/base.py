@@ -116,14 +116,15 @@ def compute(*args, **kwargs):
 
 
 def visualize(*args, **kwargs):
+    dsks = [arg for arg in args if isinstance(arg, dict)]
     args = [arg for arg in args if isinstance(arg, Base)]
     filename = kwargs.pop('filename', 'mydask')
     optimize_graph = kwargs.pop('optimize_graph', False)
     from dask.dot import dot_graph
     if optimize_graph:
-        dsks = [arg._optimize(arg.dask, arg._keys()) for arg in args]
+        dsks.extend([arg._optimize(arg.dask, arg._keys()) for arg in args])
     else:
-        dsks = [arg.dask for arg in args]
+        dsks.extend([arg.dask for arg in args])
     dsk = merge(dsks)
 
     return dot_graph(dsk, filename=filename, **kwargs)
