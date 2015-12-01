@@ -13,7 +13,7 @@ import sys
 from toolz import merge
 from tornado.gen import Return
 from tornado import gen
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 
 from .client import _gather, pack_data
 from .core import (rpc, connect_sync, read_sync, write_sync, connect, Server,
@@ -167,16 +167,25 @@ class Worker(Server):
         try:
             job_counter[0] += 1
             i = job_counter[0]
-            logger.info("Start job %d: %s", i, funcname(function))
+            logger.info("Start job %d: %s - %s", i, funcname(function), key)
             future = self.executor.submit(function, *args2, **kwargs)
-            while not future.done():
-                try:
-                    yield gen.with_timeout(timedelta(seconds=1), future)
-                    break
-                except gen.TimeoutError:
-                    logger.debug("Pending job %d: %s", i, future)
+            pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
+                key, future._state), 1000)
+            pc.start()
+            if sys.version_info < (3, 2):
+                yield future
+            else:
+                while not future.done() and future._state != 'FINISHED':
+                    try:
+                        yield gen.with_timeout(timedelta(seconds=1), future)
+                        break
+                    except gen.TimeoutError:
+                        logger.info("work queue size: %d", e._work_queue.qsize())
+                        logger.info("future state: %s", future._state)
+                        logger.info("Pending job %d: %s", i, future)
+            pc.stop()
             result = future.result()
-            logger.info("Finish job %d: %s", i, funcname(function))
+            logger.info("Finish job %d: %s - %s", i, funcname(function), key)
             self.data[key] = result
             response = yield self.center.add_keys(address=(self.ip, self.port),
                                                   keys=[key])
@@ -194,6 +203,7 @@ class Worker(Server):
                 exc_info=True)
             out = (b'error', (e, tb))
 
+        logger.debug("Send compute response to client: %s, %s", key, out)
         raise Return(out)
 
     @gen.coroutine
