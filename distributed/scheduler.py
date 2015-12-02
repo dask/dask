@@ -722,6 +722,39 @@ class Scheduler(object):
         if heal:
             self.heal_state()
 
+    def update_graph(self, dsk=None, keys=None, restrictions={}):
+        update_state(self.dask, self.dependencies, self.dependents,
+                self.held_data, self.who_has, self.in_play,
+                self.waiting, self.waiting_data, dsk, keys)
+
+        cover_aliases(self.dask, dsk)
+
+        self.restrictions.update(restrictions)
+
+        new_keyorder = order(dsk)  # TODO: define order wrt old graph
+        for key in new_keyorder:
+            if key not in self.keyorder:
+                # TODO: add test for this
+                self.keyorder[key] = (self.generation, new_keyorder[key]) # prefer old
+        if len(dsk) > 1:
+            self.generation += 1  # older graph generations take precedence
+
+        for key in dsk:
+            for dep in self.dependencies[key]:
+                if dep in self.exceptions_blame:
+                    self.mark_failed(key, self.exceptions_blame[dep])
+
+        self.seed_ready_tasks(dsk)
+        for key in keys:
+            if self.who_has[key]:
+                self.mark_key_in_memory(key)
+
+    def release_held_data(self, key=None):
+        if key in self.held_data:
+            logger.debug("Release key: %s", key)
+            self.held_data.remove(key)
+            self.release_key(key)
+
     def heal_state(self):
         """ Recover from catastrophic change """
         logger.debug("Heal state")
@@ -782,38 +815,14 @@ class Scheduler(object):
         self.report_queue.put_nowait({'op': 'start'})
         while True:
             msg = yield self.scheduler_queue.get()
+            logger.debug("scheduler receives message %s", msg)
             op = msg.pop('op')
 
-            logger.debug("scheduler receives message %s", msg)
             if op == 'close':
                 break
+
             elif op == 'update-graph':
-                update_state(self.dask, self.dependencies, self.dependents,
-                        self.held_data, self.who_has, self.in_play,
-                        self.waiting, self.waiting_data, msg['dsk'],
-                        msg['keys'])
-
-                cover_aliases(self.dask, msg['dsk'])
-
-                self.restrictions.update(msg.get('restrictions', {}))
-
-                new_keyorder = order(msg['dsk'])  # TODO: define order wrt old graph
-                for key in new_keyorder:
-                    if key not in self.keyorder:
-                        # TODO: add test for this
-                        self.keyorder[key] = (self.generation, new_keyorder[key]) # prefer old
-                if len(msg['dsk']) > 1:
-                    self.generation += 1  # older graph generations take precedence
-
-                for key in msg['dsk']:
-                    for dep in self.dependencies[key]:
-                        if dep in self.exceptions_blame:
-                            self.mark_failed(key, self.exceptions_blame[dep])
-
-                self.seed_ready_tasks(msg['dsk'])
-                for key in msg['keys']:
-                    if self.who_has[key]:
-                        self.mark_key_in_memory(key)
+                self.update_graph(**msg)
 
             elif op == 'update-data':
                 self.update_data(**msg)
@@ -825,10 +834,7 @@ class Scheduler(object):
                 self.mark_worker_missing(**msg)
 
             elif op == 'release-held-data':
-                if msg['key'] in self.held_data:
-                    logger.debug("Release key: %s", msg['key'])
-                    self.held_data.remove(msg['key'])
-                    self.release_key(msg['key'])
+                self.release_held_data(**msg)
 
             else:
                 logger.warn("Bad message: %s", msg)
