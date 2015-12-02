@@ -574,9 +574,9 @@ class Scheduler(object):
                 if not s and dep:
                     self.release_key(dep)
 
-        self.report_queue.put_nowait({'op': 'key-in-memory',
-                                     'key': key,
-                                     'workers': workers})
+        self.report({'op': 'key-in-memory',
+                     'key': key,
+                     'workers': workers})
 
     def ensure_occupied(self, worker):
         """ Spin up tasks on worker while it has tasks and free cores """
@@ -647,10 +647,10 @@ class Scheduler(object):
         if key in self.exceptions_blame:
             return
         self.exceptions_blame[key] = failing_key
-        self.report_queue.put_nowait({'op': 'task-erred',
-                                      'key': key,
-                                      'exception': self.exceptions[failing_key],
-                                      'traceback': self.tracebacks[failing_key]})
+        self.report({'op': 'task-erred',
+                     'key': key,
+                     'exception': self.exceptions[failing_key],
+                     'traceback': self.tracebacks[failing_key]})
         if key in self.waiting:
             del self.waiting[key]
         if key in self.waiting_data:
@@ -765,7 +765,7 @@ class Scheduler(object):
         self.in_play.clear(); self.in_play.update(state['in_play'])
         add_keys = {k for k, v in self.waiting.items() if not v}
         for key in self.held_data & released:
-            self.report_queue.put_nowait({'op': 'lost-key', 'key': key})
+            self.report({'op': 'lost-key', 'key': key})
         if self.stacks:
             for key in add_keys:
                 self.mark_ready_to_run(key)
@@ -779,6 +779,9 @@ class Scheduler(object):
         return heal_missing_data(self.dask, self.dependencies, self.dependents,
                 self.held_data, self.who_has, self.in_play, self.waiting,
                 self.waiting_data, missing)
+
+    def report(self, msg):
+        self.report_queue.put_nowait(msg)
 
     @gen.coroutine
     def scheduler(self):
@@ -819,7 +822,7 @@ class Scheduler(object):
                     'release-held-data': self.release_held_data}
 
         self.status = 'running'
-        self.report_queue.put_nowait({'op': 'start'})
+        self.report({'op': 'start'})
         while True:
             msg = yield self.scheduler_queue.get()
             logger.debug("scheduler receives message %s", msg)
