@@ -462,7 +462,7 @@ class Executor(object):
             remotes = {k: Future(v.key, self) for k, v in remotes.items()}
         self.loop.add_callback(self.scheduler_queue.put_nowait,
                                         {'op': 'update-data',
-                                         'who-has': who_has,
+                                         'who_has': who_has,
                                          'nbytes': nbytes})
         while not all(k in self.scheduler.who_has for k in who_has):
             yield gen.sleep(0.001)

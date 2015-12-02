@@ -622,15 +622,15 @@ class Scheduler(object):
             if key in self.in_play:
                 self.in_play.remove(key)
 
-    def update_data(self, extra_who_has, extra_nbytes):
-        logger.debug("Update data %s", extra_who_has)
-        for key, workers in extra_who_has.items():
+    def update_data(self, who_has=None, nbytes=None):
+        logger.debug("Update data %s", who_has)
+        for key, workers in who_has.items():
             self.mark_key_in_memory(key, workers)
 
-        self.nbytes.update(extra_nbytes)
+        self.nbytes.update(nbytes)
 
-        self.held_data.update(extra_who_has)
-        self.in_play.update(extra_who_has)
+        self.held_data.update(who_has)
+        self.in_play.update(who_has)
 
     def mark_task_erred(self, key, worker, exception, traceback):
         """ Mark that a task has erred on a particular worker """
@@ -670,20 +670,20 @@ class Scheduler(object):
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
 
-    def mark_missing_data(self, keys, key=None, worker=None):
-        keys = set(keys)
-        logger.debug("Recovering missing data: %s", keys)
-        for k in keys:
+    def mark_missing_data(self, missing=None, key=None, worker=None):
+        missing = set(missing)
+        logger.debug("Recovering missing data: %s", missing)
+        for k in missing:
             with ignoring(KeyError):
                 workers = self.who_has.pop(k)
                 for worker in workers:
                     self.has_what[worker].remove(k)
-        self.my_heal_missing_data(keys)
+        self.my_heal_missing_data(missing)
 
         if key and worker:
             with ignoring(KeyError):
                 self.processing[worker].remove(key)
-            self.waiting[key] = keys
+            self.waiting[key] = missing
             logger.info('task missing data, %s, %s', key, self.waiting)
             self.ensure_occupied(worker)
 
@@ -695,7 +695,7 @@ class Scheduler(object):
                 'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
                 self.in_play)
 
-    def mark_worker_missing(self, worker, heal=True):
+    def mark_worker_missing(self, worker=None, heal=True):
         """ Mark that a worker no longer seems responsive """
         logger.debug("Mark worker as missing %s", worker)
         if worker not in self.processing:
@@ -782,11 +782,12 @@ class Scheduler(object):
         self.report_queue.put_nowait({'op': 'start'})
         while True:
             msg = yield self.scheduler_queue.get()
+            op = msg.pop('op')
 
             logger.debug("scheduler receives message %s", msg)
-            if msg['op'] == 'close':
+            if op == 'close':
                 break
-            elif msg['op'] == 'update-graph':
+            elif op == 'update-graph':
                 update_state(self.dask, self.dependencies, self.dependents,
                         self.held_data, self.who_has, self.in_play,
                         self.waiting, self.waiting_data, msg['dsk'],
@@ -814,17 +815,16 @@ class Scheduler(object):
                     if self.who_has[key]:
                         self.mark_key_in_memory(key)
 
-            elif msg['op'] == 'update-data':
-                self.update_data(msg['who-has'], msg['nbytes'])
+            elif op == 'update-data':
+                self.update_data(**msg)
 
-            elif msg['op'] in ('missing-data', 'task-missing-data'):
-                self.mark_missing_data(msg['missing'], key=msg.get('key'),
-                                       worker=msg.get('worker'))
+            elif op in ('missing-data', 'task-missing-data'):
+                self.mark_missing_data(**msg)
 
-            elif msg['op'] == 'worker-failed':
-                self.mark_worker_missing(msg['worker'], heal=msg.get('heal'))
+            elif op == 'worker-failed':
+                self.mark_worker_missing(**msg)
 
-            elif msg['op'] == 'release-held-data':
+            elif op == 'release-held-data':
                 if msg['key'] in self.held_data:
                     logger.debug("Release key: %s", msg['key'])
                     self.held_data.remove(msg['key'])
