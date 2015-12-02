@@ -484,6 +484,8 @@ class Scheduler(object):
 
         self.delete_batch_time = delete_batch_time
 
+        self.diagnostics = []
+
     @gen.coroutine
     def _sync_center(self):
         self.ncores, self.has_what, self.who_has = yield [
@@ -666,6 +668,8 @@ class Scheduler(object):
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker])
             self.ensure_occupied(worker)
+            for diagnostic in self.diagnostics:
+                diagnostic.task_finished(self, key, worker, nbytes)
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
@@ -782,6 +786,10 @@ class Scheduler(object):
 
     def report(self, msg):
         self.report_queue.put_nowait(msg)
+
+    def add_diagnostic(self, diagnostic=None):
+        self.diagnostics.append(diagnostic)
+        diagnostic.start(self)
 
     @gen.coroutine
     def scheduler(self):

@@ -509,3 +509,40 @@ def test_scheduler(loop):
         yield done
 
     _test_cluster(f, loop)
+
+
+def test_diagnostic(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+
+        class Counter(object):
+            def start(self, scheduler):
+                self.count = 0
+
+            def task_finished(self, scheduler, key, worker, nbytes):
+                self.count += 1
+
+        counter = Counter()
+        s.add_diagnostic(counter)
+
+        assert counter.count == 0
+        s.scheduler_queue.put_nowait({'op': 'update-graph',
+                                      'dsk': {'x': (inc, 1),
+                                              'y': (inc, 'x'),
+                                              'z': (inc, 'y')},
+                                      'keys': ['z']})
+
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
+
+        assert counter.count == 3
+
+        s.scheduler_queue.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
