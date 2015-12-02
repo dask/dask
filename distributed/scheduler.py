@@ -24,139 +24,6 @@ from .utils import All, ignoring
 logger = logging.getLogger(__name__)
 
 
-@gen.coroutine
-def worker(scheduler_queue, worker_queue, ident, ncores):
-    """ Manage a single distributed worker node
-
-    This coroutine manages one remote worker.  It spins up several
-    ``worker_core`` coroutines, one for each core.  It reports a closed
-    connection to scheduler if one occurs.
-    """
-    try:
-        yield All([worker_core(scheduler_queue, worker_queue, ident, i)
-                for i in range(ncores)])
-    except (IOError, OSError):
-        logger.info("Worker failed from closed stream: %s", ident)
-        scheduler_queue.put_nowait({'op': 'worker-failed',
-                                    'worker': ident})
-
-
-@gen.coroutine
-def worker_core(scheduler_queue, worker_queue, ident, i):
-    """ Manage one core on one distributed worker node
-
-    This coroutine listens on worker_queue for the following operations
-
-    **Incoming Messages**:
-
-    - compute-task:  call worker.compute(...) on remote node, report when done
-    - close: close connection to worker node, report `worker-finished` to
-      scheduler
-
-    **Outgoing Messages**:
-
-    - task-finished:  sent to scheduler once a task completes
-    - task-erred: sent to scheduler when a task errs
-    - worker-finished: sent to scheduler in response to a close command
-    """
-    worker = rpc(ip=ident[0], port=ident[1])
-    logger.debug("Start worker core %s, %d", ident, i)
-
-    while True:
-        msg = yield worker_queue.get()
-        if msg['op'] == 'close':
-            logger.debug("Worker core receives close message %s, %s",
-                    ident, msg)
-            break
-        if msg['op'] == 'compute-task':
-            key = msg['key']
-            needed = msg['needed']
-            task = msg['task']
-            if not istask(task):
-                response, content = yield worker.update_data(data={key: task})
-                assert response == b'OK', response
-                nbytes = content['nbytes'][key]
-            else:
-                response, content = yield worker.compute(function=execute_task,
-                                                         args=(task,),
-                                                         needed=needed,
-                                                         key=key,
-                                                         kwargs={})
-                if response == b'OK':
-                    nbytes = content['nbytes']
-            logger.debug("Compute response from worker %s, %s, %s, %s",
-                         ident, key, response, content)
-            if response == b'error':
-                error, traceback = content
-                scheduler_queue.put_nowait({'op': 'task-erred',
-                                            'key': key,
-                                            'worker': ident,
-                                            'exception': error,
-                                            'traceback': traceback})
-
-            elif response == b'missing-data':
-                scheduler_queue.put_nowait({'op': 'task-missing-data',
-                                            'key': key,
-                                            'worker': ident,
-                                            'missing': content.args})
-
-            else:
-                scheduler_queue.put_nowait({'op': 'task-finished',
-                                            'workers': [ident],
-                                            'key': key,
-                                            'nbytes': nbytes})
-
-    yield worker.close(close=True)
-    worker.close_streams()
-    if msg.get('report', True):
-        scheduler_queue.put_nowait({'op': 'worker-finished',
-                                    'worker': ident})
-    logger.debug("Close worker core, %s, %d", ident, i)
-
-
-@gen.coroutine
-def delete(scheduler_queue, delete_queue, ip, port, batch_time=1):
-    """ Delete extraneous intermediates from distributed memory
-
-    This coroutine manages a connection to the center in order to send keys
-    that should be removed from distributed memory.  We batch several keys that
-    come in over the ``delete_queue`` into a list.  Roughly once a second we
-    send this list of keys over to the center which then handles deleting
-    these keys from workers' memory.
-
-    worker \                                /-> worker node
-    worker -> scheduler -> delete -> center --> worker node
-    worker /                                \-> worker node
-
-    **Incoming Messages**
-
-    - delete-task: holds a key to be deleted
-    - close: close this coroutine
-    """
-    batch = list()
-    last = time()
-    center = rpc(ip=ip, port=port)
-
-    while True:
-        msg = yield delete_queue.get()
-        if msg['op'] == 'close':
-            break
-
-        # TODO: trigger coroutine to go off in a second if no activity
-        batch.append(msg['key'])
-        if batch and time() - last > batch_time:  # One second batching
-            logger.debug("Ask center to delete %d keys", len(batch))
-            last = time()
-            yield center.delete_data(keys=batch)
-            batch = list()
-
-    if batch:
-        yield center.delete_data(keys=batch)
-
-    yield center.close(close=True)
-    center.close_streams()          # All done
-    scheduler_queue.put_nowait({'op': 'delete-finished'})
-    logger.debug('Delete finished')
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
@@ -636,13 +503,9 @@ class Scheduler(object):
 
         self.worker_queues = {addr: Queue() for addr in self.ncores}
 
-        self.coroutines = ([
-             self.scheduler(),
-             delete(self.scheduler_queue, self.delete_queue,
-                    self.center.ip, self.center.port,
-                    self.delete_batch_time)]
-            + [worker(self.scheduler_queue, self.worker_queues[w], w, n)
-               for w, n in self.ncores.items()])
+        self.coroutines = ([self.scheduler(),
+                            self.delete()]
+                         + [self.worker(w) for w in self.ncores])
 
         for cor in self.coroutines:
             if cor.done():
@@ -654,6 +517,8 @@ class Scheduler(object):
     def _close(self):
         self.scheduler_queue.put_nowait({'op': 'close'})
         yield All(self.coroutines)
+        yield self.center.close(close=True)
+        self.center.close_streams()
 
     @gen.coroutine
     def cleanup(self):
@@ -970,5 +835,135 @@ class Scheduler(object):
         yield self.cleanup()
         self.status = 'done'
 
+    @gen.coroutine
+    def worker(self, ident):
+        """ Manage a single distributed worker node
+
+        This coroutine manages one remote worker.  It spins up several
+        ``worker_core`` coroutines, one for each core.  It reports a closed
+        connection to scheduler if one occurs.
+        """
+        try:
+            yield All([self.worker_core(ident, i)
+                    for i in range(self.ncores[ident])])
+        except (IOError, OSError):
+            logger.info("Worker failed from closed stream: %s", ident)
+            self.scheduler_queue.put_nowait({'op': 'worker-failed',
+                                             'worker': ident})
+
+
+    @gen.coroutine
+    def worker_core(self, ident, i):
+        """ Manage one core on one distributed worker node
+
+        This coroutine listens on worker_queue for the following operations
+
+        **Incoming Messages**:
+
+        - compute-task:  call worker.compute(...) on remote node, report when done
+        - close: close connection to worker node, report `worker-finished` to
+          scheduler
+
+        **Outgoing Messages**:
+
+        - task-finished:  sent to scheduler once a task completes
+        - task-erred: sent to scheduler when a task errs
+        - worker-finished: sent to scheduler in response to a close command
+        """
+        worker = rpc(ip=ident[0], port=ident[1])
+        logger.debug("Start worker core %s, %d", ident, i)
+
+        while True:
+            msg = yield self.worker_queues[ident].get()
+            if msg['op'] == 'close':
+                logger.debug("Worker core receives close message %s, %s",
+                        ident, msg)
+                break
+            if msg['op'] == 'compute-task':
+                key = msg['key']
+                needed = msg['needed']
+                task = msg['task']
+                if not istask(task):
+                    response, content = yield worker.update_data(data={key: task})
+                    assert response == b'OK', response
+                    nbytes = content['nbytes'][key]
+                else:
+                    response, content = yield worker.compute(function=execute_task,
+                                                             args=(task,),
+                                                             needed=needed,
+                                                             key=key,
+                                                             kwargs={})
+                    if response == b'OK':
+                        nbytes = content['nbytes']
+                logger.debug("Compute response from worker %s, %s, %s, %s",
+                             ident, key, response, content)
+                if response == b'error':
+                    error, traceback = content
+                    self.scheduler_queue.put_nowait({'op': 'task-erred',
+                                                'key': key,
+                                                'worker': ident,
+                                                'exception': error,
+                                                'traceback': traceback})
+
+                elif response == b'missing-data':
+                    self.scheduler_queue.put_nowait({'op': 'task-missing-data',
+                                                'key': key,
+                                                'worker': ident,
+                                                'missing': content.args})
+
+                else:
+                    self.scheduler_queue.put_nowait({'op': 'task-finished',
+                                                'workers': [ident],
+                                                'key': key,
+                                                'nbytes': nbytes})
+
+        yield worker.close(close=True)
+        worker.close_streams()
+        if msg.get('report', True):
+            self.scheduler_queue.put_nowait({'op': 'worker-finished',
+                                        'worker': ident})
+        logger.debug("Close worker core, %s, %d", ident, i)
+
+
+    @gen.coroutine
+    def delete(self):
+        """ Delete extraneous intermediates from distributed memory
+
+        This coroutine manages a connection to the center in order to send keys
+        that should be removed from distributed memory.  We batch several keys that
+        come in over the ``delete_queue`` into a list.  Roughly once a second we
+        send this list of keys over to the center which then handles deleting
+        these keys from workers' memory.
+
+        worker \                                /-> worker node
+        worker -> scheduler -> delete -> center --> worker node
+        worker /                                \-> worker node
+
+        **Incoming Messages**
+
+        - delete-task: holds a key to be deleted
+        - close: close this coroutine
+        """
+        batch = list()
+        last = time()
+
+        while True:
+            msg = yield self.delete_queue.get()
+            if msg['op'] == 'close':
+                break
+
+            # TODO: trigger coroutine to go off in a second if no activity
+            batch.append(msg['key'])
+            if batch and time() - last > self.delete_batch_time:  # One second batching
+                logger.debug("Ask center to delete %d keys", len(batch))
+                last = time()
+                yield self.center.delete_data(keys=batch)
+                batch = list()
+
+        if batch:
+            yield self.center.delete_data(keys=batch)
+
+        self.scheduler_queue.put_nowait({'op': 'delete-finished'})
+        logger.debug('Delete finished')
 
 scheduler = 0
