@@ -547,6 +547,7 @@ class Scheduler(object):
         self.ensure_occupied(new_worker)
 
     def mark_key_in_memory(self, key, workers=None):
+        """ Mark that key now lives in particular workers """
         logger.debug("Mark %s in memory", key)
         if workers is None:
             workers = self.who_has[key]
@@ -631,6 +632,15 @@ class Scheduler(object):
         self.held_data.update(extra_who_has)
         self.in_play.update(extra_who_has)
 
+    def mark_task_erred(self, key, worker, exception, traceback):
+        """ Mark that a task has erred on a particular worker """
+        if key in self.processing[worker]:
+            self.processing[worker].remove(key)
+            self.exceptions[key] = exception
+            self.tracebacks[key] = traceback
+            self.mark_failed(key, key)
+            self.ensure_occupied(worker)
+
     def mark_failed(self, key, failing_key=None):
         """ When a task fails mark it and all dependent task as failed """
         logger.debug("Mark key as failed %s", key)
@@ -638,9 +648,9 @@ class Scheduler(object):
             return
         self.exceptions_blame[key] = failing_key
         self.report_queue.put_nowait({'op': 'task-erred',
-                                     'key': key,
-                                     'exception': self.exceptions[failing_key],
-                                     'traceback': self.tracebacks[failing_key]})
+                                      'key': key,
+                                      'exception': self.exceptions[failing_key],
+                                      'traceback': self.tracebacks[failing_key]})
         if key in self.waiting:
             del self.waiting[key]
         if key in self.waiting_data:
@@ -649,6 +659,17 @@ class Scheduler(object):
         for dep in self.dependents[key]:
             self.mark_failed(dep, failing_key)
 
+    def mark_task_finished(self, key, worker, nbytes):
+        """ Mark that a task has finished execution on a particular worker """
+        logger.debug("Mark task as finished %s, %s", key, worker)
+        if key in self.processing[worker]:
+            self.nbytes[key] = nbytes
+            self.mark_key_in_memory(key, [worker])
+            self.ensure_occupied(worker)
+        else:
+            logger.debug("Key not found in processing, %s, %s, %s",
+                         key, worker, self.processing[worker])
+
     def log_state(self, msg=''):
         logger.debug("Runtime State: %s", msg)
         logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
@@ -656,6 +677,7 @@ class Scheduler(object):
                 self.in_play)
 
     def mark_worker_missing(self, worker):
+        """ Mark that a worker no longer seems responsive """
         logger.debug("Mark worker as missing %s", worker)
         if worker not in self.processing:
             return
@@ -773,26 +795,6 @@ class Scheduler(object):
             elif msg['op'] == 'update-data':
                 self.update_data(msg['who-has'], msg['nbytes'])
 
-            elif msg['op'] == 'task-finished':
-                key, worker = msg['key'], msg['workers'][0]
-                logger.debug("Mark task as finished %s, %s", key, worker)
-                if key in self.processing[worker]:
-                    self.nbytes[key] = msg['nbytes']
-                    self.mark_key_in_memory(key, [worker])
-                    self.ensure_occupied(worker)
-                else:
-                    logger.debug("Key not found in processing, %s, %s, %s",
-                            key, worker, self.processing[worker])
-
-            elif msg['op'] == 'task-erred':
-                key, worker = msg['key'], msg['worker']
-                if key in self.processing[worker]:
-                    self.processing[worker].remove(key)
-                    self.exceptions[key] = msg['exception']
-                    self.tracebacks[key] = msg['traceback']
-                    self.mark_failed(key, key)
-                    self.ensure_occupied(worker)
-
             elif msg['op'] in ('missing-data', 'task-missing-data'):
                 missing = set(msg['missing'])
                 logger.debug("Recovering missing data: %s", missing)
@@ -899,11 +901,7 @@ class Scheduler(object):
                              ident, key, response, content)
                 if response == b'error':
                     error, traceback = content
-                    self.scheduler_queue.put_nowait({'op': 'task-erred',
-                                                'key': key,
-                                                'worker': ident,
-                                                'exception': error,
-                                                'traceback': traceback})
+                    self.mark_task_erred(key, ident, error, traceback)
 
                 elif response == b'missing-data':
                     self.scheduler_queue.put_nowait({'op': 'task-missing-data',
@@ -912,10 +910,7 @@ class Scheduler(object):
                                                 'missing': content.args})
 
                 else:
-                    self.scheduler_queue.put_nowait({'op': 'task-finished',
-                                                'workers': [ident],
-                                                'key': key,
-                                                'nbytes': nbytes})
+                    self.mark_task_finished(key, ident, nbytes)
 
         yield worker.close(close=True)
         worker.close_streams()
