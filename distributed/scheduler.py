@@ -24,8 +24,6 @@ from .utils import All, ignoring
 logger = logging.getLogger(__name__)
 
 
-
-
 def validate_state(dependencies, dependents, waiting, waiting_data,
         in_memory, stacks, processing, finished_results, released, in_play,
         **kwargs):
@@ -753,6 +751,9 @@ class Scheduler(object):
             if self.who_has[key]:
                 self.mark_key_in_memory(key)
 
+        for diagnostic in self.diagnostics:
+            diagnostic.update_graph(self, dsk, keys, restrictions)
+
     def release_held_data(self, key=None):
         if key in self.held_data:
             logger.debug("Release key: %s", key)
@@ -789,7 +790,6 @@ class Scheduler(object):
 
     def add_diagnostic(self, diagnostic=None):
         self.diagnostics.append(diagnostic)
-        diagnostic.start(self)
 
     @gen.coroutine
     def scheduler(self):

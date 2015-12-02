@@ -619,14 +619,15 @@ ALL_COMPLETED = 'ALL_COMPLETED'
 
 
 @wraps(futures.wait)
-def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
-    if len(set(f.executor for f in fs)) == 1:
-        loop = first(fs).executor.loop
+def wait(fs, timeout=None, return_when='ALL_COMPLETED', show_progress=False):
+    executor = default_executor()
+    if show_progress:
+        from distributed.diagnostics import ProgressBar
+        with ProgressBar(scheduler=executor.scheduler, keys=fs):
+            result = sync(executor.loop, _wait, fs, timeout, return_when)
     else:
-        # TODO: Groupby executor, spawn many _as_completed coroutines
-        raise NotImplementedError("wait on many event loops not yet supported")
-
-    return sync(loop, _wait, fs, timeout, return_when)
+        result = sync(executor.loop, _wait, fs, timeout, return_when)
+    return result
 
 
 @gen.coroutine
