@@ -670,13 +670,32 @@ class Scheduler(object):
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
 
+    def mark_missing_data(self, keys, key=None, worker=None):
+        keys = set(keys)
+        logger.debug("Recovering missing data: %s", keys)
+        for k in keys:
+            with ignoring(KeyError):
+                workers = self.who_has.pop(k)
+                for worker in workers:
+                    self.has_what[worker].remove(k)
+        self.my_heal_missing_data(keys)
+
+        if key and worker:
+            with ignoring(KeyError):
+                self.processing[worker].remove(key)
+            self.waiting[key] = keys
+            logger.info('task missing data, %s, %s', key, self.waiting)
+            self.ensure_occupied(worker)
+
+        self.seed_ready_tasks()
+
     def log_state(self, msg=''):
         logger.debug("Runtime State: %s", msg)
         logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
                 'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
                 self.in_play)
 
-    def mark_worker_missing(self, worker):
+    def mark_worker_missing(self, worker, heal=True):
         """ Mark that a worker no longer seems responsive """
         logger.debug("Mark worker as missing %s", worker)
         if worker not in self.processing:
@@ -699,6 +718,9 @@ class Scheduler(object):
         self.in_play.difference_update(missing_keys)
         for k in gone_data:
             del self.who_has[k]
+
+        if heal:
+            self.heal_state()
 
     def heal_state(self):
         """ Recover from catastrophic change """
@@ -796,33 +818,11 @@ class Scheduler(object):
                 self.update_data(msg['who-has'], msg['nbytes'])
 
             elif msg['op'] in ('missing-data', 'task-missing-data'):
-                missing = set(msg['missing'])
-                logger.debug("Recovering missing data: %s", missing)
-                for k in missing:
-                    with ignoring(KeyError):
-                        workers = self.who_has.pop(k)
-                        for worker in workers:
-                            self.has_what[worker].remove(k)
-                self.my_heal_missing_data(missing)
-
-                if msg['op'] == 'task-missing-data':
-                    key = msg['key']
-                    with ignoring(KeyError):
-                        self.processing[msg['worker']].remove(key)
-                    self.waiting[key] = missing
-                    logger.info('task missing data, %s, %s', key, self.waiting)
-                    with ignoring(KeyError):
-                        self.processing[msg['worker']].remove(msg['key'])
-
-                    self.ensure_occupied(msg['worker'])
-
-                self.seed_ready_tasks()
+                self.mark_missing_data(msg['missing'], key=msg.get('key'),
+                                       worker=msg.get('worker'))
 
             elif msg['op'] == 'worker-failed':
-                worker = msg['worker']
-                self.mark_worker_missing(worker)
-                if msg.get('heal', True):
-                    self.heal_state()
+                self.mark_worker_missing(msg['worker'], heal=msg.get('heal'))
 
             elif msg['op'] == 'release-held-data':
                 if msg['key'] in self.held_data:
@@ -904,10 +904,7 @@ class Scheduler(object):
                     self.mark_task_erred(key, ident, error, traceback)
 
                 elif response == b'missing-data':
-                    self.scheduler_queue.put_nowait({'op': 'task-missing-data',
-                                                'key': key,
-                                                'worker': ident,
-                                                'missing': content.args})
+                    self.mark_missing_data(content.args, key=key, worker=ident)
 
                 else:
                     self.mark_task_finished(key, ident, nbytes)
