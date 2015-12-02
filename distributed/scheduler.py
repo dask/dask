@@ -811,6 +811,13 @@ class Scheduler(object):
 
         self.heal_state()
 
+        handlers = {'update-graph': self.update_graph,
+                    'update-data': self.update_data,
+                    'missing-data': self.mark_missing_data,
+                    'task-missing-data': self.mark_missing_data,
+                    'worker-failed': self.mark_worker_missing,
+                    'release-held-data': self.release_held_data}
+
         self.status = 'running'
         self.report_queue.put_nowait({'op': 'start'})
         while True:
@@ -820,22 +827,8 @@ class Scheduler(object):
 
             if op == 'close':
                 break
-
-            elif op == 'update-graph':
-                self.update_graph(**msg)
-
-            elif op == 'update-data':
-                self.update_data(**msg)
-
-            elif op in ('missing-data', 'task-missing-data'):
-                self.mark_missing_data(**msg)
-
-            elif op == 'worker-failed':
-                self.mark_worker_missing(**msg)
-
-            elif op == 'release-held-data':
-                self.release_held_data(**msg)
-
+            if op in handlers:
+                handlers[op](**msg)
             else:
                 logger.warn("Bad message: %s", msg)
 
