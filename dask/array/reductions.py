@@ -16,7 +16,7 @@ from ..utils import ignoring
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
-              max_leaves=None, combine=None):
+              split_threshold=None, combine=None):
     """ General version of reductions
 
     >>> reduction(my_array, np.sum, np.sum, axis=0, keepdims=False)  # doctest: +SKIP
@@ -33,13 +33,13 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
         aggregate = partial(aggregate, dtype=dtype)
 
     # Normalize axes
-    if isinstance(max_leaves, dict):
-        max_leaves = dict((k, max_leaves.get(k, 2)) for k in axis)
-    elif isinstance(max_leaves, int):
-        n = builtins.max(int(max_leaves ** (1/len(axis))), 2)
-        max_leaves = dict.fromkeys(axis, n)
+    if isinstance(split_threshold, dict):
+        split_threshold = dict((k, split_threshold.get(k, 2)) for k in axis)
+    elif isinstance(split_threshold, int):
+        n = builtins.max(int(split_threshold ** (1/len(axis))), 2)
+        split_threshold = dict.fromkeys(axis, n)
     else:
-        max_leaves = dict((k, v) for (k, v) in enumerate(x.numblocks) if k in axis)
+        split_threshold = dict((k, v) for (k, v) in enumerate(x.numblocks) if k in axis)
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
@@ -50,26 +50,26 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
     # Reduce across intermediates
     depth = 1
     for i, n in enumerate(tmp.numblocks):
-        if i in max_leaves and max_leaves[i] != 1:
-            depth = int(builtins.max(depth, ceil(log(n, max_leaves[i]))))
+        if i in split_threshold and split_threshold[i] != 1:
+            depth = int(builtins.max(depth, ceil(log(n, split_threshold[i]))))
     func = compose(partial(combine or aggregate, axis=axis, keepdims=True),
                    partial(_concatenate2, axes=axis))
     for i in range(depth - 1):
-        tmp = partial_reduce(func, tmp, max_leaves, True, None)
+        tmp = partial_reduce(func, tmp, split_threshold, True, None)
     func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
                    partial(_concatenate2, axes=axis))
-    return partial_reduce(func, tmp, max_leaves, keepdims=keepdims, dtype=dtype,
+    return partial_reduce(func, tmp, split_threshold, keepdims=keepdims, dtype=dtype,
                           name=('reduce-' + tokenize(func, x, keepdims, dtype)))
 
 
-def partial_reduce(func, x, max_leaves, keepdims=False, dtype=None, name=None):
+def partial_reduce(func, x, split_threshold, keepdims=False, dtype=None, name=None):
     """Partial reduction across multiple axes.
 
     Parameters
     ----------
     func : function
     x : Array
-    max_leaves : dict
+    split_threshold : dict
         Maximum reduction block sizes in each dimension.
 
     Example
@@ -79,14 +79,14 @@ def partial_reduce(func, x, max_leaves, keepdims=False, dtype=None, name=None):
 
     >>> partial_reduce(np.min, x, {0: 1, 2: 3})    # doctest: +SKIP
     """
-    name = name or 'p_reduce-' + tokenize(func, x, max_leaves, keepdims, dtype)
-    parts = [list(partition_all(max_leaves.get(i, 1), range(n))) for (i, n)
+    name = name or 'p_reduce-' + tokenize(func, x, split_threshold, keepdims, dtype)
+    parts = [list(partition_all(split_threshold.get(i, 1), range(n))) for (i, n)
              in enumerate(x.numblocks)]
     keys = product(*map(range, map(len, parts)))
-    out_chunks = [tuple(1 for p in partition_all(max_leaves[i], c)) if i
-                  in max_leaves else c for (i, c) in enumerate(x.chunks)]
+    out_chunks = [tuple(1 for p in partition_all(split_threshold[i], c)) if i
+                  in split_threshold else c for (i, c) in enumerate(x.chunks)]
     if not keepdims:
-        out_axis = [i for i in range(x.ndim) if i not in max_leaves]
+        out_axis = [i for i in range(x.ndim) if i not in split_threshold]
         getter = lambda k: get(out_axis, k)
         keys = map(getter, keys)
         out_chunks = list(getter(out_chunks))
@@ -100,7 +100,7 @@ def partial_reduce(func, x, max_leaves, keepdims=False, dtype=None, name=None):
 
 
 @wraps(chunk.sum)
-def sum(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
+def sum(a, axis=None, dtype=None, keepdims=False, split_threshold=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -108,11 +108,11 @@ def sum(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     else:
         dt = None
     return reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
-                     dtype=dt, max_leaves=max_leaves)
+                     dtype=dt, split_threshold=split_threshold)
 
 
 @wraps(chunk.prod)
-def prod(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
+def prod(a, axis=None, dtype=None, keepdims=False, split_threshold=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -120,35 +120,35 @@ def prod(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     else:
         dt = None
     return reduction(a, chunk.prod, chunk.prod, axis=axis, keepdims=keepdims,
-                     dtype=dt, max_leaves=max_leaves)
+                     dtype=dt, split_threshold=split_threshold)
 
 
 @wraps(chunk.min)
-def min(a, axis=None, keepdims=False, max_leaves=None):
+def min(a, axis=None, keepdims=False, split_threshold=None):
     return reduction(a, chunk.min, chunk.min, axis=axis, keepdims=keepdims,
-                     dtype=a._dtype, max_leaves=max_leaves)
+                     dtype=a._dtype, split_threshold=split_threshold)
 
 
 @wraps(chunk.max)
-def max(a, axis=None, keepdims=False, max_leaves=None):
+def max(a, axis=None, keepdims=False, split_threshold=None):
     return reduction(a, chunk.max, chunk.max, axis=axis, keepdims=keepdims,
-                     dtype=a._dtype, max_leaves=max_leaves)
+                     dtype=a._dtype, split_threshold=split_threshold)
 
 
 @wraps(chunk.any)
-def any(a, axis=None, keepdims=False, max_leaves=None):
+def any(a, axis=None, keepdims=False, split_threshold=None):
     return reduction(a, chunk.any, chunk.any, axis=axis, keepdims=keepdims,
-                     dtype='bool', max_leaves=max_leaves)
+                     dtype='bool', split_threshold=split_threshold)
 
 
 @wraps(chunk.all)
-def all(a, axis=None, keepdims=False, max_leaves=None):
+def all(a, axis=None, keepdims=False, split_threshold=None):
     return reduction(a, chunk.all, chunk.all, axis=axis, keepdims=keepdims,
-                     dtype='bool', max_leaves=max_leaves)
+                     dtype='bool', split_threshold=split_threshold)
 
 
 @wraps(chunk.nansum)
-def nansum(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
+def nansum(a, axis=None, dtype=None, keepdims=False, split_threshold=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -156,12 +156,12 @@ def nansum(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     else:
         dt = None
     return reduction(a, chunk.nansum, chunk.sum, axis=axis, keepdims=keepdims,
-                     dtype=dt, max_leaves=max_leaves)
+                     dtype=dt, split_threshold=split_threshold)
 
 
 with ignoring(AttributeError):
     @wraps(chunk.nanprod)
-    def nanprod(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
+    def nanprod(a, axis=None, dtype=None, keepdims=False, split_threshold=None):
         if dtype is not None:
             dt = dtype
         elif a._dtype is not None:
@@ -169,19 +169,19 @@ with ignoring(AttributeError):
         else:
             dt = None
         return reduction(a, chunk.nanprod, chunk.prod, axis=axis,
-                         keepdims=keepdims, dtype=dt, max_leaves=max_leaves)
+                         keepdims=keepdims, dtype=dt, split_threshold=split_threshold)
 
 
 @wraps(chunk.nanmin)
-def nanmin(a, axis=None, keepdims=False, max_leaves=None):
+def nanmin(a, axis=None, keepdims=False, split_threshold=None):
     return reduction(a, chunk.nanmin, chunk.nanmin, axis=axis,
-                     keepdims=keepdims, dtype=a._dtype, max_leaves=max_leaves)
+                     keepdims=keepdims, dtype=a._dtype, split_threshold=split_threshold)
 
 
 @wraps(chunk.nanmax)
-def nanmax(a, axis=None, keepdims=False, max_leaves=None):
+def nanmax(a, axis=None, keepdims=False, split_threshold=None):
     return reduction(a, chunk.nanmax, chunk.nanmax, axis=axis,
-                     keepdims=keepdims, dtype=a._dtype, max_leaves=max_leaves)
+                     keepdims=keepdims, dtype=a._dtype, split_threshold=split_threshold)
 
 
 def numel(x, **kwargs):
@@ -219,7 +219,7 @@ def mean_agg(pair, dtype='f8', **kwargs):
 
 
 @wraps(chunk.mean)
-def mean(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
+def mean(a, axis=None, dtype=None, keepdims=False, split_threshold=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -227,10 +227,10 @@ def mean(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
     else:
         dt = None
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims,
-                     dtype=dt, max_leaves=max_leaves, combine=mean_combine)
+                     dtype=dt, split_threshold=split_threshold, combine=mean_combine)
 
 
-def nanmean(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
+def nanmean(a, axis=None, dtype=None, keepdims=False, split_threshold=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -239,7 +239,7 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, max_leaves=None):
         dt = None
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims, dtype=dt,
-                     max_leaves=max_leaves,
+                     split_threshold=split_threshold,
                      combine=partial(mean_combine, sum=chunk.nansum, numel=nannumel))
 
 with ignoring(AttributeError):
@@ -315,7 +315,7 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
 
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
-           max_leaves=None):
+           split_threshold=None):
     if not isinstance(order, int) or order < 2:
         raise ValueError("Order must be an integer >= 2")
     if dtype is not None:
@@ -326,12 +326,12 @@ def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
         dt = None
     return reduction(a, partial(moment_chunk, order=order), partial(moment_agg,
                      order=order, ddof=ddof), axis=axis, keepdims=keepdims,
-                     dtype=dt, max_leaves=max_leaves,
+                     dtype=dt, split_threshold=split_threshold,
                      combine=partial(moment_combine, order=order))
 
 
 @wraps(chunk.var)
-def var(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
+def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_threshold=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -339,11 +339,11 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
     else:
         dt = None
     return reduction(a, moment_chunk, partial(moment_agg, ddof=ddof), axis=axis,
-                     keepdims=keepdims, dtype=dt, max_leaves=max_leaves,
+                     keepdims=keepdims, dtype=dt, split_threshold=split_threshold,
                      combine=moment_combine)
 
 
-def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
+def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_threshold=None):
     if dtype is not None:
         dt = dtype
     elif a._dtype is not None:
@@ -352,24 +352,24 @@ def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
         dt = None
     return reduction(a, partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
                      partial(moment_agg, sum=np.nansum, ddof=ddof), axis=axis,
-                     keepdims=keepdims, dtype=dt, max_leaves=max_leaves,
+                     keepdims=keepdims, dtype=dt, split_threshold=split_threshold,
                      combine=partial(moment_combine, sum=np.nansum))
 
 with ignoring(AttributeError):
     nanvar = wraps(chunk.nanvar)(nanvar)
 
 @wraps(chunk.std)
-def std(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
+def std(a, axis=None, dtype=None, keepdims=False, ddof=0, split_threshold=None):
     result = sqrt(a.var(axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
-                        max_leaves=max_leaves))
+                        split_threshold=split_threshold))
     if dtype and dtype != result.dtype:
         result = result.astype(dtype)
     return result
 
 
-def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0, max_leaves=None):
+def nanstd(a, axis=None, dtype=None, keepdims=False, ddof=0, split_threshold=None):
     result = sqrt(nanvar(a, axis=axis, dtype=dtype, keepdims=keepdims,
-                         ddof=ddof, max_leaves=max_leaves))
+                         ddof=ddof, split_threshold=split_threshold))
     if dtype and dtype != result.dtype:
         result = result.astype(dtype)
     return result
@@ -378,7 +378,7 @@ with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)
 
 
-def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, max_leaves=None):
+def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_threshold=None):
     """ Vector norm
 
     See np.linalg.norm
@@ -386,18 +386,18 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, max_leaves=None):
     if ord is None or ord == 'fro':
         ord = 2
     if ord == np.inf:
-        return max(abs(a), axis=axis, keepdims=keepdims, max_leaves=max_leaves)
+        return max(abs(a), axis=axis, keepdims=keepdims, split_threshold=split_threshold)
     elif ord == -np.inf:
-        return min(abs(a), axis=axis, keepdims=keepdims, max_leaves=max_leaves)
+        return min(abs(a), axis=axis, keepdims=keepdims, split_threshold=split_threshold)
     elif ord == 1:
         return sum(abs(a), axis=axis, dtype=dtype, keepdims=keepdims,
-                   max_leaves=max_leaves)
+                   split_threshold=split_threshold)
     elif ord % 2 == 0:
         return sum(a**ord, axis=axis, dtype=dtype, keepdims=keepdims,
-                   max_leaves=max_leaves)**(1./ord)
+                   split_threshold=split_threshold)**(1./ord)
     else:
         return sum(abs(a)**ord, axis=axis, dtype=dtype, keepdims=keepdims,
-                   max_leaves=max_leaves)**(1./ord)
+                   split_threshold=split_threshold)**(1./ord)
 
 
 def _arg_combine(data, axis, argfunc):
@@ -453,11 +453,11 @@ def arg_reduction(func, argfunc):
     agg = partial(arg_agg, func, argfunc)
     combine = partial(arg_combine, func, argfunc)
     @wraps(argfunc)
-    def _(a, axis=None, max_leaves=None):
+    def _(a, axis=None, split_threshold=None):
         if axis < 0:
             axis = a.ndim + axis
         return reduction(a, chunk, agg, axis=axis, dtype='i8',
-                         max_leaves=max_leaves, combine=combine)
+                         split_threshold=split_threshold, combine=combine)
     return _
 
 
