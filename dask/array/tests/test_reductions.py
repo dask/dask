@@ -5,7 +5,6 @@ pytest.importorskip('numpy')
 
 import dask.array as da
 from dask.utils import ignoring
-from dask.array.reductions import arg_aggregate
 import numpy as np
 
 
@@ -27,13 +26,6 @@ def same_keys(a, b):
         else:
             return k
     return sorted(a.dask, key=key) == sorted(b.dask, key=key)
-
-
-def test_arg_reduction():
-    pairs = [([4, 3, 5], [10, 11, 12]),
-             ([3, 5, 1], [1, 2, 3])]
-    result = arg_aggregate(np.min, np.argmin, (100, 100), pairs)
-    assert eq(result, np.array([101, 11, 103]))
 
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, max_leaves=True):
@@ -83,6 +75,11 @@ def test_reductions_1D(dtype):
     assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
     assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
     assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
+
+    assert eq(da.argmax(a, axis=0, max_leaves=2), np.argmax(x, axis=0))
+    assert eq(da.argmin(a, axis=0, max_leaves=2), np.argmin(x, axis=0))
+    assert eq(da.nanargmax(a, axis=0, max_leaves=2), np.nanargmax(x, axis=0))
+    assert eq(da.nanargmin(a, axis=0, max_leaves=2), np.nanargmin(x, axis=0))
 
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
@@ -154,6 +151,15 @@ def test_reductions_2D(dtype):
     assert eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
     assert eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
+    assert eq(da.argmax(a, axis=0, max_leaves=2), np.argmax(x, axis=0))
+    assert eq(da.argmin(a, axis=0, max_leaves=2), np.argmin(x, axis=0))
+    assert eq(da.nanargmax(a, axis=0, max_leaves=2), np.nanargmax(x, axis=0))
+    assert eq(da.nanargmin(a, axis=0, max_leaves=2), np.nanargmin(x, axis=0))
+    assert eq(da.argmax(a, axis=1, max_leaves=2), np.argmax(x, axis=1))
+    assert eq(da.argmin(a, axis=1, max_leaves=2), np.argmin(x, axis=1))
+    assert eq(da.nanargmax(a, axis=1, max_leaves=2), np.nanargmax(x, axis=1))
+    assert eq(da.nanargmin(a, axis=1, max_leaves=2), np.nanargmin(x, axis=1))
+
 
 def test_reductions_2D_nans():
     # chunks are a mix of some/all/no NaNs
@@ -223,6 +229,7 @@ def test_reductions_with_negative_axes():
     a = da.from_array(x, chunks=2)
 
     assert eq(a.argmin(axis=-1), x.argmin(axis=-1))
+    assert eq(a.argmin(axis=-1, max_leaves=2), x.argmin(axis=-1))
 
     assert eq(a.sum(axis=-1), x.sum(axis=-1))
     assert eq(a.sum(axis=(0, -1)), x.sum(axis=(0, -1)))

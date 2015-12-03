@@ -8,7 +8,7 @@ import numpy as np
 from toolz import compose, partition_all, merge, get
 
 from . import chunk
-from .core import _concatenate2, Array, atop, sqrt, elemwise, lol_tuples
+from .core import _concatenate2, Array, atop, sqrt, lol_tuples
 from .numpy_compat import divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
@@ -133,28 +133,6 @@ def min(a, axis=None, keepdims=False, max_leaves=None):
 def max(a, axis=None, keepdims=False, max_leaves=None):
     return reduction(a, chunk.max, chunk.max, axis=axis, keepdims=keepdims,
                      dtype=a._dtype, max_leaves=max_leaves)
-
-
-@wraps(chunk.argmin)
-def argmin(a, axis=None):
-    return arg_reduction(a, chunk.min, chunk.argmin, axis=axis, dtype='i8')
-
-
-@wraps(chunk.nanargmin)
-def nanargmin(a, axis=None):
-    return arg_reduction(a, chunk.nanmin, chunk.nanargmin, axis=axis,
-                         dtype='i8')
-
-
-@wraps(chunk.argmax)
-def argmax(a, axis=None):
-    return arg_reduction(a, chunk.max, chunk.argmax, axis=axis, dtype='i8')
-
-
-@wraps(chunk.nanargmax)
-def nanargmax(a, axis=None):
-    return arg_reduction(a, chunk.nanmax, chunk.nanargmax, axis=axis,
-                         dtype='i8')
 
 
 @wraps(chunk.any)
@@ -422,45 +400,68 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, max_leaves=None):
                    max_leaves=max_leaves)**(1./ord)
 
 
-def arg_aggregate(func, argfunc, dims, pairs):
-    """
+def _arg_combine(data, axis, argfunc):
+    """Merge intermediate results from ``arg_*`` functions"""
+    vals = data['vals']
+    arg = data['arg']
+    ns = data['n']
+    args = argfunc(vals, axis=axis)
+    offsets = np.roll(np.cumsum(ns, axis=axis), 1, axis)
+    offsets[tuple(slice(None) if i != axis else 0 for i in range(ns.ndim))] = 0
+    inds = list(reversed(np.meshgrid(*map(np.arange, args.shape), sparse=True)))
+    inds.insert(axis, args)
 
-    >>> pairs = [([4, 3, 5], [10, 11, 12]),
-    ...          ([3, 5, 1], [1, 2, 3])]
-    >>> arg_aggregate(np.min, np.argmin, (100, 100), pairs)
-    array([101,  11, 103])
-    """
-    pairs = list(pairs)
-    mins, argmins = zip(*pairs)
-    mins = np.array(mins)
-    argmins = np.array(argmins)
-    args = argfunc(mins, axis=0)
-
-    offsets = np.add.accumulate([0] + list(dims)[:-1])
-    offsets = offsets.reshape((len(offsets),) + (1,) * (argmins.ndim - 1))
-    return np.choose(args, argmins + offsets)
+    arg = (arg + offsets)[tuple(inds)]
+    vals = vals[tuple(inds)]
+    n = ns.sum(axis=axis).take(0, 0)
+    return arg, vals, n
 
 
-def arg_reduction(a, func, argfunc, axis=0, dtype=None):
-    """ General version of argmin/argmax
+def arg_chunk(func, argfunc, x, axis=None, **kwargs):
+    axis = axis[0] if isinstance(axis, tuple) else axis
+    vals = func(x, axis=axis, keepdims=True)
+    arg = argfunc(x, axis=axis, keepdims=True)
+    result = np.empty(shape=vals.shape, dtype=[('vals', vals.dtype),
+                                               ('arg', arg.dtype),
+                                               ('n', 'i8')])
+    result['vals'] = vals
+    result['arg'] = arg
+    result['n'] = x.shape[axis]
+    return result
 
-    >>> arg_reduction(my_array, np.min, axis=0)  # doctest: +SKIP
-    """
-    if not isinstance(axis, int):
-        raise ValueError("Must specify integer axis= keyword argument.\n"
-                "For example:\n"
-                "  Before:  x.argmin()\n"
-                "  After:   x.argmin(axis=0)\n")
 
-    if axis < 0:
-        axis = a.ndim + axis
+def arg_combine(func, argfunc, data, axis=None, **kwargs):
+    axis = axis[0] if isinstance(axis, tuple) else axis
+    arg, vals, n = _arg_combine(data, axis, argfunc)
+    shape = tuple(s if i != axis else 1 for (i, s) in enumerate(data.shape))
+    result = np.empty(shape=shape, dtype=[('vals', vals.dtype),
+                                          ('arg', arg.dtype),
+                                          ('n', 'i8')])
+    result['vals'] = vals.reshape(shape)
+    result['arg'] = arg.reshape(shape)
+    result['n'] = n
+    return result
 
-    def argreduce(x):
-        """ Get both min/max and argmin/argmax of each block """
-        return (func(x, axis=axis), argfunc(x, axis=axis))
 
-    a2 = elemwise(argreduce, a)
+def arg_agg(func, argfunc, data, axis=None, **kwargs):
+    axis = axis[0] if isinstance(axis, tuple) else axis
+    return _arg_combine(data, axis, argfunc)[0]
 
-    return atop(partial(arg_aggregate, func, argfunc, a.chunks[axis]),
-                [i for i in range(a.ndim) if i != axis],
-                a2, list(range(a.ndim)), dtype=dtype)
+
+def arg_reduction(func, argfunc):
+    chunk = partial(arg_chunk, func, argfunc)
+    agg = partial(arg_agg, func, argfunc)
+    combine = partial(arg_combine, func, argfunc)
+    @wraps(argfunc)
+    def _(a, axis=None, max_leaves=None):
+        if axis < 0:
+            axis = a.ndim + axis
+        return reduction(a, chunk, agg, axis=axis, dtype='i8',
+                         max_leaves=max_leaves, combine=combine)
+    return _
+
+
+argmin = arg_reduction(chunk.min, chunk.argmin)
+argmax = arg_reduction(chunk.max, chunk.argmax)
+nanargmin = arg_reduction(chunk.nanmin, chunk.nanargmin)
+nanargmax = arg_reduction(chunk.nanmax, chunk.nanargmax)

@@ -993,14 +993,14 @@ class Array(Base):
         return max(self, axis=axis, keepdims=keepdims, max_leaves=max_leaves)
 
     @wraps(np.argmin)
-    def argmin(self, axis=None):
+    def argmin(self, axis=None, max_leaves=None):
         from .reductions import argmin
-        return argmin(self, axis=axis)
+        return argmin(self, axis=axis, max_leaves=max_leaves)
 
     @wraps(np.argmax)
-    def argmax(self, axis=None):
+    def argmax(self, axis=None, max_leaves=None):
         from .reductions import argmax
-        return argmax(self, axis=axis)
+        return argmax(self, axis=axis, max_leaves=max_leaves)
 
     @wraps(np.sum)
     def sum(self, axis=None, dtype=None, keepdims=False, max_leaves=None):
