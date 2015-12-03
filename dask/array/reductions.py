@@ -58,9 +58,9 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
         tmp = partial_reduce(func, tmp, split_threshold, True, None)
     func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
                    partial(_concatenate2, axes=axis))
-    return partial_reduce(func, tmp, split_threshold, keepdims=keepdims, dtype=dtype,
-                          name=('reduce-' + tokenize(func, x, keepdims, dtype)))
-
+    return partial_reduce(func, tmp, split_threshold, keepdims=keepdims,
+                          dtype=dtype)
+                          
 
 def partial_reduce(func, x, split_threshold, keepdims=False, dtype=None, name=None):
     """Partial reduction across multiple axes.

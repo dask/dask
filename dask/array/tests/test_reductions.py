@@ -287,10 +287,3 @@ def test_tree_reduce_depth():
     d3 = o.dask[d2[1][0]]
     assert len(d3[1]) == 2
     assert all(i[0].startswith('atop') for i in d3[1])
-
-
-def test_partial_reduce_names():
-    x = da.from_array(np.arange(242).reshape((11, 22)), chunks=(3, 4))
-    assert x.sum(axis=0).name == x.sum(axis=0, split_threshold=3).name
-    assert x.sum(axis=1).name == x.sum(axis=1, split_threshold=3).name
-    assert x.sum().name == x.sum(split_threshold=3).name
