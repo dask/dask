@@ -571,6 +571,7 @@ class Executor(object):
         self.scheduler.scheduler_queue = Queue()
         self.scheduler.delete_queue = Queue()
         yield self._start()
+        raise gen.Return(self)
 
     def restart(self):
         """ Restart the distributed network
