@@ -111,7 +111,7 @@ class ProgressBar(Diagnostic):
     def _update_bar(self, elapsed):
         ntasks = len(self.all_keys)
         ndone = ntasks - len(self.keys)
-        self._draw_bar(ndone / ntasks if ntasks else 0, elapsed)
+        self._draw_bar(ndone / ntasks if ntasks else 1.0, elapsed)
 
     def _draw_bar(self, frac, elapsed):
         bar = '#' * int(self._width * frac)
