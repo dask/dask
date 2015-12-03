@@ -40,6 +40,9 @@ class ProgressBar(Diagnostic):
         if scheduler:
             self.scheduler = scheduler
             scheduler.add_diagnostic(self)
+        else:
+            raise ValueError("Can not find scheduler.\n"
+                 "Either create an executor or supply scheduler as an argument")
 
         if keys:
             self.add_keys(keys)

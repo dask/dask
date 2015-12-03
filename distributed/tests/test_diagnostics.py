@@ -91,6 +91,11 @@ def test_progressbar_sync(loop, capsys):
                 assert len(p.all_keys) == 2
 
 
+def test_progressbar_no_scheduler():
+    with pytest.raises(ValueError):
+        ProgressBar()
+
+
 def check_bar_completed(capsys, width=40):
     out, err = capsys.readouterr()
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
