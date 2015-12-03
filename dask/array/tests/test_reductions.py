@@ -4,6 +4,7 @@ import pytest
 pytest.importorskip('numpy')
 
 import dask.array as da
+from dask.core import get_deps
 from dask.utils import ignoring
 import numpy as np
 
@@ -269,21 +270,42 @@ def test_reduction_on_scalar():
     assert (x == x).all()
 
 
+def assert_max_deps(x, n, eq=True):
+    dependencies, dependents = get_deps(x.dask)
+    if eq:
+        assert max(map(len, dependencies.values())) == n
+    else:
+        assert max(map(len, dependencies.values())) <= n
+
+
 def test_tree_reduce_depth():
+    # 2D
     x = da.from_array(np.arange(242).reshape((11, 22)), chunks=(3, 4))
-    # Check that tree depth is 2
-    o = x.sum(axis=0, split_threshold=3)
-    d1 = o.dask[(o.name, 0)]
-    assert len(d1[1]) == 2
-    d2 = o.dask[d1[1][0]]
-    assert len(d2[1]) == 3
-    assert all(i[0].startswith('atop') for i in d2[1])
-    # Check that tree depth is 3
-    o = x.sum(axis=1, split_threshold=2)
-    d1 = o.dask[(o.name, 0)]
-    assert len(d1[1]) == 2
-    d2 = o.dask[d1[1][0]]
-    assert len(d2[1]) == 2
-    d3 = o.dask[d2[1][0]]
-    assert len(d3[1]) == 2
-    assert all(i[0].startswith('atop') for i in d3[1])
+    thresh = {0: 2, 1: 3}
+    assert_max_deps(x.sum(split_threshold=thresh), 2 * 3)
+    assert_max_deps(x.sum(axis=0, split_threshold=thresh), 2)
+    assert_max_deps(x.sum(axis=1, split_threshold=thresh), 3)
+    assert_max_deps(x.sum(split_threshold=20), 20, False)
+    assert_max_deps(x.sum(axis=0, split_threshold=20), 4)
+    assert_max_deps(x.sum(axis=1, split_threshold=20), 6)
+
+    # 3D
+    x = da.from_array(np.arange(11 * 22 * 29).reshape((11, 22, 29)), chunks=(3, 4, 5))
+    thresh = {0: 2, 1: 3, 2: 4}
+    assert_max_deps(x.sum(split_threshold=thresh), 2 * 3 * 4)
+    assert_max_deps(x.sum(axis=0, split_threshold=thresh), 2)
+    assert_max_deps(x.sum(axis=1, split_threshold=thresh), 3)
+    assert_max_deps(x.sum(axis=2, split_threshold=thresh), 4)
+    assert_max_deps(x.sum(axis=(0, 1), split_threshold=thresh), 2 * 3)
+    assert_max_deps(x.sum(axis=(0, 2), split_threshold=thresh), 2 * 4)
+    assert_max_deps(x.sum(axis=(1, 2), split_threshold=thresh), 3 * 4)
+    assert_max_deps(x.sum(split_threshold=20), 20, False)
+    assert_max_deps(x.sum(axis=0, split_threshold=20), 4)
+    assert_max_deps(x.sum(axis=1, split_threshold=20), 6)
+    assert_max_deps(x.sum(axis=2, split_threshold=20), 6)
+    assert_max_deps(x.sum(axis=(0, 1), split_threshold=20), 20, False)
+    assert_max_deps(x.sum(axis=(0, 2), split_threshold=20), 20, False)
+    assert_max_deps(x.sum(axis=(1, 2), split_threshold=20), 20, False)
+    assert_max_deps(x.sum(axis=(0, 1), split_threshold=40), 4 * 6)
+    assert_max_deps(x.sum(axis=(0, 2), split_threshold=40), 4 * 6)
+    assert_max_deps(x.sum(axis=(1, 2), split_threshold=40), 6 * 6)
