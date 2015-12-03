@@ -180,7 +180,7 @@ class Worker(Server):
                         yield gen.with_timeout(timedelta(seconds=1), future)
                         break
                     except gen.TimeoutError:
-                        logger.info("work queue size: %d", e._work_queue.qsize())
+                        logger.info("work queue size: %d", self.executor._work_queue.qsize())
                         logger.info("future state: %s", future._state)
                         logger.info("Pending job %d: %s", i, future)
             pc.stop()
