@@ -5,6 +5,7 @@ pytest.importorskip('numpy')
 
 import dask.array as da
 from dask.core import get_deps
+from dask.context import set_options
 from dask.utils import ignoring
 import numpy as np
 
@@ -309,3 +310,10 @@ def test_tree_reduce_depth():
     assert_max_deps(x.sum(axis=(0, 1), split_threshold=40), 4 * 6)
     assert_max_deps(x.sum(axis=(0, 2), split_threshold=40), 4 * 6)
     assert_max_deps(x.sum(axis=(1, 2), split_threshold=40), 6 * 6)
+
+
+def test_tree_reduce_set_options():
+    x = da.from_array(np.arange(242).reshape((11, 22)), chunks=(3, 4))
+    with set_options(split_threshold={0: 2, 1: 3}):
+        assert_max_deps(x.sum(), 2 * 3)
+        assert_max_deps(x.sum(axis=0), 2)

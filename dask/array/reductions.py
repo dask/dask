@@ -12,6 +12,7 @@ from .core import _concatenate2, Array, atop, sqrt, lol_tuples
 from .numpy_compat import divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
+from ..context import _globals
 from ..utils import ignoring
 
 
@@ -32,11 +33,12 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
     if dtype and 'dtype' in getargspec(aggregate).args:
         aggregate = partial(aggregate, dtype=dtype)
 
-    # Normalize axes
+    # Normalize split_threshold
+    split_threshold = split_threshold or _globals.get('split_threshold', 32)
     if isinstance(split_threshold, dict):
         split_threshold = dict((k, split_threshold.get(k, 2)) for k in axis)
     elif isinstance(split_threshold, int):
-        n = builtins.max(int(split_threshold ** (1/len(axis))), 2)
+        n = builtins.max(int(split_threshold ** (1/(len(axis) or 1))), 2)
         split_threshold = dict.fromkeys(axis, n)
     else:
         split_threshold = dict((k, v) for (k, v) in enumerate(x.numblocks) if k in axis)
