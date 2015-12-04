@@ -620,14 +620,9 @@ ALL_COMPLETED = 'ALL_COMPLETED'
 
 
 @wraps(futures.wait)
-def wait(fs, timeout=None, return_when='ALL_COMPLETED', show_progress=False):
+def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
     executor = default_executor()
-    if show_progress:
-        from distributed.diagnostics import progress_bar
-        with progress_bar(scheduler=executor.scheduler, keys=fs):
-            result = sync(executor.loop, _wait, fs, timeout, return_when)
-    else:
-        result = sync(executor.loop, _wait, fs, timeout, return_when)
+    result = sync(executor.loop, _wait, fs, timeout, return_when)
     return result
 
 

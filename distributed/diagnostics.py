@@ -22,8 +22,24 @@ class Diagnostic(object):
         pass
 
 
+def incomplete_keys(keys, scheduler):
+    keys = {k.key if hasattr(k, 'key') else k for k in keys}
+    out = set()
+    stack = list(keys)
+    while stack:
+        key = stack.pop()
+        if (key in out or
+            scheduler.who_has.get(key) or
+            key in scheduler.processing or key in scheduler.stacks):
+            continue
+
+        out.add(key)
+        stack.extend(scheduler.waiting.get(key, []))
+    return out
+
+
 class ProgressBar(Diagnostic):
-    def __init__(self, scheduler=None, keys=None, minimum=0, dt=0.1):
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
         self._minimum = minimum
         self._dt = dt
         self.last_duration = 0
@@ -42,23 +58,27 @@ class ProgressBar(Diagnostic):
             raise ValueError("Can not find scheduler.\n"
                  "Either create an executor or supply scheduler as an argument")
 
-        if keys:
-            self.add_keys(keys)
+        self.keys = incomplete_keys(keys, scheduler)
+        self.all_keys = self.keys.copy()
 
-    def add_keys(self, keys, scheduler=None):
-        keys = {k.key if hasattr(k, 'key') else k for k in keys}
-        stack = list(keys)
-        while stack:
-            key = stack.pop()
-            if (key in self.keys or
-                self.scheduler.who_has.get(key) or
-                key in self.scheduler.processing or key in self.scheduler.stacks):
-                continue
+    def task_finished(self, scheduler, key, worker, nbytes):
+        if key in self.keys:
+            self.keys.remove(key)
 
-            self.keys.add(key)
-            self.all_keys.add(key)
-            stack.extend(self.scheduler.waiting.get(key, []))
+        if not self.keys:
+            self.stop()
 
+    def stop(self):
+        if self in self.scheduler.diagnostics:
+            self.scheduler.diagnostics.remove(self)
+
+
+class TextProgressBar(ProgressBar):
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40):
+        ProgressBar.__init__(self, keys, scheduler, minimum, dt)
+        self._width = width
+
+    def start(self):
         if not self._running:
             self._start_time = default_timer()
             # Start background thread
@@ -67,17 +87,8 @@ class ProgressBar(Diagnostic):
             self._timer.daemon = True
             self._timer.start()
 
-    def update_graph(self, scheduler, dsk, keys, restrictions):
-        self.add_keys(keys)
-
-    def task_finished(self, scheduler, key, worker, nbytes):
-        if key in self.keys:
-            self.keys.remove(key)
-
-        if not self.keys:
-            self.finish()
-
-    def finish(self):
+    def stop(self):
+        ProgressBar.stop(self)
         if self._running:
             self._running = False
             self._timer.join()
@@ -87,18 +98,8 @@ class ProgressBar(Diagnostic):
                 return
             else:
                 self._update_bar(elapsed)
-            self._finish_bar()
-
-    def _finish_bar(self):
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.finish()
-        if self in self.scheduler.diagnostics:
-            self.scheduler.diagnostics.remove(self)
+            sys.stdout.write('\n')
+            sys.stdout.flush()
 
     def _timer_func(self):
         """Background thread for updating the progress bar"""
@@ -107,19 +108,6 @@ class ProgressBar(Diagnostic):
             if elapsed > self._minimum:
                 self._update_bar(elapsed)
             time.sleep(self._dt)
-
-    def _update_bar(self, elapsed):
-        pass
-
-
-class TextProgressBar(ProgressBar):
-    def __init__(self, scheduler=None, keys=None, minimum=0, dt=0.1, width=40):
-        ProgressBar.__init__(self, scheduler, keys, minimum, dt)
-        self._width = width
-
-    def _finish_bar(self):
-        sys.stdout.write('\n')
-        sys.stdout.flush()
 
     def _update_bar(self, elapsed):
         ntasks = len(self.all_keys)
@@ -137,12 +125,11 @@ class TextProgressBar(ProgressBar):
             sys.stdout.flush()
 
 
-class WidgetProgressBar(ProgressBar):
-    def __init__(self, scheduler=None, keys=None, minimum=0, dt=0.1,
-                display=True):
+class ProgressWidget(ProgressBar):
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
         from IPython.html.widgets import FloatProgress
         self.bar = FloatProgress(min=0, max=1)
-        ProgressBar.__init__(self, scheduler, keys, minimum, dt)
+        ProgressBar.__init__(self, keys, scheduler, minimum, dt)
 
         if display == True:
             from IPython.display import display

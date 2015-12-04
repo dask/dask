@@ -54,22 +54,24 @@ def test_TextProgressBar(loop, capsys):
         yield s._sync_center()
         done = s.start()
 
-        with TextProgressBar(s) as progress:
-            s.update_graph(dsk={'x': (inc, 1),
-                                'y': (inc, 'x'),
-                                'z': (inc, 'y')},
-                           keys=['z'])
+        s.update_graph(dsk={'x': (inc, 1),
+                            'y': (inc, 'x'),
+                            'z': (inc, 'y')},
+                       keys=['z'])
+        progress = TextProgressBar(['z'], scheduler=s)
+        progress.start()
 
-            assert progress.all_keys == {'x', 'y', 'z'}
-            assert progress.keys == {'x', 'y', 'z'}
+        assert progress.all_keys == {'x', 'y', 'z'}
+        assert progress.keys == {'x', 'y', 'z'}
 
-            while True:
-                msg = yield s.report_queue.get()
-                if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
-                    break
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
 
-            assert progress.keys == set()
-            check_bar_completed(capsys)
+        assert progress.keys == set()
+        check_bar_completed(capsys)
+
         assert progress not in s.diagnostics
 
         s.scheduler_queue.put_nowait({'op': 'close'})
@@ -81,32 +83,22 @@ def test_TextProgressBar(loop, capsys):
 def test_progressbar_sync(loop, capsys):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            with TextProgressBar() as p:
-                assert p.scheduler is e.scheduler
-                assert p in e.scheduler.diagnostics
-                f = e.submit(lambda: 1)
-                g = e.submit(lambda: 2)
-                f.result()
-                g.result()
-                check_bar_completed(capsys)
-                assert len(p.all_keys) == 2
-
-
-def test_progressbar_done_futures(loop, capsys):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            x = e.submit(lambda x: x + 1, 1)
-            wait([x], show_progress=True)
+            f = e.submit(lambda: 1)
+            g = e.submit(lambda: 2)
+            p = TextProgressBar([f, g])
+            p.start()
+            assert p.scheduler is e.scheduler
+            assert p in e.scheduler.diagnostics
+            f.result()
+            g.result()
             sys.stdout.flush()
             check_bar_completed(capsys)
-            wait([x], show_progress=True)
-            sys.stdout.flush()
-            check_bar_completed(capsys)
+            assert len(p.all_keys) == 2
 
 
 def test_progressbar_no_scheduler():
     with pytest.raises(ValueError):
-        ProgressBar()
+        ProgressBar([])
 
 
 def check_bar_completed(capsys, width=40):
