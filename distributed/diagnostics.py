@@ -4,7 +4,9 @@ import threading
 import time
 from timeit import default_timer
 
-from .utils import ignoring
+from tornado.ioloop import PeriodicCallback, IOLoop
+
+from .utils import ignoring, sync
 from .executor import default_executor
 
 
@@ -23,14 +25,14 @@ class Diagnostic(object):
 
 
 def incomplete_keys(keys, scheduler):
-    keys = {k.key if hasattr(k, 'key') else k for k in keys}
     out = set()
     stack = list(keys)
     while stack:
         key = stack.pop()
         if (key in out or
             scheduler.who_has.get(key) or
-            key in scheduler.processing or key in scheduler.stacks):
+            key in scheduler.processing or
+            key in scheduler.stacks):
             continue
 
         out.add(key)
@@ -40,28 +42,49 @@ def incomplete_keys(keys, scheduler):
 
 class ProgressBar(Diagnostic):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
+        keys = {k.key if hasattr(k, 'key') else k for k in keys}
+
+        if scheduler is None:
+            executor = default_executor()
+            if executor is None:
+                raise ValueError("Can not find scheduler.\n"
+                 "Either create an executor or supply scheduler as an argument")
+            else:
+                scheduler = default_executor().scheduler
+
+        start = time.time()
+        while not keys.issubset(scheduler.in_play):
+            time.sleep(0.01)
+            if time.time() > start + 1:
+                raise ValueError("Keys not found: %s" % str(keys -
+                    scheduler.in_play))
+
+        self._start_time = default_timer()
+
         self._minimum = minimum
         self._dt = dt
         self.last_duration = 0
-        self.all_keys = set()
-        self.keys = set()
+        self.keys = None
+        self._pre_keys = None
 
         self._running = False
 
-        if scheduler is None and default_executor():
-            scheduler = default_executor().scheduler
+        self.scheduler = scheduler
 
-        if scheduler:
-            self.scheduler = scheduler
-            scheduler.add_diagnostic(self)
-        else:
-            raise ValueError("Can not find scheduler.\n"
-                 "Either create an executor or supply scheduler as an argument")
-
+        scheduler.add_diagnostic(self)  # subtle race condition here
         self.keys = incomplete_keys(keys, scheduler)
         self.all_keys = self.keys.copy()
+        self.all_keys.update(keys)
 
     def task_finished(self, scheduler, key, worker, nbytes):
+        if self.keys is None:
+            self._pre_keys.add(key)
+            return
+        else:
+            if self._pre_keys:
+                self.keys -= self._pre_keys
+                self._pre_keys.clear()
+
         if key in self.keys:
             self.keys.remove(key)
 
@@ -72,6 +95,10 @@ class ProgressBar(Diagnostic):
         if self in self.scheduler.diagnostics:
             self.scheduler.diagnostics.remove(self)
 
+    @property
+    def elapsed(self):
+        return default_timer() - self._start_time
+
 
 class TextProgressBar(ProgressBar):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40):
@@ -80,7 +107,6 @@ class TextProgressBar(ProgressBar):
 
     def start(self):
         if not self._running:
-            self._start_time = default_timer()
             # Start background thread
             self._running = True
             self._timer = threading.Thread(target=self._timer_func)
@@ -92,21 +118,19 @@ class TextProgressBar(ProgressBar):
         if self._running:
             self._running = False
             self._timer.join()
-            elapsed = default_timer() - self._start_time
-            self.last_duration = elapsed
-            if elapsed < self._minimum:
+            self.last_duration = self.elapsed
+            if self.last_duration < self._minimum:
                 return
             else:
-                self._update_bar(elapsed)
+                self._update_bar(self.last_duration)
             sys.stdout.write('\n')
             sys.stdout.flush()
 
     def _timer_func(self):
         """Background thread for updating the progress bar"""
         while self._running:
-            elapsed = default_timer() - self._start_time
-            if elapsed > self._minimum:
-                self._update_bar(elapsed)
+            if self.elapsed > self._minimum:
+                self._update_bar(self.elapsed)
             time.sleep(self._dt)
 
     def _update_bar(self, elapsed):
@@ -127,19 +151,27 @@ class TextProgressBar(ProgressBar):
 
 class ProgressWidget(ProgressBar):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
-        from IPython.html.widgets import FloatProgress
-        self.bar = FloatProgress(min=0, max=1)
         ProgressBar.__init__(self, keys, scheduler, minimum, dt)
+        from ipywidgets import FloatProgress
+        self.bar = FloatProgress(min=0, max=1, description='Hello')
+        from zmq.eventloop.ioloop import IOLoop
+        loop = IOLoop.instance()
+        self.pc = PeriodicCallback(self._update_bar, self._dt, io_loop=loop)
 
-        if display == True:
-            from IPython.display import display
-            display(self.bar)
+    def start(self):
+        from IPython.display import display
+        display(self.bar)
+        self.pc.start()
 
-    def _update_bar(self, elapsed):
+    def stop(self):
+        self.bar.bar_style = 'success'
+        self.pc.stop()
+
+    def _update_bar(self):
         ntasks = len(self.all_keys)
         ndone = ntasks - len(self.keys)
         self.bar.value = ndone / ntasks if ntasks else 1.0
-        self.bar.description = format_time(elapsed)
+        self.bar.description = format_time(self.elapsed)
 
 
 def progress_bar(*args, **kwargs):

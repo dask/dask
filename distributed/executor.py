@@ -164,7 +164,8 @@ class Executor(object):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
-        self.scheduler = Scheduler(center, delete_batch_time=delete_batch_time)
+        self.scheduler = Scheduler(center, delete_batch_time=delete_batch_time,
+                                   loop=loop)
 
         if start:
             self.start()

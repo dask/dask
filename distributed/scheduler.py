@@ -451,7 +451,7 @@ def execute_task(task):
 
 
 class Scheduler(object):
-    def __init__(self, center, delete_batch_time=1):
+    def __init__(self, center, delete_batch_time=1, loop=None):
         self.scheduler_queue = Queue()
         self.report_queue = Queue()
         self.delete_queue = Queue()
@@ -479,6 +479,8 @@ class Scheduler(object):
         self.exceptions = dict()
         self.tracebacks = dict()
         self.exceptions_blame = dict()
+
+        self.loop = loop or IOLoop.current()
 
         self.delete_batch_time = delete_batch_time
 

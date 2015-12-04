@@ -6,13 +6,14 @@ from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import cluster, slow, _test_cluster, loop, inc
 from distributed.utils import All
-from distributed.diagnostics import ProgressBar, TextProgressBar, Diagnostic
+from distributed.diagnostics import (ProgressBar, TextProgressBar, Diagnostic,
+        ProgressWidget)
 
 
 def test_diagnostic(loop):
     @gen.coroutine
     def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
+        s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
 
@@ -50,7 +51,7 @@ def test_diagnostic(loop):
 def test_TextProgressBar(loop, capsys):
     @gen.coroutine
     def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
+        s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
 
@@ -89,11 +90,38 @@ def test_progressbar_sync(loop, capsys):
             p.start()
             assert p.scheduler is e.scheduler
             assert p in e.scheduler.diagnostics
-            f.result()
-            g.result()
             sys.stdout.flush()
             check_bar_completed(capsys)
             assert len(p.all_keys) == 2
+
+
+@pytest.mark.xfail
+def test_progressbar_widget(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port), loop=loop)
+        yield s._sync_center()
+        done = s.start()
+
+        s.update_graph(dsk={'x': (inc, 1),
+                            'y': (inc, 'x'),
+                            'z': (inc, 'y')},
+                       keys=['z'])
+        progress = ProgressWidget(['z'], scheduler=s)
+
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
+
+        progress._update_bar()
+        assert progress.bar.value == 1.0
+        assert 's' in progress.bar.description
+
+        s.scheduler_queue.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
 
 
 def test_progressbar_no_scheduler():
