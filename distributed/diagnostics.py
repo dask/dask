@@ -141,17 +141,18 @@ class WidgetProgressBar(ProgressBar):
     def __init__(self, scheduler=None, keys=None, minimum=0, dt=0.1,
                 display=True):
         from IPython.html.widgets import FloatProgress
-        self.widget = FloatProgress(min=0, max=1)
+        self.bar = FloatProgress(min=0, max=1)
         ProgressBar.__init__(self, scheduler, keys, minimum, dt)
 
         if display == True:
             from IPython.display import display
-            display(self.widget)
+            display(self.bar)
 
     def _update_bar(self, elapsed):
         ntasks = len(self.all_keys)
         ndone = ntasks - len(self.keys)
-        self.widget.value = ndone / ntasks if ntasks else 1.0
+        self.bar.value = ndone / ntasks if ntasks else 1.0
+        self.bar.description = format_time(elapsed)
 
 
 def progress_bar(*args, **kwargs):
