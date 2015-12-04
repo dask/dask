@@ -149,7 +149,7 @@ a light weight dependency.
 
 ``dask.array`` depends on ``numpy``.
 
-``dask.bag`` depends on ``toolz`` and ``dill``.
+``dask.bag`` depends on ``toolz`` and ``cloudpickle``.
 
 
 Examples

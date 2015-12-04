@@ -1,14 +1,12 @@
 import pytest
-pytest.importorskip('dill')
 
-from dask.multiprocessing import get, dill_apply_async
+from dask.multiprocessing import get, pickle_apply_async
+from dask.multiprocessing import _dumps, _loads
 from dask.context import set_options
 import multiprocessing
-import dill
 import pickle
 from operator import add
 from dask.utils import raises
-
 
 inc = lambda x: x + 1
 
@@ -16,7 +14,7 @@ inc = lambda x: x + 1
 def test_apply_lambda():
     p = multiprocessing.Pool()
     try:
-        result = dill_apply_async(p.apply_async, lambda x: x + 1, args=[1])
+        result = pickle_apply_async(p.apply_async, lambda x: x + 1, args=[1])
         assert isinstance(result, multiprocessing.pool.ApplyResult)
         assert result.get() == 2
     finally:

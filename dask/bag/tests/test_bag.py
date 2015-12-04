@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from sys import getdefaultencoding
 
 import pytest
-pytest.importorskip('dill')
 
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial, valmap)

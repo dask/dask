@@ -2,12 +2,12 @@ import pytest
 pytest.importorskip('numpy')
 
 import numpy as np
-import dill
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
 import dask.array as da
 import dask
 from dask.multiprocessing import get as mpget
+from dask.multiprocessing import _dumps, _loads
 
 
 def test_RandomState():
@@ -37,7 +37,7 @@ def test_serializability():
     state = da.random.RandomState(5)
     x = state.normal(10, 1, size=10, chunks=5)
 
-    y = dill.loads(dill.dumps(x))
+    y = _loads(_dumps(x))
 
     assert (x.compute() == y.compute()).all()
 

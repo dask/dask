@@ -22,8 +22,8 @@ install:
   # Install dependencies
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.3' ]]; then conda install numpy=1.9.2 pandas=0.16.2 pytables=3.2.0 h5py=2.5.0 bcolz=0.10.0 pytest coverage toolz scikit-learn cytoolz dill ipython chest blosc cython psutil mock; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then conda install numpy pandas pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz dill ipython chest blosc cython psutil mock; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.3' ]]; then conda install numpy=1.9.2 pandas=0.16.2 pytables=3.2.0 h5py=2.5.0 bcolz=0.10.0 pytest coverage toolz scikit-learn cytoolz dill cloudpickle ipython chest blosc cython psutil mock; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then conda install numpy pandas pytables h5py bcolz pytest coverage toolz scikit-learn cytoolz dill cloudpickle ipython chest blosc cython psutil mock; fi
   - if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then conda install unittest2; fi
   - if [[ $TRAVIS_PYTHON_VERSION != '2.6' ]]; then conda install bokeh; fi
   - pip install git+https://github.com/mrocklin/partd --upgrade

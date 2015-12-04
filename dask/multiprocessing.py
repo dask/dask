@@ -9,6 +9,10 @@ from .async import get_async # TODO: get better get
 from .context import _globals
 
 
+_dumps = dill.dumps
+_loads = dill.loads
+
+
 def _process_get_id():
     return multiprocessing.current_process().ident
 
@@ -29,9 +33,11 @@ def get(dsk, keys, optimizations=[], num_workers=None,
     num_workers: int
         Number of worker processes (defaults to number of cores)
     func_dumps: function
-        Function to use for function serialization (defaults to dill.dumps)
+        Function to use for function serialization (defaults to
+        cloudpickle.dumps)
     func_loads: function
-        Function to use for function deserialization (defaults to dill.loads)
+        Function to use for function deserialization (defaults to
+        cloudpickle.loads)
     """
     pool = _globals['pool']
     if pool is None:
@@ -43,8 +49,9 @@ def get(dsk, keys, optimizations=[], num_workers=None,
     manager = multiprocessing.Manager()
     queue = manager.Queue()
 
-    apply_async = dill_apply_async(pool.apply_async,
-                                   func_dumps=func_dumps, func_loads=func_loads)
+    apply_async = pickle_apply_async(pool.apply_async,
+                                          func_dumps=func_dumps,
+                                          func_loads=func_loads)
 
     # Optimize Dask
     dsk2 = fuse(dsk, keys)
@@ -61,16 +68,17 @@ def get(dsk, keys, optimizations=[], num_workers=None,
 
 
 def apply_func(sfunc, sargs, skwds, loads=None):
-    loads = loads or _globals.get('loads') or dill.loads
+    loads = loads or _globals.get('loads') or _loads
     func = loads(sfunc)
     args = loads(sargs)
     kwds = loads(skwds)
     return func(*args, **kwds)
 
+
 @curry
-def dill_apply_async(apply_async, func, args=(), kwds={},
-                     func_loads=None, func_dumps=None):
-    dumps = func_dumps or _globals.get('func_dumps') or dill.dumps
+def pickle_apply_async(apply_async, func, args=(), kwds={},
+                            func_loads=None, func_dumps=None):
+    dumps = func_dumps or _globals.get('func_dumps') or _dumps
     sfunc = dumps(func)
     sargs = dumps(args)
     skwds = dumps(kwds)
