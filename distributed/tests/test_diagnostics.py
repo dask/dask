@@ -1,11 +1,12 @@
 import pytest
+import sys
 from tornado import gen
 
 from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import cluster, slow, _test_cluster, loop, inc
 from distributed.utils import All
-from distributed.diagnostics import ProgressBar, Diagnostic
+from distributed.diagnostics import ProgressBar, TextProgressBar, Diagnostic
 
 
 def test_diagnostic(loop):
@@ -53,7 +54,7 @@ def test_progressbar(loop, capsys):
         yield s._sync_center()
         done = s.start()
 
-        with ProgressBar(s) as progress:
+        with TextProgressBar(s) as progress:
             s.update_graph(dsk={'x': (inc, 1),
                                 'y': (inc, 'x'),
                                 'z': (inc, 'y')},
@@ -80,7 +81,7 @@ def test_progressbar(loop, capsys):
 def test_progressbar_sync(loop, capsys):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            with ProgressBar() as p:
+            with TextProgressBar() as p:
                 assert p.scheduler is e.scheduler
                 assert p in e.scheduler.diagnostics
                 f = e.submit(lambda: 1)
@@ -96,8 +97,10 @@ def test_progressbar_done_futures(loop, capsys):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             x = e.submit(lambda x: x + 1, 1)
             wait([x], show_progress=True)
+            sys.stdout.flush()
             check_bar_completed(capsys)
             wait([x], show_progress=True)
+            sys.stdout.flush()
             check_bar_completed(capsys)
 
 

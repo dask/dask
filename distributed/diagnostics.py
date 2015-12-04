@@ -23,12 +23,10 @@ class Diagnostic(object):
 
 
 class ProgressBar(Diagnostic):
-    def __init__(self, scheduler=None, keys=None, minimum=0, width=40, dt=0.1):
+    def __init__(self, scheduler=None, keys=None, minimum=0, dt=0.1):
         self._minimum = minimum
-        self._width = width
         self._dt = dt
         self.last_duration = 0
-
         self.all_keys = set()
         self.keys = set()
 
@@ -89,8 +87,10 @@ class ProgressBar(Diagnostic):
                 return
             else:
                 self._update_bar(elapsed)
-            sys.stdout.write('\n')
-            sys.stdout.flush()
+            self._finish_bar()
+
+    def _finish_bar(self):
+        pass
 
     def __enter__(self):
         return self
@@ -107,6 +107,19 @@ class ProgressBar(Diagnostic):
             if elapsed > self._minimum:
                 self._update_bar(elapsed)
             time.sleep(self._dt)
+
+    def _update_bar(self, elapsed):
+        pass
+
+
+class TextProgressBar(ProgressBar):
+    def __init__(self, scheduler=None, keys=None, minimum=0, dt=0.1, width=40):
+        ProgressBar.__init__(self, scheduler, keys, minimum, dt)
+        self._width = width
+
+    def _finish_bar(self):
+        sys.stdout.write('\n')
+        sys.stdout.flush()
 
     def _update_bar(self, elapsed):
         ntasks = len(self.all_keys)
