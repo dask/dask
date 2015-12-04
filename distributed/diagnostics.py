@@ -137,6 +137,44 @@ class TextProgressBar(ProgressBar):
             sys.stdout.flush()
 
 
+class WidgetProgressBar(ProgressBar):
+    def __init__(self, scheduler=None, keys=None, minimum=0, dt=0.1,
+                display=True):
+        from IPython.html.widgets import FloatProgress
+        self.widget = FloatProgress(min=0, max=1)
+        ProgressBar.__init__(self, scheduler, keys, minimum, dt)
+
+        if display == True:
+            from IPython.display import display
+            display(self.widget)
+
+    def _update_bar(self, elapsed):
+        ntasks = len(self.all_keys)
+        ndone = ntasks - len(self.keys)
+        self.widget.value = ndone / ntasks if ntasks else 1.0
+
+
+def progress_bar(*args, **kwargs):
+    notebook = kwargs.pop('notebook', None)
+    if notebook is None:
+        notebook = is_kernel()  # often but not always correct assumption
+    if notebook:
+        return WidgetProgressBar(*args, **kwargs)
+    else:
+        return TextProgressBar(*args, **kwargs)
+
+
+def is_kernel():
+    # http://stackoverflow.com/questions/34091701/determine-if-were-in-an-ipython-notebook-session
+    if 'IPython' not in sys.modules:
+        # IPython hasn't been imported, definitely not
+        return False
+    from IPython import get_ipython
+    # check for `kernel` attribute on the IPython instance
+    return getattr(get_ipython(), 'kernel', None) is not None
+
+
+
 def format_time(t):
     """Format seconds into a human readable form.
 

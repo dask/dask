@@ -47,7 +47,7 @@ def test_diagnostic(loop):
     _test_cluster(f, loop)
 
 
-def test_progressbar(loop, capsys):
+def test_TextProgressBar(loop, capsys):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))

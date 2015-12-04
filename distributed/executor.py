@@ -623,8 +623,8 @@ ALL_COMPLETED = 'ALL_COMPLETED'
 def wait(fs, timeout=None, return_when='ALL_COMPLETED', show_progress=False):
     executor = default_executor()
     if show_progress:
-        from distributed.diagnostics import TextProgressBar
-        with TextProgressBar(scheduler=executor.scheduler, keys=fs):
+        from distributed.diagnostics import progress_bar
+        with progress_bar(scheduler=executor.scheduler, keys=fs):
             result = sync(executor.loop, _wait, fs, timeout, return_when)
     else:
         result = sync(executor.loop, _wait, fs, timeout, return_when)
