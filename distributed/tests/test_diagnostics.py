@@ -174,7 +174,7 @@ def test_TextProgressBar_error(loop, capsys):
         progress = TextProgressBar(['x'], scheduler=s)
         progress.start()
         assert progress.status == 'error'
-        assert not progress._timer.is_alive()
+        assert not progress._timer or not progress._timer.is_alive()
 
         s.scheduler_queue.put_nowait({'op': 'close'})
         yield done
@@ -191,7 +191,7 @@ def test_TextProgressBar_empty(loop, capsys):
 
         p = TextProgressBar([], scheduler=s)
         p.start()
-        p._timer.join()
+        assert p.status == 'finished'
         check_bar_completed(capsys)
 
     _test_cluster(f, loop)

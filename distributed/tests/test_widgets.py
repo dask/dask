@@ -90,7 +90,7 @@ def test_progressbar_widget(loop):
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
-        progress._update_bar()
+        progress._update()
         assert progress.bar.value == 1.0
         assert 's' in progress.bar.description
 
@@ -131,7 +131,7 @@ def test_multi_progressbar_widget(loop):
                           'y': {'y-1', 'y-2'},
                           'e': {'e'}}
 
-        p._update_bar()
+        p._update()
         assert p.bars['x'].value == 1.0
         assert p.bars['y'].value == 0.0
         assert p.bars['e'].value == 0.0
@@ -144,7 +144,7 @@ def test_multi_progressbar_widget(loop):
             if msg['op'] == 'key-in-memory' and msg['key'] == 'y-2':
                 break
 
-        p._update_bar()
+        p._update()
         assert p.bars['x'].value == 1.0
         assert p.bars['y'].value == 1.0
         assert p.bars['e'].value == 0.0

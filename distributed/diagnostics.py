@@ -113,6 +113,17 @@ class Progress(SchedulerPlugin):
 
         self.status = None
 
+    def start(self):
+        if not self.keys:
+            self.stop()
+        elif all(k in self.scheduler.exceptions_blame for k in self.keys):
+            self.stop(True)
+        else:
+            self._start()
+
+    def _start(self):
+        pass
+
     def task_finished(self, scheduler, key, worker, nbytes):
         if key in self.keys:
             self.keys.remove(key)
@@ -199,8 +210,9 @@ class TextProgressBar(Progress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40):
         Progress.__init__(self, keys, scheduler, minimum, dt)
         self._width = width
+        self._timer = None
 
-    def start(self):
+    def _start(self):
         if not self._running:
             # Start background thread
             self._running = True
@@ -208,14 +220,11 @@ class TextProgressBar(Progress):
             self._timer.daemon = True
             self._timer.start()
 
-        self._update_bar()
-        if not self.keys:
-            self.stop()
-        if all(k in self.scheduler.exceptions_blame for k in self.keys):
-            self.stop(True)
+        self._update()
 
     def stop(self, exception=None, key=None):
         Progress.stop(self, exception, key=None)
+        self._update()
         if self._running:
             self._running = False
             self._timer.join()
@@ -223,7 +232,7 @@ class TextProgressBar(Progress):
             if self.last_duration < self._minimum:
                 return
             else:
-                self._update_bar()
+                self._update()
             sys.stdout.write('\n')
             sys.stdout.flush()
 
@@ -231,10 +240,10 @@ class TextProgressBar(Progress):
         """Background thread for updating the progress bar"""
         while self._running:
             if self.elapsed > self._minimum:
-                self._update_bar()
+                self._update()
             time.sleep(self._dt)
 
-    def _update_bar(self):
+    def _update(self):
         ntasks = len(self.all_keys)
         ndone = ntasks - len(self.keys)
         self._draw_bar(ndone / ntasks if ntasks else 1.0, self.elapsed)
@@ -258,15 +267,12 @@ class ProgressWidget(Progress):
         self.widget = self.bar
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
-        self.pc = PeriodicCallback(self._update_bar, self._dt, io_loop=loop)
+        self.pc = PeriodicCallback(self._update, self._dt, io_loop=loop)
 
-    def start(self):
+    def _start(self):
         from IPython.display import display
         display(self.widget)
         self.pc.start()
-        if not self.keys:
-            self._update_bar()
-            self.stop()
 
     def stop(self, exception=None, key=None):
         self.pc.stop()
@@ -276,7 +282,7 @@ class ProgressWidget(Progress):
         elif not self.keys:
             self.bar.bar_style = 'success'
 
-    def _update_bar(self):
+    def _update(self):
         ntasks = len(self.all_keys)
         ndone = ntasks - len(self.keys)
         self.bar.value = ndone / ntasks if ntasks else 1.0
@@ -297,7 +303,7 @@ class MultiProgressWidget(MultiProgress):
                                             sorted(self.bars, key=str)])])
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
-        self.pc = PeriodicCallback(self._update_bar, 1000 * self._dt, io_loop=loop)
+        self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
 
     start = ProgressWidget.start
 
@@ -311,7 +317,7 @@ class MultiProgressWidget(MultiProgress):
             self.bars[self.func(key)].value = 1
             self.bars[self.func(key)].bar_style = 'danger'
 
-    def _update_bar(self):
+    def _update(self):
         for k in self.keys:
             ntasks = len(self.all_keys[k])
             ndone = ntasks - len(self.keys[k])
