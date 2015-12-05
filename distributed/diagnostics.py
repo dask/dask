@@ -200,14 +200,30 @@ class ProgressWidget(ProgressBar):
         self.bar.description = format_time(self.elapsed)
 
 
-def progress_bar(*args, **kwargs):
-    notebook = kwargs.pop('notebook', None)
+def progress(futures, notebook=None):
+    """ Track progress of futures
+
+    This operates differently in the notebook and the console
+
+    *  Notebook:  This returns immediately, leaving an IPython widget on screen
+    *  Console:  This blocks until the computation completes
+
+    Examples
+    --------
+    >>> progress(futures)  # doctest: +SKIP
+    [########################################] | 100% Completed |  1.7s
+    """
+    if not isinstance(futures, (set, list)):
+        futures = [futures]
     if notebook is None:
         notebook = is_kernel()  # often but not always correct assumption
     if notebook:
-        return WidgetProgressBar(*args, **kwargs)
+        bar = ProgressWidget(futures)
+        bar.start()
     else:
-        return TextProgressBar(*args, **kwargs)
+        bar = TextProgressBar(futures)
+        bar.start()
+        bar._timer.join()
 
 
 def is_kernel():
