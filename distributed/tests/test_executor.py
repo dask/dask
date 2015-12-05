@@ -1291,14 +1291,22 @@ def test_upload_file(loop):
 
         def g():
             import myfile
-            return myfile.x
+            return myfile.f()
 
-        with tmp_text('myfile.py', 'x = 123') as fn:
+        with tmp_text('myfile.py', 'def f():\n    return 123') as fn:
             yield e._upload_file(fn)
 
-            x = e.submit(g)
-            result = yield x._result()
-            assert result == 123
+        sleep(1)  # TODO:  why is this necessary?
+        x = e.submit(g, pure=False)
+        result = yield x._result()
+        assert result == 123
+
+        with tmp_text('myfile.py', 'def f():\n    return 456') as fn:
+            yield e._upload_file(fn)
+
+        y = e.submit(g, pure=False)
+        result = yield y._result()
+        assert result == 456
 
         yield e._shutdown()
     _test_cluster(f, loop)
@@ -1315,3 +1323,26 @@ def test_upload_file_sync(loop):
                 e.upload_file(fn)
                 x = e.submit(g)
                 assert x.result() == 123
+
+
+def test_upload_file_exception(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+
+        with tmp_text('myfile.py', 'syntax-error!') as fn:
+            with pytest.raises(SyntaxError):
+                yield e._upload_file(fn)
+
+        yield e._shutdown()
+
+    _test_cluster(f, loop)
+
+
+def test_upload_file_exception_sync(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            with tmp_text('myfile.py', 'syntax-error!') as fn:
+                with pytest.raises(SyntaxError):
+                    e.upload_file(fn)

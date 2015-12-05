@@ -581,13 +581,20 @@ class Executor(object):
         return sync(self.loop, self._restart)
 
     @gen.coroutine
-    def _upload_file(self, filename):
+    def _upload_file(self, filename, raise_on_error=True):
         with open(filename, 'rb') as f:
             data = f.read()
         _, fn = os.path.split(filename)
         d = yield self.center.broadcast(msg={'op': 'upload_file',
                                              'filename': fn,
                                              'data': data})
+
+        if any(isinstance(v, Exception) for v in d.values()):
+            exception = next(v for v in d.values() if isinstance(v, Exception))
+            if raise_on_error:
+                raise exception
+            else:
+                raise gen.Return(exception)
 
         assert all(len(data) == v for v in d.values())
 
@@ -599,7 +606,10 @@ class Executor(object):
         filename: string
             Filename of .py file to send to workers
         """
-        return sync(self.loop, self._upload_file, filename)
+        result = sync(self.loop, self._upload_file, filename,
+                        raise_on_error=False)
+        if isinstance(result, Exception):
+            raise result
 
 
 @gen.coroutine
