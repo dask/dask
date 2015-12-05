@@ -44,7 +44,7 @@ def incomplete_keys(keys, scheduler):
     return out
 
 
-class ProgressBar(Diagnostic):
+class Progress(Diagnostic):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
         keys = {k.key if hasattr(k, 'key') else k for k in keys}
 
@@ -95,7 +95,7 @@ class ProgressBar(Diagnostic):
             self.stop()
 
     def task_erred(self, scheduler, key, worker, exception):
-        logger.info("Progressbar sees task erred")
+        logger.info("Progress sees task erred")
         if key in self.all_keys:
             self.stop(exception=exception)
 
@@ -113,9 +113,9 @@ class ProgressBar(Diagnostic):
         return default_timer() - self._start_time
 
 
-class TextProgressBar(ProgressBar):
+class TextProgressBar(Progress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40):
-        ProgressBar.__init__(self, keys, scheduler, minimum, dt)
+        Progress.__init__(self, keys, scheduler, minimum, dt)
         self._width = width
 
     def start(self):
@@ -133,7 +133,7 @@ class TextProgressBar(ProgressBar):
             self.stop(True)
 
     def stop(self, exception=None):
-        ProgressBar.stop(self, exception)
+        Progress.stop(self, exception)
         if self._running:
             self._running = False
             self._timer.join()
@@ -168,9 +168,9 @@ class TextProgressBar(ProgressBar):
             sys.stdout.flush()
 
 
-class ProgressWidget(ProgressBar):
+class ProgressWidget(Progress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
-        ProgressBar.__init__(self, keys, scheduler, minimum, dt)
+        Progress.__init__(self, keys, scheduler, minimum, dt)
         from ipywidgets import FloatProgress
         self.bar = FloatProgress(min=0, max=1, description='Hello')
         from zmq.eventloop.ioloop import IOLoop
@@ -187,7 +187,7 @@ class ProgressWidget(ProgressBar):
 
     def stop(self, exception=None):
         self.pc.stop()
-        ProgressBar.stop(self, exception)
+        Progress.stop(self, exception)
         if exception:
             self.bar.bar_style = 'danger'
         elif not self.keys:

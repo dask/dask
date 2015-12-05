@@ -6,7 +6,7 @@ from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import cluster, slow, _test_cluster, loop, inc, div
 from distributed.utils import All
-from distributed.diagnostics import (ProgressBar, TextProgressBar, Diagnostic,
+from distributed.diagnostics import (Progress, TextProgressBar, Diagnostic,
         ProgressWidget)
 
 
@@ -48,7 +48,7 @@ def test_diagnostic(loop):
     _test_cluster(f, loop)
 
 
-def test_many_progressbars(loop):
+def test_many_Progresss(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
@@ -60,7 +60,7 @@ def test_many_progressbars(loop):
                             'z': (inc, 'y')},
                        keys=['z'])
 
-        bars = [ProgressBar(keys=['z'], scheduler=s) for i in range(10)]
+        bars = [Progress(keys=['z'], scheduler=s) for i in range(10)]
 
         while True:
             msg = yield s.report_queue.get()
@@ -205,9 +205,9 @@ def test_progressbar_widget(loop):
     _test_cluster(f, loop)
 
 
-def test_progressbar_no_scheduler():
+def test_Progress_no_scheduler():
     with pytest.raises(ValueError):
-        ProgressBar([])
+        Progress([])
 
 
 def check_bar_completed(capsys, width=40):
