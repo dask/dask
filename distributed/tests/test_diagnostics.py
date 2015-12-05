@@ -7,7 +7,7 @@ from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
         div, dec)
 from distributed.utils import All
-from distributed.diagnostics import (Progress, TextProgressBar, Diagnostic,
+from distributed.diagnostics import (Progress, TextProgressBar, SchedulerPlugin,
         ProgressWidget, MultiProgress)
 
 
@@ -18,7 +18,7 @@ def test_diagnostic(loop):
         yield s._sync_center()
         done = s.start()
 
-        class Counter(Diagnostic):
+        class Counter(SchedulerPlugin):
             def start(self, scheduler):
                 scheduler.diagnostics.append(self)
                 self.count = 0

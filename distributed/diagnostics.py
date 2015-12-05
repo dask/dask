@@ -14,7 +14,31 @@ from .executor import default_executor
 logger = logging.getLogger(__name__)
 
 
-class Diagnostic(object):
+class SchedulerPlugin(object):
+    """ Interface to plug into Scheduler
+
+    The scheduler responds to externally driven events.  As changes within the
+    system occur the scheduler calls various functions like ``task_finished``,
+    ``update_graph``, ``task_erred``, etc..  A ``SchedulerPlugin`` allows user
+    driven code to extend those events.
+
+    By implementing these methods within a custom plugin and registering that
+    plugin with the scheduler, we run user code within the scheduler thread
+    that can perform arbitrary operations in synchrony with the scheduler
+    itself.
+
+    Examples
+    --------
+    >>> class Counter(SchedulerPlugin):
+    ...     def __init__(self):
+    ...         self.counter = 0
+    ...
+    ...     def task_finished(self, scheduler, key, worker, nbytes):
+    ...         self.counter += 1
+
+    >>> c = Counter()
+    >>> scheduler.add_plugin(c)  # doctest: +SKIP
+    """
     def start(self, scheduler):
         pass
 
@@ -45,7 +69,8 @@ def incomplete_keys(keys, scheduler):
     return out
 
 
-class Progress(Diagnostic):
+class Progress(SchedulerPlugin):
+    """ Tracks progress of a set of keys or futures """
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
         keys = {k.key if hasattr(k, 'key') else k for k in keys}
 
