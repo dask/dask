@@ -127,6 +127,11 @@ def test_TextProgressBar_error(loop, capsys):
         assert progress.status == 'error'
         assert not progress._timer.is_alive()
 
+        progress = TextProgressBar(['x'], scheduler=s)
+        progress.start()
+        assert progress.status == 'error'
+        assert not progress._timer.is_alive()
+
         s.scheduler_queue.put_nowait({'op': 'close'})
         yield done
 

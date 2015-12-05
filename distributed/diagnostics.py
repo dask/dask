@@ -129,6 +129,8 @@ class TextProgressBar(ProgressBar):
         self._update_bar()
         if not self.keys:
             self.stop()
+        if all(k in self.scheduler.exceptions_blame for k in self.keys):
+            self.stop(True)
 
     def stop(self, exception=None):
         ProgressBar.stop(self, exception)
