@@ -642,7 +642,7 @@ class Scheduler(object):
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
             self.ensure_occupied(worker)
-            for diagnostic in self.diagnostics:
+            for diagnostic in self.diagnostics[:]:
                 diagnostic.task_erred(self, key, worker, exception)
 
     def mark_failed(self, key, failing_key=None):
@@ -670,7 +670,7 @@ class Scheduler(object):
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker])
             self.ensure_occupied(worker)
-            for diagnostic in self.diagnostics:
+            for diagnostic in self.diagnostics[:]:
                 diagnostic.task_finished(self, key, worker, nbytes)
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
@@ -755,7 +755,7 @@ class Scheduler(object):
             if self.who_has[key]:
                 self.mark_key_in_memory(key)
 
-        for diagnostic in self.diagnostics:
+        for diagnostic in self.diagnostics[:]:
             diagnostic.update_graph(self, dsk, keys, restrictions)
 
     def release_held_data(self, key=None):

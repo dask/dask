@@ -69,28 +69,25 @@ class ProgressBar(Diagnostic):
         self._dt = dt
         self.last_duration = 0
         self.keys = None
-        self._pre_keys = None
 
         self._running = False
 
         self.scheduler = scheduler
 
-        scheduler.add_diagnostic(self)  # subtle race condition here
-        self.keys = incomplete_keys(keys, scheduler)
-        self.all_keys = self.keys.copy()
-        self.all_keys.update(keys)
+        def f():
+            scheduler.add_diagnostic(self)  # subtle race condition here
+            self.keys = incomplete_keys(keys, scheduler)
+            self.all_keys = self.keys.copy()
+            self.all_keys.update(keys)
+
+        if scheduler.loop._thread_ident == threading.current_thread().ident:
+            f()
+        else:
+            sync(scheduler.loop, f)
 
         self.status = None
 
     def task_finished(self, scheduler, key, worker, nbytes):
-        if self.keys is None:
-            self._pre_keys.add(key)
-            return
-        else:
-            if self._pre_keys:
-                self.keys -= self._pre_keys
-                self._pre_keys.clear()
-
         if key in self.keys:
             self.keys.remove(key)
 

@@ -48,6 +48,32 @@ def test_diagnostic(loop):
     _test_cluster(f, loop)
 
 
+def test_many_progressbars(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port), loop=loop)
+        yield s._sync_center()
+        done = s.start()
+
+        s.update_graph(dsk={'x': (inc, 1),
+                            'y': (inc, 'x'),
+                            'z': (inc, 'y')},
+                       keys=['z'])
+
+        bars = [ProgressBar(keys=['z'], scheduler=s) for i in range(10)]
+
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
+
+        assert all(b.status == 'finished' for b in bars)
+        s.scheduler_queue.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
+
+
 def test_TextProgressBar(loop, capsys):
     @gen.coroutine
     def f(c, a, b):
