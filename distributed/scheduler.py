@@ -642,6 +642,8 @@ class Scheduler(object):
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
             self.ensure_occupied(worker)
+            for diagnostic in self.diagnostics:
+                diagnostic.task_erred(self, key, worker, exception)
 
     def mark_failed(self, key, failing_key=None):
         """ When a task fails mark it and all dependent task as failed """

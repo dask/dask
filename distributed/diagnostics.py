@@ -23,8 +23,12 @@ class Diagnostic(object):
     def update_graph(self, scheduler, dsk, keys, restrictions):
         pass
 
+    def task_erred(self, scheduler, key, worker, exception):
+        pass
+
 
 def incomplete_keys(keys, scheduler):
+    """ All keys that need to compute for these keys to finish """
     out = set()
     stack = list(keys)
     while stack:
@@ -53,7 +57,7 @@ class ProgressBar(Diagnostic):
                 scheduler = default_executor().scheduler
 
         start = time.time()
-        while not keys.issubset(scheduler.in_play):
+        while not keys.issubset(scheduler.dask):
             time.sleep(0.01)
             if time.time() > start + 1:
                 raise ValueError("Keys not found: %s" % str(keys -
@@ -76,6 +80,8 @@ class ProgressBar(Diagnostic):
         self.all_keys = self.keys.copy()
         self.all_keys.update(keys)
 
+        self.status = None
+
     def task_finished(self, scheduler, key, worker, nbytes):
         if self.keys is None:
             self._pre_keys.add(key)
@@ -91,9 +97,19 @@ class ProgressBar(Diagnostic):
         if not self.keys:
             self.stop()
 
-    def stop(self):
+    def task_erred(self, scheduler, key, worker, exception):
+        logger.info("Progressbar sees task erred")
+        if key in self.all_keys:
+            self.stop(exception=exception)
+
+    def stop(self, exception=None):
         if self in self.scheduler.diagnostics:
             self.scheduler.diagnostics.remove(self)
+
+        if exception:
+            self.status = 'error'
+        else:
+            self.status = 'finished'
 
     @property
     def elapsed(self):
@@ -113,8 +129,12 @@ class TextProgressBar(ProgressBar):
             self._timer.daemon = True
             self._timer.start()
 
-    def stop(self):
-        ProgressBar.stop(self)
+        self._update_bar()
+        if not self.keys:
+            self.stop()
+
+    def stop(self, exception=None):
+        ProgressBar.stop(self, exception)
         if self._running:
             self._running = False
             self._timer.join()
@@ -122,7 +142,7 @@ class TextProgressBar(ProgressBar):
             if self.last_duration < self._minimum:
                 return
             else:
-                self._update_bar(self.last_duration)
+                self._update_bar()
             sys.stdout.write('\n')
             sys.stdout.flush()
 
@@ -130,13 +150,13 @@ class TextProgressBar(ProgressBar):
         """Background thread for updating the progress bar"""
         while self._running:
             if self.elapsed > self._minimum:
-                self._update_bar(self.elapsed)
+                self._update_bar()
             time.sleep(self._dt)
 
-    def _update_bar(self, elapsed):
+    def _update_bar(self):
         ntasks = len(self.all_keys)
         ndone = ntasks - len(self.keys)
-        self._draw_bar(ndone / ntasks if ntasks else 1.0, elapsed)
+        self._draw_bar(ndone / ntasks if ntasks else 1.0, self.elapsed)
 
     def _draw_bar(self, frac, elapsed):
         bar = '#' * int(self._width * frac)
@@ -162,10 +182,17 @@ class ProgressWidget(ProgressBar):
         from IPython.display import display
         display(self.bar)
         self.pc.start()
+        if not self.keys:
+            self._update_bar()
+            self.stop()
 
-    def stop(self):
-        self.bar.bar_style = 'success'
+    def stop(self, exception=None):
         self.pc.stop()
+        ProgressBar.stop(self, exception)
+        if exception:
+            self.bar.bar_style = 'danger'
+        elif not self.keys:
+            self.bar.bar_style = 'success'
 
     def _update_bar(self):
         ntasks = len(self.all_keys)

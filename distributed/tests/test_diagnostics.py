@@ -4,7 +4,7 @@ from tornado import gen
 
 from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
-from distributed.utils_test import cluster, slow, _test_cluster, loop, inc
+from distributed.utils_test import cluster, slow, _test_cluster, loop, inc, div
 from distributed.utils import All
 from distributed.diagnostics import (ProgressBar, TextProgressBar, Diagnostic,
         ProgressWidget)
@@ -81,6 +81,47 @@ def test_TextProgressBar(loop, capsys):
     _test_cluster(f, loop)
 
 
+def test_TextProgressBar_error(loop, capsys):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port), loop=loop)
+        yield s._sync_center()
+        done = s.start()
+
+        s.update_graph(dsk={'x': (div, 1, 0)},
+                       keys=['x'])
+        progress = TextProgressBar(['x'], scheduler=s)
+        progress.start()
+
+        while True:
+            msg = yield s.report_queue.get()
+            if msg.get('key') == 'x':
+                break
+
+        assert progress.status == 'error'
+        assert not progress._timer.is_alive()
+
+        s.scheduler_queue.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
+
+
+def test_TextProgressBar_empty(loop, capsys):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port), loop=loop)
+        yield s._sync_center()
+        done = s.start()
+
+        p = TextProgressBar([], scheduler=s)
+        p.start()
+        p._timer.join()
+        check_bar_completed(capsys)
+
+    _test_cluster(f, loop)
+
+
 def test_progressbar_sync(loop, capsys):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
@@ -88,11 +129,20 @@ def test_progressbar_sync(loop, capsys):
             g = e.submit(lambda: 2)
             p = TextProgressBar([f, g])
             p.start()
+            # assert p in e.scheduler.diagnostics
             assert p.scheduler is e.scheduler
-            assert p in e.scheduler.diagnostics
+            f.result()
+            g.result()
             sys.stdout.flush()
             check_bar_completed(capsys)
             assert len(p.all_keys) == 2
+
+            h = e.submit(lambda x, y: x / y, 1, 0)
+            p = TextProgressBar([h])
+            p.start()
+            h.exception()
+            with pytest.raises(AssertionError):
+                check_bar_completed(capsys)
 
 
 @pytest.mark.xfail
