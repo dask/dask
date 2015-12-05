@@ -264,9 +264,12 @@ class MultiProgressWidget(MultiProgress):
         from ipywidgets import FloatProgress, VBox, HTML, HBox
         self.bars = {key: FloatProgress(min=0, max=1, description=key)
                         for key in self.keys}
-        self.box = VBox([self.bars[k] for k in sorted(self.bars, key=str)])
+        self.texts = {key: HTML() for key in self.keys}
+        self.boxes = {key: HBox([self.bars[key], self.texts[key]])
+                        for key in self.keys}
         self.time = HTML()
-        self.widget = HBox([self.time, self.box])
+        self.widget = HBox([self.time, VBox([self.boxes[key] for key in
+                                            sorted(self.bars, key=str)])])
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
         self.pc = PeriodicCallback(self._update_bar, self._dt, io_loop=loop)
@@ -282,16 +285,13 @@ class MultiProgressWidget(MultiProgress):
         if exception:
             self.bars[self.func(key)].value = 1
             self.bars[self.func(key)].bar_style = 'danger'
-            self.time.value = "<p>%s</p>\n<p>%s</p>\n<p>%s</p>" % (
-                    format_time(self.elapsed),
-                    type(exception).__name__,
-                    str(exception))
 
     def _update_bar(self):
         for k in self.keys:
             ntasks = len(self.all_keys[k])
             ndone = ntasks - len(self.keys[k])
             self.bars[k].value = ndone / ntasks if ntasks else 1.0
+            self.texts[k].value = "%d / %d" % (ndone, ntasks)
             self.time.value = format_time(self.elapsed)
 
 
