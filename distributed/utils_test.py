@@ -31,6 +31,10 @@ def inc(x):
     return x + 1
 
 
+def dec(x):
+    return x - 1
+
+
 def div(x, y):
     return x / y
 

@@ -4,6 +4,7 @@ import threading
 import time
 from timeit import default_timer
 
+from toolz import valmap, groupby
 from tornado.ioloop import PeriodicCallback, IOLoop
 
 from .utils import ignoring, sync
@@ -111,6 +112,60 @@ class Progress(Diagnostic):
     @property
     def elapsed(self):
         return default_timer() - self._start_time
+
+
+def key_split(s):
+    """
+    >>> key_split('x-1')
+    'x'
+    >>> key_split('x-1-2-3')
+    'x-1-2'
+    >>> key_split(('x', 1))
+    'x'
+    >>> key_split(None)
+    'Other'
+    """
+    if isinstance(s, tuple):
+        return key_split(s[0])
+    try:
+        return s.rsplit('-', 1)[0]
+    except:
+        return 'Other'
+
+
+class MultiProgress(Progress):
+    """ Progress variant that keeps track of different groups of keys
+
+    See Progress for most details.  This only adds a function ``func=``
+    that splits keys.  This defaults to ``key_split`` which aligns with naming
+    conventions chosen in the dask project (tuples, hyphens, etc..)
+
+    Examples
+    --------
+    >>> split = lambda s: s.split('-')[0]
+    >>> p = MultiProgress(['y-2'], func=split)  # doctest: +SKIP
+    >>> p.keys   # doctest: +SKIP
+    {'x': {'x-1', 'x-2', 'x-3'},
+     'y': {'y-1', 'y-2'}}
+    """
+    def __init__(self, keys, scheduler=None, func=key_split):
+        Progress.__init__(self, keys, scheduler)
+        self.func = func
+        self.keys = valmap(set, groupby(self.func, self.keys))
+        self.all_keys = valmap(set, groupby(self.func, self.all_keys))
+
+    def task_finished(self, scheduler, key, worker, nbytes):
+        s = self.keys.get(self.func(key))
+        if s and key in s:
+            s.remove(key)
+
+        if not self.keys or not any(self.keys.values()):
+            self.stop()
+
+    def task_erred(self, scheduler, key, worker, exception):
+        logger.info("Progress sees task erred")
+        if key in self.all_keys:
+            self.stop(exception=exception)
 
 
 class TextProgressBar(Progress):
