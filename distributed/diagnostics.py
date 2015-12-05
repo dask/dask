@@ -272,7 +272,7 @@ class MultiProgressWidget(MultiProgress):
                                             sorted(self.bars, key=str)])])
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
-        self.pc = PeriodicCallback(self._update_bar, self._dt, io_loop=loop)
+        self.pc = PeriodicCallback(self._update_bar, 1000 * self._dt, io_loop=loop)
 
     start = ProgressWidget.start
 
