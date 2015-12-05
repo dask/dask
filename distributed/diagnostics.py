@@ -120,7 +120,7 @@ def key_split(s):
     'x'
     >>> key_split('x-1-2-3')
     'x-1-2'
-    >>> key_split(('x', 1))
+    >>> key_split(('x-2', 1))
     'x'
     >>> key_split(None)
     'Other'
