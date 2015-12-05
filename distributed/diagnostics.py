@@ -98,9 +98,9 @@ class Progress(Diagnostic):
     def task_erred(self, scheduler, key, worker, exception):
         logger.info("Progress sees task erred")
         if key in self.all_keys:
-            self.stop(exception=exception)
+            self.stop(exception=exception, key=key)
 
-    def stop(self, exception=None):
+    def stop(self, exception=None, key=None):
         if self in self.scheduler.diagnostics:
             self.scheduler.diagnostics.remove(self)
 
@@ -148,14 +148,14 @@ class MultiProgress(Progress):
     {'x': {'x-1', 'x-2', 'x-3'},
      'y': {'y-1', 'y-2'}}
     """
-    def __init__(self, keys, scheduler=None, func=key_split):
-        Progress.__init__(self, keys, scheduler)
+    def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1):
+        Progress.__init__(self, keys, scheduler, minimum, dt)
         self.func = func
         self.keys = valmap(set, groupby(self.func, self.keys))
         self.all_keys = valmap(set, groupby(self.func, self.all_keys))
 
     def task_finished(self, scheduler, key, worker, nbytes):
-        s = self.keys.get(self.func(key))
+        s = self.keys.get(self.func(key), None)
         if s and key in s:
             s.remove(key)
 
@@ -164,8 +164,10 @@ class MultiProgress(Progress):
 
     def task_erred(self, scheduler, key, worker, exception):
         logger.info("Progress sees task erred")
-        if key in self.all_keys:
-            self.stop(exception=exception)
+
+        if (self.func(key) in self.all_keys and
+            key in self.all_keys[self.func(key)]):
+            self.stop(exception=exception, key=key)
 
 
 class TextProgressBar(Progress):
@@ -187,8 +189,8 @@ class TextProgressBar(Progress):
         if all(k in self.scheduler.exceptions_blame for k in self.keys):
             self.stop(True)
 
-    def stop(self, exception=None):
-        Progress.stop(self, exception)
+    def stop(self, exception=None, key=None):
+        Progress.stop(self, exception, key=None)
         if self._running:
             self._running = False
             self._timer.join()
@@ -227,7 +229,7 @@ class ProgressWidget(Progress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
         Progress.__init__(self, keys, scheduler, minimum, dt)
         from ipywidgets import FloatProgress
-        self.bar = FloatProgress(min=0, max=1, description='Hello')
+        self.bar = FloatProgress(min=0, max=1, description='0.0s')
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
         self.pc = PeriodicCallback(self._update_bar, self._dt, io_loop=loop)
@@ -240,9 +242,9 @@ class ProgressWidget(Progress):
             self._update_bar()
             self.stop()
 
-    def stop(self, exception=None):
+    def stop(self, exception=None, key=None):
         self.pc.stop()
-        Progress.stop(self, exception)
+        Progress.stop(self, exception, key=None)
         if exception:
             self.bar.bar_style = 'danger'
         elif not self.keys:
@@ -255,7 +257,43 @@ class ProgressWidget(Progress):
         self.bar.description = format_time(self.elapsed)
 
 
-def progress(futures, notebook=None):
+class MultiProgressWidget(MultiProgress):
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, func=key_split):
+        MultiProgress.__init__(self, keys, scheduler, func, minimum, dt)
+        from ipywidgets import FloatProgress, VBox
+        self.bars = {key: FloatProgress(min=0, max=1, description=key)
+                        for key in self.keys}
+        self.box = VBox([self.bars[k] for k in sorted(self.bars, key=str)])
+        from zmq.eventloop.ioloop import IOLoop
+        loop = IOLoop.instance()
+        self.pc = PeriodicCallback(self._update_bar, self._dt, io_loop=loop)
+
+    def start(self):
+        from IPython.display import display
+        display(self.box)
+        self.pc.start()
+        if not self.keys:
+            self._update()
+            self.stop()
+
+    def stop(self, exception=None, key=None):
+        self.pc.stop()
+        Progress.stop(self, exception)
+        for k, v in self.keys.items():
+            if not v:
+                self.bars[k].bar_style = 'success'
+        if exception:
+            self.bars[self.func(key)].value = 1
+            self.bars[self.func(key)].bar_style = 'danger'
+
+    def _update_bar(self):
+        for k in self.keys:
+            ntasks = len(self.all_keys[k])
+            ndone = ntasks - len(self.keys[k])
+            self.bars[k].value = ndone / ntasks if ntasks else 1.0
+
+
+def progress(futures, notebook=None, multi=False):
     """ Track progress of futures
 
     This operates differently in the notebook and the console
@@ -273,7 +311,10 @@ def progress(futures, notebook=None):
     if notebook is None:
         notebook = is_kernel()  # often but not always correct assumption
     if notebook:
-        bar = ProgressWidget(futures)
+        if multi:
+            bar = MultiProgressWidget(futures)
+        else:
+            bar = ProgressWidget(futures)
         bar.start()
     else:
         bar = TextProgressBar(futures)
