@@ -3,14 +3,16 @@ from __future__ import absolute_import, division, print_function
 from toolz import curry, pipe, partial
 from .optimize import fuse, cull
 import multiprocessing
-import dill
+import cloudpickle
 import pickle
 from .async import get_async # TODO: get better get
 from .context import _globals
 
 
-_dumps = dill.dumps
-_loads = dill.loads
+def _dumps(x):
+        return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+
+_loads = pickle.loads
 
 
 def _process_get_id():
