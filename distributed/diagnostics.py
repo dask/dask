@@ -230,13 +230,14 @@ class ProgressWidget(Progress):
         Progress.__init__(self, keys, scheduler, minimum, dt)
         from ipywidgets import FloatProgress
         self.bar = FloatProgress(min=0, max=1, description='0.0s')
+        self.widget = self.bar
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
         self.pc = PeriodicCallback(self._update_bar, self._dt, io_loop=loop)
 
     def start(self):
         from IPython.display import display
-        display(self.bar)
+        display(self.widget)
         self.pc.start()
         if not self.keys:
             self._update_bar()
@@ -260,21 +261,17 @@ class ProgressWidget(Progress):
 class MultiProgressWidget(MultiProgress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, func=key_split):
         MultiProgress.__init__(self, keys, scheduler, func, minimum, dt)
-        from ipywidgets import FloatProgress, VBox
+        from ipywidgets import FloatProgress, VBox, HTML, HBox
         self.bars = {key: FloatProgress(min=0, max=1, description=key)
                         for key in self.keys}
         self.box = VBox([self.bars[k] for k in sorted(self.bars, key=str)])
+        self.time = HTML()
+        self.widget = HBox([self.time, self.box])
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
         self.pc = PeriodicCallback(self._update_bar, self._dt, io_loop=loop)
 
-    def start(self):
-        from IPython.display import display
-        display(self.box)
-        self.pc.start()
-        if not self.keys:
-            self._update()
-            self.stop()
+    start = ProgressWidget.start
 
     def stop(self, exception=None, key=None):
         self.pc.stop()
@@ -285,12 +282,17 @@ class MultiProgressWidget(MultiProgress):
         if exception:
             self.bars[self.func(key)].value = 1
             self.bars[self.func(key)].bar_style = 'danger'
+            self.time.value = "<p>%s</p>\n<p>%s</p>\n<p>%s</p>" % (
+                    format_time(self.elapsed),
+                    type(exception).__name__,
+                    str(exception))
 
     def _update_bar(self):
         for k in self.keys:
             ntasks = len(self.all_keys[k])
             ndone = ntasks - len(self.keys[k])
             self.bars[k].value = ndone / ntasks if ntasks else 1.0
+            self.time.value = format_time(self.elapsed)
 
 
 def progress(futures, notebook=None, multi=False):
