@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function
 from toolz import curry, pipe, partial
 from .optimize import fuse, cull
 import multiprocessing
-import cloudpickle
 import pickle
+import cloudpickle
+import dill
 from .async import get_async # TODO: get better get
 from .context import _globals
 from sys import getrecursionlimit, setrecursionlimit
@@ -13,15 +14,9 @@ def _dumps(x):
     try:
         return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
     except:
-        try:
-            recursionlimit = getrecursionlimit()
-            setrecursionlimit(2*recursionlimit)
-            dumped = cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-            setrecursionlimit(recursionlimit)
-            return dumped
-        except:
-            raise
-
+        # note that the dill import should make pickle work for
+        # method_descriptor objects in python 2.x
+        return pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
 
 _loads = pickle.loads
 
