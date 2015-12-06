@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from toolz import curry, pipe, partial
 from .optimize import fuse, cull
 import multiprocessing
-import dill
 import cloudpickle
 import pickle
 from .async import get_async # TODO: get better get
@@ -47,11 +46,11 @@ def get(dsk, keys, optimizations=[], num_workers=None,
     num_workers: int
         Number of worker processes (defaults to number of cores)
     func_dumps: function
-        Function to use for function serialization (defaults to
-        cloudpickle.dumps)
+        Function to use for function serialization
+        (defaults to cloudpickle.dumps)
     func_loads: function
-        Function to use for function deserialization (defaults to
-        cloudpickle.loads)
+        Function to use for function deserialization
+        (defaults to cloudpickle.loads)
     """
     pool = _globals['pool']
     if pool is None:
