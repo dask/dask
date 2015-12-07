@@ -454,9 +454,16 @@ def map_blocks(func, *arrs, **kwargs):
         spec = getargspec(func)
     except:
         spec = None
-    if spec and 'block_id' in spec.args + spec.kwonlyargs:
-        for k in core.flatten(result._keys()):
-            result.dask[k] = (partial(func, block_id=k[1:]),) + result.dask[k][1:]
+    if spec:
+        args = spec.args
+        try:
+            args += spec.kwonlyargs
+        except AttributeError:
+            pass
+        if 'block_id' in args:
+            for k in core.flatten(result._keys()):
+                result.dask[k] = (partial(func, block_id=k[1:]),)\
+                                 + result.dask[k][1:]
 
     # Assert user specified chunks
     chunks = kwargs.get('chunks')
