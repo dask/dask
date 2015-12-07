@@ -580,11 +580,14 @@ class Scheduler(object):
             for i in range(nc):
                 self.worker_queues[w].put_nowait({'op': 'close'}); n += 1
 
-        for s in self.scheduler_queues:
-            s.put_nowait({'op': 'close-stream'}); n += 1
+        for s in self.scheduler_queues[1:]:
+            s.put_nowait({'op': 'close-stream'})
 
         for i in range(n):
-            yield self.scheduler_queue.get()
+            msg = yield self.scheduler_queues[0].get()
+
+        for q in self.report_queues:
+            q.put_nowait({'op': 'close'})
 
     def mark_ready_to_run(self, key):
         """ Send task to an appropriate worker, trigger worker """

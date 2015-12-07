@@ -251,8 +251,6 @@ class Executor(object):
     @gen.coroutine
     def _shutdown(self, fast=False):
         """ Send shutdown signal and wait until scheduler completes """
-        self.loop.add_callback(self.report_queue.put_nowait,
-                               {'op': 'close'})
         self.send_to_scheduler({'op': 'close'})
         if _global_executor[0] is self:
             _global_executor[0] = None
@@ -261,7 +259,6 @@ class Executor(object):
 
     def shutdown(self):
         """ Send shutdown signal and wait until scheduler terminates """
-        self.loop.add_callback(self.report_queue.put_nowait, {'op': 'close'})
         self.send_to_scheduler({'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
