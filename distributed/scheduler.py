@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from functools import partial
 import logging
 from math import ceil
@@ -16,7 +16,7 @@ from tornado.iostream import StreamClosedError
 from dask.core import istask, get_deps, reverse_dict, get_dependencies
 from dask.order import order
 
-from .core import rpc, coerce_to_rpc
+from .core import rpc, coerce_to_rpc, connect, read, write
 from .client import unpack_remotedata
 from .utils import All, ignoring
 
@@ -451,7 +451,8 @@ def execute_task(task):
 
 
 class Scheduler(object):
-    def __init__(self, center, delete_batch_time=1, loop=None):
+    def __init__(self, center, delete_batch_time=1, loop=None,
+            resource_interval=1, resource_log_size=1000):
         self.scheduler_queues = [Queue()]
         self.report_queues = [Queue()]
         self.delete_queue = Queue()
@@ -470,6 +471,7 @@ class Scheduler(object):
         self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
+        self.nannies = dict()
         self.processing = dict()
         self.restrictions = dict()
         self.stacks = dict()
@@ -480,10 +482,13 @@ class Scheduler(object):
         self.exceptions = dict()
         self.tracebacks = dict()
         self.exceptions_blame = dict()
+        self.resource_logs = dict()
 
         self.loop = loop or IOLoop.current()
 
         self.delete_batch_time = delete_batch_time
+        self.resource_interval = resource_interval
+        self.resource_log_size = resource_log_size
 
         self.diagnostics = []
 
@@ -504,10 +509,20 @@ class Scheduler(object):
 
     @gen.coroutine
     def _sync_center(self):
-        self.ncores, self.has_what, self.who_has = yield [
+        self.ncores, self.has_what, self.who_has, self.nannies = yield [
                 self.center.ncores(),
                 self.center.has_what(),
-                self.center.who_has()]
+                self.center.who_has(),
+                self.center.nannies()]
+
+        self._nanny_coroutines = []
+        for (ip, wport), nport in self.nannies.items():
+            if not nport:
+                continue
+            if (ip, nport) not in self.resource_logs:
+                self.resource_logs[(ip, nport)] = deque(maxlen=self.resource_log_size)
+
+            self._nanny_coroutines.append(self._nanny_listen(ip, nport))
 
     def start(self):
         collections = [self.dask, self.dependencies, self.dependents,
@@ -1006,5 +1021,15 @@ class Scheduler(object):
 
         self.put({'op': 'delete-finished'})
         logger.debug('Delete finished')
+
+    @gen.coroutine
+    def _nanny_listen(self, ip, port):
+        stream = yield connect(ip=ip, port=port)
+        yield write(stream, {'op': 'monitor_resources',
+                             'interval': self.resource_interval})
+        while not stream.closed():
+            msg = yield read(stream)
+            self.resource_logs[(ip, port)].append(msg)
+
 
 scheduler = 0

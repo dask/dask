@@ -6,6 +6,7 @@ from toolz import merge, concat
 from tornado.queues import Queue
 import pytest
 
+from distributed import Center, Nanny
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
         decide_worker, assign_many_tasks, heal_missing_data, Scheduler)
@@ -562,3 +563,41 @@ def test_multi_queues(loop):
         yield done
 
     _test_cluster(f, loop)
+
+
+def test_monitor_resources(loop):
+    c = Center('127.0.0.1', 8026)
+    a = Nanny('127.0.0.1', 8027, 8028, '127.0.0.1', 8026, ncores=2)
+    b = Nanny('127.0.0.1', 8029, 8030, '127.0.0.1', 8026, ncores=2)
+    c.listen(c.port)
+    s = Scheduler((c.ip, c.port), resource_interval=0.01, resource_log_size=3)
+
+    @gen.coroutine
+    def f():
+        yield a._start()
+        yield b._start()
+        yield s._sync_center()
+        done = s.start()
+
+        try:
+            assert s.ncores == {('127.0.0.1', a.worker_port): 2,
+                                ('127.0.0.1', b.worker_port): 2}
+            assert s.nannies == {(n.ip, n.worker_port): n.port
+                                 for n in [a, b]}
+
+            while any(len(v) < 3 for v in s.resource_logs.values()):
+                yield gen.sleep(0.01)
+
+            yield gen.sleep(0.1)
+
+            assert set(s.resource_logs) == {(a.ip, a.port), (b.ip, b.port)}
+            assert all(len(v) == 3 for v in s.resource_logs.values())
+
+            s.put({'op': 'close'})
+            yield done
+        finally:
+            yield a._close()
+            yield b._close()
+            c.stop()
+
+    loop.run_sync(f)
