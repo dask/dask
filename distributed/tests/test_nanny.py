@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import sys
 from time import time
@@ -7,6 +8,7 @@ from tornado.iostream import StreamClosedError
 from tornado import gen
 
 from distributed import Nanny, Center, rpc
+from distributed.core import connect, read, write
 from distributed.utils import ignoring
 from distributed.utils_test import loop
 
@@ -94,3 +96,34 @@ def test_nanny_process_failure(loop):
 
     loop.run_sync(f)
 
+
+def test_monitor_resources(loop):
+    c = Center('127.0.0.1', 8026)
+    n = Nanny('127.0.0.1', 8027, 8028, '127.0.0.1', 8026, ncores=2)
+    c.listen(c.port)
+
+    @gen.coroutine
+    def f():
+        nn = rpc(ip=n.ip, port=n.port)
+        yield n._start()
+        assert n.process.is_alive()
+        d = n.resource_collect()
+        assert {'cpu_percent', 'status', 'memory_percent', 'memory_info_ex',
+                'io_counters'}.issubset(d)
+
+        assert isinstance(d['timestamp'], datetime)
+
+        stream = yield connect(ip=n.ip, port=n.port)
+        yield write(stream, {'op': 'monitor_resources', 'interval': 0.01})
+
+        for i in range(3):
+            msg = yield read(stream)
+            assert isinstance(msg, dict)
+            assert {'cpu_percent', 'status', 'memory_percent', 'memory_info_ex',
+                    'io_counters'}.issubset(msg)
+
+        stream.close()
+        yield n._close()
+        c.stop()
+
+    loop.run_sync(f)

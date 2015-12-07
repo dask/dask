@@ -4,3 +4,4 @@ cloudpickle
 dask
 paramiko
 click
+psutil
