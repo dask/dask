@@ -24,8 +24,6 @@ from .utils import All, ignoring
 logger = logging.getLogger(__name__)
 
 
-
-
 def validate_state(dependencies, dependents, waiting, waiting_data,
         in_memory, stacks, processing, finished_results, released, in_play,
         **kwargs):
@@ -453,7 +451,7 @@ def execute_task(task):
 
 
 class Scheduler(object):
-    def __init__(self, center, delete_batch_time=1):
+    def __init__(self, center, delete_batch_time=1, loop=None):
         self.scheduler_queue = Queue()
         self.report_queue = Queue()
         self.delete_queue = Queue()
@@ -482,7 +480,11 @@ class Scheduler(object):
         self.tracebacks = dict()
         self.exceptions_blame = dict()
 
+        self.loop = loop or IOLoop.current()
+
         self.delete_batch_time = delete_batch_time
+
+        self.diagnostics = []
 
     @gen.coroutine
     def _sync_center(self):
@@ -640,6 +642,8 @@ class Scheduler(object):
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
             self.ensure_occupied(worker)
+            for diagnostic in self.diagnostics[:]:
+                diagnostic.task_erred(self, key, worker, exception)
 
     def mark_failed(self, key, failing_key=None):
         """ When a task fails mark it and all dependent task as failed """
@@ -666,6 +670,8 @@ class Scheduler(object):
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker])
             self.ensure_occupied(worker)
+            for diagnostic in self.diagnostics[:]:
+                diagnostic.task_finished(self, key, worker, nbytes)
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
@@ -749,6 +755,9 @@ class Scheduler(object):
             if self.who_has[key]:
                 self.mark_key_in_memory(key)
 
+        for diagnostic in self.diagnostics[:]:
+            diagnostic.update_graph(self, dsk, keys, restrictions)
+
     def release_held_data(self, key=None):
         if key in self.held_data:
             logger.debug("Release key: %s", key)
@@ -782,6 +791,9 @@ class Scheduler(object):
 
     def report(self, msg):
         self.report_queue.put_nowait(msg)
+
+    def add_diagnostic(self, diagnostic=None):
+        self.diagnostics.append(diagnostic)
 
     @gen.coroutine
     def scheduler(self):

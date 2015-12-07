@@ -175,18 +175,20 @@ class Worker(Server):
             pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
                 key, future._state), 1000)
             pc.start()
-            if sys.version_info < (3, 2):
-                yield future
-            else:
-                while not future.done() and future._state != 'FINISHED':
-                    try:
-                        yield gen.with_timeout(timedelta(seconds=1), future)
-                        break
-                    except gen.TimeoutError:
-                        logger.info("work queue size: %d", e._work_queue.qsize())
-                        logger.info("future state: %s", future._state)
-                        logger.info("Pending job %d: %s", i, future)
-            pc.stop()
+            try:
+                if sys.version_info < (3, 2):
+                    yield future
+                else:
+                    while not future.done() and future._state != 'FINISHED':
+                        try:
+                            yield gen.with_timeout(timedelta(seconds=1), future)
+                            break
+                        except gen.TimeoutError:
+                            logger.info("work queue size: %d", self.executor._work_queue.qsize())
+                            logger.info("future state: %s", future._state)
+                            logger.info("Pending job %d: %s", i, future)
+            finally:
+                pc.stop()
             result = future.result()
             logger.info("Finish job %d: %s - %s", i, funcname(function), key)
             self.data[key] = result

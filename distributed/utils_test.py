@@ -31,6 +31,14 @@ def inc(x):
     return x + 1
 
 
+def dec(x):
+    return x - 1
+
+
+def div(x, y):
+    return x / y
+
+
 def run_center(port):
     from distributed import Center
     from tornado.ioloop import IOLoop, PeriodicCallback

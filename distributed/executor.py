@@ -164,7 +164,8 @@ class Executor(object):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
-        self.scheduler = Scheduler(center, delete_batch_time=delete_batch_time)
+        self.scheduler = Scheduler(center, delete_batch_time=delete_batch_time,
+                                   loop=loop)
 
         if start:
             self.start()
@@ -571,6 +572,7 @@ class Executor(object):
         self.scheduler.scheduler_queue = Queue()
         self.scheduler.delete_queue = Queue()
         yield self._start()
+        raise gen.Return(self)
 
     def restart(self):
         """ Restart the distributed network
@@ -630,13 +632,9 @@ ALL_COMPLETED = 'ALL_COMPLETED'
 
 @wraps(futures.wait)
 def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
-    if len(set(f.executor for f in fs)) == 1:
-        loop = first(fs).executor.loop
-    else:
-        # TODO: Groupby executor, spawn many _as_completed coroutines
-        raise NotImplementedError("wait on many event loops not yet supported")
-
-    return sync(loop, _wait, fs, timeout, return_when)
+    executor = default_executor()
+    result = sync(executor.loop, _wait, fs, timeout, return_when)
+    return result
 
 
 @gen.coroutine

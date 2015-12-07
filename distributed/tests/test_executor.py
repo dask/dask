@@ -1183,7 +1183,8 @@ def test_restart(loop):
             assert e.scheduler.who_has == who_has
             assert set(e.scheduler.who_has) == {x.key, y.key}
 
-            yield e._restart()
+            f = yield e._restart()
+            assert f is e
 
             assert len(e.scheduler.stacks) == 2
             assert len(e.scheduler.processing) == 2

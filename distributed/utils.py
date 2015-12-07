@@ -76,7 +76,7 @@ def sync(loop, func, *args, **kwargs):
 
     @gen.coroutine
     def f():
-        result[0] = yield func(*args, **kwargs)
+        result[0] = yield gen.maybe_future(func(*args, **kwargs))
         e.set()
 
     a = loop.add_callback(f)
