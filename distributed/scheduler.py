@@ -17,7 +17,7 @@ from dask.core import istask, get_deps, reverse_dict, get_dependencies
 from dask.order import order
 
 from .core import rpc, coerce_to_rpc, connect, read, write
-from .client import unpack_remotedata
+from .client import unpack_remotedata, scatter_to_workers
 from .utils import All, ignoring
 
 
@@ -1031,5 +1031,17 @@ class Scheduler(object):
             msg = yield read(stream)
             self.resource_logs[(ip, port)].append(msg)
 
+    @gen.coroutine
+    def _scatter(self, stream, data=None, workers=None):
+        if not self.ncores:
+            raise ValueError("No workers yet found.  "
+                             "Try syncing with center.\n"
+                             "  e.sync_center()")
+        ncores = workers if workers is not None else self.ncores
+        remotes, who_has, nbytes = yield scatter_to_workers(
+                                            self.center, ncores, data)
+        self.update_data(who_has=who_has, nbytes=nbytes)
+
+        raise gen.Return(remotes)
 
 scheduler = 0

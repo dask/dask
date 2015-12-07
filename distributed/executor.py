@@ -22,8 +22,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
-from .client import (WrappedKey, _gather, unpack_remotedata, pack_data,
-        scatter_to_workers)
+from .client import (WrappedKey, _gather, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
 from .sizeof import sizeof
@@ -446,23 +445,18 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None):
-        if not self.scheduler.ncores:
-            raise ValueError("No workers yet found.  "
-                             "Try syncing with center.\n"
-                             "  e.sync_center()")
-        ncores = workers if workers is not None else self.scheduler.ncores
-        remotes, who_has, nbytes = yield scatter_to_workers(
-                                            self.center, ncores, data)
+        remotes = yield self.scheduler._scatter(None, data, workers)
         if isinstance(remotes, list):
             remotes = [Future(r.key, self) for r in remotes]
+            keys = {r.key for r in remotes}
         elif isinstance(remotes, dict):
             remotes = {k: Future(v.key, self) for k, v in remotes.items()}
-        self.loop.add_callback(self.scheduler.put,
-                                        {'op': 'update-data',
-                                         'who_has': who_has,
-                                         'nbytes': nbytes})
-        while not all(k in self.scheduler.who_has for k in who_has):
-            yield gen.sleep(0.001)
+            keys = set(remotes)
+
+        for key in keys:
+            self.futures[key]['status'] = 'finished'
+            self.futures[key]['event'].set()
+
         raise gen.Return(remotes)
 
     def scatter(self, data, workers=None):
