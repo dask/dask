@@ -108,8 +108,7 @@ def test_monitor_resources(loop):
         yield n._start()
         assert n.process.is_alive()
         d = n.resource_collect()
-        assert {'cpu_percent', 'status', 'memory_percent', 'memory_info_ex',
-                'io_counters'}.issubset(d)
+        assert {'cpu_percent', 'memory_percent'}.issubset(d)
 
         assert isinstance(d['timestamp'], datetime)
 
@@ -119,8 +118,7 @@ def test_monitor_resources(loop):
         for i in range(3):
             msg = yield read(stream)
             assert isinstance(msg, dict)
-            assert {'cpu_percent', 'status', 'memory_percent', 'memory_info_ex',
-                    'io_counters'}.issubset(msg)
+            assert {'cpu_percent', 'memory_percent'}.issubset(msg)
 
         stream.close()
         yield n._close()

@@ -136,11 +136,12 @@ class Nanny(Server):
     def resource_collect(self):
         p = psutil.Process(self.process.pid)
         return {'timestamp': datetime.now(),
-                'cpu_percent': p.cpu_percent(),
+                'cpu_percent': psutil.cpu_percent(),
                 'status': p.status(),
                 'memory_percent': p.memory_percent(),
                 'memory_info_ex': p.memory_info_ex(),
-                'io_counters': p.io_counters()}
+                'disk_io_counters': psutil.disk_io_counters(),
+                'net_io_counters': psutil.net_io_counters()}
 
     @gen.coroutine
     def monitor_resources(self, stream, interval=1):
