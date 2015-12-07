@@ -3,6 +3,7 @@ from operator import add
 
 from dask.core import get_deps
 from toolz import merge, concat
+from tornado.queues import Queue
 import pytest
 
 from distributed.client import WrappedKey
@@ -463,33 +464,34 @@ def test_scheduler(loop):
         done = s.start()
 
         # Test update graph
-        s.scheduler_queue.put_nowait({'op': 'update-graph',
-                                      'dsk': {'x': (inc, 1),
-                                              'y': (inc, 'x'),
-                                              'z': (inc, 'y')},
-                                      'keys': ['z']})
+        s.put({'op': 'update-graph',
+               'dsk': {'x': (inc, 1),
+                       'y': (inc, 'x'),
+                       'z': (inc, 'y')},
+               'keys': ['z']})
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield s.report_queues[0].get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
         assert a.data.get('x') == 2 or b.data.get('x') == 2
 
         # Test erring tasks
-        s.scheduler_queue.put_nowait({'op': 'update-graph',
-                                      'dsk': {'a': (div, 1, 0),
-                                              'b': (inc, 'a')},
-                                      'keys': ['a', 'b']})
+        s.put({'op': 'update-graph',
+               'dsk': {'a': (div, 1, 0),
+                       'b': (inc, 'a')},
+               'keys': ['a', 'b']})
+
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield s.report_queues[0].get()
             if msg['op'] == 'task-erred' and msg['key'] == 'b':
                 break
 
         # Test missing data
-        s.scheduler_queue.put_nowait({'op': 'missing-data',
-                                      'missing': ['z']})
+        s.put({'op': 'missing-data',
+               'missing': ['z']})
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield s.report_queues[0].get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
@@ -497,15 +499,66 @@ def test_scheduler(loop):
         for w in [a, b]:
             if 'z' in w.data:
                 del w.data['z']
-        s.scheduler_queue.put_nowait({'op': 'update-graph',
-                                      'dsk': {'zz': (inc, 'z')},
-                                      'keys': ['zz']})
+        s.put({'op': 'update-graph',
+               'dsk': {'zz': (inc, 'z')},
+               'keys': ['zz']})
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield s.report_queues[0].get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'zz':
                 break
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        s.put({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
+
+
+def test_multi_queues(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+
+        sched, report = Queue(), Queue()
+        s.handle_queues(sched, report)
+
+        msg = yield report.get()
+        assert msg['op'] == 'stream-start'
+
+        # Test update graph
+        sched.put_nowait({'op': 'update-graph',
+                          'dsk': {'x': (inc, 1),
+                                  'y': (inc, 'x'),
+                                  'z': (inc, 'y')},
+                          'keys': ['z']})
+
+        while True:
+            msg = yield s.report_queues[0].get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
+        while True:
+            msg = yield report.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
+
+        slen, rlen = len(s.scheduler_queues), len(s.report_queues)
+        sched2, report2 = Queue(), Queue()
+        s.handle_queues(sched2, report2)
+        assert slen + 1 == len(s.scheduler_queues)
+        assert rlen + 1 == len(s.report_queues)
+
+        sched2.put_nowait({'op': 'update-graph',
+                           'dsk': {'a': (inc, 10)},
+                           'keys': ['a']})
+
+        for q in [report, report2]:
+            while True:
+                msg = yield q.get()
+                if msg['op'] == 'key-in-memory' and msg['key'] == 'a':
+                    break
+
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)

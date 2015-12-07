@@ -30,11 +30,11 @@ def test_diagnostic(loop):
         counter.start(s)
 
         assert counter.count == 0
-        s.scheduler_queue.put_nowait({'op': 'update-graph',
-                                      'dsk': {'x': (inc, 1),
-                                              'y': (inc, 'x'),
-                                              'z': (inc, 'y')},
-                                      'keys': ['z']})
+        s.put({'op': 'update-graph',
+               'dsk': {'x': (inc, 1),
+                       'y': (inc, 'x'),
+                       'z': (inc, 'y')},
+               'keys': ['z']})
 
         while True:
             msg = yield s.report_queue.get()
@@ -43,7 +43,7 @@ def test_diagnostic(loop):
 
         assert counter.count == 3
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        s.put({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -69,7 +69,7 @@ def test_many_Progresss(loop):
                 break
 
         assert all(b.status == 'finished' for b in bars)
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        s.put({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -112,7 +112,7 @@ def test_multiprogress(loop):
 
         assert p.status == 'finished'
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        s.put({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -145,7 +145,7 @@ def test_TextProgressBar(loop, capsys):
 
         assert progress not in s.diagnostics
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        s.put({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -176,7 +176,7 @@ def test_TextProgressBar_error(loop, capsys):
         assert progress.status == 'error'
         assert not progress._timer or not progress._timer.is_alive()
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        s.put({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)

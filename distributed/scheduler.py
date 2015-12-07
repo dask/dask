@@ -452,10 +452,11 @@ def execute_task(task):
 
 class Scheduler(object):
     def __init__(self, center, delete_batch_time=1, loop=None):
-        self.scheduler_queue = Queue()
-        self.report_queue = Queue()
+        self.scheduler_queues = [Queue()]
+        self.report_queues = [Queue()]
         self.delete_queue = Queue()
         self.status = None
+        self.coroutines = []
 
         self.center = coerce_to_rpc(center)
 
@@ -486,6 +487,21 @@ class Scheduler(object):
 
         self.diagnostics = []
 
+        self.handlers = {'update-graph': self.update_graph,
+                         'update-data': self.update_data,
+                         'missing-data': self.mark_missing_data,
+                         'task-missing-data': self.mark_missing_data,
+                         'worker-failed': self.mark_worker_missing,
+                         'release-held-data': self.release_held_data,
+                         'close': self._close}
+
+    def put(self, msg):
+        return self.scheduler_queues[0].put_nowait(msg)
+
+    @property
+    def report_queue(self):
+        return self.report_queues[0]
+
     @gen.coroutine
     def _sync_center(self):
         self.ncores, self.has_what, self.who_has = yield [
@@ -505,32 +521,48 @@ class Scheduler(object):
 
         self.worker_queues = {addr: Queue() for addr in self.ncores}
 
-        self.coroutines = ([self.scheduler(),
-                            self.delete()]
+        for c in self.coroutines:
+            c.cancel()
+
+        self.coroutines = ([self.delete()]
                          + [self.worker(w) for w in self.ncores])
+
+        self.handle_queues(self.scheduler_queues[0], self.report_queues[0])
 
         for cor in self.coroutines:
             if cor.done():
                 raise cor.exception()
 
-        return All(self.coroutines)
+        return self._finished()
+
+    @gen.coroutine
+    def _finished(self):
+        while any(not c.done() for c in self.coroutines):
+            yield All(self.coroutines)
 
     @gen.coroutine
     def _close(self):
-        self.scheduler_queue.put_nowait({'op': 'close'})
-        yield All(self.coroutines)
+        yield self.cleanup()
+        yield self._finished()
         yield self.center.close(close=True)
         self.center.close_streams()
 
     @gen.coroutine
     def cleanup(self):
         """ Clean up queues and coroutines, prepare to stop """
+        if self.status == 'closing':
+            raise gen.Return()
+
+        self.status = 'closing'
         logger.debug("Cleaning up coroutines")
         n = 0
         self.delete_queue.put_nowait({'op': 'close'}); n += 1
         for w, nc in self.ncores.items():
             for i in range(nc):
                 self.worker_queues[w].put_nowait({'op': 'close'}); n += 1
+
+        for s in self.scheduler_queues:
+            s.put_nowait({'op': 'close-stream'}); n += 1
 
         for i in range(n):
             yield self.scheduler_queue.get()
@@ -790,13 +822,21 @@ class Scheduler(object):
                 self.waiting_data, missing)
 
     def report(self, msg):
-        self.report_queue.put_nowait(msg)
+        for q in self.report_queues:
+            q.put_nowait(msg)
 
     def add_diagnostic(self, diagnostic=None):
         self.diagnostics.append(diagnostic)
 
+    def handle_queues(self, scheduler_queue, report_queue):
+        self.scheduler_queues.append(scheduler_queue)
+        self.report_queues.append(report_queue)
+        future = self.handle_scheduler(scheduler_queue, report_queue)
+        self.coroutines.append(future)
+        return future
+
     @gen.coroutine
-    def scheduler(self):
+    def handle_scheduler(self, queue, report):
         """ The scheduler coroutine for dask scheduling
 
         This coroutine manages interactions with all worker cores and with the
@@ -821,35 +861,31 @@ class Scheduler(object):
         ncores: dict {worker: int}
             Mapping worker-identity to number-of-cores
         """
-
         assert (not self.dask) == (not self.dependencies), (self.dask, self.dependencies)
 
         self.heal_state()
 
-        handlers = {'update-graph': self.update_graph,
-                    'update-data': self.update_data,
-                    'missing-data': self.mark_missing_data,
-                    'task-missing-data': self.mark_missing_data,
-                    'worker-failed': self.mark_worker_missing,
-                    'release-held-data': self.release_held_data}
+        if not self.status == 'running':
+            self.status = 'running'
+            self.report({'op': 'start'})
 
-        self.status = 'running'
-        self.report({'op': 'start'})
+        report.put_nowait({'op': 'stream-start'})
         while True:
-            msg = yield self.scheduler_queue.get()
+            msg = yield queue.get()
             logger.debug("scheduler receives message %s", msg)
             op = msg.pop('op')
 
+            if op == 'close-stream':
+                break
+            if op in self.handlers:
+                self.handlers[op](**msg)
+            else:
+                logger.warn("Bad message: op=%s, %s", op, msg)
+
             if op == 'close':
                 break
-            if op in handlers:
-                handlers[op](**msg)
-            else:
-                logger.warn("Bad message: %s", msg)
 
-        logger.debug('Finished scheduling')
-        yield self.cleanup()
-        self.status = 'done'
+        logger.debug('Finished scheduling coroutine')
 
     @gen.coroutine
     def worker(self, ident):
@@ -864,9 +900,8 @@ class Scheduler(object):
                     for i in range(self.ncores[ident])])
         except (IOError, OSError):
             logger.info("Worker failed from closed stream: %s", ident)
-            self.scheduler_queue.put_nowait({'op': 'worker-failed',
-                                             'worker': ident})
-
+            self.put({'op': 'worker-failed',
+                      'worker': ident})
 
     @gen.coroutine
     def worker_core(self, ident, i):
@@ -926,8 +961,8 @@ class Scheduler(object):
         yield worker.close(close=True)
         worker.close_streams()
         if msg.get('report', True):
-            self.scheduler_queue.put_nowait({'op': 'worker-finished',
-                                        'worker': ident})
+            self.put({'op': 'worker-finished',
+                      'worker': ident})
         logger.debug("Close worker core, %s, %d", ident, i)
 
 
@@ -969,7 +1004,7 @@ class Scheduler(object):
         if batch:
             yield self.center.delete_data(keys=batch)
 
-        self.scheduler_queue.put_nowait({'op': 'delete-finished'})
+        self.put({'op': 'delete-finished'})
         logger.debug('Delete finished')
 
 scheduler = 0

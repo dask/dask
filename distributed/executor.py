@@ -181,6 +181,10 @@ class Executor(object):
         self._loop_thread.start()
         sync(self.loop, self._start)
 
+    @property
+    def report_queue(self):
+        return self.scheduler.report_queues[0]
+
     @gen.coroutine
     def _start(self):
         yield self.scheduler._sync_center()
@@ -191,12 +195,8 @@ class Executor(object):
         logger.debug("Started scheduling coroutines. Synchronized")
 
     @property
-    def scheduler_queue(self):
-        return self.scheduler.scheduler_queue
-
-    @property
     def report_queue(self):
-        return self.scheduler.report_queue
+        return self.scheduler.report_queues[0]
 
     def __enter__(self):
         if not self.loop._running:
@@ -221,7 +221,7 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
+        self.loop.add_callback(self.scheduler.put,
                 {'op': 'release-held-data', 'key': key})
 
     @gen.coroutine
@@ -229,7 +229,7 @@ class Executor(object):
         """ Listen to scheduler """
         while True:
             msg = yield self.report_queue.get()
-            if msg['op'] == 'start':
+            if msg['op'] == 'stream-start':
                 self._scheduler_start_event.set()
             if msg['op'] == 'close':
                 break
@@ -253,7 +253,7 @@ class Executor(object):
         """ Send shutdown signal and wait until scheduler completes """
         self.loop.add_callback(self.report_queue.put_nowait,
                                {'op': 'close'})
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
+        self.loop.add_callback(self.scheduler.put,
                                {'op': 'close'})
         if self in _global_executors:
             _global_executors.remove(self)
@@ -263,7 +263,7 @@ class Executor(object):
     def shutdown(self):
         """ Send shutdown signal and wait until scheduler terminates """
         self.loop.add_callback(self.report_queue.put_nowait, {'op': 'close'})
-        self.loop.add_callback(self.scheduler_queue.put_nowait, {'op': 'close'})
+        self.loop.add_callback(self.scheduler.put, {'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
         if self in _global_executors:
@@ -323,7 +323,7 @@ class Executor(object):
             restrictions = {}
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
+        self.loop.add_callback(self.scheduler.put,
                                         {'op': 'update-graph',
                                          'dsk': {key: task},
                                          'keys': [key],
@@ -393,7 +393,7 @@ class Executor(object):
             raise TypeError("Workers must be a list or set of workers or None")
 
         logger.debug("map(%s, ...)", funcname(func))
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
+        self.loop.add_callback(self.scheduler.put,
                                         {'op': 'update-graph',
                                          'dsk': dsk,
                                          'keys': keys,
@@ -418,7 +418,7 @@ class Executor(object):
                 data = yield _gather(self.center, keys)
             except KeyError as e:
                 logger.debug("Couldn't gather keys %s", e)
-                self.loop.add_callback(self.scheduler_queue.put_nowait,
+                self.loop.add_callback(self.scheduler.put,
                                                 {'op': 'missing-data',
                                                  'missing': e.args})
                 for key in e.args:
@@ -461,7 +461,7 @@ class Executor(object):
             remotes = [Future(r.key, self) for r in remotes]
         elif isinstance(remotes, dict):
             remotes = {k: Future(v.key, self) for k, v in remotes.items()}
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
+        self.loop.add_callback(self.scheduler.put,
                                         {'op': 'update-data',
                                          'who_has': who_has,
                                          'nbytes': nbytes})
@@ -499,7 +499,7 @@ class Executor(object):
         flatkeys = list(flatten([keys]))
         futures = {key: Future(key, self) for key in flatkeys}
 
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
+        self.loop.add_callback(self.scheduler.put,
                                         {'op': 'update-graph',
                                          'dsk': dsk,
                                          'keys': flatkeys,
@@ -547,7 +547,7 @@ class Executor(object):
         logger.debug("Sending shutdown signal to workers")
         nannies = yield self.center.nannies()
         for addr in nannies:
-            self.loop.add_callback(self.scheduler_queue.put_nowait,
+            self.loop.add_callback(self.scheduler.put,
                     {'op': 'worker-failed', 'worker': addr, 'heal': False})
 
         logger.debug("Sending kill signal to nannies")
@@ -568,8 +568,8 @@ class Executor(object):
         yield All([nanny.instantiate(close=True) for nanny in nannies])
 
         logger.info("Restarting executor")
-        self.scheduler.report_queue = Queue()
-        self.scheduler.scheduler_queue = Queue()
+        self.scheduler.report_queues[0] = Queue()
+        self.scheduler.scheduler_queues[0] = Queue()
         self.scheduler.delete_queue = Queue()
         yield self._start()
         raise gen.Return(self)

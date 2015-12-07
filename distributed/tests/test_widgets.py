@@ -94,7 +94,7 @@ def test_progressbar_widget(loop):
         assert progress.bar.value == 1.0
         assert 's' in progress.bar.description
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        s.put({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -164,7 +164,7 @@ def test_multi_progressbar_widget(loop):
 
         assert p.status == 'error'
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        s.put({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
