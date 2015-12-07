@@ -18,7 +18,7 @@ from dask.order import order
 
 from .core import rpc, coerce_to_rpc, connect, read, write
 from .client import unpack_remotedata, scatter_to_workers
-from .utils import All, ignoring
+from .utils import All, ignoring, clear_queue
 
 
 logger = logging.getLogger(__name__)
@@ -524,7 +524,7 @@ class Scheduler(object):
 
             self._nanny_coroutines.append(self._nanny_listen(ip, nport))
 
-    def start(self):
+    def start(self, start_queues=True):
         collections = [self.dask, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.in_play, self.keyorder,
                 self.nbytes, self.processing, self.restrictions]
@@ -536,13 +536,17 @@ class Scheduler(object):
 
         self.worker_queues = {addr: Queue() for addr in self.ncores}
 
-        for c in self.coroutines:
-            c.cancel()
+        with ignoring(AttributeError):
+            self._delete_coroutine.cancel()
+        with ignoring(AttributeError):
+            for c in self._worker_coroutines:
+                c.cancel()
 
-        self.coroutines = ([self.delete()]
-                         + [self.worker(w) for w in self.ncores])
+        self._delete_coroutine = self.delete()
+        self._worker_coroutines = [self.worker(w) for w in self.ncores]
 
-        self.handle_queues(self.scheduler_queues[0], self.report_queues[0])
+        if start_queues:
+            self.handle_queues(self.scheduler_queues[0], self.report_queues[0])
 
         for cor in self.coroutines:
             if cor.done():
@@ -1043,5 +1047,31 @@ class Scheduler(object):
         self.update_data(who_has=who_has, nbytes=nbytes)
 
         raise gen.Return(remotes)
+
+    @gen.coroutine
+    def _restart(self):
+        logger.debug("Send shutdown signal to workers")
+
+        for q in self.scheduler_queues + self.report_queues:
+            clear_queue(q)
+
+        for addr in self.nannies:
+            self.mark_worker_missing(worker=addr, heal=False)
+
+        logger.debug("Send kill signal to nannies")
+        nannies = [rpc(ip=ip, port=n_port)
+                   for (ip, w_port), n_port in self.nannies.items()]
+        yield All([nanny.kill() for nanny in nannies])
+
+        while self.ncores:
+            yield gen.sleep(0.01)
+
+        # All quiet
+
+        yield All([nanny.instantiate(close=True) for nanny in nannies])
+        yield self._sync_center()
+        self.start()
+
+        raise gen.Return(self)
 
 scheduler = 0

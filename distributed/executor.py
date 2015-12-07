@@ -534,34 +534,13 @@ class Executor(object):
 
     @gen.coroutine
     def _restart(self):
-        logger.debug("Sending shutdown signal to workers")
-        nannies = yield self.center.nannies()
-        for addr in nannies:
-            self.loop.add_callback(self.scheduler.put,
-                    {'op': 'worker-failed', 'worker': addr, 'heal': False})
-
-        logger.debug("Sending kill signal to nannies")
-        nannies = [rpc(ip=ip, port=n_port)
-                   for (ip, w_port), n_port in nannies.items()]
-        yield All([nanny.kill() for nanny in nannies])
-
-        while self.scheduler.ncores:
-            yield gen.sleep(0.01)
-
-        yield self._shutdown(fast=True)
-
+        yield gen.sleep(0)  # let one cycle pass to allow submit/map calls
+        yield self.scheduler._restart()
         events = [d['event'] for d in self.futures.values()]
         self.futures.clear()
         for e in events:
             e.set()
 
-        yield All([nanny.instantiate(close=True) for nanny in nannies])
-
-        logger.info("Restarting executor")
-        self.scheduler.report_queues[0] = Queue()
-        self.scheduler.scheduler_queues[0] = Queue()
-        self.scheduler.delete_queue = Queue()
-        yield self._start()
         raise gen.Return(self)
 
     def restart(self):

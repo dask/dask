@@ -1264,13 +1264,11 @@ def test_fast_kill(loop):
         L = e.map(sleep, range(10))
 
         try:
-
             start = time()
             yield e._restart()
             assert time() - start < 5
 
             assert all(x.status == 'cancelled' for x in L)
-            c.stop()
 
             x = e.submit(inc, 1)
             result = yield x._result()
