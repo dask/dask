@@ -118,3 +118,18 @@ def test_large_packets(loop):
 def test_connect_sync_timeouts():
     with pytest.raises(socket.timeout):
         s = connect_sync('42.42.245.108', 47248, timeout=0.01)
+
+
+def test_identity(loop):
+    @gen.coroutine
+    def f():
+        server = Server({})
+        server.listen(8887)
+
+        remote = rpc(ip='127.0.0.1', port=8887)
+        a = yield remote.identity()
+        b = yield remote.identity()
+        assert a['type'] == 'Server'
+        assert a['id'] == b['id']
+
+    loop.run_sync(f)
