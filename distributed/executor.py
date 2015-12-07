@@ -188,15 +188,11 @@ class Executor(object):
     @gen.coroutine
     def _start(self):
         yield self.scheduler._sync_center()
-        self._scheduler_start_event = Event()
-        self.coroutines = [self.scheduler.start(), self.report()]
+        start_event = Event()
+        self.coroutines = [self.scheduler.start(), self.report(start_event)]
         _global_executors.add(self)
-        yield self._scheduler_start_event.wait()
+        yield start_event.wait()
         logger.debug("Started scheduling coroutines. Synchronized")
-
-    @property
-    def report_queue(self):
-        return self.scheduler.report_queues[0]
 
     def __enter__(self):
         if not self.loop._running:
@@ -225,12 +221,12 @@ class Executor(object):
                 {'op': 'release-held-data', 'key': key})
 
     @gen.coroutine
-    def report(self):
+    def report(self, start_event):
         """ Listen to scheduler """
         while True:
             msg = yield self.report_queue.get()
             if msg['op'] == 'stream-start':
-                self._scheduler_start_event.set()
+                start_event.set()
             if msg['op'] == 'close':
                 break
             if msg['op'] == 'key-in-memory':
