@@ -97,10 +97,10 @@ def dask_graph(func, location, namenode_host, namenode_port, executor=None,
 
     dsk = {name: (func, path) for name, path in zip(names, paths)}
 
-    executor.scheduler_queue.put_nowait({'op': 'update-graph',
-                                         'dsk': {},
-                                         'keys': [],
-                                         'restrictions': restrictions})
+    executor.send_to_scheduler({'op': 'update-graph',
+                                'dsk': {},
+                                'keys': [],
+                                'restrictions': restrictions})
     return dsk, names
 
 
@@ -117,10 +117,10 @@ def read_csv(location, namenode_host, namenode_port, executor=None, **kwargs):
     names = [(name, i) for i, _ in enumerate(paths)]
 
     restrictions = dict(zip(names, hosts))
-    executor.scheduler_queue.put_nowait({'op': 'update-graph',
-                                         'dsk': {},
-                                         'keys': [],
-                                         'restrictions': restrictions})
+    executor.send_to_scheduler({'op': 'update-graph',
+                                'dsk': {},
+                                'keys': [],
+                                'restrictions': restrictions})
 
     future = executor.submit(fill_kwargs, blocks[0]['path'], **kwargs)
     columns, kwargs = future.result()

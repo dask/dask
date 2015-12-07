@@ -180,6 +180,12 @@ class Executor(object):
         self._loop_thread.start()
         sync(self.loop, self._start)
 
+    def send_to_scheduler(self, msg):
+        if isinstance(self.scheduler, Scheduler):
+            self.loop.add_callback(self.scheduler.put, msg)
+        else:
+            raise NotImplementedError()
+
     @property
     def report_queue(self):
         return self.scheduler.report_queues[0]
@@ -216,8 +222,7 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self.loop.add_callback(self.scheduler.put,
-                {'op': 'release-held-data', 'key': key})
+        self.send_to_scheduler({'op': 'release-held-data', 'key': key})
 
     @gen.coroutine
     def report(self, start_event):
@@ -248,8 +253,7 @@ class Executor(object):
         """ Send shutdown signal and wait until scheduler completes """
         self.loop.add_callback(self.report_queue.put_nowait,
                                {'op': 'close'})
-        self.loop.add_callback(self.scheduler.put,
-                               {'op': 'close'})
+        self.send_to_scheduler({'op': 'close'})
         if _global_executor[0] is self:
             _global_executor[0] = None
         if not fast:
@@ -258,7 +262,7 @@ class Executor(object):
     def shutdown(self):
         """ Send shutdown signal and wait until scheduler terminates """
         self.loop.add_callback(self.report_queue.put_nowait, {'op': 'close'})
-        self.loop.add_callback(self.scheduler.put, {'op': 'close'})
+        self.send_to_scheduler({'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
         if _global_executor[0] is self:
@@ -318,11 +322,10 @@ class Executor(object):
             restrictions = {}
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
-        self.loop.add_callback(self.scheduler.put,
-                                        {'op': 'update-graph',
-                                         'dsk': {key: task},
-                                         'keys': [key],
-                                         'restrictions': restrictions})
+        self.send_to_scheduler({'op': 'update-graph',
+                                'dsk': {key: task},
+                                'keys': [key],
+                                'restrictions': restrictions})
 
         return Future(key, self)
 
@@ -388,11 +391,10 @@ class Executor(object):
             raise TypeError("Workers must be a list or set of workers or None")
 
         logger.debug("map(%s, ...)", funcname(func))
-        self.loop.add_callback(self.scheduler.put,
-                                        {'op': 'update-graph',
-                                         'dsk': dsk,
-                                         'keys': keys,
-                                         'restrictions': restrictions})
+        self.send_to_scheduler({'op': 'update-graph',
+                                'dsk': dsk,
+                                'keys': keys,
+                                'restrictions': restrictions})
 
         return [Future(key, self) for key in keys]
 
@@ -413,9 +415,8 @@ class Executor(object):
                 data = yield _gather(self.center, keys)
             except KeyError as e:
                 logger.debug("Couldn't gather keys %s", e)
-                self.loop.add_callback(self.scheduler.put,
-                                                {'op': 'missing-data',
-                                                 'missing': e.args})
+                self.send_to_scheduler({'op': 'missing-data',
+                                        'missing': e.args})
                 for key in e.args:
                     self.futures[key]['event'].clear()
             else:
@@ -489,11 +490,10 @@ class Executor(object):
         flatkeys = list(flatten([keys]))
         futures = {key: Future(key, self) for key in flatkeys}
 
-        self.loop.add_callback(self.scheduler.put,
-                                        {'op': 'update-graph',
-                                         'dsk': dsk,
-                                         'keys': flatkeys,
-                                         'restrictions': restrictions or {}})
+        self.send_to_scheduler({'op': 'update-graph',
+                                'dsk': dsk,
+                                'keys': flatkeys,
+                                'restrictions': restrictions or {}})
 
         packed = pack_data(keys, futures)
         if raise_on_error:
