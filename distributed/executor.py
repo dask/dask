@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 tokens = (str(uuid.uuid4()) for i in itertools.count(1))
 
 
-_global_executors = set()
+_global_executor = [None]
 
 
 class Future(WrappedKey):
@@ -177,7 +177,7 @@ class Executor(object):
         from threading import Thread
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.daemon = True
-        _global_executors.add(self)
+        _global_executor[0] = self
         self._loop_thread.start()
         sync(self.loop, self._start)
 
@@ -190,7 +190,7 @@ class Executor(object):
         yield self.scheduler._sync_center()
         start_event = Event()
         self.coroutines = [self.scheduler.start(), self.report(start_event)]
-        _global_executors.add(self)
+        _global_executor[0] = self
         yield start_event.wait()
         logger.debug("Started scheduling coroutines. Synchronized")
 
@@ -251,8 +251,8 @@ class Executor(object):
                                {'op': 'close'})
         self.loop.add_callback(self.scheduler.put,
                                {'op': 'close'})
-        if self in _global_executors:
-            _global_executors.remove(self)
+        if _global_executor[0] is self:
+            _global_executor[0] = None
         if not fast:
             yield self.coroutines
 
@@ -262,8 +262,8 @@ class Executor(object):
         self.loop.add_callback(self.scheduler.put, {'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
-        if self in _global_executors:
-            _global_executors.remove(self)
+        if _global_executor[0] is self:
+            _global_executor[0] = None
 
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler
@@ -670,14 +670,10 @@ def default_executor(e=None):
     """ Return an executor if exactly one has started """
     if e:
         return e
-    if len(_global_executors) == 1:
-        return first(_global_executors)
-    if len(_global_executors) == 0:
+    if _global_executor[0]:
+        return _global_executor[0]
+    else:
         raise ValueError("No executors found\n"
                 "Start an executor and point it to the center address\n"
                 "  from distributed import Executor\n"
                 "  executor = Executor('ip-addr-of-center:8787')\n")
-    if len(_global_executors) > 1:
-        raise ValueError("There are %d executors running.\n"
-            "Please specify which executor you want with the executor= \n"
-            "keyword argument." % len(_global_executors))

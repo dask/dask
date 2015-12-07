@@ -15,7 +15,7 @@ from tornado import gen
 from distributed import Center, Worker
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
-        as_completed, tokenize, _global_executors, default_executor)
+        as_completed, tokenize, _global_executor, default_executor)
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
 from distributed.utils_test import cluster, slow, _test_cluster, loop
@@ -947,20 +947,20 @@ def test_get_releases_data(loop):
 
 
 def test_global_executors(loop):
-    assert not _global_executors
+    assert not _global_executor[0]
     with pytest.raises(ValueError):
         default_executor()
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            assert _global_executors == {e}
+            assert _global_executor == [e]
             assert default_executor() is e
             with Executor(('127.0.0.1', c['port']), loop=loop) as f:
-                with pytest.raises(ValueError):
-                    default_executor()
+                assert _global_executor == [f]
+                assert default_executor() is f
                 assert default_executor(e) is e
                 assert default_executor(f) is f
 
-    assert not _global_executors
+    assert not _global_executor[0]
 
 
 def test_exception_on_exception(loop):
