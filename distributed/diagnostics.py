@@ -333,9 +333,10 @@ class ProgressWidget(Progress):
                                    io_loop=self.ipy_loop)
         return errors
 
+    def _ipython_display_(self, **kwargs):
+        return self.widget._ipython_display_(**kwargs)
+
     def _start(self):
-        from IPython.display import display
-        display(self.widget)
         self._update()
         self.pc.start()
 
@@ -381,6 +382,8 @@ class MultiProgressWidget(MultiProgress):
         return errors
 
     _start = ProgressWidget._start
+
+    _ipython_display_ = ProgressWidget._ipython_display_
 
     def stop(self, exception=None, key=None):
         with ignoring(AttributeError):
