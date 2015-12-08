@@ -620,7 +620,7 @@ class Executor(object):
             else:
                 futures.append(arg)
 
-        return tuple(futures)
+        return futures
 
     @gen.coroutine
     def _restart(self):
