@@ -22,6 +22,14 @@ Chat with other users
 
 Review and ask questions on `StackOverflow <http://stackoverflow.com/>`_ using the #dask tag. Participate in dask discussions in the `gitter chat room <https://gitter.im/blaze/dask>`_.
 
+Get paid support
+---------------------
+
+Paid training and support options:
+* `Python training <https://www.continuum.io/training>`_ — online and on-premises, delivered by 
+* `Consulting <https://www.continuum.io/consulting>`_ — leverage our expertise to solve your analytics puzzles.
+* `Paid support plans <https://www.continuum.io//content/support-plan>`_ — helping you get the most out of Python data tools. 
+
 Give us feedback
 ----------------
 
