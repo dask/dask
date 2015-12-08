@@ -103,7 +103,7 @@ class Progress(SchedulerPlugin):
         self.scheduler = scheduler
 
         def f():
-            scheduler.add_diagnostic(self)  # subtle race condition here
+            scheduler.add_plugin(self)  # subtle race condition here
             self.all_keys = dependent_keys(keys, scheduler.who_has,
                     scheduler.processing, scheduler.stacks, scheduler.waiting,
                     complete=complete)
@@ -150,8 +150,8 @@ class Progress(SchedulerPlugin):
             self.stop(exception=exception, key=key)
 
     def stop(self, exception=None, key=None):
-        if self in self.scheduler.diagnostics:
-            self.scheduler.diagnostics.remove(self)
+        if self in self.scheduler.plugins:
+            self.scheduler.plugins.remove(self)
         if exception:
             self.status = 'error'
         else:

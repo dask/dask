@@ -26,7 +26,7 @@ def test_diagnostic(loop):
 
         class Counter(SchedulerPlugin):
             def start(self, scheduler):
-                scheduler.diagnostics.append(self)
+                scheduler.add_plugin(self)
                 self.count = 0
 
             def task_finished(self, scheduler, key, worker, nbytes):
@@ -170,7 +170,7 @@ def test_TextProgressBar(loop, capsys):
         assert progress.keys == set()
         check_bar_completed(capsys)
 
-        assert progress not in s.diagnostics
+        assert progress not in s.plugins
 
         sched.put_nowait({'op': 'close'})
         yield done
@@ -236,7 +236,7 @@ def test_TestProgressBar_sync(loop, capsys):
             p = TextProgressBar([f, g])
             assert p.all_keys == {f.key, g.key}
             p.start()
-            # assert p in e.scheduler.diagnostics
+            # assert p in e.scheduler.plugins
             assert p.scheduler is e.scheduler
             f.result()
             g.result()
