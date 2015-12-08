@@ -16,7 +16,8 @@ import numpy as np
 from toolz import merge, assoc, dissoc
 
 from ..compatibility import StringIO, unicode, range, apply
-from ..utils import textblock, file_size, get_bom, system_encoding
+from ..utils import (textblock, file_size, get_bom, system_encoding,
+                     infer_compression)
 from ..base import tokenize
 from .. import array as da
 from ..async import get_sync
@@ -27,7 +28,7 @@ from .shuffle import set_partition
 
 
 lock = Lock()
-csv_defaults = {'compression': None}
+csv_defaults = {'compression': 'infer'}
 
 
 def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
@@ -156,6 +157,9 @@ def fill_kwargs(fn, **kwargs):
         if not filenames:
             raise ValueError("No files found matching name %s" % fn)
         fn = filenames[0]
+
+    if kwargs['compression'] == 'infer':
+        kwargs['compression'] = infer_compression(fn)
 
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)

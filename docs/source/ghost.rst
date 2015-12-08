@@ -115,8 +115,8 @@ arbitrary function.  This is a good interaction point with Numba_.
 
 If your function does not preserve the shape of the block then you will need to
 provide a ``chunks`` keyword argument.  If your block sizes are regular  then
-this can be a blockshape, e.g. ``(1000, 1000)`` or if your blocks are irregular
-then this must be a full chunks tuple, e.g. ``((1000, 700, 1000), (200, 300))``.
+this can be a blockshape, such as ``(1000, 1000)`` or if your blocks are irregular
+then this must be a full chunks tuple, for example ``((1000, 700, 1000), (200, 300))``.
 
 .. code-block:: python
 

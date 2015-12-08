@@ -12,7 +12,7 @@ system and thinks about syntax trees while Dask is a scheduling system and
 thinks about blocked algorithms and directed acyclic graphs.
 
 Blaze reasons about and optimizes the expressions that a user types in,
-optimizing order of execution, operator fusion, checking type errors, etc..
+optimizing order of execution, operator fusion, checking type errors, and so on.
 Blaze applies these optimizations and then translates to a variety of
 computational systems, passing work off to them.  One such computational system
 is dask.array.

@@ -17,7 +17,7 @@ The ``get`` function
 --------------------
 
 The entry point for all schedulers is a ``get`` function. This takes a dask
-graph, and a key or list of keys to compute.
+graph, and a key or list of keys to compute:
 
 .. code-block:: python
 
@@ -39,7 +39,7 @@ graph, and a key or list of keys to compute.
 Using ``compute`` methods
 -------------------------
 
-Most of the time when working with dask collections you shouldn't need to
+When working with dask collections, you will rarely need to
 interact with scheduler ``get`` functions directly. Each collection has a
 default scheduler, and a built-in ``compute`` method that calculates the output
 of the collection:
@@ -54,17 +54,19 @@ of the collection:
 The compute method takes a number of keywords:
 
 - ``get``: a scheduler ``get`` function, overrides the default for the collection
-- ``**kwargs``: extra keywords to pass on to the scheduler ``get`` function (see :ref:`configuring-schedulers`)
+- ``**kwargs``: extra keywords to pass on to the scheduler ``get`` function.
+
+See also: :ref:`configuring-schedulers`.
 
 
 The ``compute`` function
 ------------------------
 
-Sometimes you want to compute results from multiple dask collections at once.
+You may wish to compute results from multiple dask collections at once.
 Similar to the ``compute`` method on each collection, there is a general
 ``compute`` function that takes multiple collections and returns multiple
 results. This merges the graphs from each collection, so intermediate results
-are shared.
+are shared:
 
 .. code-block:: python
 
@@ -75,7 +77,7 @@ are shared.
 
 Here the ``x + 1`` intermediate was only computed once, while calling
 ``y.compute()`` and ``z.compute()`` would compute it twice. For large graphs
-that share many intermediates this can be a big performance gain.
+that share many intermediates, this can be a big performance gain.
 
 The ``compute`` function works with any dask collection, and is found in
 ``dask.base``. For convenience it has also been imported into the top level
@@ -93,22 +95,22 @@ namespace of each collection.
 Configuring the schedulers
 --------------------------
 
-The dask collections each have a default scheduler
+The dask collections each have a default scheduler:
 
 - ``dask.array`` and ``dask.dataframe`` use the threaded scheduler by default
-- ``dask.bag`` uses the multiprocessing scheduler by default
+- ``dask.bag`` uses the multiprocessing scheduler by default.
 
-For most cases, the default settings are good choices, however sometimes you
-may want to use a different scheduler. There are two ways to do this:
+For most cases, the default settings are good choices. However, sometimes you
+may want to use a different scheduler. There are two ways to do this.
 
-1. Using the ``get`` keyword in the ``compute`` method
+1. Using the ``get`` keyword in the ``compute`` method:
 
     .. code-block:: python
 
         >>> x.sum().compute(get=dask.multiprocessing.get)
 
 2. Using ``set_options``. This can be used either as a context manager, or to
-   set the scheduler globally.
+   set the scheduler globally:
 
     .. code-block:: python
 
@@ -121,7 +123,7 @@ may want to use a different scheduler. There are two ways to do this:
         >>> x.sum().compute()
 
 
-Additionaly, each scheduler may take a few extra keywords specific to that
+Additionally, each scheduler may take a few extra keywords specific to that
 scheduler. For example, the multiprocessing and threaded schedulers each take a
 ``num_workers`` keyword, which sets the number of processes or threads to use
 (defaults to number of cores). This can be set by passing the keyword when
@@ -150,9 +152,9 @@ Debugging the schedulers
 
 Debugging parallel code can be difficult, as conventional tools such as ``pdb``
 don't work well with multiple threads or processes. To get around this when
-debugging, it is recommeneded to use the synchronous scheduler found at
+debugging, we recommend using the synchronous scheduler found at
 ``dask.async.get_sync``. This runs everything serially, allowing it to work
-well with ``pdb``.
+well with ``pdb``:
 
 .. code-block:: python
 
