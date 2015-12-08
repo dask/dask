@@ -1721,3 +1721,9 @@ def test_broadcast_chunks():
     b = ((3, 3,), (5, 5),)
     with pytest.raises(ValueError):
         broadcast_chunks(a, b)
+
+
+def test_chunks_error():
+    x = np.ones((10, 10))
+    with pytest.raises(ValueError):
+        da.from_array(x, chunks=(5,))

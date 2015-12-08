@@ -222,6 +222,13 @@ class Value(base.Base):
         object.__setattr__(self, '_key', name)
         object.__setattr__(self, '_dasks', dasks)
 
+    def __setstate__(self, state):
+        self.__init__(*state)
+        return self
+
+    def __getstate__(self):
+        return (self._key, self._dasks)
+
     @property
     def dask(self):
         return merge(*self._dasks)

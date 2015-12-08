@@ -531,9 +531,15 @@ def map_blocks(func, *args, **kwargs):
         spec = getargspec(func)
     except:
         spec = None
-    if spec and 'block_id' in spec.args:
-        for k in dsk:
-            dsk[k] = (partial(func, block_id=k[1:]),) + dsk[k][1:]
+    if spec:
+        args = spec.args
+        try:
+            args += spec.kwonlyargs
+        except AttributeError:
+            pass
+        if 'block_id' in args:
+            for k in dsk.keys():
+                dsk[k] = (partial(func, block_id=k[1:]),) + dsk[k][1:]
 
     numblocks = list(arrs[0].numblocks)
 
@@ -1405,6 +1411,9 @@ def from_array(x, chunks, name=None, lock=False):
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
+    if len(chunks) != len(x.shape):
+        raise ValueError("Input array has %d dimensions but the supplied "
+                "chunks has only %d dimensions" % (len(x.shape), len(chunks)))
     name = name or 'from-array-' + tokenize(x, chunks)
     dsk = getem(name, chunks)
     if lock is True:

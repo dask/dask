@@ -1,5 +1,6 @@
-from operator import add
 from collections import Iterator, namedtuple
+from operator import add
+import pickle
 from random import random
 
 import pytest
@@ -221,3 +222,10 @@ def test_key_names_include_function_names():
 
 def test_key_names_include_type_names():
     assert value(1).key.startswith('int')
+
+
+def test_value_picklable():
+    x = value(1)
+    y = pickle.loads(pickle.dumps(x))
+    assert x.dask == y.dask
+    assert x._key == y._key
