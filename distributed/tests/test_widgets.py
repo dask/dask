@@ -271,7 +271,6 @@ def test_multibar_complete(loop):
         p = MultiProgressWidget(['e'], scheduler=s, complete=True)
         assert set(concat(p.all_keys.values())) == {'x-1', 'x-2', 'x-3', 'y-1',
                 'y-2', 'e'}
-        p._update()
         assert all(b.value == 1.0 for b in p.bars.values())
         assert p.texts['x'].value == '3 / 3'
         assert p.texts['y'].value == '2 / 2'

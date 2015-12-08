@@ -65,10 +65,10 @@ def test_dependent_keys():
     dependencies, dependeents = get_deps(dsk)
 
     assert dependent_keys(f, who_has, processing, stacks, dependencies,
-            exceptions, complete=False) == {f, e, c, d}
+            exceptions, complete=False)[0] == {f, e, c, d}
 
     assert dependent_keys(f, who_has, processing, stacks, dependencies,
-            exceptions, complete=True) == {a, b, c, d, e, f}
+            exceptions, complete=True)[0] == {a, b, c, d, e, f}
 
 
 def test_many_Progresss(loop):
@@ -229,7 +229,7 @@ def test_TextProgressBar_empty(loop, capsys):
     _test_cluster(f, loop)
 
 
-def test_TestProgressBar_sync(loop, capsys):
+def test_TextProgressBar_sync(loop, capsys):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             f = e.submit(lambda: 1)

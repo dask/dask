@@ -56,6 +56,7 @@ class SchedulerPlugin(object):
 def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions, complete=False):
     """ All keys that need to compute for these keys to finish """
     out = set()
+    errors = set()
     stack = list(keys)
     while stack:
         key = stack.pop()
@@ -63,20 +64,52 @@ def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions, 
             continue
         if not complete and (who_has.get(key) or
                              key in processing or
-                             key in stacks or
-                             key in exceptions):
+                             key in stacks):
             continue
+        if key in exceptions:
+            errors.add(key)
+            if not complete:
+                continue
 
         out.add(key)
         stack.extend(dependencies.get(key, []))
-    return out
+    return out, errors
 
 
 class Progress(SchedulerPlugin):
     """ Tracks progress of a set of keys or futures """
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
         keys = {k.key if hasattr(k, 'key') else k for k in keys}
+        self.setup_pre(keys, scheduler, minimum, dt, complete)
 
+        if self.scheduler.loop._thread_ident == threading.current_thread().ident:
+            errors = self.setup(keys, complete)
+        else:
+            errors = sync(self.scheduler.loop, self.setup, keys, complete)
+
+        for k in errors:
+            self.task_erred(None, k, None, True)
+
+    def setup(self, keys, complete):
+        self.scheduler.add_plugin(self)  # subtle race condition here
+        self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
+                self.scheduler.processing, self.scheduler.stacks,
+                self.scheduler.dependencies, self.scheduler.exceptions,
+                complete=complete)
+        if not complete:
+            self.keys = self.all_keys.copy()
+        else:
+            self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
+                    self.scheduler.processing, self.scheduler.stacks,
+                    self.scheduler.dependencies, self.scheduler.exceptions,
+                    complete=False)
+        self.all_keys.update(keys)
+        self.keys |= errors & self.all_keys
+
+        logger.info("Set up Progress keys")
+        return errors
+
+    def setup_pre(self, keys, scheduler, minimum, dt, complete):
         if scheduler is None:
             executor = default_executor()
             if executor is None:
@@ -92,6 +125,8 @@ class Progress(SchedulerPlugin):
                 raise ValueError("Keys not found: %s" %
                                  str(keys - scheduler.in_play))
 
+        self.scheduler = scheduler
+
         self._start_time = default_timer()
 
         self._minimum = minimum
@@ -100,32 +135,8 @@ class Progress(SchedulerPlugin):
         self.keys = None
 
         self._running = False
-
-        self.scheduler = scheduler
-
-        def f():
-            scheduler.add_plugin(self)  # subtle race condition here
-            self.all_keys = dependent_keys(keys, scheduler.who_has,
-                    scheduler.processing, scheduler.stacks,
-                    scheduler.dependencies, scheduler.exceptions,
-                    complete=complete)
-            if not complete:
-                self.keys = self.all_keys.copy()
-            else:
-                self.keys = dependent_keys(keys, scheduler.who_has,
-                        scheduler.processing, scheduler.stacks,
-                        scheduler.dependencies, scheduler.exceptions,
-                        complete=False)
-            self.all_keys.update(keys)
-
-            logger.info("Set up Progress keys")
-
-        if scheduler.loop._thread_ident == threading.current_thread().ident:
-            f()
-        else:
-            sync(scheduler.loop, f)
-
         self.status = None
+
 
     def start(self):
         self.status = 'running'
@@ -200,15 +211,23 @@ class MultiProgress(Progress):
     {'x': {'x-1', 'x-2', 'x-3'},
      'y': {'y-1', 'y-2'}}
     """
-    def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1,
-            complete=False):
-        Progress.__init__(self, keys, scheduler, minimum, dt, complete=complete)
+    def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1, complete=False):
         self.func = func
+        Progress.__init__(self, keys, scheduler, minimum=minimum, dt=dt,
+                            complete=complete)
+
+    def setup(self, keys, complete):
+        errors = Progress.setup(self, keys, complete)
+
+        # Group keys by func name
         self.keys = valmap(set, groupby(self.func, self.keys))
         self.all_keys = valmap(set, groupby(self.func, self.all_keys))
         for k in self.all_keys:
             if k not in self.keys:
                 self.keys[k] = set()
+
+        logger.info("Set up Progress keys")
+        return errors
 
     def task_finished(self, scheduler, key, worker, nbytes):
         s = self.keys.get(self.func(key), None)
@@ -241,9 +260,9 @@ class MultiProgress(Progress):
 class TextProgressBar(Progress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40,
             complete=False):
-        Progress.__init__(self, keys, scheduler, minimum, dt, complete=complete)
         self._width = width
         self._timer = None
+        Progress.__init__(self, keys, scheduler, minimum, dt, complete=complete)
 
     def _start(self):
         if not self._running:
@@ -294,13 +313,17 @@ class TextProgressBar(Progress):
 
 class ProgressWidget(Progress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
-        Progress.__init__(self, keys, scheduler, minimum, dt, complete=complete)
+        Progress.__init__(self, keys, scheduler, minimum=minimum, dt=dt, complete=complete)
+
+    def setup(self, keys, complete):
+        errors = Progress.setup(self, keys, complete)
         from ipywidgets import FloatProgress
         self.bar = FloatProgress(min=0, max=1, description='0.0s')
         self.widget = self.bar
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
         self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
+        return errors
 
     def _start(self):
         from IPython.display import display
@@ -327,9 +350,17 @@ class ProgressWidget(Progress):
 
 class MultiProgressWidget(MultiProgress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, func=key_split,
-            complete=False):
+                 complete=False):
         MultiProgress.__init__(self, keys, scheduler, func, minimum, dt,
                 complete=complete)
+
+        from tornado.ioloop import IOLoop
+        loop = IOLoop.instance()
+        self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
+
+    def setup(self, keys, complete):
+        errors = MultiProgress.setup(self, keys, complete)
+
         from ipywidgets import FloatProgress, VBox, HTML, HBox
         self.bars = {key: FloatProgress(min=0, max=1, description=key)
                         for key in self.all_keys}
@@ -339,14 +370,13 @@ class MultiProgressWidget(MultiProgress):
         self.time = HTML()
         self.widget = HBox([self.time, VBox([self.boxes[key] for key in
                                             sorted(self.bars, key=str)])])
-        from tornado.ioloop import IOLoop
-        loop = IOLoop.instance()
-        self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
+        return errors
 
     _start = ProgressWidget._start
 
     def stop(self, exception=None, key=None):
-        self.pc.stop()
+        with ignoring(AttributeError):
+            self.pc.stop()
         Progress.stop(self, exception, key)
         self._update()
         for k, v in self.keys.items():
@@ -365,7 +395,7 @@ class MultiProgressWidget(MultiProgress):
             self.time.value = format_time(self.elapsed)
 
 
-def progress(*futures, notebook=None, multi=False):
+def progress(*futures, notebook=None, multi=False, complete=False):
     """ Track progress of futures
 
     This operates differently in the notebook and the console
@@ -385,12 +415,12 @@ def progress(*futures, notebook=None, multi=False):
         notebook = is_kernel()  # often but not always correct assumption
     if notebook:
         if multi:
-            bar = MultiProgressWidget(futures)
+            bar = MultiProgressWidget(futures, complete=complete)
         else:
-            bar = ProgressWidget(futures)
+            bar = ProgressWidget(futures, complete=complete)
         bar.start()
     else:
-        bar = TextProgressBar(futures)
+        bar = TextProgressBar(futures, complete=complete)
         bar.start()
         bar._timer.join()
 
