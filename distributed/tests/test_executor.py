@@ -1345,3 +1345,30 @@ def test_upload_file_exception_sync(loop):
             with tmp_text('myfile.py', 'syntax-error!') as fn:
                 with pytest.raises(SyntaxError):
                     e.upload_file(fn)
+
+
+def test_multiple_executors(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        a = Executor((c.ip, c.port), start=False, loop=loop)
+        yield a._start()
+        b = Executor(scheduler=a.scheduler, start=False, loop=loop)
+        yield b._start()
+
+        x = a.submit(inc, 1)
+        y = b.submit(inc, 2)
+        assert x.executor is a
+        assert y.executor is b
+        xx = yield x._result()
+        yy = yield y._result()
+        assert xx == 2
+        assert yy == 3
+        z = a.submit(add, x, y)
+        assert z.executor is a
+        zz = yield z._result()
+        assert zz == 5
+
+        yield a._shutdown()
+        yield b._shutdown()
+
+    _test_cluster(f, loop)

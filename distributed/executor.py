@@ -19,7 +19,7 @@ from tornado.gen import Return
 from tornado.locks import Event
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError
+from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
 from .client import (WrappedKey, _gather, unpack_remotedata, pack_data)
@@ -158,13 +158,29 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center, start=True, delete_batch_time=1, loop=None):
-        self.center = coerce_to_rpc(center)
+    def __init__(self, center=None, scheduler=None, start=True, delete_batch_time=1, loop=None):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
-        self.scheduler = Scheduler(center, delete_batch_time=delete_batch_time,
-                                   loop=loop)
+        self.scheduler_queue = Queue()
+        self.report_queue = Queue()
+
+        if scheduler:
+            if isinstance(scheduler, Scheduler):
+                self.scheduler = scheduler
+                if not center:
+                    self.center = scheduler.center
+            else:
+                raise NotImplementedError()
+                # self.scheduler = coerce_to_rpc(scheduler)
+        else:
+            self.scheduler = Scheduler(center, loop=loop,
+                                       delete_batch_time=delete_batch_time)
+        if center:
+            self.center = coerce_to_rpc(center)
+
+        if not self.center:
+            raise ValueError("Provide Center address")
 
         if start:
             self.start()
@@ -182,19 +198,21 @@ class Executor(object):
 
     def send_to_scheduler(self, msg):
         if isinstance(self.scheduler, Scheduler):
-            self.loop.add_callback(self.scheduler.put, msg)
+            self.loop.add_callback(self.scheduler_queue.put_nowait, msg)
         else:
             raise NotImplementedError()
 
-    @property
-    def report_queue(self):
-        return self.scheduler.report_queues[0]
-
     @gen.coroutine
     def _start(self):
-        yield self.scheduler._sync_center()
+        if self.scheduler.status != 'running':
+            yield self.scheduler._sync_center()
+            self.scheduler.start()
+
         start_event = Event()
-        self.coroutines = [self.scheduler.start(), self.report(start_event)]
+        self.coroutines = [
+                self.scheduler.handle_queues(self.scheduler_queue, self.report_queue),
+                self.report(start_event)]
+
         _global_executor[0] = self
         yield start_event.wait()
         logger.debug("Started scheduling coroutines. Synchronized")
@@ -228,7 +246,14 @@ class Executor(object):
     def report(self, start_event):
         """ Listen to scheduler """
         while True:
-            msg = yield self.report_queue.get()
+            if isinstance(self.scheduler, Scheduler):
+                msg = yield self.report_queue.get()
+            elif isinstance(self.scheduler, IOStream):
+                raise NotImplementedError()
+                msg = yield read(self.scheduler)
+            else:
+                raise NotImplementedError()
+
             if msg['op'] == 'stream-start':
                 start_event.set()
             if msg['op'] == 'close':
