@@ -9,7 +9,7 @@ from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
         div, dec)
 from distributed.utils import All
 from distributed.diagnostics import (Progress, TextProgressBar, SchedulerPlugin,
-        ProgressWidget, MultiProgress)
+        ProgressWidget, MultiProgress, progress)
 
 
 def test_diagnostic(loop):
@@ -236,6 +236,16 @@ def test_progressbar_sync(loop, capsys):
 def test_Progress_no_scheduler():
     with pytest.raises(ValueError):
         Progress([])
+
+
+def test_progress_function(loop, capsys):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            f = e.submit(lambda: 1)
+            g = e.submit(lambda: 2)
+
+            progress([[f], [[g]]], notebook=False)
+            check_bar_completed(capsys)
 
 
 def check_bar_completed(capsys, width=40):

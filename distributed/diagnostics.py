@@ -4,6 +4,7 @@ import threading
 import time
 from timeit import default_timer
 
+import dask
 from toolz import valmap, groupby
 from tornado.ioloop import PeriodicCallback, IOLoop
 
@@ -265,7 +266,7 @@ class ProgressWidget(Progress):
         self.widget = self.bar
         from zmq.eventloop.ioloop import IOLoop
         loop = IOLoop.instance()
-        self.pc = PeriodicCallback(self._update, self._dt, io_loop=loop)
+        self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
 
     def _start(self):
         from IPython.display import display
@@ -301,7 +302,7 @@ class MultiProgressWidget(MultiProgress):
         self.time = HTML()
         self.widget = HBox([self.time, VBox([self.boxes[key] for key in
                                             sorted(self.bars, key=str)])])
-        from zmq.eventloop.ioloop import IOLoop
+        from tornado.ioloop import IOLoop
         loop = IOLoop.instance()
         self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
 
@@ -340,6 +341,7 @@ def progress(*futures, notebook=None, multi=True):
     >>> progress(futures)  # doctest: +SKIP
     [########################################] | 100% Completed |  1.7s
     """
+    futures = list(dask.core.flatten(list(futures)))
     if not isinstance(futures, (set, list)):
         futures = [futures]
     if notebook is None:
@@ -349,10 +351,11 @@ def progress(*futures, notebook=None, multi=True):
             bar = MultiProgressWidget(futures)
         else:
             bar = ProgressWidget(futures)
+        bar.start()
     else:
         bar = TextProgressBar(futures)
+        bar.start()
         bar._timer.join()
-    bar.start()
 
 
 def is_kernel():
