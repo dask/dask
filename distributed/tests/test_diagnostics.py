@@ -1,15 +1,18 @@
+from operator import add
 import pytest
 import sys
 from tornado import gen
 from tornado.queues import Queue
 
+from dask.core import get_deps
 from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
         div, dec)
 from distributed.utils import All
+from distributed.utils_test import inc
 from distributed.diagnostics import (Progress, TextProgressBar, SchedulerPlugin,
-        ProgressWidget, MultiProgress, progress)
+        ProgressWidget, MultiProgress, progress, dependent_keys)
 
 
 def test_diagnostic(loop):
@@ -50,6 +53,21 @@ def test_diagnostic(loop):
         yield done
 
     _test_cluster(f, loop)
+
+
+def test_dependent_keys():
+    a, b, c, d, e, f, g = 'abcdefg'
+    who_has = {a: [1], b: [1]}
+    processing = {'alice': {c}}
+    stacks = {'bob': [d]}
+    dsk = {a: 1, b: 2, c: (add, a, b), d: (inc, a), e: (add, c, d), f: (inc, e)}
+    dependencies, dependeents = get_deps(dsk)
+
+    assert dependent_keys(f, who_has, processing, stacks, dependencies,
+            complete=False) == {f, e, c, d}
+
+    assert dependent_keys(f, who_has, processing, stacks, dependencies,
+            complete=True) == {a, b, c, d, e, f}
 
 
 def test_many_Progresss(loop):

@@ -53,20 +53,21 @@ class SchedulerPlugin(object):
         pass
 
 
-def incomplete_keys(keys, scheduler):
+def dependent_keys(keys, who_has, processing, stacks, dependencies, complete=False):
     """ All keys that need to compute for these keys to finish """
     out = set()
     stack = list(keys)
     while stack:
         key = stack.pop()
-        if (key in out or
-            scheduler.who_has.get(key) or
-            key in scheduler.processing or
-            key in scheduler.stacks):
+        if key in out:
+            continue
+        if not complete and (who_has.get(key) or
+                             key in processing or
+                             key in stacks):
             continue
 
         out.add(key)
-        stack.extend(scheduler.waiting.get(key, []))
+        stack.extend(dependencies.get(key, []))
     return out
 
 
@@ -87,8 +88,8 @@ class Progress(SchedulerPlugin):
         while not keys.issubset(scheduler.dask):
             time.sleep(0.01)
             if time.time() > start + 1:
-                raise ValueError("Keys not found: %s" % str(keys -
-                    scheduler.in_play))
+                raise ValueError("Keys not found: %s" %
+                                 str(keys - scheduler.in_play))
 
         self._start_time = default_timer()
 
@@ -103,7 +104,8 @@ class Progress(SchedulerPlugin):
 
         def f():
             scheduler.add_diagnostic(self)  # subtle race condition here
-            self.keys = incomplete_keys(keys, scheduler)
+            self.keys = dependent_keys(keys, scheduler.who_has,
+                    scheduler.processing, scheduler.stacks, scheduler.waiting)
             self.all_keys = self.keys.copy()
             self.all_keys.update(keys)
 
@@ -270,8 +272,8 @@ class ProgressWidget(Progress):
 
     def _start(self):
         from IPython.display import display
-        self._update()
         display(self.widget)
+        self._update()
         self.pc.start()
 
     def stop(self, exception=None, key=None):
@@ -328,7 +330,7 @@ class MultiProgressWidget(MultiProgress):
             self.time.value = format_time(self.elapsed)
 
 
-def progress(*futures, notebook=None, multi=True):
+def progress(*futures, notebook=None, multi=False):
     """ Track progress of futures
 
     This operates differently in the notebook and the console
