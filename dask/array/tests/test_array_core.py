@@ -1559,6 +1559,18 @@ def test_point_slicing_with_full_slice():
         assert result.shape[0] == k
 
 
+def test_slice_with_floats():
+    d = da.ones((5,), chunks=(3,))
+    with pytest.raises(IndexError):
+        d[1.5]
+    with pytest.raises(IndexError):
+        d[0:1.5]
+    with pytest.raises(IndexError):
+        d[[1, 1.5]]
+
+
+
+
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
     assert raises(IndexError, lambda: d.vindex[0])
