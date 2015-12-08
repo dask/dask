@@ -184,7 +184,7 @@ def key_split(s):
     >>> key_split('x-1')
     'x'
     >>> key_split('x-1-2-3')
-    'x-1-2'
+    'x'
     >>> key_split(('x-2', 1))
     'x'
     >>> key_split(None)
@@ -193,7 +193,7 @@ def key_split(s):
     if isinstance(s, tuple):
         return key_split(s[0])
     try:
-        return s.rsplit('-', 1)[0]
+        return s.split('-', 1)[0]
     except:
         return 'Other'
 
