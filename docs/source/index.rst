@@ -2,10 +2,6 @@
 Dask
 ====
 
-http://continuum.io
-
-support@continuum.io
-
 **Dask enables parallel computing** through task scheduling and blocked algorithms.
 This allows developers to write complex parallel algorithms and execute them
 in parallel either on a modern multi-core machine or on a distributed cluster.
