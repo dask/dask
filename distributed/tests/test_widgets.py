@@ -62,6 +62,7 @@ def record_display(*args):
 
 import pytest
 from tornado import gen
+from tornado.queues import Queue
 
 from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
@@ -78,6 +79,8 @@ def test_progressbar_widget(loop):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x': (inc, 1),
                             'y': (inc, 'x'),
@@ -86,7 +89,7 @@ def test_progressbar_widget(loop):
         progress = ProgressWidget(['z'], scheduler=s)
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
@@ -94,7 +97,7 @@ def test_progressbar_widget(loop):
         assert progress.bar.value == 1.0
         assert 's' in progress.bar.description
 
-        s.put({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -106,6 +109,8 @@ def test_multi_progressbar_widget(loop):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x-1': (inc, 1),
                             'x-2': (inc, 'x-1'),
@@ -123,7 +128,7 @@ def test_multi_progressbar_widget(loop):
                           'e': {'e'}}
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'x-3':
                 break
 
@@ -140,7 +145,7 @@ def test_multi_progressbar_widget(loop):
         assert '0 / 1' in p.texts['e'].value
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'y-2':
                 break
 
@@ -154,7 +159,7 @@ def test_multi_progressbar_widget(loop):
                           'e': {'e'}}
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'task-erred' and msg['key'] == 'e':
                 break
 
@@ -164,7 +169,7 @@ def test_multi_progressbar_widget(loop):
 
         assert p.status == 'error'
 
-        s.put({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
