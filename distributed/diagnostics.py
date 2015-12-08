@@ -128,10 +128,10 @@ class Progress(SchedulerPlugin):
         self.status = 'running'
         logger.info("Start Progress Plugin")
         self._start()
-        if not self.keys:
-            self.stop()
-        elif all(k in self.scheduler.exceptions_blame for k in self.keys):
+        if any(k in self.scheduler.exceptions_blame for k in self.all_keys):
             self.stop(True)
+        elif not self.keys:
+            self.stop()
 
     def _start(self):
         pass
@@ -306,11 +306,12 @@ class ProgressWidget(Progress):
     def stop(self, exception=None, key=None):
         Progress.stop(self, exception, key=None)
         self.pc.stop()
+        self._update()
         if exception:
             self.bar.bar_style = 'danger'
+            self.bar.value = 1.0
         elif not self.keys:
             self.bar.bar_style = 'success'
-        self._update()
 
     def _update(self):
         ntasks = len(self.all_keys)

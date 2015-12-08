@@ -71,8 +71,6 @@ from distributed.utils_test import (cluster, _test_cluster, loop, inc,
         div, dec, throws)
 from distributed.diagnostics import (ProgressWidget, MultiProgressWidget)
 
-def bad(*args):
-    raise Exception()
 
 def test_progressbar_widget(loop):
     @gen.coroutine
@@ -118,7 +116,7 @@ def test_multi_progressbar_widget(loop):
                             'x-3': (inc, 'x-2'),
                             'y-1': (dec, 'x-3'),
                             'y-2': (dec, 'y-1'),
-                            'e': (bad, 'y-2'),
+                            'e': (throws, 'y-2'),
                             'other': (inc, 123)},
                        keys=['e'])
 
@@ -188,7 +186,7 @@ def test_multi_progressbar_widget_after_close(loop):
                             'x-3': (inc, 'x-2'),
                             'y-1': (dec, 'x-3'),
                             'y-2': (dec, 'y-1'),
-                            'e': (bad, 'y-2'),
+                            'e': (throws, 'y-2'),
                             'other': (inc, 123)},
                        keys=['e'])
 
@@ -226,3 +224,24 @@ def test_values(loop):
             p.start()
             assert p.status == 'error'
             assert p.bars[p.func(x.key)].value == 1.0
+
+
+def test_progressbar_done(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            L = [e.submit(inc, i) for i in range(5)]
+            wait(L)
+            p = ProgressWidget(L)
+            p.start()
+            assert p.status == 'finished'
+            assert p.bar.value == 1.0
+            assert p.bar.bar_style == 'success'
+
+            f = e.submit(throws, L)
+            wait([f])
+
+            p = ProgressWidget([f])
+            p.start()
+            assert p.status == 'error'
+            assert p.bar.value == 1.0
+            assert p.bar.bar_style == 'danger'
