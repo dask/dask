@@ -1372,3 +1372,43 @@ def test_multiple_executors(loop):
         yield b._shutdown()
 
     _test_cluster(f, loop)
+
+
+def test_multiple_executors_restart(loop):
+    from distributed import Nanny, rpc
+    c = Center('127.0.0.1', 8006)
+    a = Nanny('127.0.0.1', 8007, 8008, '127.0.0.1', 8006, ncores=2)
+    b = Nanny('127.0.0.1', 8009, 8010, '127.0.0.1', 8006, ncores=2)
+    c.listen(c.port)
+    @gen.coroutine
+    def f():
+        yield a._start()
+        yield b._start()
+        while len(c.ncores) < 2:
+            yield gen.sleep(0.01)
+
+        try:
+            e1 = Executor((c.ip, c.port), start=False, loop=loop)
+            yield e1._start()
+            e2 = Executor(scheduler=e1.scheduler, start=False, loop=loop)
+            yield e2._start()
+
+            x = e1.submit(inc, 1)
+            y = e2.submit(inc, 2)
+            xx = yield x._result()
+            yy = yield y._result()
+            assert xx == 2
+            assert yy == 3
+
+            yield e1._restart()
+
+            assert x.cancelled()
+            assert y.cancelled()
+        finally:
+            yield a._close()
+            yield b._close()
+            yield e1._shutdown(fast=True)
+            yield e2._shutdown(fast=True)
+            c.stop()
+
+    loop.run_sync(f)

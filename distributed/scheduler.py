@@ -498,7 +498,7 @@ class Scheduler(object):
                          'task-missing-data': self.mark_missing_data,
                          'worker-failed': self.mark_worker_missing,
                          'release-held-data': self.release_held_data,
-                         'close': self._close}
+                         'restart': self._restart}
 
     def put(self, msg):
         return self.scheduler_queues[0].put_nowait(msg)
@@ -899,8 +899,12 @@ class Scheduler(object):
 
             if op == 'close-stream':
                 break
-            if op in self.handlers:
-                self.handlers[op](**msg)
+            elif op == 'close':
+               self._close()
+            elif op in self.handlers:
+                result = self.handlers[op](**msg)
+                if isinstance(result, gen.Future):
+                    yield result
             else:
                 logger.warn("Bad message: op=%s, %s", op, msg)
 
@@ -1075,6 +1079,6 @@ class Scheduler(object):
         yield self._sync_center()
         self.start()
 
-        raise gen.Return(self)
+        self.report({'op': 'restart'})
 
 scheduler = 0

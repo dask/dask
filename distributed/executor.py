@@ -26,7 +26,7 @@ from .client import (WrappedKey, _gather, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
 from .sizeof import sizeof
-from .utils import All, sync, funcname
+from .utils import All, sync, funcname, ignoring
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +272,14 @@ class Executor(object):
                     self.futures[msg['key']]['exception'] = msg['exception']
                     self.futures[msg['key']]['traceback'] = msg['traceback']
                     self.futures[msg['key']]['event'].set()
+            if msg['op'] == 'restart':
+                logger.info("Receive restart signal from scheduler")
+                events = [d['event'] for d in self.futures.values()]
+                self.futures.clear()
+                for e in events:
+                    e.set()
+                with ignoring(AttributeError):
+                    self._restart_event.set()
 
     @gen.coroutine
     def _shutdown(self, fast=False):
@@ -556,12 +564,9 @@ class Executor(object):
 
     @gen.coroutine
     def _restart(self):
-        yield gen.sleep(0)  # let one cycle pass to allow submit/map calls
-        yield self.scheduler._restart()
-        events = [d['event'] for d in self.futures.values()]
-        self.futures.clear()
-        for e in events:
-            e.set()
+        self.send_to_scheduler({'op': 'restart'})
+        self._restart_event = Event()
+        yield self._restart_event.wait()
 
         raise gen.Return(self)
 
