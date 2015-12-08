@@ -345,7 +345,7 @@ class ProgressWidget(Progress):
         return self.widget._ipython_display_(**kwargs)
 
     def _start(self):
-        self._update()
+        return self._update()
 
     def stop(self, exception=None, key=None):
         Progress.stop(self, exception, key=None)
@@ -398,9 +398,11 @@ class MultiProgressWidget(MultiProgress):
 
         clear_errors(errors)
 
-    _start = ProgressWidget._start
+    def _start(self):
+        return self._update()
 
-    _ipython_display_ = ProgressWidget._ipython_display_
+    def _ipython_display_(self, **kwargs):
+        return self.widget._ipython_display_(**kwargs)
 
     def stop(self, exception=None, key=None):
         with ignoring(AttributeError):
@@ -423,8 +425,18 @@ class MultiProgressWidget(MultiProgress):
             self.time.value = format_time(self.elapsed)
 
 
-def progress(*futures, notebook=None, multi=False, complete=False):
+def progress(*futures, **kwargs):
     """ Track progress of futures
+
+    Parameters
+    ----------
+    notebook: bool (optional)
+        Running in the notebook or not (defaults to guess)
+    multi: bool (optional)
+        Track different functions independently (defaults to True)
+    complete: bool (optional)
+        Track all keys (True) or only keys that have not yet run (False)
+        (defaults to True)
 
     This operates differently in the notebook and the console
 
@@ -436,6 +448,11 @@ def progress(*futures, notebook=None, multi=False, complete=False):
     >>> progress(futures)  # doctest: +SKIP
     [########################################] | 100% Completed |  1.7s
     """
+    notebook = kwargs.pop('notebook', None)
+    multi = kwargs.pop('multi', True)
+    complete = kwargs.pop('complete', True)
+    assert not kwargs
+
     futures = list(dask.core.flatten(list(futures)))
     if not isinstance(futures, (set, list)):
         futures = [futures]

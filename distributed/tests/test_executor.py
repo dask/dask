@@ -1,3 +1,4 @@
+from __future__ import division
 from operator import add, sub
 
 from collections import Iterator
