@@ -6,6 +6,8 @@
 
 [Erik Welch](http://github.com/eriknw/)
 
+[Erkka Rinne](https://github.com/ererkka)
+
 [Jim Crist](http://jcrist.github.io/)
 
 [John Kirkham](https://github.com/jakirkham)
