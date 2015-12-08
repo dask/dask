@@ -3,20 +3,26 @@ from __future__ import absolute_import, division, print_function
 from toolz import curry, pipe, partial
 from .optimize import fuse, cull
 import multiprocessing
-import pickle
-import cloudpickle
-import dill
 from .async import get_async # TODO: get better get
 from .context import _globals
-from sys import getrecursionlimit, setrecursionlimit
+from sys import version
+
+if version < '3':
+    import copy_reg as copyreg
+else:
+    import copyreg
+
+def _reduce_method_descriptor(m):
+    return getattr, (m.__objclass__, m.__name__)
+
+# type(set.union) is used as a proxy to <class 'method_descriptor'>
+copyreg.pickle(type(set.union), _reduce_method_descriptor)
+
+import pickle
+import cloudpickle
 
 def _dumps(x):
-    try:
-        return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-    except:
-        # note that the dill import should make pickle work for
-        # method_descriptor objects in python 2.x
-        return pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+    return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
 
 _loads = pickle.loads
 
