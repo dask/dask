@@ -25,11 +25,17 @@ def sanitize_index(ind):
     [1, 2]
     >>> type(sanitize_index(np.int32(0)))
     <type 'int'>
+    >>> sanitize_index(1.0)
+    1
+    >>> sanitize_index(0.5)
+    Traceback (most recent call last):
+    ...
+    IndexError: Bad index.  Must be integer-like: 0.5
     """
     if isinstance(ind, Number):
         ind2 = int(ind)
         if ind2 != ind:
-            raise IndexError("Bad index.  Must be integer-like: ", ind)
+            raise IndexError("Bad index.  Must be integer-like: %s" % ind)
         else:
             return ind2
     if isinstance(ind, np.ndarray):

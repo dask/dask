@@ -2466,12 +2466,13 @@ def unravel(array, shape):
 
 @wraps(np.reshape)
 def reshape(array, shape):
-    shape = tuple(shape)
+    from .slicing import sanitize_index
+    shape = tuple(map(sanitize_index, shape))
     known_sizes = [s for s in shape if s != -1]
     if len(known_sizes) < len(shape):
         if len(known_sizes) - len(shape) > 1:
             raise ValueError('can only specify one unknown dimension')
-        missing_size = int(array.size / np.prod(known_sizes))
+        missing_size = sanitize_index(array.size / np.prod(known_sizes))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
     if np.prod(shape) != array.size:
