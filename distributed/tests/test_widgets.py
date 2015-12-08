@@ -245,3 +245,38 @@ def test_progressbar_done(loop):
             assert p.status == 'error'
             assert p.bar.value == 1.0
             assert p.bar.bar_style == 'danger'
+
+
+def test_multibar_complete(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port), loop=loop)
+        yield s._sync_center()
+        done = s.start()
+
+        s.update_graph(dsk={'x-1': (inc, 1),
+                            'x-2': (inc, 'x-1'),
+                            'x-3': (inc, 'x-2'),
+                            'y-1': (dec, 'x-3'),
+                            'y-2': (dec, 'y-1'),
+                            'e': (throws, 'y-2'),
+                            'other': (inc, 123)},
+                       keys=['e'])
+
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'task-erred' and msg['key'] == 'e':
+                break
+
+        p = MultiProgressWidget(['e'], scheduler=s, complete=True)
+        assert set(concat(p.all_keys.values())) == {'x-1', 'x-2', 'x-3', 'y-1',
+                'y-2', 'e'}
+        p._update()
+        assert all(b.value == 1.0 for b in p.bars.values())
+        assert p.texts['x'].value == '3 / 3'
+        assert p.texts['y'].value == '2 / 2'
+
+        s.scheduler_queue.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)

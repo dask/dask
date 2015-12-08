@@ -53,7 +53,7 @@ class SchedulerPlugin(object):
         pass
 
 
-def dependent_keys(keys, who_has, processing, stacks, dependencies, complete=False):
+def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions, complete=False):
     """ All keys that need to compute for these keys to finish """
     out = set()
     stack = list(keys)
@@ -63,7 +63,8 @@ def dependent_keys(keys, who_has, processing, stacks, dependencies, complete=Fal
             continue
         if not complete and (who_has.get(key) or
                              key in processing or
-                             key in stacks):
+                             key in stacks or
+                             key in exceptions):
             continue
 
         out.add(key)
@@ -105,13 +106,15 @@ class Progress(SchedulerPlugin):
         def f():
             scheduler.add_plugin(self)  # subtle race condition here
             self.all_keys = dependent_keys(keys, scheduler.who_has,
-                    scheduler.processing, scheduler.stacks, scheduler.waiting,
+                    scheduler.processing, scheduler.stacks,
+                    scheduler.dependencies, scheduler.exceptions,
                     complete=complete)
             if not complete:
                 self.keys = self.all_keys.copy()
             else:
                 self.keys = dependent_keys(keys, scheduler.who_has,
-                        scheduler.processing, scheduler.stacks, scheduler.waiting,
+                        scheduler.processing, scheduler.stacks,
+                        scheduler.dependencies, scheduler.exceptions,
                         complete=False)
             self.all_keys.update(keys)
 
@@ -197,8 +200,9 @@ class MultiProgress(Progress):
     {'x': {'x-1', 'x-2', 'x-3'},
      'y': {'y-1', 'y-2'}}
     """
-    def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1):
-        Progress.__init__(self, keys, scheduler, minimum, dt)
+    def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1,
+            complete=False):
+        Progress.__init__(self, keys, scheduler, minimum, dt, complete=complete)
         self.func = func
         self.keys = valmap(set, groupby(self.func, self.keys))
         self.all_keys = valmap(set, groupby(self.func, self.all_keys))
@@ -235,8 +239,9 @@ class MultiProgress(Progress):
 
 
 class TextProgressBar(Progress):
-    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40):
-        Progress.__init__(self, keys, scheduler, minimum, dt)
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40,
+            complete=False):
+        Progress.__init__(self, keys, scheduler, minimum, dt, complete=complete)
         self._width = width
         self._timer = None
 
@@ -288,8 +293,8 @@ class TextProgressBar(Progress):
 
 
 class ProgressWidget(Progress):
-    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
-        Progress.__init__(self, keys, scheduler, minimum, dt)
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
+        Progress.__init__(self, keys, scheduler, minimum, dt, complete=complete)
         from ipywidgets import FloatProgress
         self.bar = FloatProgress(min=0, max=1, description='0.0s')
         self.widget = self.bar
@@ -321,8 +326,10 @@ class ProgressWidget(Progress):
 
 
 class MultiProgressWidget(MultiProgress):
-    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, func=key_split):
-        MultiProgress.__init__(self, keys, scheduler, func, minimum, dt)
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, func=key_split,
+            complete=False):
+        MultiProgress.__init__(self, keys, scheduler, func, minimum, dt,
+                complete=complete)
         from ipywidgets import FloatProgress, VBox, HTML, HBox
         self.bars = {key: FloatProgress(min=0, max=1, description=key)
                         for key in self.all_keys}
