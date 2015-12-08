@@ -10,10 +10,11 @@ import os
 import time
 import uuid
 
-from dask.base import tokenize, normalize_token
+import dask
+from dask.base import tokenize, normalize_token, Base
 from dask.core import flatten, quote
 from dask.compatibility import apply
-from toolz import first, groupby, valmap
+from toolz import first, groupby, valmap, merge
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
@@ -561,6 +562,65 @@ class Executor(object):
             raise result
         else:
             return result
+
+    def compute(self, *args, **kwargs):
+        """ Compute dask collections on cluster
+
+        Parameters
+        ----------
+        args: iterable of dask objects
+            Collections like dask.array or dataframe or dask.value objects
+        sync: bool (optional)
+            Returns Futures if False (default) or concrete values if True
+
+        Returns
+        -------
+        Tuple of Futures or concrete values
+
+        Examples
+        --------
+
+        >>> from dask import do, value
+        >>> from operator import add
+        >>> x = dask.do(add)(1, 2)
+        >>> y = dask.do(add)(x, x)
+        >>> xx, yy = executor.compute(x, y)  # doctest: +SKIP
+        >>> xx  # doctest: +SKIP
+        <Future: status: finished, key: add-8f6e709446674bad78ea8aeecfee188e>
+        >>> xx.result()  # doctest: +SKIP
+        3
+        >>> yy.result()  # doctest: +SKIP
+        6
+        """
+        sync = kwargs.pop('sync', False)
+        assert not kwargs
+        if sync:
+            return dask.compute(*args, get=self.get)
+
+        variables = [a for a in args if isinstance(a, Base)]
+
+        groups = groupby(lambda x: x._optimize, variables)
+        dsk = merge([opt(merge([v.dask for v in val]),
+                         [v._keys() for v in val])
+                    for opt, val in groups.items()])
+        names = ['finalize-%s' % tokenize(v) for v in variables]
+        dsk2 = {name: (v._finalize, v, v._keys()) for name, v in zip(names, variables)}
+
+        self.loop.add_callback(self.scheduler_queue.put_nowait,
+                                {'op': 'update-graph',
+                                'dsk': merge(dsk, dsk2),
+                                'keys': names})
+
+        i = 0
+        futures = []
+        for arg in args:
+            if isinstance(arg, Base):
+                futures.append(Future(names[i], self))
+                i += 1
+            else:
+                futures.append(arg)
+
+        return tuple(futures)
 
     @gen.coroutine
     def _restart(self):

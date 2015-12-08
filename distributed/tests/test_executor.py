@@ -18,19 +18,8 @@ from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize, _global_executor, default_executor)
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
-from distributed.utils_test import cluster, slow, _test_cluster, loop
-
-
-def inc(x):
-    return x + 1
-
-
-def div(x, y):
-    return x / y
-
-
-def throws(x):
-    raise Exception()
+from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
+        dec, div, throws)
 
 
 def test_submit(loop):
@@ -1412,3 +1401,38 @@ def test_multiple_executors_restart(loop):
             c.stop()
 
     loop.run_sync(f)
+
+
+def test_async_compute(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
+
+        from dask.imperative import do, value
+        x = value(1)
+        y = do(inc)(x)
+        z = do(dec)(x)
+
+        yy, zz, aa = e.compute(y, z, 3, sync=False)
+        assert isinstance(yy, Future)
+        assert isinstance(zz, Future)
+        assert aa == 3
+
+        result = yield e._gather([yy, zz])
+        assert result == [2, 0]
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
+
+
+def test_sync_compute(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port'])) as e:
+            from dask.imperative import do, value
+            x = value(1)
+            y = do(inc)(x)
+            z = do(dec)(x)
+
+            yy, zz = e.compute(y, z, sync=True)
+            assert (yy, zz) == (2, 0)
