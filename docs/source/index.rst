@@ -109,9 +109,10 @@ help make debugging and profiling graph execution easier.
    inspect.rst
    diagnostics.rst
 
-**Other**
+**Help & reference**
 
 * :doc:`install`
+* :doc: `glossary`
 * :doc:`faq`
 * :doc:`spark`
 
@@ -121,6 +122,7 @@ help make debugging and profiling graph execution easier.
    :caption: More information
 
    install.rst
+   glossary.rst
    faq.rst
    spark.rst
    caching.rst
