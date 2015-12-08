@@ -175,7 +175,7 @@ class Executor(object):
                 raise NotImplementedError()
                 # self.scheduler = coerce_to_rpc(scheduler)
         else:
-            self.scheduler = Scheduler(center, loop=loop,
+            self.scheduler = Scheduler(center, loop=self.loop,
                                        delete_batch_time=delete_batch_time)
         if center:
             self.center = coerce_to_rpc(center)
