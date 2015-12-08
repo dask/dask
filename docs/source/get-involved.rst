@@ -26,7 +26,7 @@ Report a bug
 
 Open issues with dask are tracked on GitHub at https://github.com/blaze/dask/issues. If you find a bug, please:
 
-1.  Search issues to see if yours has already been reported, then
+1.  Search issues to see if yours has already been reported. If no one has,
 2.  Create a new issue to report it!
 
 
