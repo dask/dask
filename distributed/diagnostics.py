@@ -5,7 +5,7 @@ import time
 from timeit import default_timer
 
 import dask
-from toolz import valmap, groupby
+from toolz import valmap, groupby, concat
 from tornado.ioloop import PeriodicCallback, IOLoop
 
 from .utils import ignoring, sync
@@ -73,7 +73,7 @@ def dependent_keys(keys, who_has, processing, stacks, dependencies, complete=Fal
 
 class Progress(SchedulerPlugin):
     """ Tracks progress of a set of keys or futures """
-    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1):
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
         keys = {k.key if hasattr(k, 'key') else k for k in keys}
 
         if scheduler is None:
@@ -104,10 +104,18 @@ class Progress(SchedulerPlugin):
 
         def f():
             scheduler.add_diagnostic(self)  # subtle race condition here
-            self.keys = dependent_keys(keys, scheduler.who_has,
-                    scheduler.processing, scheduler.stacks, scheduler.waiting)
-            self.all_keys = self.keys.copy()
+            self.all_keys = dependent_keys(keys, scheduler.who_has,
+                    scheduler.processing, scheduler.stacks, scheduler.waiting,
+                    complete=complete)
+            if not complete:
+                self.keys = self.all_keys.copy()
+            else:
+                self.keys = dependent_keys(keys, scheduler.who_has,
+                        scheduler.processing, scheduler.stacks, scheduler.waiting,
+                        complete=False)
             self.all_keys.update(keys)
+
+            logger.info("Set up Progress keys")
 
         if scheduler.loop._thread_ident == threading.current_thread().ident:
             f()
@@ -117,6 +125,8 @@ class Progress(SchedulerPlugin):
         self.status = None
 
     def start(self):
+        self.status = 'running'
+        logger.info("Start Progress Plugin")
         self._start()
         if not self.keys:
             self.stop()
@@ -127,6 +137,7 @@ class Progress(SchedulerPlugin):
         pass
 
     def task_finished(self, scheduler, key, worker, nbytes):
+        logger.info("Progress sees key %s", key)
         if key in self.keys:
             self.keys.remove(key)
 
@@ -145,6 +156,7 @@ class Progress(SchedulerPlugin):
             self.status = 'error'
         else:
             self.status = 'finished'
+        logger.info("Remove Progress plugin")
 
     @property
     def elapsed(self):
@@ -190,6 +202,9 @@ class MultiProgress(Progress):
         self.func = func
         self.keys = valmap(set, groupby(self.func, self.keys))
         self.all_keys = valmap(set, groupby(self.func, self.all_keys))
+        for k in self.all_keys:
+            if k not in self.keys:
+                self.keys[k] = set()
 
     def task_finished(self, scheduler, key, worker, nbytes):
         s = self.keys.get(self.func(key), None)
@@ -205,6 +220,18 @@ class MultiProgress(Progress):
         if (self.func(key) in self.all_keys and
             key in self.all_keys[self.func(key)]):
             self.stop(exception=exception, key=key)
+
+    def start(self):
+        self.status = 'running'
+        logger.info("Start Progress Plugin")
+        self._start()
+        if not self.keys or not any(v for v in self.keys.values()):
+            self.stop()
+        elif all(k in self.scheduler.exceptions_blame for k in
+                concat(self.keys.values())):
+            key = next(k for k in concat(self.keys.values()) if k in
+                    self.scheduler.exceptions_blame)
+            self.stop(exception=True, key=key)
 
 
 class TextProgressBar(Progress):
@@ -297,10 +324,10 @@ class MultiProgressWidget(MultiProgress):
         MultiProgress.__init__(self, keys, scheduler, func, minimum, dt)
         from ipywidgets import FloatProgress, VBox, HTML, HBox
         self.bars = {key: FloatProgress(min=0, max=1, description=key)
-                        for key in self.keys}
-        self.texts = {key: HTML() for key in self.keys}
+                        for key in self.all_keys}
+        self.texts = {key: HTML() for key in self.all_keys}
         self.boxes = {key: HBox([self.bars[key], self.texts[key]])
-                        for key in self.keys}
+                        for key in self.all_keys}
         self.time = HTML()
         self.widget = HBox([self.time, VBox([self.boxes[key] for key in
                                             sorted(self.bars, key=str)])])
@@ -308,11 +335,11 @@ class MultiProgressWidget(MultiProgress):
         loop = IOLoop.instance()
         self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
 
-    start = ProgressWidget.start
+    _start = ProgressWidget._start
 
     def stop(self, exception=None, key=None):
         self.pc.stop()
-        Progress.stop(self, exception)
+        Progress.stop(self, exception, key)
         self._update()
         for k, v in self.keys.items():
             if not v:
@@ -322,7 +349,7 @@ class MultiProgressWidget(MultiProgress):
             self.bars[self.func(key)].bar_style = 'danger'
 
     def _update(self):
-        for k in self.keys:
+        for k in self.all_keys:
             ntasks = len(self.all_keys[k])
             ndone = ntasks - len(self.keys[k])
             self.bars[k].value = ndone / ntasks if ntasks else 1.0

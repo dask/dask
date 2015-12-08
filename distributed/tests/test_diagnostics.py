@@ -228,17 +228,19 @@ def test_TextProgressBar_empty(loop, capsys):
     _test_cluster(f, loop)
 
 
-def test_progressbar_sync(loop, capsys):
+def test_TestProgressBar_sync(loop, capsys):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             f = e.submit(lambda: 1)
             g = e.submit(lambda: 2)
             p = TextProgressBar([f, g])
+            assert p.all_keys == {f.key, g.key}
             p.start()
             # assert p in e.scheduler.diagnostics
             assert p.scheduler is e.scheduler
             f.result()
             g.result()
+            assert not p.keys
             sys.stdout.flush()
             check_bar_completed(capsys)
             assert len(p.all_keys) == 2

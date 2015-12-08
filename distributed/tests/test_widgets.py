@@ -61,13 +61,14 @@ def record_display(*args):
 #####################
 
 import pytest
+from toolz import concat
 from tornado import gen
 from tornado.queues import Queue
 
 from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, _test_cluster, loop, inc,
-        div, dec)
+        div, dec, throws)
 from distributed.diagnostics import (ProgressWidget, MultiProgressWidget)
 
 def bad(*args):
@@ -173,3 +174,55 @@ def test_multi_progressbar_widget(loop):
         yield done
 
     _test_cluster(f, loop)
+
+
+def test_multi_progressbar_widget_after_close(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port), loop=loop)
+        yield s._sync_center()
+        done = s.start()
+
+        s.update_graph(dsk={'x-1': (inc, 1),
+                            'x-2': (inc, 'x-1'),
+                            'x-3': (inc, 'x-2'),
+                            'y-1': (dec, 'x-3'),
+                            'y-2': (dec, 'y-1'),
+                            'e': (bad, 'y-2'),
+                            'other': (inc, 123)},
+                       keys=['e'])
+
+        while True:
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'y-2':
+                break
+
+        p = MultiProgressWidget(['x-1', 'x-2', 'x-3'], scheduler=s)
+        assert set(concat(p.all_keys.values())).issuperset({'x-1', 'x-2', 'x-3'})
+        assert 'x' in p.bars
+
+        s.scheduler_queue.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
+
+
+def test_values(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            L = [e.submit(inc, i) for i in range(5)]
+            wait(L)
+            p = MultiProgressWidget(L)
+            p.start()
+            assert set(p.all_keys) == {'inc'}
+            assert len(p.all_keys['inc']) == 5
+            assert p.status == 'finished'
+            assert not p.pc.is_running()
+            assert p.texts['inc'].value == '5 / 5'
+            assert p.bars['inc'].value == 1.0
+
+            x = e.submit(throws, 1)
+            p = MultiProgressWidget([x])
+            p.start()
+            assert p.status == 'error'
+            assert p.bars[p.func(x.key)].value == 1.0
