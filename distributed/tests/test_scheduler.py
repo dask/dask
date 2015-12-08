@@ -463,6 +463,10 @@ def test_scheduler(loop):
         s = Scheduler((c.ip, c.port))
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue()
+        s.handle_queues(sched, report)
+        msg = yield report.get()
+        assert msg['op'] == 'stream-start'
 
         # Test update graph
         s.put({'op': 'update-graph',
@@ -471,7 +475,7 @@ def test_scheduler(loop):
                        'z': (inc, 'y')},
                'keys': ['z']})
         while True:
-            msg = yield s.report_queues[0].get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
@@ -484,7 +488,7 @@ def test_scheduler(loop):
                'keys': ['a', 'b']})
 
         while True:
-            msg = yield s.report_queues[0].get()
+            msg = yield report.get()
             if msg['op'] == 'task-erred' and msg['key'] == 'b':
                 break
 
@@ -492,7 +496,7 @@ def test_scheduler(loop):
         s.put({'op': 'missing-data',
                'missing': ['z']})
         while True:
-            msg = yield s.report_queues[0].get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
@@ -504,7 +508,7 @@ def test_scheduler(loop):
                'dsk': {'zz': (inc, 'z')},
                'keys': ['zz']})
         while True:
-            msg = yield s.report_queues[0].get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'zz':
                 break
 
@@ -534,10 +538,6 @@ def test_multi_queues(loop):
                                   'z': (inc, 'y')},
                           'keys': ['z']})
 
-        while True:
-            msg = yield s.report_queues[0].get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
-                break
         while True:
             msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':

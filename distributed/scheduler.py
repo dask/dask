@@ -454,7 +454,7 @@ class Scheduler(object):
     def __init__(self, center, delete_batch_time=1, loop=None,
             resource_interval=1, resource_log_size=1000):
         self.scheduler_queues = [Queue()]
-        self.report_queues = [Queue()]
+        self.report_queues = []
         self.delete_queue = Queue()
         self.status = None
         self.coroutines = []
@@ -546,7 +546,7 @@ class Scheduler(object):
         self._worker_coroutines = [self.worker(w) for w in self.ncores]
 
         if start_queues:
-            self.handle_queues(self.scheduler_queues[0], self.report_queues[0])
+            self.handle_queues(self.scheduler_queues[0], None)
 
         for cor in self.coroutines:
             if cor.done():
@@ -852,7 +852,8 @@ class Scheduler(object):
 
     def handle_queues(self, scheduler_queue, report_queue):
         self.scheduler_queues.append(scheduler_queue)
-        self.report_queues.append(report_queue)
+        if report_queue:
+            self.report_queues.append(report_queue)
         future = self.handle_scheduler(scheduler_queue, report_queue)
         self.coroutines.append(future)
         return future
@@ -891,7 +892,8 @@ class Scheduler(object):
             self.status = 'running'
             self.report({'op': 'start'})
 
-        report.put_nowait({'op': 'stream-start'})
+        if report:
+            report.put_nowait({'op': 'stream-start'})
         while True:
             msg = yield queue.get()
             logger.debug("scheduler receives message %s", msg)
