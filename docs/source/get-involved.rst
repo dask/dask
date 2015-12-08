@@ -37,7 +37,7 @@ Paid training and support options:
 
 * `Python training <https://www.continuum.io/training>`_ — online and on-premises.
 * `Consulting <https://www.continuum.io/consulting>`_ — leverage our expertise to solve your analytics puzzles.
-* `Paid support plans <https://www.continuum.io//content/support-plan>`_ — helping you get the most out of Python data tools. 
+* `Paid support plans <https://www.continuum.io/content/support-plan>`_ — helping you get the most out of Python data tools. 
 
 Give us feedback
 ----------------
