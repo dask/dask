@@ -1411,6 +1411,9 @@ def from_array(x, chunks, name=None, lock=False):
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
+    if len(chunks) != len(x.shape):
+        raise ValueError("Input array has %d dimensions but the supplied "
+                "chunks has only %d dimensions" % (len(x.shape), len(chunks)))
     name = name or 'from-array-' + tokenize(x, chunks)
     dsk = getem(name, chunks)
     if lock is True:
