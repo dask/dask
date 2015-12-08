@@ -15,7 +15,10 @@ We welcome you to join the `dask mailing list <https://groups.google.com/a/conti
 Chat with other users
 ---------------------
 
-Review and ask questions on `StackOverflow <http://stackoverflow.com/questions/tagged/dask>`_ using the #dask tag. Participate in dask discussions in the `gitter chat room <https://gitter.im/blaze/dask>`_.
+Discuss and ask questions here:
+
+* `StackOverflow <http://stackoverflow.com/questions/tagged/dask>`_ using the #dask tag
+* The `gitter chat room <https://gitter.im/blaze/dask>`_
 
 
 Report a bug
