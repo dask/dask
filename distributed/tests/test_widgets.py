@@ -60,6 +60,8 @@ def record_display(*args):
 # Distributed stuff #
 #####################
 
+from operator import add
+
 import pytest
 from toolz import concat
 from tornado import gen
@@ -69,7 +71,8 @@ from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, _test_cluster, loop, inc,
         div, dec, throws)
-from distributed.diagnostics import (ProgressWidget, MultiProgressWidget)
+from distributed.diagnostics import (ProgressWidget, MultiProgressWidget,
+        progress)
 
 
 def test_progressbar_widget(loop):
@@ -279,3 +282,13 @@ def test_multibar_complete(loop):
         yield done
 
     _test_cluster(f, loop)
+
+
+def test_fast(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            L = e.map(inc, range(100))
+            L2 = e.map(dec, L)
+            L3 = e.map(add, L, L2)
+            p = progress(L3, multi=True, complete=True, notebook=True)
+            assert set(p.all_keys) == {'inc', 'dec', 'add'}

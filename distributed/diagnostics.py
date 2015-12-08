@@ -154,8 +154,6 @@ class Progress(SchedulerPlugin):
 
     def task_finished(self, scheduler, key, worker, nbytes):
         logger.info("Progress sees key %s", key)
-        if self.keys is None:
-            return
         if key in self.keys:
             self.keys.remove(key)
 
@@ -234,9 +232,6 @@ class MultiProgress(Progress):
         return errors
 
     def task_finished(self, scheduler, key, worker, nbytes):
-        if self.keys is None or isinstance(self.keys, set):
-            return
-
         s = self.keys.get(self.func(key), None)
         if s and key in s:
             s.remove(key)
@@ -319,18 +314,31 @@ class TextProgressBar(Progress):
 
 
 class ProgressWidget(Progress):
-    def __init__(self, *args, **kwargs):
-        from zmq.eventloop.ioloop import IOLoop
-        self.ipy_loop = IOLoop.current()
-        Progress.__init__(self, *args, **kwargs)
+    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
+        keys = {k.key if hasattr(k, 'key') else k for k in keys}
+        self.setup_pre(keys, scheduler, minimum, dt, complete)
 
-    def setup(self, keys, complete):
-        errors = Progress.setup(self, keys, complete)
+        def clear_errors(errors):
+            for k in errors:
+                self.task_erred(None, k, None, True)
+
+        if self.scheduler.loop._thread_ident == threading.current_thread().ident:
+            errors = self.setup(keys, complete)
+        else:
+            errors = sync(self.scheduler.loop, self.setup, keys, complete)
+
+        self.pc = PeriodicCallback(self._update, 1000 * self._dt)
+
         from ipywidgets import FloatProgress
         self.bar = FloatProgress(min=0, max=1, description='0.0s')
         self.widget = self.bar
-        self.pc = PeriodicCallback(self._update, 1000 * self._dt,
-                                   io_loop=self.ipy_loop)
+
+        clear_errors(errors)
+
+        self.pc.start()
+
+    def setup(self, keys, complete):
+        errors = Progress.setup(self, keys, complete)
         return errors
 
     def _ipython_display_(self, **kwargs):
@@ -338,11 +346,11 @@ class ProgressWidget(Progress):
 
     def _start(self):
         self._update()
-        self.pc.start()
 
     def stop(self, exception=None, key=None):
         Progress.stop(self, exception, key=None)
-        self.pc.stop()
+        with ignoring(AttributeError):
+            self.pc.stop()
         self._update()
         if exception:
             self.bar.bar_style = 'danger'
@@ -360,15 +368,18 @@ class ProgressWidget(Progress):
 class MultiProgressWidget(MultiProgress):
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, func=key_split,
                  complete=False):
-        MultiProgress.__init__(self, keys, scheduler, func, minimum, dt,
-                complete=complete)
+        self.func = func
+        keys = {k.key if hasattr(k, 'key') else k for k in keys}
+        self.setup_pre(keys, scheduler, minimum, dt, complete)
 
-        from tornado.ioloop import IOLoop
-        loop = IOLoop.instance()
-        self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
+        def clear_errors(errors):
+            for k in errors:
+                self.task_erred(None, k, None, True)
 
-    def setup(self, keys, complete):
-        errors = MultiProgress.setup(self, keys, complete)
+        if self.scheduler.loop._thread_ident == threading.current_thread().ident:
+            errors = self.setup(keys, complete)
+        else:
+            errors = sync(self.scheduler.loop, self.setup, keys, complete)
 
         from ipywidgets import FloatProgress, VBox, HTML, HBox
         self.bars = {key: FloatProgress(min=0, max=1, description=key)
@@ -379,7 +390,13 @@ class MultiProgressWidget(MultiProgress):
         self.time = HTML()
         self.widget = HBox([self.time, VBox([self.boxes[key] for key in
                                             sorted(self.bars, key=str)])])
-        return errors
+
+        from tornado.ioloop import IOLoop
+        loop = IOLoop.instance()
+        self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
+        self.pc.start()
+
+        clear_errors(errors)
 
     _start = ProgressWidget._start
 
