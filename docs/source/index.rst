@@ -124,7 +124,7 @@ help make debugging and profiling graph execution easier.
 **Help & reference**
 
 * :doc:`install`
-* :doc: `glossary`
+* :doc:`glossary`
 * :doc:`faq`
 * :doc:`spark`
 
