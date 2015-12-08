@@ -327,7 +327,7 @@ class MultiProgressWidget(MultiProgress):
             self.time.value = format_time(self.elapsed)
 
 
-def progress(futures, notebook=None, multi=False):
+def progress(*futures, notebook=None, multi=True):
     """ Track progress of futures
 
     This operates differently in the notebook and the console
