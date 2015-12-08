@@ -213,8 +213,6 @@ includes the following projects:
 * Plasma_
 * Arrays in MLlib_
 
-Edited 2015-12-08 12:07 by Will Warner.
-
 .. _Spartan: https://github.com/spartan-array/spartan
 .. _Distarray: http://docs.enthought.com/distarray/
 .. _Biggus: https://github.com/SciTools/biggus
