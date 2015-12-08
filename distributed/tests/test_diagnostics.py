@@ -268,6 +268,37 @@ def test_progress_function(loop, capsys):
             check_bar_completed(capsys)
 
 
+def test_robust_to_bad_plugin(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port), loop=loop)
+        yield s._sync_center()
+        done = s.start()
+
+        class Bad(SchedulerPlugin):
+            def task_finished(self, scheduler, key, worker, nbytes):
+                raise Exception()
+
+        bad = Bad()
+        s.add_plugin(bad)
+
+        s.scheduler_queue.put_nowait({'op': 'update-graph',
+                                      'dsk': {'x': (inc, 1),
+                                              'y': (inc, 'x'),
+                                              'z': (inc, 'y')},
+                                      'keys': ['z']})
+
+        while True:  # normal execution
+            msg = yield s.report_queue.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
+
+        s.scheduler_queue.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
+
+
 def check_bar_completed(capsys, width=40):
     out, err = capsys.readouterr()
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
