@@ -2,7 +2,7 @@
 Dask
 ====
 
-The word "Dask" comes from a combination of "DAG" (for directed acyclic graph) and "task." 
+The word "dask" comes from a combination of "DAG" (for directed acyclic graph) and "task." 
 
 **Dask enables parallel computing** through task scheduling and blocked algorithms.
 This allows developers to write complex parallel algorithms and execute them
