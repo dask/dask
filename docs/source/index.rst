@@ -129,6 +129,7 @@ help make debugging and profiling graph execution easier.
 * :doc:`glossary`
 * :doc:`faq`
 * :doc:`spark`
+* :doc:`help-and-reference`
 * :doc:`get-involved`
 
 .. toctree::
