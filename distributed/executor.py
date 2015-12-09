@@ -165,15 +165,18 @@ class Executor(object):
         self.loop = loop or IOLoop()
         self.scheduler_queue = Queue()
         self.report_queue = Queue()
+        self.coroutines = []
 
         if scheduler:
             if isinstance(scheduler, Scheduler):
                 self.scheduler = scheduler
                 if not center:
                     self.center = scheduler.center
-            else:
-                raise NotImplementedError()
-                # self.scheduler = coerce_to_rpc(scheduler)
+            if isinstance(scheduler, str):
+                ip, port = tuple(scheduler.split(':'))
+                scheduler = (ip, int(port))
+            if isinstance(scheduler, tuple):
+                self.scheduler = scheduler
         else:
             self.scheduler = Scheduler(center, loop=self.loop,
                                        delete_batch_time=delete_batch_time)
@@ -200,19 +203,22 @@ class Executor(object):
     def send_to_scheduler(self, msg):
         if isinstance(self.scheduler, Scheduler):
             self.loop.add_callback(self.scheduler_queue.put_nowait, msg)
-        else:
-            raise NotImplementedError()
+        elif isinstance(self.scheduler, IOStream):
+            write(self.scheduler, msg)
 
     @gen.coroutine
     def _start(self):
-        if self.scheduler.status != 'running':
-            yield self.scheduler._sync_center()
-            self.scheduler.start()
+        if isinstance(self.scheduler, Scheduler):
+            if self.scheduler.status != 'running':
+                yield self.scheduler._sync_center()
+                self.scheduler.start()
+            self.coroutines.append(self.scheduler.handle_queues(
+                self.scheduler_queue, self.report_queue))
+        elif isinstance(self.scheduler, tuple):
+            self.scheduler = yield connect(*self.scheduler)
 
         start_event = Event()
-        self.coroutines = [
-                self.scheduler.handle_queues(self.scheduler_queue, self.report_queue),
-                self.report(start_event)]
+        self.coroutines.append(self.report(start_event))
 
         _global_executor[0] = self
         yield start_event.wait()
@@ -246,14 +252,18 @@ class Executor(object):
     @gen.coroutine
     def report(self, start_event):
         """ Listen to scheduler """
+        if isinstance(self.scheduler, Scheduler):
+            next_message = self.report_queue.get
+        elif isinstance(self.scheduler, IOStream):
+            next_message = lambda: read(self.scheduler)
+        else:
+            raise NotImplemented()
+
         while True:
-            if isinstance(self.scheduler, Scheduler):
-                msg = yield self.report_queue.get()
-            elif isinstance(self.scheduler, IOStream):
-                raise NotImplementedError()
-                msg = yield read(self.scheduler)
-            else:
-                raise NotImplementedError()
+            try:
+                msg = yield next_message()
+            except StreamClosedError:
+                break
 
             if msg['op'] == 'stream-start':
                 start_event.set()

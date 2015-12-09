@@ -11,12 +11,14 @@ from time import sleep, time
 import pytest
 from toolz import identity, isdistinct, first
 from tornado.ioloop import IOLoop
+from tornado.iostream import IOStream
 from tornado import gen
 
 from distributed import Center, Worker
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize, _global_executor, default_executor)
+from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
 from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
@@ -1437,3 +1439,26 @@ def test_sync_compute(loop):
 
             yy, zz = e.compute(y, z, sync=True)
             assert (yy, zz) == (2, 0)
+
+
+def test_remote_scheduler(loop):
+    port = 8041
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+        s.listen(port)
+
+        e = Executor(center=(c.ip, c.port), scheduler=('127.0.0.1', port),
+                     start=False, loop=loop)
+        yield e._start()
+
+        assert isinstance(e.scheduler, IOStream)
+        assert s.streams
+
+        x = e.submit(inc, 1)
+        result = yield x._result()
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
