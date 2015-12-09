@@ -127,8 +127,9 @@ class Worker(Server):
         self.loop.add_callback(self._start)
 
     @gen.coroutine
-    def _close(self):
-        yield self.center.unregister(address=(self.ip, self.port))
+    def _close(self, timeout=10):
+        yield gen.with_timeout(timedelta(seconds=timeout),
+                self.center.unregister(address=(self.ip, self.port)))
         self.center.close_streams()
         self.stop()
         self.executor.shutdown()

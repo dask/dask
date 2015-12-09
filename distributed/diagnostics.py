@@ -323,12 +323,12 @@ class TextProgressBar(Progress):
 
         self._update()
 
-    def stop(self, exception=None, key=None):
+    def stop(self, exception=None, key=None, timeout=10):
         Progress.stop(self, exception, key=None)
         self._update()
         if self._running:
             self._running = False
-            self._timer.join()
+            self._timer.join(timeout=timeout)
             self.last_duration = self.elapsed
             if self.last_duration < self._minimum:
                 return

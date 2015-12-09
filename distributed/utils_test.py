@@ -9,7 +9,12 @@ import shutil
 import socket
 from time import time
 
-from distributed.core import connect_sync, write_sync, read_sync
+from tornado import gen
+from tornado.ioloop import IOLoop, TimeoutError
+from tornado.iostream import StreamClosedError
+
+from distributed.core import (connect_sync, write_sync, read_sync, connect,
+        read, write)
 from distributed.utils import ignoring
 import pytest
 
@@ -118,18 +123,23 @@ def cluster(nworkers=2, nanny=False):
 
         yield {'proc': center, 'port': cport}, workers
     finally:
+        loop = IOLoop()
         logger.debug("Closing out test cluster")
         for port in [cport] + [w['port'] for w in workers]:
-            with ignoring(socket.error):
-                sock = connect_sync('127.0.0.1', port)
-                write_sync(sock, dict(op='terminate', close=True))
-                response = read_sync(sock)
-                sock.close()
+            with ignoring(socket.error, TimeoutError, StreamClosedError):
+                loop.run_sync(lambda: disconnect('127.0.0.1', port), timeout=10)
         for proc in [center] + [w['proc'] for w in workers]:
             with ignoring(Exception):
                 proc.terminate()
         for fn in glob('_test_worker-*'):
             shutil.rmtree(fn)
+
+@gen.coroutine
+def disconnect(ip, port):
+    stream = yield connect(ip, port)
+    yield write(stream, {'op': 'terminate', 'close': True})
+    response = yield read(stream)
+    stream.close()
 
 
 import pytest
@@ -165,7 +175,7 @@ def _test_cluster(f, loop=None):
         finally:
             logger.debug("Closing out test cluster")
             for w in [a, b]:
-                with ignoring():
+                with ignoring(TimeoutError, StreamClosedError):
                     yield w._close()
                 if os.path.exists(w.local_dir):
                     shutil.rmtree(w.local_dir)

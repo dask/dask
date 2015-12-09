@@ -545,6 +545,8 @@ class Scheduler(object):
         self._delete_coroutine = self.delete()
         self._worker_coroutines = [self.worker(w) for w in self.ncores]
 
+        self.heal_state()
+
         if start_queues:
             self.handle_queues(self.scheduler_queues[0], None)
 
@@ -894,8 +896,6 @@ class Scheduler(object):
             Mapping worker-identity to number-of-cores
         """
         assert (not self.dask) == (not self.dependencies), (self.dask, self.dependencies)
-
-        self.heal_state()
 
         if not self.status == 'running':
             self.status = 'running'

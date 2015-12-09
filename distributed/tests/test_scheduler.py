@@ -600,4 +600,4 @@ def test_monitor_resources(loop):
             yield b._close()
             c.stop()
 
-    loop.run_sync(f)
+    loop.run_sync(f, timeout=10)
