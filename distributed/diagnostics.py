@@ -16,17 +16,21 @@ logger = logging.getLogger(__name__)
 
 
 class SchedulerPlugin(object):
-    """ Interface to plug into Scheduler
+    """ Interface to extend the Scheduler
 
-    The scheduler responds to externally driven events.  As changes within the
-    system occur the scheduler calls various functions like ``task_finished``,
-    ``update_graph``, ``task_erred``, etc..  A ``SchedulerPlugin`` allows user
-    driven code to extend those events.
+    The scheduler operates by triggering and responding to events like
+    ``task_finished``, ``update_graph``, ``task_erred``, etc..
 
-    By implementing these methods within a custom plugin and registering that
-    plugin with the scheduler, we run user code within the scheduler thread
-    that can perform arbitrary operations in synchrony with the scheduler
-    itself.
+    A plugin enables custom code to run at each of those same events.  The
+    scheduler will run the analagous methods on this class when each event is
+    triggered.  This runs user code within the scheduler thread that can
+    perform arbitrary operations in synchrony with the scheduler itself.
+
+    Plugins are often used for diagnostics and measurement, but have full
+    access to the scheduler and could in principle affect core scheduling.
+
+    To implement a plugin implement some of the methods of this class and add
+    the plugin to the scheduler with ``Scheduler.add_plugin(myplugin)``.
 
     Examples
     --------
@@ -36,23 +40,27 @@ class SchedulerPlugin(object):
     ...
     ...     def task_finished(self, scheduler, key, worker, nbytes):
     ...         self.counter += 1
+    ...
+    ...     def restart(self, scheduler):
+    ...         self.counter = 0
 
     >>> c = Counter()
     >>> scheduler.add_plugin(c)  # doctest: +SKIP
     """
-    def start(self, scheduler):
-        pass
-
     def task_finished(self, scheduler, key, worker, nbytes):
+        """ Run when a task is reported complete """
         pass
 
     def update_graph(self, scheduler, dsk, keys, restrictions):
+        """ Run when a new graph / tasks enter the scheduler """
         pass
 
     def task_erred(self, scheduler, key, worker, exception):
+        """ Run when a task is reported failed """
         pass
 
     def restart(self, scheduler):
+        """ Run when the scheduler restarts itself """
         pass
 
 
@@ -489,6 +497,11 @@ class MultiProgressWidget(MultiProgress):
 def progress(*futures, **kwargs):
     """ Track progress of futures
 
+    This operates differently in the notebook and the console
+
+    *  Notebook:  This returns immediately, leaving an IPython widget on screen
+    *  Console:  This blocks until the computation completes
+
     Parameters
     ----------
     futures: Futures
@@ -500,11 +513,6 @@ def progress(*futures, **kwargs):
     complete: bool (optional)
         Track all keys (True) or only keys that have not yet run (False)
         (defaults to True)
-
-    This operates differently in the notebook and the console
-
-    *  Notebook:  This returns immediately, leaving an IPython widget on screen
-    *  Console:  This blocks until the computation completes
 
     Examples
     --------
