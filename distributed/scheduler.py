@@ -11,12 +11,13 @@ from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
 from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError
+from tornado.iostream import StreamClosedError, IOStream
+from tornado.tcpserver import TCPServer
 
 from dask.core import istask, get_deps, reverse_dict, get_dependencies
 from dask.order import order
 
-from .core import rpc, coerce_to_rpc, connect, read, write
+from .core import rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE
 from .client import unpack_remotedata, scatter_to_workers
 from .utils import All, ignoring, clear_queue
 
@@ -450,12 +451,14 @@ def execute_task(task):
         return task
 
 
-class Scheduler(object):
+class Scheduler(TCPServer):
     def __init__(self, center, delete_batch_time=1, loop=None,
-            resource_interval=1, resource_log_size=1000):
+            resource_interval=1, resource_log_size=1000,
+            max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
         self.delete_queue = Queue()
+        self.streams = []
         self.status = None
         self.coroutines = []
 
@@ -485,6 +488,7 @@ class Scheduler(object):
         self.resource_logs = dict()
 
         self.loop = loop or IOLoop.current()
+        self.io_loop = self.loop
 
         self.delete_batch_time = delete_batch_time
         self.resource_interval = resource_interval
@@ -499,6 +503,8 @@ class Scheduler(object):
                          'worker-failed': self.mark_worker_missing,
                          'release-held-data': self.release_held_data,
                          'restart': self._restart}
+
+        super(Scheduler, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
     def put(self, msg):
         return self.scheduler_queues[0].put_nowait(msg)
@@ -546,6 +552,8 @@ class Scheduler(object):
         self._worker_coroutines = [self.worker(w) for w in self.ncores]
 
         self.heal_state()
+
+        self.status = 'running'
 
         if start_queues:
             self.handle_queues(self.scheduler_queues[0], None)
@@ -857,6 +865,11 @@ class Scheduler(object):
     def report(self, msg):
         for q in self.report_queues:
             q.put_nowait(msg)
+        for s in self.streams:
+            try:
+                write(s, msg)
+            except StreamClosedError:
+                logger.critical("Tried writing to closed stream: %s", msg)
 
     def add_plugin(self, plugin):
         self.plugins.append(plugin)
@@ -865,12 +878,27 @@ class Scheduler(object):
         self.scheduler_queues.append(scheduler_queue)
         if report_queue:
             self.report_queues.append(report_queue)
-        future = self.handle_scheduler(scheduler_queue, report_queue)
+        future = self.handle_messages(scheduler_queue, report_queue)
         self.coroutines.append(future)
         return future
 
     @gen.coroutine
-    def handle_scheduler(self, queue, report):
+    def handle_stream(self, stream, address):
+        ip, port = address
+        logger.info("Connection from %s%d to %s", ip, port, type(self).__name__)
+        self.streams.append(stream)
+        try:
+            yield self.handle_messages(stream, stream)
+        finally:
+            if not stream.closed():
+                yield write(stream, {'op': 'stream-closed'})
+                stream.close()
+            self.streams.remove(stream)
+            logger.info("Close connection from %s:%d to %s",
+                    address[0], address[1], type(self).__name__)
+
+    @gen.coroutine
+    def handle_messages(self, in_queue, report):
         """ The scheduler coroutine for dask scheduling
 
         This coroutine manages interactions with all worker cores and with the
@@ -895,16 +923,23 @@ class Scheduler(object):
         ncores: dict {worker: int}
             Mapping worker-identity to number-of-cores
         """
-        assert (not self.dask) == (not self.dependencies), (self.dask, self.dependencies)
+        if isinstance(in_queue, Queue):
+            next_message = in_queue.get
+        elif isinstance(in_queue, IOStream):
+            next_message = lambda: read(in_queue)
+        else:
+            raise NotImplementedError()
 
-        if not self.status == 'running':
-            self.status = 'running'
-            self.report({'op': 'start'})
+        if isinstance(report, Queue):
+            put = report.put_nowait
+        elif isinstance(report, IOStream):
+            put = lambda msg: write(report, msg)
+        else:
+            put = lambda msg: None
+        put({'op': 'stream-start'})
 
-        if report:
-            report.put_nowait({'op': 'stream-start'})
         while True:
-            msg = yield queue.get()
+            msg = yield next_message()  # in_queue.get()
             logger.debug("scheduler receives message %s", msg)
             op = msg.pop('op')
 
@@ -912,6 +947,7 @@ class Scheduler(object):
                 break
             elif op == 'close':
                self._close()
+               break
             elif op in self.handlers:
                 result = self.handlers[op](**msg)
                 if isinstance(result, gen.Future):
