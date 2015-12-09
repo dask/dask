@@ -9,8 +9,6 @@ You can install dask using ``pip``::
 
     pip install dask
 
-Dask also ships with Anaconda so you may have it already.
-
 Install parts of dask
 ---------------------
 
