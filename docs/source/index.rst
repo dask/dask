@@ -31,7 +31,7 @@ Users interact with dask either by making graphs directly, or through the *dask 
 * ``dask.bag`` = ``map, filter, toolz`` + ``multiprocessing``
 * ``dask.dataframe`` = ``pandas`` + ``threading``
 
-Dask primarily targets parallel computations that run on a single machine.  It
+Dask primarily targets parallel computations that run on a single machine. It
 integrates nicely with the existing PyData ecosystem and is trivial to setup
 and use::
 
@@ -40,7 +40,7 @@ and use::
     pip install dask
 
 Operations on dask collections (array, bag, dataframe) produce task graphs that
-encode blocked algorithms.  Task schedulers execute these task graphs in
+encode blocked algorithms. Task schedulers execute these task graphs in
 parallel in a variety of contexts.
 
 .. image:: images/collections-schedulers.png
@@ -50,8 +50,8 @@ parallel in a variety of contexts.
 
 **Collections:**
 
-Dask collections are the main interaction point for users.  They look like
-NumPy and pandas but generate dask graphs internally.  If you are a dask *user*
+Dask collections are the main interaction point for users. They look like
+NumPy and pandas but generate dask graphs internally. If you are a dask *user*
 then you should start here.
 
 * :doc:`array`
@@ -73,7 +73,7 @@ then you should start here.
 
 Dask graphs encode algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  If you are a *developer* then you should start here.
+dask collections.  If you are a *developer*, you should start here.
 
 * :doc:`graphs`
 * :doc:`spec`
@@ -150,7 +150,9 @@ help make debugging and profiling graph execution easier.
 * For community discussion please use `blaze-dev@continuum.io`_
 * For chat, see `gitter chat room`_
 
-Dask is part of the Blaze_ project supported by `Continuum Analytics`_
+Dask is part of the Blaze_ project supported and offered by 
+`Continuum Analytics`_ and contributors under a `BSD3 license` :doc:`license`_
+
 
 .. _Blaze: http://continuum.io/open-source/blaze
 .. _`Continuum Analytics`: http://continuum.io
