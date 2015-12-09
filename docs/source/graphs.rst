@@ -7,14 +7,14 @@ An explanation of dask task graphs.
 Motivation
 ----------
 
-Normally humans write programs and then compilers/interpreters interpret them
+Normally, humans write programs and then compilers/interpreters interpret them
 (e.g.  ``python``, ``javac``, ``clang``).  Sometimes humans disagree with how
 these compilers/interpreters choose to interpret and execute their programs.
 In these cases humans often bring the analysis, optimization, and execution of
 code into the code itself.
 
 Commonly a desire for parallel execution causes this shift of responsibility
-from compiler to human developer.  In these cases we often represent the
+from compiler to human developer.  In these cases, we often represent the
 structure of our program explicitly as data within the program itself.
 
 A common approach to parallel execution in user-space is *task scheduling*.  In
@@ -44,7 +44,7 @@ Example
    :align: right
 
 
-Consider the following simple program
+Consider the following simple program:
 
 .. code-block:: python
 
@@ -58,7 +58,7 @@ Consider the following simple program
    y = inc(x)
    z = add(y, 10)
 
-We encode this as a dictionary in the following way
+We encode this as a dictionary in the following way:
 
 .. code-block:: python
 
@@ -66,10 +66,10 @@ We encode this as a dictionary in the following way
         'y': (inc, 'x'),
         'z': (add, 'y', 10)}
 
-While less pleasant than our original code this representation can be analyzed
+While less pleasant than our original code, this representation can be analyzed
 and executed by other Python code, not just the CPython interpreter.  We don't
 recommend that users write code in this way, but rather that it is an
-appropriate target for automated systems.  Also, in non-toy examples the
+appropriate target for automated systems.  Also, in non-toy examples, the
 execution times are likely much larger than for ``inc`` and ``add``, warranting
 the extra complexity.
 
@@ -84,3 +84,4 @@ special and others can write different schedulers better suited to other
 applications or architectures easily.  Systems that emit dask graphs (like
 ``dask.array``, ``dask.bag``, etc.) may leverage the appropriate scheduler for
 the application and hardware.
+
