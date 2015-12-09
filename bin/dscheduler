@@ -5,11 +5,11 @@ from sys import argv, exit
 import socket
 
 import click
-from distributed import Nanny, Worker, sync
+from distributed import  Scheduler, sync
 from distributed.utils import get_ip
 from tornado.ioloop import IOLoop
 
-logger = logging.getLogger('distributed.dworker')
+logger = logging.getLogger('distributed.scheduler')
 
 ip = get_ip()
 
@@ -17,9 +17,7 @@ ip = get_ip()
 @click.command()
 @click.argument('center', type=str)
 @click.option('--port', type=int, default=8788, help="Serving port")
-@click.option('--host', type=str, default=ip, help="Serving host")
-@click.option('--ncores', type=int, default=0, help="Number of cores to serve")
-def go(center, host, port, ncores):
+def go(center, port):
     while True:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -34,19 +32,19 @@ def go(center, host, port, ncores):
         center_ip, center_port = center.split(':')
         center_port = int(center_port)
     except IndexError:
-        logger.info("Usage:  dworker center_host:center_port")
+        logger.info("Usage:  dscheduler center_host:center_port")
 
     loop = IOLoop.current()
-    worker = Nanny(host, port, port + 1, center_ip, center_port, ncores=ncores)
-    loop.add_callback(worker._start)
+    scheduler = Scheduler((center_ip, center_port))
+    loop.run_sync(scheduler._sync_center)
+    done = scheduler.start()
+    scheduler.listen(port)
+
     try:
+        logger.info("Start Scheduler at %s:%s", ip, port)
         loop.start()
     except KeyboardInterrupt:
-        result = IOLoop().run_sync(lambda:
-                worker.center.unregister(address=worker.worker_address))
-        if result == b'OK':
-            logger.info("Unregister %s:%d from center", *worker.worker_address)
-        logger.info("End worker at %s:%d", ip, port)
+        logger.info("End scheduler at %s:%d", ip, port)
 
 if __name__ == '__main__':
     go()
