@@ -52,6 +52,9 @@ class SchedulerPlugin(object):
     def task_erred(self, scheduler, key, worker, exception):
         pass
 
+    def restart(self, scheduler):
+        pass
+
 
 def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions, complete=False):
     """ All keys that need to compute for these keys to finish """
@@ -180,6 +183,9 @@ class Progress(SchedulerPlugin):
         logger.debug("Progress sees task erred")
         if key in self.all_keys:
             self.stop(exception=exception, key=key)
+
+    def restart(self, scheduler):
+        self.stop()
 
     def stop(self, exception=None, key=None):
         if self in self.scheduler.plugins:

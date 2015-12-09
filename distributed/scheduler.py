@@ -1091,5 +1091,10 @@ class Scheduler(object):
         self.start()
 
         self.report({'op': 'restart'})
+        for plugin in self.plugins[:]:
+            try:
+                plugin.restart(self)
+            except Exception as e:
+                logger.exception(e)
 
 scheduler = 0
