@@ -1,7 +1,7 @@
 DataFrame
 =========
 
-Dask dataframes look and feel like pandas dataframes but operate on datasets
+Dask dataframes look and feel like pandas dataframes, but operate on datasets
 larger than memory using multiple threads.  Dask.dataframe does not implement
 the complete pandas interface.
 
@@ -28,7 +28,7 @@ Dask.dataframe copies the pandas API
 
 Because the ``dask.dataframe`` API is a subset of the pandas API it should be
 familiar to pandas users.  There are some slight alterations due to the
-parallel nature of dask.
+parallel nature of dask:
 
 .. code-block:: python
 
@@ -46,7 +46,7 @@ parallel nature of dask.
    >>> df2 = df[df.y == 'a'].x + 1
 
 As with all dask collections (e.g. Array, Bag, DataFrame) one triggers
-computation by calling the ``.compute()`` method.
+computation by calling the ``.compute()`` method:
 
 .. code-block:: python
 
@@ -61,20 +61,20 @@ Threaded Scheduling
 
 By default ``dask.dataframe`` uses the multi-threaded scheduler.
 This exposes some parallelism when pandas or the underlying numpy operations
-release the GIL.  Generally pandas is more GIL bound than NumPy, so multi-core
-speedups are not as pronounced for ``dask.dataframe`` as they are for
-``dask.array``.  This is changing and the pandas development team is actively
-working on releasing the GIL.
+release the global interpreter lock, or GIL.  Generally pandas is more GIL 
+bound than NumPy, so multi-core speed-ups are not as pronounced for 
+``dask.dataframe`` as they are for ``dask.array``.  This is changing, and 
+the pandas development team is actively working on releasing the GIL.
 
 
 What doesn't work?
 ------------------
 
-Dask.dataframe only covers a small but well-used portion of the pandas API.
+Dask.dataframe covers a small but well-used portion of the pandas API.
 This limitation is for two reasons:
 
 1.  The pandas API is *huge*
-2.  Some operations are genuinely hard to do in parallel (e.g. sort)
+2.  Some operations are genuinely hard to do in parallel (e.g. sort).
 
 Additionally, some important operations like ``set_index`` work, but are slower
 than in pandas because they may write out to disk.
@@ -111,17 +111,17 @@ What definitely works?
 Partitions
 ----------
 
-Internally a dask dataframe is split into many partitions, each partition is
+Internally a dask dataframe is split into many partitions, and each partition is
 one pandas dataframe.  These dataframes are split vertically along the index.
 When our index is sorted and we know the values of the divisions of our
-partitions then we can be clever and efficient.
+partitions, then we can be clever and efficient.
 
 For example, if we have a time-series index then our partitions might be
 divided by month.  All of January will live in one partition while all of
 February will live in the next.  In these cases operations like ``loc``,
 ``groupby``, and ``join/merge`` along the index can be *much* more efficient
 than would otherwise be possible in parallel.  You can view the number of
-partitions and divisions of your dataframe with the following fields
+partitions and divisions of your dataframe with the following fields:
 
 .. code-block:: python
 
@@ -133,7 +133,7 @@ partitions and divisions of your dataframe with the following fields
 Divisions includes the minimum value of every partition's index and the maximum
 value of the last partition's index.  In the example above if the user searches
 for a specific datetime range then we know which partitions we need to inspect
-and which we can drop.
+and which we can drop:
 
 .. code-block:: python
 
@@ -141,7 +141,7 @@ and which we can drop.
 
 Often we do not have such information about our partitions.  When reading CSV
 files for example we do not know, without extra user input, how the data is
-divided.  In this case ``.divisions`` will be all ``None``.
+divided.  In this case ``.divisions`` will be all ``None``:
 
 .. code-block:: python
 
