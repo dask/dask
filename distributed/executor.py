@@ -291,11 +291,11 @@ class Executor(object):
         if not fast:
             yield self.coroutines
 
-    def shutdown(self):
+    def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates """
         self.send_to_scheduler({'op': 'close'})
         self.loop.stop()
-        self._loop_thread.join()
+        self._loop_thread.join(timeout=timeout)
         if _global_executor[0] is self:
             _global_executor[0] = None
 
