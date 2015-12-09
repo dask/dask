@@ -2,6 +2,8 @@
 Dask
 ====
 
+The word "Dask" comes from a combination of "DAG" (for directed acyclic graph) and "task." 
+
 **Dask enables parallel computing** through task scheduling and blocked algorithms.
 This allows developers to write complex parallel algorithms and execute them
 in parallel either on a modern multi-core machine or on a distributed cluster.
