@@ -1,7 +1,7 @@
 Opportunistic Caching
 =====================
 
-EXPERIMENTAL FEATURE - see :ref:`disclaimer<disclaimer>`.
+EXPERIMENTAL FEATURE added to Version 0.6.2 and above - see :ref:`disclaimer<disclaimer>`.
 
 Dask usually removes intermediate values as quickly as possible in order to
 make space for more data to flow through your computation.  However, in some
