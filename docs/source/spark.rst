@@ -9,6 +9,14 @@ Python layer.
 Dask has several elements that appear to intersect this space and as such we are often asked the question, 
 "How does Dask compare with Spark?
 
+Summary
+-------
+
+* You should probably use Spark If you have petabytes of JSON files, a simple workflow,  and a thousand node
+cluster. 
+* You should probably use dask if you have 10s-1000s of gigabytes of binary or numeric data, complex algorithms, and a large multi-core workstation.
+* If you have a terabyte or less of CSV or JSON data, forget both Spark *and* Dask and use Postgres_ or MongoDB_ instead.
+
 General
 ------------
 
@@ -18,7 +26,7 @@ efficiently.
 * Apache Spark is more mature and better integrates with HDFS.  It handles
 resiliency and was originally built to scale up to thousands of workers.
 
-User-Facing Differences
+User-facing differences
 -----------------------
 
 Scale
@@ -33,7 +41,7 @@ such it thinks well about worker failures and integration with data-local
 file systems like the Hadoop FileSystem (HDFS).  That being said, Spark can
 run in standalone mode on a single machine.
 
-Java Python Performance
+Java Python performance
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 * Dask is written in Python, a multi-paradigm language built on top of the
@@ -50,7 +58,7 @@ large amounts of heterogeneous data such as you might find in JSON blobs.  The
 Spark development team is now focusing more on binary and native data formats
 with their new effort, Tungsten.
 
-Java Python Disconnect
+Java Python disconnect
 ~~~~~~~~~~~~~~~~~~~~~~
 
 * Dask has an advantage for Python users because it is itself a Python library,
@@ -84,10 +92,10 @@ repeats.  Most spark add-ons were built on top of this construct, inheriting
 both its abilities and limitations.
 
 
-Developer-Facing Differences
+Developer-facing differences
 ----------------------------
 
-Graph Granularity
+Graph granularity
 ~~~~~~~~~~~~~~~~~
 
 Both Spark and Dask represent computations with directed acyclic graphs.  These
@@ -113,20 +121,12 @@ eventually be turned into many little tasks to execute on individual workers.
 This many-little-tasks state is only available internally to the Spark
 scheduler.
 
-Coding Styles
+Coding styles
 ~~~~~~~~~~~~~
 
 * Both Spark and Dask are written in a functional style.  
 * Dask will probably be more familiar to those who enjoy Lisp and "code as data structures".
 * Spark will probably be more familiar to those who enjoy algebraic types.
-
-Conclusion
-----------
-
-* You should probably use Spark If you have petabytes of JSON files, a simple workflow,  and a thousand node
-cluster. 
-* You should probably use dask if you have 10s-1000s of gigabytes of binary or numeric data, complex algorithms, and a large multi-core workstation.
-* You should forget both Spark *and* Dask If you have a terabyte or less of CSV or JSON data, and use Postgres_ or MongoDB_ instead.
 
 Resources
 ---------
