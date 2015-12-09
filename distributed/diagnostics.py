@@ -114,12 +114,11 @@ class Progress(SchedulerPlugin):
         self.status = None
 
     def start(self):
+        self._start()
         if not self.keys:
             self.stop()
         elif all(k in self.scheduler.exceptions_blame for k in self.keys):
             self.stop(True)
-        else:
-            self._start()
 
     def _start(self):
         pass
@@ -139,7 +138,6 @@ class Progress(SchedulerPlugin):
     def stop(self, exception=None, key=None):
         if self in self.scheduler.diagnostics:
             self.scheduler.diagnostics.remove(self)
-
         if exception:
             self.status = 'error'
         else:
@@ -271,16 +269,18 @@ class ProgressWidget(Progress):
 
     def _start(self):
         from IPython.display import display
+        self._update()
         display(self.widget)
         self.pc.start()
 
     def stop(self, exception=None, key=None):
-        self.pc.stop()
         Progress.stop(self, exception, key=None)
+        self.pc.stop()
         if exception:
             self.bar.bar_style = 'danger'
         elif not self.keys:
             self.bar.bar_style = 'success'
+        self._update()
 
     def _update(self):
         ntasks = len(self.all_keys)
@@ -310,6 +310,7 @@ class MultiProgressWidget(MultiProgress):
     def stop(self, exception=None, key=None):
         self.pc.stop()
         Progress.stop(self, exception)
+        self._update()
         for k, v in self.keys.items():
             if not v:
                 self.bars[k].bar_style = 'success'
@@ -348,11 +349,10 @@ def progress(futures, notebook=None, multi=False):
             bar = MultiProgressWidget(futures)
         else:
             bar = ProgressWidget(futures)
-        bar.start()
     else:
         bar = TextProgressBar(futures)
-        bar.start()
         bar._timer.join()
+    bar.start()
 
 
 def is_kernel():

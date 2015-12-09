@@ -1,6 +1,7 @@
 import pytest
 import sys
 from tornado import gen
+from tornado.queues import Queue
 
 from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
@@ -17,6 +18,8 @@ def test_diagnostic(loop):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         class Counter(SchedulerPlugin):
             def start(self, scheduler):
@@ -30,20 +33,20 @@ def test_diagnostic(loop):
         counter.start(s)
 
         assert counter.count == 0
-        s.scheduler_queue.put_nowait({'op': 'update-graph',
-                                      'dsk': {'x': (inc, 1),
-                                              'y': (inc, 'x'),
-                                              'z': (inc, 'y')},
-                                      'keys': ['z']})
+        sched.put_nowait({'op': 'update-graph',
+               'dsk': {'x': (inc, 1),
+                       'y': (inc, 'x'),
+                       'z': (inc, 'y')},
+               'keys': ['z']})
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
         assert counter.count == 3
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -55,6 +58,8 @@ def test_many_Progresss(loop):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x': (inc, 1),
                             'y': (inc, 'x'),
@@ -64,12 +69,12 @@ def test_many_Progresss(loop):
         bars = [Progress(keys=['z'], scheduler=s) for i in range(10)]
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
         assert all(b.status == 'finished' for b in bars)
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -81,6 +86,8 @@ def test_multiprogress(loop):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x-1': (inc, 1),
                             'x-2': (inc, 'x-1'),
@@ -95,7 +102,7 @@ def test_multiprogress(loop):
                           'y': {'y-1', 'y-2'}}
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'x-3':
                 break
 
@@ -103,7 +110,7 @@ def test_multiprogress(loop):
                           'y': {'y-1', 'y-2'}}
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'y-2':
                 break
 
@@ -112,7 +119,7 @@ def test_multiprogress(loop):
 
         assert p.status == 'finished'
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -124,6 +131,8 @@ def test_TextProgressBar(loop, capsys):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x': (inc, 1),
                             'y': (inc, 'x'),
@@ -136,7 +145,7 @@ def test_TextProgressBar(loop, capsys):
         assert progress.keys == {'x', 'y', 'z'}
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
@@ -145,7 +154,7 @@ def test_TextProgressBar(loop, capsys):
 
         assert progress not in s.diagnostics
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -157,6 +166,8 @@ def test_TextProgressBar_error(loop, capsys):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x': (div, 1, 0)},
                        keys=['x'])
@@ -164,7 +175,7 @@ def test_TextProgressBar_error(loop, capsys):
         progress.start()
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg.get('key') == 'x':
                 break
 
@@ -176,7 +187,7 @@ def test_TextProgressBar_error(loop, capsys):
         assert progress.status == 'error'
         assert not progress._timer or not progress._timer.is_alive()
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -188,6 +199,8 @@ def test_TextProgressBar_empty(loop, capsys):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         p = TextProgressBar([], scheduler=s)
         p.start()

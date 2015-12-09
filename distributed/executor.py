@@ -19,15 +19,14 @@ from tornado.gen import Return
 from tornado.locks import Event
 from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
-from tornado.iostream import StreamClosedError
+from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
-from .client import (WrappedKey, _gather, unpack_remotedata, pack_data,
-        scatter_to_workers)
+from .client import (WrappedKey, _gather, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
 from .sizeof import sizeof
-from .utils import All, sync, funcname
+from .utils import All, sync, funcname, ignoring
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ logger = logging.getLogger(__name__)
 tokens = (str(uuid.uuid4()) for i in itertools.count(1))
 
 
-_global_executors = set()
+_global_executor = [None]
 
 
 class Future(WrappedKey):
@@ -159,13 +158,29 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center, start=True, delete_batch_time=1, loop=None):
-        self.center = coerce_to_rpc(center)
+    def __init__(self, center=None, scheduler=None, start=True, delete_batch_time=1, loop=None):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
-        self.scheduler = Scheduler(center, delete_batch_time=delete_batch_time,
-                                   loop=loop)
+        self.scheduler_queue = Queue()
+        self.report_queue = Queue()
+
+        if scheduler:
+            if isinstance(scheduler, Scheduler):
+                self.scheduler = scheduler
+                if not center:
+                    self.center = scheduler.center
+            else:
+                raise NotImplementedError()
+                # self.scheduler = coerce_to_rpc(scheduler)
+        else:
+            self.scheduler = Scheduler(center, loop=loop,
+                                       delete_batch_time=delete_batch_time)
+        if center:
+            self.center = coerce_to_rpc(center)
+
+        if not self.center:
+            raise ValueError("Provide Center address")
 
         if start:
             self.start()
@@ -177,26 +192,30 @@ class Executor(object):
         from threading import Thread
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.daemon = True
-        _global_executors.add(self)
+        _global_executor[0] = self
         self._loop_thread.start()
         sync(self.loop, self._start)
 
+    def send_to_scheduler(self, msg):
+        if isinstance(self.scheduler, Scheduler):
+            self.loop.add_callback(self.scheduler_queue.put_nowait, msg)
+        else:
+            raise NotImplementedError()
+
     @gen.coroutine
     def _start(self):
-        yield self.scheduler._sync_center()
-        self._scheduler_start_event = Event()
-        self.coroutines = [self.scheduler.start(), self.report()]
-        _global_executors.add(self)
-        yield self._scheduler_start_event.wait()
+        if self.scheduler.status != 'running':
+            yield self.scheduler._sync_center()
+            self.scheduler.start()
+
+        start_event = Event()
+        self.coroutines = [
+                self.scheduler.handle_queues(self.scheduler_queue, self.report_queue),
+                self.report(start_event)]
+
+        _global_executor[0] = self
+        yield start_event.wait()
         logger.debug("Started scheduling coroutines. Synchronized")
-
-    @property
-    def scheduler_queue(self):
-        return self.scheduler.scheduler_queue
-
-    @property
-    def report_queue(self):
-        return self.scheduler.report_queue
 
     def __enter__(self):
         if not self.loop._running:
@@ -221,16 +240,22 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
-                {'op': 'release-held-data', 'key': key})
+        self.send_to_scheduler({'op': 'release-held-data', 'key': key})
 
     @gen.coroutine
-    def report(self):
+    def report(self, start_event):
         """ Listen to scheduler """
         while True:
-            msg = yield self.report_queue.get()
-            if msg['op'] == 'start':
-                self._scheduler_start_event.set()
+            if isinstance(self.scheduler, Scheduler):
+                msg = yield self.report_queue.get()
+            elif isinstance(self.scheduler, IOStream):
+                raise NotImplementedError()
+                msg = yield read(self.scheduler)
+            else:
+                raise NotImplementedError()
+
+            if msg['op'] == 'stream-start':
+                start_event.set()
             if msg['op'] == 'close':
                 break
             if msg['op'] == 'key-in-memory':
@@ -247,27 +272,31 @@ class Executor(object):
                     self.futures[msg['key']]['exception'] = msg['exception']
                     self.futures[msg['key']]['traceback'] = msg['traceback']
                     self.futures[msg['key']]['event'].set()
+            if msg['op'] == 'restart':
+                logger.info("Receive restart signal from scheduler")
+                events = [d['event'] for d in self.futures.values()]
+                self.futures.clear()
+                for e in events:
+                    e.set()
+                with ignoring(AttributeError):
+                    self._restart_event.set()
 
     @gen.coroutine
     def _shutdown(self, fast=False):
         """ Send shutdown signal and wait until scheduler completes """
-        self.loop.add_callback(self.report_queue.put_nowait,
-                               {'op': 'close'})
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
-                               {'op': 'close'})
-        if self in _global_executors:
-            _global_executors.remove(self)
+        self.send_to_scheduler({'op': 'close'})
+        if _global_executor[0] is self:
+            _global_executor[0] = None
         if not fast:
             yield self.coroutines
 
     def shutdown(self):
         """ Send shutdown signal and wait until scheduler terminates """
-        self.loop.add_callback(self.report_queue.put_nowait, {'op': 'close'})
-        self.loop.add_callback(self.scheduler_queue.put_nowait, {'op': 'close'})
+        self.send_to_scheduler({'op': 'close'})
         self.loop.stop()
         self._loop_thread.join()
-        if self in _global_executors:
-            _global_executors.remove(self)
+        if _global_executor[0] is self:
+            _global_executor[0] = None
 
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler
@@ -323,11 +352,10 @@ class Executor(object):
             restrictions = {}
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
-                                        {'op': 'update-graph',
-                                         'dsk': {key: task},
-                                         'keys': [key],
-                                         'restrictions': restrictions})
+        self.send_to_scheduler({'op': 'update-graph',
+                                'dsk': {key: task},
+                                'keys': [key],
+                                'restrictions': restrictions})
 
         return Future(key, self)
 
@@ -393,11 +421,10 @@ class Executor(object):
             raise TypeError("Workers must be a list or set of workers or None")
 
         logger.debug("map(%s, ...)", funcname(func))
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
-                                        {'op': 'update-graph',
-                                         'dsk': dsk,
-                                         'keys': keys,
-                                         'restrictions': restrictions})
+        self.send_to_scheduler({'op': 'update-graph',
+                                'dsk': dsk,
+                                'keys': keys,
+                                'restrictions': restrictions})
 
         return [Future(key, self) for key in keys]
 
@@ -418,9 +445,8 @@ class Executor(object):
                 data = yield _gather(self.center, keys)
             except KeyError as e:
                 logger.debug("Couldn't gather keys %s", e)
-                self.loop.add_callback(self.scheduler_queue.put_nowait,
-                                                {'op': 'missing-data',
-                                                 'missing': e.args})
+                self.send_to_scheduler({'op': 'missing-data',
+                                        'missing': e.args})
                 for key in e.args:
                     self.futures[key]['event'].clear()
             else:
@@ -450,23 +476,18 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None):
-        if not self.scheduler.ncores:
-            raise ValueError("No workers yet found.  "
-                             "Try syncing with center.\n"
-                             "  e.sync_center()")
-        ncores = workers if workers is not None else self.scheduler.ncores
-        remotes, who_has, nbytes = yield scatter_to_workers(
-                                            self.center, ncores, data)
+        remotes = yield self.scheduler._scatter(None, data, workers)
         if isinstance(remotes, list):
             remotes = [Future(r.key, self) for r in remotes]
+            keys = {r.key for r in remotes}
         elif isinstance(remotes, dict):
             remotes = {k: Future(v.key, self) for k, v in remotes.items()}
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
-                                        {'op': 'update-data',
-                                         'who_has': who_has,
-                                         'nbytes': nbytes})
-        while not all(k in self.scheduler.who_has for k in who_has):
-            yield gen.sleep(0.001)
+            keys = set(remotes)
+
+        for key in keys:
+            self.futures[key]['status'] = 'finished'
+            self.futures[key]['event'].set()
+
         raise gen.Return(remotes)
 
     def scatter(self, data, workers=None):
@@ -499,11 +520,10 @@ class Executor(object):
         flatkeys = list(flatten([keys]))
         futures = {key: Future(key, self) for key in flatkeys}
 
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
-                                        {'op': 'update-graph',
-                                         'dsk': dsk,
-                                         'keys': flatkeys,
-                                         'restrictions': restrictions or {}})
+        self.send_to_scheduler({'op': 'update-graph',
+                                'dsk': dsk,
+                                'keys': flatkeys,
+                                'restrictions': restrictions or {}})
 
         packed = pack_data(keys, futures)
         if raise_on_error:
@@ -544,34 +564,10 @@ class Executor(object):
 
     @gen.coroutine
     def _restart(self):
-        logger.debug("Sending shutdown signal to workers")
-        nannies = yield self.center.nannies()
-        for addr in nannies:
-            self.loop.add_callback(self.scheduler_queue.put_nowait,
-                    {'op': 'worker-failed', 'worker': addr, 'heal': False})
+        self.send_to_scheduler({'op': 'restart'})
+        self._restart_event = Event()
+        yield self._restart_event.wait()
 
-        logger.debug("Sending kill signal to nannies")
-        nannies = [rpc(ip=ip, port=n_port)
-                   for (ip, w_port), n_port in nannies.items()]
-        yield All([nanny.kill() for nanny in nannies])
-
-        while self.scheduler.ncores:
-            yield gen.sleep(0.01)
-
-        yield self._shutdown(fast=True)
-
-        events = [d['event'] for d in self.futures.values()]
-        self.futures.clear()
-        for e in events:
-            e.set()
-
-        yield All([nanny.instantiate(close=True) for nanny in nannies])
-
-        logger.info("Restarting executor")
-        self.scheduler.report_queue = Queue()
-        self.scheduler.scheduler_queue = Queue()
-        self.scheduler.delete_queue = Queue()
-        yield self._start()
         raise gen.Return(self)
 
     def restart(self):
@@ -674,14 +670,10 @@ def default_executor(e=None):
     """ Return an executor if exactly one has started """
     if e:
         return e
-    if len(_global_executors) == 1:
-        return first(_global_executors)
-    if len(_global_executors) == 0:
+    if _global_executor[0]:
+        return _global_executor[0]
+    else:
         raise ValueError("No executors found\n"
                 "Start an executor and point it to the center address\n"
                 "  from distributed import Executor\n"
                 "  executor = Executor('ip-addr-of-center:8787')\n")
-    if len(_global_executors) > 1:
-        raise ValueError("There are %d executors running.\n"
-            "Please specify which executor you want with the executor= \n"
-            "keyword argument." % len(_global_executors))

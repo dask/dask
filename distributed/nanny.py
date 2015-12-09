@@ -1,7 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
+from datetime import datetime
 import logging
 from multiprocessing import Process, Queue, queues
+import psutil
 import os
 import shutil
 import tempfile
@@ -9,7 +11,7 @@ import tempfile
 from tornado.ioloop import IOLoop
 from tornado import gen
 
-from .core import Server, rpc
+from .core import Server, rpc, write
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,8 @@ class Nanny(Server):
 
         handlers = {'instantiate': self._instantiate,
                     'kill': self._kill,
-                    'terminate': self._close}
+                    'terminate': self._close,
+                    'monitor_resources': self.monitor_resources}
 
         super(Nanny, self).__init__(handlers, **kwargs)
 
@@ -129,6 +132,23 @@ class Nanny(Server):
     @property
     def worker_address(self):
         return (self.ip, self.worker_port)
+
+    def resource_collect(self):
+        p = psutil.Process(self.process.pid)
+        return {'timestamp': datetime.now(),
+                'cpu_percent': psutil.cpu_percent(),
+                'status': p.status(),
+                'memory_percent': p.memory_percent(),
+                'memory_info_ex': p.memory_info_ex(),
+                'disk_io_counters': psutil.disk_io_counters(),
+                'net_io_counters': psutil.net_io_counters()}
+
+    @gen.coroutine
+    def monitor_resources(self, stream, interval=1):
+        while not stream.closed():
+            if self.process:
+                yield write(stream, self.resource_collect())
+            yield gen.sleep(interval)
 
 
 def run_worker(q, ip, port, center_ip, center_port, ncores, nanny_port,

@@ -97,6 +97,12 @@ def tmp_text(filename, text):
             os.remove(fn)
 
 
+def clear_queue(q):
+    while not q.empty():
+        q.get_nowait()
+
+
+
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)

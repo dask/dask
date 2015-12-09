@@ -15,7 +15,7 @@ from tornado import gen
 from distributed import Center, Worker
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
-        as_completed, tokenize, _global_executors, default_executor)
+        as_completed, tokenize, _global_executor, default_executor)
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
 from distributed.utils_test import cluster, slow, _test_cluster, loop
@@ -947,20 +947,20 @@ def test_get_releases_data(loop):
 
 
 def test_global_executors(loop):
-    assert not _global_executors
+    assert not _global_executor[0]
     with pytest.raises(ValueError):
         default_executor()
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            assert _global_executors == {e}
+            assert _global_executor == [e]
             assert default_executor() is e
             with Executor(('127.0.0.1', c['port']), loop=loop) as f:
-                with pytest.raises(ValueError):
-                    default_executor()
+                assert _global_executor == [f]
+                assert default_executor() is f
                 assert default_executor(e) is e
                 assert default_executor(f) is f
 
-    assert not _global_executors
+    assert not _global_executor[0]
 
 
 def test_exception_on_exception(loop):
@@ -1264,13 +1264,11 @@ def test_fast_kill(loop):
         L = e.map(sleep, range(10))
 
         try:
-
             start = time()
             yield e._restart()
             assert time() - start < 5
 
             assert all(x.status == 'cancelled' for x in L)
-            c.stop()
 
             x = e.submit(inc, 1)
             result = yield x._result()
@@ -1347,3 +1345,70 @@ def test_upload_file_exception_sync(loop):
             with tmp_text('myfile.py', 'syntax-error!') as fn:
                 with pytest.raises(SyntaxError):
                     e.upload_file(fn)
+
+
+def test_multiple_executors(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        a = Executor((c.ip, c.port), start=False, loop=loop)
+        yield a._start()
+        b = Executor(scheduler=a.scheduler, start=False, loop=loop)
+        yield b._start()
+
+        x = a.submit(inc, 1)
+        y = b.submit(inc, 2)
+        assert x.executor is a
+        assert y.executor is b
+        xx = yield x._result()
+        yy = yield y._result()
+        assert xx == 2
+        assert yy == 3
+        z = a.submit(add, x, y)
+        assert z.executor is a
+        zz = yield z._result()
+        assert zz == 5
+
+        yield a._shutdown()
+        yield b._shutdown()
+
+    _test_cluster(f, loop)
+
+
+def test_multiple_executors_restart(loop):
+    from distributed import Nanny, rpc
+    c = Center('127.0.0.1', 8006)
+    a = Nanny('127.0.0.1', 8007, 8008, '127.0.0.1', 8006, ncores=2)
+    b = Nanny('127.0.0.1', 8009, 8010, '127.0.0.1', 8006, ncores=2)
+    c.listen(c.port)
+    @gen.coroutine
+    def f():
+        yield a._start()
+        yield b._start()
+        while len(c.ncores) < 2:
+            yield gen.sleep(0.01)
+
+        try:
+            e1 = Executor((c.ip, c.port), start=False, loop=loop)
+            yield e1._start()
+            e2 = Executor(scheduler=e1.scheduler, start=False, loop=loop)
+            yield e2._start()
+
+            x = e1.submit(inc, 1)
+            y = e2.submit(inc, 2)
+            xx = yield x._result()
+            yy = yield y._result()
+            assert xx == 2
+            assert yy == 3
+
+            yield e1._restart()
+
+            assert x.cancelled()
+            assert y.cancelled()
+        finally:
+            yield a._close()
+            yield b._close()
+            yield e1._shutdown(fast=True)
+            yield e2._shutdown(fast=True)
+            c.stop()
+
+    loop.run_sync(f)

@@ -5,7 +5,9 @@ import signal
 import socket
 import struct
 from time import sleep, time
+import uuid
 
+from toolz import assoc
 import tornado
 import pickle
 import cloudpickle
@@ -72,8 +74,12 @@ class Server(TCPServer):
     *  ``{'op': 'add': 'x': 10, 'y': 20}``
     """
     def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
-        self.handlers = handlers
+        self.handlers = assoc(handlers, 'identity', self.identity)
+        self.id = uuid.uuid1()
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
+
+    def identity(self, stream):
+        return {'type': type(self).__name__, 'id': self.id}
 
     @gen.coroutine
     def handle_stream(self, stream, address):
