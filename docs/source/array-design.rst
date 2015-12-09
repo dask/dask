@@ -59,7 +59,7 @@ anti-symmetric shapes.
 
 Some ways in which ``chunks`` reflects properties of our array
 
-1.  ``len(x.chunks) == x.ndims``: The length of chunks is the number of dimensions
+1.  ``len(x.chunks) == x.ndim``: The length of chunks is the number of dimensions
 2.  ``map(sum, chunks) == shape``: The sum of each internal chunk, is the
     length of that dimension.
 3.  The length of each internal chunk is the number of keys in that dimension,
