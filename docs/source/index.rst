@@ -151,7 +151,7 @@ help make debugging and profiling graph execution easier.
 * For chat, see `gitter chat room`_
 
 Dask is part of the Blaze_ project supported and offered by 
-`Continuum Analytics`_ and contributors under a `BSD3 license` :doc:`license`_
+`Continuum Analytics`_ and contributors under a :doc:`BSD3 license<license>`.
 
 
 .. _Blaze: http://continuum.io/open-source/blaze
