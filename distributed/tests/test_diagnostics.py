@@ -275,6 +275,8 @@ def test_robust_to_bad_plugin(loop):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         class Bad(SchedulerPlugin):
             def task_finished(self, scheduler, key, worker, nbytes):
@@ -283,18 +285,18 @@ def test_robust_to_bad_plugin(loop):
         bad = Bad()
         s.add_plugin(bad)
 
-        s.scheduler_queue.put_nowait({'op': 'update-graph',
-                                      'dsk': {'x': (inc, 1),
-                                              'y': (inc, 'x'),
-                                              'z': (inc, 'y')},
-                                      'keys': ['z']})
+        sched.put_nowait({'op': 'update-graph',
+                          'dsk': {'x': (inc, 1),
+                                  'y': (inc, 'x'),
+                                  'z': (inc, 'y')},
+                          'keys': ['z']})
 
         while True:  # normal execution
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
                 break
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)

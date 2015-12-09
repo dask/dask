@@ -183,6 +183,8 @@ def test_multi_progressbar_widget_after_close(loop):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x-1': (inc, 1),
                             'x-2': (inc, 'x-1'),
@@ -194,7 +196,7 @@ def test_multi_progressbar_widget_after_close(loop):
                        keys=['e'])
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'key-in-memory' and msg['key'] == 'y-2':
                 break
 
@@ -202,7 +204,7 @@ def test_multi_progressbar_widget_after_close(loop):
         assert set(concat(p.all_keys.values())).issuperset({'x-1', 'x-2', 'x-3'})
         assert 'x' in p.bars
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
@@ -256,6 +258,8 @@ def test_multibar_complete(loop):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s._sync_center()
         done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x-1': (inc, 1),
                             'x-2': (inc, 'x-1'),
@@ -267,7 +271,7 @@ def test_multibar_complete(loop):
                        keys=['e'])
 
         while True:
-            msg = yield s.report_queue.get()
+            msg = yield report.get()
             if msg['op'] == 'task-erred' and msg['key'] == 'e':
                 break
 
@@ -278,7 +282,7 @@ def test_multibar_complete(loop):
         assert p.texts['x'].value == '3 / 3'
         assert p.texts['y'].value == '2 / 2'
 
-        s.scheduler_queue.put_nowait({'op': 'close'})
+        sched.put_nowait({'op': 'close'})
         yield done
 
     _test_cluster(f, loop)
