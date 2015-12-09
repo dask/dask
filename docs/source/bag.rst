@@ -10,13 +10,15 @@ Name
 ----
 
 *Bag* is an abstract collection, like *list* or *set*.  It is a friendly
-synonym to multiset_.
+synonym to multiset_. A bag or a multiset is a generalization of the concept 
+of a set that, unlike a set, allows multiple instances of the multiset's 
+elements. 
 
 * ``list``: *ordered* collection *with repeats*, ``[1, 2, 3, 2]``
 * ``set``: *unordered* collection *without repeats*,  ``{1, 2, 3}``
 * ``bag``: *unordered* collection *with repeats*, ``{1, 2, 2, 3}``
 
-So a bag is like a list but doesn't guarantee an ordering among elements.
+So a bag is like a list, but it doesn't guarantee an ordering among elements.
 There can be repeated elements but you can't ask for a particular element.
 
 .. _multiset: http://en.wikipedia.org/wiki/Bag_(mathematics)
@@ -25,7 +27,7 @@ There can be repeated elements but you can't ask for a particular element.
 Example
 -------
 
-We commonly use ``dask.bag`` to process unstructured or semi-structured data.
+We commonly use ``dask.bag`` to process unstructured or semi-structured data:
 
 .. code-block:: python
 
@@ -43,19 +45,19 @@ We commonly use ``dask.bag`` to process unstructured or semi-structured data.
 Create Bags
 -----------
 
-There are several ways to create dask.bags around your data
+There are several ways to create dask.bags around your data:
 
 ``db.from_sequence``
 ~~~~~~~~~~~~~~~~~~~~
 
-You can create a bag from an existing Python sequence.
+You can create a bag from an existing Python sequence:
 
 .. code-block:: python
 
    >>> import dask.bag as db
    >>> b = db.from_sequence([1, 2, 3, 4, 5, 6])
 
-You can control the number of partitions into which this data is binned.
+You can control the number of partitions into which this data is binned:
 
 .. code-block:: python
 
@@ -64,9 +66,9 @@ You can control the number of partitions into which this data is binned.
 This controls the granularity of the parallelism that you expose.  By default
 dask will try to partition your data into about 100 partitions.
 
-Warning: you should not load your data into Python and then load that data into
-dask.bag.  Instead, you should use dask.bag to load your data.  This
-parallelizes the loading step and reduces inter-worker communication.
+IMPORTANT: do not load your data into Python and then load that data into
+dask.bag.  Instead, use dask.bag to load your data.  This
+parallelizes the loading step and reduces inter-worker communication:
 
 .. code-block:: python
 
@@ -78,7 +80,7 @@ parallelizes the loading step and reduces inter-worker communication.
 
 Dask.bag can load data from textfiles directly.
 You can pass either a single filename, a list of filenames, or a globstring.
-The resulting bag will have one item per line, one file per partition.
+The resulting bag will have one item per line, one file per partition:
 
 .. code-block:: python
 
@@ -87,14 +89,14 @@ The resulting bag will have one item per line, one file per partition.
    >>> b = db.from_filenames('myfile.*.json')
 
 Dask.bag handles standard compression libraries, notably ``gzip`` and ``bz2``,
-based on the filename extension.
+based on the filename extension:
 
 .. code-block:: python
 
    >>> b = db.from_filenames('myfile.*.json.gz')
 
 The resulting items in the bag are strings.  You may want to parse them using
-functions like ``json.loads``
+functions like ``json.loads``:
 
 .. code-block:: python
 
@@ -102,7 +104,7 @@ functions like ``json.loads``
    >>> b = db.from_filenames('myfile.*.json.gz').map(json.loads)
 
 Or do string munging tasks.  For convenience there is a string namespace
-attached directly to bags with ``.str.methodname``.
+attached directly to bags with ``.str.methodname``:
 
 .. code-block:: python
 
@@ -112,7 +114,7 @@ attached directly to bags with ``.str.methodname``.
 ``db.from_hdfs``
 ~~~~~~~~~~~~~~~~
 
-Dask.bag can use WebHDFS to load text data from HDFS
+Dask.bag can use WebHDFS to load text data from HDFS:
 
 .. code-block:: python
 
@@ -121,10 +123,10 @@ Dask.bag can use WebHDFS to load text data from HDFS
 
    >>> b = db.from_hdfs('/user/username/data/2015/06/', hdfs=hdfs)
 
-If the input is a directory then we return all data underneath that directory
+If the input is a directory, then we return all data underneath that directory
 and all subdirectories.
 
-This uses WebHDFS to pull data from HDFS and so only works if that is enabled.
+This uses WebHDFS to pull data from HDFS, and so only works if that is enabled.
 It does not require your computer to actually be on HDFS, merely that you have
 network access.  Data will be downloaded to memory, decompressed, used, and
 cleaned up as necessary.
@@ -135,21 +137,20 @@ that has the data.  This functionality is not the same as what you would get
 with Hadoop or Spark.  *No dask scheduler currently integrates nicely with
 data-local file systems like HDFS*.
 
-
 Execution
 ---------
 
-Execution on bags provide two benefits
+Execution on bags provide two benefits:
 
 1.  Streaming: data processes lazily, allowing smooth execution of
     larger-than-memory data
-2.  Parallel: data is split up, allowing multiple cores to execute in parallel
+2.  Parallel: data is split up, allowing multiple cores to execute in parallel.
 
 
 Trigger Evaluation
 ~~~~~~~~~~~~~~~~~~
 
-Bags have a ``.compute()`` method to trigger computation.
+Bags have a ``.compute()`` method to trigger computation:
 
 .. code-block:: python
 
@@ -157,12 +158,12 @@ Bags have a ``.compute()`` method to trigger computation.
    >>> c.compute()
    [1, 2, 3, 4, ...]
 
-You must ensure that your result will fit in memory.
+You must ensure that your result will fit in memory:
 
 Bags also support the ``__iter__``
 protocol and so work well with pythonic collections like ``list, tuple, set,
 dict``.  Converting your object into a list or dict can look more Pythonic
-than calling ``.compute()``
+than calling ``.compute()``:
 
 .. code-block:: python
 
@@ -186,7 +187,6 @@ result in reductions with little data moving between workers.
 Additionally, using multiprocessing opens up potential problems with function
 serialization (see below).
 
-
 Shuffle
 ~~~~~~~
 
@@ -196,7 +196,7 @@ operations that use disk and a central memory server as a central point of
 communication.
 
 Shuffle operations are expensive and better handled by projects like
-``dask.dataframe``.  It is best to use ``dask.bag`` to clean and process data
+``dask.dataframe``.  It is best to use ``dask.bag`` to clean and process data,
 then transform it into an array or dataframe before embarking on the more
 complex operations that require shuffle steps.
 
@@ -221,7 +221,7 @@ These two features are arguably the most important when comparing ``dask.bag``
 to direct use of ``multiprocessing``.
 
 If you would like to turn off multiprocessing you can do so by setting the
-default get function to the synchronous single-core scheduler
+default get function to the synchronous single-core scheduler:
 
 .. code-block:: python
 
@@ -241,7 +241,7 @@ Known Limitations
 -----------------
 
 Bags provide very general computation (any Python function.)  This generality
-comes at cost.  Bags have the following known limitations
+comes at cost.  Bags have the following known limitations:
 
 1.  By default they rely on the multiprocessing scheduler, which has its own
     set of known limitations (see shared_)
