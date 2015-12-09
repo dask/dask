@@ -2,7 +2,7 @@ Imperative
 ==========
 
 As discussed in the :ref:`custom graphs <custom-graph-example>` section,
-sometimes problems don't fit into one of the collections like ``dask.bag`` or
+sometimes a problem doesn't fit into one of the collections like ``dask.bag`` or
 ``dask.array``. Instead of creating a dask directly using a dictionary, one can
 use the ``dask.imperative`` interface. This allows one to create graphs
 directly with a light annotation of normal python code.
@@ -84,14 +84,14 @@ Operations that aren't supported include:
 
 The last two in particular mean that ``Value`` objects cannot be used for
 control flow, meaning that no ``Value`` can appear in a loop or if statement.
-Even with this limitation, many workflows can be easily parallelized.
+Even with this limitation, many workflows can easily be parallelized.
 
 
 Example
 -------
 
 Here we have a serial blocked computation for computing the mean of all
-positive elements in a large, on disk array.
+positive elements in a large, on disk array:
 
 .. code-block:: python
 
@@ -108,7 +108,7 @@ positive elements in a large, on disk array.
     result = sum(sums) / sum(counts)            # Aggregate results
 
 
-Below is the same code, parallelized using ``dask.imperative``
+Below is the same code, parallelized using ``dask.imperative``:
 
 .. code-block:: python
 
