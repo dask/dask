@@ -1,3 +1,5 @@
+**License**
+
 Copyright (c) 2014–2015, Continuum Analytics, Inc. and contributors.
 
 All rights reserved.
