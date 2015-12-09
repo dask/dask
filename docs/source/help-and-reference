@@ -1,6 +1,8 @@
-Dask cheat sheet
-Glossary
-FAQ
-Diagnostics
-Support 
-Dask license
+**Help & reference**
+
+* :doc:`cheat-sheet`
+* :doc:`install`
+* :doc:`glossary`
+* :doc:`faq`
+* :doc:`spark`
+* :doc:`get-involved`
