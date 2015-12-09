@@ -77,7 +77,24 @@ def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions, 
 
 
 class Progress(SchedulerPlugin):
-    """ Tracks progress of a set of keys or futures """
+    """ Tracks progress of a set of keys or futures
+
+    On creation we provide a set of keys or futures that interest us as well as
+    a scheduler.  We traverse through the scheduler's depenedencies to find all
+    relevent keys on which our keys depend.  We then plug into the scheduler to
+    learn when our keys become available in memory at which point we record
+    their completion.
+
+    State
+    -----
+    keys: set
+        Set of keys that are not yet computed
+    all_keys: set
+        Set of all keys that we track
+
+    This class performs no visualization.  However it is used by other classes,
+    notably TextProgressBar and ProgressWidget, which do perform visualization.
+    """
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
         keys = {k.key if hasattr(k, 'key') else k for k in keys}
         self.setup_pre(keys, scheduler, minimum, dt, complete)
@@ -88,10 +105,9 @@ class Progress(SchedulerPlugin):
 
         if self.scheduler.loop._thread_ident == threading.current_thread().ident:
             errors = self.setup(keys, complete)
-            clear_errors(errors)
         else:
             errors = sync(self.scheduler.loop, self.setup, keys, complete)
-            sync(self.scheduler.loop, clear_errors, errors)
+        clear_errors(errors)
 
     def setup(self, keys, complete):
         self.scheduler.add_plugin(self)  # subtle race condition here
@@ -109,7 +125,7 @@ class Progress(SchedulerPlugin):
         self.all_keys.update(keys)
         self.keys |= errors & self.all_keys
 
-        logger.info("Set up Progress keys")
+        logger.debug("Set up Progress keys")
         return errors
 
     def setup_pre(self, keys, scheduler, minimum, dt, complete):
@@ -142,7 +158,7 @@ class Progress(SchedulerPlugin):
 
     def start(self):
         self.status = 'running'
-        logger.info("Start Progress Plugin")
+        logger.debug("Start Progress Plugin")
         self._start()
         if any(k in self.scheduler.exceptions_blame for k in self.all_keys):
             self.stop(True)
@@ -153,7 +169,7 @@ class Progress(SchedulerPlugin):
         pass
 
     def task_finished(self, scheduler, key, worker, nbytes):
-        logger.info("Progress sees key %s", key)
+        logger.debug("Progress sees key %s", key)
         if key in self.keys:
             self.keys.remove(key)
 
@@ -161,7 +177,7 @@ class Progress(SchedulerPlugin):
             self.stop()
 
     def task_erred(self, scheduler, key, worker, exception):
-        logger.info("Progress sees task erred")
+        logger.debug("Progress sees task erred")
         if key in self.all_keys:
             self.stop(exception=exception, key=key)
 
@@ -172,7 +188,7 @@ class Progress(SchedulerPlugin):
             self.status = 'error'
         else:
             self.status = 'finished'
-        logger.info("Remove Progress plugin")
+        logger.debug("Remove Progress plugin")
 
     @property
     def elapsed(self):
@@ -205,6 +221,13 @@ class MultiProgress(Progress):
     that splits keys.  This defaults to ``key_split`` which aligns with naming
     conventions chosen in the dask project (tuples, hyphens, etc..)
 
+    State
+    -----
+    keys: dict
+        Maps group name to set of not-yet-complete keys for that group
+    all_keys: dict
+        Maps group name to set of all keys for that group
+
     Examples
     --------
     >>> split = lambda s: s.split('-')[0]
@@ -228,7 +251,7 @@ class MultiProgress(Progress):
             if k not in self.keys:
                 self.keys[k] = set()
 
-        logger.info("Set up Progress keys")
+        logger.debug("Set up Progress keys")
         return errors
 
     def task_finished(self, scheduler, key, worker, nbytes):
@@ -240,7 +263,7 @@ class MultiProgress(Progress):
             self.stop()
 
     def task_erred(self, scheduler, key, worker, exception):
-        logger.info("Progress sees task erred")
+        logger.debug("Progress sees task erred")
 
         if (self.func(key) in self.all_keys and
             key in self.all_keys[self.func(key)]):
@@ -248,7 +271,7 @@ class MultiProgress(Progress):
 
     def start(self):
         self.status = 'running'
-        logger.info("Start Progress Plugin")
+        logger.debug("Start Progress Plugin")
         self._start()
         if not self.keys or not any(v for v in self.keys.values()):
             self.stop()
@@ -260,6 +283,16 @@ class MultiProgress(Progress):
 
 
 class TextProgressBar(Progress):
+    """ ProgressBar that emits result to stdout
+
+    This is suitable for console use.  See ``Progress`` for more information
+
+    See Also
+    --------
+    progress: User function
+    Progress: Super class with most of the logic
+    ProgressWidget: Widget version suitable for the notebook
+    """
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40,
             complete=False):
         self._width = width
@@ -314,6 +347,14 @@ class TextProgressBar(Progress):
 
 
 class ProgressWidget(Progress):
+    """ ProgressBar that uses an IPython ProgressBar widget for the notebook
+
+    See Also
+    --------
+    progress: User function
+    Progress: Super class with most of the logic
+    TextProgressBar: Text version suitable for the console
+    """
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
         keys = {k.key if hasattr(k, 'key') else k for k in keys}
         self.setup_pre(keys, scheduler, minimum, dt, complete)
@@ -366,6 +407,17 @@ class ProgressWidget(Progress):
 
 
 class MultiProgressWidget(MultiProgress):
+    """ Multiple progress bar Widget suitable for the notebook
+
+    Displays multiple progress bars for a computation, split on computation
+    type.
+
+    See Also
+    --------
+    progress: User-level function <--- use this
+    MultiProgress: Non-visualization component that contains most logic
+    ProgressWidget: Single progress bar widget
+    """
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, func=key_split,
                  complete=False):
         self.func = func
@@ -376,11 +428,13 @@ class MultiProgressWidget(MultiProgress):
             for k in errors:
                 self.task_erred(None, k, None, True)
 
+        # Get keys and all-keys
         if self.scheduler.loop._thread_ident == threading.current_thread().ident:
             errors = self.setup(keys, complete)
         else:
             errors = sync(self.scheduler.loop, self.setup, keys, complete)
 
+        # Set up widgets
         from ipywidgets import FloatProgress, VBox, HTML, HBox
         self.bars = {key: FloatProgress(min=0, max=1, description=key)
                         for key in self.all_keys}
@@ -396,6 +450,7 @@ class MultiProgressWidget(MultiProgress):
         self.pc = PeriodicCallback(self._update, 1000 * self._dt, io_loop=loop)
         self.pc.start()
 
+        # Clear out errors
         clear_errors(errors)
 
     def _start(self):
@@ -430,6 +485,8 @@ def progress(*futures, **kwargs):
 
     Parameters
     ----------
+    futures: Futures
+        A list of futures or keys to track
     notebook: bool (optional)
         Running in the notebook or not (defaults to guess)
     multi: bool (optional)
@@ -472,6 +529,11 @@ def progress(*futures, **kwargs):
 
 
 def is_kernel():
+    """ Determine if we're running within an IPython kernel
+
+    >>> is_kernel()
+    False
+    """
     # http://stackoverflow.com/questions/34091701/determine-if-were-in-an-ipython-notebook-session
     if 'IPython' not in sys.modules:
         # IPython hasn't been imported, definitely not
