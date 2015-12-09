@@ -1079,7 +1079,7 @@ def from_sequence(seq, partition_size=None, npartitions=None):
     return Bag(d, name, len(d))
 
 
-def from_castra(x, columns=None, index=False, npartitions=None):
+def from_castra(x, columns=None, index=False):
     """Load a dask Bag from a Castra.
 
     Parameters
@@ -1090,9 +1090,6 @@ def from_castra(x, columns=None, index=False, npartitions=None):
     index: bool, optional
         If True, the index is included as the first element in each tuple.
         Default is False.
-    npartitions: int, optional
-        The number of desired partitions. Defaults to number of partitions in
-        the Castra.
     """
     from castra import Castra
     if not isinstance(x, Castra):
