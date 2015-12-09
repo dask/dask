@@ -1,15 +1,18 @@
+from operator import add
 import pytest
 import sys
 from tornado import gen
 from tornado.queues import Queue
 
+from dask.core import get_deps
 from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
         div, dec)
 from distributed.utils import All
+from distributed.utils_test import inc
 from distributed.diagnostics import (Progress, TextProgressBar, SchedulerPlugin,
-        ProgressWidget, MultiProgress)
+        ProgressWidget, MultiProgress, progress, dependent_keys)
 
 
 def test_diagnostic(loop):
@@ -23,7 +26,7 @@ def test_diagnostic(loop):
 
         class Counter(SchedulerPlugin):
             def start(self, scheduler):
-                scheduler.diagnostics.append(self)
+                scheduler.add_plugin(self)
                 self.count = 0
 
             def task_finished(self, scheduler, key, worker, nbytes):
@@ -50,6 +53,22 @@ def test_diagnostic(loop):
         yield done
 
     _test_cluster(f, loop)
+
+
+def test_dependent_keys():
+    a, b, c, d, e, f, g = 'abcdefg'
+    who_has = {a: [1], b: [1]}
+    processing = {'alice': {c}}
+    stacks = {'bob': [d]}
+    exceptions = {}
+    dsk = {a: 1, b: 2, c: (add, a, b), d: (inc, a), e: (add, c, d), f: (inc, e)}
+    dependencies, dependeents = get_deps(dsk)
+
+    assert dependent_keys(f, who_has, processing, stacks, dependencies,
+            exceptions, complete=False)[0] == {f, e, c, d}
+
+    assert dependent_keys(f, who_has, processing, stacks, dependencies,
+            exceptions, complete=True)[0] == {a, b, c, d, e, f}
 
 
 def test_many_Progresss(loop):
@@ -152,7 +171,7 @@ def test_TextProgressBar(loop, capsys):
         assert progress.keys == set()
         check_bar_completed(capsys)
 
-        assert progress not in s.diagnostics
+        assert progress not in s.plugins
 
         sched.put_nowait({'op': 'close'})
         yield done
@@ -210,17 +229,19 @@ def test_TextProgressBar_empty(loop, capsys):
     _test_cluster(f, loop)
 
 
-def test_progressbar_sync(loop, capsys):
+def test_TextProgressBar_sync(loop, capsys):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             f = e.submit(lambda: 1)
             g = e.submit(lambda: 2)
             p = TextProgressBar([f, g])
+            assert p.all_keys == {f.key, g.key}
             p.start()
-            # assert p in e.scheduler.diagnostics
+            # assert p in e.scheduler.plugins
             assert p.scheduler is e.scheduler
             f.result()
             g.result()
+            assert not p.keys
             sys.stdout.flush()
             check_bar_completed(capsys)
             assert len(p.all_keys) == 2
@@ -236,6 +257,49 @@ def test_progressbar_sync(loop, capsys):
 def test_Progress_no_scheduler():
     with pytest.raises(ValueError):
         Progress([])
+
+
+def test_progress_function(loop, capsys):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            f = e.submit(lambda: 1)
+            g = e.submit(lambda: 2)
+
+            progress([[f], [[g]]], notebook=False)
+            check_bar_completed(capsys)
+
+
+def test_robust_to_bad_plugin(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port), loop=loop)
+        yield s._sync_center()
+        done = s.start()
+        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
+        msg = yield report.get(); assert msg['op'] == 'stream-start'
+
+        class Bad(SchedulerPlugin):
+            def task_finished(self, scheduler, key, worker, nbytes):
+                raise Exception()
+
+        bad = Bad()
+        s.add_plugin(bad)
+
+        sched.put_nowait({'op': 'update-graph',
+                          'dsk': {'x': (inc, 1),
+                                  'y': (inc, 'x'),
+                                  'z': (inc, 'y')},
+                          'keys': ['z']})
+
+        while True:  # normal execution
+            msg = yield report.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+                break
+
+        sched.put_nowait({'op': 'close'})
+        yield done
+
+    _test_cluster(f, loop)
 
 
 def check_bar_completed(capsys, width=40):

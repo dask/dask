@@ -490,7 +490,7 @@ class Scheduler(object):
         self.resource_interval = resource_interval
         self.resource_log_size = resource_log_size
 
-        self.diagnostics = []
+        self.plugins = []
 
         self.handlers = {'update-graph': self.update_graph,
                          'update-data': self.update_data,
@@ -696,8 +696,11 @@ class Scheduler(object):
             self.tracebacks[key] = traceback
             self.mark_failed(key, key)
             self.ensure_occupied(worker)
-            for diagnostic in self.diagnostics[:]:
-                diagnostic.task_erred(self, key, worker, exception)
+            for plugin in self.plugins[:]:
+                try:
+                    plugin.task_erred(self, key, worker, exception)
+                except Exception as e:
+                    logger.exception(e)
 
     def mark_failed(self, key, failing_key=None):
         """ When a task fails mark it and all dependent task as failed """
@@ -724,8 +727,11 @@ class Scheduler(object):
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker])
             self.ensure_occupied(worker)
-            for diagnostic in self.diagnostics[:]:
-                diagnostic.task_finished(self, key, worker, nbytes)
+            for plugin in self.plugins[:]:
+                try:
+                    plugin.task_finished(self, key, worker, nbytes)
+                except Exception as e:
+                    logger.exception(e)
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
@@ -809,8 +815,11 @@ class Scheduler(object):
             if self.who_has[key]:
                 self.mark_key_in_memory(key)
 
-        for diagnostic in self.diagnostics[:]:
-            diagnostic.update_graph(self, dsk, keys, restrictions)
+        for plugin in self.plugins[:]:
+            try:
+                plugin.update_graph(self, dsk, keys, restrictions)
+            except Exception as e:
+                logger.exception(e)
 
     def release_held_data(self, key=None):
         if key in self.held_data:
@@ -847,8 +856,8 @@ class Scheduler(object):
         for q in self.report_queues:
             q.put_nowait(msg)
 
-    def add_diagnostic(self, diagnostic=None):
-        self.diagnostics.append(diagnostic)
+    def add_plugin(self, plugin):
+        self.plugins.append(plugin)
 
     def handle_queues(self, scheduler_queue, report_queue):
         self.scheduler_queues.append(scheduler_queue)
@@ -1082,5 +1091,10 @@ class Scheduler(object):
         self.start()
 
         self.report({'op': 'restart'})
+        for plugin in self.plugins[:]:
+            try:
+                plugin.restart(self)
+            except Exception as e:
+                logger.exception(e)
 
 scheduler = 0

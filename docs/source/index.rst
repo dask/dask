@@ -61,4 +61,5 @@ Contents
    resilience
    related-work
    journey
+   plugins
    comparison
