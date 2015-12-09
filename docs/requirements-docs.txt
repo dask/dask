@@ -2,3 +2,4 @@ numpydoc
 toolz
 dill
 pandas>=0.16.0
+dask
