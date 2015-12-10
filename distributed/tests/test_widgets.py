@@ -97,7 +97,7 @@ def test_progressbar_widget(loop):
 
         progress._update()
         assert progress.bar.value == 1.0
-        assert 's' in progress.bar.description
+        assert '3 / 3' in progress.bar_text.value
 
         sched.put_nowait({'op': 'close'})
         yield done
@@ -142,9 +142,9 @@ def test_multi_progressbar_widget(loop):
         assert p.bars['x'].value == 1.0
         assert p.bars['y'].value == 0.0
         assert p.bars['e'].value == 0.0
-        assert '3 / 3' in p.texts['x'].value
-        assert '0 / 2' in p.texts['y'].value
-        assert '0 / 1' in p.texts['e'].value
+        assert '3 / 3' in p.bar_texts['x'].value
+        assert '0 / 2' in p.bar_texts['y'].value
+        assert '0 / 1' in p.bar_texts['e'].value
 
         while True:
             msg = yield report.get()
@@ -221,7 +221,7 @@ def test_values(loop):
             assert len(p.all_keys['inc']) == 5
             assert p.status == 'finished'
             assert not p.pc.is_running()
-            assert p.texts['inc'].value == '5 / 5'
+            assert p.bar_texts['inc'].value == '5 / 5'
             assert p.bars['inc'].value == 1.0
 
             x = e.submit(throws, 1)
@@ -279,8 +279,8 @@ def test_multibar_complete(loop):
         assert set(concat(p.all_keys.values())) == {'x-1', 'x-2', 'x-3', 'y-1',
                 'y-2', 'e'}
         assert all(b.value == 1.0 for b in p.bars.values())
-        assert p.texts['x'].value == '3 / 3'
-        assert p.texts['y'].value == '2 / 2'
+        assert p.bar_texts['x'].value == '3 / 3'
+        assert p.bar_texts['y'].value == '2 / 2'
 
         sched.put_nowait({'op': 'close'})
         yield done
