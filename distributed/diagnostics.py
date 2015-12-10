@@ -387,10 +387,9 @@ class ProgressWidget(Progress):
         from ipywidgets import FloatProgress, HBox, VBox, HTML
         self.elapsed_time = HTML('')
         self.bar = FloatProgress(min=0, max=1, description='', height = '10px')
-        self.bar_text = HTML('')
-        self.bar_label = HTML('<div style="padding: 0px 10px 0px 10px; text-align:right; word-wrap: break-word;">Progress:</div>', width = "300px")
+        self.bar_text = HTML('', width = "140px")
 
-        self.bar_widget = HBox([ VBox([self.bar_label]), VBox([ HBox([self.bar, self.bar_text]) ]) ])
+        self.bar_widget = HBox([ self.bar_text, self.bar ])
         self.widget = VBox([self.elapsed_time, self.bar_widget])
 
         clear_errors(errors)
@@ -423,7 +422,7 @@ class ProgressWidget(Progress):
         ndone = ntasks - len(self.keys)
         self.elapsed_time.value = '<div style=\"padding: 0px 10px 5px 10px\"><b>Elapsed time:</b> ' + format_time(self.elapsed) + '</div>'
         self.bar.value = ndone / ntasks if ntasks else 1.0
-        self.bar_text.value = '<div style="padding: 0px 10px 0px 10px">%d / %d</div>' % (ndone, ntasks)
+        self.bar_text.value = '<div style="padding: 0px 10px 0px 10px; text-align:right;">%d / %d</div>' % (ndone, ntasks)
 
 class MultiProgressWidget(MultiProgress):
     """ Multiple progress bar Widget suitable for the notebook
@@ -455,22 +454,23 @@ class MultiProgressWidget(MultiProgress):
 
         # Set up widgets
         from ipywidgets import FloatProgress, HBox, VBox, HTML
+        import html
         self.elapsed_time = HTML('')
         self.bars = {key: FloatProgress(min=0, max=1, description='', height = '10px')
                         for key in self.all_keys}
-        self.bar_texts = {key: HTML('') for key in self.all_keys}
-        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:right; word-wrap: break-word;\">' + key + ':</div>', width = '300px') for key in self.all_keys}
+        self.bar_texts = {key: HTML('', width = "140px") for key in self.all_keys}
+        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">' + html.escape(key) + '</div>') for key in self.all_keys}
 
         # Check to see if 'finalize' is one of the keys. If it is, move it to
         # the end so that it is rendered last in the list (for aesthetics...)
         key_order = set(self.all_keys.keys())
         if 'finalize' in key_order:
             key_order.remove('finalize')
-            key_order = list(key_order) + ['finalize']
+            key_order = sorted(list(key_order)) + ['finalize']
         else:
             key_order = list(key_order)
 
-        self.bar_widgets = VBox([ HBox([ self.bar_labels[key], self.bars[key], self.bar_texts[key] ]) for key in key_order ])
+        self.bar_widgets = VBox([ HBox([ self.bar_texts[key], self.bars[key], self.bar_labels[key] ]) for key in key_order ])
         self.widget = VBox([self.elapsed_time, self.bar_widgets])
 
         from tornado.ioloop import IOLoop
@@ -505,7 +505,7 @@ class MultiProgressWidget(MultiProgress):
             ndone = ntasks - len(self.keys[k])
             self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Elapsed time:</b> ' + format_time(self.elapsed) + '</div>'
             self.bars[k].value = ndone / ntasks if ntasks else 1.0
-            self.bar_texts[k].value = '<div style="padding: 0px 10px 0px 10px">%d / %d</div>' % (ndone, ntasks)
+            self.bar_texts[k].value = '<div style="padding: 0px 10px 0px 10px; text-align: right">%d / %d</div>' % (ndone, ntasks)
 
 
 def progress(*futures, **kwargs):
