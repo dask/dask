@@ -171,6 +171,15 @@ class RemoteData(WrappedKey):
         self.center = rpc(ip=center_ip, port=center_port)
         self._result = result
 
+    def __getstate__(self):
+        return (self.key, self.status, self.center.ip, self.center.port)
+
+    def __setstate__(self, state):
+        self.key = state[0]
+        self.status = state[1]
+        self.center = rpc(ip=state[2], port=state[3])
+        self.result = no_default
+
     def __str__(self):
         if len(self.key) > 13:
             key = self.key[:10] + '...'

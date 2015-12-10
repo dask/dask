@@ -1,3 +1,4 @@
+import pickle
 from time import sleep
 
 import pytest
@@ -58,6 +59,15 @@ def test_scatter_delete(loop):
         assert result == [4, 5, 6]
 
     _test_cluster(f)
+
+
+def test_RemoteData_pickle():
+    rd = RemoteData('x', '127.0.0.1', 8787, 'status')
+    rd2 = pickle.loads(pickle.dumps(rd))
+    assert rd.key == rd2.key
+    assert rd.center.ip == rd2.center.ip
+    assert rd.center.port == rd2.center.port
+    assert rd.status == rd2.status
 
 
 def test_garbage_collection(loop):
