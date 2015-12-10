@@ -19,7 +19,7 @@ from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server)
-from .client import unpack_remotedata, scatter_to_workers
+from .client import unpack_remotedata, scatter_to_workers, _gather
 from .utils import All, ignoring, clear_queue
 
 
@@ -505,7 +505,9 @@ class Scheduler(Server):
                                  'release-held-data': self.release_held_data,
                                  'restart': self._restart}
 
-        self.handlers = {'start-control': self.control_stream}
+        self.handlers = {'start-control': self.control_stream,
+                         'scatter': self.scatter,
+                         'gather': self.gather}
 
         super(Scheduler, self).__init__(handlers=self.handlers, max_buffer_size=max_buffer_size, **kwargs)
 
@@ -1102,7 +1104,7 @@ class Scheduler(Server):
             self.resource_logs[(ip, port)].append(msg)
 
     @gen.coroutine
-    def _scatter(self, stream, data=None, workers=None):
+    def scatter(self, stream=None, data=None, workers=None):
         if not self.ncores:
             raise ValueError("No workers yet found.  "
                              "Try syncing with center.\n"
@@ -1113,6 +1115,20 @@ class Scheduler(Server):
         self.update_data(who_has=who_has, nbytes=nbytes)
 
         raise gen.Return(remotes)
+
+    @gen.coroutine
+    def gather(self, stream=None, keys=None):
+        keys = list(keys)
+
+        try:
+            data = yield _gather(self.center, keys)
+            data = dict(zip(keys, data))
+            result = (b'OK', data)
+        except KeyError as e:
+            logger.debug("Couldn't gather keys %s", e)
+            result = (b'error', e)
+
+        raise gen.Return(result)
 
     @gen.coroutine
     def _restart(self):

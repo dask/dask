@@ -1467,6 +1467,7 @@ def test_remote_scheduler(loop):
         result = yield x._result()
 
         yield e._shutdown()
+        s.stop()
     _test_cluster(f, loop)
 
 
@@ -1502,4 +1503,29 @@ def test_input_types(loop):
         yield e1._shutdown()
         yield e2._shutdown()
         yield e3._shutdown()
+    _test_cluster(f, loop)
+
+
+def test_remote_scatter_gather(loop):
+    port = 8043
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+        s.listen(port)
+
+        e = Executor(('127.0.0.1', port), start=False, loop=loop)
+        yield e._start()
+
+        x, y, z = yield e._scatter([1, 2, 3])
+
+        assert x.key in a.data or x.key in b.data
+        assert y.key in a.data or y.key in b.data
+        assert z.key in a.data or z.key in b.data
+
+        xx, yy, zz = yield e._gather([x, y, z])
+        assert (xx, yy, zz) == (1, 2, 3)
+
+        s.stop()
     _test_cluster(f, loop)

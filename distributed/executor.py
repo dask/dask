@@ -464,18 +464,17 @@ class Executor(object):
                           if self.futures[key]['status'] == 'error']
             if exceptions:
                 raise exceptions[0]
-            try:
-                data = yield _gather(self.center, keys)
-            except KeyError as e:
-                logger.debug("Couldn't gather keys %s", e)
+
+            response, data = yield self.scheduler.gather(keys=keys)
+
+            if response == b'error':
+                logger.debug("Couldn't gather keys %s", data)
                 self.send_to_scheduler({'op': 'missing-data',
-                                        'missing': e.args})
-                for key in e.args:
+                                        'missing': data.args})
+                for key in data.args:
                     self.futures[key]['event'].clear()
             else:
                 break
-
-        data = dict(zip(keys, data))
 
         result = pack_data(futures2, data)
         raise gen.Return(result)
@@ -499,7 +498,7 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None):
-        remotes = yield self.scheduler._scatter(None, data, workers)
+        remotes = yield self.scheduler.scatter(data=data, workers=workers)
         if isinstance(remotes, list):
             remotes = [Future(r.key, self) for r in remotes]
             keys = {r.key for r in remotes}
