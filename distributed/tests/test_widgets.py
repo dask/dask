@@ -221,7 +221,7 @@ def test_values(loop):
             assert len(p.all_keys['inc']) == 5
             assert p.status == 'finished'
             assert not p.pc.is_running()
-            assert p.bar_texts['inc'].value == '5 / 5'
+            assert '5 / 5' in p.bar_texts['inc'].value
             assert p.bars['inc'].value == 1.0
 
             x = e.submit(throws, 1)
@@ -248,7 +248,7 @@ def test_progressbar_done(loop):
             p = ProgressWidget([f])
             p.start()
             assert p.status == 'error'
-            assert p.bar.value == 1.0
+            assert p.bar.value == 0.0
             assert p.bar.bar_style == 'danger'
 
 
