@@ -384,9 +384,14 @@ class ProgressWidget(Progress):
 
         self.pc = PeriodicCallback(self._update, 1000 * self._dt)
 
-        from ipywidgets import FloatProgress
-        self.bar = FloatProgress(min=0, max=1, description='0.0s')
-        self.widget = self.bar
+        from ipywidgets import FloatProgress, HBox, VBox, HTML
+        self.elapsed_time = HTML('')
+        self.bar = FloatProgress(min=0, max=1, description='', height = '10px')
+        self.bar_text = HTML('')
+        self.bar_label = HTML('<div style="padding: 0px 10px 0px 10px; text-align:right; word-wrap: break-word;">Progress:</div>', width = "300px")
+
+        self.bar_widget = HBox([ VBox([self.bar_label]), VBox([ HBox([self.bar, self.bar_text]) ]) ])
+        self.widget = VBox([self.elapsed_time, self.bar_widget])
 
         clear_errors(errors)
 
@@ -409,16 +414,16 @@ class ProgressWidget(Progress):
         self._update()
         if exception:
             self.bar.bar_style = 'danger'
-            self.bar.value = 1.0
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Warning:</b> the computation terminated due to an error after ' + format_time(self.elapsed) + '</div>'
         elif not self.keys:
             self.bar.bar_style = 'success'
 
     def _update(self):
         ntasks = len(self.all_keys)
         ndone = ntasks - len(self.keys)
+        self.elapsed_time.value = '<div style=\"padding: 0px 10px 5px 10px\"><b>Elapsed time:</b> ' + format_time(self.elapsed) + '</div>'
         self.bar.value = ndone / ntasks if ntasks else 1.0
-        self.bar.description = format_time(self.elapsed)
-
+        self.bar_text.value = '<div style="padding: 0px 10px 0px 10px">%d / %d</div>' % (ndone, ntasks)
 
 class MultiProgressWidget(MultiProgress):
     """ Multiple progress bar Widget suitable for the notebook
@@ -449,15 +454,24 @@ class MultiProgressWidget(MultiProgress):
             errors = sync(self.scheduler.loop, self.setup, keys, complete)
 
         # Set up widgets
-        from ipywidgets import FloatProgress, VBox, HTML, HBox
-        self.bars = {key: FloatProgress(min=0, max=1, description=key)
+        from ipywidgets import FloatProgress, HBox, VBox, HTML
+        self.elapsed_time = HTML('')
+        self.bars = {key: FloatProgress(min=0, max=1, description='', height = '10px')
                         for key in self.all_keys}
-        self.texts = {key: HTML() for key in self.all_keys}
-        self.boxes = {key: HBox([self.bars[key], self.texts[key]])
-                        for key in self.all_keys}
-        self.time = HTML()
-        self.widget = HBox([self.time, VBox([self.boxes[key] for key in
-                                            sorted(self.bars, key=str)])])
+        self.bar_texts = {key: HTML('') for key in self.all_keys}
+        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:right; word-wrap: break-word;\">' + key + ':</div>', width = '300px') for key in self.all_keys}
+
+        # Check to see if 'finalize' is one of the keys. If it is, move it to
+        # the end so that it is rendered last in the list (for aesthetics...)
+        key_order = set(self.all_keys.keys())
+        if 'finalize' in key_order:
+            key_order.remove('finalize')
+            key_order = list(key_order) + ['finalize']
+        else:
+            key_order = list(key_order)
+
+        self.bar_widgets = VBox([ HBox([ self.bar_labels[key], self.bars[key], self.bar_texts[key] ]) for key in key_order ])
+        self.widget = VBox([self.elapsed_time, self.bar_widgets])
 
         from tornado.ioloop import IOLoop
         loop = IOLoop.instance()
@@ -482,16 +496,16 @@ class MultiProgressWidget(MultiProgress):
             if not v:
                 self.bars[k].bar_style = 'success'
         if exception:
-            self.bars[self.func(key)].value = 1
             self.bars[self.func(key)].bar_style = 'danger'
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Warning:</b> the computation terminated due to an error after ' + format_time(self.elapsed) + '</div>'
 
     def _update(self):
         for k in self.all_keys:
             ntasks = len(self.all_keys[k])
             ndone = ntasks - len(self.keys[k])
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Elapsed time:</b> ' + format_time(self.elapsed) + '</div>'
             self.bars[k].value = ndone / ntasks if ntasks else 1.0
-            self.texts[k].value = "%d / %d" % (ndone, ntasks)
-            self.time.value = format_time(self.elapsed)
+            self.bar_texts[k].value = '<div style="padding: 0px 10px 0px 10px">%d / %d</div>' % (ndone, ntasks)
 
 
 def progress(*futures, **kwargs):
