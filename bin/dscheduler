@@ -16,7 +16,7 @@ ip = get_ip()
 
 @click.command()
 @click.argument('center', type=str)
-@click.option('--port', type=int, default=8788, help="Serving port")
+@click.option('--port', type=int, default=8786, help="Serving port")
 def go(center, port):
     while True:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
