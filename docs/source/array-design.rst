@@ -60,7 +60,7 @@ anti-symmetric shapes.
 Some ways in which ``chunks`` reflects properties of our array
 
 1.  ``len(x.chunks) == x.ndim``: The length of chunks is the number of dimensions
-2.  ``map(sum, chunks) == shape``: The sum of each internal chunk, is the
+2.  ``tuple(map(sum, x.chunks)) == x.shape``: The sum of each internal chunk, is the
     length of that dimension.
 3.  The length of each internal chunk is the number of keys in that dimension,
     e.g. for ``chunks == ((a, b), (d, e, f))`` and name == ``'x'``
@@ -103,8 +103,8 @@ identity matrix
 .. code-block:: python
 
    def eye(n, blocksize):
-       chunks = ((blocksize,) * n // blocksize,
-                 (blocksize,) * n // blocksize)
+       chunks = ((blocksize,) * (n // blocksize),
+                 (blocksize,) * (n // blocksize))
 
        name = 'eye' + next(tokens)  # unique identifier
 
@@ -114,7 +114,6 @@ identity matrix
                 for i in range(n // blocksize)
                 for j in range(n // blocksize)}
 
-
        dtype = np.eye(0).dtype  # take dtype default from numpy
 
-       return Array(dsk, name, chunks, dtype)
+       return dask.array.Array(dsk, name, chunks, dtype)
