@@ -21,7 +21,8 @@ class set_options(object):
         pool - a thread or process pool
         cache - Cache to use for intermediate results
         func_loads/func_dumps - loads/dumps functions for serialization of data
-            likely to contain functions.  Defaults to dill.loads/dill.dumps
+            likely to contain functions.  Defaults to
+            cloudpickle.loads/cloudpickle.dumps
         rerun_exceptions_locally - rerun failed tasks in master process
 
     Examples

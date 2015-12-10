@@ -1849,6 +1849,19 @@ def test_dataframe_series_are_dillable():
     f = dill.loads(dill.dumps(e))
     assert eq(e, f)
 
+def test_dataframe_series_are_pickleable():
+    try:
+        import cloudpickle
+        import pickle
+    except ImportError:
+        return
+
+    dumps = cloudpickle.dumps
+    loads = pickle.loads
+
+    e = d.groupby(d.a).b.sum()
+    f = loads(dumps(e))
+    assert eq(e, f)
 
 def test_random_partitions():
     a, b = d.random_split([0.5, 0.5])

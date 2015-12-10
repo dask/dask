@@ -208,9 +208,9 @@ Dask.bag uses partd_ to perform efficient, parallel, spill-to-disk shuffles.
 Function Serialization and Error Handling
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Dask.bag uses dill_ to serialize functions to send to worker processes.  Dill
-supports almost any kind of function, including lambdas, closures, partials
-and functions defined interactively.
+Dask.bag uses cloudpickle_ to serialize functions to send to worker processes.
+cloudpickle supports almost any kind of function, including lambdas, closures,
+partials and functions defined interactively.
 
 When an error occurs in a remote process the dask schedulers record the
 Exception and the traceback and delivers these to the main process.  These
@@ -234,7 +234,7 @@ default get function to the synchronous single-core scheduler
    >>> dask.set_options(get=get_sync)  # set global
    >>> list(b)  # uses synchronous scheduler
 
-.. _dill: http://trac.mystic.cacr.caltech.edu/project/pathos/wiki/dill
+.. _cloudpickle: https://github.com/cloudpipe/cloudpickle
 
 
 Known Limitations
