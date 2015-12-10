@@ -138,14 +138,24 @@ def normalize_future(f):
 
 
 class Executor(object):
-    """ Distributed executor with data dependencies
+    """ Distributed executor
 
-    This executor resembles executors in concurrent.futures but also allows
+    This executor resembles executors in ``concurrent.futures`` but also allows
     Futures within submit/map calls.
 
-    Provide center address on initialization
+    Parameters
+    ----------
+    arg: string, tuple, Scheduler
+        This can be the address of a ``Center`` or ``Scheduler`` servers, either
+        as a string or tuple ``'127.0.0.1:8787'`` or ``('127.0.0.1', 8787)``
+        or it can be a local ``Scheduler`` object.
 
-    >>> executor = Executor(('127.0.0.1', 8787))  # doctest: +SKIP
+
+    Examples
+    --------
+    Provide cluster's head node address on initialization:
+
+    >>> executor = Executor('127.0.0.1:8787')  # doctest: +SKIP
 
     Use ``submit`` method like normal
 
@@ -159,35 +169,17 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center=None, scheduler=None, start=True, delete_batch_time=1, loop=None):
+    def __init__(self, arg, start=True, delete_batch_time=1, loop=None):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
         self.coroutines = []
-
-        if scheduler:
-            if isinstance(scheduler, Scheduler):
-                self.scheduler = scheduler
-                if not center:
-                    self.center = scheduler.center
-            if isinstance(scheduler, str):
-                ip, port = tuple(scheduler.split(':'))
-                scheduler = (ip, int(port))
-            if isinstance(scheduler, tuple):
-                self.scheduler = scheduler
-        else:
-            self.scheduler = Scheduler(center, loop=self.loop,
-                                       delete_batch_time=delete_batch_time)
-        if isinstance(self.scheduler, Scheduler):
-            self.scheduler_queue = Queue()
-            self.report_queue = Queue()
-        if center:
-            self.center = coerce_to_rpc(center)
+        self._start_arg = arg
 
         if start:
-            self.start()
+            self.start(delete_batch_time=delete_batch_time)
 
-    def start(self):
+    def start(self, **kwargs):
         """ Start scheduler running in separate thread """
         if hasattr(self, '_loop_thread'):
             return
@@ -196,7 +188,7 @@ class Executor(object):
         self._loop_thread.daemon = True
         _global_executor[0] = self
         self._loop_thread.start()
-        sync(self.loop, self._start)
+        sync(self.loop, self._start, **kwargs)
 
     def send_to_scheduler(self, msg):
         if isinstance(self.scheduler, Scheduler):
@@ -205,24 +197,37 @@ class Executor(object):
             write(self.scheduler_stream, msg)
 
     @gen.coroutine
-    def _start(self):
+    def _start(self, **kwargs):
+        if isinstance(self._start_arg, Scheduler):
+            self.scheduler = self._start_arg
+            self.center = self._start_arg.center
+        if isinstance(self._start_arg, str):
+            ip, port = tuple(self._start_arg.split(':'))
+            self._start_arg = (ip, int(port))
+        if isinstance(self._start_arg, tuple):
+            r = coerce_to_rpc(self._start_arg)
+            ident = yield r.identity()
+            if ident['type'] == 'Center':
+                self.center = r
+                self.scheduler = Scheduler(self.center, loop=self.loop,
+                        **kwargs)
+            elif ident['type'] == 'Scheduler':
+                self.scheduler = r
+                self.scheduler_stream = yield connect(*self._start_arg)
+                yield write(self.scheduler_stream, {'op': 'start-control'})
+                cip, cport = ident['center']
+                self.center = rpc(ip=cip, port=cport)
+            else:
+                raise ValueError("Unknown Type")
+
         if isinstance(self.scheduler, Scheduler):
             if self.scheduler.status != 'running':
                 yield self.scheduler._sync_center()
                 self.scheduler.start()
+            self.scheduler_queue = Queue()
+            self.report_queue = Queue()
             self.coroutines.append(self.scheduler.handle_queues(
                 self.scheduler_queue, self.report_queue))
-        elif isinstance(self.scheduler, tuple):
-            ip, port = self.scheduler
-            self.scheduler_stream = yield connect(ip, port)
-            yield write(self.scheduler_stream, {'op': 'start-control'})
-
-            self.scheduler = rpc(ip=ip, port=port)
-            ident = yield self.scheduler.identity()
-            assert ident['type'] == 'Scheduler'
-
-            ip, port = ident['center']
-            self.center = rpc(ip=ip, port=port)
 
         start_event = Event()
         self.coroutines.append(self.report(start_event))
