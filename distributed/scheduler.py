@@ -5,6 +5,7 @@ from functools import partial
 import logging
 from math import ceil
 from time import time
+import uuid
 
 from toolz import frequencies, memoize, concat, first, identity
 from tornado import gen
@@ -12,12 +13,12 @@ from tornado.gen import Return
 from tornado.queues import Queue
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError, IOStream
-from tornado.tcpserver import TCPServer
 
 from dask.core import istask, get_deps, reverse_dict, get_dependencies
 from dask.order import order
 
-from .core import rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE
+from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
+        Server)
 from .client import unpack_remotedata, scatter_to_workers
 from .utils import All, ignoring, clear_queue
 
@@ -451,7 +452,7 @@ def execute_task(task):
         return task
 
 
-class Scheduler(TCPServer):
+class Scheduler(Server):
     def __init__(self, center, delete_batch_time=1, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
@@ -496,15 +497,26 @@ class Scheduler(TCPServer):
 
         self.plugins = []
 
-        self.handlers = {'update-graph': self.update_graph,
-                         'update-data': self.update_data,
-                         'missing-data': self.mark_missing_data,
-                         'task-missing-data': self.mark_missing_data,
-                         'worker-failed': self.mark_worker_missing,
-                         'release-held-data': self.release_held_data,
-                         'restart': self._restart}
+        self.compute_handlers = {'update-graph': self.update_graph,
+                                 'update-data': self.update_data,
+                                 'missing-data': self.mark_missing_data,
+                                 'task-missing-data': self.mark_missing_data,
+                                 'worker-failed': self.mark_worker_missing,
+                                 'release-held-data': self.release_held_data,
+                                 'restart': self._restart}
 
-        super(Scheduler, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
+        self.handlers = {'start-control': self.control_stream}
+
+        super(Scheduler, self).__init__(handlers=self.handlers, max_buffer_size=max_buffer_size, **kwargs)
+
+    @property
+    def port(self):
+        return first(self._sockets.values()).getsockname()[1]
+
+    def identity(self, stream):
+        return {'type': type(self).__name__, 'id': self.id,
+                'center': (self.center.ip, self.center.port),
+                'workers': list(self.ncores)}
 
     def put(self, msg):
         return self.scheduler_queues[0].put_nowait(msg)
@@ -883,9 +895,9 @@ class Scheduler(TCPServer):
         return future
 
     @gen.coroutine
-    def handle_stream(self, stream, address):
-        ip, port = address
-        logger.info("Connection from %s%d to %s", ip, port, type(self).__name__)
+    def control_stream(self, stream, address=None):
+        ident = str(uuid.uuid1())
+        logger.info("Connection to %s, %s", type(self).__name__, ident)
         self.streams.append(stream)
         try:
             yield self.handle_messages(stream, stream)
@@ -894,8 +906,8 @@ class Scheduler(TCPServer):
                 yield write(stream, {'op': 'stream-closed'})
                 stream.close()
             self.streams.remove(stream)
-            logger.info("Close connection from %s:%d to %s",
-                    address[0], address[1], type(self).__name__)
+            logger.info("Close connection to %s, %s", type(self).__name__,
+                    ident)
 
     @gen.coroutine
     def handle_messages(self, in_queue, report):
@@ -948,8 +960,8 @@ class Scheduler(TCPServer):
             elif op == 'close':
                self._close()
                break
-            elif op in self.handlers:
-                result = self.handlers[op](**msg)
+            elif op in self.compute_handlers:
+                result = self.compute_handlers[op](**msg)
                 if isinstance(result, gen.Future):
                     yield result
             else:

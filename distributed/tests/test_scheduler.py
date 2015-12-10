@@ -7,7 +7,7 @@ from tornado.queues import Queue
 import pytest
 
 from distributed import Center, Nanny
-from distributed.core import connect, read, write
+from distributed.core import connect, read, write, rpc
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
         decide_worker, assign_many_tasks, heal_missing_data, Scheduler)
@@ -614,6 +614,7 @@ def test_server(loop):
         s.listen(port)
 
         stream = yield connect('127.0.0.1', port)
+        yield write(stream, {'op': 'start-control'})
         yield write(stream, {'op': 'update-graph',
                              'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
                              'keys': ['y']})
@@ -630,5 +631,25 @@ def test_server(loop):
 
         s.scheduler_queues[0].put_nowait({'op': 'close'})
         yield done
+        s.stop()
+
+    _test_cluster(f, loop)
+
+
+def test_server_listens_to_other_ops(loop):
+    port = 8040
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+        s.listen(port)
+        assert s.port == port
+
+        r = rpc(ip='127.0.0.1', port=s.port)
+        ident = yield r.identity()
+        assert ident['type'] == 'Scheduler'
+
+        s.stop()
 
     _test_cluster(f, loop)
