@@ -1450,11 +1450,11 @@ def test_remote_scheduler(loop):
         done = s.start()
         s.listen(port)
 
-        e = Executor(center=(c.ip, c.port), scheduler=('127.0.0.1', port),
+        e = Executor(scheduler=('127.0.0.1', port),
                      start=False, loop=loop)
         yield e._start()
 
-        assert isinstance(e.scheduler, IOStream)
+        assert isinstance(e.scheduler_stream, IOStream)
         assert s.streams
 
         x = e.submit(inc, 1)

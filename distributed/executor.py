@@ -24,7 +24,7 @@ from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
 from .client import (WrappedKey, _gather, unpack_remotedata, pack_data)
-from .core import read, write, connect, rpc, coerce_to_rpc
+from .core import read, write, connect, rpc, coerce_to_rpc, send_recv
 from .scheduler import Scheduler
 from .sizeof import sizeof
 from .utils import All, sync, funcname, ignoring
@@ -163,8 +163,6 @@ class Executor(object):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
-        self.scheduler_queue = Queue()
-        self.report_queue = Queue()
         self.coroutines = []
 
         if scheduler:
@@ -180,11 +178,11 @@ class Executor(object):
         else:
             self.scheduler = Scheduler(center, loop=self.loop,
                                        delete_batch_time=delete_batch_time)
+        if isinstance(self.scheduler, Scheduler):
+            self.scheduler_queue = Queue()
+            self.report_queue = Queue()
         if center:
             self.center = coerce_to_rpc(center)
-
-        if not self.center:
-            raise ValueError("Provide Center address")
 
         if start:
             self.start()
@@ -203,8 +201,8 @@ class Executor(object):
     def send_to_scheduler(self, msg):
         if isinstance(self.scheduler, Scheduler):
             self.loop.add_callback(self.scheduler_queue.put_nowait, msg)
-        elif isinstance(self.scheduler, IOStream):
-            write(self.scheduler, msg)
+        elif isinstance(self.scheduler_stream, IOStream):
+            write(self.scheduler_stream, msg)
 
     @gen.coroutine
     def _start(self):
@@ -215,7 +213,16 @@ class Executor(object):
             self.coroutines.append(self.scheduler.handle_queues(
                 self.scheduler_queue, self.report_queue))
         elif isinstance(self.scheduler, tuple):
-            self.scheduler = yield connect(*self.scheduler)
+            ip, port = self.scheduler
+            self.scheduler_stream = yield connect(ip, port)
+            yield write(self.scheduler_stream, {'op': 'start-control'})
+
+            self.scheduler = rpc(ip=ip, port=port)
+            ident = yield self.scheduler.identity()
+            assert ident['type'] == 'Scheduler'
+
+            ip, port = ident['center']
+            self.center = rpc(ip=ip, port=port)
 
         start_event = Event()
         self.coroutines.append(self.report(start_event))
@@ -254,8 +261,8 @@ class Executor(object):
         """ Listen to scheduler """
         if isinstance(self.scheduler, Scheduler):
             next_message = self.report_queue.get
-        elif isinstance(self.scheduler, IOStream):
-            next_message = lambda: read(self.scheduler)
+        elif isinstance(self.scheduler_stream, IOStream):
+            next_message = lambda: read(self.scheduler_stream)
         else:
             raise NotImplemented()
 
@@ -616,8 +623,7 @@ class Executor(object):
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v, v._keys()) for name, v in zip(names, variables)}
 
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
-                                {'op': 'update-graph',
+        self.send_to_scheduler({'op': 'update-graph',
                                 'dsk': merge(dsk, dsk2),
                                 'keys': names})
 
