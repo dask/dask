@@ -121,7 +121,11 @@ class Server(TCPServer):
                     logger.warn(result)
                 else:
                     logger.debug("Calling into handler %s", handler.__name__)
-                    result = yield gen.maybe_future(handler(stream, **msg))
+                    try:
+                        result = yield gen.maybe_future(handler(stream, **msg))
+                    except Exception as e:
+                        logger.exception(e)
+                        raise
                 if reply:
                     try:
                         yield write(stream, result)
