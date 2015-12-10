@@ -7,26 +7,23 @@ from functools import wraps, partial
 import itertools
 import logging
 import os
-import time
 import uuid
 
 import dask
 from dask.base import tokenize, normalize_token, Base
-from dask.core import flatten, quote
+from dask.core import flatten
 from dask.compatibility import apply
-from toolz import first, groupby, valmap, merge
+from toolz import first, groupby, merge
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
-from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
-from .client import (WrappedKey, _gather, unpack_remotedata, pack_data)
-from .core import read, write, connect, rpc, coerce_to_rpc, send_recv
+from .client import (WrappedKey, unpack_remotedata, pack_data)
+from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
-from .sizeof import sizeof
 from .utils import All, sync, funcname, ignoring
 
 logger = logging.getLogger(__name__)
