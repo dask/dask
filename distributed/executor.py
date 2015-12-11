@@ -779,8 +779,17 @@ def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
 ALL_COMPLETED = 'ALL_COMPLETED'
 
 
-@wraps(futures.wait)
 def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
+    """ Wait until all futures are complete
+
+    Parameters
+    ----------
+    fs: list of futures
+
+    Returns
+    -------
+    Named tuple of completed, not completed
+    """
     executor = default_executor()
     result = sync(executor.loop, _wait, fs, timeout, return_when)
     return result
@@ -800,8 +809,15 @@ def _as_completed(fs, queue):
             queue.put_nowait(f)
 
 
-@wraps(futures.as_completed)
 def as_completed(fs):
+    """ Return futures in the order in which they complete
+
+    This returns an iterator that yields the input future objects in the order
+    in which they complete.  Calling ``next`` on the iterator will block until
+    the next future completes, irrespective of order.
+
+    This function does not return futures in the order in which they are input.
+    """
     if len(set(f.executor for f in fs)) == 1:
         loop = first(fs).executor.loop
     else:

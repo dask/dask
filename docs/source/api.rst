@@ -27,6 +27,13 @@ API
    Future.done
    Future.cancelled
 
+**Other**
+
+.. autosummary::
+   as_completed
+   distributed.diagnostics.progress
+   wait
+
 Executor
 --------
 
@@ -39,3 +46,11 @@ Future
 
 .. autoclass:: Future
    :members:
+
+
+Other
+-----
+
+.. autofunction:: as_completed
+.. autofunction:: distributed.diagnostics.progress
+.. autofunction:: wait
