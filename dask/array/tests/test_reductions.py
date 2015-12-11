@@ -30,7 +30,7 @@ def same_keys(a, b):
     return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
-def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_threshold=True):
+def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
     assert eq(da_func(darr), np_func(narr))
     assert eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
     assert same_keys(da_func(darr), da_func(darr))
@@ -39,13 +39,13 @@ def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_thresh
         assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
         assert eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
         assert same_keys(da_func(darr, dtype='i8'), da_func(darr, dtype='i8'))
-    if split_threshold:
-        a1 = da_func(darr, split_threshold=2)
-        a2 = da_func(darr, split_threshold={0: 2})
+    if split_every:
+        a1 = da_func(darr, split_every=2)
+        a2 = da_func(darr, split_every={0: 2})
         assert same_keys(a1, a2)
         assert eq(a1, np_func(narr))
         assert eq(a2, np_func(narr))
-        assert eq(da_func(darr, keepdims=True, split_threshold=2),
+        assert eq(da_func(darr, keepdims=True, split_every=2),
                   np_func(narr, keepdims=True))
 
 
@@ -78,14 +78,14 @@ def test_reductions_1D(dtype):
     assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
     assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
 
-    assert eq(da.argmax(a, axis=0, split_threshold=2), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0, split_threshold=2), np.argmin(x, axis=0))
-    assert eq(da.nanargmax(a, axis=0, split_threshold=2), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0, split_threshold=2), np.nanargmin(x, axis=0))
+    assert eq(da.argmax(a, axis=0, split_every=2), np.argmax(x, axis=0))
+    assert eq(da.argmin(a, axis=0, split_every=2), np.argmin(x, axis=0))
+    assert eq(da.nanargmax(a, axis=0, split_every=2), np.nanargmax(x, axis=0))
+    assert eq(da.nanargmin(a, axis=0, split_every=2), np.nanargmin(x, axis=0))
 
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
-                      split_threshold=True):
+                      split_every=True):
     assert eq(da_func(darr), np_func(narr))
     assert eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
     assert eq(da_func(darr, axis=0), np_func(narr, axis=0))
@@ -101,19 +101,19 @@ def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
         assert eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
         assert eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
 
-    if split_threshold:
-        a1 = da_func(darr, split_threshold=4)
-        a2 = da_func(darr, split_threshold={0: 2, 1: 2})
+    if split_every:
+        a1 = da_func(darr, split_every=4)
+        a2 = da_func(darr, split_every={0: 2, 1: 2})
         assert same_keys(a1, a2)
         assert eq(a1, np_func(narr))
         assert eq(a2, np_func(narr))
-        assert eq(da_func(darr, keepdims=True, split_threshold=4),
+        assert eq(da_func(darr, keepdims=True, split_every=4),
                   np_func(narr, keepdims=True))
-        assert eq(da_func(darr, axis=0, split_threshold=2), np_func(narr, axis=0))
-        assert eq(da_func(darr, axis=0, keepdims=True, split_threshold=2),
+        assert eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
+        assert eq(da_func(darr, axis=0, keepdims=True, split_every=2),
                   np_func(narr, axis=0, keepdims=True))
-        assert eq(da_func(darr, axis=1, split_threshold=2), np_func(narr, axis=1))
-        assert eq(da_func(darr, axis=1, keepdims=True, split_threshold=2),
+        assert eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
+        assert eq(da_func(darr, axis=1, keepdims=True, split_every=2),
                   np_func(narr, axis=1, keepdims=True))
 
 
@@ -153,14 +153,14 @@ def test_reductions_2D(dtype):
     assert eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
     assert eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
-    assert eq(da.argmax(a, axis=0, split_threshold=2), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0, split_threshold=2), np.argmin(x, axis=0))
-    assert eq(da.nanargmax(a, axis=0, split_threshold=2), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0, split_threshold=2), np.nanargmin(x, axis=0))
-    assert eq(da.argmax(a, axis=1, split_threshold=2), np.argmax(x, axis=1))
-    assert eq(da.argmin(a, axis=1, split_threshold=2), np.argmin(x, axis=1))
-    assert eq(da.nanargmax(a, axis=1, split_threshold=2), np.nanargmax(x, axis=1))
-    assert eq(da.nanargmin(a, axis=1, split_threshold=2), np.nanargmin(x, axis=1))
+    assert eq(da.argmax(a, axis=0, split_every=2), np.argmax(x, axis=0))
+    assert eq(da.argmin(a, axis=0, split_every=2), np.argmin(x, axis=0))
+    assert eq(da.nanargmax(a, axis=0, split_every=2), np.nanargmax(x, axis=0))
+    assert eq(da.nanargmin(a, axis=0, split_every=2), np.nanargmin(x, axis=0))
+    assert eq(da.argmax(a, axis=1, split_every=2), np.argmax(x, axis=1))
+    assert eq(da.argmin(a, axis=1, split_every=2), np.argmin(x, axis=1))
+    assert eq(da.nanargmax(a, axis=1, split_every=2), np.nanargmax(x, axis=1))
+    assert eq(da.nanargmin(a, axis=1, split_every=2), np.nanargmin(x, axis=1))
 
 
 def test_reductions_2D_nans():
@@ -221,9 +221,9 @@ def test_moment():
     assert eq(a.moment(4, axis=(1, 0)), moment(x, 4, axis=(1, 0)))
 
     # Tree reduction
-    assert eq(a.moment(order=4, split_threshold=4), moment(x, 4))
-    assert eq(a.moment(order=4, axis=0, split_threshold=4), moment(x, 4, axis=0))
-    assert eq(a.moment(order=4, axis=1, split_threshold=4), moment(x, 4, axis=1))
+    assert eq(a.moment(order=4, split_every=4), moment(x, 4))
+    assert eq(a.moment(order=4, axis=0, split_every=4), moment(x, 4, axis=0))
+    assert eq(a.moment(order=4, axis=1, split_every=4), moment(x, 4, axis=1))
 
 
 def test_reductions_with_negative_axes():
@@ -231,7 +231,7 @@ def test_reductions_with_negative_axes():
     a = da.from_array(x, chunks=2)
 
     assert eq(a.argmin(axis=-1), x.argmin(axis=-1))
-    assert eq(a.argmin(axis=-1, split_threshold=2), x.argmin(axis=-1))
+    assert eq(a.argmin(axis=-1, split_every=2), x.argmin(axis=-1))
 
     assert eq(a.sum(axis=-1), x.sum(axis=-1))
     assert eq(a.sum(axis=(0, -1)), x.sum(axis=(0, -1)))
@@ -283,37 +283,37 @@ def test_tree_reduce_depth():
     # 2D
     x = da.from_array(np.arange(242).reshape((11, 22)), chunks=(3, 4))
     thresh = {0: 2, 1: 3}
-    assert_max_deps(x.sum(split_threshold=thresh), 2 * 3)
-    assert_max_deps(x.sum(axis=0, split_threshold=thresh), 2)
-    assert_max_deps(x.sum(axis=1, split_threshold=thresh), 3)
-    assert_max_deps(x.sum(split_threshold=20), 20, False)
-    assert_max_deps(x.sum(axis=0, split_threshold=20), 4)
-    assert_max_deps(x.sum(axis=1, split_threshold=20), 6)
+    assert_max_deps(x.sum(split_every=thresh), 2 * 3)
+    assert_max_deps(x.sum(axis=0, split_every=thresh), 2)
+    assert_max_deps(x.sum(axis=1, split_every=thresh), 3)
+    assert_max_deps(x.sum(split_every=20), 20, False)
+    assert_max_deps(x.sum(axis=0, split_every=20), 4)
+    assert_max_deps(x.sum(axis=1, split_every=20), 6)
 
     # 3D
     x = da.from_array(np.arange(11 * 22 * 29).reshape((11, 22, 29)), chunks=(3, 4, 5))
     thresh = {0: 2, 1: 3, 2: 4}
-    assert_max_deps(x.sum(split_threshold=thresh), 2 * 3 * 4)
-    assert_max_deps(x.sum(axis=0, split_threshold=thresh), 2)
-    assert_max_deps(x.sum(axis=1, split_threshold=thresh), 3)
-    assert_max_deps(x.sum(axis=2, split_threshold=thresh), 4)
-    assert_max_deps(x.sum(axis=(0, 1), split_threshold=thresh), 2 * 3)
-    assert_max_deps(x.sum(axis=(0, 2), split_threshold=thresh), 2 * 4)
-    assert_max_deps(x.sum(axis=(1, 2), split_threshold=thresh), 3 * 4)
-    assert_max_deps(x.sum(split_threshold=20), 20, False)
-    assert_max_deps(x.sum(axis=0, split_threshold=20), 4)
-    assert_max_deps(x.sum(axis=1, split_threshold=20), 6)
-    assert_max_deps(x.sum(axis=2, split_threshold=20), 6)
-    assert_max_deps(x.sum(axis=(0, 1), split_threshold=20), 20, False)
-    assert_max_deps(x.sum(axis=(0, 2), split_threshold=20), 20, False)
-    assert_max_deps(x.sum(axis=(1, 2), split_threshold=20), 20, False)
-    assert_max_deps(x.sum(axis=(0, 1), split_threshold=40), 4 * 6)
-    assert_max_deps(x.sum(axis=(0, 2), split_threshold=40), 4 * 6)
-    assert_max_deps(x.sum(axis=(1, 2), split_threshold=40), 6 * 6)
+    assert_max_deps(x.sum(split_every=thresh), 2 * 3 * 4)
+    assert_max_deps(x.sum(axis=0, split_every=thresh), 2)
+    assert_max_deps(x.sum(axis=1, split_every=thresh), 3)
+    assert_max_deps(x.sum(axis=2, split_every=thresh), 4)
+    assert_max_deps(x.sum(axis=(0, 1), split_every=thresh), 2 * 3)
+    assert_max_deps(x.sum(axis=(0, 2), split_every=thresh), 2 * 4)
+    assert_max_deps(x.sum(axis=(1, 2), split_every=thresh), 3 * 4)
+    assert_max_deps(x.sum(split_every=20), 20, False)
+    assert_max_deps(x.sum(axis=0, split_every=20), 4)
+    assert_max_deps(x.sum(axis=1, split_every=20), 6)
+    assert_max_deps(x.sum(axis=2, split_every=20), 6)
+    assert_max_deps(x.sum(axis=(0, 1), split_every=20), 20, False)
+    assert_max_deps(x.sum(axis=(0, 2), split_every=20), 20, False)
+    assert_max_deps(x.sum(axis=(1, 2), split_every=20), 20, False)
+    assert_max_deps(x.sum(axis=(0, 1), split_every=40), 4 * 6)
+    assert_max_deps(x.sum(axis=(0, 2), split_every=40), 4 * 6)
+    assert_max_deps(x.sum(axis=(1, 2), split_every=40), 6 * 6)
 
 
 def test_tree_reduce_set_options():
     x = da.from_array(np.arange(242).reshape((11, 22)), chunks=(3, 4))
-    with set_options(split_threshold={0: 2, 1: 3}):
+    with set_options(split_every={0: 2, 1: 3}):
         assert_max_deps(x.sum(), 2 * 3)
         assert_max_deps(x.sum(axis=0), 2)
