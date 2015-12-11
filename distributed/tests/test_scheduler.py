@@ -601,7 +601,7 @@ def test_monitor_resources(loop):
             yield b._close()
             c.stop()
 
-    loop.run_sync(f, timeout=10)
+    loop.run_sync(f, timeout=30)
 
 
 def test_server(loop):
