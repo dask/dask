@@ -1,15 +1,17 @@
 API
 ===
 
+.. currentmodule:: distributed.executor
+
 Executor
 --------
 
-.. autoclass:: distributed.executor.Executor
+.. autoclass:: Executor
    :members:
 
 
 Future
 ------
 
-.. autoclass:: distributed.executor.Future
+.. autoclass:: Future
    :members:

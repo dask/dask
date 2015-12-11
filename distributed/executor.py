@@ -58,7 +58,7 @@ class Future(WrappedKey):
 
     See Also
     --------
-    distributed.executor.Executor:  Creates futures
+    Executor:  Creates futures
     """
     def __init__(self, key, executor):
         self.key = key
@@ -128,7 +128,7 @@ class Future(WrappedKey):
 
         See Also
         --------
-        distributed.executor.Future.traceback
+        Future.traceback
         """
         return sync(self.executor.loop, self._exception)
 
@@ -149,7 +149,7 @@ class Future(WrappedKey):
 
         See Also
         --------
-        distributed.executor.Future.exception
+        Future.exception
         """
         return sync(self.executor.loop, self._traceback)
 
@@ -385,7 +385,7 @@ class Executor(object):
 
         See Also
         --------
-        distributed.executor.Executor.map: Submit on many arguments at once
+        Executor.map: Submit on many arguments at once
         """
         if not callable(func):
             raise TypeError("First input to submit must be a callable function")
@@ -449,7 +449,7 @@ class Executor(object):
 
         See also
         --------
-        distributed.executor.Executor.submit: Submit a single function
+        Executor.submit: Submit a single function
         """
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
@@ -539,7 +539,7 @@ class Executor(object):
 
         See Also
         --------
-        distributed.executor.Executor.scatter: Send data out to cluster
+        Executor.scatter: Send data out to cluster
         """
         return sync(self.loop, self._gather, futures)
 
@@ -584,7 +584,7 @@ class Executor(object):
 
         See Also
         --------
-        distributed.executor.Executor.gather: Gather data back to local process
+        Executor.gather: Gather data back to local process
         """
         return sync(self.loop, self._scatter, data, workers=workers)
 
@@ -631,7 +631,7 @@ class Executor(object):
 
         See Also
         --------
-        distributed.executor.Executor.compute: Compute asynchronous collections
+        Executor.compute: Compute asynchronous collections
         """
         status, result = sync(self.loop, self._get, dsk, keys,
                               raise_on_error=False, **kwargs)
@@ -672,7 +672,7 @@ class Executor(object):
 
         See Also
         --------
-        distributed.executor.Executor.get: Normal synchronous dask.get function
+        Executor.get: Normal synchronous dask.get function
         """
         sync = kwargs.pop('sync', False)
         assert not kwargs
