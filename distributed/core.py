@@ -20,10 +20,20 @@ from tornado.iostream import IOStream, StreamClosedError
 
 
 def dumps(x):
-    return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+    try:
+        return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception as e:
+        logger.info("Failed to serialize %s", x)
+        logger.exception(e)
+        raise
 
 
-loads = cloudpickle.loads
+def loads(x):
+    try:
+        return cloudpickle.loads(x)
+    except Exception as e:
+        logger.exception(e)
+        raise
 
 
 logger = logging.getLogger(__name__)
@@ -180,22 +190,16 @@ sentinel = b'7f57da0f9202f6b4df78e251058be6f0'
 def read(stream):
     """ Read a message from a stream """
     msg = yield stream.read_until(sentinel)
-    try:
-        msg = msg[:-len(sentinel)]
-        msg = loads(msg)
-    except Exception as e:
-        logger.exception(e)
+    msg = msg[:-len(sentinel)]
+    msg = loads(msg)
     raise Return(msg)
 
 
 @gen.coroutine
 def write(stream, msg):
     """ Write a message to a stream """
-    try:
-        msg = dumps(msg)
-        yield stream.write(msg + sentinel)
-    except Exception as e:
-        logger.exception(e)
+    msg = dumps(msg)
+    yield stream.write(msg + sentinel)
 
 
 def pingpong(stream):
