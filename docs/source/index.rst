@@ -48,6 +48,7 @@ Contents
    quickstart
    executor
    setup
+   efficiency
 
 **Developer Documentation**
 
