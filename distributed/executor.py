@@ -33,7 +33,33 @@ _global_executor = [None]
 
 
 class Future(WrappedKey):
-    """ The result of a remotely running computation """
+    """ A remotely running computation
+
+    A Future is a local proxy to a result running on a remote worker.  A user
+    manages future objects in the local Python process to determine what
+    happens in the larger cluster.
+
+    Examples
+    --------
+
+    Futures typically emerge from Executor computations
+
+    >>> my_future = executor.submit(add, 1, 2)  # doctest: +SKIP
+
+    We can track the progress and results of a future
+
+    >>> my_future  # doctest: +SKIP
+    <Future: status: finished, key: add-8f6e709446674bad78ea8aeecfee188e>
+
+    We can get the result or the exception and traceback from the future
+
+    >>> my_future.result()  # doctest: +SKIP
+    3
+
+    See Also
+    --------
+    distributed.executor.Executor:  Creates futures
+    """
     def __init__(self, key, executor):
         self.key = key
         self.executor = executor
@@ -98,7 +124,12 @@ class Future(WrappedKey):
             raise Return(None)
 
     def exception(self):
-        """ Return the exception of a failed task """
+        """ Return the exception of a failed task
+
+        See Also
+        --------
+        distributed.executor.Future.traceback
+        """
         return sync(self.executor.loop, self._exception)
 
     def cancelled(self):
@@ -114,7 +145,12 @@ class Future(WrappedKey):
             raise Return(None)
 
     def traceback(self):
-        """ Return the exception of a failed task """
+        """ Return the exception of a failed task
+
+        See Also
+        --------
+        distributed.executor.Future.exception
+        """
         return sync(self.executor.loop, self._traceback)
 
     def __del__(self):
@@ -141,7 +177,7 @@ class Executor(object):
 
     Parameters
     ----------
-    arg: string, tuple, Scheduler
+    address: string, tuple, or ``Scheduler``
         This can be the address of a ``Center`` or ``Scheduler`` servers, either
         as a string ``'127.0.0.1:8787'`` or tuple ``('127.0.0.1', 8787)``
         or it can be a local ``Scheduler`` object.
@@ -152,24 +188,30 @@ class Executor(object):
 
     >>> executor = Executor('127.0.0.1:8787')  # doctest: +SKIP
 
-    Use ``submit`` method like normal
+    Use ``submit`` method to send individual computations to the cluster
 
     >>> a = executor.submit(add, 1, 2)  # doctest: +SKIP
     >>> b = executor.submit(add, 10, 20)  # doctest: +SKIP
 
-    Additionally, provide results of submit calls (futures) to further submit
-    calls:
+    Continue using submit or map on results to build up larger computations
 
     >>> c = executor.submit(add, a, b)  # doctest: +SKIP
 
-    This allows for the dynamic creation of complex dependencies.
+    Gather results with the ``gather`` method.
+
+    >>> executor.gather([c])  # doctest: +SKIP
+    33
+
+    See Also
+    --------
+    distributed.scheduler.Scheduler: Internal scheduler
     """
-    def __init__(self, arg, start=True, delete_batch_time=1, loop=None):
+    def __init__(self, address, start=True, delete_batch_time=1, loop=None):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
         self.coroutines = []
-        self._start_arg = arg
+        self._start_arg = address
 
         if start:
             self.start(delete_batch_time=delete_batch_time)
