@@ -148,12 +148,8 @@ class Progress(SchedulerPlugin):
             else:
                 scheduler = default_executor().scheduler
 
-        start = time.time()
         while not keys.issubset(scheduler.dask):
-            time.sleep(0.01)
-            if time.time() > start + 1:
-                raise ValueError("Keys not found: %s" %
-                                 str(keys - scheduler.in_play))
+            time.sleep(0.05)
 
         self.scheduler = scheduler
 
