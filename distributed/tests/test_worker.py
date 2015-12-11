@@ -151,6 +151,42 @@ def test_upload_file(loop):
     _test_cluster(f)
 
 
+def test_upload_egg(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        eggname = 'mytestegg-1.0.0-py3.4.egg'
+        local_file = __file__.replace('test_worker.py', eggname)
+        assert not os.path.exists(os.path.join(a.local_dir, eggname))
+        assert not os.path.exists(os.path.join(b.local_dir, eggname))
+        assert a.local_dir != b.local_dir
+
+        aa = rpc(ip=a.ip, port=a.port)
+        bb = rpc(ip=b.ip, port=b.port)
+        with open(local_file, 'rb') as f:
+            payload = f.read()
+        yield [aa.upload_file(filename=eggname, data=payload),
+               bb.upload_file(filename=eggname, data=payload)]
+
+        assert os.path.exists(os.path.join(a.local_dir, eggname))
+        assert os.path.exists(os.path.join(b.local_dir, eggname))
+
+        def g(x):
+            import testegg
+            return testegg.inc(x)
+
+        yield aa.compute(function=g, key='x', args=(10,))
+        result = yield aa.get_data(keys=['x'])
+        assert result == {'x': 10 + 1}
+
+        yield a._close()
+        yield b._close()
+        aa.close_streams()
+        bb.close_streams()
+        assert not os.path.exists(os.path.join(a.local_dir, eggname))
+
+    _test_cluster(f)
+
+
 def test_broadcast(loop):
     @gen.coroutine
     def f(c, a, b):
