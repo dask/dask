@@ -4,7 +4,7 @@ Executor
 The Executor is the primary entry point for users of ``distributed``.
 
 After you :doc:`setup a cluster <setup>`, initialize an ``Executor`` by
-pointing it to the Center node's address:
+pointing it to the address of a ``Center`` or ``Scheduler`` nodes:
 
 .. code-block:: python
 
@@ -69,7 +69,9 @@ as they become available.
 
 But, as always, we want to minimize communicating results back to the local
 process.  It's often best to leave data on the cluster and operate on it
-remotely with functions like ``submit``, ``map``, and ``get``.
+remotely with functions like ``submit``, ``map``, ``get`` and ``compute``.
+See :doc:`efficiency <efficiency>` for more information on efficient use of
+distributed.
 
 ``map``
 ~~~~~~~

@@ -9,13 +9,17 @@ performance.
 Leave data on the cluster
 -------------------------
 
-Wait as long as possible to gather data locally.  For example if we want to
-compute the shape of a numpy array on the cluster we might do one of the
-following:
+Wait as long as possible to gather data locally.  If you want to ask a question
+of a large piece of data on the cluster it is often faster to submit a function
+onto that data then to bring the data down to your local computer.
 
-1.  Gather the numpy array to the local process, access the ``.shape``
+
+For example if we have a numpy array on the cluster and we want to know its
+shape we might choose one of the following options:
+
+1.  **Slow:** Gather the numpy array to the local process, access the ``.shape``
     attribute
-2.  Send a quick lambda function up to the cluster to compute the shape
+2.  **Fast:** Send a lambda function up to the cluster to compute the shape
 
 .. code-block:: python
 
@@ -59,6 +63,7 @@ A common solution is to batch your input into larger chunks.
 **Fast**
 
 .. code-block:: python
+
    >>> def f_many(chunk):
    ...     return [f(x) for x in chunk]
 
@@ -88,12 +93,15 @@ for you.  Your code is likely optimal for use with multi-threading.
 Don't go distributed
 --------------------
 
-Consider the dask and concurrent.futures modules, which perform much of the
-same function on a single machine.  It may be that your problem performs well
-enough on a laptop.
+Consider the dask_ and concurrent.futures_ modules, which have similar APIs to
+distributed but operate on a single machine.  It may be that your problem
+performs well enough on a laptop or large workstation.
 
 Consider accelerating your code through other means than parallelism.  Better
 algorithms, data structures, storage formats, or just a little bit of
 C/Fortran/Numba code might be enough to give you the 10x speed boost that
 you're looking for.  Parallelism and distributed computing are expensive ways
 to accelerate your application.
+
+.. _dask: http://dask.pydata.org/en/latest/
+.. _concurrent.futures: https://docs.python.org/3/library/concurrent.futures.html
