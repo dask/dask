@@ -242,20 +242,26 @@ class Worker(Server):
         return {k: self.data[k] for k in keys if k in self.data}
 
     def upload_file(self, stream, filename=None, data=None, load=True):
-        with open(os.path.join(self.local_dir, filename), 'wb') as f:
+        out_filename = os.path.join(self.local_dir, filename)
+        with open(out_filename, 'wb') as f:
             f.write(data)
             f.flush()
 
         if load:
             try:
                 name, ext = os.path.splitext(filename)
-                logger.info("Reloading module %s", name)
                 if ext in ('.py', '.pyc'):
+                    logger.info("Reload module %s from .py file", name)
                     name = name.split('-')[0]
                     reload(import_module(name))
                 if ext == '.egg':
-                    for pkg in pkg_resources.find_distributions(filename):
+                    sys.path.append(out_filename)
+                    pkgs = pkg_resources.find_distributions(out_filename)
+                    for pkg in pkgs:
+                        logger.info("Load module %s from egg", pkg.project_name)
                         reload(import_module(pkg.project_name))
+                    if not pkgs:
+                        logger.warning("Found no packages in egg file")
             except Exception as e:
                 logger.exception(e)
                 return e
