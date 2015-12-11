@@ -229,3 +229,8 @@ def test_value_picklable():
     y = pickle.loads(pickle.dumps(x))
     assert x.dask == y.dask
     assert x._key == y._key
+
+
+def test_imperative_compute_forward_kwargs():
+    x = value(1) + 2
+    x.compute(bogus_keyword=10)

@@ -1727,3 +1727,8 @@ def test_chunks_error():
     x = np.ones((10, 10))
     with pytest.raises(ValueError):
         da.from_array(x, chunks=(5,))
+
+
+def test_array_compute_forward_kwargs():
+    x = da.arange(10, chunks=2).sum()
+    x.compute(bogus_keyword=10)

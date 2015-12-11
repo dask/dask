@@ -2386,3 +2386,8 @@ def test_reset_index():
     assert len(res.index.compute()) == len(exp.index)
     assert res.columns == tuple(exp.columns)
     assert_array_almost_equal(res.compute().values, exp.values)
+
+
+def test_dataframe_compute_forward_kwargs():
+    x = dd.from_pandas(pd.DataFrame({'a': range(10)}), npartitions=2).a.sum()
+    x.compute(bogus_keyword=10)
