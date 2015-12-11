@@ -22,5 +22,5 @@ setup(name='distributed',
       long_description=(open('README.md').read() if os.path.exists('README.md')
                         else ''),
       scripts=[os.path.join('bin', name)
-               for name in ['dcenter', 'dworker', 'dcluster']],
+               for name in ['dcenter', 'dworker', 'dcluster', 'dscheduler']],
       zip_safe=False)
