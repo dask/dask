@@ -18,7 +18,7 @@ Serve Data
 Workers serve data from a local dictionary of data::
 
    {'x': np.array(...),
-    'y': np.array(...)}
+    'y': pd.DataFrame(...)}
 
 Operations include normal dictionary operations, like get, set, and delete
 key-value pairs.  In the following example we connect to two workers, collect
@@ -50,8 +50,11 @@ actual result stays on the remote worker.
 
 .. code-block:: python
 
-   response = yield alice.compute(function=add, keys=['x', 'a'])
-   assert response == b'OK'
+   >>> response, metadata = yield alice.compute(function=add, keys=['x', 'a'])
+   >>> response
+   b'OK'
+   >>> metadata
+   {'nbytes': 1024}
 
 The worker also reports back to the center whenever it completes a computation.
 Metadata storage is centralized but all data transfer is peer-to-peer.  Here is
