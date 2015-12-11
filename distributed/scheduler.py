@@ -440,17 +440,36 @@ def execute_task(task):
 
 
 class Scheduler(Server):
-    """ A dynamic distributed task scheduler
+    """ Dynamic distributed task scheduler
 
     The scheduler tracks the current state of workers, data, and computations.
     The scheduler listens for events and responds by controlling workers
     appropriately.  It continuously tries to use the workers to execute an ever
     growing dask graph.
 
-    All events are handled quickly, in linear time to their input (which is
-    often of constant size) and generally within a millisecond.  To accomplish
-    this the scheduler tracks a lot of state.  Every operations maintains the
-    consistency of this state.
+    All events are handled quickly, in linear time with respect to their input
+    (which is often of constant size) and generally within a millisecond.  To
+    accomplish this the scheduler tracks a lot of state.  Every operation
+    maintains the consistency of this state.
+
+    The scheduler communicates with the outside world either by adding pairs of
+    in/out queues or by responding to a new IOStream (the Scheduler can operate
+    as a typical distributed ``Server``).  It maintains a consistent and valid
+    view of the world even when listening to several clients at once.
+
+    A Scheduler is typically started either with the ``dscheduler``
+    executable::
+
+        $ dscheduler 127.0.0.1:8787  # address of center
+
+    Or as part of when an Executor starts up and connects to a Center::
+
+        >>> e = Executor('127.0.0.1:8787')  # doctest:: +SKIP
+        >>> e.scheduler  # doctest:: +SKIP
+        Scheduler(...)
+
+    Users typically do not interact with the scheduler except through Plugins.
+    See http://distributed.readthedocs.org/en/latest/plugins.html
 
     Parameters
     ----------
