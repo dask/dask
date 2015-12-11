@@ -228,7 +228,6 @@ def test_values(loop):
             p = MultiProgressWidget([x])
             p.start()
             assert p.status == 'error'
-            assert p.bars[p.func(x.key)].value == 1.0
 
 
 def test_progressbar_done(loop):
@@ -278,9 +277,9 @@ def test_multibar_complete(loop):
         p = MultiProgressWidget(['e'], scheduler=s, complete=True)
         assert set(concat(p.all_keys.values())) == {'x-1', 'x-2', 'x-3', 'y-1',
                 'y-2', 'e'}
-        assert all(b.value == 1.0 for b in p.bars.values())
-        assert p.bar_texts['x'].value == '3 / 3'
-        assert p.bar_texts['y'].value == '2 / 2'
+        assert all(b.value == 1.0 for k, b in p.bars.items() if k != 'e')
+        assert '3 / 3' in p.bar_texts['x'].value
+        assert '2 / 2' in p.bar_texts['y'].value
 
         sched.put_nowait({'op': 'close'})
         yield done
