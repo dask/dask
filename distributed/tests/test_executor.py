@@ -1551,3 +1551,14 @@ def test_remote_submit_on_Future(loop):
         yield e._shutdown()
         s.stop()
     _test_cluster(f, loop)
+
+
+def test_start_is_idempotent(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            e.start()
+            e.start()
+            e.start()
+
+            x = e.submit(inc, 1)
+            assert x.result() == 2

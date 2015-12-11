@@ -132,10 +132,12 @@ def normalize_future(f):
 
 
 class Executor(object):
-    """ Distributed executor
+    """ Drive computations on a distributed cluster
 
-    This executor resembles executors in ``concurrent.futures`` but also allows
-    Futures within submit/map calls.
+    The Executor connects users to a distributed compute cluster.  It provides
+    an asynchronous user interface around functions and futures.  This class
+    resembles executors in ``concurrent.futures`` but also allows ``Future``
+    objects within ``submit/map`` calls.
 
     Parameters
     ----------
@@ -143,7 +145,6 @@ class Executor(object):
         This can be the address of a ``Center`` or ``Scheduler`` servers, either
         as a string or tuple ``'127.0.0.1:8787'`` or ``('127.0.0.1', 8787)``
         or it can be a local ``Scheduler`` object.
-
 
     Examples
     --------
@@ -184,11 +185,13 @@ class Executor(object):
         self._loop_thread.start()
         sync(self.loop, self._start, **kwargs)
 
-    def send_to_scheduler(self, msg):
+    def _send_to_scheduler(self, msg):
         if isinstance(self.scheduler, Scheduler):
             self.loop.add_callback(self.scheduler_queue.put_nowait, msg)
         elif isinstance(self.scheduler_stream, IOStream):
             write(self.scheduler_stream, msg)
+        else:
+            raise NotImplementedError()
 
     @gen.coroutine
     def _start(self, **kwargs):
@@ -224,7 +227,7 @@ class Executor(object):
                 self.scheduler_queue, self.report_queue))
 
         start_event = Event()
-        self.coroutines.append(self.report(start_event))
+        self.coroutines.append(self._handle_report(start_event))
 
         _global_executor[0] = self
         yield start_event.wait()
@@ -253,10 +256,10 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self.send_to_scheduler({'op': 'release-held-data', 'key': key})
+        self._send_to_scheduler({'op': 'release-held-data', 'key': key})
 
     @gen.coroutine
-    def report(self, start_event):
+    def _handle_report(self, start_event):
         """ Listen to scheduler """
         if isinstance(self.scheduler, Scheduler):
             next_message = self.report_queue.get
@@ -301,7 +304,7 @@ class Executor(object):
     @gen.coroutine
     def _shutdown(self, fast=False):
         """ Send shutdown signal and wait until scheduler completes """
-        self.send_to_scheduler({'op': 'close'})
+        self._send_to_scheduler({'op': 'close'})
         if _global_executor[0] is self:
             _global_executor[0] = None
         if not fast:
@@ -309,7 +312,7 @@ class Executor(object):
 
     def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates """
-        self.send_to_scheduler({'op': 'close'})
+        self._send_to_scheduler({'op': 'close'})
         self.loop.stop()
         self._loop_thread.join(timeout=timeout)
         if _global_executor[0] is self:
@@ -371,7 +374,7 @@ class Executor(object):
         task2, _ = unpack_remotedata(task)
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
-        self.send_to_scheduler({'op': 'update-graph',
+        self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': {key: task2},
                                 'keys': [key],
                                 'restrictions': restrictions})
@@ -442,7 +445,7 @@ class Executor(object):
             raise TypeError("Workers must be a list or set of workers or None")
 
         logger.debug("map(%s, ...)", funcname(func))
-        self.send_to_scheduler({'op': 'update-graph',
+        self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': dsk,
                                 'keys': keys,
                                 'restrictions': restrictions})
@@ -467,7 +470,7 @@ class Executor(object):
 
             if response == b'error':
                 logger.debug("Couldn't gather keys %s", data)
-                self.send_to_scheduler({'op': 'missing-data',
+                self._send_to_scheduler({'op': 'missing-data',
                                         'missing': data.args})
                 for key in data.args:
                     self.futures[key]['event'].clear()
@@ -542,7 +545,7 @@ class Executor(object):
         dsk2 = {k: unpack_remotedata(v)[0] for k, v in dsk.items()}
         dsk3 = {k: v for k, v in dsk2.items() if (k == v) is not True}
 
-        self.send_to_scheduler({'op': 'update-graph',
+        self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': dsk3,
                                 'keys': flatkeys,
                                 'restrictions': restrictions or {}})
@@ -629,7 +632,7 @@ class Executor(object):
 
         dsk3 = {k: unpack_remotedata(v)[0] for k, v in merge(dsk, dsk2).items()}
 
-        self.send_to_scheduler({'op': 'update-graph',
+        self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': dsk3,
                                 'keys': names})
 
@@ -646,7 +649,7 @@ class Executor(object):
 
     @gen.coroutine
     def _restart(self):
-        self.send_to_scheduler({'op': 'restart'})
+        self._send_to_scheduler({'op': 'restart'})
         self._restart_event = Event()
         yield self._restart_event.wait()
 
