@@ -61,3 +61,107 @@ RPC
 To interact with remote servers we typically use ``rpc`` objects.
 
 .. autoclass:: distributed.core.rpc
+
+
+Example
+-------
+
+Here is a small example using distributed.core to create and interact with a
+custom server.
+
+
+Server Side
+~~~~~~~~~~~
+
+.. code-block:: python
+
+   from tornado import gen
+   from tornado.ioloop import IOLoop
+   from distributed.core import write, Server
+
+   def add(stream, x=None, y=None):  # simple handler, just a function
+       return x + y
+
+   @gen.coroutine
+   def stream_data(stream, interval=1):  # complex handler, multiple responses
+       data = 0
+       while True:
+           yield gen.sleep(interval)
+           data += 1
+           yield write(stream, data)
+
+   s = Server({'add': add, 'stream': stream_data})
+   s.listen(8888)
+
+   IOLoop.current().start()
+
+
+Client Side
+~~~~~~~~~~~
+
+.. code-block:: python
+
+   from tornado import gen
+   from tornado.ioloop import IOLoop
+   from distributed.core import connect, read, write
+
+   @gen.coroutine
+   def f():
+       stream = yield connect('127.0.0.1', 8888)
+       yield write(stream, {'op': 'add', 'x': 1, 'y': 2})
+       result = yield read(stream)
+       print(result)
+
+   >>> IOLoop().run_sync(f)
+   3
+
+   @gen.coroutine
+   def g():
+       stream = yield connect('127.0.0.1', 8888)
+       yield write(stream, {'op': 'stream', 'interval': 1})
+       while True:
+           result = yield read(stream)
+           print(result)
+
+   >>> IOLoop().run_sync(g)
+   1
+   2
+   3
+   ...
+
+
+Client Side with rpc
+~~~~~~~~~~~~~~~~~~~~
+
+RPC provides a more pythonic interface.  It also provides other benefits, such
+as using multiple streams in concurrent cases.  Most distributed code uses
+rpc.  The exception is when we need to perform multiple reads or writes, as
+with the stream data case above.
+
+.. code-block:: python
+
+   from tornado import gen
+   from tornado.ioloop import IOLoop
+   from distributed.core import rpc
+
+   @gen.coroutine
+   def f():
+       # stream = yield connect('127.0.0.1', 8888)
+       # yield write(stream, {'op': 'add', 'x': 1, 'y': 2})
+       # result = yield read(stream)
+       r = rpc(ip='127.0.0.1', 8888)
+       result = yield r.add(x=1, y=2)
+
+       print(result)
+
+   >>> IOLoop().run_sync(f)
+   3
+
+Everything is a Server
+----------------------
+
+The Center, Workers, Scheduler, and Nanny objects all inherit from Server.
+Each maintains separate state and serves separate functions but all communicate
+in the way shown above.  They talk to each other by opening connections,
+writing messages that trigger remote functions, and then collect the results
+with read.
