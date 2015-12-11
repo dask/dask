@@ -14,13 +14,13 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError, IOStream
 
-from dask.core import istask, get_deps, reverse_dict, _deps
+from dask.core import istask, get_deps, reverse_dict
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server)
 from .client import unpack_remotedata, scatter_to_workers, _gather
-from .utils import All, ignoring, clear_queue
+from .utils import All, ignoring, clear_queue, _deps
 
 
 logger = logging.getLogger(__name__)

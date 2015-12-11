@@ -1,11 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import Iterable
+from contextlib import contextmanager
 import os
 import socket
 import sys
 import tempfile
 
+from dask import istask
 from tornado import gen
 
 
@@ -24,7 +26,6 @@ def get_ip():
         for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
 
 
-from contextlib import contextmanager
 
 @contextmanager
 def ignoring(*exceptions):
@@ -101,6 +102,40 @@ def clear_queue(q):
     while not q.empty():
         q.get_nowait()
 
+
+def _deps(dsk, arg):
+    """ Get dependencies from keys or tasks
+
+    Helper function for get_dependencies.
+
+    >>> dsk = {'x': 1, 'y': 2}
+
+    >>> _deps(dsk, 'x')
+    ['x']
+    >>> _deps(dsk, (add, 'x', 1))
+    ['x']
+    >>> _deps(dsk, ['x', 'y'])
+    ['x', 'y']
+    >>> _deps(dsk, {'name': 'x'})
+    ['x']
+    >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
+    ['x', 'y']
+    """
+    if istask(arg):
+        result = []
+        for a in arg[1:]:
+            result.extend(_deps(dsk, a))
+        return result
+    if isinstance(arg, list):
+        return sum([_deps(dsk, a) for a in arg], [])
+    if isinstance(arg, dict):
+        return sum([_deps(dsk, v) for v in arg.values()], [])
+    try:
+        if arg not in dsk:
+            return []
+    except TypeError:  # not hashable
+            return []
+    return [arg]
 
 
 import logging
