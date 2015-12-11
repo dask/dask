@@ -11,12 +11,15 @@ from time import sleep, time
 import pytest
 from toolz import identity, isdistinct, first
 from tornado.ioloop import IOLoop
+from tornado.iostream import IOStream
 from tornado import gen
 
 from distributed import Center, Worker
+from distributed.core import rpc
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
         as_completed, tokenize, _global_executor, default_executor)
+from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
 from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
@@ -100,11 +103,15 @@ def test_map(loop):
 
 
 def test_future(loop):
-    e = Executor('127.0.0.1:8787', start=False, loop=loop)
-    x = e.submit(inc, 10)
-    assert str(x.key) in repr(x)
-    assert str(x.status) in repr(x)
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
 
+        x = e.submit(inc, 10)
+        assert str(x.key) in repr(x)
+        assert str(x.status) in repr(x)
+    _test_cluster(f, loop)
 
 def test_Future_exception(loop):
     @gen.coroutine
@@ -137,6 +144,7 @@ def test_map_naming(loop):
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
 
         L1 = e.map(inc, range(5))
         L2 = e.map(inc, range(5))
@@ -156,6 +164,7 @@ def test_submit_naming(loop):
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
 
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
@@ -395,6 +404,7 @@ def test_garbage_collection(loop):
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
 
         a = e.submit(inc, 1)
         b = e.submit(inc, 1)
@@ -405,8 +415,6 @@ def test_garbage_collection(loop):
 
         c = e.submit(inc, b)
         b.__del__()
-
-        yield e._start()
 
         result = yield c._result()
         assert result == 3
@@ -422,9 +430,8 @@ def test_garbage_collection(loop):
 def test_garbage_collection_with_scatter(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False,
-                loop=loop)
-        yield e._start()
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start(delete_batch_time=0)
 
         [a] = yield e._scatter([1])
         assert a.key in e.futures
@@ -450,9 +457,9 @@ def test_garbage_collection_with_scatter(loop):
 def test_recompute_released_key(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False,
+        e = Executor((c.ip, c.port), start=False,
                 loop=loop)
-        yield e._start()
+        yield e._start(delete_batch_time=0)
 
         x = e.submit(inc, 100)
         result1 = yield x._result()
@@ -494,9 +501,9 @@ def test_stress_gc(loop):
 def test_long_tasks_dont_trigger_timeout(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False,
+        e = Executor((c.ip, c.port), start=False,
                 loop=loop)
-        yield e._start()
+        yield e._start(delete_batch_time=0)
 
         from time import sleep
         x = e.submit(sleep, 3)
@@ -509,9 +516,9 @@ def test_long_tasks_dont_trigger_timeout(loop):
 def test_missing_data_heals(loop):
     @gen.coroutine
     def f(c, a, b):
-        e = Executor((c.ip, c.port), delete_batch_time=0, start=False,
+        e = Executor((c.ip, c.port), start=False,
                 loop=loop)
-        yield e._start()
+        yield e._start(delete_batch_time=0)
 
         x = e.submit(inc, 1)
         y = e.submit(inc, x)
@@ -607,16 +614,23 @@ def test_gather_robust_to_nested_missing_data(loop):
 
 
 def test_tokenize_on_futures(loop):
-    e = Executor((None, None), start=False, loop=loop)
-    x = e.submit(inc, 1)
-    y = e.submit(inc, 1)
-    tok = tokenize(x)
-    assert tokenize(x) == tokenize(x)
-    assert tokenize(x) == tokenize(y)
+    @gen.coroutine
+    def f(c, a, b):
+        e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
 
-    e.futures[x.key]['status'] = 'finished'
+        x = e.submit(inc, 1)
+        y = e.submit(inc, 1)
+        tok = tokenize(x)
+        assert tokenize(x) == tokenize(x)
+        assert tokenize(x) == tokenize(y)
 
-    assert tok == tokenize(y)
+        e.futures[x.key]['status'] = 'finished'
+
+        assert tok == tokenize(y)
+
+        yield e._shutdown()
+    _test_cluster(f, loop)
 
 
 def test_restrictions_submit(loop):
@@ -881,11 +895,6 @@ def test_aliases(loop):
     _test_cluster(f, loop)
 
 
-def test_executor_has_state_on_initialization(loop):
-    e = Executor('127.0.0.1:8787', start=False, loop=loop)
-    assert isinstance(e.scheduler.ncores, dict)
-
-
 def test__scatter(loop):
     @gen.coroutine
     def f(c, a, b):
@@ -957,11 +966,10 @@ def test_exception_on_exception(loop):
     @gen.coroutine
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e._start()
 
         x = e.submit(lambda: 1 / 0)
         y = e.submit(inc, x)
-
-        yield e._start()
 
         with pytest.raises(ZeroDivisionError):
             out = yield y._result()
@@ -1342,7 +1350,7 @@ def test_multiple_executors(loop):
     def f(c, a, b):
         a = Executor((c.ip, c.port), start=False, loop=loop)
         yield a._start()
-        b = Executor(scheduler=a.scheduler, start=False, loop=loop)
+        b = Executor(a.scheduler, start=False, loop=loop)
         yield b._start()
 
         x = a.submit(inc, 1)
@@ -1380,7 +1388,7 @@ def test_multiple_executors_restart(loop):
         try:
             e1 = Executor((c.ip, c.port), start=False, loop=loop)
             yield e1._start()
-            e2 = Executor(scheduler=e1.scheduler, start=False, loop=loop)
+            e2 = Executor(e1.scheduler, start=False, loop=loop)
             yield e2._start()
 
             x = e1.submit(inc, 1)
@@ -1437,3 +1445,87 @@ def test_sync_compute(loop):
 
             yy, zz = e.compute(y, z, sync=True)
             assert (yy, zz) == (2, 0)
+
+
+def test_remote_scheduler(loop):
+    port = 8041
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+        s.listen(port)
+
+        e = Executor(('127.0.0.1', port),
+                     start=False, loop=loop)
+        yield e._start()
+
+        assert isinstance(e.scheduler_stream, IOStream)
+        assert s.streams
+
+        x = e.submit(inc, 1)
+        result = yield x._result()
+
+        yield e._shutdown()
+        s.stop()
+    _test_cluster(f, loop)
+
+
+def test_input_types(loop):
+    @gen.coroutine
+    def f(c, a, b):
+        e1 = Executor((c.ip, c.port), start=False, loop=loop)
+        yield e1._start()
+
+        assert isinstance(e1.center, rpc)
+        assert isinstance(e1.scheduler, Scheduler)
+
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+
+        e2 = Executor(s, start=False, loop=loop)
+        yield e2._start()
+
+        assert isinstance(e2.center, rpc)
+        assert isinstance(e2.scheduler, Scheduler)
+
+        s.listen(8042)
+
+        e3 = Executor(('127.0.0.1', s.port), start=False, loop=loop)
+        yield e3._start()
+
+        assert isinstance(e3.center, rpc)
+        assert isinstance(e3.scheduler, rpc)
+
+        s.stop()
+
+        yield e1._shutdown()
+        yield e2._shutdown()
+        yield e3._shutdown()
+    _test_cluster(f, loop)
+
+
+def test_remote_scatter_gather(loop):
+    port = 8043
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+        s.listen(port)
+
+        e = Executor(('127.0.0.1', port), start=False, loop=loop)
+        yield e._start()
+
+        x, y, z = yield e._scatter([1, 2, 3])
+
+        assert x.key in a.data or x.key in b.data
+        assert y.key in a.data or y.key in b.data
+        assert z.key in a.data or z.key in b.data
+
+        xx, yy, zz = yield e._gather([x, y, z])
+        assert (xx, yy, zz) == (1, 2, 3)
+
+        s.stop()
+    _test_cluster(f, loop)

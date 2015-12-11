@@ -13,9 +13,6 @@ logger = logging.getLogger('distributed.dworker')
 
 ip = get_ip()
 
-# Set up signal handling
-import signal
-
 
 @click.command()
 @click.argument('center', type=str)

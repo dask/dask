@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+
+import logging
+from sys import argv, exit
+import socket
+
+import click
+from distributed import  Scheduler, sync
+from distributed.utils import get_ip
+from tornado.ioloop import IOLoop
+
+logger = logging.getLogger('distributed.scheduler')
+
+ip = get_ip()
+
+
+@click.command()
+@click.argument('center', type=str)
+@click.option('--port', type=int, default=8786, help="Serving port")
+def go(center, port):
+    while True:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(('127.0.0.1', port))
+        except socket.error:
+            port += 1
+        else:
+            sock.close()
+            break
+
+    try:
+        center_ip, center_port = center.split(':')
+        center_port = int(center_port)
+    except IndexError:
+        logger.info("Usage:  dscheduler center_host:center_port")
+
+    loop = IOLoop.current()
+    scheduler = Scheduler((center_ip, center_port))
+    loop.run_sync(scheduler._sync_center)
+    done = scheduler.start()
+    scheduler.listen(port)
+
+    try:
+        logger.info("Start Scheduler at %s:%s", ip, port)
+        loop.start()
+    except KeyboardInterrupt:
+        logger.info("End scheduler at %s:%d", ip, port)
+
+if __name__ == '__main__':
+    go()

@@ -7,26 +7,23 @@ from functools import wraps, partial
 import itertools
 import logging
 import os
-import time
 import uuid
 
 import dask
 from dask.base import tokenize, normalize_token, Base
-from dask.core import flatten, quote
+from dask.core import flatten
 from dask.compatibility import apply
-from toolz import first, groupby, valmap, merge
+from toolz import first, groupby, merge
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
-from tornado.concurrent import Future
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
-from .client import (WrappedKey, _gather, unpack_remotedata, pack_data)
+from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
-from .sizeof import sizeof
 from .utils import All, sync, funcname, ignoring
 
 logger = logging.getLogger(__name__)
@@ -138,14 +135,24 @@ def normalize_future(f):
 
 
 class Executor(object):
-    """ Distributed executor with data dependencies
+    """ Distributed executor
 
-    This executor resembles executors in concurrent.futures but also allows
+    This executor resembles executors in ``concurrent.futures`` but also allows
     Futures within submit/map calls.
 
-    Provide center address on initialization
+    Parameters
+    ----------
+    arg: string, tuple, Scheduler
+        This can be the address of a ``Center`` or ``Scheduler`` servers, either
+        as a string or tuple ``'127.0.0.1:8787'`` or ``('127.0.0.1', 8787)``
+        or it can be a local ``Scheduler`` object.
 
-    >>> executor = Executor(('127.0.0.1', 8787))  # doctest: +SKIP
+
+    Examples
+    --------
+    Provide cluster's head node address on initialization:
+
+    >>> executor = Executor('127.0.0.1:8787')  # doctest: +SKIP
 
     Use ``submit`` method like normal
 
@@ -159,34 +166,17 @@ class Executor(object):
 
     This allows for the dynamic creation of complex dependencies.
     """
-    def __init__(self, center=None, scheduler=None, start=True, delete_batch_time=1, loop=None):
+    def __init__(self, arg, start=True, delete_batch_time=1, loop=None):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
-        self.scheduler_queue = Queue()
-        self.report_queue = Queue()
-
-        if scheduler:
-            if isinstance(scheduler, Scheduler):
-                self.scheduler = scheduler
-                if not center:
-                    self.center = scheduler.center
-            else:
-                raise NotImplementedError()
-                # self.scheduler = coerce_to_rpc(scheduler)
-        else:
-            self.scheduler = Scheduler(center, loop=self.loop,
-                                       delete_batch_time=delete_batch_time)
-        if center:
-            self.center = coerce_to_rpc(center)
-
-        if not self.center:
-            raise ValueError("Provide Center address")
+        self.coroutines = []
+        self._start_arg = arg
 
         if start:
-            self.start()
+            self.start(delete_batch_time=delete_batch_time)
 
-    def start(self):
+    def start(self, **kwargs):
         """ Start scheduler running in separate thread """
         if hasattr(self, '_loop_thread'):
             return
@@ -195,24 +185,49 @@ class Executor(object):
         self._loop_thread.daemon = True
         _global_executor[0] = self
         self._loop_thread.start()
-        sync(self.loop, self._start)
+        sync(self.loop, self._start, **kwargs)
 
     def send_to_scheduler(self, msg):
         if isinstance(self.scheduler, Scheduler):
             self.loop.add_callback(self.scheduler_queue.put_nowait, msg)
-        else:
-            raise NotImplementedError()
+        elif isinstance(self.scheduler_stream, IOStream):
+            write(self.scheduler_stream, msg)
 
     @gen.coroutine
-    def _start(self):
-        if self.scheduler.status != 'running':
-            yield self.scheduler._sync_center()
-            self.scheduler.start()
+    def _start(self, **kwargs):
+        if isinstance(self._start_arg, Scheduler):
+            self.scheduler = self._start_arg
+            self.center = self._start_arg.center
+        if isinstance(self._start_arg, str):
+            ip, port = tuple(self._start_arg.split(':'))
+            self._start_arg = (ip, int(port))
+        if isinstance(self._start_arg, tuple):
+            r = coerce_to_rpc(self._start_arg)
+            ident = yield r.identity()
+            if ident['type'] == 'Center':
+                self.center = r
+                self.scheduler = Scheduler(self.center, loop=self.loop,
+                        **kwargs)
+            elif ident['type'] == 'Scheduler':
+                self.scheduler = r
+                self.scheduler_stream = yield connect(*self._start_arg)
+                yield write(self.scheduler_stream, {'op': 'start-control'})
+                cip, cport = ident['center']
+                self.center = rpc(ip=cip, port=cport)
+            else:
+                raise ValueError("Unknown Type")
+
+        if isinstance(self.scheduler, Scheduler):
+            if self.scheduler.status != 'running':
+                yield self.scheduler._sync_center()
+                self.scheduler.start()
+            self.scheduler_queue = Queue()
+            self.report_queue = Queue()
+            self.coroutines.append(self.scheduler.handle_queues(
+                self.scheduler_queue, self.report_queue))
 
         start_event = Event()
-        self.coroutines = [
-                self.scheduler.handle_queues(self.scheduler_queue, self.report_queue),
-                self.report(start_event)]
+        self.coroutines.append(self.report(start_event))
 
         _global_executor[0] = self
         yield start_event.wait()
@@ -246,14 +261,18 @@ class Executor(object):
     @gen.coroutine
     def report(self, start_event):
         """ Listen to scheduler """
+        if isinstance(self.scheduler, Scheduler):
+            next_message = self.report_queue.get
+        elif isinstance(self.scheduler_stream, IOStream):
+            next_message = lambda: read(self.scheduler_stream)
+        else:
+            raise NotImplemented()
+
         while True:
-            if isinstance(self.scheduler, Scheduler):
-                msg = yield self.report_queue.get()
-            elif isinstance(self.scheduler, IOStream):
-                raise NotImplementedError()
-                msg = yield read(self.scheduler)
-            else:
-                raise NotImplementedError()
+            try:
+                msg = yield next_message()
+            except StreamClosedError:
+                break
 
             if msg['op'] == 'stream-start':
                 start_event.set()
@@ -442,18 +461,17 @@ class Executor(object):
                           if self.futures[key]['status'] == 'error']
             if exceptions:
                 raise exceptions[0]
-            try:
-                data = yield _gather(self.center, keys)
-            except KeyError as e:
-                logger.debug("Couldn't gather keys %s", e)
+
+            response, data = yield self.scheduler.gather(keys=keys)
+
+            if response == b'error':
+                logger.debug("Couldn't gather keys %s", data)
                 self.send_to_scheduler({'op': 'missing-data',
-                                        'missing': e.args})
-                for key in e.args:
+                                        'missing': data.args})
+                for key in data.args:
                     self.futures[key]['event'].clear()
             else:
                 break
-
-        data = dict(zip(keys, data))
 
         result = pack_data(futures2, data)
         raise gen.Return(result)
@@ -477,7 +495,7 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None):
-        remotes = yield self.scheduler._scatter(None, data, workers)
+        remotes = yield self.scheduler.scatter(data=data, workers=workers)
         if isinstance(remotes, list):
             remotes = [Future(r.key, self) for r in remotes]
             keys = {r.key for r in remotes}
@@ -606,8 +624,7 @@ class Executor(object):
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v, v._keys()) for name, v in zip(names, variables)}
 
-        self.loop.add_callback(self.scheduler_queue.put_nowait,
-                                {'op': 'update-graph',
+        self.send_to_scheduler({'op': 'update-graph',
                                 'dsk': merge(dsk, dsk2),
                                 'keys': names})
 

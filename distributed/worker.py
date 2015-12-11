@@ -126,6 +126,10 @@ class Worker(Server):
     def start(self):
         self.loop.add_callback(self._start)
 
+    def identity(self, stream):
+        return {'type': type(self).__name__, 'id': self.id,
+                'center': (self.center.ip, self.center.port)}
+
     @gen.coroutine
     def _close(self, timeout=10):
         yield gen.with_timeout(timedelta(seconds=timeout),

@@ -121,7 +121,11 @@ class Server(TCPServer):
                     logger.warn(result)
                 else:
                     logger.debug("Calling into handler %s", handler.__name__)
-                    result = yield gen.maybe_future(handler(stream, **msg))
+                    try:
+                        result = yield gen.maybe_future(handler(stream, **msg))
+                    except Exception as e:
+                        logger.exception(e)
+                        raise
                 if reply:
                     try:
                         yield write(stream, result)
@@ -176,16 +180,22 @@ sentinel = b'7f57da0f9202f6b4df78e251058be6f0'
 def read(stream):
     """ Read a message from a stream """
     msg = yield stream.read_until(sentinel)
-    msg = msg[:-len(sentinel)]
-    msg = loads(msg)
+    try:
+        msg = msg[:-len(sentinel)]
+        msg = loads(msg)
+    except Exception as e:
+        logger.exception(e)
     raise Return(msg)
 
 
 @gen.coroutine
 def write(stream, msg):
     """ Write a message to a stream """
-    msg = dumps(msg)
-    yield stream.write(msg + sentinel)
+    try:
+        msg = dumps(msg)
+        yield stream.write(msg + sentinel)
+    except Exception as e:
+        logger.exception(e)
 
 
 def pingpong(stream):

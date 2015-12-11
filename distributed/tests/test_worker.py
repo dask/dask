@@ -23,6 +23,12 @@ def test_worker_ncores():
     finally:
         shutil.rmtree(w.local_dir)
 
+def test_identity():
+    w = Worker('127.0.0.1', 8018, '127.0.0.1', 8019)
+    ident = w.identity(None)
+    assert ident['type'] == 'Worker'
+    assert ident['center'] == ('127.0.0.1', 8019)
+
 
 def test_worker(loop):
     @gen.coroutine
