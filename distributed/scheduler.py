@@ -490,7 +490,7 @@ class Scheduler(Server):
                                  'task-missing-data': self.mark_missing_data,
                                  'worker-failed': self.mark_worker_missing,
                                  'release-held-data': self.release_held_data,
-                                 'restart': self._restart}
+                                 'restart': self.restart}
 
         self.handlers = {'start-control': self.control_stream,
                          'scatter': self.scatter,
@@ -510,12 +510,9 @@ class Scheduler(Server):
     def put(self, msg):
         return self.scheduler_queues[0].put_nowait(msg)
 
-    @property
-    def report_queue(self):
-        return self.report_queues[0]
-
     @gen.coroutine
-    def _sync_center(self):
+    def sync_center(self):
+        """ Connect to center, determine available workers """
         self.ncores, self.has_what, self.who_has, self.nannies = yield [
                 self.center.ncores(),
                 self.center.has_what(),
@@ -529,7 +526,7 @@ class Scheduler(Server):
             if (ip, nport) not in self.resource_logs:
                 self.resource_logs[(ip, nport)] = deque(maxlen=self.resource_log_size)
 
-            self._nanny_coroutines.append(self._nanny_listen(ip, nport))
+            self._nanny_coroutines.append(self.nanny_listen(ip, nport))
 
     def start(self, start_queues=True):
         collections = [self.dask, self.dependencies, self.dependents,
@@ -563,17 +560,24 @@ class Scheduler(Server):
             if cor.done():
                 raise cor.exception()
 
-        return self._finished()
+        return self.finished()
 
     @gen.coroutine
-    def _finished(self):
+    def finished(self):
+        """ Wait until all coroutines have ceased """
         while any(not c.done() for c in self.coroutines):
             yield All(self.coroutines)
 
     @gen.coroutine
-    def _close(self):
+    def close(self):
+        """ Send cleanup signal to all coroutines then wait until finished
+
+        See Also
+        --------
+        distributed.scheduler.Scheduler.cleanup
+        """
         yield self.cleanup()
-        yield self._finished()
+        yield self.finished()
         yield self.center.close(close=True)
         self.center.close_streams()
 
@@ -947,7 +951,7 @@ class Scheduler(Server):
             if op == 'close-stream':
                 break
             elif op == 'close':
-               self._close()
+               self.close()
                break
             elif op in self.compute_handlers:
                 result = self.compute_handlers[op](**msg)
@@ -1082,7 +1086,8 @@ class Scheduler(Server):
         logger.debug('Delete finished')
 
     @gen.coroutine
-    def _nanny_listen(self, ip, port):
+    def nanny_listen(self, ip, port):
+        """ Listen to a nanny for monitoring information """
         stream = yield connect(ip=ip, port=port)
         yield write(stream, {'op': 'monitor_resources',
                              'interval': self.resource_interval})
@@ -1118,7 +1123,8 @@ class Scheduler(Server):
         raise gen.Return(result)
 
     @gen.coroutine
-    def _restart(self):
+    def restart(self):
+        """ Restart all workers.  Reset local state """
         logger.debug("Send shutdown signal to workers")
 
         for q in self.scheduler_queues + self.report_queues:
@@ -1138,7 +1144,7 @@ class Scheduler(Server):
         # All quiet
 
         yield All([nanny.instantiate(close=True) for nanny in nannies])
-        yield self._sync_center()
+        yield self.sync_center()
         self.start()
 
         self.report({'op': 'restart'})

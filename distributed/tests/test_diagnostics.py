@@ -19,7 +19,7 @@ def test_diagnostic(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -75,7 +75,7 @@ def test_many_Progresss(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -103,7 +103,7 @@ def test_multiprogress(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -148,7 +148,7 @@ def test_TextProgressBar(loop, capsys):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -183,7 +183,7 @@ def test_TextProgressBar_error(loop, capsys):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -216,7 +216,7 @@ def test_TextProgressBar_empty(loop, capsys):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -273,7 +273,7 @@ def test_robust_to_bad_plugin(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'

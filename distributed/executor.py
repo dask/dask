@@ -261,7 +261,7 @@ class Executor(object):
 
         if isinstance(self.scheduler, Scheduler):
             if self.scheduler.status != 'running':
-                yield self.scheduler._sync_center()
+                yield self.scheduler.sync_center()
                 self.scheduler.start()
             self.scheduler_queue = Queue()
             self.report_queue = Queue()

@@ -79,7 +79,7 @@ def test_progressbar_widget(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -109,7 +109,7 @@ def test_multi_progressbar_widget(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -181,7 +181,7 @@ def test_multi_progressbar_widget_after_close(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
@@ -255,7 +255,7 @@ def test_multibar_complete(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'

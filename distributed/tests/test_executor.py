@@ -1452,7 +1452,7 @@ def test_remote_scheduler(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         s.listen(port)
 
@@ -1481,7 +1481,7 @@ def test_input_types(loop):
         assert isinstance(e1.scheduler, Scheduler)
 
         s = Scheduler((c.ip, c.port))
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
 
         e2 = Executor(s, start=False, loop=loop)
@@ -1511,7 +1511,7 @@ def test_remote_scatter_gather(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         s.listen(port)
 
@@ -1536,7 +1536,7 @@ def test_remote_submit_on_Future(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         s.listen(port)
 

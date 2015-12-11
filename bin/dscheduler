@@ -36,7 +36,7 @@ def go(center, port):
 
     loop = IOLoop.current()
     scheduler = Scheduler((center_ip, center_port))
-    loop.run_sync(scheduler._sync_center)
+    loop.run_sync(scheduler.sync_center)
     done = scheduler.start()
     scheduler.listen(port)
 

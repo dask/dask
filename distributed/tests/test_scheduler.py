@@ -429,7 +429,7 @@ def test_scheduler(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         sched, report = Queue(), Queue()
         s.handle_queues(sched, report)
@@ -490,7 +490,7 @@ def test_multi_queues(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
 
         sched, report = Queue(), Queue()
@@ -544,7 +544,7 @@ def test_monitor_resources(loop):
     def f():
         yield a._start()
         yield b._start()
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
 
         try:
@@ -576,7 +576,7 @@ def test_server(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         s.listen(port)
 
@@ -608,7 +608,7 @@ def test_server_listens_to_other_ops(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
-        yield s._sync_center()
+        yield s.sync_center()
         done = s.start()
         s.listen(port)
         assert s.port == port
