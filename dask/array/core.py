@@ -1112,67 +1112,67 @@ class Array(Base):
         return elemwise(operator.xor, other, self)
 
     @wraps(np.any)
-    def any(self, axis=None, keepdims=False, split_threshold=None):
+    def any(self, axis=None, keepdims=False, split_every=None):
         from .reductions import any
-        return any(self, axis=axis, keepdims=keepdims, split_threshold=split_threshold)
+        return any(self, axis=axis, keepdims=keepdims, split_every=split_every)
 
     @wraps(np.all)
-    def all(self, axis=None, keepdims=False, split_threshold=None):
+    def all(self, axis=None, keepdims=False, split_every=None):
         from .reductions import all
-        return all(self, axis=axis, keepdims=keepdims, split_threshold=split_threshold)
+        return all(self, axis=axis, keepdims=keepdims, split_every=split_every)
 
     @wraps(np.min)
-    def min(self, axis=None, keepdims=False, split_threshold=None):
+    def min(self, axis=None, keepdims=False, split_every=None):
         from .reductions import min
-        return min(self, axis=axis, keepdims=keepdims, split_threshold=split_threshold)
+        return min(self, axis=axis, keepdims=keepdims, split_every=split_every)
 
     @wraps(np.max)
-    def max(self, axis=None, keepdims=False, split_threshold=None):
+    def max(self, axis=None, keepdims=False, split_every=None):
         from .reductions import max
-        return max(self, axis=axis, keepdims=keepdims, split_threshold=split_threshold)
+        return max(self, axis=axis, keepdims=keepdims, split_every=split_every)
 
     @wraps(np.argmin)
-    def argmin(self, axis=None, split_threshold=None):
+    def argmin(self, axis=None, split_every=None):
         from .reductions import argmin
-        return argmin(self, axis=axis, split_threshold=split_threshold)
+        return argmin(self, axis=axis, split_every=split_every)
 
     @wraps(np.argmax)
-    def argmax(self, axis=None, split_threshold=None):
+    def argmax(self, axis=None, split_every=None):
         from .reductions import argmax
-        return argmax(self, axis=axis, split_threshold=split_threshold)
+        return argmax(self, axis=axis, split_every=split_every)
 
     @wraps(np.sum)
-    def sum(self, axis=None, dtype=None, keepdims=False, split_threshold=None):
+    def sum(self, axis=None, dtype=None, keepdims=False, split_every=None):
         from .reductions import sum
         return sum(self, axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_threshold=split_threshold)
+                   split_every=split_every)
 
     @wraps(np.prod)
-    def prod(self, axis=None, dtype=None, keepdims=False, split_threshold=None):
+    def prod(self, axis=None, dtype=None, keepdims=False, split_every=None):
         from .reductions import prod
         return prod(self, axis=axis, dtype=dtype, keepdims=keepdims,
-                    split_threshold=split_threshold)
+                    split_every=split_every)
 
     @wraps(np.mean)
-    def mean(self, axis=None, dtype=None, keepdims=False, split_threshold=None):
+    def mean(self, axis=None, dtype=None, keepdims=False, split_every=None):
         from .reductions import mean
         return mean(self, axis=axis, dtype=dtype, keepdims=keepdims,
-                    split_threshold=split_threshold)
+                    split_every=split_every)
 
     @wraps(np.std)
-    def std(self, axis=None, dtype=None, keepdims=False, ddof=0, split_threshold=None):
+    def std(self, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
         from .reductions import std
         return std(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
-                   split_threshold=split_threshold)
+                   split_every=split_every)
 
     @wraps(np.var)
-    def var(self, axis=None, dtype=None, keepdims=False, ddof=0, split_threshold=None):
+    def var(self, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
         from .reductions import var
         return var(self, axis=axis, dtype=dtype, keepdims=keepdims, ddof=ddof,
-                   split_threshold=split_threshold)
+                   split_every=split_every)
 
     def moment(self, order, axis=None, dtype=None, keepdims=False, ddof=0,
-               split_threshold=None):
+               split_every=None):
         """Calculate the nth centralized moment.
 
         Parameters
@@ -1209,13 +1209,13 @@ class Array(Base):
 
         from .reductions import moment
         return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims,
-                      ddof=ddof, split_threshold=split_threshold)
+                      ddof=ddof, split_every=split_every)
 
-    def vnorm(self, ord=None, axis=None, keepdims=False, split_threshold=None):
+    def vnorm(self, ord=None, axis=None, keepdims=False, split_every=None):
         """ Vector norm """
         from .reductions import vnorm
         return vnorm(self, ord=ord, axis=axis, keepdims=keepdims,
-                     split_threshold=split_threshold)
+                     split_every=split_every)
 
     @wraps(map_blocks)
     def map_blocks(self, func, *args, **kwargs):

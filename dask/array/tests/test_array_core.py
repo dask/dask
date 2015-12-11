@@ -551,12 +551,12 @@ def test_norm():
     assert eq(b.vnorm(ord=1), np.linalg.norm(a.flatten(), ord=1))
     assert eq(b.vnorm(ord=4, axis=0), np.linalg.norm(a, ord=4, axis=0))
     assert b.vnorm(ord=4, axis=0, keepdims=True).ndim == b.ndim
-    split_threshold = {0: 3, 1: 3}
-    assert eq(b.vnorm(ord=1, axis=0, split_threshold=split_threshold),
+    split_every = {0: 3, 1: 3}
+    assert eq(b.vnorm(ord=1, axis=0, split_every=split_every),
               np.linalg.norm(a, ord=1, axis=0))
-    assert eq(b.vnorm(ord=np.inf, axis=0, split_threshold=split_threshold),
+    assert eq(b.vnorm(ord=np.inf, axis=0, split_every=split_every),
               np.linalg.norm(a, ord=np.inf, axis=0))
-    assert eq(b.vnorm(ord=np.inf, split_threshold=split_threshold),
+    assert eq(b.vnorm(ord=np.inf, split_every=split_every),
               np.linalg.norm(a.flatten(), ord=np.inf))
 
 
