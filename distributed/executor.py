@@ -494,6 +494,10 @@ class Executor(object):
         3
         >>> e.gather([x, [x], x])  # support lists and dicts # doctest: +SKIP
         [3, [3], 3]
+
+        See Also
+        --------
+        distributed.executor.gather
         """
         return sync(self.loop, self._gather, futures)
 
@@ -535,6 +539,10 @@ class Executor(object):
          'z': RemoteData<center=127.0.0.1:8787, key=z>}
 
         >>> e.scatter([1, 2, 3], workers=[('hostname', 8788)])  # doctest: +SKIP
+
+        See Also
+        --------
+        distributed.executor.gather
         """
         return sync(self.loop, self._scatter, data, workers=workers)
 
@@ -578,6 +586,10 @@ class Executor(object):
         >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
         >>> e.get({'x': (add, 1, 2)}, 'x')  # doctest: +SKIP
         3
+
+        See Also
+        --------
+        distributed.executor.compute
         """
         status, result = sync(self.loop, self._get, dsk, keys,
                               raise_on_error=False, **kwargs)
@@ -615,6 +627,10 @@ class Executor(object):
         3
         >>> yy.result()  # doctest: +SKIP
         6
+
+        See Also
+        --------
+        distributed.executor.get
         """
         sync = kwargs.pop('sync', False)
         assert not kwargs
