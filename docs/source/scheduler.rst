@@ -65,7 +65,6 @@ Internal API
 
 .. currentmodule:: distributed.scheduler
 
-
 .. autoclass:: Scheduler
    :members:
 .. autofunction:: heal_missing_data
