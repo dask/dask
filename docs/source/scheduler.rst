@@ -63,12 +63,11 @@ scheduler system and then put and get from those queues respectively.
 Internal API
 ------------
 
-.. autofunction:: distributed.scheduler.scheduler
-.. autofunction:: distributed.scheduler.worker
-.. autofunction:: distributed.scheduler.worker_core
-.. autofunction:: distributed.scheduler.delete
+.. currentmodule:: distributed.scheduler
 
-.. autofunction:: distributed.scheduler.heal
-.. autofunction:: distributed.scheduler.update_state
-.. autofunction:: distributed.scheduler.validate_state
-.. autofunction:: distributed.scheduler.decide_worker
+
+.. autoclass:: Scheduler
+   :members:
+.. autofunction:: heal_missing_data
+.. autofunction:: decide_worker
+.. autofunction:: assign_many_tasks

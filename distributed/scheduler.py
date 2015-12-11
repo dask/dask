@@ -36,7 +36,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
 
     See Also
     --------
-    distributed.scheduler.heal: fix a broken runtime state
+    heal: fix a broken runtime state
     """
     in_stacks = {k for v in stacks.values() for k in v}
     in_processing = {k for v in processing.values() for k in v}
@@ -440,6 +440,74 @@ def execute_task(task):
 
 
 class Scheduler(Server):
+    """ A dynamic distributed task scheduler
+
+    The scheduler tracks the current state of workers, data, and computations.
+    The scheduler listens for events and responds by controlling workers
+    appropriately.  It continuously tries to use the workers to execute an ever
+    growing dask graph.
+
+    All events are handled quickly, in linear time to their input (which is
+    often of constant size) and generally within a millisecond.  To accomplish
+    this the scheduler tracks a lot of state.  Every operations maintains the
+    consistency of this state.
+
+    Parameters
+    ----------
+    dask: dict {key: task}
+        Dask graph of all computations to perform
+    dependencies:  dict {key: {key}}
+        Dictionary showing which keys depend on which others
+    dependents:  dict {key: {key}}
+        Dictionary showing which keys are dependent on  which others
+    waiting: dict {key: {key}}
+        Dictionary like dependencies but excludes keys already computed
+    waiting_data: dict {key: {key}}
+        Dictionary like dependents but excludes keys already computed
+    ncores: dict {worker: int}
+        Number of cores owned by each worker
+    nannies: dict {worker: port}
+        Port of nanny process for each worker
+    who_has: dict {key: {worker}
+        Where each key lives.  The current state of distributed memory.
+    has_what: dict {worker: {key}
+        What worker has what keys.  The transpose of who_has.
+    processing: dict {worker: {keys}}
+        Set of keys currently in execution on each worker
+    stacks: dict {worker: [keys]}
+        List of keys waiting to be sent to each worker
+    retrictions: dict {key: {hostnames}}
+        A set of hostnames per key of where that key can be run.  Usually this
+        is empty unless a key has been specifically restricted to only run on
+        certain hosts.  These restrictions don't include a worker port.  Any
+        worker on that hostname is deemed valid.
+    held_data: set {key}
+        A set of keys that we are not allowed to garbage collect
+    in_play: set {key}
+        All keys in one of who_has, waiting, stacks, processing.  This is any
+        key that will eventually be in memory.
+    keyorder: dict {key: tuple}
+        A score per key that determines its priority
+    scheduler_queues: list of Queues
+        A list of Tornado Queues from which we accept stimuli
+    report_queues: list of Queues
+        A list of Tornado Queues on which we report results
+    streams: list of IOStreams
+        A list of Tornado IOStreams from which we both accept stimuli and
+        report results
+    coroutines: list of Futures
+        A list of active futures that control operation
+    exceptions: dict ``{key: Exception}``
+        A dict mapping keys to remote exceptions
+    tracebacks: dict ``{key: list}``
+        A dict mapping keys to remote tracebacks stored as a list of strings
+    exceptions_blame: dict ``{key: key}``
+        A dict mapping a key to another key on which it depends that has failed
+    resource_logs: list
+        A list of dicts from the nannies, tracking resources on the workers
+    loop: IOLoop
+        The running Torando IOLoop
+    """
     def __init__(self, center, delete_batch_time=1, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
@@ -503,11 +571,13 @@ class Scheduler(Server):
         return first(self._sockets.values()).getsockname()[1]
 
     def identity(self, stream):
+        """ Basic information about ourselves and our cluster """
         return {'type': type(self).__name__, 'id': self.id,
                 'center': (self.center.ip, self.center.port),
                 'workers': list(self.ncores)}
 
     def put(self, msg):
+        """ Place a message into the scheduler's queue """
         return self.scheduler_queues[0].put_nowait(msg)
 
     @gen.coroutine
@@ -529,6 +599,7 @@ class Scheduler(Server):
             self._nanny_coroutines.append(self.nanny_listen(ip, nport))
 
     def start(self, start_queues=True):
+        """ Clear out old state and restart all running coroutines """
         collections = [self.dask, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.in_play, self.keyorder,
                 self.nbytes, self.processing, self.restrictions]
@@ -574,7 +645,7 @@ class Scheduler(Server):
 
         See Also
         --------
-        distributed.scheduler.Scheduler.cleanup
+        Scheduler.cleanup
         """
         yield self.cleanup()
         yield self.finished()
@@ -605,7 +676,13 @@ class Scheduler(Server):
             q.put_nowait({'op': 'close'})
 
     def mark_ready_to_run(self, key):
-        """ Send task to an appropriate worker, trigger worker """
+        """ Send task to an appropriate worker.  Trigger that worker.
+
+        See Also
+        --------
+        decide_worker
+        Scheduler.ensure_occupied
+        """
         logger.debug("Mark %s ready to run", key)
         if key in self.waiting:
             assert not self.waiting[key]
@@ -618,7 +695,7 @@ class Scheduler(Server):
         self.ensure_occupied(new_worker)
 
     def mark_key_in_memory(self, key, workers=None):
-        """ Mark that key now lives in particular workers """
+        """ Mark that a key now lives in distributed memory """
         logger.debug("Mark %s in memory", key)
         if workers is None:
             workers = self.who_has[key]
@@ -650,7 +727,7 @@ class Scheduler(Server):
                      'workers': workers})
 
     def ensure_occupied(self, worker):
-        """ Spin up tasks on worker while it has tasks and free cores """
+        """ Send tasks to worker while it has tasks and free cores """
         logger.debug('Ensure worker is occupied: %s', worker)
         while (self.stacks[worker] and
                self.ncores[worker] > len(self.processing[worker])):
@@ -664,9 +741,14 @@ class Scheduler(Server):
                      'needed': self.dependencies[key]})
 
     def seed_ready_tasks(self, keys=None):
-        """ Distribute leaves among workers
+        """ Distribute many leaf tasks among workers
 
         Takes an iterable of keys to consider for execution
+
+        See Also
+        --------
+        assign_many_tasks
+        Scheduler.ensure_occupied
         """
         if keys is None:
             keys = self.dask
@@ -694,6 +776,13 @@ class Scheduler(Server):
                 self.in_play.remove(key)
 
     def update_data(self, who_has=None, nbytes=None):
+        """
+        Learn that new data has entered the network from an external source
+
+        See Also
+        --------
+        Scheduler.mark_key_in_memory
+        """
         logger.debug("Update data %s", who_has)
         for key, workers in who_has.items():
             self.mark_key_in_memory(key, workers)
@@ -704,7 +793,12 @@ class Scheduler(Server):
         self.in_play.update(who_has)
 
     def mark_task_erred(self, key, worker, exception, traceback):
-        """ Mark that a task has erred on a particular worker """
+        """ Mark that a task has erred on a particular worker
+
+        See Also
+        --------
+        Scheduler.mark_failed
+        """
         if key in self.processing[worker]:
             self.processing[worker].remove(key)
             self.exceptions[key] = exception
@@ -752,6 +846,12 @@ class Scheduler(Server):
                          key, worker, self.processing[worker])
 
     def mark_missing_data(self, missing=None, key=None, worker=None):
+        """ Mark that certain keys have gone missing.  Recover.
+
+        See Also
+        --------
+        heal_missing_data
+        """
         missing = set(missing)
         logger.debug("Recovering missing data: %s", missing)
         for k in missing:
@@ -771,13 +871,19 @@ class Scheduler(Server):
         self.seed_ready_tasks()
 
     def log_state(self, msg=''):
+        """ Log current full state of the scheduler """
         logger.debug("Runtime State: %s", msg)
         logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
                 'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
                 self.in_play)
 
     def mark_worker_missing(self, worker=None, heal=True):
-        """ Mark that a worker no longer seems responsive """
+        """ Mark that a worker no longer seems responsive
+
+        See Also
+        --------
+        Scheduler.heal_state
+        """
         logger.debug("Mark worker as missing %s", worker)
         if worker not in self.processing:
             return
@@ -804,6 +910,10 @@ class Scheduler(Server):
             self.heal_state()
 
     def update_graph(self, dsk=None, keys=None, restrictions={}):
+        """ Add new computations to the internal dask graph
+
+        This happens whenever the Executor calls submit, map, get, or compute.
+        """
         update_state(self.dask, self.dependencies, self.dependents,
                 self.held_data, self.who_has, self.in_play,
                 self.waiting, self.waiting_data, dsk, keys)
@@ -837,6 +947,7 @@ class Scheduler(Server):
                 logger.exception(e)
 
     def release_held_data(self, key=None):
+        """ Mark that a key is no longer externally required to be in memory """
         if key in self.held_data:
             logger.debug("Release key: %s", key)
             self.held_data.remove(key)
@@ -862,24 +973,31 @@ class Scheduler(Server):
         self.log_state("After Heal")
 
     def my_heal_missing_data(self, missing):
+        """ Recover from lost data """
         logger.debug("Heal from missing data")
         return heal_missing_data(self.dask, self.dependencies, self.dependents,
                 self.held_data, self.who_has, self.in_play, self.waiting,
                 self.waiting_data, missing)
 
     def report(self, msg):
+        """ Publish updates to all listening Queues and Streams """
         for q in self.report_queues:
             q.put_nowait(msg)
         for s in self.streams:
             try:
-                write(s, msg)
+                write(s, msg)  # asynchrnous
             except StreamClosedError:
                 logger.critical("Tried writing to closed stream: %s", msg)
 
     def add_plugin(self, plugin):
+        """ Add external plugin to scheduler
+
+        See http://http://distributed.readthedocs.org/en/latest/plugins.html
+        """
         self.plugins.append(plugin)
 
     def handle_queues(self, scheduler_queue, report_queue):
+        """ Register new control and report queues to the Scheduler """
         self.scheduler_queues.append(scheduler_queue)
         if report_queue:
             self.report_queues.append(report_queue)
@@ -889,6 +1007,7 @@ class Scheduler(Server):
 
     @gen.coroutine
     def control_stream(self, stream, address=None):
+        """ Listen to messages from an IOStream """
         ident = str(uuid.uuid1())
         logger.info("Connection to %s, %s", type(self).__name__, ident)
         self.streams.append(stream)
@@ -904,29 +1023,9 @@ class Scheduler(Server):
 
     @gen.coroutine
     def handle_messages(self, in_queue, report):
-        """ The scheduler coroutine for dask scheduling
+        """ Master coroutine.  Handles inbound messages.
 
-        This coroutine manages interactions with all worker cores and with the
-        delete coroutine through queues.
-
-        Parameters
-        ----------
-        scheduler_queue: tornado.queues.Queue
-            Get information from outside
-        report_queue: tornado.queues.Queue
-            Report information to outside
-        worker_queues: dict {worker: tornado.queues.Queue}
-            One queue per worker node.
-            Each queue is listened to by several worker_core coroutines.
-        delete_queue: tornado.queues.Queue
-            One queue listened to by ``delete`` which connects to the
-            center to delete unnecessary intermediate data
-        who_has: dict {key: set}
-            Mapping key to {set of worker-identities}
-        has_what: dict {worker: set}
-            Mapping worker-identity to {set of keys}
-        ncores: dict {worker: int}
-            Mapping worker-identity to number-of-cores
+        This runs once per Queue or Stream.
         """
         if isinstance(in_queue, Queue):
             next_message = in_queue.get
@@ -993,11 +1092,12 @@ class Scheduler(Server):
         - close: close connection to worker node, report `worker-finished` to
           scheduler
 
-        **Outgoing Messages**:
-
-        - task-finished:  sent to scheduler once a task completes
-        - task-erred: sent to scheduler when a task errs
-        - worker-finished: sent to scheduler in response to a close command
+        See Also
+        --------
+        Scheduler.mark_task_finished
+        Scheduler.mark_task_erred
+        Scheduler.mark_missing_data
+        distributed.worker.Worker.compute
         """
         worker = rpc(ip=ident[0], port=ident[1])
         logger.debug("Start worker core %s, %d", ident, i)
@@ -1052,11 +1152,11 @@ class Scheduler(Server):
         that should be removed from distributed memory.  We batch several keys that
         come in over the ``delete_queue`` into a list.  Roughly once a second we
         send this list of keys over to the center which then handles deleting
-        these keys from workers' memory.
+        these keys from workers' memory.::
 
-        worker \                                /-> worker node
-        worker -> scheduler -> delete -> center --> worker node
-        worker /                                \-> worker node
+            worker \                                /-> worker node
+            worker -> scheduler -> delete -> center --> worker node
+            worker /                                \-> worker node
 
         **Incoming Messages**
 
@@ -1097,6 +1197,7 @@ class Scheduler(Server):
 
     @gen.coroutine
     def scatter(self, stream=None, data=None, workers=None):
+        """ Send data out to workers """
         if not self.ncores:
             raise ValueError("No workers yet found.  "
                              "Try syncing with center.\n"
@@ -1110,6 +1211,7 @@ class Scheduler(Server):
 
     @gen.coroutine
     def gather(self, stream=None, keys=None):
+        """ Collect data in from workers """
         keys = list(keys)
 
         try:
