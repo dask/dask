@@ -1,8 +1,8 @@
 **Help & reference**
 
-* :doc:`cheat-sheet`
-* :doc:`install`
-* :doc:`glossary`
-* :doc:`faq`
-* :doc:`spark`
-* :doc:`get-involved`
+* :doc:`Dask cheat sheet<dask-cheat-sheet>`
+* :doc:`Glossary<glossary>`
+* :doc:`FAQ<faq>`
+* :doc:`Diagnostics<diagnostics>`
+* :doc:`Support<get-involved>` 
+* :doc:`Dask license<license>`
