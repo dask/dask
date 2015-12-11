@@ -49,6 +49,7 @@ Contents
    executor
    setup
    efficiency
+   api
 
 **Developer Documentation**
 

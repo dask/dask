@@ -143,7 +143,7 @@ class Executor(object):
     ----------
     arg: string, tuple, Scheduler
         This can be the address of a ``Center`` or ``Scheduler`` servers, either
-        as a string or tuple ``'127.0.0.1:8787'`` or ``('127.0.0.1', 8787)``
+        as a string ``'127.0.0.1:8787'`` or tuple ``('127.0.0.1', 8787)``
         or it can be a local ``Scheduler`` object.
 
     Examples
@@ -343,7 +343,7 @@ class Executor(object):
 
         See Also
         --------
-        distributed.executor.Executor.submit:
+        distributed.executor.Executor.map:
         """
         if not callable(func):
             raise TypeError("First input to submit must be a callable function")
@@ -492,7 +492,7 @@ class Executor(object):
         >>> x = e.submit(add, 1, 2)  # doctest: +SKIP
         >>> e.gather(x)  # doctest: +SKIP
         3
-        >>> e.gather([x, [x], x])  # doctest: +SKIP
+        >>> e.gather([x, [x], x])  # support lists and dicts # doctest: +SKIP
         [3, [3], 3]
         """
         return sync(self.loop, self._gather, futures)
@@ -562,7 +562,7 @@ class Executor(object):
         raise gen.Return(result)
 
     def get(self, dsk, keys, **kwargs):
-        """ Gather futures from distributed memory
+        """ Compute dask graph
 
         Parameters
         ----------
@@ -599,7 +599,7 @@ class Executor(object):
 
         Returns
         -------
-        Tuple of Futures or concrete values
+        List of Futures
 
         Examples
         --------
@@ -684,10 +684,20 @@ class Executor(object):
     def upload_file(self, filename):
         """ Upload local package to workers
 
+        This sends a local file up to all worker nodes.  This file is placed
+        into a temporary directory on Python's system path so any .py or .egg
+        files will be importable.
+
         Parameters
         ----------
         filename: string
-            Filename of .py file to send to workers
+            Filename of .py or .egg file to send to workers
+
+        Examples
+        --------
+        >>> executor.upload_file('mylibrary.egg')  # doctest: +SKIP
+        >>> from mylibrary import myfunc  # doctest: +SKIP
+        >>> L = e.map(myfunc, seq)  # doctest: +SKIP
         """
         result = sync(self.loop, self._upload_file, filename,
                         raise_on_error=False)
