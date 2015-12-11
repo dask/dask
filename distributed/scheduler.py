@@ -14,7 +14,7 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError, IOStream
 
-from dask.core import istask, get_deps, reverse_dict, get_dependencies
+from dask.core import istask, get_deps, reverse_dict, _deps
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
@@ -135,8 +135,9 @@ def update_state(dsk, dependencies, dependents, held_data,
         if key in dependencies:
             continue
 
-        deps = get_dependencies(dsk, key)
-        dependencies[key] = deps
+        task = new_dsk[key]
+        deps = _deps(dsk, task) + _deps(held_data, task)
+        dependencies[key] = set(deps)
 
         for dep in deps:
             if dep not in dependents:
@@ -145,20 +146,6 @@ def update_state(dsk, dependencies, dependents, held_data,
 
         if key not in dependents:
             dependents[key] = set()
-
-    for key, value in new_dsk.items():  # add in remotedata
-        vv, s = unpack_remotedata(value)
-        if s:
-            # TODO: check against in-memory, maybe add to in_play
-            dsk[key] = vv
-            dependencies[key] |= s
-            for dep in s:
-                if not dep in dependencies:
-                    held_data.add(dep)
-                    dependencies[dep] = set()
-                if dep not in dependents:
-                    dependents[dep] = set()
-                dependents[dep].add(key)
 
     exterior = keys_outside_frontier(dsk, dependencies, new_keys, in_play)
     in_play |= exterior

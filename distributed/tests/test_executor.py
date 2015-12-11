@@ -1529,3 +1529,25 @@ def test_remote_scatter_gather(loop):
 
         s.stop()
     _test_cluster(f, loop)
+
+
+def test_remote_submit_on_Future(loop):
+    port = 8045
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s._sync_center()
+        done = s.start()
+        s.listen(port)
+
+        e = Executor(('127.0.0.1', port), start=False, loop=loop)
+        yield e._start()
+
+        x = e.submit(lambda x: x + 1, 1)
+        y = e.submit(lambda x: x + 1, x)
+        result = yield y._result()
+        assert result == 3
+
+        yield e._shutdown()
+        s.stop()
+    _test_cluster(f, loop)

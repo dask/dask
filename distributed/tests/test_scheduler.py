@@ -183,39 +183,6 @@ def test_update_state_with_processing():
     assert in_play == {'x', 'y', 'z', 'a', 'b', 'c'}
 
 
-def test_update_state_respects_WrappedKeys():
-    dsk = {'x': 1, 'y': (inc, 'x')}
-    dependencies, dependents = get_deps(dsk)
-
-    waiting = {'y': set()}
-    waiting_data = {'x': {'y'}, 'y': set()}
-
-    held_data = {'y'}
-    who_has = {'x': {'alice'}}
-    processing = set()
-    released = set()
-    in_play = {'x', 'y'}
-
-    e_dsk = {'x': 1, 'y': (inc, 'x'), 'a': 1, 'z': (add, 'y', 'a')}
-    e_dependencies = {'x': set(), 'a': set(), 'y': {'x'}, 'z': {'a', 'y'}}
-    e_dependents = {'z': set(), 'y': {'z'}, 'a': {'z'}, 'x': {'y'}}
-
-    e_waiting = {'y': set(), 'a': set(), 'z': {'a', 'y'}}
-    e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'a': {'z'}, 'z': set()}
-
-    e_held_data = {'y', 'z'}
-
-    new_dsk = {'z': (add, WrappedKey('y'), 10)}
-    a = update_state(*map(deepcopy, [dsk, dependencies, dependents, held_data,
-                                     who_has, in_play,
-                                     waiting, waiting_data, new_dsk, {'z'}]))
-    new_dsk = {'z': (add, 'y', 10)}
-    b = update_state(*map(deepcopy, [dsk, dependencies, dependents, held_data,
-                                     who_has, in_play,
-                                     waiting, waiting_data, new_dsk, {'z'}]))
-    assert a == b
-
-
 def test_update_state_respects_data_in_memory():
     dsk = {'x': 1, 'y': (inc, 'x')}
     dependencies, dependents = get_deps(dsk)

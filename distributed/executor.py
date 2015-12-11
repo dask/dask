@@ -29,9 +29,6 @@ from .utils import All, sync, funcname, ignoring
 logger = logging.getLogger(__name__)
 
 
-tokens = (str(uuid.uuid4()) for i in itertools.count(1))
-
-
 _global_executor = [None]
 
 
@@ -356,7 +353,7 @@ class Executor(object):
             if pure:
                 key = funcname(func) + '-' + tokenize(func, kwargs, *args)
             else:
-                key = funcname(func) + '-' + next(tokens)
+                key = funcname(func) + '-' + str(uuid.uuid4())
 
         if key in self.futures:
             return Future(key, self)
@@ -371,9 +368,11 @@ class Executor(object):
         else:
             restrictions = {}
 
+        task2, _ = unpack_remotedata(task)
+
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self.send_to_scheduler({'op': 'update-graph',
-                                'dsk': {key: task},
+                                'dsk': {key: task2},
                                 'keys': [key],
                                 'restrictions': restrictions})
 
@@ -417,7 +416,7 @@ class Executor(object):
                     for args in zip(*iterables)]
         else:
             uid = str(uuid.uuid4())
-            keys = [funcname(func) + '-' + uid + '-' + next(tokens)
+            keys = [funcname(func) + '-' + uid + '-' + str(uuid.uuid4())
                     for i in range(min(map(len, iterables)))]
 
         if not kwargs:
@@ -426,6 +425,8 @@ class Executor(object):
         else:
             dsk = {key: (apply, func, args, kwargs)
                    for key, args in zip(keys, zip(*iterables))}
+
+        dsk = {key: unpack_remotedata(task)[0] for key, task in dsk.items()}
 
         if isinstance(workers, (list, set)):
             if workers and isinstance(first(workers), (list, set)):
@@ -538,9 +539,11 @@ class Executor(object):
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
         flatkeys = list(flatten([keys]))
         futures = {key: Future(key, self) for key in flatkeys}
+        dsk2 = {k: unpack_remotedata(v)[0] for k, v in dsk.items()}
+        dsk3 = {k: v for k, v in dsk2.items() if (k == v) is not True}
 
         self.send_to_scheduler({'op': 'update-graph',
-                                'dsk': dsk,
+                                'dsk': dsk3,
                                 'keys': flatkeys,
                                 'restrictions': restrictions or {}})
 
@@ -624,8 +627,10 @@ class Executor(object):
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v, v._keys()) for name, v in zip(names, variables)}
 
+        dsk3 = {k: unpack_remotedata(v)[0] for k, v in merge(dsk, dsk2).items()}
+
         self.send_to_scheduler({'op': 'update-graph',
-                                'dsk': merge(dsk, dsk2),
+                                'dsk': dsk3,
                                 'keys': names})
 
         i = 0
