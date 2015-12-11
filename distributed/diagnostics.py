@@ -454,12 +454,13 @@ class MultiProgressWidget(MultiProgress):
 
         # Set up widgets
         from ipywidgets import FloatProgress, HBox, VBox, HTML
-        import html
+        import cgi
         self.elapsed_time = HTML('')
         self.bars = {key: FloatProgress(min=0, max=1, description='', height = '10px')
                         for key in self.all_keys}
         self.bar_texts = {key: HTML('', width = "140px") for key in self.all_keys}
-        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">' + html.escape(key) + '</div>') for key in self.all_keys}
+        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">'
+                                     + cgi.escape(key) + '</div>') for key in self.all_keys}
 
         # Check to see if 'finalize' is one of the keys. If it is, move it to
         # the end so that it is rendered last in the list (for aesthetics...)
