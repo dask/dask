@@ -63,7 +63,6 @@ Contents
    worker-center
    scheduler
    resilience
-   related-work
    journey
    plugins
-   comparison
+   related-work
