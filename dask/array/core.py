@@ -880,6 +880,9 @@ class Array(Base):
         kwargs:
             Keyword arguments to pass on to ``get`` function for scheduling
 
+        Examples
+        --------
+
         This triggers evaluation and store the result in either
 
         1.  An ndarray object supporting setitem (see da.store)
