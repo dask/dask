@@ -94,10 +94,17 @@ For example, our function ``inc`` is actually a *terrible* function to
 parallelize in practice.
 
 
-``get``
-~~~~~~~
+``dask``
+~~~~~~~~
 
-We can provide full complex dask graphs to the scheduler.
+Distributed provides a dask_ compliant task scheduling interface.  It provides
+this through two methods, ``get`` (synchronous) and ``compute`` (asynchronous).
+
+.. _dask: http://dask.pydata.org/en/latest/
+
+**get**
+
+We provide dask graph dictionaries to the scheduler:
 
 .. code-block:: python
 
@@ -116,6 +123,23 @@ with existing dask code.
    499999359.23511785
    >>> x.sum().compute(get=executor.get)  # use distributed cluster
    499999359.23511785
+
+**compute**
+
+We can also provide dask collections (arrays, bags, dataframes, imperative
+values) to the executor with the ``compute`` method.
+
+.. code-block:: python
+
+   >>> type(x)
+   dask.array.Array
+   >>> type(df)
+   dask.dataframe.DataFrame
+
+   >>> x_future, df_future = executor.compute(x, df)
+
+This immediately returns standard ``Future`` objects as would be returned by
+``submit`` or ``map``.
 
 
 ``restart``

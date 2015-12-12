@@ -87,38 +87,15 @@ once.
    >>> executor.gather(A) # gather for many futures
    [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
 
-get
-~~~
 
-Use the ``Executor.get`` method to interact with dask collections.
+Restart
+~~~~~~~
 
-Get works with raw dask graphs:
-
-.. code-block:: python
-
-   >>> dsk = {'a': 12, 'b': (square, 'a')}
-   >>> executor.get(dsk, 'b')
-   144
-
-Get works with dask collections (like dask.array or dask.dataframe):
+When things go wrong, or when you want to reset the cluster state, call the
+``restart`` method.
 
 .. code-block:: python
 
-   >>> import dask.array as da
-   >>> x = da.arange(10, chunks=(5,))
-   >>> x.sum().compute(get=executor.get)
-   45
-
-Shutdown
-~~~~~~~~
-
-Shut down the executor (and background thread) with the shutdown method.  This
-cleanly shuts down your connection to the cluster but does not terminate the
-worker processes on the cluster.  Those remain active for future connections
-from other executors.
-
-.. code-block:: python
-
-   >>> executor.shutdown()
+   >>> executor.restart()
 
 See :doc:`executor <executor>` for advanced use.
