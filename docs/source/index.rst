@@ -61,7 +61,6 @@ Contents
 
    foundations
    worker-center
-   clients
    scheduler
    resilience
    related-work
