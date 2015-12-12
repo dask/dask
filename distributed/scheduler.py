@@ -471,60 +471,60 @@ class Scheduler(Server):
     Users typically do not interact with the scheduler except through Plugins.
     See http://distributed.readthedocs.org/en/latest/plugins.html
 
-    Parameters
-    ----------
-    dask: dict {key: task}
+    **State**
+
+    * **dask:** ``{key: task}``:
         Dask graph of all computations to perform
-    dependencies:  dict {key: {key}}
+    * **dependencies:** ``{key: {key}}``:
         Dictionary showing which keys depend on which others
-    dependents:  dict {key: {key}}
+    * **dependents:** ``{key: {key}}``:
         Dictionary showing which keys are dependent on  which others
-    waiting: dict {key: {key}}
+    * **waiting:** ``{key: {key}}``:
         Dictionary like dependencies but excludes keys already computed
-    waiting_data: dict {key: {key}}
+    * **waiting_data:** ``{key: {key}}``:
         Dictionary like dependents but excludes keys already computed
-    ncores: dict {worker: int}
+    * **ncores:** ``{worker: int}``:
         Number of cores owned by each worker
-    nannies: dict {worker: port}
+    * **nannies:** ``{worker: port}``:
         Port of nanny process for each worker
-    who_has: dict {key: {worker}
+    * **who_has:** ``{key: {worker}}``:
         Where each key lives.  The current state of distributed memory.
-    has_what: dict {worker: {key}
+    * **has_what:** ``{worker: {key}}``:
         What worker has what keys.  The transpose of who_has.
-    processing: dict {worker: {keys}}
+    * **processing:** ``{worker: {keys}}``:
         Set of keys currently in execution on each worker
-    stacks: dict {worker: [keys]}
+    * **stacks:** ``{worker: [keys]}``:
         List of keys waiting to be sent to each worker
-    retrictions: dict {key: {hostnames}}
+    * **retrictions:** ``{key: {hostnames}}``:
         A set of hostnames per key of where that key can be run.  Usually this
         is empty unless a key has been specifically restricted to only run on
         certain hosts.  These restrictions don't include a worker port.  Any
         worker on that hostname is deemed valid.
-    held_data: set {key}
+    * **held_data:** ``{key}``:
         A set of keys that we are not allowed to garbage collect
-    in_play: set {key}
+    * **in_play:** ``{key}``:
         All keys in one of who_has, waiting, stacks, processing.  This is any
         key that will eventually be in memory.
-    keyorder: dict {key: tuple}
+    * **keyorder:** ``{key: tuple}``:
         A score per key that determines its priority
-    scheduler_queues: list of Queues
+    * **scheduler_queues:** ``[Queues]``:
         A list of Tornado Queues from which we accept stimuli
-    report_queues: list of Queues
+    * **report_queues:** ``[Queues]``:
         A list of Tornado Queues on which we report results
-    streams: list of IOStreams
+    * **streams:** ``[IOStreams]``:
         A list of Tornado IOStreams from which we both accept stimuli and
         report results
-    coroutines: list of Futures
+    * **coroutines:** ``[Futures]``:
         A list of active futures that control operation
-    exceptions: dict ``{key: Exception}``
+    *  **exceptions:** ``{key: Exception}``:
         A dict mapping keys to remote exceptions
-    tracebacks: dict ``{key: list}``
+    *  **tracebacks:** ``{key: list}``:
         A dict mapping keys to remote tracebacks stored as a list of strings
-    exceptions_blame: dict ``{key: key}``
+    *  **exceptions_blame:** ``{key: key}``:
         A dict mapping a key to another key on which it depends that has failed
-    resource_logs: list
+    *  **resource_logs:** ``list``:
         A list of dicts from the nannies, tracking resources on the workers
-    loop: IOLoop
+    *  **loop:** ``IOLoop``:
         The running Torando IOLoop
     """
     def __init__(self, center, delete_batch_time=1, loop=None,
