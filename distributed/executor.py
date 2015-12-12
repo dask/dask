@@ -565,8 +565,7 @@ class Executor(object):
         Accepts a list of data elements or dict of key-value pairs
 
         Optionally provide a set of workers to constrain the scatter.  Specify
-        workers as hostname/port pairs, i.e.  ('127.0.0.1', 8787).
-        Default port is 8788.
+        workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
 
         Examples
         --------

@@ -79,21 +79,4 @@ Center
 
 Centers hold metadata about what data resides on which workers.
 
-.. code-block:: python
-
-   has_what = {'alice':   {'x', 'y'}
-               'bob':     {'a', 'b', 'c'},
-               'charlie': {'w', 'x', 'b'}}
-
-   who_has  = {'x': {'alice', 'charlie'},
-               'y': {'alice'},
-               'a': {'bob'},
-               'b': {'bob', 'charlie'},
-               'c': {'bob'},
-               'w': {'charlie'}}
-
-All worker nodes in the same network have the same center node.  They update
-and query this center node to share and learn what nodes have what data.  The
-center node could conceptually be replaced by a Redis server.
-
 .. autoclass:: distributed.center.Center

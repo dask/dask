@@ -19,23 +19,61 @@ logger = logging.getLogger(__name__)
 class Center(Server):
     """ Central metadata storage
 
-    A Center serves as central point of metadata storage among workers.  It
+    A Center serves as central point of metadata storage among Workers.  It
     maintains dictionaries of which worker has which keys and which keys are
     owned by which workers.
 
-    *  who_has:   {key: {set of workers}}
-    *  has_what:  {worker: {set of keys}}
+    All worker nodes in the same network have the same center node.  They
+    update and query this center node to share and learn what nodes have what
+    data.
+
+    **State**
+
+    *   ``who_has:: {key: {workers}}``
+        Set of workers that own a particular key
+    *   ``has_what:: {worker: {keys}}``
+        Set of keys owned by a particular worker
+    *   ``ncores:: {worker: int}``
+        Number of cores per worker
+    *   ``nannies:: {worker: port}``
+        The port of the nanny process for a particular worker
 
     Workers and clients check in with the Center to discover available resources
 
+
+    Examples
+    --------
     You can start a center with the ``dcenter`` command line application::
 
        $ dcenter
        Start center at 127.0.0.1:8787
 
-    Examples
-    --------
-    >>> c = Center('192.168.0.123', 8000)
+    Of you can create one in Python:
+
+    >>> center = Center('192.168.0.123', 8000)
+
+    >>> center.has_what  # doctest: +SKIP
+    {('alice', 8788):   {'x', 'y'}
+     ('bob', 8788):     {'a', 'b', 'c'},
+     ('charlie', 8788): {'w', 'x', 'b'}}
+
+    >>> center.who_has  # doctest: +SKIP
+    {'x': {('alice', 8788), ('charlie', 8788)},
+     'y': {('alice', 8788)},
+     'a': {('bob', 8788)},
+     'b': {('bob', 8788), ('charlie', 8788)},
+     'c': {('bob', 8788)},
+     'w': {('charlie', 8788)}}
+
+    >>> center.ncores  # doctest: +SKIP
+    {('alice', 8788): 8,
+     ('bob', 8788): 4,
+     ('charlie', 8788): 4}
+
+    >>> center.nannies  # doctest: +SKIP
+    {('alice', 8788): 8789,
+     ('bob', 8788): 8789,
+     ('charlie', 8788): 8789}
 
     See Also
     --------
