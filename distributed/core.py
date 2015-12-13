@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from hashlib import md5
 import logging
 import signal
 import socket
@@ -184,7 +185,7 @@ def read_sync(s):
     return loads(msg)
 
 
-sentinel = b'7f57da0f9202f6b4df78e251058be6f0'
+sentinel = md5(b'7f57da0f9202f6b4df78e251058be6f0').hexdigest().encode()
 
 @gen.coroutine
 def read(stream):
