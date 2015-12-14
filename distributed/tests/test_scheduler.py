@@ -1,12 +1,13 @@
 from copy import deepcopy
 from operator import add
+from time import time
 
 from dask.core import get_deps
 from toolz import merge, concat
 from tornado.queues import Queue
 import pytest
 
-from distributed import Center, Nanny
+from distributed import Center, Nanny, Worker
 from distributed.core import connect, read, write, rpc
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
@@ -619,4 +620,58 @@ def test_server_listens_to_other_ops(loop):
 
         s.stop()
 
+    _test_cluster(f, loop)
+
+
+def test_remove_worker_from_scheduler(loop):
+    port = 8040
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s.sync_center()
+        done = s.start()
+        s.listen(port)
+
+        dsk = {('x', i): (inc, i) for i in range(10)}
+        s.update_graph(dsk=dsk, keys=list(dsk))
+        assert s.stacks[a.address]
+
+        assert a.address in s.worker_queues
+        s.remove_worker(a.address)
+        assert a.address not in s.ncores
+        assert len(s.stacks[b.address]) + len(s.processing[b.address]) == \
+                len(dsk)  # b owns everything
+        assert all(k in s.in_play for k in dsk)
+        s.validate()
+
+        s.stop()
+    _test_cluster(f, loop)
+
+
+def test_add_worker(loop):
+    port = 8040
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s.sync_center()
+        done = s.start()
+        s.listen(port)
+
+        w = Worker('127.0.0.4', 8020, c.ip, c.port, ncores=3)
+        w.data[('x', 5)] = 6
+        w.data['y'] = 1
+        yield w._start()
+
+        dsk = {('x', i): (inc, i) for i in range(10)}
+        s.update_graph(dsk=dsk, keys=list(dsk))
+
+        s.add_worker(address=w.address, keys=list(w.data),
+                     ncores=w.ncores, nanny_port=w.nanny_port)
+
+        for k in w.data:
+            assert w.address in s.who_has[k]
+
+        s.validate(allow_overlap=True)
+
+        s.stop()
     _test_cluster(f, loop)

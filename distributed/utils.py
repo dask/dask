@@ -108,6 +108,9 @@ def _deps(dsk, arg):
 
     Helper function for get_dependencies.
 
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+
     >>> dsk = {'x': 1, 'y': 2}
 
     >>> _deps(dsk, 'x')
