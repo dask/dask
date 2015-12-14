@@ -164,10 +164,12 @@ class Scheduler(Server):
                                  'task-missing-data': self.mark_missing_data,
                                  'worker-failed': self.remove_worker,
                                  'release-held-data': self.release_held_data,
+                                 'register': self.add_worker,
                                  'restart': self.restart}
 
         self.handlers = {'start-control': self.control_stream,
                          'scatter': self.scatter,
+                         'register': self.add_worker,
                          'gather': self.gather}
 
         super(Scheduler, self).__init__(handlers=self.handlers,
@@ -516,6 +518,23 @@ class Scheduler(Server):
 
         if heal:
             self.heal_state()
+
+    def add_worker(self, stream=None, address=None, keys=(), ncores=None,
+                   nanny_port=None):
+        self.ncores[address] = ncores
+        self.nannies[address] = nanny_port
+        if address not in self.processing:
+            self.has_what[address] = set()
+            self.processing[address] = set()
+            self.stacks[address] = []
+            self.worker_queues[address] = Queue()
+        for key in keys:
+            self.mark_key_in_memory(key, [address])
+
+        self._worker_coroutines.append(self.worker(address))
+
+        logger.info("Register %s", str(address))
+        return b'OK'
 
     def update_graph(self, dsk=None, keys=None, restrictions={}):
         """ Add new computations to the internal dask graph
