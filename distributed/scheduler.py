@@ -162,7 +162,6 @@ class Scheduler(Server):
                                  'update-data': self.update_data,
                                  'missing-data': self.mark_missing_data,
                                  'task-missing-data': self.mark_missing_data,
-                                 'worker-failed': self.remove_worker,
                                  'release-held-data': self.release_held_data,
                                  'register': self.add_worker,
                                  'restart': self.restart}
@@ -486,29 +485,29 @@ class Scheduler(Server):
                 'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
                 self.in_play)
 
-    def remove_worker(self, worker=None, heal=True):
+    def remove_worker(self, address=None, heal=True):
         """ Mark that a worker no longer seems responsive
 
         See Also
         --------
         Scheduler.heal_state
         """
-        logger.debug("Remove worker %s", worker)
-        if worker not in self.processing:
+        logger.debug("Remove worker %s", address)
+        if address not in self.processing:
             return
-        keys = self.has_what.pop(worker)
-        for i in range(self.ncores[worker]):  # send close message, in case not dead
-            self.worker_queues[worker].put_nowait({'op': 'close', 'report': False})
-        del self.worker_queues[worker]
-        del self.ncores[worker]
-        del self.stacks[worker]
-        del self.processing[worker]
-        del self.nannies[worker]
+        keys = self.has_what.pop(address)
+        for i in range(self.ncores[address]):  # send close message, in case not dead
+            self.worker_queues[address].put_nowait({'op': 'close', 'report': False})
+        del self.worker_queues[address]
+        del self.ncores[address]
+        del self.stacks[address]
+        del self.processing[address]
+        del self.nannies[address]
         if not self.stacks:
             logger.critical("Lost all workers")
         missing_keys = set()
         for key in keys:
-            self.who_has[key].remove(worker)
+            self.who_has[key].remove(address)
             if not self.who_has[key]:
                 missing_keys.add(key)
         gone_data = {k for k, v in self.who_has.items() if not v}
@@ -704,8 +703,7 @@ class Scheduler(Server):
                     for i in range(self.ncores[ident])])
         except (IOError, OSError):
             logger.info("Worker failed from closed stream: %s", ident)
-            self.put({'op': 'worker-failed',
-                      'worker': ident})
+            self.remove_worker(address=ident)
 
     @gen.coroutine
     def worker_core(self, ident, i):
@@ -860,7 +858,7 @@ class Scheduler(Server):
             clear_queue(q)
 
         for addr in self.nannies:
-            self.remove_worker(worker=addr, heal=False)
+            self.remove_worker(address=addr, heal=False)
 
         logger.debug("Send kill signal to nannies")
         nannies = [rpc(ip=ip, port=n_port)
