@@ -162,7 +162,7 @@ class Scheduler(Server):
                                  'update-data': self.update_data,
                                  'missing-data': self.mark_missing_data,
                                  'task-missing-data': self.mark_missing_data,
-                                 'worker-failed': self.mark_worker_missing,
+                                 'worker-failed': self.remove_worker,
                                  'release-held-data': self.release_held_data,
                                  'restart': self.restart}
 
@@ -484,14 +484,14 @@ class Scheduler(Server):
                 'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
                 self.in_play)
 
-    def mark_worker_missing(self, worker=None, heal=True):
+    def remove_worker(self, worker=None, heal=True):
         """ Mark that a worker no longer seems responsive
 
         See Also
         --------
         Scheduler.heal_state
         """
-        logger.debug("Mark worker as missing %s", worker)
+        logger.debug("Remove worker %s", worker)
         if worker not in self.processing:
             return
         keys = self.has_what.pop(worker)
@@ -501,6 +501,7 @@ class Scheduler(Server):
         del self.ncores[worker]
         del self.stacks[worker]
         del self.processing[worker]
+        del self.nannies[worker]
         if not self.stacks:
             logger.critical("Lost all workers")
         missing_keys = set()
@@ -840,7 +841,7 @@ class Scheduler(Server):
             clear_queue(q)
 
         for addr in self.nannies:
-            self.mark_worker_missing(worker=addr, heal=False)
+            self.remove_worker(worker=addr, heal=False)
 
         logger.debug("Send kill signal to nannies")
         nannies = [rpc(ip=ip, port=n_port)
@@ -862,6 +863,18 @@ class Scheduler(Server):
                 plugin.restart(self)
             except Exception as e:
                 logger.exception(e)
+
+    def validate(self):
+        in_memory = {k for k, v in self.who_has if v}
+        validate_state(self.dependencies, self.dependents, self.waiting,
+                self.waiting_data, in_memory, self.stacks,
+                self.processing, None, set(), self.in_play)
+        assert (set(self.ncores) == \
+                set(self.has_what) == \
+                set(self.stacks) == \
+                set(self.processing) == \
+                set(self.nannies) == \
+                set(self.worker_queues))
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
@@ -1018,12 +1031,13 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
             assert all(dep in in_memory for dep in dependencies[key])
             assert not waiting.get(key)
 
-        if key in finished_results:
-            assert key in in_memory
-            assert key in keys
+        if finished_results is not None:
+            if key in finished_results:
+                assert key in in_memory
+                assert key in keys
 
-        if key in keys and key in in_memory:
-            assert key in finished_results
+            if key in keys and key in in_memory:
+                assert key in finished_results
 
         return True
 

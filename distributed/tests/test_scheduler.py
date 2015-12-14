@@ -620,3 +620,28 @@ def test_server_listens_to_other_ops(loop):
         s.stop()
 
     _test_cluster(f, loop)
+
+
+def test_remove_worker_from_scheduler(loop):
+    port = 8040
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s.sync_center()
+        done = s.start()
+        s.listen(port)
+
+        dsk = {('x', i): (inc, i) for i in range(10)}
+        s.update_graph(dsk=dsk, keys=list(dsk))
+        assert s.stacks[a.address]
+
+        assert a.address in s.worker_queues
+        s.remove_worker(a.address)
+        assert a.address not in s.ncores
+        assert len(s.stacks[b.address]) + len(s.processing[b.address]) == \
+                len(dsk)  # b owns everything
+        assert all(k in s.in_play for k in dsk)
+        s.validate()
+
+        s.stop()
+    _test_cluster(f, loop)
