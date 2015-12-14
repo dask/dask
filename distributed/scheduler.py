@@ -473,7 +473,7 @@ class Scheduler(Server):
             with ignoring(KeyError):
                 self.processing[worker].remove(key)
             self.waiting[key] = missing
-            logger.info('task missing data, %s, %s', key, self.waiting)
+            logger.debug('task missing data, %s, %s', key, self.waiting)
             self.ensure_occupied(worker)
 
         self.seed_ready_tasks()
@@ -679,9 +679,13 @@ class Scheduler(Server):
                self.close()
                break
             elif op in self.compute_handlers:
-                result = self.compute_handlers[op](**msg)
-                if isinstance(result, gen.Future):
-                    yield result
+                try:
+                    result = self.compute_handlers[op](**msg)
+                    if isinstance(result, gen.Future):
+                        yield result
+                except Exception as e:
+                    logger.exception(e)
+                    raise
             else:
                 logger.warn("Bad message: op=%s, %s", op, msg)
 
@@ -857,12 +861,14 @@ class Scheduler(Server):
         for q in self.scheduler_queues + self.report_queues:
             clear_queue(q)
 
-        for addr in self.nannies:
+        nannies = self.nannies.copy()
+
+        for addr in nannies:
             self.remove_worker(address=addr, heal=False)
 
         logger.debug("Send kill signal to nannies")
         nannies = [rpc(ip=ip, port=n_port)
-                   for (ip, w_port), n_port in self.nannies.items()]
+                   for (ip, w_port), n_port in nannies.items()]
         yield All([nanny.kill() for nanny in nannies])
 
         while self.ncores:
