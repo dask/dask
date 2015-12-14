@@ -864,11 +864,12 @@ class Scheduler(Server):
             except Exception as e:
                 logger.exception(e)
 
-    def validate(self):
-        in_memory = {k for k, v in self.who_has if v}
+    def validate(self, allow_overlap=False):
+        in_memory = {k for k, v in self.who_has.items() if v}
         validate_state(self.dependencies, self.dependents, self.waiting,
                 self.waiting_data, in_memory, self.stacks,
-                self.processing, None, set(), self.in_play)
+                self.processing, None, set(), self.in_play,
+                allow_overlap=allow_overlap)
         assert (set(self.ncores) == \
                 set(self.has_what) == \
                 set(self.stacks) == \
@@ -994,7 +995,7 @@ def update_state(dsk, dependencies, dependents, held_data,
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
         in_memory, stacks, processing, finished_results, released, in_play,
-        **kwargs):
+        allow_overlap=False, **kwargs):
     """ Validate a current runtime state
 
     This performs a sequence of checks on the entire graph, running in about
@@ -1011,11 +1012,15 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
     @memoize
     def check_key(key):
         """ Validate a single key, recurse downards """
-        assert sum([key in waiting,
-                    key in in_stacks,
-                    key in in_processing,
-                    key in in_memory,
-                    key in released]) == 1
+        val = sum([key in waiting,
+                   key in in_stacks,
+                   key in in_processing,
+                   key in in_memory,
+                   key in released])
+        if allow_overlap:
+            assert val >= 1
+        else:
+            assert val == 1
 
         assert (key in released) != (key in in_play)
 
