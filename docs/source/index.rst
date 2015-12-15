@@ -20,7 +20,7 @@ The types of users who are likely to find dask most useful are as follows:
 * **Cutting-edge library developers:** Some developers use dask within their own libraries. Current projects include `xray`_ (climate science), `scikit-image`_ and `scikit-allel`_ (genomics). The developers of these libraries use dask to accelerate interactive analysis of large datasets in their domains.
 * **Dask-array users:** Many users leverage the dask.array abstraction within dask, combined with custom graphs using dictionaries or the dask.imperative system.
 * **Algorithm developers:** Academics design complex algorithms and need a way to implement them; dask provides a testbed for them. The dask team has worked with a few of these users doing linear algebra, optimization, and machine learning.  They want to work directly with dask graphs or dask.imperative, eschewing the higher level collections.
-* **Big `pandas`_ seekers:** Dask.dataframe is useful to process data files that are larger than can fit in available memory, providing some limited pandas-like ability. It covers part, but not all, of the pandas API.
+* **Big pandas seekers:** Dask.dataframe is useful to process data files that are larger than can fit in available memory, providing some limited pandas-like ability. It covers part, but not all, of the `pandas`_ API.
 * **Multiprocessing users:** Some people are using dask.bag to process large dumps of log files.  
 
 Dask user intro
