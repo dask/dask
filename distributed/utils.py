@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from collections import Iterable
 from contextlib import contextmanager
+import logging
 import os
 import socket
 import sys
@@ -9,6 +10,9 @@ import tempfile
 
 from dask import istask
 from tornado import gen
+
+
+logger = logging.getLogger(__name__)
 
 
 def funcname(func):
@@ -74,15 +78,25 @@ def sync(loop, func, *args, **kwargs):
     from threading import Event
     e = Event()
     result = [None]
+    error = [False]
 
     @gen.coroutine
     def f():
-        result[0] = yield gen.maybe_future(func(*args, **kwargs))
-        e.set()
+        try:
+            result[0] = yield gen.maybe_future(func(*args, **kwargs))
+        except Exception as exc:
+            logger.exception(exc)
+            result[0] = exc
+            error[0] = True
+        finally:
+            e.set()
 
     a = loop.add_callback(f)
     e.wait()
-    return result[0]
+    if error[0]:
+        raise result[0]
+    else:
+        return result[0]
 
 
 @contextmanager
