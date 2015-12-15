@@ -69,22 +69,28 @@ def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node
 
 
 class Cluster(object):
-    def __init__(self, center_addr, center_port, worker_addrs, workers_per_node, cpus_per_worker, logdir):
+    def __init__(self, center_addr, center_port, worker_addrs, workers_per_node = 1, cpus_per_worker = None, logdir = None):
+
+        self.center_addr = center_addr
+        self.center_port = center_port
+        self.workers_per_node = workers_per_node
+        self.cpus_per_worker = cpus_per_worker
 
         # Generate a universal timestamp to use for log files
         import datetime
         if logdir is not None:
             logdir = os.path.join(logdir, "dcluster_" + datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S"))
             print(bcolors.WARNING + 'Output will be redirected to logfiles stored locally on individual woker nodes under "{logdir}".'.format(logdir=logdir) + bcolors.ENDC)
+        self.logdir = logdir
 
-        self.center = merge(start_center(logdir, center_addr, center_port),
-                            {'address': center_addr})
+
+        # Start the center node
+        self.center = merge(start_center(logdir, center_addr, center_port), {'address': center_addr})
+
+        # Start worker nodes
         self.workers = []
         for addr in worker_addrs:
-            self.workers += [ merge(start_worker(logdir, center_addr, center_port, addr,
-                                                 workers_per_node, cpus_per_worker),
-                                    {'address': addr, 'worker_id': worker_id})
-                              for worker_id in range(workers_per_node)]
+            self.add_worker(addr)
 
     def monitor_remote_processes(self):
 
@@ -160,8 +166,10 @@ class Cluster(object):
             pass   # Return execution to the calling process
 
     def add_worker(self, address):
-        self.workers.append(merge(start_worker(self.center['address'], address),
-                                  {'address': address}))
+        self.workers += [ merge(start_worker(self.logdir, self.center_addr, self.center_port, address,
+                                             self.workers_per_node, self.cpus_per_worker),
+                                {'address': address, 'worker_id': worker_id})
+                          for worker_id in range(self.workers_per_node)]
 
     def shutdown(self):
         for d in self.workers:
