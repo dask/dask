@@ -165,4 +165,4 @@ Dask is part of the Blaze_ project supported and offered by
 .. _`xray`: http://xray.readthedocs.org/en/stable/dask.html
 .. _`scikit-image`: http://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
-.. _`pandas` :http://pandas.pydata.org/pandas-docs/version/0.17.0/
+.. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
