@@ -1,16 +1,16 @@
 Specification
 =============
 
-We represent a computation as a directed acyclic graph of tasks with data
-dependencies.  Dask is a specification to encode such a graph using ordinary
-Python data structures, namely dicts, tuples, functions, and arbitrary Python
-values.
+Dask is a specification to encode a graph -- specifically, a directed 
+acyclic graph of tasks with data dependencies -- using ordinary Python data 
+structures, namely dicts, tuples, functions, and arbitrary Python
+values. 
 
 
 Definitions
 -----------
 
-A **dask graph** is a dictionary mapping data-keys to values or tasks.
+A **dask graph** is a dictionary mapping data-keys to values or tasks:
 
 .. code-block:: python
 
@@ -19,7 +19,7 @@ A **dask graph** is a dictionary mapping data-keys to values or tasks.
     'z': (add, 'x', 'y'),
     'w': (sum, ['x', 'y', 'z'])}
 
-A **key** is any hashable value that is not a task.
+A **key** is any hashable value that is not a task:
 
 .. code-block:: python
 
@@ -27,7 +27,7 @@ A **key** is any hashable value that is not a task.
    ('x', 2, 3)
 
 A **task** is a tuple with a callable first element.  Tasks represent atomic
-units of work meant to be run by a single worker.
+units of work meant to be run by a single worker. Example: 
 
 .. code-block:: python
 
@@ -44,7 +44,7 @@ An **argument** may be one of the following:
 3.  Other tasks like ``(inc, 'x')``
 4.  List of arguments, like ``[1, 'x', (inc, 'x')]``
 
-So all of the following are valid tasks
+So all of the following are valid tasks:
 
 .. code-block:: python
 
@@ -55,14 +55,14 @@ So all of the following are valid tasks
    (sum, ['x', (inc, 'x')])
    (np.dot, np.array([...]), np.array([...]))
 
-To encode keyword arguments we recommend the use of ``functools.partial`` or
+To encode keyword arguments, we recommend the use of ``functools.partial`` or
 ``toolz.curry``.
 
 
 What functions should expect
 ----------------------------
 
-In cases like ``(add, 'x', 'y')`` functions like ``add`` receive concrete
+In cases like ``(add, 'x', 'y')``, functions like ``add`` receive concrete
 values instead of keys.  A dask scheduler replaces keys (like ``'x'`` and ``'y'``) with
 their computed values (like ``1``, and ``2``) *before* calling the ``add`` function.
 
@@ -72,8 +72,8 @@ Entry Point - The ``get`` function
 
 The ``get`` function serves as entry point to computation.
 This function gets the value associated to the given key.  That key may
-refer to stored data as is the case with ``'x'`` or a task as is the case with
-``'z'``.  In the latter case ``get`` should perform all necessary computation
+refer to stored data, as is the case with ``'x'``, or a task as is the case with
+``'z'``.  In the latter case, ``get`` should perform all necessary computation
 to retrieve the computed value.
 
 .. code-block:: python
@@ -94,15 +94,15 @@ to retrieve the computed value.
    >>> get(dsk, 'w')
    6
 
-Additionally if given a ``list`` get should simultaneously acquire values for
-multiple keys
+Additionally if given a ``list``, get should simultaneously acquire values for
+multiple keys:
 
 .. code-block:: python
 
    >>> get(dsk, ['x', 'y', 'z'])
    [1, 2, 3]
 
-Because we accept lists of keys as keys we support nested lists.
+Because we accept lists of keys as keys, we support nested lists.
 
 .. code-block:: python
 
@@ -110,7 +110,7 @@ Because we accept lists of keys as keys we support nested lists.
    [[1, 2], [3, 6]]
 
 Internally ``get`` can be arbitrarily complex, calling out to distributed
-computing, using caches, etc..
+computing, using caches, etc.
 
 
 Why use tuples
@@ -125,11 +125,11 @@ We intend the following meaning:
 
    add('x', 'y')  # after x and y have been replaced
 
-But this will err because Python executes the function immediately
+But this will err because Python executes the function immediately,
 before we know values for ``'x'`` and ``'y'``.
 
 We delay the execution by moving the opening parenthesis one term to the left,
-creating a tuple.
+creating a tuple:
 
 .. code::
 
@@ -137,7 +137,7 @@ creating a tuple.
     After: (add, 'x', 'y')
 
 This lets us store the desired computation as data that we can analyze using
-other Python code rather than cause immediate execution.
+other Python code, rather than cause immediate execution.
 
-LISP users will identify this as an s-expression or as a rudimentary form of
+LISP users will identify this as an s-expression, or as a rudimentary form of
 quoting.
