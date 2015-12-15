@@ -1,23 +1,27 @@
 Optimization
 ============
 
-Small optimizations performed on the dask graph before calling the scheduler
-can significantly improve performance in different contexts. The
+Performance can be significantly improved in different contexts by making
+small optimizations on the dask graph before calling the scheduler. 
+
+The
 ``dask.optimize`` module contains several functions to transform graphs in a
 variety of useful ways. In most cases, users won't need to interact with these
-functions directly - specialized subsets of these transforms are done
+functions directly, as specialized subsets of these transforms are done
 automatically in the dask collections (``dask.array``, ``dask.bag``, and
 ``dask.dataframe``). However, users working with custom graphs or computations
 may find that applying these methods results in substantial speedups.
 
-In general, there are two goals when doing graph optimizations
+In general, there are two goals when doing graph optimizations:
 
 1. Simplify computation
-2. Improve parallelism
+2. Improve parallelism.
 
 Simplifying computation can be done on a graph level by removing unnecessary
 tasks (``cull``), or on a task level by replacing expensive operations with
-cheaper ones (``RewriteRule``). Parallelism can be improved by reducing
+cheaper ones (``RewriteRule``). 
+
+Parallelism can be improved by reducing
 inter-task communication, whether by fusing many tasks into one (``fuse``), or
 by inlining cheap operations (``inline``, ``inline_functions``).
 
@@ -27,7 +31,7 @@ a task graph.
 Example
 -------
 
-Suppose you had a custom dask graph for doing a word counting task.
+Suppose you had a custom dask graph for doing a word counting task:
 
 .. code-block:: python
 
@@ -63,7 +67,7 @@ Here we're counting the occurence of the words ``'orange``, ``'apple'``, and
 results, printing the output, then returning the output string.
 
 To perform the computation, we pass the dask and the desired output keys to a
-scheduler ``get`` function.
+scheduler ``get`` function:
 
 .. code-block:: python
 
@@ -80,9 +84,11 @@ scheduler ``get`` function.
 
 As can be seen above, the schedulers computed the whole graph before returning
 just a few of the outputs. This is because the schedulers will always compute
-all tasks, even if we only requested a few of the output keys. Before we pass
-the dask to ``get``, we need to remove the unnecessary tasks from the graph. To
-do this, we can use the ``cull`` function.
+all tasks, even if we only requested a few of the output keys. 
+
+To make this task run more efficiently, before passing the dask to ``get``, 
+remove the unnecessary tasks from the graph. To do this, use the ``cull`` 
+function:
 
 .. code-block:: python
 
@@ -98,7 +104,7 @@ do this, we can use the ``cull`` function.
 
 Looking at the task graph above, there are multiple accesses to constants such
 as ``'val1'`` or ``'val2'`` in the dask. These can be inlined into the tasks to
-improve efficiency using the ``inline`` function.
+improve efficiency using the ``inline`` function. For example:
 
 .. code-block:: python
 
@@ -117,7 +123,7 @@ is the word counting function. For cheap operations like this, the
 serialization cost may be larger than the actual computation, so it may be
 faster to do the computation more than once, rather than passing the results to
 all nodes. To perform this function inlining, the ``inline_functions`` function
-can be used.
+can be used:
 
 .. code-block:: python
 
@@ -134,7 +140,7 @@ can be used.
 Now we have a set of purely linear tasks. We'd like to have the scheduler run
 all of these on the same worker to reduce data serialization between workers.
 One option is just to merge these linear chains into one big task using the
-``fuse`` function.
+``fuse`` function:
 
 .. code-block:: python
 
@@ -164,18 +170,20 @@ Putting it all together:
     word list has 2 occurrences of orange, out of 7 words
 
 
-In summary, the above operations:
+In summary, the above operations accomplish the following:
 
 1. Removed tasks unncessary for the desired output using ``cull``
 2. Inlined constants using ``inline``
-3. Inlined cheap computations using ``inline_functions``, improving parallelism
-4. Fused linear tasks together to ensure they run on the same worker, using ``fuse``
+3. Inlined cheap computations using ``inline_functions``, improving parallelism, and
+4. Fused linear tasks together to ensure they run on the same worker using ``fuse``.
 
-These are just a few of the optimizations provided in ``dask.optimize``, for
-more information see the api below. As stated previously, these optimizations
+ As stated previously, these optimizations
 are already performed automatically in the dask collections. Users not working
-with custom graphs or computations should have little reason to directly
+with custom graphs or computations should rarely need to directly
 interact with them.
+
+These are just a few of the optimizations provided in ``dask.optimize``. For
+more information, see the API below.
 
 
 Rewrite Rules
@@ -186,7 +194,6 @@ pattern matching and term rewriting. This is useful for replacing expensive
 computations with equivalent, cheaper computations. For example, ``dask.array``
 uses the rewrite functionality to replace series of array slicing operations
 with a more efficient single slice.
-
 
 The interface to the rewrite system consists of two classes:
 
@@ -213,7 +220,7 @@ Here we create two rewrite rules expressing the following mathematical transform
 1. ``a + a -> 2*a``
 2. ``a * a -> a**2``
 
-where ``'a'`` is a variable.
+where ``'a'`` is a variable:
 
 .. code-block:: python
 
@@ -230,7 +237,7 @@ where ``'a'`` is a variable.
 
 The ``RewriteRule`` objects describe the desired transformations in a
 declarative way, and the ``RuleSet`` builds an efficient automata for applying
-that transformation. Rewriting can then be done using the ``rewrite`` method.
+that transformation. Rewriting can then be done using the ``rewrite`` method:
 
 .. code-block:: python
 
@@ -244,7 +251,7 @@ that transformation. Rewriting can then be done using the ``rewrite`` method.
     (pow, (mul, 3, 2), 2)
 
 The whole task is traversed by default. If you only want to apply a transform
-to the top-level of the task, you can pass in ``strategy='top_level'``.
+to the top-level of the task, you can pass in ``strategy='top_level'`` as shown:
 
 .. code-block:: python
 
@@ -257,7 +264,7 @@ to the top-level of the task, you can pass in ``strategy='top_level'``.
     (sum, [(add, 3, 3), (mul, 3, 3)])
 
 The rewriting system provides a powerful abstraction for transforming
-computations at a task level, but for many users directly interacting with
+computations at a task level. Again, for many users, directly interacting with
 these transformations will be unnecessary.
 
 
