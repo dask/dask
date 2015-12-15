@@ -39,11 +39,16 @@ def loads(x):
 
 logger = logging.getLogger(__name__)
 
-try:
-    import psutil
-    MAX_BUFFER_SIZE = psutil.virtual_memory().total / 2
-except ImportError:
-    MAX_BUFFER_SIZE = 2e9  # 2GB
+
+def get_total_physical_memory():
+    try:
+        import psutil
+        return psutil.virtual_memory().total / 2
+    except ImportError:
+        return 2e9
+
+
+MAX_BUFFER_SIZE = get_total_physical_memory()
 
 
 def handle_signal(sig, frame):

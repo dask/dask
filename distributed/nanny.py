@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from datetime import datetime
 import logging
 from multiprocessing import Process, Queue, queues
-import psutil
 import os
 import shutil
 import tempfile
@@ -134,6 +133,7 @@ class Nanny(Server):
         return (self.ip, self.worker_port)
 
     def resource_collect(self):
+        import psutil
         p = psutil.Process(self.process.pid)
         return {'timestamp': datetime.now(),
                 'cpu_percent': psutil.cpu_percent(),
