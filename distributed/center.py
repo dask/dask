@@ -4,6 +4,7 @@ from collections import defaultdict
 import logging
 from functools import partial
 import socket
+from toolz import first
 
 from tornado import gen
 from tornado.gen import Return
@@ -50,7 +51,8 @@ class Center(Server):
 
     Of you can create one in Python:
 
-    >>> center = Center('192.168.0.123', 8000)
+    >>> center = Center('192.168.0.123')
+    >>> center.listen(8787)
 
     >>> center.has_what  # doctest: +SKIP
     {('alice', 8788):   {'x', 'y'}
@@ -79,9 +81,8 @@ class Center(Server):
     --------
     distributed.worker.Worker:
     """
-    def __init__(self, ip, port, **kwargs):
-        self.ip = ip
-        self.port = port
+    def __init__(self, ip=None, **kwargs):
+        self.ip = ip or get_ip()
         self.who_has = defaultdict(set)
         self.has_what = defaultdict(set)
         self.ncores = dict()
@@ -98,6 +99,10 @@ class Center(Server):
         d['ping'] = pingpong
 
         super(Center, self).__init__(d, **kwargs)
+
+    @property
+    def port(self):
+        return first(self._sockets.values()).getsockname()[1]
 
     @gen.coroutine
     def terminate(self, stream):

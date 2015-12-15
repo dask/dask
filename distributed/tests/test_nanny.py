@@ -14,17 +14,17 @@ from distributed.utils_test import loop
 
 
 def test_nanny(loop):
-    c = Center('127.0.0.1', 8026)
-    n = Nanny('127.0.0.1', 8027, 8028, '127.0.0.1', 8026, ncores=2)
-    c.listen(c.port)
+    c = Center('127.0.0.1')
+    c.listen(0)
+    n = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
 
     @gen.coroutine
     def f():
+        yield n._start(0)
         nn = rpc(ip=n.ip, port=n.port)
-        yield n._start()
         assert n.process.is_alive()
         assert c.ncores[n.worker_address] == 2
-        assert c.nannies[n.worker_address] > 8000
+        assert c.nannies[n.worker_address] > 1024
 
         yield nn.kill()
         assert n.worker_address not in c.ncores
@@ -39,7 +39,7 @@ def test_nanny(loop):
         yield nn.instantiate()
         assert n.process.is_alive()
         assert c.ncores[n.worker_address] == 2
-        assert c.nannies[n.worker_address] > 8000
+        assert c.nannies[n.worker_address] > 1024
 
         yield nn.terminate()
         assert not n.process
@@ -54,14 +54,14 @@ def test_nanny(loop):
 
 
 def test_nanny_process_failure(loop):
-    c = Center('127.0.0.1', 8036)
-    n = Nanny('127.0.0.1', 8037, 8038, '127.0.0.1', 8036, ncores=2)
-    c.listen(c.port)
 
     @gen.coroutine
     def f():
-        nn = rpc(ip=n.ip, port=n.port)
+        c = Center('127.0.0.1')
+        c.listen(0)
+        n = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
         yield n._start()
+        nn = rpc(ip=n.ip, port=n.port)
         first_dir = n.worker_dir
 
         assert os.path.exists(first_dir)
@@ -98,14 +98,14 @@ def test_nanny_process_failure(loop):
 
 
 def test_monitor_resources(loop):
-    c = Center('127.0.0.1', 8026)
-    n = Nanny('127.0.0.1', 8027, 8028, '127.0.0.1', 8026, ncores=2)
-    c.listen(c.port)
+    c = Center(ip='127.0.0.1')
+    c.listen(0)
+    n = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
 
     @gen.coroutine
     def f():
-        nn = rpc(ip=n.ip, port=n.port)
         yield n._start()
+        nn = rpc(ip=n.ip, port=n.port)
         assert n.process.is_alive()
         d = n.resource_collect()
         assert {'cpu_percent', 'memory_percent'}.issubset(d)

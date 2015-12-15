@@ -535,10 +535,10 @@ def test_multi_queues(loop):
 
 
 def test_monitor_resources(loop):
-    c = Center('127.0.0.1', 8026)
-    a = Nanny('127.0.0.1', 8027, 8028, '127.0.0.1', 8026, ncores=2)
-    b = Nanny('127.0.0.1', 8029, 8030, '127.0.0.1', 8026, ncores=2)
-    c.listen(c.port)
+    c = Center('127.0.0.1')
+    c.listen(0)
+    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
+    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
     s = Scheduler((c.ip, c.port), resource_interval=0.01, resource_log_size=3)
 
     @gen.coroutine
@@ -657,10 +657,10 @@ def test_add_worker(loop):
         done = s.start()
         s.listen(port)
 
-        w = Worker('127.0.0.4', 8020, c.ip, c.port, ncores=3)
+        w = Worker(c.ip, c.port, ncores=3, ip='127.0.0.4')
         w.data[('x', 5)] = 6
         w.data['y'] = 1
-        yield w._start()
+        yield w._start(8020)
 
         dsk = {('x', i): (inc, i) for i in range(10)}
         s.update_graph(dsk=dsk, keys=list(dsk))
