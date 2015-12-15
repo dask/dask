@@ -5,11 +5,19 @@ import click
 
 @click.command()
 @click.option('--center', default=None, type=str,
-              help="Specify center node.  Defaults to first address")
+              help="Specify center node.  Defaults to first address.")
+@click.option('--center-port', default=8787, type=int,
+              help="Specify center port number.  Defaults to port 8787.")
+@click.option('--ncores', default=None, type=int,
+              help="Number of cores per worker node")
+@click.option('--nworkers', default=1, type=int,
+              help="Number of workers per host")
 @click.argument('hostnames', nargs=-1, type=str)
 @click.option('--hostfile', default=None, type=click.Path(exists=True),
               help="Textfile with hostnames/IP addresses")
-def start(center, hostnames, hostfile):
+@click.option('--log-directory', default=None, type=click.Path(exists=True),
+              help="Directory to use on all cluster nodes for the output of dcenter and dworker commands.")
+def start(center, center_port, hostnames, hostfile, ncores, nworkers, log_directory):
     hostnames = list(hostnames)
     if hostfile:
         with open(hostfile) as f:
@@ -19,10 +27,15 @@ def start(center, hostnames, hostfile):
     if not center:
         center, hostnames = hostnames[0], hostnames[1:]
 
-    c = Cluster(center, hostnames)
-    from time import sleep
-    while True:
-        sleep(1)
+    print("\n[ dcluster ]: starting a cluster with {n} worker node(s).\n".format(n=len(hostnames)))
+    c = Cluster(center, center_port, hostnames, nworkers, ncores, log_directory)
+
+    # Monitor the output of remote processes.  This blocks until the user issues a KeyboardInterrupt.
+    c.monitor_remote_processes()
+
+    # Close down the remote processes and exit.
+    c.shutdown()
+    print("\n[ dcluster ]: remote processes have been terminated. Exiting.")
 
 if __name__ == '__main__':
     start()
