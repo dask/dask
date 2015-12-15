@@ -17,10 +17,10 @@ Dask use cases
 
 The types of users who are likely to find dask most useful are as follows:
 
-* Cutting edge library developers: Developers who use dask within their own libraries.  Current projects include xray (climate science), scikit-image and scikit-allel (genomics).  The developers of these libraries are very knowledgeable and use dask to accelerate interactive analysis of large datasets in their domains.  They, in turn, serve a larger community of scientific users who are less technical.  These users generally want the dask.array abstraction, combined with custom graphs using dictionaries or the dask.imperative system.
-* Algorithm developers: Academics design complex algorithms and need a way to implement them; dask provides a testbed for them.  The dask team has worked with a few of these users doing linear algebra, optimization, and machine learning.  They want to work directly with dask graphs or dask.imperative, eschewing the higher level collections.
-* Big pandas seekers: Most stack overflow questions come from people who want the promise "It's exactly like pandas, but handles your 10GB pile of CSV files." To be clear, we neither issue nor deliver on this promise. 
-* Multiprocessing users: Some people are using dask.bag to process large dumps of log files.  
+* *Cutting edge library developers:* Developers who use dask within their own libraries.  Current projects include xray (climate science), scikit-image and scikit-allel (genomics).  The developers of these libraries are very knowledgeable and use dask to accelerate interactive analysis of large datasets in their domains.  They, in turn, serve a larger community of scientific users who are less technical.  These users generally want the dask.array abstraction, combined with custom graphs using dictionaries or the dask.imperative system.
+* *Algorithm developers:* Academics design complex algorithms and need a way to implement them; dask provides a testbed for them.  The dask team has worked with a few of these users doing linear algebra, optimization, and machine learning.  They want to work directly with dask graphs or dask.imperative, eschewing the higher level collections.
+* *Big pandas seekers:* Most stack overflow questions come from people who want the promise "It's exactly like pandas, but handles your 10GB pile of CSV files." To be clear, we neither issue nor deliver on this promise. 
+* *Multiprocessing users:* Some people are using dask.bag to process large dumps of log files.  
 
 Dask user intro
 ===============
