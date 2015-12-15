@@ -53,7 +53,7 @@ def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node
             worker_addr = worker_addr, worker_port = worker_port,
             logdir = logdir)
     else:
-        cmd = 'mkdir -p {logdir} && dworker {center_addr}:{center_port} --host {worker_addr} --port {worker_port} --ncpus {ncpu}\n'.format(
+        cmd = 'mkdir -p {logdir} && dworker {center_addr}:{center_port} --host {worker_addr} --port {worker_port} --ncores {ncpu}\n'.format(
             center_addr = center_addr, center_port = center_port,
             worker_addr = worker_addr, worker_port = worker_port,
             ncpu = cpus_per_worker, logdir = logdir)
@@ -98,7 +98,7 @@ class Cluster(object):
         # non-blocking. Also set up some nicely formatted output labels we can
         # prepend to each line of output, and create a 'status' key to keep
         # track of jobs that terminate prematurely.
-        self.center['label'] = (bcolors.OKBLUE +
+        self.center['label'] = (bcolors.BOLD +
                                 'center {addr}:{port}'.format(addr = self.center['address'],
                                                                port = self.center['port']) +
                                 bcolors.ENDC)
@@ -107,11 +107,9 @@ class Cluster(object):
         self.center['stderr'].channel.settimeout(0.1)
 
         for worker in self.workers:
-            worker['label'] = (bcolors.OKGREEN +
-                               'worker {addr}:{port} {{{worker_id}}}'.format(worker_id = worker['worker_id'],
-                                                                             addr = worker['address'],
-                                                                             port = worker['port']) +
-                               bcolors.ENDC)
+            worker['label'] = 'worker {addr}:{port} {{{worker_id}}}'.format(worker_id = worker['worker_id'],
+                                                                            addr = worker['address'],
+                                                                            port = worker['port'])
             worker['status'] = 'running'
             worker['stdout'].channel.settimeout(0.1)
             worker['stderr'].channel.settimeout(0.1)
@@ -128,7 +126,8 @@ class Cluster(object):
 
                     if process['stdout'].channel.exit_status_ready():
                         exit_status = process['stdout'].channel.recv_exit_status()
-                        print(bcolors.FAIL + process['label'] + ": remote process exited with exit status " + str(exit_status) + bcolors.ENDC)
+                        print('[ ' + process['label'] + ' ] : ' + bcolors.FAIL +
+                              "remote process exited with exit status " + str(exit_status) + bcolors.ENDC)
                         process['status'] = 'finished'
 
                     # Read stdout stream, time out if necessary.
@@ -148,7 +147,11 @@ class Cluster(object):
                     try:
                         line = process['stderr'].readline()
                         while len(line) > 0:
-                            print(bcolors.WARNING + line.rstrip() + bcolors.ENDC)
+                            print('[ {label} ] : ' +
+                                  bcolors.WARNING +
+                                  ' {output}'.format(label = process['label'],
+                                                     output = line.rstrip()) +
+                                  bcolors.ENDC)
                             line = process['stderr'].readline()
 
                     except paramiko.buffered_pipe.PipeTimeout:
