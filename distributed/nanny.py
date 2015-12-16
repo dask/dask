@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from multiprocessing import Process, Queue, queues
 import os
@@ -52,7 +52,7 @@ class Nanny(Server):
         logger.info('Start Nanny at:             %s:%d', self.ip, self.port)
 
     @gen.coroutine
-    def _kill(self, stream=None):
+    def _kill(self, stream=None, timeout=5):
         """ Kill the local worker process
 
         Blocks until both the process is down and the center is properly
@@ -62,11 +62,17 @@ class Nanny(Server):
             yield gen.sleep(0.1)
 
         if self.process is not None:
-            result = yield self.center.unregister(address=self.worker_address)
-            if result != b'OK':
-                logger.critical("Unable to unregister with center %s. "
-                        "Nanny: %s, Worker: %s", result, self.address,
-                        self.worker_address)
+            try:
+                result = yield gen.with_timeout(timedelta(seconds=timeout),
+                            self.center.unregister(address=self.worker_address))
+                if result != b'OK':
+                    logger.critical("Unable to unregister with center %s. "
+                            "Nanny: %s, Worker: %s", result, self.address,
+                            self.worker_address)
+            except gen.TimeoutError:
+                logger.info("Nanny %s:%d failed to kill worker %s:%d",
+                        self.ip, self.port, self.ip, self.worker_port,
+                        exc_info=True)
             self.process.terminate()
             self.process = None
             logger.info("Nanny %s:%d kills worker process %s:%d",
@@ -125,10 +131,10 @@ class Nanny(Server):
                 yield gen.sleep(wait_seconds)
 
     @gen.coroutine
-    def _close(self, stream=None):
+    def _close(self, stream=None, timeout=5):
         """ Close the nanny process, stop listening """
         logger.info("Closing Nanny at %s:%d", self.ip, self.port)
-        yield self._kill()
+        yield self._kill(timeout=timeout)
         self.center.close_streams()
         self.stop()
         self.status = 'closed'

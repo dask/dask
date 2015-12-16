@@ -5,6 +5,8 @@ from time import time
 from dask.core import get_deps
 from toolz import merge, concat
 from tornado.queues import Queue
+from tornado.iostream import StreamClosedError
+from tornado.gen import TimeoutError
 import pytest
 
 from distributed import Center, Nanny, Worker
@@ -12,7 +14,7 @@ from distributed.core import connect, read, write, rpc
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
         decide_worker, assign_many_tasks, heal_missing_data, Scheduler)
-from distributed.utils_test import inc
+from distributed.utils_test import inc, ignoring
 
 
 def test_heal():
@@ -559,14 +561,16 @@ def test_monitor_resources(loop):
 
             yield gen.sleep(0.1)
 
-            assert set(s.resource_logs) == {(a.ip, a.port), (b.ip, b.port)}
+            assert set(s.resource_logs) == {a.address, b.address}
             assert all(len(v) == 3 for v in s.resource_logs.values())
 
             s.put({'op': 'close'})
             yield done
         finally:
-            yield a._close()
-            yield b._close()
+            with ignoring(TimeoutError, StreamClosedError, OSError):
+                yield a._close(timeout=0.5)
+            with ignoring(TimeoutError, StreamClosedError, OSError):
+                yield b._close(timeout=0.5)
             c.stop()
 
     loop.run_sync(f, timeout=30)

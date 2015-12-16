@@ -142,7 +142,7 @@ def test_ports(loop):
     try:
         assert server.port == port
 
-        with pytest.raises(OSError):
+        with pytest.raises((OSError, socket.error)):
             server2 = Server({})
             server2.listen(port)
     finally:
