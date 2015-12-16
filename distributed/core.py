@@ -113,8 +113,11 @@ class Server(TCPServer):
                 super(Server, self).listen(port)
                 break
             except OSError as e:
-                logger.info('Randomly assigned port taken for %s.  Retrying',
-                            type(self).__name__)
+                if port:
+                    raise
+                else:
+                    logger.info('Randomly assigned port taken for %s. Retrying',
+                                type(self).__name__)
 
     @gen.coroutine
     def handle_stream(self, stream, address):
