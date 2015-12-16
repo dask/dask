@@ -50,18 +50,16 @@ def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node
     import random
     worker_port = random.randint(10000, 20000)
 
-    if cpus_per_worker is None:
-        cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --port {worker_port}'.format(
-            center_addr = center_addr, center_port = center_port,
-            worker_addr = worker_addr, worker_port = worker_port,
-            logdir = logdir)
-    else:
-        cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --port {worker_port} --ncores {ncpu}\n'.format(
-            center_addr = center_addr, center_port = center_port,
-            worker_addr = worker_addr, worker_port = worker_port,
-            ncpu = cpus_per_worker, logdir = logdir)
+    cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --port {worker_port}'.format(
+        center_addr = center_addr, center_port = center_port,
+        worker_addr = worker_addr, worker_port = worker_port,
+        logdir = logdir)
 
-    # Optionally re-direct stdout and stderr to a logfile
+    # (Optionally) add the ncores argument
+    if cpus_per_worker is not None:
+        cmd += ' --ncores {ncpu}\n'.format(ncpu = cpus_per_worker)
+
+    # Optionally redirect stdout and stderr to a logfile
     if logdir is not None:
         cmd = 'mkdir -p {logdir} && ' + cmd
         cmd += '&> {logdir}/dcenter_{addr}:{port}.log\n'.format(
