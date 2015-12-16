@@ -33,7 +33,7 @@ def start_center(logdir, center_addr, center_port):
     # Optionally re-direct stdout and stderr to a logfile
     if logdir is not None:
         cmd = 'mkdir -p {logdir} && ' + cmd
-        cmd += '&> {logdir}/dcenter_{addr}:{port}.log\n'.format(
+        cmd += '&> {logdir}/dcenter_{addr}:{port}.log'.format(
             addr = center_addr, port = center_port, logdir = logdir)
 
     # Run the command
@@ -63,12 +63,12 @@ def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node
 
     # (Optionally) add the ncores argument
     if cpus_per_worker is not None:
-        cmd += ' --ncores {ncpu}\n'.format(ncpu = cpus_per_worker)
+        cmd += ' --ncores {ncpu}'.format(ncpu = cpus_per_worker)
 
     # Optionally redirect stdout and stderr to a logfile
     if logdir is not None:
         cmd = 'mkdir -p {logdir} && ' + cmd
-        cmd += '&> {logdir}/dcenter_{addr}:{port}.log\n'.format(
+        cmd += '&> {logdir}/dcenter_{addr}:{port}.log'.format(
             addr = worker_addr, port = worker_port, logdir = logdir)
 
     # Run the command
