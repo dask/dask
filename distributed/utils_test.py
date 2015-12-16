@@ -13,8 +13,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
 
-from distributed.core import (connect_sync, write_sync, read_sync, connect,
-        read, write)
+from distributed.core import connect, read, write, rpc
 from distributed.utils import ignoring
 import pytest
 
@@ -122,12 +121,12 @@ def cluster(nworkers=2, nanny=False):
     for worker in workers:
         worker['proc'].start()
 
-    sock = connect_sync('127.0.0.1', cport)
+    loop = IOLoop()
+    c = rpc(ip='127.0.0.1', port=cport)
     start = time()
     try:
         while True:
-            write_sync(sock, {'op': 'ncores'})
-            ncores = read_sync(sock)
+            ncores = loop.run_sync(c.ncores)
             if len(ncores) == nworkers:
                 break
             if time() - start > 5:
@@ -135,7 +134,6 @@ def cluster(nworkers=2, nanny=False):
 
         yield {'proc': center, 'port': cport}, workers
     finally:
-        loop = IOLoop()
         logger.debug("Closing out test cluster")
         for port in [cport] + [w['port'] for w in workers]:
             with ignoring(socket.error, TimeoutError, StreamClosedError):
@@ -145,6 +143,7 @@ def cluster(nworkers=2, nanny=False):
                 proc.terminate()
         for fn in glob('_test_worker-*'):
             shutil.rmtree(fn)
+
 
 @gen.coroutine
 def disconnect(ip, port):

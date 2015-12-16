@@ -182,37 +182,6 @@ class Server(TCPServer):
                     type(self).__name__)
 
 
-def connect_sync(host, port, timeout=1):
-    start = time()
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(timeout)
-    while True:
-        try:
-            s.connect((host, port))
-            break
-        except socket.error:
-            if time() - start > timeout:
-                raise
-            else:
-                sleep(0.1)
-
-    return s
-
-
-def write_sync(sock, msg):
-    msg = dumps(msg)
-    sock.send(msg)
-    sock.send(sentinel)
-
-
-def read_sync(s):
-    bytes = []
-    while b''.join(bytes[-len(sentinel):]) != sentinel:
-        bytes.append(s.recv(1))
-    msg = b''.join(bytes[:-len(sentinel)])
-    return loads(msg)
-
-
 sentinel = md5(b'7f57da0f9202f6b4df78e251058be6f0').hexdigest().encode()
 
 @gen.coroutine
