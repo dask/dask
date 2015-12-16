@@ -163,7 +163,7 @@ slow = pytest.mark.skipif(
 from tornado import gen
 from tornado.ioloop import IOLoop
 
-def _test_cluster(f, loop=None):
+def _test_cluster(f, loop=None, b_ip='127.0.0.1'):
     from .center import Center
     from .worker import Worker
     from .executor import _global_executor
@@ -171,9 +171,9 @@ def _test_cluster(f, loop=None):
     def g():
         c = Center('127.0.0.1')
         c.listen(8017)
-        a = Worker(c.ip, c.port, ncores=2, ip='127.0.0.2')
+        a = Worker(c.ip, c.port, ncores=2, ip='127.0.0.1')
         yield a._start()
-        b = Worker(c.ip, c.port, ncores=1, ip='127.0.0.3')
+        b = Worker(c.ip, c.port, ncores=1, ip=b_ip)
         yield b._start()
 
         start = time()
