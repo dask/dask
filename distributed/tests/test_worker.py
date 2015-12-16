@@ -17,14 +17,14 @@ from tornado.ioloop import IOLoop
 
 def test_worker_ncores():
     from distributed.worker import _ncores
-    w = Worker('127.0.0.1', 8018, '127.0.0.1', 8019)
+    w = Worker('127.0.0.1', 8019)
     try:
         assert w.executor._max_workers == _ncores
     finally:
         shutil.rmtree(w.local_dir)
 
 def test_identity():
-    w = Worker('127.0.0.1', 8018, '127.0.0.1', 8019)
+    w = Worker('127.0.0.1', 8019)
     ident = w.identity(None)
     assert ident['type'] == 'Worker'
     assert ident['center'] == ('127.0.0.1', 8019)
@@ -197,6 +197,19 @@ def test_broadcast(loop):
         cc.close_streams()
 
     _test_cluster(f)
+
+
+def test_worker_with_port_zero(loop):
+    @gen.coroutine
+    def f():
+        c = Center('127.0.0.1')
+        c.listen(8007)
+        w = Worker(c.ip, c.port, ip='127.0.0.1')
+        yield w._start()
+        assert isinstance(w.port, int)
+        assert w.port > 1024
+
+    loop.run_sync(f)
 """
 
 def test_close():

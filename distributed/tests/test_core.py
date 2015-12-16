@@ -133,3 +133,25 @@ def test_identity(loop):
         assert a['id'] == b['id']
 
     loop.run_sync(f)
+
+
+def test_ports(loop):
+    port = 9876
+    server = Server({})
+    server.listen(port)
+    try:
+        assert server.port == port
+
+        with pytest.raises((OSError, socket.error)):
+            server2 = Server({})
+            server2.listen(port)
+    finally:
+        server.stop()
+
+    try:
+        server3 = Server({})
+        server3.listen(0)
+        assert isinstance(server3.port, int)
+        assert server3.port > 1024
+    finally:
+        server3.stop()

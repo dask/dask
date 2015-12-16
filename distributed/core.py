@@ -8,7 +8,7 @@ import struct
 from time import sleep, time
 import uuid
 
-from toolz import assoc
+from toolz import assoc, first
 import tornado
 import pickle
 import cloudpickle
@@ -92,10 +92,32 @@ class Server(TCPServer):
     def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = uuid.uuid1()
+        self._port = None
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
+
+    @property
+    def port(self):
+        if not self._port:
+            try:
+                self._port = first(self._sockets.values()).getsockname()[1]
+            except StopIteration:
+                raise OSError("Server has no port.  Please call .listen first")
+        return self._port
 
     def identity(self, stream):
         return {'type': type(self).__name__, 'id': self.id}
+
+    def listen(self, port):
+        while True:
+            try:
+                super(Server, self).listen(port)
+                break
+            except OSError as e:
+                if port:
+                    raise
+                else:
+                    logger.info('Randomly assigned port taken for %s. Retrying',
+                                type(self).__name__)
 
     @gen.coroutine
     def handle_stream(self, stream, address):
