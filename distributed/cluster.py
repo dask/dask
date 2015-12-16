@@ -19,13 +19,11 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-def connect_ssh(addr):
+def start_center(logdir, center_addr, center_port):
+
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(addr, timeout = 20)
-    return ssh
-
-def start_center(ssh, logdir, center_addr, center_port):
+    ssh.connect(center_addr, timeout = 20)
 
     cmd = 'dcenter --host {addr} --port {port}'.format(
         addr = center_addr, port = center_port, logdir = logdir)
@@ -41,7 +39,11 @@ def start_center(ssh, logdir, center_addr, center_port):
     return {'address': center_addr, 'port': center_port, 'client': ssh, 'stdout': stdout, 'stderr': stderr}
 
 
-def start_worker(ssh, logdir, center_addr, center_port, worker_addr, workers_per_node, cpus_per_worker):
+def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node, cpus_per_worker):
+
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(worker_addr, timeout = 20)
 
     # Pick a random port for the worker.  This prevents contention over a single port,
     # which may occasionally cause workers to fail to register with the center node.
@@ -86,8 +88,7 @@ class Cluster(object):
         self.logdir = logdir
 
         # Start the center node
-        center_ssh = connect_ssh(center_addr)
-        self.center = merge(start_center(center_ssh, logdir, center_addr, center_port), {'address': center_addr})
+        self.center = merge(start_center(logdir, center_addr, center_port), {'address': center_addr})
 
         # Start worker nodes
         self.workers = []
@@ -171,8 +172,7 @@ class Cluster(object):
             pass   # Return execution to the calling process
 
     def add_worker(self, address):
-        ssh = connect_ssh(address)
-        self.workers += [ merge(start_worker(ssh, self.logdir, self.center_addr, self.center_port, address,
+        self.workers += [ merge(start_worker(self.logdir, self.center_addr, self.center_port, address,
                                              self.workers_per_node, self.cpus_per_worker),
                                 {'address': address, 'worker_id': worker_id})
                           for worker_id in range(self.workers_per_node)]
