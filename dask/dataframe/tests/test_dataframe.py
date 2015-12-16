@@ -2391,3 +2391,23 @@ def test_reset_index():
 def test_dataframe_compute_forward_kwargs():
     x = dd.from_pandas(pd.DataFrame({'a': range(10)}), npartitions=2).a.sum()
     x.compute(bogus_keyword=10)
+
+def test_series_iteritems():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    for (a, b) in zip(df['x'].iteritems(), ddf['x'].iteritems()):
+        assert a == b
+
+def test_dataframe_iterrows():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for (a, b) in zip(df.iterrows(), ddf.iterrows()):
+        tm.assert_series_equal(a[1], b[1])
+
+def test_dataframe_itertuples():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for (a, b) in zip(df.itertuples(), ddf.itertuples()):
+        assert a == b
