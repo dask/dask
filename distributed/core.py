@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from datetime import timedelta
 from hashlib import md5
 import logging
 import signal
@@ -235,13 +236,13 @@ def pingpong(stream):
 
 
 @gen.coroutine
-def connect(ip, port, timeout=1):
+def connect(ip, port, timeout=3):
     client = TCPClient()
     start = time()
     while True:
         try:
-            stream = yield client.connect(ip, port,
-                    max_buffer_size=MAX_BUFFER_SIZE)
+            future = client.connect(ip, port, max_buffer_size=MAX_BUFFER_SIZE)
+            stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
             raise Return(stream)
         except StreamClosedError:
             if time() - start < timeout:
@@ -249,6 +250,8 @@ def connect(ip, port, timeout=1):
                 logger.debug("sleeping on connect")
             else:
                 raise
+        except gen.TimeoutError:
+            raise IOError("Timed out while connecting to %s:%d" % (ip, port))
 
 
 @gen.coroutine
