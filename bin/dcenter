@@ -27,7 +27,7 @@ def go(host, port):
         host = get_ip()
 
     logger.info("Start center at %s:%d", host, port)
-    center = Center(host, port)
+    center = Center(host)
     center.listen(port)
     IOLoop.current().start()
     IOLoop.current().close()
