@@ -19,11 +19,13 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
 def start_center(logdir, center_addr, center_port):
 
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(center_addr, timeout = 20)
+    channel = ssh.invoke_shell()
 
     cmd = 'dcenter --host {addr} --port {port}'.format(
         addr = center_addr, port = center_port, logdir = logdir)
@@ -35,8 +37,11 @@ def start_center(logdir, center_addr, center_port):
             addr = center_addr, port = center_port, logdir = logdir)
 
     # Run the command
-    stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
-    return {'address': center_addr, 'port': center_port, 'client': ssh, 'stdout': stdout, 'stderr': stderr}
+    channel.send(cmd + '\n')
+
+    # Return a dictionary including file handlers for stdout and stderr
+    return {'address': center_addr, 'port': center_port, 'client': ssh,
+            'stdout': channel.makefile('r'), 'stderr': channel.makefile_stderr('r')}
 
 
 def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node, cpus_per_worker):
@@ -44,6 +49,7 @@ def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(worker_addr, timeout = 20)
+    channel = ssh.invoke_shell()
 
     # Pick a random port for the worker.  This prevents contention over a single port,
     # which may occasionally cause workers to fail to register with the center node.
@@ -66,8 +72,11 @@ def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node
             addr = worker_addr, port = worker_port, logdir = logdir)
 
     # Run the command
-    stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
-    return {'address': worker_addr, 'port': worker_port, 'client': ssh, 'stdout': stdout, 'stderr': stderr}
+    channel.send(cmd + '\n')
+
+    # Return a dictionary including file handlers for stdout and stderr
+    return {'address': worker_addr, 'port': worker_port, 'client': ssh,
+            'stdout': channel.makefile('r'), 'stderr': channel.makefile_stderr('r')}
 
 
 class Cluster(object):
@@ -125,12 +134,6 @@ class Cluster(object):
                     if process['status'] == 'finished':
                         continue
 
-                    if process['stdout'].channel.exit_status_ready():
-                        exit_status = process['stdout'].channel.recv_exit_status()
-                        print('[ ' + process['label'] + ' ] : ' + bcolors.FAIL +
-                              "remote process exited with exit status " + str(exit_status) + bcolors.ENDC)
-                        process['status'] = 'finished'
-
                     # Read stdout stream, time out if necessary.
                     try:
                         line = process['stdout'].readline()
@@ -148,11 +151,8 @@ class Cluster(object):
                     try:
                         line = process['stderr'].readline()
                         while len(line) > 0:
-                            print('[ {label} ] : ' +
-                                  bcolors.WARNING +
-                                  ' {output}'.format(label = process['label'],
-                                                     output = line.rstrip()) +
-                                  bcolors.ENDC)
+                            print('[ {{label}} ] : '.format(label = process['label']) +
+                                  bcolors.FAIL + '{output}'.format(output = line.rstrip()) + bcolors.ENDC)
                             line = process['stderr'].readline()
 
                     except paramiko.buffered_pipe.PipeTimeout:
@@ -160,11 +160,18 @@ class Cluster(object):
                     except socket.timeout:
                         continue
 
+                    # Check to see if the process has exited.
+                    if process['stdout'].channel.exit_status_ready():
+                        exit_status = process['stdout'].channel.recv_exit_status()
+                        print('[ {{label}} ] : '.format(label = process['label']) +
+                              bcolors.FAIL + "remote process exited with exit status " + str(exit_status) + bcolors.ENDC)
+                        process['status'] = 'finished'
+
                 # Kill some time and free up CPU before starting the next sweep
                 # through the processes.
-                sleep(1)
+                sleep(1.0)
 
-                # end while()
+            # end while(1)
 
         except KeyboardInterrupt:
             pass   # Return execution to the calling process
