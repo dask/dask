@@ -2,6 +2,7 @@
 Dask
 ====
 
+Dask  is a simple task scheduling system that breaks up large computations into many small ones.  
 The word "dask" comes from a combination of "DAG" (for directed acyclic graph) and "task." 
 
 **Dask enables parallel computing** through task scheduling and blocked algorithms.
