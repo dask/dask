@@ -142,9 +142,9 @@ class Cluster(object):
                             line = process['stdout'].readline()
 
                     except paramiko.buffered_pipe.PipeTimeout:
-                        pass
+                        continue
                     except socket.timeout:
-                        pass
+                        continue
 
                     # Read stderr stream, time out if necessary
                     try:
@@ -158,9 +158,9 @@ class Cluster(object):
                             line = process['stderr'].readline()
 
                     except paramiko.buffered_pipe.PipeTimeout:
-                        pass
+                        continue
                     except socket.timeout:
-                        pass
+                        continue
 
                 # Kill some time and free up CPU before starting the next sweep
                 # through the processes.
