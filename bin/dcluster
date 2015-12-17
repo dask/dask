@@ -46,7 +46,7 @@ def start(ctx, center, center_port, hostnames, hostfile, ncores, nworkers, log_d
     print('Worker nodes:'.format(n=len(hostnames)))
     for i, host in enumerate(hostnames):
         print('  {num}: {host}'.format(num = i, host = host))
-    print('Center node: {addr}:{port}'.format(addr = center, port = center_port))
+    print('\nCenter node: {addr}:{port}'.format(addr = center, port = center_port))
     print('---------------------------------------------------------------\n\n')
 
     # Monitor the output of remote processes.  This blocks until the user issues a KeyboardInterrupt.

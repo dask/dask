@@ -5,7 +5,11 @@ from time import sleep
 import socket
 import os
 
-from queue import Queue
+try:
+    from queue import Queue
+except ImportError:  # Python 2.7 fix
+    from Queue import Queue
+
 from threading import Thread
 
 from toolz import merge
