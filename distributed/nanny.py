@@ -45,11 +45,11 @@ class Nanny(Server):
     def _start(self, port=0):
         """ Start nanny, start local process, start watching """
         self.listen(port)
+        logger.info('Start Nanny at:             %s:%d', self.ip, self.port)
         yield self.instantiate()
         self.loop.add_callback(self._watch)
         assert self.worker_port
         self.status = 'running'
-        logger.info('Start Nanny at:             %s:%d', self.ip, self.port)
 
     @gen.coroutine
     def _kill(self, stream=None, timeout=5):
