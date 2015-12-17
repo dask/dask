@@ -69,8 +69,11 @@ class Nanny(Server):
                     logger.critical("Unable to unregister with center %s. "
                             "Nanny: %s, Worker: %s", result, self.address,
                             self.worker_address)
+                else:
+                    logger.info("Unregister worker %s:%d from center",
+                                self.ip, self.worker_port)
             except gen.TimeoutError:
-                logger.info("Nanny %s:%d failed to kill worker %s:%d",
+                logger.info("Nanny %s:%d failed to unregister worker %s:%d",
                         self.ip, self.port, self.ip, self.worker_port,
                         exc_info=True)
             self.process.terminate()

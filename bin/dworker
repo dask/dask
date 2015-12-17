@@ -37,17 +37,17 @@ def go(center, host, port, ncores, nprocesses):
     except KeyboardInterrupt:
         @gen.coroutine
         def stop():
-            result = yield [worker.center.unregister(address=worker.worker_address)
-                    for worker in workers]
-
-            raise gen.Return(result)
+            results = yield [worker._kill() for worker in workers]
+            raise gen.Return(results)
 
         results = IOLoop().run_sync(stop)
 
-        for worker, result in zip(workers, results):
-            if result == b'OK':
-                logger.info("Unregister %s:%d from center", *worker.worker_address)
-        logger.info("End workers at %s:%d", worker.ip, worker.port)
+        for r, worker in zip(results, workers):
+            if r == b'OK':
+                logger.info("End nanny at %s:%d", worker.ip, worker.port)
+            else:
+                logger.info("Failed to cleanly kill worker %s:%d",
+                            worker.ip, worker.port)
 
 if __name__ == '__main__':
     go()
