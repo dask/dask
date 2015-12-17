@@ -27,27 +27,27 @@ def go(center, host, port, ncores, nprocesses):
         logger.info("Usage:  dworker center_host:center_port")
 
     loop = IOLoop.current()
-    workers = [Nanny(center_ip, center_port, ncores=ncores, ip=host)
+    nannies = [Nanny(center_ip, center_port, ncores=ncores, ip=host)
                 for i in range(nprocesses)]
 
-    for worker in workers:
-        loop.add_callback(worker._start, port)
+    for nanny in nannies:
+        loop.add_callback(nanny._start, port)
     try:
         loop.start()
     except KeyboardInterrupt:
         @gen.coroutine
         def stop():
-            results = yield [worker._kill() for worker in workers]
+            results = yield [nanny._kill() for nanny in nannies]
             raise gen.Return(results)
 
         results = IOLoop().run_sync(stop)
 
-        for r, worker in zip(results, workers):
+        for r, nanny in zip(results, nannies):
             if r == b'OK':
-                logger.info("End nanny at %s:%d", worker.ip, worker.port)
+                logger.info("End nanny at %s:%d", nanny.ip, nanny.port)
             else:
                 logger.info("Failed to cleanly kill worker %s:%d",
-                            worker.ip, worker.port)
+                            nanny.ip, nanny.port)
 
 if __name__ == '__main__':
     go()
