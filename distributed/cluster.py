@@ -153,22 +153,19 @@ def start_center(logdir, center_addr, center_port):
 
     return merge(cmd_dict, {'thread': thread})
 
-def start_worker(logdir, center_addr, center_port, worker_addr,
-                 worker_id, workers_per_node, cpus_per_worker):
+def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs):
 
     # Pick a random port for the worker.  This prevents contention over a single port,
     # which may occasionally cause workers to fail to register with the center node.
     import random
     worker_port = random.randint(10000, 20000)
 
-    cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --port {worker_port}'.format(
+    cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --port {worker_port} --nthreads {nthreads} --nprocs {nprocs}'.format(
         center_addr = center_addr, center_port = center_port,
         worker_addr = worker_addr, worker_port = worker_port,
-        logdir = logdir)
-
-    # (Optionally) add the ncores argument
-    if cpus_per_worker is not None:
-        cmd += ' --ncores {ncpu}'.format(ncpu = cpus_per_worker)
+        nthreads = nthreads,
+        nprocs = nprocs)
+    print("RUNNING", cmd)
 
     # Optionally redirect stdout and stderr to a logfile
     if logdir is not None:
@@ -176,9 +173,8 @@ def start_worker(logdir, center_addr, center_port, worker_addr,
         cmd += '&> {logdir}/dcenter_{addr}:{port}.log'.format(
             addr = worker_addr, port = worker_port, logdir = logdir)
 
-    label = 'worker {addr}:{port} {{{worker_id}}}'.format(worker_id = worker_id,
-                                                          addr = worker_addr,
-                                                          port = worker_port)
+    label = 'worker {addr}:{port}'.format(addr = worker_addr,
+                                          port = worker_port)
 
     # Create a command dictionary, which contains everything we need to run and
     # interact with this command.
@@ -196,12 +192,12 @@ def start_worker(logdir, center_addr, center_port, worker_addr,
 
 
 class Cluster(object):
-    def __init__(self, center_addr, center_port, worker_addrs, workers_per_node = 1, cpus_per_worker = None, logdir = None):
+    def __init__(self, center_addr, center_port, worker_addrs, nthreads = 0, nprocs = 1, logdir = None):
 
         self.center_addr = center_addr
         self.center_port = center_port
-        self.workers_per_node = workers_per_node
-        self.cpus_per_worker = cpus_per_worker
+        self.nthreads = nthreads
+        self.nprocs = nprocs
 
         # Generate a universal timestamp to use for log files
         import datetime
@@ -218,18 +214,7 @@ class Cluster(object):
 
         # Start worker nodes
         self.workers = []
-
-        # For rate limiting (below)
-        import multiprocessing
-        ncores = multiprocessing.cpu_count()
-
         for i, addr in enumerate(worker_addrs):
-
-            # Rate limit the starting of worker nodes. We don't want to fire off
-            # too many SSH connections at the same time, or this machine will
-            # briefly grind to a halt.
-            sleep(float( i // (2*ncores) ))
-
             self.add_worker(addr)
 
     def monitor_remote_processes(self):
@@ -253,16 +238,12 @@ class Cluster(object):
             pass   # Return execution to the calling process
 
     def add_worker(self, address):
-        for worker_id in range(self.workers_per_node):
-            worker = merge( start_worker(self.logdir,
+        self.workers.append(start_worker(self.logdir,
                                          self.center_addr,
                                          self.center_port,
                                          address,
-                                         worker_id,
-                                         self.workers_per_node,
-                                         self.cpus_per_worker),
-                            {'worker_id': worker_id})
-            self.workers.append(worker)
+                                         self.nthreads,
+                                         self.nprocs))
 
     def shutdown(self):
         all_processes = [self.center] + self.workers

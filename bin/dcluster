@@ -13,17 +13,17 @@ import os
               help="Specify center node.  Defaults to first address.")
 @click.option('--center-port', default=8787, type=int,
               help="Specify center port number.  Defaults to port 8787.")
-@click.option('--ncores', default=None, type=int,
-              help="Number of cores per worker node")
-@click.option('--nworkers', default=1, type=int,
-              help="Number of workers per host")
+@click.option('--nthreads', default=0, type=int,
+              help="Number of threads per worker process. Defaults to number of cores divided by the number of proceses per host.")
+@click.option('--nprocs', default=1, type=int,
+              help="Number of worker processes per host.  Defaults to one.")
 @click.argument('hostnames', nargs=-1, type=str)
 @click.option('--hostfile', default=None, type=click.Path(exists=True),
               help="Textfile with hostnames/IP addresses")
 @click.option('--log-directory', default=None, type=click.Path(exists=True),
               help="Directory to use on all cluster nodes for the output of dcenter and dworker commands.")
 @click.pass_context
-def start(ctx, center, center_port, hostnames, hostfile, ncores, nworkers, log_directory):
+def start(ctx, center, center_port, hostnames, hostfile, nthreads, nprocs, log_directory):
     try:
         hostnames = list(hostnames)
         if hostfile:
@@ -38,7 +38,7 @@ def start(ctx, center, center_port, hostnames, hostfile, ncores, nworkers, log_d
         print(ctx.get_help())
         exit(1)
 
-    c = Cluster(center, center_port, hostnames, nworkers, ncores, log_directory)
+    c = Cluster(center, center_port, hostnames, nthreads, nprocs, log_directory)
 
     import distributed
     print('\n---------------------------------------------------------------')
