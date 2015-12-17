@@ -5,6 +5,9 @@ from time import sleep
 import socket
 import os
 
+from queue import Queue
+from threading import Thread
+
 from toolz import merge
 
 # These are handy for creating colorful terminal output to enhance readability
@@ -19,13 +22,79 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
-def start_center(logdir, center_addr, center_port):
-
+def async_ssh(cmd_dict):
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(center_addr, timeout = 20)
-    channel = ssh.invoke_shell()
+    ssh.connect(cmd_dict['address'], timeout = 20)
+
+    # Execute the command, and grab file handles for stdout and stderr. Note
+    # that we run the command using the user's default shell, but force it to
+    # run in an interactive login shell, which hopefully ensures that all of the
+    # user's normal environment variables (via the dot files) have been loaded
+    # before the command is run. This should help to ensure that important
+    # aspects of the environment like PATH and PYTHONPATH are configured.
+
+    print('[ {label} ] : {cmd}'.format(label = cmd_dict['label'],
+                                       cmd = cmd_dict['cmd']))
+    stdin, stdout, stderr = ssh.exec_command('$SHELL -i -l -c \'' + cmd_dict['cmd'] + '\'', get_pty = True)
+
+    # Set up channel timeouts (which we rely on below to make readline()
+    # non-blocking.
+    stdout.channel.settimeout(0.1)
+    stderr.channel.settimeout(0.1)
+
+    # Wait for a message on the input_queue. Any message received signals this
+    # thread to shut itself down.
+    while(cmd_dict['input_queue'].empty()):
+
+        # Read stdout stream, time out if necessary.
+        try:
+            line = stdout.readline()
+            while len(line) > 0:    # Loops until a timout exception occurs
+                cmd_dict['output_queue'].put('[ {label} ] : {output}'.format(label = cmd_dict['label'],
+                                                                             output = line.rstrip()))
+                line = stdout.readline()
+
+        except paramiko.buffered_pipe.PipeTimeout:
+            continue
+        except socket.timeout:
+            continue
+
+        # Read stderr stream, time out if necessary
+        try:
+            line = stderr.readline()
+            while len(line) > 0:
+                cmd_dict['output_queue'].put('[ {label} ] : '.format(label = cmd_dict['label']) +
+                                             bcolors.FAIL + '{output}'.format(output = line.rstrip()) + bcolors.ENDC)
+                line = stderr.readline()
+
+        except paramiko.buffered_pipe.PipeTimeout:
+            continue
+        except socket.timeout:
+            continue
+
+        # Check to see if the process has exited. If it has, we let this thread
+        # terminate.
+        if stdout.channel.exit_status_ready():
+            exit_status = stdout.channel.recv_exit_status()
+            cmd_dict['output_queue'].put('[ {label} ] : '.format(label = cmd_dict['label']) +
+                                         bcolors.FAIL +
+                                         "remote process exited with exit status " +
+                                         str(exit_status) + bcolors.ENDC)
+            break
+
+        # Kill some time so that this thread does not hog the CPU.
+        sleep(2.0)
+
+    # end while()
+
+    # Shutdown the channel, and close the SSH connection
+    stdout.channel.close()
+    stderr.channel.close()
+    ssh.close()
+
+
+def start_center(logdir, center_addr, center_port):
 
     cmd = 'dcenter --host {addr} --port {port}'.format(
         addr = center_addr, port = center_port, logdir = logdir)
@@ -36,20 +105,28 @@ def start_center(logdir, center_addr, center_port):
         cmd += '&> {logdir}/dcenter_{addr}:{port}.log'.format(
             addr = center_addr, port = center_port, logdir = logdir)
 
-    # Run the command
-    channel.send(cmd + '\n')
+    # Format output labels we can prepend to each line of output, and create
+    # a 'status' key to keep track of jobs that terminate prematurely.
+    label = (bcolors.BOLD +
+             'center {addr}:{port}'.format(addr = center_addr,
+                                           port = center_port) +
+             bcolors.ENDC)
 
-    # Return a dictionary including file handlers for stdout and stderr
-    return {'address': center_addr, 'port': center_port, 'client': ssh,
-            'stdout': channel.makefile('r'), 'stderr': channel.makefile_stderr('r')}
+    # Create a command dictionary, which contains everything we need to run and
+    # interact with this command.
+    input_queue = Queue()
+    output_queue = Queue()
+    cmd_dict = {'cmd': cmd, 'label': label, 'address': center_addr, 'port': center_port,
+                'input_queue': input_queue, 'output_queue': output_queue}
 
+    # Start the thread
+    thread = Thread(target=async_ssh, args=[cmd_dict])
+    thread.start()
 
-def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node, cpus_per_worker):
+    return merge(cmd_dict, {'thread': thread})
 
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(worker_addr, timeout = 20)
-    channel = ssh.invoke_shell()
+def start_worker(logdir, center_addr, center_port, worker_addr,
+                 worker_id, workers_per_node, cpus_per_worker):
 
     # Pick a random port for the worker.  This prevents contention over a single port,
     # which may occasionally cause workers to fail to register with the center node.
@@ -71,12 +148,23 @@ def start_worker(logdir, center_addr, center_port, worker_addr, workers_per_node
         cmd += '&> {logdir}/dcenter_{addr}:{port}.log'.format(
             addr = worker_addr, port = worker_port, logdir = logdir)
 
-    # Run the command
-    channel.send(cmd + '\n')
+    label = 'worker {addr}:{port} {{{worker_id}}}'.format(worker_id = worker_id,
+                                                          addr = worker_addr,
+                                                          port = worker_port)
 
-    # Return a dictionary including file handlers for stdout and stderr
-    return {'address': worker_addr, 'port': worker_port, 'client': ssh,
-            'stdout': channel.makefile('r'), 'stderr': channel.makefile_stderr('r')}
+    # Create a command dictionary, which contains everything we need to run and
+    # interact with this command.
+    input_queue = Queue()
+    output_queue = Queue()
+    cmd_dict = {'cmd': cmd, 'label': label, 'address': worker_addr, 'port': worker_port,
+                'input_queue': input_queue, 'output_queue': output_queue}
+
+    # Start the thread
+    thread = Thread(target=async_ssh, args=[cmd_dict])
+    thread.start()
+
+    return merge(cmd_dict, {'thread': thread})
+
 
 
 class Cluster(object):
@@ -94,8 +182,11 @@ class Cluster(object):
             print(bcolors.WARNING + 'Output will be redirected to logfiles stored locally on individual woker nodes under "{logdir}".'.format(logdir=logdir) + bcolors.ENDC)
         self.logdir = logdir
 
+        # Keep track of all running threads
+        self.threads = []
+
         # Start the center node
-        self.center = merge(start_center(logdir, center_addr, center_port), {'address': center_addr})
+        self.center = start_center(logdir, center_addr, center_port)
 
         # Start worker nodes
         self.workers = []
@@ -104,26 +195,6 @@ class Cluster(object):
 
     def monitor_remote_processes(self):
 
-        # Set up channel timeouts (which we rely on below to make readline()
-        # non-blocking. Also set up some nicely formatted output labels we can
-        # prepend to each line of output, and create a 'status' key to keep
-        # track of jobs that terminate prematurely.
-        self.center['label'] = (bcolors.BOLD +
-                                'center {addr}:{port}'.format(addr = self.center['address'],
-                                                               port = self.center['port']) +
-                                bcolors.ENDC)
-        self.center['status'] = 'running'
-        self.center['stdout'].channel.settimeout(0.1)
-        self.center['stderr'].channel.settimeout(0.1)
-
-        for worker in self.workers:
-            worker['label'] = 'worker {addr}:{port} {{{worker_id}}}'.format(worker_id = worker['worker_id'],
-                                                                            addr = worker['address'],
-                                                                            port = worker['port'])
-            worker['status'] = 'running'
-            worker['stdout'].channel.settimeout(0.1)
-            worker['stderr'].channel.settimeout(0.1)
-
         # Form a list containing all processes, since we treat them equally from here on out.
         all_processes = [self.center] + self.workers
 
@@ -131,41 +202,8 @@ class Cluster(object):
             while(1):
                 for process in all_processes:
 
-                    if process['status'] == 'finished':
-                        continue
-
-                    # Read stdout stream, time out if necessary.
-                    try:
-                        line = process['stdout'].readline()
-                        while len(line) > 0:    # Loops until a timout exception occurs
-                            print('[ {label} ] : {output}'.format(label = process['label'],
-                                                                  output = line.rstrip()))
-                            line = process['stdout'].readline()
-
-                    except paramiko.buffered_pipe.PipeTimeout:
-                        continue
-                    except socket.timeout:
-                        continue
-
-                    # Read stderr stream, time out if necessary
-                    try:
-                        line = process['stderr'].readline()
-                        while len(line) > 0:
-                            print('[ {{label}} ] : '.format(label = process['label']) +
-                                  bcolors.FAIL + '{output}'.format(output = line.rstrip()) + bcolors.ENDC)
-                            line = process['stderr'].readline()
-
-                    except paramiko.buffered_pipe.PipeTimeout:
-                        continue
-                    except socket.timeout:
-                        continue
-
-                    # Check to see if the process has exited.
-                    if process['stdout'].channel.exit_status_ready():
-                        exit_status = process['stdout'].channel.recv_exit_status()
-                        print('[ {{label}} ] : '.format(label = process['label']) +
-                              bcolors.FAIL + "remote process exited with exit status " + str(exit_status) + bcolors.ENDC)
-                        process['status'] = 'finished'
+                    while not process['output_queue'].empty():
+                        print(process['output_queue'].get())
 
                 # Kill some time and free up CPU before starting the next sweep
                 # through the processes.
@@ -177,26 +215,23 @@ class Cluster(object):
             pass   # Return execution to the calling process
 
     def add_worker(self, address):
-        self.workers += [ merge(start_worker(self.logdir, self.center_addr, self.center_port, address,
-                                             self.workers_per_node, self.cpus_per_worker),
-                                {'address': address, 'worker_id': worker_id})
-                          for worker_id in range(self.workers_per_node)]
+        for worker_id in range(self.workers_per_node):
+            worker = merge( start_worker(self.logdir,
+                                         self.center_addr,
+                                         self.center_port,
+                                         address,
+                                         worker_id,
+                                         self.workers_per_node,
+                                         self.cpus_per_worker),
+                            {'worker_id': worker_id})
+            self.workers.append(worker)
 
     def shutdown(self):
+        all_processes = [self.center] + self.workers
 
-        # Close down sockets
-        for d in self.workers:
-            d['stdout'].channel.close()
-            d['stderr'].channel.close()
-
-        self.center['stdout'].channel.close()
-        self.center['stderr'].channel.close()
-
-        # Close down ssh connections
-        for d in self.workers:
-            d['client'].close()  # Calling this multiple times on the same connection seems ok.
-
-        self.center['client'].close()
+        for process in all_processes:
+            process['input_queue'].put('shutdown')
+            process['thread'].join()
 
     def __enter__(self):
         return self
