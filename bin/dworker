@@ -36,6 +36,9 @@ def go(center, host, port, nthreads, nprocs):
     if not nthreads:
         nthreads = _ncores // nprocs
 
+    if nprocs > 1 and port != 0:
+        raise ValueError("Can not specify a port when using multiple processes")
+
     loop = IOLoop.current()
     nannies = [Nanny(center_ip, center_port, ncores=nthreads, ip=host)
                 for i in range(nprocs)]
