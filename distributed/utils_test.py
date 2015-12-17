@@ -13,8 +13,8 @@ from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
 
-from distributed.core import connect, read, write, rpc
-from distributed.utils import ignoring
+from .core import connect, read, write, rpc
+from .utils import ignoring, log_errors
 import pytest
 
 
@@ -73,26 +73,28 @@ def run_worker(port, center_port, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
-    IOLoop.clear_instance()
-    loop = IOLoop(); loop.make_current()
-    PeriodicCallback(lambda: None, 500).start()
-    logging.getLogger("tornado").setLevel(logging.CRITICAL)
-    worker = Worker('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
-    worker.start(port)
-    loop.start()
+    with log_errors():
+        IOLoop.clear_instance()
+        loop = IOLoop(); loop.make_current()
+        PeriodicCallback(lambda: None, 500).start()
+        logging.getLogger("tornado").setLevel(logging.CRITICAL)
+        worker = Worker('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
+        worker.start(port)
+        loop.start()
 
 
 def run_nanny(port, center_port, **kwargs):
     from distributed import Nanny
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
-    IOLoop.clear_instance()
-    loop = IOLoop(); loop.make_current()
-    PeriodicCallback(lambda: None, 500).start()
-    logging.getLogger("tornado").setLevel(logging.CRITICAL)
-    worker = Nanny('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
-    loop.run_sync(lambda: worker._start(port))
-    loop.start()
+    with log_errors():
+        IOLoop.clear_instance()
+        loop = IOLoop(); loop.make_current()
+        PeriodicCallback(lambda: None, 500).start()
+        logging.getLogger("tornado").setLevel(logging.CRITICAL)
+        worker = Nanny('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
+        loop.run_sync(lambda: worker._start(port))
+        loop.start()
 
 
 _port = [8010]
