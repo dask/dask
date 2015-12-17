@@ -45,11 +45,11 @@ class Nanny(Server):
     def _start(self, port=0):
         """ Start nanny, start local process, start watching """
         self.listen(port)
+        logger.info('Start Nanny at:             %s:%d', self.ip, self.port)
         yield self.instantiate()
         self.loop.add_callback(self._watch)
         assert self.worker_port
         self.status = 'running'
-        logger.info('Start Nanny at:             %s:%d', self.ip, self.port)
 
     @gen.coroutine
     def _kill(self, stream=None, timeout=5):
@@ -69,8 +69,11 @@ class Nanny(Server):
                     logger.critical("Unable to unregister with center %s. "
                             "Nanny: %s, Worker: %s", result, self.address,
                             self.worker_address)
+                else:
+                    logger.info("Unregister worker %s:%d from center",
+                                self.ip, self.worker_port)
             except gen.TimeoutError:
-                logger.info("Nanny %s:%d failed to kill worker %s:%d",
+                logger.info("Nanny %s:%d failed to unregister worker %s:%d",
                         self.ip, self.port, self.ip, self.worker_port,
                         exc_info=True)
             self.process.terminate()

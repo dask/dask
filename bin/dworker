@@ -7,34 +7,57 @@ import socket
 import click
 from distributed import Nanny, Worker, sync
 from distributed.utils import get_ip
+from distributed.worker import _ncores
 from tornado.ioloop import IOLoop
+from tornado import gen
 
 logger = logging.getLogger('distributed.dworker')
+
+ip = get_ip()
 
 
 @click.command()
 @click.argument('center', type=str)
-@click.option('--port', type=int, default=0, help="Serving port")
-@click.option('--host', type=str, default=None, help="Serving host")
-@click.option('--ncores', type=int, default=0, help="Number of cores to serve")
-def go(center, host, port, ncores):
+@click.option('--port', type=int, default=0,
+              help="Serving port, defaults to randomly assigned")
+@click.option('--host', type=str, default=None,
+              help="Serving host defaults to %s" % ip)
+@click.option('--nthreads', type=int, default=0,
+              help="Number of threads per process. Defaults to number of cores")
+@click.option('--nprocs', type=int, default=1,
+              help="Number of worker processes.  Defaults to one.")
+def go(center, host, port, nthreads, nprocs):
     try:
         center_ip, center_port = center.split(':')
         center_port = int(center_port)
     except IndexError:
         logger.info("Usage:  dworker center_host:center_port")
 
+    if not nthreads:
+        nthreads = _ncores // nprocs
+
     loop = IOLoop.current()
-    worker = Nanny(center_ip, center_port, ncores=ncores, ip=host)
-    loop.add_callback(lambda: worker._start(port))
+    nannies = [Nanny(center_ip, center_port, ncores=nthreads, ip=host)
+                for i in range(nprocs)]
+
+    for nanny in nannies:
+        loop.add_callback(nanny._start, port)
     try:
         loop.start()
     except KeyboardInterrupt:
-        result = IOLoop().run_sync(lambda:
-                worker.center.unregister(address=worker.worker_address))
-        if result == b'OK':
-            logger.info("Unregister %s:%d from center", *worker.worker_address)
-        logger.info("End worker at %s:%d", ip, port)
+        @gen.coroutine
+        def stop():
+            results = yield [nanny._kill() for nanny in nannies]
+            raise gen.Return(results)
+
+        results = IOLoop().run_sync(stop)
+
+        for r, nanny in zip(results, nannies):
+            if r == b'OK':
+                logger.info("End nanny at %s:%d", nanny.ip, nanny.port)
+            else:
+                logger.info("Failed to cleanly kill worker %s:%d",
+                            nanny.ip, nanny.port)
 
 if __name__ == '__main__':
     go()
