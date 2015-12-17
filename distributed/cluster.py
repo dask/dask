@@ -201,7 +201,6 @@ class Cluster(object):
         try:
             while(1):
                 for process in all_processes:
-
                     while not process['output_queue'].empty():
                         print(process['output_queue'].get())
 

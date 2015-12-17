@@ -38,8 +38,16 @@ def start(ctx, center, center_port, hostnames, hostfile, ncores, nworkers, log_d
         print(ctx.get_help())
         exit(1)
 
-    print("\n[ dcluster ]: starting a cluster with {n} worker node(s).\n".format(n=len(hostnames)))
     c = Cluster(center, center_port, hostnames, nworkers, ncores, log_directory)
+
+    import distributed
+    print('\n---------------------------------------------------------------')
+    print('                    Distributed v{version}\n'.format(version = distributed.__version__))
+    print('Center address: {addr}:{port}'.format(addr = center, port = center_port))
+    print('Worker nodes:'.format(n=len(hostnames)))
+    for i, host in enumerate(hostnames):
+        print('  {num}: {host}'.format(num = i, host = host))
+    print('---------------------------------------------------------------\n\n')
 
     # Monitor the output of remote processes.  This blocks until the user issues a KeyboardInterrupt.
     c.monitor_remote_processes()
