@@ -14,7 +14,7 @@ from tornado.iostream import StreamClosedError
 from toolz import merge, concat, groupby, drop
 
 from .core import rpc, coerce_to_rpc
-from .utils import ignore_exceptions, ignoring
+from .utils import ignore_exceptions, ignoring, All
 
 
 no_default = '__no_default__'
@@ -329,9 +329,9 @@ def scatter_to_workers(center, ncores, data, key=None):
     d = {k: {b: c for a, b, c in v}
           for k, v in d.items()}
 
-    out = yield [rpc(ip=w_ip, port=w_port).update_data(data=v,
+    out = yield All([rpc(ip=w_ip, port=w_port).update_data(data=v,
                                              close=True, report=True)
-                 for (w_ip, w_port), v in d.items()]
+                 for (w_ip, w_port), v in d.items()])
     nbytes = merge([o[1]['nbytes'] for o in out])
 
     who_has = {k: [w for w, _, _ in v] for k, v in groupby(1, L).items()}

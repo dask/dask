@@ -1,5 +1,6 @@
 import pickle
 from time import sleep
+import sys
 
 import pytest
 from toolz import merge, concat
@@ -135,6 +136,8 @@ def test_gather_errors_voluminously(loop):
             assert set(e.args) == {'x', 'y', 'z'}
 
 
+@pytest.mark.skipif(sys.platform!='linux',
+                    reason='KQueue error - uncertain cause')
 def test_gather_scatter(loop):
     with cluster() as (c, [a, b]):
         data = {'x': 1, 'y': 2, 'z': 3}

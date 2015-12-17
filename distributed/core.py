@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from datetime import timedelta
 from hashlib import md5
 import logging
 import signal
@@ -181,37 +182,6 @@ class Server(TCPServer):
                     type(self).__name__)
 
 
-def connect_sync(host, port, timeout=1):
-    start = time()
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(timeout)
-    while True:
-        try:
-            s.connect((host, port))
-            break
-        except socket.error:
-            if time() - start > timeout:
-                raise
-            else:
-                sleep(0.1)
-
-    return s
-
-
-def write_sync(sock, msg):
-    msg = dumps(msg)
-    sock.send(msg)
-    sock.send(sentinel)
-
-
-def read_sync(s):
-    bytes = []
-    while b''.join(bytes[-len(sentinel):]) != sentinel:
-        bytes.append(s.recv(1))
-    msg = b''.join(bytes[:-len(sentinel)])
-    return loads(msg)
-
-
 sentinel = md5(b'7f57da0f9202f6b4df78e251058be6f0').hexdigest().encode()
 
 @gen.coroutine
@@ -235,13 +205,13 @@ def pingpong(stream):
 
 
 @gen.coroutine
-def connect(ip, port, timeout=1):
+def connect(ip, port, timeout=3):
     client = TCPClient()
     start = time()
     while True:
         try:
-            stream = yield client.connect(ip, port,
-                    max_buffer_size=MAX_BUFFER_SIZE)
+            future = client.connect(ip, port, max_buffer_size=MAX_BUFFER_SIZE)
+            stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
             raise Return(stream)
         except StreamClosedError:
             if time() - start < timeout:
@@ -249,6 +219,8 @@ def connect(ip, port, timeout=1):
                 logger.debug("sleeping on connect")
             else:
                 raise
+        except gen.TimeoutError:
+            raise IOError("Timed out while connecting to %s:%d" % (ip, port))
 
 
 @gen.coroutine

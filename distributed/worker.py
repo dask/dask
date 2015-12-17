@@ -19,8 +19,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 
 from .client import _gather, pack_data
 from .compatibility import reload
-from .core import (rpc, connect_sync, read_sync, write_sync, connect, Server,
-        pingpong)
+from .core import rpc, Server, pingpong
 from .sizeof import sizeof
 from .utils import funcname, get_ip, ignoring
 
