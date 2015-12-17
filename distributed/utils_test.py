@@ -62,7 +62,7 @@ def run_center(q):
             center.listen(0)
             break
         except Exception as e:
-            logger.info("Could not start center on port.  Retrying",
+            logging.info("Could not start center on port.  Retrying",
                     exc_info=True)
 
     q.put(center.port)
