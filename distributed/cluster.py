@@ -29,9 +29,31 @@ class bcolors:
 def async_ssh(cmd_dict):
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(cmd_dict['address'],
-                timeout = 20,
-                banner_timeout = 20)  # Helps prevent timeouts when many concurrent ssh connections are opened.
+
+    retries = 0
+    while True:  # Be robust to transient SSH failures.
+        try:
+            ssh.connect(cmd_dict['address'],
+                        timeout = 20,
+                        banner_timeout = 20)  # Helps prevent timeouts when many concurrent ssh connections are opened.
+
+            # Connection successful, break out of while loop
+            break
+
+        except (paramiko.ssh_exception.SSHException, EOFError):
+            # Transient SSH errors can occur when many SSH connections are
+            # simultaneously opened to the same server. This makes a few
+            # attempts to retry.
+            retries += 1
+            if retries >= 3:
+                print('[ dcluster ] : ' +
+                      bcolors.FAIL +
+                      'Could not open SSH connection to run \'{cmd}\''.format(label = cmd_dict['label']) +
+                      bcolors.ENDC)
+
+                # Connection failed after multiple attempts.  Terminate this thread.
+                return
+
 
     # Execute the command, and grab file handles for stdout and stderr. Note
     # that we run the command using the user's default shell, but force it to

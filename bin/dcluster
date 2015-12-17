@@ -53,8 +53,9 @@ def start(ctx, center, center_port, hostnames, hostfile, ncores, nworkers, log_d
     c.monitor_remote_processes()
 
     # Close down the remote processes and exit.
+    print("\n[ dcluster ]: Shutting down remote processes (this may take a moment).")
     c.shutdown()
-    print("\n[ dcluster ]: Remote processes have been terminated. Exiting.")
+    print("[ dcluster ]: Remote processes have been terminated. Exiting.")
 
 if __name__ == '__main__':
     start()
