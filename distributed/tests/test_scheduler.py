@@ -5,6 +5,8 @@ from time import time
 from dask.core import get_deps
 from toolz import merge, concat
 from tornado.queues import Queue
+from tornado.iostream import StreamClosedError
+from tornado.gen import TimeoutError
 import pytest
 
 from distributed import Center, Nanny, Worker
@@ -12,7 +14,7 @@ from distributed.core import connect, read, write, rpc
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
         decide_worker, assign_many_tasks, heal_missing_data, Scheduler)
-from distributed.utils_test import inc
+from distributed.utils_test import inc, ignoring
 
 
 def test_heal():
@@ -535,10 +537,10 @@ def test_multi_queues(loop):
 
 
 def test_monitor_resources(loop):
-    c = Center('127.0.0.1', 8026)
-    a = Nanny('127.0.0.1', 8027, 8028, '127.0.0.1', 8026, ncores=2)
-    b = Nanny('127.0.0.1', 8029, 8030, '127.0.0.1', 8026, ncores=2)
-    c.listen(c.port)
+    c = Center('127.0.0.1')
+    c.listen(0)
+    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
+    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
     s = Scheduler((c.ip, c.port), resource_interval=0.01, resource_log_size=3)
 
     @gen.coroutine
@@ -559,14 +561,16 @@ def test_monitor_resources(loop):
 
             yield gen.sleep(0.1)
 
-            assert set(s.resource_logs) == {(a.ip, a.port), (b.ip, b.port)}
+            assert set(s.resource_logs) == {a.address, b.address}
             assert all(len(v) == 3 for v in s.resource_logs.values())
 
             s.put({'op': 'close'})
             yield done
         finally:
-            yield a._close()
-            yield b._close()
+            with ignoring(TimeoutError, StreamClosedError, OSError):
+                yield a._close(timeout=0.5)
+            with ignoring(TimeoutError, StreamClosedError, OSError):
+                yield b._close(timeout=0.5)
             c.stop()
 
     loop.run_sync(f, timeout=30)
@@ -657,10 +661,10 @@ def test_add_worker(loop):
         done = s.start()
         s.listen(port)
 
-        w = Worker('127.0.0.4', 8020, c.ip, c.port, ncores=3)
+        w = Worker(c.ip, c.port, ncores=3, ip='127.0.0.4')
         w.data[('x', 5)] = 6
         w.data['y'] = 1
-        yield w._start()
+        yield w._start(8020)
 
         dsk = {('x', i): (inc, i) for i in range(10)}
         s.update_graph(dsk=dsk, keys=list(dsk))

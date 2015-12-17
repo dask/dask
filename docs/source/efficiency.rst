@@ -78,12 +78,13 @@ A common solution is to batch your input into larger chunks.
 Adjust between Threads and Processes
 ------------------------------------
 
-By default a single Worker runs many computations in parallel using as many
-threads as your compute node has cores.  If you're using pure Python functions
-then this may not be optimal and you may instead want to run several separate
-Worker processes on each node, each using one thread.  When configuring your
-cluster you may need to use the ``--ncores 1`` option on the ``dworker``
-executable and run it many times per node.
+By default a single ``Worker`` runs many computations in parallel using as many
+threads as your compute node has cores.  When using pure Python functions
+this may not be optimal and you may instead want to run several separate
+worker processes on each node, each using one thread.  When configuring your
+cluster you may want to use the options to the ``dworker`` executable as follows::
+
+   $ dworker ip:port --nprocs 8 --nthreads 1
 
 Note that if you're primarily using NumPy, Pandas, SciPy, Scikit Learn, Numba,
 or other C/Fortran/LLVM/Cython-accelerated libraries then this is not an issue

@@ -633,6 +633,8 @@ def test_tokenize_on_futures(loop):
     _test_cluster(f, loop)
 
 
+@pytest.mark.skipif(sys.platform!='linux',
+                    reason="Need 127.0.0.2 to mean localhost")
 def test_restrictions_submit(loop):
     @gen.coroutine
     def f(c, a, b):
@@ -650,9 +652,11 @@ def test_restrictions_submit(loop):
         assert y.key in b.data
 
         yield e._shutdown()
-    _test_cluster(f, loop)
+    _test_cluster(f, loop, b_ip='127.0.0.2')
 
 
+@pytest.mark.skipif(sys.platform!='linux',
+                    reason="Need 127.0.0.2 to mean localhost")
 def test_restrictions_map(loop):
     @gen.coroutine
     def f(c, a, b):
@@ -680,9 +684,11 @@ def test_restrictions_map(loop):
             e.map(inc, [10, 11, 12], workers=[{a.ip}])
 
         yield e._shutdown()
-    _test_cluster(f, loop)
+    _test_cluster(f, loop, b_ip='127.0.0.2')
 
 
+@pytest.mark.skipif(sys.platform!='linux',
+                    reason="Need 127.0.0.2 to mean localhost")
 def test_restrictions_get(loop):
     @gen.coroutine
     def f(c, a, b):
@@ -698,7 +704,7 @@ def test_restrictions_get(loop):
         assert 'z' in b.data
 
         yield e._shutdown()
-    _test_cluster(f, loop)
+    _test_cluster(f, loop, b_ip='127.0.0.2')
 
 
 def dont_test_bad_restrictions_raise_exception(loop):
@@ -759,12 +765,12 @@ def test_gather_then_submit_after_failed_workers(loop):
 
 
 def test_errors_dont_block(loop):
-    c = Center('127.0.0.1', 8017)
-    w = Worker('127.0.0.2', 8018, c.ip, c.port, ncores=1)
+    c = Center('127.0.0.1')
+    c.listen(8017)
+    w = Worker(c.ip, c.port, ncores=1, ip='127.0.0.1')
     e = Executor((c.ip, c.port), start=False, loop=loop)
     @gen.coroutine
     def f():
-        c.listen(c.port)
         yield w._start()
         yield e._start()
 
@@ -1002,6 +1008,8 @@ def test_nbytes(loop):
     _test_cluster(f, loop)
 
 
+@pytest.mark.skipif(sys.platform!='linux',
+                    reason="Need 127.0.0.2 to mean localhost")
 def test_nbytes_determines_worker(loop):
     @gen.coroutine
     def f(c, a, b):
@@ -1017,7 +1025,7 @@ def test_nbytes_determines_worker(loop):
         assert e.scheduler.who_has[z.key] == {b.address}
 
         yield e._shutdown()
-    _test_cluster(f, loop)
+    _test_cluster(f, loop, b_ip='127.0.0.2')
 
 
 def test_pragmatic_move_small_data_to_large_data(loop):
@@ -1158,10 +1166,10 @@ def test_traceback_sync(loop):
 
 def test_restart(loop):
     from distributed import Nanny, rpc
-    c = Center('127.0.0.1', 8006)
-    a = Nanny('127.0.0.1', 8007, 8008, '127.0.0.1', 8006, ncores=2)
-    b = Nanny('127.0.0.1', 8009, 8010, '127.0.0.1', 8006, ncores=2)
-    c.listen(c.port)
+    c = Center('127.0.0.1')
+    c.listen(0)
+    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
+    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
     @gen.coroutine
     def f():
         yield a._start()
@@ -1245,11 +1253,11 @@ def test_restart_fast(loop):
 
 def test_fast_kill(loop):
     from distributed import Nanny, rpc
-    c = Center('127.0.0.1', 8006)
-    a = Nanny('127.0.0.1', 8007, 8008, '127.0.0.1', 8006, ncores=2)
-    b = Nanny('127.0.0.1', 8009, 8010, '127.0.0.1', 8006, ncores=2)
+    c = Center('127.0.0.1')
+    c.listen(0)
+    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
+    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
     e = Executor((c.ip, c.port), start=False, loop=loop)
-    c.listen(c.port)
     @gen.coroutine
     def f():
         yield a._start()
@@ -1374,10 +1382,10 @@ def test_multiple_executors(loop):
 
 def test_multiple_executors_restart(loop):
     from distributed import Nanny, rpc
-    c = Center('127.0.0.1', 8006)
-    a = Nanny('127.0.0.1', 8007, 8008, '127.0.0.1', 8006, ncores=2)
-    b = Nanny('127.0.0.1', 8009, 8010, '127.0.0.1', 8006, ncores=2)
-    c.listen(c.port)
+    c = Center('127.0.0.1')
+    c.listen(0)
+    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
+    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
     @gen.coroutine
     def f():
         yield a._start()

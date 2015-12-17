@@ -5,8 +5,7 @@ import socket
 from tornado import gen, ioloop
 import pytest
 
-from distributed.core import (read, write, pingpong, read_sync, write_sync,
-        Server, connect_sync, rpc, connect)
+from distributed.core import read, write, pingpong, Server, rpc, connect
 from distributed.utils_test import slow, loop
 
 def test_server(loop):
@@ -72,27 +71,6 @@ def test_rpc_with_many_connections(loop):
     loop.run_sync(f)
 
 
-def test_sync(loop):
-    def f():
-        from distributed.core import Server
-        from tornado.ioloop import IOLoop
-        server = Server({'ping': pingpong})
-        server.listen(8887)
-        IOLoop.current().start()
-        IOLoop.current().stop()
-
-    p = Process(target=f)
-    p.start()
-
-    try:
-        sock = connect_sync('127.0.0.1', 8887)
-        write_sync(sock, {'op': 'ping', 'close': True})
-        response = read_sync(sock)
-        assert response == b'pong'
-    finally:
-        p.terminate()
-
-
 @slow
 def test_large_packets(loop):
     """ tornado has a 100MB cap by default """
@@ -115,11 +93,6 @@ def test_large_packets(loop):
     loop.run_sync(f)
 
 
-def test_connect_sync_timeouts():
-    with pytest.raises(socket.timeout):
-        s = connect_sync('42.42.245.108', 47248, timeout=0.01)
-
-
 def test_identity(loop):
     @gen.coroutine
     def f():
@@ -133,3 +106,25 @@ def test_identity(loop):
         assert a['id'] == b['id']
 
     loop.run_sync(f)
+
+
+def test_ports(loop):
+    port = 9876
+    server = Server({})
+    server.listen(port)
+    try:
+        assert server.port == port
+
+        with pytest.raises((OSError, socket.error)):
+            server2 = Server({})
+            server2.listen(port)
+    finally:
+        server.stop()
+
+    try:
+        server3 = Server({})
+        server3.listen(0)
+        assert isinstance(server3.port, int)
+        assert server3.port > 1024
+    finally:
+        server3.stop()

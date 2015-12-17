@@ -10,7 +10,7 @@ from distributed.utils_test import loop
 
 
 def test_metadata(loop):
-    c = Center('127.0.0.1', 8006)
+    c = Center('127.0.0.1')
     c.listen(8006)
 
     @gen.coroutine

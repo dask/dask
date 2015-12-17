@@ -155,6 +155,17 @@ def _deps(dsk, arg):
     return [arg]
 
 
+@contextmanager
+def log_errors():
+    try:
+        yield
+    except gen.Return:
+        raise
+    except Exception as e:
+        logger.exception(e)
+        raise
+
+
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)

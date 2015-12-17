@@ -7,7 +7,7 @@ from math import ceil
 from time import time
 import uuid
 
-from toolz import frequencies, memoize, concat, first, identity
+from toolz import frequencies, memoize, concat, identity
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -173,10 +173,6 @@ class Scheduler(Server):
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
-
-    @property
-    def port(self):
-        return first(self._sockets.values()).getsockname()[1]
 
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """
@@ -874,11 +870,15 @@ class Scheduler(Server):
         while self.ncores:
             yield gen.sleep(0.01)
 
-        # All quiet
 
-        yield All([nanny.instantiate(close=True) for nanny in nannies])
+        # All quiet
+        resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
+        assert all(resp == b'OK' for resp in resps)
         yield self.sync_center()
         self.start()
+
+        # self.who_has.clear()
+        # self.has_what.clear()
 
         self.report({'op': 'restart'})
         for plugin in self.plugins[:]:

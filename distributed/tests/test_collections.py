@@ -1,3 +1,4 @@
+import sys
 
 import dask
 import dask.dataframe as dd
@@ -9,6 +10,7 @@ from distributed.collections import (_futures_to_dask_dataframe,
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
+import pytest
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -197,6 +199,8 @@ def test__dask_array_collections(loop):
     _test_cluster(f)
 
 
+@pytest.mark.skipif(sys.platform!='linux',
+                    reason='KQueue error - uncertain cause')
 def test_futures_to_dask_array(loop):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:

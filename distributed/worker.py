@@ -19,10 +19,9 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 
 from .client import _gather, pack_data
 from .compatibility import reload
-from .core import (rpc, connect_sync, read_sync, write_sync, connect, Server,
-        pingpong)
+from .core import rpc, Server, pingpong
 from .sizeof import sizeof
-from .utils import funcname
+from .utils import funcname, get_ip, ignoring
 
 _ncores = ThreadPool()._processes
 
@@ -50,9 +49,9 @@ class Worker(Server):
     Create centers and workers in Python:
 
     >>> from distributed import Center, Worker
-    >>> c = Center('192.168.0.100', 8000)  # doctest: +SKIP
-    >>> w = Worker('192.168.0.101', 8001,  # doctest: +SKIP
-    ...            center_ip='192.168.0.100', center_port=8000)
+    >>> c = Center('192.168.0.100', 8787)  # doctest: +SKIP
+    >>> w = Worker(c.ip, c.port)  # doctest: +SKIP
+    >>> yield w._start(port=8788)  # doctest: +SKIP
 
     Or use the command line::
 
@@ -68,10 +67,10 @@ class Worker(Server):
     distributed.center.Center:
     """
 
-    def __init__(self, ip, port, center_ip, center_port, ncores=None,
+    def __init__(self, center_ip, center_port, ip=None, ncores=None,
                  loop=None, nanny_port=None, local_dir=None, **kwargs):
-        self.ip = ip
-        self.port = port
+        self.ip = ip or get_ip()
+        self._port = 0
         self.nanny_port = nanny_port
         self.ncores = ncores or _ncores
         self.data = dict()
@@ -98,17 +97,14 @@ class Worker(Server):
         super(Worker, self).__init__(handlers, **kwargs)
 
     @gen.coroutine
-    def _start(self):
+    def _start(self, port=0):
         while True:
-            try:
-                logger.info('Start worker at             %s:%d', self.ip, self.port)
-                self.listen(self.port)
+            with ignoring(OSError):
+                self.listen(port)
                 break
-            except (OSError, IOError):
-                logger.info('Port %d taken. Trying %d', self.port, self.port + 1)
-                self.port += 1
-
-        logger.info('Waiting to connect to       %s:%d', self.center.ip, self.center.port)
+        logger.info('Start worker at             %s:%d', self.ip, self.port)
+        logger.info('Waiting to connect to       %s:%d',
+                    self.center.ip, self.center.port)
         while True:
             try:
                 resp = yield self.center.register(
@@ -123,8 +119,8 @@ class Worker(Server):
                     self.center.ip, self.center.port)
         self.status = 'running'
 
-    def start(self):
-        self.loop.add_callback(self._start)
+    def start(self, port=0):
+        self.loop.add_callback(lambda: self._start(port))
 
     def identity(self, stream):
         return {'type': type(self).__name__, 'id': self.id,
