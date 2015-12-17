@@ -90,7 +90,7 @@ def async_ssh(cmd_dict):
             break
 
         # Kill some time so that this thread does not hog the CPU.
-        sleep(2.0)
+        sleep(1.0)
 
     # end while()
 
@@ -216,16 +216,16 @@ class Cluster(object):
         all_processes = [self.center] + self.workers
 
         try:
-            while(1):
+            while True:
                 for process in all_processes:
                     while not process['output_queue'].empty():
                         print(process['output_queue'].get())
 
                 # Kill some time and free up CPU before starting the next sweep
                 # through the processes.
-                sleep(1.0)
+                sleep(0.1)
 
-            # end while(1)
+            # end while true
 
         except KeyboardInterrupt:
             pass   # Return execution to the calling process
