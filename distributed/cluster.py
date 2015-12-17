@@ -29,7 +29,9 @@ class bcolors:
 def async_ssh(cmd_dict):
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(cmd_dict['address'], timeout = 20)
+    ssh.connect(cmd_dict['address'],
+                timeout = 20,
+                banner_timeout = 20)  # Helps prevent timeouts when many concurrent ssh connections are opened.
 
     # Execute the command, and grab file handles for stdout and stderr. Note
     # that we run the command using the user's default shell, but force it to
@@ -194,7 +196,18 @@ class Cluster(object):
 
         # Start worker nodes
         self.workers = []
-        for addr in worker_addrs:
+
+        # For rate limiting (below)
+        import multiprocessing
+        ncores = multiprocessing.cpu_count()
+
+        for i, addr in enumerate(worker_addrs):
+
+            # Rate limit the starting of worker nodes. We don't want to fire off
+            # too many SSH connections at the same time, or this machine will
+            # briefly grind to a halt.
+            sleep(float( i // (2*ncores) ))
+
             self.add_worker(addr)
 
     def monitor_remote_processes(self):
