@@ -22,7 +22,7 @@ requirements:
     - toolz
     - numpy
     - pandas
-    - dill
+    - cloudpickle
     - partd
     - chest
 

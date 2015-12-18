@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from sys import getdefaultencoding
 
 import pytest
-pytest.importorskip('dill')
 
 from toolz import (merge, join, pipe, filter, identity, merge_with, take,
         partial, valmap)
@@ -690,3 +689,8 @@ def test_gh715():
             f.write(bin_data)
         a = db.from_filenames(fn)
         assert a.compute()[0] == bin_data.decode('utf-8')
+
+
+def test_bag_compute_forward_kwargs():
+    x = db.from_sequence([1, 2, 3]).map(lambda a: a + 1)
+    x.compute(bogus_keyword=10)

@@ -55,9 +55,9 @@ def _concat(args, **kwargs):
     return args
 
 
-def optimize(dsk, keys):
+def optimize(dsk, keys, **kwargs):
     from .optimize import optimize
-    return optimize(dsk, keys)
+    return optimize(dsk, keys, **kwargs)
 
 
 def finalize(self, results):

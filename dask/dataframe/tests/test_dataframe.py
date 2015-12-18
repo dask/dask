@@ -1849,6 +1849,19 @@ def test_dataframe_series_are_dillable():
     f = dill.loads(dill.dumps(e))
     assert eq(e, f)
 
+def test_dataframe_series_are_pickleable():
+    try:
+        import cloudpickle
+        import pickle
+    except ImportError:
+        return
+
+    dumps = cloudpickle.dumps
+    loads = pickle.loads
+
+    e = d.groupby(d.a).b.sum()
+    f = loads(dumps(e))
+    assert eq(e, f)
 
 def test_random_partitions():
     a, b = d.random_split([0.5, 0.5])
@@ -2373,3 +2386,8 @@ def test_reset_index():
     assert len(res.index.compute()) == len(exp.index)
     assert res.columns == tuple(exp.columns)
     assert_array_almost_equal(res.compute().values, exp.values)
+
+
+def test_dataframe_compute_forward_kwargs():
+    x = dd.from_pandas(pd.DataFrame({'a': range(10)}), npartitions=2).a.sum()
+    x.compute(bogus_keyword=10)

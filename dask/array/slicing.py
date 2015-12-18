@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from itertools import product
 from math import ceil
+from numbers import Number
 from operator import getitem, add
 
 import numpy as np
@@ -11,27 +12,47 @@ from ..base import tokenize
 from ..compatibility import long
 
 
-def sanitize_index_elements(ind):
+def sanitize_index(ind):
     """ Sanitize the elements for indexing along one axis
 
-    >>> sanitize_index_elements([2, 3, 5])
+    >>> sanitize_index([2, 3, 5])
     [2, 3, 5]
-    >>> sanitize_index_elements([True, False, True, False])
+    >>> sanitize_index([True, False, True, False])
     [0, 2]
-    >>> sanitize_index_elements(np.array([1, 2, 3]))
+    >>> sanitize_index(np.array([1, 2, 3]))
     [1, 2, 3]
-    >>> sanitize_index_elements(np.array([False, True, True]))
+    >>> sanitize_index(np.array([False, True, True]))
     [1, 2]
-    >>> type(sanitize_index_elements(np.int32(0)))
+    >>> type(sanitize_index(np.int32(0)))
     <type 'int'>
+    >>> sanitize_index(1.0)
+    1
+    >>> sanitize_index(0.5)
+    Traceback (most recent call last):
+    ...
+    IndexError: Bad index.  Must be integer-like: 0.5
     """
-    if isinstance(ind, np.integer):
-        ind = int(ind)
+    if isinstance(ind, Number):
+        ind2 = int(ind)
+        if ind2 != ind:
+            raise IndexError("Bad index.  Must be integer-like: %s" % ind)
+        else:
+            return ind2
     if isinstance(ind, np.ndarray):
         ind = ind.tolist()
     if isinstance(ind, list) and ind and isinstance(ind[0], bool):
         ind = [a for a, b in enumerate(ind) if b]
-    return ind
+        return ind
+    if isinstance(ind, list):
+        return [sanitize_index(i) for i in ind]
+    if isinstance(ind, slice):
+        return slice(sanitize_index(ind.start),
+                     sanitize_index(ind.stop),
+                     sanitize_index(ind.step))
+    if ind is None:
+        return ind
+
+    raise IndexError("Invalid index", i)
 
 
 def slice_array(out_name, in_name, blockdims, index):
@@ -95,7 +116,7 @@ def slice_array(out_name, in_name, blockdims, index):
     slice_slices_and_integers - handle everything else
     """
     index = replace_ellipsis(len(blockdims), index)
-    index = tuple(map(sanitize_index_elements, index))
+    index = tuple(map(sanitize_index, index))
     blockdims = tuple(map(tuple, blockdims))
 
     # x[:, :, :] - Punt and return old value
@@ -116,15 +137,13 @@ def slice_array(out_name, in_name, blockdims, index):
     return dsk_out, bd_out
 
 
+
 def slice_with_newaxes(out_name, in_name, blockdims, index):
     """
     Handle indexing with Nones
 
     Strips out Nones then hands off to slice_wrap_lists
     """
-    assert all(isinstance(ind, (slice, int, long, list, type(None)))
-               for ind in index)
-
     # Strip Nones from index
     index2 = tuple([ind for ind in index if ind is not None])
     where_none = [i for i, ind in enumerate(index) if ind is None]
