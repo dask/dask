@@ -4,6 +4,7 @@ import paramiko
 from time import sleep
 import socket
 import os
+import traceback
 
 try:
     from queue import Queue
@@ -33,26 +34,51 @@ def async_ssh(cmd_dict):
     retries = 0
     while True:  # Be robust to transient SSH failures.
         try:
-            ssh.connect(cmd_dict['address'],
+            # Set paramiko logging to WARN or higher to squelch INFO messages.
+            import logging
+            logger = paramiko.util.logging.getLogger()
+            logger.setLevel(logging.WARN)
+
+            ssh.connect(hostname = cmd_dict['address'],
+                        username = cmd_dict['ssh_username'],
+                        port = cmd_dict['ssh_port'],
+                        key_filename = cmd_dict['ssh_private_key'],
+                        compress = True,
                         timeout = 20,
                         banner_timeout = 20)  # Helps prevent timeouts when many concurrent ssh connections are opened.
+
 
             # Connection successful, break out of while loop
             break
 
-        except (paramiko.ssh_exception.SSHException, EOFError):
+        except (paramiko.ssh_exception.SSHException, paramiko.ssh_exception.PasswordRequiredException) as e:
+
+            print('[ dcluster ] : ' + bcolors.FAIL +
+                  'SSH connection error when connecting to {addr}:{port} to run \'{cmd}\''.format(addr = cmd_dict['address'],
+                                                                                                  port = cmd_dict['ssh_port'],
+                                                                                                  cmd = cmd_dict['cmd']) +
+                  bcolors.ENDC)
+            print( bcolors.FAIL + '               SSH reported this exception: ' + str(e) + bcolors.ENDC )
+
+            # Print an exception traceback
+            traceback.print_exc()
+
             # Transient SSH errors can occur when many SSH connections are
             # simultaneously opened to the same server. This makes a few
             # attempts to retry.
             retries += 1
             if retries >= 3:
-                print('[ dcluster ] : ' +
-                      bcolors.FAIL +
-                      'Could not open SSH connection to run \'{cmd}\''.format(label = cmd_dict['label']) +
-                      bcolors.ENDC)
+                print( '[ dcluster ] : ' + bcolors.FAIL + 'SSH connection failed after 3 retries. Exiting.' + bcolors.ENDC)
 
                 # Connection failed after multiple attempts.  Terminate this thread.
-                return
+                os._exit(1)
+
+            # Wait a moment before retrying
+            print( '               ' + bcolors.FAIL +
+                   'Retrying... (attempt {n}/{total})'.format(n = retries, total = 3) +
+                   bcolors.ENDC)
+
+            sleep(1)
 
 
     # Execute the command, and grab file handles for stdout and stderr. Note
@@ -122,7 +148,8 @@ def async_ssh(cmd_dict):
     ssh.close()
 
 
-def start_center(logdir, center_addr, center_port):
+def start_center(logdir, center_addr, center_port,
+                 ssh_username, ssh_port, ssh_private_key):
 
     cmd = 'dcenter --host {addr} --port {port}'.format(
         addr = center_addr, port = center_port, logdir = logdir)
@@ -145,7 +172,9 @@ def start_center(logdir, center_addr, center_port):
     input_queue = Queue()
     output_queue = Queue()
     cmd_dict = {'cmd': cmd, 'label': label, 'address': center_addr, 'port': center_port,
-                'input_queue': input_queue, 'output_queue': output_queue}
+                'input_queue': input_queue, 'output_queue': output_queue,
+                'ssh_username': ssh_username, 'ssh_port': ssh_port,
+                'ssh_private_key': ssh_private_key}
 
     # Start the thread
     thread = Thread(target=async_ssh, args=[cmd_dict])
@@ -153,7 +182,8 @@ def start_center(logdir, center_addr, center_port):
 
     return merge(cmd_dict, {'thread': thread})
 
-def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs):
+def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs,
+                 ssh_username, ssh_port, ssh_private_key):
 
     cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --nthreads {nthreads} --nprocs {nprocs}'.format(
         center_addr = center_addr, center_port = center_port,
@@ -174,7 +204,9 @@ def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs
     input_queue = Queue()
     output_queue = Queue()
     cmd_dict = {'cmd': cmd, 'label': label, 'address': worker_addr,
-                'input_queue': input_queue, 'output_queue': output_queue}
+                'input_queue': input_queue, 'output_queue': output_queue,
+                'ssh_username': ssh_username, 'ssh_port': ssh_port,
+                'ssh_private_key': ssh_private_key}
 
     # Start the thread
     thread = Thread(target=async_ssh, args=[cmd_dict])
@@ -185,12 +217,17 @@ def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs
 
 
 class Cluster(object):
-    def __init__(self, center_addr, center_port, worker_addrs, nthreads = 0, nprocs = 1, logdir = None):
+    def __init__(self, center_addr, center_port, worker_addrs, nthreads = 0, nprocs = 1,
+                 ssh_username = None, ssh_port = 22, ssh_private_key = None, logdir = None):
 
         self.center_addr = center_addr
         self.center_port = center_port
         self.nthreads = nthreads
         self.nprocs = nprocs
+
+        self.ssh_username = ssh_username
+        self.ssh_port = ssh_port
+        self.ssh_private_key = ssh_private_key
 
         # Generate a universal timestamp to use for log files
         import datetime
@@ -203,7 +240,7 @@ class Cluster(object):
         self.threads = []
 
         # Start the center node
-        self.center = start_center(logdir, center_addr, center_port)
+        self.center = start_center(logdir, center_addr, center_port, ssh_username, ssh_port, ssh_private_key)
 
         # Start worker nodes
         self.workers = []
@@ -231,12 +268,8 @@ class Cluster(object):
             pass   # Return execution to the calling process
 
     def add_worker(self, address):
-        self.workers.append(start_worker(self.logdir,
-                                         self.center_addr,
-                                         self.center_port,
-                                         address,
-                                         self.nthreads,
-                                         self.nprocs))
+        self.workers.append(start_worker(self.logdir, self.center_addr, self.center_port, address, self.nthreads,
+                                         self.nprocs, self.ssh_username, self.ssh_port, self.ssh_private_key))
 
     def shutdown(self):
         all_processes = [self.center] + self.workers

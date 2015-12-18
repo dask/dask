@@ -20,10 +20,18 @@ import os
 @click.argument('hostnames', nargs=-1, type=str)
 @click.option('--hostfile', default=None, type=click.Path(exists=True),
               help="Textfile with hostnames/IP addresses")
+@click.option('--ssh-username', default=None, type=str,
+              help="Username to use when establishing SSH connections.")
+@click.option('--ssh-port', default=22, type=int,
+              help="Port to use for SSH connections.")
+@click.option('--ssh-private-key', default=None, type=str,
+              help="Private key file to use for SSH connections.")
+
 @click.option('--log-directory', default=None, type=click.Path(exists=True),
               help="Directory to use on all cluster nodes for the output of dcenter and dworker commands.")
 @click.pass_context
-def start(ctx, center, center_port, hostnames, hostfile, nthreads, nprocs, log_directory):
+def start(ctx, center, center_port, hostnames, hostfile, nthreads, nprocs,
+          ssh_username, ssh_port, ssh_private_key, log_directory):
     try:
         hostnames = list(hostnames)
         if hostfile:
@@ -38,7 +46,8 @@ def start(ctx, center, center_port, hostnames, hostfile, nthreads, nprocs, log_d
         print(ctx.get_help())
         exit(1)
 
-    c = Cluster(center, center_port, hostnames, nthreads, nprocs, log_directory)
+    c = Cluster(center, center_port, hostnames, nthreads, nprocs,
+                ssh_username, ssh_port, ssh_private_key, log_directory)
 
     import distributed
     print('\n---------------------------------------------------------------')
