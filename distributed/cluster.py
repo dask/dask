@@ -155,32 +155,25 @@ def start_center(logdir, center_addr, center_port):
 
 def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs):
 
-    # Pick a random port for the worker.  This prevents contention over a single port,
-    # which may occasionally cause workers to fail to register with the center node.
-    import random
-    worker_port = random.randint(10000, 20000)
-
-    cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --port {worker_port} --nthreads {nthreads} --nprocs {nprocs}'.format(
+    cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --nthreads {nthreads} --nprocs {nprocs}'.format(
         center_addr = center_addr, center_port = center_port,
-        worker_addr = worker_addr, worker_port = worker_port,
+        worker_addr = worker_addr,
         nthreads = nthreads,
         nprocs = nprocs)
-    print("RUNNING", cmd)
 
     # Optionally redirect stdout and stderr to a logfile
     if logdir is not None:
         cmd = 'mkdir -p {logdir} && ' + cmd
-        cmd += '&> {logdir}/dcenter_{addr}:{port}.log'.format(
-            addr = worker_addr, port = worker_port, logdir = logdir)
+        cmd += '&> {logdir}/dcenter_{addr}.log'.format(
+            addr = worker_addr, logdir = logdir)
 
-    label = 'worker {addr}:{port}'.format(addr = worker_addr,
-                                          port = worker_port)
+    label = 'worker {addr}'.format(addr = worker_addr)
 
     # Create a command dictionary, which contains everything we need to run and
     # interact with this command.
     input_queue = Queue()
     output_queue = Queue()
-    cmd_dict = {'cmd': cmd, 'label': label, 'address': worker_addr, 'port': worker_port,
+    cmd_dict = {'cmd': cmd, 'label': label, 'address': worker_addr,
                 'input_queue': input_queue, 'output_queue': output_queue}
 
     # Start the thread

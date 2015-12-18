@@ -33,6 +33,10 @@ def go(center, host, port, nthreads, nprocs):
     except IndexError:
         logger.info("Usage:  dworker center_host:center_port")
 
+    if nprocs > 1 and port != 0:
+        logger.error("Failed to launch worker.  You cannot use the --port argument when nprocs > 1.")
+        exit(1)
+
     if not nthreads:
         nthreads = _ncores // nprocs
 
@@ -56,8 +60,8 @@ def go(center, host, port, nthreads, nprocs):
             if r == b'OK':
                 logger.info("End nanny at %s:%d", nanny.ip, nanny.port)
             else:
-                logger.info("Failed to cleanly kill worker %s:%d",
-                            nanny.ip, nanny.port)
+                logger.error("Failed to cleanly kill worker %s:%d",
+                             nanny.ip, nanny.port)
 
 if __name__ == '__main__':
     go()
