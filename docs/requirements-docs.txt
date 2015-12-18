@@ -1,5 +1,5 @@
 numpydoc
 toolz
-dill
+cloudpickle
 pandas>=0.16.0
 dask

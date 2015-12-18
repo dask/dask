@@ -49,7 +49,7 @@ Install parts of dask
 Different components of dask have different dependencies that are only relevant for that component.
 
 * ``dask.array``: numpy
-* ``dask.bag``: dill
+* ``dask.bag``: cloudpickle
 * ``dask.dataframe``: pandas, bcolz (in development)
 
 The base ``pip`` install of dask is fairly minimal.  This is to protect

@@ -214,7 +214,7 @@ class Value(base.Base):
     Equivalent to the output from a single key in a dask graph.
     """
     __slots__ = ('_key', '_dasks')
-    _optimize = staticmethod(lambda dsk, keys: dsk)
+    _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
     _finalize = staticmethod(lambda a, r: r[0])
     _default_get = staticmethod(threaded.get)
 

@@ -39,7 +39,7 @@ class Base(object):
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
         get = get or _globals['get'] or cls._default_get
-        dsk2 = cls._optimize(dsk, keys)
+        dsk2 = cls._optimize(dsk, keys, **kwargs)
         return get(dsk2, keys, **kwargs)
 
     @classmethod
@@ -104,7 +104,7 @@ def compute(*args, **kwargs):
                              "the `get` kwarg or globally with `set_options`.")
 
     dsk = merge([opt(merge([v.dask for v in val]),
-                     [v._keys() for v in val])
+                     [v._keys() for v in val], **kwargs)
                 for opt, val in groups.items()])
     keys = [var._keys() for var in variables]
     results = get(dsk, keys, **kwargs)
