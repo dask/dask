@@ -7,7 +7,9 @@ import pytest
 @slow
 @pytest.mark.avoid_travis
 def test_cluster():
-    with Cluster('127.0.0.1', ['127.0.0.1', '127.0.0.1']) as c:
+    with Cluster(center_addr = '127.0.0.1',
+                 center_port = 8787,
+                 worker_addrs = ['127.0.0.1', '127.0.0.1']) as c:
         c = rpc(ip='127.0.0.1', port=8787)
         result = []
         while len(result) != 2:
