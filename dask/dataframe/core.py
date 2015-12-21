@@ -986,6 +986,13 @@ class Series(_Frame):
     def _get_numeric_data(self, how='any', subset=None):
         return self
 
+    @derived_from(pd.Series)
+    def iteritems(self):
+        for i in range(self.npartitions):
+            s = self.get_division(i).compute()
+            for item in s.iteritems():
+                yield item
+
     @classmethod
     def _validate_axis(cls, axis=0):
         if axis not in (0, 'index', None):
@@ -1461,6 +1468,20 @@ class DataFrame(_Frame):
         elif isinstance(other, pd.Series):
             other = other.to_frame().T
         return super(DataFrame, self).append(other)
+
+    @derived_from(pd.DataFrame)
+    def iterrows(self):
+        for i in range(self.npartitions):
+            df = self.get_division(i).compute()
+            for row in df.iterrows():
+                yield row
+
+    @derived_from(pd.DataFrame)
+    def itertuples(self):
+        for i in range(self.npartitions):
+            df = self.get_division(i).compute()
+            for row in df.itertuples():
+                yield row
 
     @classmethod
     def _bind_operator_method(cls, name, op):
