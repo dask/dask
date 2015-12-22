@@ -38,4 +38,6 @@
 
 [Valentin Haenel](http://haenel.co/)
 
+[Vikhyat Korrapati](http://vikhyat.net/)
+
 [Wesley Emeneker](http://github.com/nevermindewe/)
