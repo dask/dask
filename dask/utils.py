@@ -215,7 +215,7 @@ def textblock(filename, start, end, compression=None, encoding=system_encoding,
                 fb.seek(start)
                 while True:
                     buf = f.read(4096)
-                    if buf == '':
+                    if not buf:
                         raise StopIteration
                     try:
                         start += buf.index(bin_linesep)
