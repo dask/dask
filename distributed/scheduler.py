@@ -161,9 +161,7 @@ class Scheduler(Server):
         self.compute_handlers = {'update-graph': self.update_graph,
                                  'update-data': self.update_data,
                                  'missing-data': self.mark_missing_data,
-                                 'task-missing-data': self.mark_missing_data,
                                  'release-held-data': self.release_held_data,
-                                 'register': self.add_worker,
                                  'restart': self.restart}
 
         self.handlers = {'start-control': self.control_stream,
