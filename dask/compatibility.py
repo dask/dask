@@ -14,6 +14,8 @@ if PY3:
     from queue import Queue, Empty
     from itertools import zip_longest
     from io import StringIO, BytesIO
+    from bz2 import BZ2File
+    from gzip import GzipFile
     from urllib.request import urlopen
     from urllib.parse import urlparse
     from urllib.parse import quote, unquote
@@ -35,7 +37,9 @@ else:
     from Queue import Queue, Empty
     from itertools import izip_longest as zip_longest
     from StringIO import StringIO
-    from io import BytesIO
+    from io import BytesIO, BufferedIOBase
+    import bz2
+    import gzip
     from urllib2 import urlopen
     from urlparse import urlparse
     from urllib import quote, unquote
@@ -47,6 +51,43 @@ else:
 
     def _getargspec(func):
         return inspect.getargspec(func)
+
+    if sys.version_info[1] <= 6:
+        class BZ2File(bz2.BZ2File, BufferedIOBase):
+            def __init__(self, *args, **kwargs):
+                super(BZ2File, self).__init__(*args, **kwargs)
+
+            def readable(self):
+                return 'r' in self.mode
+
+            def writable(self):
+                return 'w' in self.mode
+
+            def seekable(self):
+                return self.readable()
+
+            def read1(self, size=-1):
+                return self.read(size)
+
+        class GzipFile(gzip.GzipFile, BufferedIOBase):
+            def __init__(self, *args, **kwargs):
+                super(GzipFile, self).__init__(*args, **kwargs)
+
+            def readable(self):
+                return self.mode == gzip.READ
+
+            def writable(self):
+                return self.mode == gzip.WRITE
+
+            def seekable(self):
+                # TODO: Can we really hard-code True here?
+                return True
+
+            def read1(self, size=-1):
+                return self.read(size)
+    else:
+        BZ2File = bz2.BZ2File
+        GzipFile = gzip.GzipFile
 
 
 def getargspec(func):

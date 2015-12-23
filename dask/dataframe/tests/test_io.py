@@ -16,7 +16,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
         from_array, from_bcolz, from_dask_array)
-from dask.compatibility import StringIO
+from dask.compatibility import StringIO, BZ2File, GzipFile
 
 from dask.utils import filetext, tmpfile, ignoring
 from dask.async import get_sync
@@ -51,7 +51,7 @@ def test_read_csv():
 
 
 def test_read_gzip_csv():
-    with filetext(text.encode(), open=gzip.open) as fn:
+    with filetext(text.encode(), open=GzipFile) as fn:
         f = dd.read_csv(fn, chunkbytes=30, compression='gzip')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
@@ -64,7 +64,7 @@ def test_file_size():
     counts = (len(text), len(text) + text.count('\n'))
     with filetext(text) as fn:
         assert file_size(fn) in counts
-    with filetext(text.encode(), open=gzip.open) as fn:
+    with filetext(text.encode(), open=GzipFile) as fn:
         assert file_size(fn, 'gzip') in counts
 
 

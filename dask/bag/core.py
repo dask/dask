@@ -3,16 +3,13 @@ from __future__ import absolute_import, division, print_function
 import io
 import itertools
 import math
-import gzip
 import bz2
 import os
-import codecs
-from sys import getdefaultencoding
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
-from warnings import warn
+from itertools import repeat
 
 from ..utils import ignoring
 
@@ -26,19 +23,16 @@ with ignoring(ImportError):
 
 from ..base import Base, normalize_token
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
-        StringIO)
+        StringIO, GzipFile, BZ2File)
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
-from ..utils import file_size, get_bin_linesep, takes_multiple_arguments
+from ..utils import (file_size, infer_compression, open, system_encoding,
+                     takes_multiple_arguments, textblock)
 
 names = ('bag-%d' % i for i in itertools.count(1))
 tokens = ('-%d' % i for i in itertools.count(1))
 load_names = ('load-%d' % i for i in itertools.count(1))
-
-system_encoding = getdefaultencoding()
-if system_encoding == 'ascii':
-    system_encoding = 'utf-8'
 
 no_default = '__no__default__'
 
@@ -103,7 +97,8 @@ def optimize(dsk, keys):
     return dsk5
 
 
-def to_textfiles(b, path, name_function=str, encoding=system_encoding):
+def to_textfiles(b, path, name_function=str, compression='infer',
+                 encoding=system_encoding):
     """ Write bag to disk, one filename per partition, one line per element
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -164,8 +159,14 @@ def to_textfiles(b, path, name_function=str, encoding=system_encoding):
 2.  A directory -- 'foo/
 3.  A path with a * in it -- 'foo.*.json'""")
 
+    def get_compression(path, compression=compression):
+        if compression == 'infer':
+            compression = infer_compression(path)
+        return compression
+
     name = next(names)
-    dsk = dict(((name, i), (write, (b.name, i), path, encoding))
+    dsk = dict(((name, i), (write, (b.name, i), path, get_compression(path),
+                            encoding))
                for i, path in enumerate(paths))
 
     return Bag(merge(b.dask, dsk), name, b.npartitions)
@@ -338,8 +339,9 @@ class Bag(Base):
                              "Use db.from_filenames instead.")
 
     @wraps(to_textfiles)
-    def to_textfiles(self, path, name_function=str, encoding=system_encoding):
-        return to_textfiles(self, path, name_function, encoding)
+    def to_textfiles(self, path, name_function=str, compression='infer',
+                     encoding=system_encoding):
+        return to_textfiles(self, path, name_function, compression, encoding)
 
     def fold(self, binop, combine=None, initial=no_default):
         """ Parallelizable reduction
@@ -824,11 +826,8 @@ def collect(grouper, group, p, barrier_token):
     return list(d.items())
 
 
-opens = {'gz': gzip.open, 'bz2': bz2.BZ2File}
-
-
-def from_filenames(filenames, chunkbytes=None, encoding=system_encoding,
-                   linesep=os.linesep):
+def from_filenames(filenames, chunkbytes=None, compression='infer',
+                   encoding=system_encoding, linesep=os.linesep):
     """ Create dask by loading in lines from many files
 
     Provide list of filenames
@@ -863,114 +862,45 @@ def from_filenames(filenames, chunkbytes=None, encoding=system_encoding,
     # argument.
     linesep = str(linesep)
 
+    def get_compression(path, compression=compression):
+        if compression == 'infer':
+            compression = infer_compression(path)
+        return compression
+
     if chunkbytes:
         chunkbytes = int(chunkbytes)
-        taskss = [_chunk_read_file(fn, chunkbytes, encoding, linesep)
+        taskss = [_chunk_read_file(fn, chunkbytes, get_compression(fn),
+                                   encoding, linesep)
                   for fn in full_filenames]
         d = dict(((name, i), task)
                  for i, task in enumerate(toolz.concat(taskss)))
     else:
-        extension = os.path.splitext(filenames[0])[1].strip('.')
-        myopen = opens.get(extension, io.open)
-
         d = dict(((name, i), (list,
                               (io.TextIOWrapper,
-                               (io.BufferedReader, (myopen, fn, 'rb')),
+                               (io.BufferedReader,
+                                (open, fn, 'rb', get_compression(fn))),
                                encoding, None, linesep)))
                  for i, fn in enumerate(full_filenames))
 
     return Bag(d, name, len(d))
 
 
-def _textblock(filename, start, end, compression, encoding, linesep):
-    # Make sure `linesep` is not a byte string because `io.TextIOWrapper` in
-    # python versions other than 2.7 dislike byte strings for the `newline`
-    # argument.
-    linesep = str(linesep)
-
-    chunksize = end - start + 1
-    f = opens.get(compression, io.open)(filename, 'rb')
-    try:
-        with io.BufferedReader(f) as fb:
-            # Get byte representation of the line separator.
-            bin_linesep = get_bin_linesep(encoding, linesep)
-            bin_linesep_len = len(bin_linesep)
-
-            # If `start` does not correspond to the beginning of the file, then
-            # we need to set the file pointer to `start` and keep reading
-            # chunks until we find a line separator. We then set the file
-            # pointer to the position after the line separator.
-            # If `start` corresponds to the first character of a line, the line
-            # is not part of this textblock. This is okay since
-            # io.TextIOWrapper below keeps reading lines until `start` exceeds
-            # `end`, i.e also the line where `start == end` is part of this
-            # textblock. Thus, the line is definitely only part of one
-            # textblock.
-            if start > 0:
-                fb.seek(start)
-                while True:
-                    buf = f.read(4096)
-                    try:
-                        start += buf.index(bin_linesep)
-                        start += bin_linesep_len
-                    except ValueError:
-                        start += len(buf)
-                    else:
-                        f.seek(start)
-                        break
-
-            with io.TextIOWrapper(fb, encoding, newline=linesep) as fbw:
-                try:
-                    # Retrieve and yield lines until the file position
-                    # *exceeds* `end`. See the comment above for why
-                    # `start <= end` is correct and not `start < end`.
-                    while start <= end:
-                        line = next(fbw)
-
-                        # We need to encode the line again to get the byte
-                        # length in order to correctly update the byte offset.
-                        line_len = len(line.encode(encoding))
-                        if chunksize < line_len:
-                            warn(('`chunksize` ({:d}) is less than the line '
-                                  'length ({:d}). This may cause duplicate '
-                                  'processing of this line. It is advised '
-                                  'to increase `chunksize`.').format(
-                                  chunksize, line_len))
-
-                        yield line
-                        start += line_len
-                except StopIteration:
-                    pass
-    finally:
-        f.close()
-
-
-def _chunk_read_file(filename, chunkbytes, encoding, linesep):
-    extension = os.path.splitext(filename)[1].strip('.')
-    compression = {'gz': 'gzip', 'bz2': 'bz2'}.get(extension, None)
-    return [(list, (_textblock, filename, i, i + chunkbytes, extension,
+def _chunk_read_file(filename, chunkbytes, compression, encoding, linesep):
+    return [(list, (textblock, filename, i, i + chunkbytes, compression,
                     encoding, linesep))
             for i in range(0, file_size(filename, compression), chunkbytes)]
 
 
-def write(data, filename, encoding):
+def write(data, filename, compression, encoding):
     dirname = os.path.dirname(filename)
     if not os.path.exists(dirname):
         with ignoring(OSError):
             os.makedirs(dirname)
 
-    ext = os.path.splitext(filename)[1][1:]
-    if ext == 'gz':
-        f = gzip.open(filename, 'wb')
-        data = (line.encode(encoding) for line in data)
-    elif ext == 'bz2':
-        f = bz2.BZ2File(filename, 'wb')
-        data = (line.encode(encoding) for line in data)
-    else:
-        f = codecs.open(filename, 'wb', encoding=encoding)
+    f = open(filename, mode='wb', compression=compression)
     try:
-        for item in data:
-            f.write(item)
+        for line in data:
+            f.write(line.encode(encoding))
     finally:
         f.close()
 
@@ -1090,7 +1020,7 @@ def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
 def stream_decompress(fmt, data):
     """ Decompress a block of compressed bytes into a stream of strings """
     if fmt == 'gz':
-        return gzip.GzipFile(fileobj=BytesIO(data))
+        return GzipFile(fileobj=BytesIO(data))
     if fmt == 'bz2':
         return bz2_stream(data)
     else:

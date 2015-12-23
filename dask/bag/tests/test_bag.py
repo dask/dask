@@ -1,6 +1,5 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
-from sys import getdefaultencoding
 
 import pytest
 pytest.importorskip('dill')
@@ -11,15 +10,15 @@ import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
         _parse_s3_URI, inline_singleton_lists, optimize, system_encoding)
-from dask.utils import filetexts, tmpfile, raises
+from dask.compatibility import BZ2File, GzipFile
+from dask.utils import filetexts, tmpfile, raises, open
 from dask.async import get_sync
 import dask
 import dask.bag as db
+import bz2
 import io
 import shutil
 import os
-import gzip
-import bz2
 import partd
 from tempfile import mkdtemp
 
@@ -329,12 +328,12 @@ def test_from_filenames_gzip():
             set([(list,
                   (io.TextIOWrapper,
                    (io.BufferedReader,
-                    (gzip.open, os.path.abspath('foo.json.gz'), 'rb')),
+                    (open, os.path.abspath('foo.json.gz'), 'rb', 'gzip')),
                    system_encoding, None, '\n')),
                  (list,
                   (io.TextIOWrapper,
                    (io.BufferedReader,
-                    (gzip.open, os.path.abspath('bar.json.gz'), 'rb')),
+                    (open, os.path.abspath('bar.json.gz'), 'rb', 'gzip')),
                    system_encoding, None, '\n'))]))
 
 
@@ -345,12 +344,12 @@ def test_from_filenames_bz2():
             set([(list,
                   (io.TextIOWrapper,
                    (io.BufferedReader,
-                    (bz2.BZ2File, os.path.abspath('foo.json.bz2'), 'rb')),
+                    (open, os.path.abspath('foo.json.bz2'), 'rb', 'bz2')),
                    system_encoding, None, '\n')),
                  (list,
                   (io.TextIOWrapper,
                    (io.BufferedReader,
-                    (bz2.BZ2File, os.path.abspath('bar.json.bz2'), 'rb')),
+                    (open, os.path.abspath('bar.json.bz2'), 'rb', 'bz2')),
                    system_encoding, None, '\n'))]))
 
 
@@ -382,7 +381,7 @@ def test_from_filenames_encoding():
 
 def test_from_filenames_large_gzip():
     with tmpfile('gz') as fn:
-        f = gzip.open(fn, 'wb')
+        f = GzipFile(fn, 'wb')
         f.write(b'Hello, world!\n' * 100)
         f.close()
 
@@ -555,7 +554,7 @@ def test_to_dataframe():
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     dir = mkdtemp()
-    for ext, myopen in [('gz', gzip.open), ('bz2', bz2.BZ2File), ('', open)]:
+    for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
         c = b.to_textfiles(os.path.join(dir, '*.' + ext))
         assert c.npartitions == b.npartitions
         try:
@@ -576,7 +575,7 @@ def test_to_textfiles():
 def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
     dir = mkdtemp()
-    for ext, myopen in [('gz', gzip.open), ('bz2', bz2.BZ2File), ('', open)]:
+    for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
         c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030')
         assert c.npartitions == b.npartitions
         try:
@@ -653,7 +652,7 @@ def test_stream_decompress():
     assert [s.strip() for s in stream_decompress('bz2', bz2.compress(data))] == \
             ['abc', 'def', '123']
     with tmpfile() as fn:
-        f = gzip.open(fn, 'wb')
+        f = GzipFile(fn, 'wb')
         f.write(data)
         f.close()
         with open(fn, 'rb') as f:
