@@ -1,13 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, deque
+from datetime import datetime
 from functools import partial
 import logging
 from math import ceil
 from time import time
 import uuid
 
-from toolz import frequencies, memoize, concat, identity
+from toolz import frequencies, memoize, concat, identity, valmap
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -167,7 +168,16 @@ class Scheduler(Server):
         self.handlers = {'start-control': self.control_stream,
                          'scatter': self.scatter,
                          'register': self.add_worker,
-                         'gather': self.gather}
+                         'gather': self.gather,
+                         'diagnostics': self.diagnostic_stream}
+
+        self.diagnostics = {'cpu': self.diagnostic_cpu,
+                            'memory': self.diagnostic_memory,
+                            'time': self.diagnostic_time,
+                            'num-processing': self.diagnostic_num_processing,
+                            'num-stacks': self.diagnostic_num_stacks,
+                            'ncores': self.get_ncores
+                            }
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
@@ -897,6 +907,39 @@ class Scheduler(Server):
                 set(self.processing) == \
                 set(self.nannies) == \
                 set(self.worker_queues))
+
+    def diagnostic_cpu(self, n=100):
+        logs = {worker: log[-n:] for worker, log in self.resource_logs.items()}
+        return {worker: [d['cpu_percent'] for d in log]}
+
+    def diagnostic_memory(self, n=100):
+        logs = {worker: log[-n:] for worker, log in self.resource_logs.items()}
+        return {worker: [d['memory_percent'] for d in log]}
+
+    def diagnostic_time(self, n=100):
+        now = datetime.now()
+        logs = {worker: log[-n:] for worker, log in self.resource_logs.items()}
+        return {worker: [(d['timestamp'] - now).total_seconds() for d in log]}
+
+    def diagnostic_num_processing(self):
+        return valmap(len, self.processing)
+
+    def diagnostic_num_stacks(self):
+        return valmap(len, self.stacks)
+
+    def get_ncores(self):
+        return self.ncores
+
+    @gen.coroutine
+    def diagnostic_stream(self, stream, diagnostics=[], interval=1, **kwargs):
+        while True:
+            response = {k: self.diagnostics[k](**kwargs) for k in diagnostics}
+            try:
+                yield write(stream, response)
+            except StreamClosedError:
+                logger.info("Diagnostic stream closed")
+                break
+            yield gen.sleep(interval)
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):

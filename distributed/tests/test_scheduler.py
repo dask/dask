@@ -3,7 +3,7 @@ from operator import add
 from time import time
 
 from dask.core import get_deps
-from toolz import merge, concat
+from toolz import merge, concat, valmap
 from tornado.queues import Queue
 from tornado.iostream import StreamClosedError
 from tornado.gen import TimeoutError
@@ -678,4 +678,31 @@ def test_add_worker(loop):
         s.validate(allow_overlap=True)
 
         s.stop()
+    _test_cluster(f, loop)
+
+
+def test_diagnostic_stream(loop):
+    port = 8040
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s.sync_center()
+        done = s.start()
+        s.listen(port)
+
+        stream = yield connect(s.center.ip, s.port)
+        yield write(stream, {'op': 'diagnostics',
+                             'diagnostics': ['num-processing',
+                                             'num-stacks',
+                                             'ncores'],
+                             'interval': 0.01})
+        for i in range(5):
+            response = yield read(stream)
+            expected = {'ncores': s.ncores,
+                        'num-processing': valmap(len, s.processing),
+                        'num-stacks': valmap(len, s.stacks)}
+
+        stream.close()
+        s.stop()
+
     _test_cluster(f, loop)
