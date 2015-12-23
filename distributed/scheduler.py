@@ -171,9 +171,7 @@ class Scheduler(Server):
                          'gather': self.gather,
                          'diagnostics': self.diagnostic_stream}
 
-        self.diagnostics = {'cpu': self.diagnostic_cpu,
-                            'memory': self.diagnostic_memory,
-                            'time': self.diagnostic_time,
+        self.diagnostics = {'resources': self.diagnostic_resources,
                             'num-processing': self.diagnostic_num_processing,
                             'num-stacks': self.diagnostic_num_stacks,
                             'ncores': self.get_ncores
@@ -908,18 +906,14 @@ class Scheduler(Server):
                 set(self.nannies) == \
                 set(self.worker_queues))
 
-    def diagnostic_cpu(self, n=100):
-        logs = {worker: log[-n:] for worker, log in self.resource_logs.items()}
-        return {worker: [d['cpu_percent'] for d in log]}
-
-    def diagnostic_memory(self, n=100):
-        logs = {worker: log[-n:] for worker, log in self.resource_logs.items()}
-        return {worker: [d['memory_percent'] for d in log]}
-
-    def diagnostic_time(self, n=100):
+    def diagnostic_resources(self, n=100):
         now = datetime.now()
-        logs = {worker: log[-n:] for worker, log in self.resource_logs.items()}
-        return {worker: [(d['timestamp'] - now).total_seconds() for d in log]}
+        logs = {worker: list(log)[-n:] for worker, log in self.resource_logs.items()}
+        return {worker: {'cpu': [d['cpu_percent'] for d in log],
+                         'memory': [d['memory_percent'] for d in log],
+                         'time': [(d['timestamp'] - now).total_seconds()
+                                  for d in log]}
+                for worker, log in logs.items()}
 
     def diagnostic_num_processing(self):
         return valmap(len, self.processing)

@@ -564,6 +564,11 @@ def test_monitor_resources(loop):
             assert set(s.resource_logs) == {a.address, b.address}
             assert all(len(v) == 3 for v in s.resource_logs.values())
 
+            d = s.diagnostic_resources(n=2)
+            assert set(d) == {a.address, b.address}
+            assert set(d[a.address]).issubset({'cpu', 'memory', 'time'})
+            assert all(len(v) == 2 for v in d[a.address].values())
+
             s.put({'op': 'close'})
             yield done
         finally:
