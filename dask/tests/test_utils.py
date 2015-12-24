@@ -10,12 +10,12 @@ from dask.utils import (textblock, filetext, takes_multiple_arguments,
 def test_textblock():
     text = b'123 456 789 abc def ghi'.replace(b' ', os.linesep.encode())
     with filetext(text, mode='wb') as fn:
-        text = ''.join(textblock(fn, 1, 11, None))
+        text = ''.join(textblock(fn, 1, 11, None)).encode()
         assert text == ('456 789 '.replace(' ', os.linesep)).encode()
         assert set(map(len, text.split())) == set([3])
 
-        assert ''.join(textblock(fn, 0, 3, None)) == ('123' + os.linesep).encode()
-        assert ''.join(textblock(fn, 3, 3, None)) == b''
+        assert ''.join(textblock(fn, 0, 3, None)).encode() == ('123' + os.linesep).encode()
+        assert ''.join(textblock(fn, 3, 3, None)).encode() == b''
 
 
 def test_takes_multiple_arguments():
