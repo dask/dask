@@ -188,6 +188,20 @@ def get_bin_linesep(encoding, linesep):
 
 def textblock(filename, start, end, compression=None, encoding=system_encoding,
               linesep=os.linesep):
+    """Pull out a block of text from a file given start and stop bytes.
+
+    This gets data starting/ending from the next linesep delimiter.
+
+    Examples
+    --------
+    >> with open('myfile.txt', 'wb') as f:
+    ..     f.write('123\n456\n789\nabc')
+
+    In the example below, 1 and 10 don't line up with endlines.
+
+    >> u''.join(textblock('myfile.txt', 1, 10))
+    '456\n789\n'
+    """
     # Make sure `linesep` is not a byte string because `io.TextIOWrapper` in
     # Python versions other than 2.7 dislike byte strings for the `newline`
     # argument.
