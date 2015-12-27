@@ -100,7 +100,7 @@ def inline_singleton_lists(dsk):
 def optimize(dsk, keys, **kwargs):
     """ Optimize a dask from a dask.bag """
     dsk2 = cull(dsk, keys)
-    dsk3 = fuse(dsk2)
+    dsk3 = fuse(dsk2, keys)
     dsk4 = inline_singleton_lists(dsk3)
     dsk5 = lazify(dsk4)
     return dsk5
