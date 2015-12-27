@@ -222,7 +222,7 @@ def unwrap_partial(func):
     return func
 
 
-def dealias(dsk):
+def dealias(dsk, keys=None):
     """ Remove aliases from dask
 
     Removes and renames aliases using ``inline``.  Keeps aliases at the top of
@@ -230,6 +230,10 @@ def dealias(dsk):
 
     Aliases are not expected by schedulers.  It's unclear that this is a legal
     state.
+
+    Optional ``keys`` keyword argument allows us to protect keys from being
+    deleted.  This is useful to protect keys that would be expected by a
+    scheduler.
 
     Examples
     --------
@@ -245,7 +249,20 @@ def dealias(dsk):
      'd': (sum, 'a'),
      'e': (identity, 'd'),
      'f': (inc, 'd')}
+
+    >>> dsk = {'a': (range, 5),
+    ...        'b': 'a'}
+    >>> dealias(dsk)  # doctest: +SKIP
+    {'b': (range, 5)}
+
+    >>> dealias(dsk, keys=['a', 'b'])  # doctest: +SKIP
+    {'a': (range, 5),
+     'b': (identity, 5)}
     """
+    keys = keys or set()
+    if not isinstance(keys, set):
+        keys = set(keys)
+
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     dependents = reverse_dict(dependencies)
 
@@ -260,7 +277,7 @@ def dealias(dsk):
 
     for k in roots & aliases:
         k2 = dsk3[k]
-        if len(dependents[k2]) == 1:
+        if len(dependents[k2]) == 1 and k2 not in keys:
             dsk3[k] = dsk3[k2]
             del dsk3[k2]
         else:
