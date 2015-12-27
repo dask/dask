@@ -565,9 +565,9 @@ def test_monitor_resources(loop):
             assert all(len(v) == 3 for v in s.resource_logs.values())
 
             d = s.diagnostic_resources(n=2)
-            assert set(d) == {a.address, b.address}
-            assert set(d[a.address]).issubset({'cpu', 'memory', 'time'})
-            assert all(len(v) == 2 for v in d[a.address].values())
+            assert set(d) == {a.worker_address, b.worker_address}
+            assert set(d[a.worker_address]).issubset({'cpu', 'memory', 'time'})
+            assert all(len(v) == 2 for v in d[a.worker_address].values())
 
             s.put({'op': 'close'})
             yield done
@@ -686,7 +686,7 @@ def test_add_worker(loop):
     _test_cluster(f, loop)
 
 
-def test_diagnostic_stream(loop):
+def test_feed(loop):
     port = 8040
     @gen.coroutine
     def f(c, a, b):
@@ -695,17 +695,23 @@ def test_diagnostic_stream(loop):
         done = s.start()
         s.listen(port)
 
+        def initial(scheduler):
+            return scheduler.id
+
+        def func(scheduler):
+            return scheduler.processing, scheduler.stacks
+
         stream = yield connect(s.center.ip, s.port)
-        yield write(stream, {'op': 'diagnostics',
-                             'diagnostics': ['num-processing',
-                                             'num-stacks',
-                                             'ncores'],
+        yield write(stream, {'op': 'feed',
+                             'function': func,
+                             'initial': initial,
                              'interval': 0.01})
+        response = yield read(stream)
+        assert response == s.id
+
         for i in range(5):
             response = yield read(stream)
-            expected = {'ncores': s.ncores,
-                        'num-processing': valmap(len, s.processing),
-                        'num-stacks': valmap(len, s.stacks)}
+            expected = s.processing, s.stacks
 
         stream.close()
         s.stop()

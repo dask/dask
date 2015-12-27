@@ -169,13 +169,7 @@ class Scheduler(Server):
                          'scatter': self.scatter,
                          'register': self.add_worker,
                          'gather': self.gather,
-                         'diagnostics': self.diagnostic_stream}
-
-        self.diagnostics = {'resources': self.diagnostic_resources,
-                            'num-processing': self.diagnostic_num_processing,
-                            'num-stacks': self.diagnostic_num_stacks,
-                            'ncores': self.get_ncores
-                            }
+                         'feed': self.feed}
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
@@ -908,26 +902,23 @@ class Scheduler(Server):
 
     def diagnostic_resources(self, n=100):
         now = datetime.now()
-        logs = {worker: list(log)[-n:] for worker, log in self.resource_logs.items()}
+        workers = {(ip, nport): (ip, wport)
+                   for (ip, wport), nport in self.nannies.items()}
+        logs = {workers[nanny]: list(log)[-n:]
+                for nanny, log in self.resource_logs.items()}
         return {worker: {'cpu': [d['cpu_percent'] for d in log],
                          'memory': [d['memory_percent'] for d in log],
                          'time': [(d['timestamp'] - now).total_seconds()
                                   for d in log]}
                 for worker, log in logs.items()}
 
-    def diagnostic_num_processing(self):
-        return valmap(len, self.processing)
-
-    def diagnostic_num_stacks(self):
-        return valmap(len, self.stacks)
-
-    def get_ncores(self):
-        return self.ncores
-
     @gen.coroutine
-    def diagnostic_stream(self, stream, diagnostics=[], interval=1, **kwargs):
+    def feed(self, stream, function=None, initial=None, interval=1, **kwargs):
+        if initial:
+            response = initial(self, **kwargs)
+            yield write(stream, response)
         while True:
-            response = {k: self.diagnostics[k](**kwargs) for k in diagnostics}
+            response = function(self, **kwargs)
             try:
                 yield write(stream, response)
             except StreamClosedError:
