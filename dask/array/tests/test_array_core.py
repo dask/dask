@@ -1744,3 +1744,11 @@ def test_chunks_error():
 def test_array_compute_forward_kwargs():
     x = da.arange(10, chunks=2).sum()
     x.compute(bogus_keyword=10)
+
+
+def test_dont_fuse_outputs():
+    dsk = {('x', 0): np.array([1, 2]),
+           ('x', 1): (inc, ('x', 0))}
+
+    a = da.Array(dsk, 'x', chunks=(2,), shape=(4,))
+    eq(a, np.array([1, 2, 2, 3], dtype=a.dtype))

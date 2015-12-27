@@ -22,7 +22,7 @@ def optimize(dsk, keys, **kwargs):
                              set([getarray, getitem, np.transpose]))
     dsk2 = cull(dsk, list(flatten(keys)))
     dsk3 = remove_full_slices(dsk2)
-    dsk4 = fuse(dsk3)
+    dsk4 = fuse(dsk3, keys)
     dsk5 = valmap(rewrite_rules.rewrite, dsk4)
     dsk6 = inline_functions(dsk5, fast_functions=fast_functions)
     return dsk6
