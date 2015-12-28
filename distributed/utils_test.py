@@ -70,7 +70,26 @@ def run_center(q):
     loop.start()
 
 
-def run_worker(port, center_port, **kwargs):
+def run_scheduler(q, center_port, **kwargs):
+    from distributed import Scheduler
+    from tornado.ioloop import IOLoop, PeriodicCallback
+    import logging
+    IOLoop.clear_instance()
+    loop = IOLoop(); loop.make_current()
+    PeriodicCallback(lambda: None, 500).start()
+    logging.getLogger("tornado").setLevel(logging.CRITICAL)
+
+    scheduler = Scheduler(('127.0.0.1', center_port), **kwargs)
+    scheduler.listen(0)
+
+    loop.run_sync(scheduler.sync_center)
+    done = scheduler.start()
+
+    q.put(scheduler.port)
+    loop.start()
+
+
+def run_worker(q, center_port, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -100,7 +119,34 @@ def run_nanny(q, center_port, **kwargs):
         loop.start()
 
 
-_port = [8010]
+@contextmanager
+def scheduler(cport, **kwargs):
+    q = Queue()
+
+    proc = Process(target=run_scheduler, args=(q, cport), kwargs=kwargs)
+    proc.start()
+
+    sport = q.get()
+
+    s = rpc(ip='127.0.0.1', port=sport)
+    loop = IOLoop()
+    start = time()
+    while True:
+        ncores = loop.run_sync(s.ncores)
+        if ncores:
+            break
+        if time() - start > 5:
+            raise Exception("Timeout on cluster creation")
+        sleep(0.01)
+
+    try:
+        yield sport
+    finally:
+        loop = IOLoop()
+        with ignoring(socket.error, TimeoutError, StreamClosedError):
+            loop.run_sync(lambda: disconnect('127.0.0.1', sport), timeout=10)
+        proc.terminate()
+
 
 @contextmanager
 def cluster(nworkers=2, nanny=False):
@@ -108,7 +154,6 @@ def cluster(nworkers=2, nanny=False):
         _run_worker = run_nanny
     else:
         _run_worker = run_worker
-    _port[0] += 1
     center_q = Queue()
     center = Process(target=run_center, args=(center_q,))
     center.start()

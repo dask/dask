@@ -169,7 +169,9 @@ class Scheduler(Server):
                          'scatter': self.scatter,
                          'register': self.add_worker,
                          'gather': self.gather,
-                         'feed': self.feed}
+                         'feed': self.feed,
+                         'terminate': self.close,
+                         'ncores': self.get_ncores}
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
@@ -925,6 +927,9 @@ class Scheduler(Server):
                 logger.info("Diagnostic stream closed")
                 break
             yield gen.sleep(interval)
+
+    def get_ncores(self, stream=None):
+        return self.ncores
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
