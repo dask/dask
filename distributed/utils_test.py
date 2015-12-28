@@ -8,6 +8,7 @@ import os
 import shutil
 import socket
 from time import time, sleep
+import uuid
 
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
@@ -79,11 +80,12 @@ def run_worker(port, center_port, **kwargs):
         PeriodicCallback(lambda: None, 500).start()
         logging.getLogger("tornado").setLevel(logging.CRITICAL)
         worker = Worker('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
-        worker.start(port)
+        loop.run_sync(lambda: worker._start(0))
+        q.put(worker.port)
         loop.start()
 
 
-def run_nanny(port, center_port, **kwargs):
+def run_nanny(q, center_port, **kwargs):
     from distributed import Nanny
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -93,7 +95,8 @@ def run_nanny(port, center_port, **kwargs):
         PeriodicCallback(lambda: None, 500).start()
         logging.getLogger("tornado").setLevel(logging.CRITICAL)
         worker = Nanny('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
-        loop.run_sync(lambda: worker._start(port))
+        loop.run_sync(lambda: worker._start(0))
+        q.put(worker.port)
         loop.start()
 
 
@@ -106,7 +109,6 @@ def cluster(nworkers=2, nanny=False):
     else:
         _run_worker = run_worker
     _port[0] += 1
-    cport = _port[0]
     center_q = Queue()
     center = Process(target=run_center, args=(center_q,))
     center.start()
@@ -114,14 +116,17 @@ def cluster(nworkers=2, nanny=False):
 
     workers = []
     for i in range(nworkers):
-        _port[0] += 1
-        port = _port[0]
-        proc = Process(target=_run_worker, args=(port, cport),
-                        kwargs={'ncores': 1, 'local_dir': '_test_worker-%d' % port})
-        workers.append({'port': port, 'proc': proc})
+        q = Queue()
+        fn = '_test_worker-%s' % uuid.uuid1()
+        proc = Process(target=_run_worker, args=(q, cport),
+                        kwargs={'ncores': 1, 'local_dir': fn})
+        workers.append({'proc': proc, 'queue': q, 'dir': fn})
 
     for worker in workers:
         worker['proc'].start()
+
+    for worker in workers:
+        worker['port'] = worker['queue'].get()
 
     loop = IOLoop()
     c = rpc(ip='127.0.0.1', port=cport)
@@ -171,7 +176,7 @@ def _test_cluster(f, loop=None, b_ip='127.0.0.1'):
     @gen.coroutine
     def g():
         c = Center('127.0.0.1')
-        c.listen(8017)
+        c.listen(0)
         a = Worker(c.ip, c.port, ncores=2, ip='127.0.0.1')
         yield a._start()
         b = Worker(c.ip, c.port, ncores=1, ip=b_ip)
