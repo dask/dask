@@ -144,7 +144,7 @@ def scheduler(cport, **kwargs):
     finally:
         loop = IOLoop()
         with ignoring(socket.error, TimeoutError, StreamClosedError):
-            loop.run_sync(lambda: disconnect('127.0.0.1', sport), timeout=10)
+            loop.run_sync(lambda: disconnect('127.0.0.1', sport), timeout=0.5)
         proc.terminate()
 
 
@@ -189,7 +189,8 @@ def cluster(nworkers=2, nanny=False):
         logger.debug("Closing out test cluster")
         for port in [cport] + [w['port'] for w in workers]:
             with ignoring(socket.error, TimeoutError, StreamClosedError):
-                loop.run_sync(lambda: disconnect('127.0.0.1', port), timeout=10)
+                loop.run_sync(lambda: disconnect('127.0.0.1', port),
+                              timeout=0.5)
         for proc in [center] + [w['proc'] for w in workers]:
             with ignoring(Exception):
                 proc.terminate()
