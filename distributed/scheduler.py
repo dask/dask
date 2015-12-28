@@ -246,7 +246,7 @@ class Scheduler(Server):
             yield All(self.coroutines)
 
     @gen.coroutine
-    def close(self):
+    def close(self, stream=None):
         """ Send cleanup signal to all coroutines then wait until finished
 
         See Also
@@ -917,15 +917,11 @@ class Scheduler(Server):
     @gen.coroutine
     def feed(self, stream, function=None, initial=None, interval=1, **kwargs):
         if initial:
-            response = initial(self, **kwargs)
+            response = initial(self)
             yield write(stream, response)
         while True:
-            response = function(self, **kwargs)
-            try:
-                yield write(stream, response)
-            except StreamClosedError:
-                logger.info("Diagnostic stream closed")
-                break
+            response = function(self)
+            yield write(stream, response)
             yield gen.sleep(interval)
 
     def get_ncores(self, stream=None):
