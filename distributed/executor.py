@@ -250,6 +250,7 @@ class Executor(object):
                 self.center = r
                 self.scheduler = Scheduler(self.center, loop=self.loop,
                         **kwargs)
+                self.scheduler.listen(0)
             elif ident['type'] == 'Scheduler':
                 self.scheduler = r
                 self.scheduler_stream = yield connect(*self._start_arg)
