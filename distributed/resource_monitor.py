@@ -1,8 +1,10 @@
 from toolz import get
 from tornado import gen
 
-from .core import connect, read, write
+from .core import connect, read, write, rpc
 from .utils import ignoring
+from .executor import default_executor
+from .scheduler import Scheduler
 
 with ignoring(ImportError):
     from bokeh.plotting import figure, Figure, show, output_notebook, ColumnDataSource
@@ -13,8 +15,10 @@ class ResourceMonitor(object):
     def __init__(self, addr=None, interval=1.00, notebook=True):
         if addr is None:
             scheduler = default_executor().scheduler
-            addr = (scheduler.ip, scheduler.port)
-
+            if isinstance(scheduler, rpc):
+                addr = (scheduler.ip, scheduler.port)
+            elif isinstance(scheduler, Scheduler):
+                addr = ('127.0.0.1', scheduler.port)
 
         self.cds = ColumnDataSource({k: []
             for k in ['host', 'cpu', 'memory',
