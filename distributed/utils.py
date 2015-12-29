@@ -117,6 +117,20 @@ def clear_queue(q):
         q.get_nowait()
 
 
+def is_kernel():
+    """ Determine if we're running within an IPython kernel
+
+    >>> is_kernel()
+    False
+    """
+    # http://stackoverflow.com/questions/34091701/determine-if-were-in-an-ipython-notebook-session
+    if 'IPython' not in sys.modules:  # IPython hasn't been imported
+        return False
+    from IPython import get_ipython
+    # check for `kernel` attribute on the IPython instance
+    return getattr(get_ipython(), 'kernel', None) is not None
+
+
 def _deps(dsk, arg):
     """ Get dependencies from keys or tasks
 
@@ -153,6 +167,25 @@ def _deps(dsk, arg):
     except TypeError:  # not hashable
             return []
     return [arg]
+
+
+def key_split(s):
+    """
+    >>> key_split('x-1')
+    'x'
+    >>> key_split('x-1-2-3')
+    'x'
+    >>> key_split(('x-2', 1))
+    'x'
+    >>> key_split(None)
+    'Other'
+    """
+    if isinstance(s, tuple):
+        return key_split(s[0])
+    try:
+        return s.split('-', 1)[0]
+    except:
+        return 'Other'
 
 
 @contextmanager

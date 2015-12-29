@@ -71,8 +71,8 @@ from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, _test_cluster, loop, inc,
         div, dec, throws)
-from distributed.diagnostics import (ProgressWidget, MultiProgressWidget,
-        progress)
+from distributed.diagnostics.progress import (ProgressWidget,
+        MultiProgressWidget, progress)
 
 
 def test_progressbar_widget(loop):

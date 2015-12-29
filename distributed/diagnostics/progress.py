@@ -8,60 +8,12 @@ import dask
 from toolz import valmap, groupby, concat
 from tornado.ioloop import PeriodicCallback, IOLoop
 
-from .utils import ignoring, sync
-from .executor import default_executor
+from .plugin import SchedulerPlugin
+from ..utils import ignoring, sync, is_kernel, key_split
+from ..executor import default_executor
 
 
 logger = logging.getLogger(__name__)
-
-
-class SchedulerPlugin(object):
-    """ Interface to extend the Scheduler
-
-    The scheduler operates by triggering and responding to events like
-    ``task_finished``, ``update_graph``, ``task_erred``, etc..
-
-    A plugin enables custom code to run at each of those same events.  The
-    scheduler will run the analagous methods on this class when each event is
-    triggered.  This runs user code within the scheduler thread that can
-    perform arbitrary operations in synchrony with the scheduler itself.
-
-    Plugins are often used for diagnostics and measurement, but have full
-    access to the scheduler and could in principle affect core scheduling.
-
-    To implement a plugin implement some of the methods of this class and add
-    the plugin to the scheduler with ``Scheduler.add_plugin(myplugin)``.
-
-    Examples
-    --------
-    >>> class Counter(SchedulerPlugin):
-    ...     def __init__(self):
-    ...         self.counter = 0
-    ...
-    ...     def task_finished(self, scheduler, key, worker, nbytes):
-    ...         self.counter += 1
-    ...
-    ...     def restart(self, scheduler):
-    ...         self.counter = 0
-
-    >>> c = Counter()
-    >>> scheduler.add_plugin(c)  # doctest: +SKIP
-    """
-    def task_finished(self, scheduler, key, worker, nbytes):
-        """ Run when a task is reported complete """
-        pass
-
-    def update_graph(self, scheduler, dsk, keys, restrictions):
-        """ Run when a new graph / tasks enter the scheduler """
-        pass
-
-    def task_erred(self, scheduler, key, worker, exception):
-        """ Run when a task is reported failed """
-        pass
-
-    def restart(self, scheduler):
-        """ Run when the scheduler restarts itself """
-        pass
 
 
 def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions, complete=False):
@@ -203,25 +155,6 @@ class Progress(SchedulerPlugin):
     @property
     def elapsed(self):
         return default_timer() - self._start_time
-
-
-def key_split(s):
-    """
-    >>> key_split('x-1')
-    'x'
-    >>> key_split('x-1-2-3')
-    'x'
-    >>> key_split(('x-2', 1))
-    'x'
-    >>> key_split(None)
-    'Other'
-    """
-    if isinstance(s, tuple):
-        return key_split(s[0])
-    try:
-        return s.split('-', 1)[0]
-    except:
-        return 'Other'
 
 
 class MultiProgress(Progress):
@@ -551,22 +484,6 @@ def progress(*futures, **kwargs):
         bar = TextProgressBar(futures, complete=complete)
         bar.start()
         bar._timer.join()
-
-
-def is_kernel():
-    """ Determine if we're running within an IPython kernel
-
-    >>> is_kernel()
-    False
-    """
-    # http://stackoverflow.com/questions/34091701/determine-if-were-in-an-ipython-notebook-session
-    if 'IPython' not in sys.modules:
-        # IPython hasn't been imported, definitely not
-        return False
-    from IPython import get_ipython
-    # check for `kernel` attribute on the IPython instance
-    return getattr(get_ipython(), 'kernel', None) is not None
-
 
 
 def format_time(t):

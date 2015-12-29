@@ -98,10 +98,8 @@ class Worker(Server):
 
     @gen.coroutine
     def _start(self, port=0):
-        while True:
-            with ignoring(OSError):
-                self.listen(port)
-                break
+        self.listen(port)
+
         logger.info('Start worker at             %s:%d', self.ip, self.port)
         logger.info('Waiting to connect to       %s:%d',
                     self.center.ip, self.center.port)

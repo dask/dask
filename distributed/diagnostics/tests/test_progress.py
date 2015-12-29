@@ -11,49 +11,9 @@ from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
         div, dec)
 from distributed.utils import All
 from distributed.utils_test import inc
-from distributed.diagnostics import (Progress, TextProgressBar, SchedulerPlugin,
-        ProgressWidget, MultiProgress, progress, dependent_keys)
-
-
-def test_diagnostic(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port), loop=loop)
-        yield s.sync_center()
-        done = s.start()
-        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
-        msg = yield report.get(); assert msg['op'] == 'stream-start'
-
-        class Counter(SchedulerPlugin):
-            def start(self, scheduler):
-                scheduler.add_plugin(self)
-                self.count = 0
-
-            def task_finished(self, scheduler, key, worker, nbytes):
-                self.count += 1
-
-        counter = Counter()
-        counter.start(s)
-
-        assert counter.count == 0
-        sched.put_nowait({'op': 'update-graph',
-               'dsk': {'x': (inc, 1),
-                       'y': (inc, 'x'),
-                       'z': (inc, 'y')},
-               'keys': ['z']})
-
-        while True:
-            msg = yield report.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
-                break
-
-        assert counter.count == 3
-
-        sched.put_nowait({'op': 'close'})
-        yield done
-
-    _test_cluster(f, loop)
-
+from distributed.diagnostics.progress import (Progress, TextProgressBar,
+        SchedulerPlugin, ProgressWidget, MultiProgress, progress,
+        dependent_keys)
 
 def test_dependent_keys():
     a, b, c, d, e, f, g = 'abcdefg'

@@ -3,7 +3,7 @@ from operator import add
 from time import time
 
 from dask.core import get_deps
-from toolz import merge, concat
+from toolz import merge, concat, valmap
 from tornado.queues import Queue
 from tornado.iostream import StreamClosedError
 from tornado.gen import TimeoutError
@@ -564,6 +564,11 @@ def test_monitor_resources(loop):
             assert set(s.resource_logs) == {a.address, b.address}
             assert all(len(v) == 3 for v in s.resource_logs.values())
 
+            d = s.diagnostic_resources(n=2)
+            assert set(d) == {a.worker_address, b.worker_address}
+            assert set(d[a.worker_address]).issubset({'cpu', 'memory', 'time'})
+            assert all(len(v) == 2 for v in d[a.worker_address].values())
+
             s.put({'op': 'close'})
             yield done
         finally:
@@ -678,4 +683,37 @@ def test_add_worker(loop):
         s.validate(allow_overlap=True)
 
         s.stop()
+    _test_cluster(f, loop)
+
+
+def test_feed(loop):
+    port = 8040
+    @gen.coroutine
+    def f(c, a, b):
+        s = Scheduler((c.ip, c.port))
+        yield s.sync_center()
+        done = s.start()
+        s.listen(port)
+
+        def initial(scheduler):
+            return scheduler.id
+
+        def func(scheduler):
+            return scheduler.processing, scheduler.stacks
+
+        stream = yield connect(s.center.ip, s.port)
+        yield write(stream, {'op': 'feed',
+                             'function': func,
+                             'initial': initial,
+                             'interval': 0.01})
+        response = yield read(stream)
+        assert response == s.id
+
+        for i in range(5):
+            response = yield read(stream)
+            expected = s.processing, s.stacks
+
+        stream.close()
+        s.stop()
+
     _test_cluster(f, loop)

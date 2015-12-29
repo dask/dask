@@ -8,6 +8,7 @@ import os
 import shutil
 import socket
 from time import time, sleep
+import uuid
 
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
@@ -69,7 +70,26 @@ def run_center(q):
     loop.start()
 
 
-def run_worker(port, center_port, **kwargs):
+def run_scheduler(q, center_port, **kwargs):
+    from distributed import Scheduler
+    from tornado.ioloop import IOLoop, PeriodicCallback
+    import logging
+    IOLoop.clear_instance()
+    loop = IOLoop(); loop.make_current()
+    PeriodicCallback(lambda: None, 500).start()
+    logging.getLogger("tornado").setLevel(logging.CRITICAL)
+
+    scheduler = Scheduler(('127.0.0.1', center_port), **kwargs)
+    scheduler.listen(0)
+
+    loop.run_sync(scheduler.sync_center)
+    done = scheduler.start()
+
+    q.put(scheduler.port)
+    loop.start()
+
+
+def run_worker(q, center_port, **kwargs):
     from distributed import Worker
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -79,11 +99,12 @@ def run_worker(port, center_port, **kwargs):
         PeriodicCallback(lambda: None, 500).start()
         logging.getLogger("tornado").setLevel(logging.CRITICAL)
         worker = Worker('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
-        worker.start(port)
+        loop.run_sync(lambda: worker._start(0))
+        q.put(worker.port)
         loop.start()
 
 
-def run_nanny(port, center_port, **kwargs):
+def run_nanny(q, center_port, **kwargs):
     from distributed import Nanny
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -93,11 +114,39 @@ def run_nanny(port, center_port, **kwargs):
         PeriodicCallback(lambda: None, 500).start()
         logging.getLogger("tornado").setLevel(logging.CRITICAL)
         worker = Nanny('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
-        loop.run_sync(lambda: worker._start(port))
+        loop.run_sync(lambda: worker._start(0))
+        q.put(worker.port)
         loop.start()
 
 
-_port = [8010]
+@contextmanager
+def scheduler(cport, **kwargs):
+    q = Queue()
+
+    proc = Process(target=run_scheduler, args=(q, cport), kwargs=kwargs)
+    proc.start()
+
+    sport = q.get()
+
+    s = rpc(ip='127.0.0.1', port=sport)
+    loop = IOLoop()
+    start = time()
+    while True:
+        ncores = loop.run_sync(s.ncores)
+        if ncores:
+            break
+        if time() - start > 5:
+            raise Exception("Timeout on cluster creation")
+        sleep(0.01)
+
+    try:
+        yield sport
+    finally:
+        loop = IOLoop()
+        with ignoring(socket.error, TimeoutError, StreamClosedError):
+            loop.run_sync(lambda: disconnect('127.0.0.1', sport), timeout=0.5)
+        proc.terminate()
+
 
 @contextmanager
 def cluster(nworkers=2, nanny=False):
@@ -105,8 +154,6 @@ def cluster(nworkers=2, nanny=False):
         _run_worker = run_nanny
     else:
         _run_worker = run_worker
-    _port[0] += 1
-    cport = _port[0]
     center_q = Queue()
     center = Process(target=run_center, args=(center_q,))
     center.start()
@@ -114,14 +161,17 @@ def cluster(nworkers=2, nanny=False):
 
     workers = []
     for i in range(nworkers):
-        _port[0] += 1
-        port = _port[0]
-        proc = Process(target=_run_worker, args=(port, cport),
-                        kwargs={'ncores': 1, 'local_dir': '_test_worker-%d' % port})
-        workers.append({'port': port, 'proc': proc})
+        q = Queue()
+        fn = '_test_worker-%s' % uuid.uuid1()
+        proc = Process(target=_run_worker, args=(q, cport),
+                        kwargs={'ncores': 1, 'local_dir': fn})
+        workers.append({'proc': proc, 'queue': q, 'dir': fn})
 
     for worker in workers:
         worker['proc'].start()
+
+    for worker in workers:
+        worker['port'] = worker['queue'].get()
 
     loop = IOLoop()
     c = rpc(ip='127.0.0.1', port=cport)
@@ -139,7 +189,8 @@ def cluster(nworkers=2, nanny=False):
         logger.debug("Closing out test cluster")
         for port in [cport] + [w['port'] for w in workers]:
             with ignoring(socket.error, TimeoutError, StreamClosedError):
-                loop.run_sync(lambda: disconnect('127.0.0.1', port), timeout=10)
+                loop.run_sync(lambda: disconnect('127.0.0.1', port),
+                              timeout=0.5)
         for proc in [center] + [w['proc'] for w in workers]:
             with ignoring(Exception):
                 proc.terminate()
@@ -171,7 +222,7 @@ def _test_cluster(f, loop=None, b_ip='127.0.0.1'):
     @gen.coroutine
     def g():
         c = Center('127.0.0.1')
-        c.listen(8017)
+        c.listen(0)
         a = Worker(c.ip, c.port, ncores=2, ip='127.0.0.1')
         yield a._start()
         b = Worker(c.ip, c.port, ncores=1, ip=b_ip)

@@ -766,7 +766,7 @@ def test_gather_then_submit_after_failed_workers(loop):
 
 def test_errors_dont_block(loop):
     c = Center('127.0.0.1')
-    c.listen(8017)
+    c.listen(0)
     w = Worker(c.ip, c.port, ncores=1, ip='127.0.0.1')
     e = Executor((c.ip, c.port), start=False, loop=loop)
     @gen.coroutine

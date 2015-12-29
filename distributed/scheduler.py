@@ -1,13 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, deque
+from datetime import datetime
 from functools import partial
 import logging
 from math import ceil
 from time import time
 import uuid
 
-from toolz import frequencies, memoize, concat, identity
+from toolz import frequencies, memoize, concat, identity, valmap
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -167,7 +168,10 @@ class Scheduler(Server):
         self.handlers = {'start-control': self.control_stream,
                          'scatter': self.scatter,
                          'register': self.add_worker,
-                         'gather': self.gather}
+                         'gather': self.gather,
+                         'feed': self.feed,
+                         'terminate': self.close,
+                         'ncores': self.get_ncores}
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
@@ -242,7 +246,7 @@ class Scheduler(Server):
             yield All(self.coroutines)
 
     @gen.coroutine
-    def close(self):
+    def close(self, stream=None):
         """ Send cleanup signal to all coroutines then wait until finished
 
         See Also
@@ -897,6 +901,31 @@ class Scheduler(Server):
                 set(self.processing) == \
                 set(self.nannies) == \
                 set(self.worker_queues))
+
+    def diagnostic_resources(self, n=100):
+        now = datetime.now()
+        workers = {(ip, nport): (ip, wport)
+                   for (ip, wport), nport in self.nannies.items()}
+        logs = {workers[nanny]: list(log)[-n:]
+                for nanny, log in self.resource_logs.items()}
+        return {worker: {'cpu': [d['cpu_percent'] for d in log],
+                         'memory': [d['memory_percent'] for d in log],
+                         'time': [(d['timestamp'] - now).total_seconds()
+                                  for d in log]}
+                for worker, log in logs.items()}
+
+    @gen.coroutine
+    def feed(self, stream, function=None, initial=None, interval=1, **kwargs):
+        if initial:
+            response = initial(self)
+            yield write(stream, response)
+        while True:
+            response = function(self)
+            yield write(stream, response)
+            yield gen.sleep(interval)
+
+    def get_ncores(self, stream=None):
+        return self.ncores
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
