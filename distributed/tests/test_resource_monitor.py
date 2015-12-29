@@ -5,7 +5,7 @@ from bokeh.plotting import Figure
 
 from tornado import gen
 from distributed import Executor
-from distributed.resource_monitor import ResourceMonitor
+from distributed.resource_monitor import ResourceMonitor, Occupancy
 from distributed.utils_test import (cluster, scheduler, slow, _test_cluster, loop, inc,
         div, dec)
 from time import time
@@ -34,3 +34,23 @@ def test_resource_monitor(loop):
 
                         assert isinstance(rm.figure, Figure)
                         rm.stream.close()
+
+
+def test_occupancy(loop):
+    with cluster(nanny=True) as (c, [a, b]):
+        with scheduler(c['port']) as sport:
+            rm = Occupancy(('127.0.0.1', sport), interval=0.01)
+            for k in ['host', 'processing', 'waiting']:
+                assert k in rm.cds.data
+
+            start = time()
+            while not rm.cds.data['host']:
+                loop.run_sync(lambda: gen.sleep(0.05))
+                assert time() < start + 2
+
+            assert (len(rm.cds.data['host']) ==
+                    len(rm.cds.data['processing']) ==
+                    len(rm.cds.data['waiting']) == 2)
+
+            assert isinstance(rm.figure, Figure)
+            rm.stream.close()
