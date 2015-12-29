@@ -1,16 +1,16 @@
-from math import log
 from toolz import get
 from tornado import gen
 
-from .core import connect, read, write, rpc
-from .utils import ignoring, is_kernel, key_split
-from .executor import default_executor
-from .scheduler import Scheduler
+from ..core import connect, read, write, rpc
+from ..utils import ignoring, is_kernel, key_split
+from ..executor import default_executor
+from ..scheduler import Scheduler
 
 with ignoring(ImportError):
     from bokeh.plotting import figure, Figure, show, output_notebook, ColumnDataSource
     from bokeh.models import HoverTool, LogAxis, Range1d
     from bokeh.io import curstate, push_notebook
+
 
 class ResourceMonitor(object):
     def __init__(self, addr=None, interval=1.00):

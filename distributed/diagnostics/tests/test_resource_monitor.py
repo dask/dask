@@ -5,7 +5,7 @@ from bokeh.plotting import Figure
 
 from tornado import gen
 from distributed import Executor
-from distributed.resource_monitor import ResourceMonitor, Occupancy
+from distributed.diagnostics.resource_monitor import ResourceMonitor, Occupancy
 from distributed.utils_test import (cluster, scheduler, slow, _test_cluster, loop, inc,
         div, dec)
 from time import time
