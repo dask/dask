@@ -392,10 +392,9 @@ def unpack_remotedata(o):
     """
     if isinstance(o, WrappedKey):
         return o.key, {o.key}
-    with ignoring(Exception):
+    if isinstance(o, (tuple, list, set, frozenset)):
         if not o:
             return o, set()
-    if isinstance(o, (tuple, list, set, frozenset)):
         out, sets = zip(*map(unpack_remotedata, o))
         return type(o)(out), set.union(*sets)
     elif isinstance(o, dict):
@@ -403,7 +402,7 @@ def unpack_remotedata(o):
             values, sets = zip(*map(unpack_remotedata, o.values()))
             return dict(zip(o.keys(), values)), set.union(*sets)
         else:
-            return dict(), set()
+            return o, set()
     else:
         return o, set()
 
