@@ -32,28 +32,25 @@ class ResourceMonitor(object):
 
         self.cds = ColumnDataSource({k: []
             for k in ['host', 'cpu', 'memory',
-                      'zero', 'left', 'right']})
+                      'zero', 'left', 'mid', 'right']})
 
         self.display_notebook = False
 
-        hover = HoverTool(
-            tooltips=[
-                ("host", "@host"),
-                ("cpu", "@cpu"),
-                ("memory", "@memory"),
-            ]
-        )
 
-        self.figure = figure(height=200, width=800,
-                             y_range=(0, 100), tools=[hover])
+        self.figure = figure(height=200, width=800, y_range=(0, 100))
         self.figure.logo = None
 
-        self.figure.quad(legend='cpu', left='left', right='right',
+        cpu = self.figure.quad(legend='cpu', left='left', right='mid',
                          bottom='zero', top='cpu', source=self.cds,
                          color=(0, 0, 255, 0.5))
-        self.figure.quad(legend='memory', left='left', right='right',
+        memory = self.figure.quad(legend='memory', left='mid', right='right',
                          bottom='zero', top='memory', source=self.cds,
                          color=(255, 0, 0, 0.5))
+
+        self.figure.add_tools(HoverTool(renderers=[cpu, memory],
+                                        tooltips=[("host", "@host"),
+                                                  ("cpu", "@cpu"),
+                                                  ("memory", "@memory")]))
 
         self.future = self.update(addr, interval)
 
@@ -105,6 +102,7 @@ class ResourceMonitor(object):
 
             self.cds.data['zero'] = [0] * n
             self.cds.data['left'] = [i + 0.00 for i in range(n)]
+            self.cds.data['mid'] = [i + 0.50 for i in range(n)]
             self.cds.data['right'] = [i + 1.00 for i in range(n)]
 
             if self.display_notebook:
@@ -131,32 +129,29 @@ class Occupancy(object):
 
         self.cds = ColumnDataSource({k: []
             for k in ['host', 'processing', 'stacks', 'waiting',
-                      'zero', 'left', 'right']})
+                      'zero', 'left', 'mid', 'right']})
 
         self.display_notebook = False
 
-        hover = HoverTool(
-            tooltips=[
-                ("host", "@host"),
-                ("processing", "@processing"),
-                ("waiting", "@waiting"),
-            ]
-        )
 
         left_range = Range1d(0, 1)
-        self.figure = figure(height=200, width=800, tools=[hover],
-                             y_range=left_range)
+        self.figure = figure(height=200, width=800, y_range=left_range)
         self.figure.extra_y_ranges = {'waiting': Range1d(start=0, end=1)}
         self.figure.add_layout(LogAxis(y_range_name='waiting',
                                        axis_label='waiting'), 'right')
         self.figure.logo = None
 
-        self.figure.quad(legend='processing', left='left', right='right',
-                         bottom='zero', top='nprocessing', source=self.cds,
-                         color=(0, 0, 255, 0.5))
-        self.figure.quad(legend='waiting', left='left', right='right',
-                         bottom='zero', top='waiting', source=self.cds,
-                         color=(255, 0, 0, 0.5))
+        proc = self.figure.quad(legend='processing', left='left', right='mid',
+                              bottom='zero', top='nprocessing', source=self.cds,
+                              color=(0, 0, 255, 0.5))
+        wait = self.figure.quad(legend='waiting', left='mid', right='right',
+                              bottom='zero', top='waiting', source=self.cds,
+                              color=(255, 0, 0, 0.5))
+
+        self.figure.add_tools(HoverTool(renderers=[proc, wait],
+                                        tooltips=[("host", "@host"),
+                                                  ("processing", "@processing"),
+                                                  ("waiting", "@waiting")]))
 
         self.future = self.update(addr, interval)
 
@@ -213,6 +208,7 @@ class Occupancy(object):
 
             self.cds.data['zero'] = [0] * n
             self.cds.data['left'] = [i + 0.00 for i in range(n)]
+            self.cds.data['mid'] = [i + 0.50 for i in range(n)]
             self.cds.data['right'] = [i + 1.00 for i in range(n)]
 
             if self.display_notebook:
