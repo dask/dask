@@ -467,13 +467,15 @@ class _Frame(Base):
         func = getattr(self._partition_type, 'fillna')
         return map_partitions(func, self.column_info, self, value)
 
-    def sample(self, frac, random_state=None):
+    def sample(self, frac, replace=False, random_state=None):
         """ Random sample of items
 
         Parameters
         ----------
         frac : float, optional
             Fraction of axis items to return.
+        replace: boolean, optional
+            Sample with or without replacement. Default = False.
         random_state: int or np.random.RandomState
             If int create a new RandomState with this as the seed
         Otherwise draw from the passed RandomState
@@ -487,14 +489,15 @@ class _Frame(Base):
         if random_state is None:
             random_state = np.random.randint(np.iinfo(np.int32).max)
 
-        name = 'sample-' + tokenize(self, frac, random_state)
+        name = 'sample-' + tokenize(self, frac, replace, random_state)
         func = getattr(self._partition_type, 'sample')
 
         seeds = different_seeds(self.npartitions, random_state)
 
         dsk = dict(((name, i),
                    (apply, func, (tuple, [(self._name, i)]),
-                       {'frac': frac, 'random_state': seed}))
+                       {'frac': frac, 'random_state': seed,
+                        'replace': replace}))
                    for i, seed in zip(range(self.npartitions), seeds))
 
         return self._constructor(merge(self.dask, dsk), name,

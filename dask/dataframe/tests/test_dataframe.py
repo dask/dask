@@ -2156,6 +2156,15 @@ def test_sample():
     assert a.sample(0.5)._name != a.sample(0.5)._name
 
 
+def test_sample_without_replacement():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+    b = a.sample(0.7, replace=False)
+    bb = b.index.compute()
+    assert len(bb) == len(set(bb))
+
+
 def test_datetime_accessor():
     df = pd.DataFrame({'x': [1, 2, 3, 4]})
     df['x'] = df.x.astype('M8[us]')
