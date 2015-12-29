@@ -13,6 +13,15 @@ with ignoring(ImportError):
 
 
 class ResourceMonitor(object):
+    """ Display current CPU and Memory resources on each worker
+
+    Parameters
+    ----------
+    addr: tuple, optional
+        (ip, port) of scheduler.  Defaults to scheduler of recent Executor
+    interval: Number, optional
+        Interval between updates.  Defaults to 1s
+    """
     def __init__(self, addr=None, interval=1.00):
         if addr is None:
             scheduler = default_executor().scheduler
@@ -46,22 +55,28 @@ class ResourceMonitor(object):
                          bottom='zero', top='memory', source=self.cds,
                          color=(255, 0, 0, 0.5))
 
-        self.future = self.coroutine(addr, interval)
+        self.future = self.update(addr, interval)
 
         if is_kernel() and not curstate().notebook:
             output_notebook()
             assert curstate().notebook
-
 
     def _ipython_display_(self, **kwargs):
         show(self.figure)
         self.display_notebook = True
 
     @gen.coroutine
-    def coroutine(self, addr, interval):
+    def update(self, addr, interval):
+        """ Query the Scheduler, update the figure
+
+        This opens a connection to the scheduler, sends it a function to run
+        periodically, streams the results back and uses those results to update
+        the bokeh figure
+        """
         self.stream = yield connect(*addr)
 
         def func(scheduler):
+            """ Get CPU and Memory usage on each worker """
             workers = [k for k, v in sorted(scheduler.ncores.items(),
                                             key=lambda x: x[0], reverse=True)]
             nannies = [(ip, scheduler.nannies[(ip, port)])
@@ -97,6 +112,15 @@ class ResourceMonitor(object):
 
 
 class Occupancy(object):
+    """ Display the tasks running and waiting on each worker
+
+    Parameters
+    ----------
+    addr: tuple, optional
+        (ip, port) of scheduler.  Defaults to scheduler of recent Executor
+    interval: Number, optional
+        Interval between updates.  Defaults to 1s
+    """
     def __init__(self, addr=None, interval=1.00):
         if addr is None:
             scheduler = default_executor().scheduler
@@ -134,7 +158,7 @@ class Occupancy(object):
                          bottom='zero', top='waiting', source=self.cds,
                          color=(255, 0, 0, 0.5))
 
-        self.future = self.coroutine(addr, interval)
+        self.future = self.update(addr, interval)
 
         if is_kernel() and not curstate().notebook:
             output_notebook()
@@ -145,10 +169,17 @@ class Occupancy(object):
         self.display_notebook = True
 
     @gen.coroutine
-    def coroutine(self, addr, interval):
+    def update(self, addr, interval):
+        """ Query the Scheduler, update the figure
+
+        This opens a connection to the scheduler, sends it a function to run
+        periodically, streams the results back and uses those results to update
+        the bokeh figure
+        """
         self.stream = yield connect(*addr)
 
         def func(scheduler):
+            """ Get tasks running or waiting on each worker """
             workers = [k for k, v in sorted(scheduler.ncores.items(),
                                             key=lambda x: x[0], reverse=True)]
             processing = [list(map(key_split, scheduler.processing[w]))
