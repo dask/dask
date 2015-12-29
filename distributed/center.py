@@ -11,7 +11,7 @@ from tornado.gen import Return
 from tornado.iostream import StreamClosedError
 
 from .core import Server, read, write, rpc, pingpong, send_recv
-from .utils import ignoring, ignore_exceptions, All
+from .utils import ignoring, ignore_exceptions, All, get_ip
 
 
 logger = logging.getLogger(__name__)

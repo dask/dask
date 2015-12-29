@@ -17,7 +17,7 @@ from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 
-from .client import _gather, pack_data
+from .client import _gather, pack_data, gather_from_workers
 from .compatibility import reload
 from .core import rpc, Server, pingpong
 from .sizeof import sizeof
@@ -145,7 +145,8 @@ class Worker(Server):
         return (self.ip, self.port)
 
     @gen.coroutine
-    def compute(self, stream, function=None, key=None, args=(), kwargs={}, needed=[]):
+    def compute(self, stream, function=None, key=None, args=(), kwargs={},
+            needed=[], who_has=None):
         """ Execute function """
         needed = [n for n in needed if n not in self.data]
 
@@ -153,11 +154,15 @@ class Worker(Server):
         if needed:
             logger.info("gather %d keys from peers: %s", len(needed), str(needed))
             try:
-                other = yield _gather(self.center, needed=needed)
+                if who_has is not None:
+                    other = yield gather_from_workers(who_has)
+                else:
+                    other = yield _gather(self.center, needed=needed)
+                    other = dict(zip(needed, other))
             except KeyError as e:
                 logger.warn("Could not find data during gather in compute", e)
                 raise Return((b'missing-data', e))
-            data2 = merge(self.data, dict(zip(needed, other)))
+            data2 = merge(self.data, other)
         else:
             data2 = self.data
 

@@ -9,7 +9,7 @@ from distributed.core import read, write, rpc, connect
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring
 from distributed.worker import Worker
-from distributed.utils_test import loop, _test_cluster
+from distributed.utils_test import loop, _test_cluster, inc
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -71,6 +71,33 @@ def test_worker(loop):
         yield b._close()
 
     _test_cluster(f)
+
+
+def test_compute_who_has(loop):
+    @gen.coroutine
+    def f():
+        c = Center(ip='127.0.0.1')
+        c.listen(0)
+        x = Worker(c.ip, c.port, ip='127.0.0.1')
+        y = Worker(c.ip, c.port, ip='127.0.0.1')
+        z = Worker(c.ip, c.port, ip='127.0.0.1')
+        x.data['a'] = 1
+        y.data['a'] = 2
+        yield [x._start(), y._start(), z._start()]
+
+        zz = rpc(ip=z.ip, port=z.port)
+        yield zz.compute(function=inc, args=('a',), needed=['a'],
+                         who_has={'a': {x.address}}, key='b')
+        assert z.data['b'] == 2
+
+        yield zz.compute(function=inc, args=('a',), needed=['a'],
+                         who_has={'a': {y.address}}, key='c')
+        assert z.data['c'] == 3
+
+        yield [x._close(), y._close(), z._close()]
+        zz.close_streams()
+
+    loop.run_sync(f, timeout=5)
 
 
 def test_workers_update_center(loop):
