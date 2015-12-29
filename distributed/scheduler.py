@@ -344,7 +344,8 @@ class Scheduler(Server):
                     {'op': 'compute-task',
                      'key': key,
                      'task': self.dask[key],
-                     'needed': self.dependencies[key]})
+                     'who_has': {dep: self.who_has[dep] for dep in
+                                 self.dependencies[key]}})
 
     def seed_ready_tasks(self, keys=None):
         """ Distribute many leaf tasks among workers
@@ -737,7 +738,7 @@ class Scheduler(Server):
                 break
             if msg['op'] == 'compute-task':
                 key = msg['key']
-                needed = msg['needed']
+                who_has = msg['who_has']
                 task = msg['task']
                 if not istask(task):
                     response, content = yield worker.update_data(data={key: task})
@@ -746,7 +747,7 @@ class Scheduler(Server):
                 else:
                     response, content = yield worker.compute(function=execute_task,
                                                              args=(task,),
-                                                             needed=needed,
+                                                             who_has=who_has,
                                                              key=key,
                                                              kwargs={})
                     if response == b'OK':

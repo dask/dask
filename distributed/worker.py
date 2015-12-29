@@ -151,7 +151,7 @@ class Worker(Server):
         needed = [n for n in needed if n not in self.data]
 
         # gather data from peers
-        if needed:
+        if needed or who_has:
             logger.info("gather %d keys from peers: %s", len(needed), str(needed))
             try:
                 if who_has is not None:
