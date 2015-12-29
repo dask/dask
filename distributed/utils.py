@@ -169,6 +169,25 @@ def _deps(dsk, arg):
     return [arg]
 
 
+def key_split(s):
+    """
+    >>> key_split('x-1')
+    'x'
+    >>> key_split('x-1-2-3')
+    'x'
+    >>> key_split(('x-2', 1))
+    'x'
+    >>> key_split(None)
+    'Other'
+    """
+    if isinstance(s, tuple):
+        return key_split(s[0])
+    try:
+        return s.split('-', 1)[0]
+    except:
+        return 'Other'
+
+
 @contextmanager
 def log_errors():
     try:

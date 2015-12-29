@@ -8,7 +8,7 @@ import dask
 from toolz import valmap, groupby, concat
 from tornado.ioloop import PeriodicCallback, IOLoop
 
-from .utils import ignoring, sync, is_kernel
+from .utils import ignoring, sync, is_kernel, key_split
 from .executor import default_executor
 
 
@@ -203,25 +203,6 @@ class Progress(SchedulerPlugin):
     @property
     def elapsed(self):
         return default_timer() - self._start_time
-
-
-def key_split(s):
-    """
-    >>> key_split('x-1')
-    'x'
-    >>> key_split('x-1-2-3')
-    'x'
-    >>> key_split(('x-2', 1))
-    'x'
-    >>> key_split(None)
-    'Other'
-    """
-    if isinstance(s, tuple):
-        return key_split(s[0])
-    try:
-        return s.split('-', 1)[0]
-    except:
-        return 'Other'
 
 
 class MultiProgress(Progress):
