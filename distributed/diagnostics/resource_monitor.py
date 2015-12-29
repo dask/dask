@@ -8,7 +8,7 @@ from ..scheduler import Scheduler
 
 with ignoring(ImportError):
     from bokeh.plotting import figure, Figure, show, output_notebook, ColumnDataSource
-    from bokeh.models import HoverTool, LogAxis, Range1d
+    from bokeh.models import HoverTool, LinearAxis, Range1d
     from bokeh.io import curstate, push_notebook
 
 
@@ -137,8 +137,8 @@ class Occupancy(object):
         left_range = Range1d(0, 1)
         self.figure = figure(height=200, width=800, y_range=left_range)
         self.figure.extra_y_ranges = {'waiting': Range1d(start=0, end=1)}
-        self.figure.add_layout(LogAxis(y_range_name='waiting',
-                                       axis_label='waiting'), 'right')
+        self.figure.add_layout(LinearAxis(y_range_name='waiting',
+                                          axis_label='waiting'), 'right')
         self.figure.logo = None
 
         proc = self.figure.quad(legend='processing', left='left', right='mid',
@@ -146,7 +146,7 @@ class Occupancy(object):
                               color=(0, 0, 255, 0.5))
         wait = self.figure.quad(legend='waiting', left='mid', right='right',
                               bottom='zero', top='waiting', source=self.cds,
-                              color=(255, 0, 0, 0.5))
+                              y_range_name='waiting', color=(255, 0, 0, 0.5))
 
         self.figure.add_tools(HoverTool(renderers=[proc, wait],
                                         tooltips=[("host", "@host"),
