@@ -15,11 +15,10 @@ def test_resource_monitor(loop):
     with cluster(nanny=True) as (c, [a, b]):
         with scheduler(c['port']) as sport:
             with Executor(('127.0.0.1', sport)) as e:
-                rm1 = ResourceMonitor(notebook=False, interval=0.01)
+                rm1 = ResourceMonitor(interval=0.01)
                 with Executor(('127.0.0.1', c['port'])) as e:
-                    rm2 = ResourceMonitor(notebook=False, interval=0.01)
-                    rm3 = ResourceMonitor(('127.0.0.1', sport), notebook=False,
-                                          interval=0.01)
+                    rm2 = ResourceMonitor(interval=0.01)
+                    rm3 = ResourceMonitor(('127.0.0.1', sport), interval=0.01)
                     for rm in [rm1, rm2, rm3]:
                         for k in ['cpu', 'memory', 'host']:
                             assert k in rm.cds.data

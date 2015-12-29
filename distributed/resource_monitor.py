@@ -2,17 +2,17 @@ from toolz import get
 from tornado import gen
 
 from .core import connect, read, write, rpc
-from .utils import ignoring
+from .utils import ignoring, is_kernel
 from .executor import default_executor
 from .scheduler import Scheduler
 
 with ignoring(ImportError):
     from bokeh.plotting import figure, Figure, show, output_notebook, ColumnDataSource
     from bokeh.models import HoverTool
-
+    from bokeh.io import curstate
 
 class ResourceMonitor(object):
-    def __init__(self, addr=None, interval=1.00, notebook=True):
+    def __init__(self, addr=None, interval=1.00):
         if addr is None:
             scheduler = default_executor().scheduler
             if isinstance(scheduler, rpc):
@@ -24,7 +24,7 @@ class ResourceMonitor(object):
             for k in ['host', 'cpu', 'memory',
                       'zero', 'left', 'right']})
 
-        self.notebook = notebook
+        self.display_notebook = False
 
         hover = HoverTool(
             tooltips=[
@@ -47,8 +47,14 @@ class ResourceMonitor(object):
 
         self.future = self.coroutine(addr, interval)
 
+        if is_kernel() and not curstate().notebook:
+            output_notebook()
+            assert curstate().notebook
+
+
     def _ipython_display_(self, **kwargs):
-        return show(self.figure)
+        show(self.figure)
+        self.display_notebook = True
 
     @gen.coroutine
     def coroutine(self, addr, interval):
@@ -85,5 +91,5 @@ class ResourceMonitor(object):
             self.cds.data['left'] = [i + 0.00 for i in range(n)]
             self.cds.data['right'] = [i + 1.00 for i in range(n)]
 
-            if self.notebook:
+            if self.display_notebook:
                 self.cds.push_notebook()
