@@ -20,7 +20,7 @@ from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server)
-from .client import unpack_remotedata, scatter_to_workers, _gather
+from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
 from .utils import All, ignoring, clear_queue, _deps
 
 
@@ -115,7 +115,7 @@ class Scheduler(Server):
     *  **loop:** ``IOLoop``:
         The running Torando IOLoop
     """
-    def __init__(self, center, delete_batch_time=1, loop=None,
+    def __init__(self, center=None, delete_batch_time=1, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
         self.scheduler_queues = [Queue()]
@@ -125,7 +125,10 @@ class Scheduler(Server):
         self.status = None
         self.coroutines = []
 
-        self.center = coerce_to_rpc(center)
+        if center:
+            self.center = coerce_to_rpc(center)
+        else:
+            self.center = None
 
         self.dask = dict()
         self.dependencies = dict()
@@ -168,6 +171,7 @@ class Scheduler(Server):
         self.handlers = {'start-control': self.control_stream,
                          'scatter': self.scatter,
                          'register': self.add_worker,
+                         'unregister': self.remove_worker,
                          'gather': self.gather,
                          'feed': self.feed,
                          'terminate': self.close,
@@ -178,9 +182,11 @@ class Scheduler(Server):
 
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """
-        return {'type': type(self).__name__, 'id': self.id,
-                'center': (self.center.ip, self.center.port),
-                'workers': list(self.ncores)}
+        d = {'type': type(self).__name__, 'id': self.id,
+             'workers': list(self.ncores)}
+        if self.center:
+            d['center'] = (self.center.ip, self.center.port)
+        return d
 
     def put(self, msg):
         """ Place a message into the scheduler's queue """
@@ -255,8 +261,9 @@ class Scheduler(Server):
         """
         yield self.cleanup()
         yield self.finished()
-        yield self.center.close(close=True)
-        self.center.close_streams()
+        if self.center:
+            yield self.center.close(close=True)
+            self.center.close_streams()
 
     @gen.coroutine
     def cleanup(self):
@@ -484,7 +491,7 @@ class Scheduler(Server):
                 'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
                 self.in_play)
 
-    def remove_worker(self, address=None, heal=True):
+    def remove_worker(self, stream=None, address=None, heal=True):
         """ Mark that a worker no longer seems responsive
 
         See Also
@@ -804,10 +811,11 @@ class Scheduler(Server):
             if batch and time() - last > self.delete_batch_time:  # One second batching
                 logger.debug("Ask center to delete %d keys", len(batch))
                 last = time()
-                yield self.center.delete_data(keys=batch)
+                if self.center:
+                    yield self.center.delete_data(keys=batch)
                 batch = list()
 
-        if batch:
+        if batch and self.center:
             yield self.center.delete_data(keys=batch)
 
         self.put({'op': 'delete-finished'})
@@ -832,7 +840,7 @@ class Scheduler(Server):
                              "  e.sync_center()")
         ncores = workers if workers is not None else self.ncores
         remotes, who_has, nbytes = yield scatter_to_workers(
-                                            self.center, ncores, data)
+                                            self.center, ncores, data)  # TODO
         self.update_data(who_has=who_has, nbytes=nbytes)
 
         raise gen.Return(remotes)
@@ -841,10 +849,10 @@ class Scheduler(Server):
     def gather(self, stream=None, keys=None):
         """ Collect data in from workers """
         keys = list(keys)
+        who_has = {key: self.who_has[key] for key in keys}
 
         try:
-            data = yield _gather(self.center, keys)
-            data = dict(zip(keys, data))
+            data = yield gather_from_workers(who_has)
             result = (b'OK', data)
         except KeyError as e:
             logger.debug("Couldn't gather keys %s", e)

@@ -112,6 +112,8 @@ class Center(Server):
     def register(self, stream, address=None, keys=(), ncores=None,
                  nanny_port=None):
         self.has_what[address] = set(keys)
+        for key in keys:
+            self.who_has[key].add(address)
         self.ncores[address] = ncores
         self.nannies[address] = nanny_port
         logger.info("Register %s", str(address))

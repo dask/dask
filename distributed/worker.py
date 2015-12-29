@@ -107,7 +107,7 @@ class Worker(Server):
             try:
                 resp = yield self.center.register(
                         ncores=self.ncores, address=(self.ip, self.port),
-                        nanny_port=self.nanny_port)
+                        nanny_port=self.nanny_port, keys=list(self.data))
                 break
             except OSError:
                 logger.debug("Unable to register with center.  Waiting")

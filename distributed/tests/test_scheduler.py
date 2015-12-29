@@ -633,20 +633,19 @@ def test_server_listens_to_other_ops(loop):
 
 
 def test_remove_worker_from_scheduler(loop):
-    port = 8040
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
         yield s.sync_center()
         done = s.start()
-        s.listen(port)
+        s.listen(0)
 
         dsk = {('x', i): (inc, i) for i in range(10)}
         s.update_graph(dsk=dsk, keys=list(dsk))
         assert s.stacks[a.address]
 
         assert a.address in s.worker_queues
-        s.remove_worker(a.address)
+        s.remove_worker(address=a.address)
         assert a.address not in s.ncores
         assert len(s.stacks[b.address]) + len(s.processing[b.address]) == \
                 len(dsk)  # b owns everything
@@ -658,13 +657,12 @@ def test_remove_worker_from_scheduler(loop):
 
 
 def test_add_worker(loop):
-    port = 8040
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
         yield s.sync_center()
         done = s.start()
-        s.listen(port)
+        s.listen(0)
 
         w = Worker(c.ip, c.port, ncores=3, ip='127.0.0.4')
         w.data[('x', 5)] = 6
@@ -687,13 +685,12 @@ def test_add_worker(loop):
 
 
 def test_feed(loop):
-    port = 8040
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port))
         yield s.sync_center()
         done = s.start()
-        s.listen(port)
+        s.listen(0)
 
         def initial(scheduler):
             return scheduler.id
@@ -717,3 +714,37 @@ def test_feed(loop):
         s.stop()
 
     _test_cluster(f, loop)
+
+
+def test_scheduler_as_center(loop):
+    @gen.coroutine
+    def f():
+        s = Scheduler()
+        s.listen(0)
+        done = s.start()
+        a = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=1)
+        a.data.update({'x': 1, 'y': 2})
+        b = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=2)
+        b.data.update({'y': 2, 'z': 3})
+        c = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=3)
+        yield [w._start() for w in [a, b, c]]
+
+        assert s.ncores == {w.address: w.ncores for w in [a, b, c]}
+        assert s.who_has == {'x': {a.address},
+                             'y': {a.address, b.address},
+                             'z': {b.address}}
+
+        s.update_graph(dsk={'a': (inc, 1)},
+                       keys=['a'])
+        while not s.who_has['a']:
+            yield gen.sleep(0.01)
+        assert 'a' in a.data or 'a' in b.data or 'a' in c.data
+
+        yield [w._close() for w in [a, b, c]]
+
+        assert s.ncores == {}
+        assert s.who_has == {}
+
+        yield s.close()
+
+    loop.run_sync(f, timeout=10)

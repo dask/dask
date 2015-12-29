@@ -255,8 +255,11 @@ class Executor(object):
                 self.scheduler = r
                 self.scheduler_stream = yield connect(*self._start_arg)
                 yield write(self.scheduler_stream, {'op': 'start-control'})
-                cip, cport = ident['center']
-                self.center = rpc(ip=cip, port=cport)
+                if 'center' in ident:
+                    cip, cport = ident['center']
+                    self.center = rpc(ip=cip, port=cport)
+                else:
+                    self.center = None
             else:
                 raise ValueError("Unknown Type")
 

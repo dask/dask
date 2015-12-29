@@ -15,7 +15,7 @@ ip = get_ip()
 
 
 @click.command()
-@click.argument('center', type=str)
+@click.argument('center', type=str, default='')
 @click.option('--port', type=int, default=8786, help="Serving port")
 def go(center, port):
     while True:
@@ -28,15 +28,10 @@ def go(center, port):
             sock.close()
             break
 
-    try:
-        center_ip, center_port = center.split(':')
-        center_port = int(center_port)
-    except IndexError:
-        logger.info("Usage:  dscheduler center_host:center_port")
-
     loop = IOLoop.current()
-    scheduler = Scheduler((center_ip, center_port))
-    loop.run_sync(scheduler.sync_center)
+    scheduler = Scheduler(center)
+    if center:
+        loop.run_sync(scheduler.sync_center)
     done = scheduler.start()
     scheduler.listen(port)
 
