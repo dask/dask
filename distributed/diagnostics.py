@@ -8,7 +8,7 @@ import dask
 from toolz import valmap, groupby, concat
 from tornado.ioloop import PeriodicCallback, IOLoop
 
-from .utils import ignoring, sync
+from .utils import ignoring, sync, is_kernel
 from .executor import default_executor
 
 
@@ -551,22 +551,6 @@ def progress(*futures, **kwargs):
         bar = TextProgressBar(futures, complete=complete)
         bar.start()
         bar._timer.join()
-
-
-def is_kernel():
-    """ Determine if we're running within an IPython kernel
-
-    >>> is_kernel()
-    False
-    """
-    # http://stackoverflow.com/questions/34091701/determine-if-were-in-an-ipython-notebook-session
-    if 'IPython' not in sys.modules:
-        # IPython hasn't been imported, definitely not
-        return False
-    from IPython import get_ipython
-    # check for `kernel` attribute on the IPython instance
-    return getattr(get_ipython(), 'kernel', None) is not None
-
 
 
 def format_time(t):

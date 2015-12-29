@@ -1,4 +1,4 @@
-from distributed.utils import All, sync
+from distributed.utils import All, sync, is_kernel
 from distributed.utils_test import loop, inc, throws
 import pytest
 from threading import Thread
@@ -73,3 +73,8 @@ def test_sync_error(loop):
 
     loop.add_callback(e.set)
     thread.join()
+
+
+def test_is_kernel():
+    pytest.importorskip('IPython')
+    assert is_kernel() is False
