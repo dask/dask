@@ -69,7 +69,7 @@ def test_optimize_slicing():
     expected = {'a': (range, 10),
                 'e': (getarray, 'a', (slice(None, 5, None),))}
 
-    assert remove_full_slices(dsk) == expected
+    assert remove_full_slices(dsk, []) == expected
 
 
 def test_fuse_slice():

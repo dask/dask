@@ -1752,3 +1752,13 @@ def test_dont_fuse_outputs():
 
     a = da.Array(dsk, 'x', chunks=(2,), shape=(4,))
     eq(a, np.array([1, 2, 2, 3], dtype=a.dtype))
+
+
+def test_dont_dealias_outputs():
+    dsk = {('x', 0, 0): np.ones((2, 2)),
+           ('x', 0, 1): np.ones((2, 2)),
+           ('x', 1, 0): np.ones((2, 2)),
+           ('x', 1, 1): ('x', 0, 0)}
+
+    a = da.Array(dsk, 'x', chunks=(2, 2), shape=(4, 4))
+    eq(a, np.ones((4, 4)))

@@ -18,10 +18,11 @@ def optimize(dsk, keys, **kwargs):
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
+    keys = list(flatten(keys))
     fast_functions=kwargs.get('fast_functions',
                              set([getarray, getitem, np.transpose]))
-    dsk2 = cull(dsk, list(flatten(keys)))
-    dsk3 = remove_full_slices(dsk2)
+    dsk2 = cull(dsk, keys)
+    dsk3 = remove_full_slices(dsk2, keys)
     dsk4 = fuse(dsk3, keys)
     dsk5 = valmap(rewrite_rules.rewrite, dsk4)
     dsk6 = inline_functions(dsk5, fast_functions=fast_functions)
@@ -45,7 +46,7 @@ def is_full_slice(task):
              all(ind == slice(None, None, None) for ind in task[2])))
 
 
-def remove_full_slices(dsk):
+def remove_full_slices(dsk, keys):
     """ Remove full slices from dask
 
     See Also:
@@ -67,7 +68,7 @@ def remove_full_slices(dsk):
     full_slice_keys = set(k for k, task in dsk.items() if is_full_slice(task))
     dsk2 = dict((k, task[1] if k in full_slice_keys else task)
                  for k, task in dsk.items())
-    dsk3 = dealias(dsk2)
+    dsk3 = dealias(dsk2, keys)
     return dsk3
 
 

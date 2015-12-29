@@ -209,6 +209,19 @@ def test_dealias():
     assert dealias(dsk)  == expected
 
 
+def test_dealias_keys():
+    dsk = {'a': (inc, 1),
+           'b': 'a',
+           'c': (inc, 2),
+           'd': 'c'}
+
+    assert dealias(dsk) == {'b': (inc, 1), 'd': (inc, 2)}
+
+    assert dealias(dsk, keys=['a', 'b', 'd']) == {'a': (inc, 1),
+                                                  'b': (identity, 'a'),
+                                                  'd': (inc, 2)}
+
+
 def test_equivalent():
     t1 = (add, 'a', 'b')
     t2 = (add, 'x', 'y')
