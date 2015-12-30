@@ -146,7 +146,7 @@ class Worker(Server):
 
     @gen.coroutine
     def compute(self, stream, function=None, key=None, args=(), kwargs={},
-            needed=[], who_has=None):
+            needed=[], who_has=None, report=True):
         """ Execute function """
         needed = [n for n in needed if n not in self.data]
 
@@ -196,11 +196,12 @@ class Worker(Server):
             result = future.result()
             logger.info("Finish job %d: %s - %s", i, funcname(function), key)
             self.data[key] = result
-            response = yield self.center.add_keys(address=(self.ip, self.port),
-                                                  keys=[key])
-            if not response == b'OK':
-                logger.warn('Could not report results of work to center: %s',
-                            response.decode())
+            if report:
+                response = yield self.center.add_keys(address=(self.ip, self.port),
+                                                      keys=[key])
+                if not response == b'OK':
+                    logger.warn('Could not report results to center: %s',
+                                response.decode())
             out = (b'OK', {'nbytes': sizeof(result)})
         except Exception as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
