@@ -259,7 +259,7 @@ class Executor(object):
                     cip, cport = ident['center']
                     self.center = rpc(ip=cip, port=cport)
                 else:
-                    self.center = None
+                    self.center = self.scheduler
             else:
                 raise ValueError("Unknown Type")
 

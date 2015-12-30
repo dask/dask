@@ -21,7 +21,7 @@ from dask.order import order
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server)
 from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
-from .utils import All, ignoring, clear_queue, _deps
+from .utils import All, ignoring, clear_queue, _deps, get_ip
 
 
 logger = logging.getLogger(__name__)
@@ -117,13 +117,14 @@ class Scheduler(Server):
     """
     def __init__(self, center=None, delete_batch_time=1, loop=None,
             resource_interval=1, resource_log_size=1000,
-            max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
+            max_buffer_size=MAX_BUFFER_SIZE, ip=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
         self.delete_queue = Queue()
         self.streams = []
         self.status = None
         self.coroutines = []
+        self.ip = ip or get_ip()
 
         if center:
             self.center = coerce_to_rpc(center)
@@ -175,10 +176,15 @@ class Scheduler(Server):
                          'gather': self.gather,
                          'feed': self.feed,
                          'terminate': self.close,
+                         'broadcast': self.broadcast,
                          'ncores': self.get_ncores}
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
+
+    @property
+    def address(self):
+        return (self.ip, self.port)
 
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """
@@ -756,7 +762,9 @@ class Scheduler(Server):
                                                              args=(task,),
                                                              who_has=who_has,
                                                              key=key,
-                                                             kwargs={})
+                                                             kwargs={},
+                                                             report=self.center
+                                                                     is not None)
                     if response == b'OK':
                         nbytes = content['nbytes']
                 logger.debug("Compute response from worker %s, %s, %s, %s",
@@ -840,7 +848,9 @@ class Scheduler(Server):
                              "  e.sync_center()")
         ncores = workers if workers is not None else self.ncores
         remotes, who_has, nbytes = yield scatter_to_workers(
-                                            self.center, ncores, data)  # TODO
+                                            self.center or self.address,
+                                            ncores, data,
+                                            report=not not self.center)
         self.update_data(who_has=who_has, nbytes=nbytes)
 
         raise gen.Return(remotes)
@@ -935,6 +945,14 @@ class Scheduler(Server):
 
     def get_ncores(self, stream=None):
         return self.ncores
+
+    @gen.coroutine
+    def broadcast(self, stream, msg=None):
+        """ Broadcast message to workers, return all results """
+        workers = list(self.ncores)
+        results = yield All([send_recv(ip=ip, port=port, close=True, **msg)
+                             for ip, port in workers])
+        raise Return(dict(zip(workers, results)))
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
