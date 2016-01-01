@@ -360,11 +360,11 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)]):
             loop = IOLoop()
             loop.make_current()
 
-            s, workers = loop.run_sync(lambda: start(ncores))
+            s, workers = loop.run_sync(lambda: start_cluster(ncores))
             try:
                 loop.run_sync(lambda: cor(s, *workers))
             finally:
-                loop.run_sync(lambda: end(s, workers))
+                loop.run_sync(lambda: end_cluster(s, workers))
                 loop.stop()
                 loop.close()
 
