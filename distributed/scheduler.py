@@ -20,8 +20,8 @@ from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server)
-from .client import unpack_remotedata, scatter_to_workers, _gather
-from .utils import All, ignoring, clear_queue, _deps
+from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
+from .utils import All, ignoring, clear_queue, _deps, get_ip
 
 
 logger = logging.getLogger(__name__)
@@ -115,17 +115,21 @@ class Scheduler(Server):
     *  **loop:** ``IOLoop``:
         The running Torando IOLoop
     """
-    def __init__(self, center, delete_batch_time=1, loop=None,
+    def __init__(self, center=None, delete_batch_time=1, loop=None,
             resource_interval=1, resource_log_size=1000,
-            max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
+            max_buffer_size=MAX_BUFFER_SIZE, ip=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
         self.delete_queue = Queue()
         self.streams = []
         self.status = None
         self.coroutines = []
+        self.ip = ip or get_ip()
 
-        self.center = coerce_to_rpc(center)
+        if center:
+            self.center = coerce_to_rpc(center)
+        else:
+            self.center = None
 
         self.dask = dict()
         self.dependencies = dict()
@@ -168,19 +172,27 @@ class Scheduler(Server):
         self.handlers = {'start-control': self.control_stream,
                          'scatter': self.scatter,
                          'register': self.add_worker,
+                         'unregister': self.remove_worker,
                          'gather': self.gather,
                          'feed': self.feed,
                          'terminate': self.close,
+                         'broadcast': self.broadcast,
                          'ncores': self.get_ncores}
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
 
+    @property
+    def address(self):
+        return (self.ip, self.port)
+
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """
-        return {'type': type(self).__name__, 'id': self.id,
-                'center': (self.center.ip, self.center.port),
-                'workers': list(self.ncores)}
+        d = {'type': type(self).__name__, 'id': self.id,
+             'workers': list(self.ncores)}
+        if self.center:
+            d['center'] = (self.center.ip, self.center.port)
+        return d
 
     def put(self, msg):
         """ Place a message into the scheduler's queue """
@@ -255,8 +267,9 @@ class Scheduler(Server):
         """
         yield self.cleanup()
         yield self.finished()
-        yield self.center.close(close=True)
-        self.center.close_streams()
+        if self.center:
+            yield self.center.close(close=True)
+            self.center.close_streams()
 
     @gen.coroutine
     def cleanup(self):
@@ -344,7 +357,8 @@ class Scheduler(Server):
                     {'op': 'compute-task',
                      'key': key,
                      'task': self.dask[key],
-                     'needed': self.dependencies[key]})
+                     'who_has': {dep: self.who_has[dep] for dep in
+                                 self.dependencies[key]}})
 
     def seed_ready_tasks(self, keys=None):
         """ Distribute many leaf tasks among workers
@@ -483,7 +497,7 @@ class Scheduler(Server):
                 'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
                 self.in_play)
 
-    def remove_worker(self, address=None, heal=True):
+    def remove_worker(self, stream=None, address=None, heal=True):
         """ Mark that a worker no longer seems responsive
 
         See Also
@@ -737,7 +751,7 @@ class Scheduler(Server):
                 break
             if msg['op'] == 'compute-task':
                 key = msg['key']
-                needed = msg['needed']
+                who_has = msg['who_has']
                 task = msg['task']
                 if not istask(task):
                     response, content = yield worker.update_data(data={key: task})
@@ -746,9 +760,11 @@ class Scheduler(Server):
                 else:
                     response, content = yield worker.compute(function=execute_task,
                                                              args=(task,),
-                                                             needed=needed,
+                                                             who_has=who_has,
                                                              key=key,
-                                                             kwargs={})
+                                                             kwargs={},
+                                                             report=self.center
+                                                                     is not None)
                     if response == b'OK':
                         nbytes = content['nbytes']
                 logger.debug("Compute response from worker %s, %s, %s, %s",
@@ -803,10 +819,11 @@ class Scheduler(Server):
             if batch and time() - last > self.delete_batch_time:  # One second batching
                 logger.debug("Ask center to delete %d keys", len(batch))
                 last = time()
-                yield self.center.delete_data(keys=batch)
+                if self.center:
+                    yield self.center.delete_data(keys=batch)
                 batch = list()
 
-        if batch:
+        if batch and self.center:
             yield self.center.delete_data(keys=batch)
 
         self.put({'op': 'delete-finished'})
@@ -831,7 +848,9 @@ class Scheduler(Server):
                              "  e.sync_center()")
         ncores = workers if workers is not None else self.ncores
         remotes, who_has, nbytes = yield scatter_to_workers(
-                                            self.center, ncores, data)
+                                            self.center or self.address,
+                                            ncores, data,
+                                            report=not not self.center)
         self.update_data(who_has=who_has, nbytes=nbytes)
 
         raise gen.Return(remotes)
@@ -840,10 +859,10 @@ class Scheduler(Server):
     def gather(self, stream=None, keys=None):
         """ Collect data in from workers """
         keys = list(keys)
+        who_has = {key: self.who_has[key] for key in keys}
 
         try:
-            data = yield _gather(self.center, keys)
-            data = dict(zip(keys, data))
+            data = yield gather_from_workers(who_has)
             result = (b'OK', data)
         except KeyError as e:
             logger.debug("Couldn't gather keys %s", e)
@@ -926,6 +945,14 @@ class Scheduler(Server):
 
     def get_ncores(self, stream=None):
         return self.ncores
+
+    @gen.coroutine
+    def broadcast(self, stream, msg=None):
+        """ Broadcast message to workers, return all results """
+        workers = list(self.ncores)
+        results = yield All([send_recv(ip=ip, port=port, close=True, **msg)
+                             for ip, port in workers])
+        raise Return(dict(zip(workers, results)))
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):

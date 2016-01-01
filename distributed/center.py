@@ -11,7 +11,7 @@ from tornado.gen import Return
 from tornado.iostream import StreamClosedError
 
 from .core import Server, read, write, rpc, pingpong, send_recv
-from .utils import ignoring, ignore_exceptions, All
+from .utils import ignoring, ignore_exceptions, All, get_ip
 
 
 logger = logging.getLogger(__name__)
@@ -112,6 +112,8 @@ class Center(Server):
     def register(self, stream, address=None, keys=(), ncores=None,
                  nanny_port=None):
         self.has_what[address] = set(keys)
+        for key in keys:
+            self.who_has[key].add(address)
         self.ncores[address] = ncores
         self.nannies[address] = nanny_port
         logger.info("Register %s", str(address))

@@ -248,3 +248,39 @@ def _test_cluster(f, loop=None, b_ip='127.0.0.1'):
     loop = loop or IOLoop.current()
     loop.run_sync(g)
     _global_executor[0] = None
+
+
+def _test_scheduler(f, loop=None, b_ip='127.0.0.1'):
+    from .scheduler import Scheduler
+    from .worker import Worker
+    from .executor import _global_executor
+    @gen.coroutine
+    def g():
+        s = Scheduler(ip='127.0.0.1')
+        done = s.start()
+        s.listen(0)
+        a = Worker('127.0.0.1', s.port, ncores=2, ip='127.0.0.1')
+        yield a._start()
+        b = Worker('127.0.0.1', s.port, ncores=1, ip=b_ip)
+        yield b._start()
+
+        start = time()
+        try:
+            while len(s.ncores) < 2:
+                yield gen.sleep(0.01)
+                if time() - start > 5:
+                    raise Exception("Cluster creation timeout")
+
+            yield f(s, a, b)
+        finally:
+            logger.debug("Closing out test cluster")
+            for w in [a, b]:
+                with ignoring(TimeoutError, StreamClosedError, OSError):
+                    yield w._close()
+                if os.path.exists(w.local_dir):
+                    shutil.rmtree(w.local_dir)
+            yield s.close()
+
+    loop = loop or IOLoop.current()
+    loop.run_sync(g)
+    _global_executor[0] = None

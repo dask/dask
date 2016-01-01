@@ -22,8 +22,8 @@ from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
-from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
-        dec, div, throws)
+from distributed.utils_test import (cluster, slow, _test_cluster,
+        _test_scheduler, loop, inc, dec, div, throws)
 
 
 def test_submit(loop):
@@ -1570,3 +1570,26 @@ def test_start_is_idempotent(loop):
 
             x = e.submit(inc, 1)
             assert x.result() == 2
+
+
+def test_executor_with_scheduler(loop):
+    @gen.coroutine
+    def f(s, a, b):
+        assert s.ncores == {a.address: a.ncores, b.address: b.ncores}
+        e = Executor(('127.0.0.1', s.port), start=False, loop=loop)
+        yield e._start()
+
+        x = e.submit(inc, 1)
+        y = e.submit(inc, 2)
+        z = e.submit(add, x, y)
+        result = yield x._result()
+        assert result == 1 + 1
+
+        a, b, c = yield e._scatter([1, 2, 3])
+        aa, bb, xx = yield e._gather([a, b, x])
+        assert (aa, bb, xx) == (1, 2, 2)
+
+        result = yield e._get({'x': (inc, 1), 'y': (add, 'x', 10)}, 'y')
+        assert result == 12
+
+    _test_scheduler(f)

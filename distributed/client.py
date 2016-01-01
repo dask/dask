@@ -297,7 +297,7 @@ _round_robin_counter = [0]
 
 
 @gen.coroutine
-def scatter_to_workers(center, ncores, data, key=None):
+def scatter_to_workers(center, ncores, data, key=None, report=True):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
@@ -306,7 +306,15 @@ def scatter_to_workers(center, ncores, data, key=None):
 
     See scatter for parameter docstring
     """
-    center = coerce_to_rpc(center)
+    if isinstance(center, str):
+        ip, port = center.split(':')
+    elif isinstance(center, rpc):
+        ip, port = center.ip, center.port
+    elif isinstance(center, tuple):
+        ip, port = center
+    else:
+        raise TypeError("Bad type for center")
+
     if key is None:
         key = str(uuid.uuid1())
 
@@ -330,13 +338,13 @@ def scatter_to_workers(center, ncores, data, key=None):
           for k, v in d.items()}
 
     out = yield All([rpc(ip=w_ip, port=w_port).update_data(data=v,
-                                             close=True, report=True)
+                                             close=True, report=report)
                  for (w_ip, w_port), v in d.items()])
     nbytes = merge([o[1]['nbytes'] for o in out])
 
     who_has = {k: [w for w, _, _ in v] for k, v in groupby(1, L).items()}
 
-    result = [RemoteData(b, center.ip, center.port, result=c)
+    result = [RemoteData(b, ip, port, result=c)
                 for a, b, c in L]
     if in_type is dict:
         result = dict(zip(names, result))
