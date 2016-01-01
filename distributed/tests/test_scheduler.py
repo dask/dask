@@ -421,330 +421,255 @@ def test_fill_missing_data():
     assert in_play == e_in_play
 
 
-from distributed.utils_test import cluster, slow, _test_cluster, loop
+from distributed.utils_test import gen_cluster, gen_test
 from distributed.utils import All
 from tornado import gen
 
 def div(x, y):
     return x / y
 
-def test_scheduler(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
-        yield s.sync_center()
-        done = s.start()
-        sched, report = Queue(), Queue()
-        s.handle_queues(sched, report)
+@gen_cluster()
+def test_scheduler(s, a, b):
+    sched, report = Queue(), Queue()
+    s.handle_queues(sched, report)
+    msg = yield report.get()
+    assert msg['op'] == 'stream-start'
+
+    # Test update graph
+    s.put({'op': 'update-graph',
+           'dsk': {'x': (inc, 1),
+                   'y': (inc, 'x'),
+                   'z': (inc, 'y')},
+           'keys': ['z']})
+    while True:
         msg = yield report.get()
-        assert msg['op'] == 'stream-start'
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+            break
 
-        # Test update graph
-        s.put({'op': 'update-graph',
-               'dsk': {'x': (inc, 1),
-                       'y': (inc, 'x'),
-                       'z': (inc, 'y')},
-               'keys': ['z']})
-        while True:
-            msg = yield report.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
-                break
+    assert a.data.get('x') == 2 or b.data.get('x') == 2
 
-        assert a.data.get('x') == 2 or b.data.get('x') == 2
+    # Test erring tasks
+    s.put({'op': 'update-graph',
+           'dsk': {'a': (div, 1, 0),
+                   'b': (inc, 'a')},
+           'keys': ['a', 'b']})
 
-        # Test erring tasks
-        s.put({'op': 'update-graph',
-               'dsk': {'a': (div, 1, 0),
-                       'b': (inc, 'a')},
-               'keys': ['a', 'b']})
-
-        while True:
-            msg = yield report.get()
-            if msg['op'] == 'task-erred' and msg['key'] == 'b':
-                break
-
-        # Test missing data
-        s.put({'op': 'missing-data',
-               'missing': ['z']})
-        while True:
-            msg = yield report.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
-                break
-
-        # Test missing data without being informed
-        for w in [a, b]:
-            if 'z' in w.data:
-                del w.data['z']
-        s.put({'op': 'update-graph',
-               'dsk': {'zz': (inc, 'z')},
-               'keys': ['zz']})
-        while True:
-            msg = yield report.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'zz':
-                break
-
-        s.put({'op': 'close'})
-        yield done
-
-    _test_cluster(f, loop)
-
-
-def test_multi_queues(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
-        yield s.sync_center()
-        done = s.start()
-
-        sched, report = Queue(), Queue()
-        s.handle_queues(sched, report)
-
+    while True:
         msg = yield report.get()
-        assert msg['op'] == 'stream-start'
+        if msg['op'] == 'task-erred' and msg['key'] == 'b':
+            break
 
-        # Test update graph
-        sched.put_nowait({'op': 'update-graph',
-                          'dsk': {'x': (inc, 1),
-                                  'y': (inc, 'x'),
-                                  'z': (inc, 'y')},
-                          'keys': ['z']})
+    # Test missing data
+    s.put({'op': 'missing-data',
+           'missing': ['z']})
+    while True:
+        msg = yield report.get()
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+            break
 
+    # Test missing data without being informed
+    for w in [a, b]:
+        if 'z' in w.data:
+            del w.data['z']
+    s.put({'op': 'update-graph',
+           'dsk': {'zz': (inc, 'z')},
+           'keys': ['zz']})
+    while True:
+        msg = yield report.get()
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'zz':
+            break
+
+    s.put({'op': 'close'})
+
+
+@gen_cluster()
+def test_multi_queues(s, a, b):
+    sched, report = Queue(), Queue()
+    s.handle_queues(sched, report)
+
+    msg = yield report.get()
+    assert msg['op'] == 'stream-start'
+
+    # Test update graph
+    sched.put_nowait({'op': 'update-graph',
+                      'dsk': {'x': (inc, 1),
+                              'y': (inc, 'x'),
+                              'z': (inc, 'y')},
+                      'keys': ['z']})
+
+    while True:
+        msg = yield report.get()
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+            break
+
+    slen, rlen = len(s.scheduler_queues), len(s.report_queues)
+    sched2, report2 = Queue(), Queue()
+    s.handle_queues(sched2, report2)
+    assert slen + 1 == len(s.scheduler_queues)
+    assert rlen + 1 == len(s.report_queues)
+
+    sched2.put_nowait({'op': 'update-graph',
+                       'dsk': {'a': (inc, 10)},
+                       'keys': ['a']})
+
+    for q in [report, report2]:
         while True:
-            msg = yield report.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+            msg = yield q.get()
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'a':
                 break
 
-        slen, rlen = len(s.scheduler_queues), len(s.report_queues)
-        sched2, report2 = Queue(), Queue()
-        s.handle_queues(sched2, report2)
-        assert slen + 1 == len(s.scheduler_queues)
-        assert rlen + 1 == len(s.report_queues)
 
-        sched2.put_nowait({'op': 'update-graph',
-                           'dsk': {'a': (inc, 10)},
-                           'keys': ['a']})
-
-        for q in [report, report2]:
-            while True:
-                msg = yield q.get()
-                if msg['op'] == 'key-in-memory' and msg['key'] == 'a':
-                    break
-
-        sched.put_nowait({'op': 'close'})
-        yield done
-
-    _test_cluster(f, loop)
-
-
-def test_monitor_resources(loop):
+@gen_test(timeout=30)
+def test_monitor_resources():
     c = Center('127.0.0.1')
     c.listen(0)
     a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
     b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
     s = Scheduler((c.ip, c.port), resource_interval=0.01, resource_log_size=3)
 
-    @gen.coroutine
-    def f():
-        yield a._start()
-        yield b._start()
-        yield s.sync_center()
-        done = s.start()
+    yield a._start()
+    yield b._start()
+    yield s.sync_center()
+    done = s.start()
 
-        try:
-            assert s.ncores == {('127.0.0.1', a.worker_port): 2,
-                                ('127.0.0.1', b.worker_port): 2}
-            assert s.nannies == {(n.ip, n.worker_port): n.port
-                                 for n in [a, b]}
+    try:
+        assert s.ncores == {('127.0.0.1', a.worker_port): 2,
+                            ('127.0.0.1', b.worker_port): 2}
+        assert s.nannies == {(n.ip, n.worker_port): n.port
+                             for n in [a, b]}
 
-            while any(len(v) < 3 for v in s.resource_logs.values()):
-                yield gen.sleep(0.01)
-
-            yield gen.sleep(0.1)
-
-            assert set(s.resource_logs) == {a.address, b.address}
-            assert all(len(v) == 3 for v in s.resource_logs.values())
-
-            d = s.diagnostic_resources(n=2)
-            assert set(d) == {a.worker_address, b.worker_address}
-            assert set(d[a.worker_address]).issubset({'cpu', 'memory', 'time'})
-            assert all(len(v) == 2 for v in d[a.worker_address].values())
-
-            s.put({'op': 'close'})
-            yield done
-        finally:
-            with ignoring(TimeoutError, StreamClosedError, OSError):
-                yield a._close(timeout=0.5)
-            with ignoring(TimeoutError, StreamClosedError, OSError):
-                yield b._close(timeout=0.5)
-            c.stop()
-
-    loop.run_sync(f, timeout=30)
-
-
-def test_server(loop):
-    port = 8040
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
-        yield s.sync_center()
-        done = s.start()
-        s.listen(port)
-
-        stream = yield connect('127.0.0.1', port)
-        yield write(stream, {'op': 'start-control'})
-        yield write(stream, {'op': 'update-graph',
-                             'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
-                             'keys': ['y']})
-
-        while True:
-            msg = yield read(stream)
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'y':
-                break
-
-        yield write(stream, {'op': 'close-stream'})
-        msg = yield read(stream)
-        assert msg == {'op': 'stream-closed'}
-        assert stream.closed()
-
-        s.scheduler_queues[0].put_nowait({'op': 'close'})
-        yield done
-        s.stop()
-
-    _test_cluster(f, loop)
-
-
-def test_server_listens_to_other_ops(loop):
-    port = 8040
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
-        yield s.sync_center()
-        done = s.start()
-        s.listen(port)
-        assert s.port == port
-
-        r = rpc(ip='127.0.0.1', port=s.port)
-        ident = yield r.identity()
-        assert ident['type'] == 'Scheduler'
-
-        s.stop()
-
-    _test_cluster(f, loop)
-
-
-def test_remove_worker_from_scheduler(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
-        yield s.sync_center()
-        done = s.start()
-        s.listen(0)
-
-        dsk = {('x', i): (inc, i) for i in range(10)}
-        s.update_graph(dsk=dsk, keys=list(dsk))
-        assert s.stacks[a.address]
-
-        assert a.address in s.worker_queues
-        s.remove_worker(address=a.address)
-        assert a.address not in s.ncores
-        assert len(s.stacks[b.address]) + len(s.processing[b.address]) == \
-                len(dsk)  # b owns everything
-        assert all(k in s.in_play for k in dsk)
-        s.validate()
-
-        s.stop()
-    _test_cluster(f, loop)
-
-
-def test_add_worker(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
-        yield s.sync_center()
-        done = s.start()
-        s.listen(0)
-
-        w = Worker(c.ip, c.port, ncores=3, ip='127.0.0.4')
-        w.data[('x', 5)] = 6
-        w.data['y'] = 1
-        yield w._start(8020)
-
-        dsk = {('x', i): (inc, i) for i in range(10)}
-        s.update_graph(dsk=dsk, keys=list(dsk))
-
-        s.add_worker(address=w.address, keys=list(w.data),
-                     ncores=w.ncores, nanny_port=w.nanny_port)
-
-        for k in w.data:
-            assert w.address in s.who_has[k]
-
-        s.validate(allow_overlap=True)
-
-        s.stop()
-    _test_cluster(f, loop)
-
-
-def test_feed(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port))
-        yield s.sync_center()
-        done = s.start()
-        s.listen(0)
-
-        def initial(scheduler):
-            return scheduler.id
-
-        def func(scheduler):
-            return scheduler.processing, scheduler.stacks
-
-        stream = yield connect(s.center.ip, s.port)
-        yield write(stream, {'op': 'feed',
-                             'function': func,
-                             'initial': initial,
-                             'interval': 0.01})
-        response = yield read(stream)
-        assert response == s.id
-
-        for i in range(5):
-            response = yield read(stream)
-            expected = s.processing, s.stacks
-
-        stream.close()
-        s.stop()
-
-    _test_cluster(f, loop)
-
-
-def test_scheduler_as_center(loop):
-    @gen.coroutine
-    def f():
-        s = Scheduler()
-        s.listen(0)
-        done = s.start()
-        a = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=1)
-        a.data.update({'x': 1, 'y': 2})
-        b = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=2)
-        b.data.update({'y': 2, 'z': 3})
-        c = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=3)
-        yield [w._start() for w in [a, b, c]]
-
-        assert s.ncores == {w.address: w.ncores for w in [a, b, c]}
-        assert s.who_has == {'x': {a.address},
-                             'y': {a.address, b.address},
-                             'z': {b.address}}
-
-        s.update_graph(dsk={'a': (inc, 1)},
-                       keys=['a'])
-        while not s.who_has['a']:
+        while any(len(v) < 3 for v in s.resource_logs.values()):
             yield gen.sleep(0.01)
-        assert 'a' in a.data or 'a' in b.data or 'a' in c.data
 
-        yield [w._close() for w in [a, b, c]]
+        yield gen.sleep(0.1)
 
-        assert s.ncores == {}
-        assert s.who_has == {}
+        assert set(s.resource_logs) == {a.address, b.address}
+        assert all(len(v) == 3 for v in s.resource_logs.values())
 
-        yield s.close()
+        d = s.diagnostic_resources(n=2)
+        assert set(d) == {a.worker_address, b.worker_address}
+        assert set(d[a.worker_address]).issubset({'cpu', 'memory', 'time'})
+        assert all(len(v) == 2 for v in d[a.worker_address].values())
 
-    loop.run_sync(f, timeout=10)
+        s.put({'op': 'close'})
+        yield done
+    finally:
+        with ignoring(TimeoutError, StreamClosedError, OSError):
+            yield a._close(timeout=0.5)
+        with ignoring(TimeoutError, StreamClosedError, OSError):
+            yield b._close(timeout=0.5)
+        c.stop()
+
+
+@gen_cluster()
+def test_server(s, a, b):
+    stream = yield connect('127.0.0.1', s.port)
+    yield write(stream, {'op': 'start-control'})
+    yield write(stream, {'op': 'update-graph',
+                         'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
+                         'keys': ['y']})
+
+    while True:
+        msg = yield read(stream)
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'y':
+            break
+
+    yield write(stream, {'op': 'close-stream'})
+    msg = yield read(stream)
+    assert msg == {'op': 'stream-closed'}
+    assert stream.closed()
+
+
+@gen_cluster()
+def test_server_listens_to_other_ops(s, a, b):
+    r = rpc(ip='127.0.0.1', port=s.port)
+    ident = yield r.identity()
+    assert ident['type'] == 'Scheduler'
+
+
+@gen_cluster()
+def test_remove_worker_from_scheduler(s, a, b):
+    dsk = {('x', i): (inc, i) for i in range(10)}
+    s.update_graph(dsk=dsk, keys=list(dsk))
+    assert s.stacks[a.address]
+
+    assert a.address in s.worker_queues
+    s.remove_worker(address=a.address)
+    assert a.address not in s.ncores
+    assert len(s.stacks[b.address]) + len(s.processing[b.address]) == \
+            len(dsk)  # b owns everything
+    assert all(k in s.in_play for k in dsk)
+    s.validate()
+
+
+@gen_cluster()
+def test_add_worker(s, a, b):
+    w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1')
+    w.data[('x', 5)] = 6
+    w.data['y'] = 1
+    yield w._start(8020)
+
+    dsk = {('x', i): (inc, i) for i in range(10)}
+    s.update_graph(dsk=dsk, keys=list(dsk))
+
+    s.add_worker(address=w.address, keys=list(w.data),
+                 ncores=w.ncores, nanny_port=w.nanny_port)
+
+    for k in w.data:
+        assert w.address in s.who_has[k]
+
+    s.validate(allow_overlap=True)
+
+
+@gen_cluster()
+def test_feed(s, a, b):
+    def initial(scheduler):
+        return scheduler.id
+
+    def func(scheduler):
+        return scheduler.processing, scheduler.stacks
+
+    stream = yield connect(s.ip, s.port)
+    yield write(stream, {'op': 'feed',
+                         'function': func,
+                         'initial': initial,
+                         'interval': 0.01})
+    response = yield read(stream)
+    assert response == s.id
+
+    for i in range(5):
+        response = yield read(stream)
+        expected = s.processing, s.stacks
+
+    stream.close()
+
+
+@gen_test()
+def test_scheduler_as_center():
+    s = Scheduler()
+    s.listen(0)
+    done = s.start()
+    a = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=1)
+    a.data.update({'x': 1, 'y': 2})
+    b = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=2)
+    b.data.update({'y': 2, 'z': 3})
+    c = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=3)
+    yield [w._start() for w in [a, b, c]]
+
+    assert s.ncores == {w.address: w.ncores for w in [a, b, c]}
+    assert s.who_has == {'x': {a.address},
+                         'y': {a.address, b.address},
+                         'z': {b.address}}
+
+    s.update_graph(dsk={'a': (inc, 1)},
+                   keys=['a'])
+    while not s.who_has['a']:
+        yield gen.sleep(0.01)
+    assert 'a' in a.data or 'a' in b.data or 'a' in c.data
+
+    yield [w._close() for w in [a, b, c]]
+
+    assert s.ncores == {}
+    assert s.who_has == {}
+
+    yield s.close()
