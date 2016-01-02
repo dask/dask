@@ -19,7 +19,7 @@ from dask.core import istask, get_deps, reverse_dict
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server)
+        Server, send_recv)
 from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
 from .utils import All, ignoring, clear_queue, _deps, get_ip
 
@@ -270,6 +270,7 @@ class Scheduler(Server):
         if self.center:
             yield self.center.close(close=True)
             self.center.close_streams()
+        self.status = 'closed'
 
     @gen.coroutine
     def cleanup(self):
@@ -754,7 +755,8 @@ class Scheduler(Server):
                 who_has = msg['who_has']
                 task = msg['task']
                 if not istask(task):
-                    response, content = yield worker.update_data(data={key: task})
+                    response, content = yield worker.update_data(
+                            data={key: task}, report=self.center is not None)
                     assert response == b'OK', response
                     nbytes = content['nbytes'][key]
                 else:
