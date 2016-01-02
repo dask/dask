@@ -680,7 +680,8 @@ def test_delete_data(s, a, b):
     yield s.scatter(data={'x': 1, 'y': 2, 'z': 3})
     assert set(a.data) | set(b.data) == {'x', 'y', 'z'}
 
-    yield s.delete_data(keys=['x', 'y'])
+    s.delete_data(keys=['x', 'y'])
+    yield s.clear_data_from_workers()
     assert set(a.data) | set(b.data) == {'z'}
 
 
@@ -691,3 +692,21 @@ def test_rpc(s, a, b):
     bb = s.rpc(ip=b.ip, port=b.port)
     assert aa is aa2
     assert aa is not bb
+
+
+@gen_cluster()
+def test_delete_callback(s, a, b):
+    a.data['x'] = 1
+    s.who_has['x'].add(a.address)
+    s.has_what[a.address].add('x')
+
+    s.delete_data(keys=['x'])
+    assert not s.who_has['x']
+    assert not s.has_what['y']
+    assert a.data['x'] == 1  # still in memory
+    assert s.deleted_keys == {a.address: {'x'}}
+    yield s.clear_data_from_workers()
+    assert not s.deleted_keys
+    assert not a.data
+
+    assert s._delete_periodic_callback.is_running()

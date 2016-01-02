@@ -13,7 +13,7 @@ from toolz import frequencies, memoize, concat, identity, valmap
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
 from dask.core import istask, get_deps, reverse_dict
@@ -113,18 +113,22 @@ class Scheduler(Server):
         A dict mapping a key to another key on which it depends that has failed
     *  **resource_logs:** ``list``:
         A list of dicts from the nannies, tracking resources on the workers
+    *  **deleted_keys:** ``{key: {workers}}``
+        Locations of workers that have keys that should be deleted
     *  **loop:** ``IOLoop``:
         The running Torando IOLoop
     """
     def __init__(self, center=None, loop=None,
             resource_interval=1, resource_log_size=1000,
-            max_buffer_size=MAX_BUFFER_SIZE, ip=None, **kwargs):
+            max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
+            ip=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
         self.streams = []
         self.status = None
         self.coroutines = []
         self.ip = ip or get_ip()
+        self.delete_interval = delete_interval
 
         if center:
             self.center = coerce_to_rpc(center)
@@ -148,6 +152,7 @@ class Scheduler(Server):
         self.waiting = dict()
         self.waiting_data = dict()
         self.who_has = defaultdict(set)
+        self.deleted_keys = defaultdict(set)
 
         self.exceptions = dict()
         self.tracebacks = dict()
@@ -241,6 +246,11 @@ class Scheduler(Server):
                 c.cancel()
 
         self._worker_coroutines = [self.worker(w) for w in self.ncores]
+        self._delete_periodic_callback = \
+                PeriodicCallback(callback=self.clear_data_from_workers,
+                                 callback_time=self.delete_interval,
+                                 io_loop=self.loop)
+        self._delete_periodic_callback.start()
 
         self.heal_state()
 
@@ -782,29 +792,37 @@ class Scheduler(Server):
         logger.debug("Close worker core, %s, %d", ident, i)
 
     @gen.coroutine
+    def clear_data_from_workers(self):
+        """ This is intended to be run periodically,
+
+        The ``self._delete_periodic_callback`` attribute holds a PeriodicCallback
+        that runs this every ``self.delete_interval`` milliseconds``.
+        """
+        if self.deleted_keys:
+            d = self.deleted_keys.copy()
+            self.deleted_keys.clear()
+
+            coroutines = [self.rpc(ip=worker[0], port=worker[1]).delete_data(
+                                    keys=keys, report=False)
+                          for worker, keys in d.items()]
+            for worker, keys in d.items():
+                logger.debug("Remove %d keys from worker %s", len(keys), worker)
+            yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
+
+        raise Return(b'OK')
+
     def delete_data(self, stream=None, keys=None):
         who_has2 = {k: v for k, v in self.who_has.items() if k in keys}
-        d = defaultdict(list)
 
         for key in keys:
             for worker in self.who_has[key]:
                 self.has_what[worker].remove(key)
-                d[worker].append(key)
+                self.deleted_keys[worker].add(key)
             del self.who_has[key]
             if key in self.waiting_data:
                 del self.waiting_data[key]
             if key in self.in_play:
                 self.in_play.remove(key)
-
-        # TODO: ignore missing workers
-        coroutines = [self.rpc(ip=worker[0], port=worker[1]).delete_data(
-                                keys=keys, report=False)
-                      for worker, keys in d.items()]
-        for worker, keys in d.items():
-            logger.debug("Remove %d keys from worker %s", len(keys), worker)
-        yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
-
-        raise Return(b'OK')
 
     @gen.coroutine
     def nanny_listen(self, ip, port):
