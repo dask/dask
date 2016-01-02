@@ -12,7 +12,7 @@ from distributed.worker import Worker
 from distributed.utils_test import loop, _test_cluster, inc
 
 from tornado import gen
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, TimeoutError
 
 
 def test_worker_ncores():
@@ -237,6 +237,20 @@ def test_worker_with_port_zero(loop):
         assert w.port > 1024
 
     loop.run_sync(f)
+
+
+def test_worker_waits_for_center_to_come_up(loop):
+    @gen.coroutine
+    def f():
+        w = Worker('127.0.0.1', 8007, ip='127.0.0.1')
+        yield w._start()
+
+    try:
+        loop.run_sync(f, timeout=5)
+    except TimeoutError:
+        pass
+
+
 """
 
 def test_close():

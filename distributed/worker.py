@@ -16,6 +16,7 @@ from toolz import merge
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
+from tornado.iostream import StreamClosedError
 
 from .client import _gather, pack_data, gather_from_workers
 from .compatibility import reload
@@ -109,7 +110,7 @@ class Worker(Server):
                         ncores=self.ncores, address=(self.ip, self.port),
                         nanny_port=self.nanny_port, keys=list(self.data))
                 break
-            except OSError:
+            except (OSError, StreamClosedError):
                 logger.debug("Unable to register with center.  Waiting")
                 yield gen.sleep(0.5)
         assert resp == b'OK'
