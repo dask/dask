@@ -1,5 +1,4 @@
 import os
-from itertools import product
 
 import numpy as np
 
@@ -14,8 +13,16 @@ def test_textblock():
         assert text == ('456 789 '.replace(' ', os.linesep)).encode()
         assert set(map(len, text.split())) == set([3])
 
-        assert ''.join(textblock(fn, 0, 3, None)).encode() == ('123' + os.linesep).encode()
-        assert ''.join(textblock(fn, 3, 3, None)).encode() == b''
+        assert ''.join(textblock(fn, 0, 4, None)).encode() == ('123' + os.linesep).encode()
+        assert ''.join(textblock(fn, 4, 4, None)).encode() == b''
+
+
+def test_textblock_multibyte_linesep():
+    text = b'12 34 56 78'.replace(b' ', b'\r\n')
+    with filetext(text, mode='wb') as fn:
+        text = [line.encode()
+                for line in textblock(fn, 5, 13, linesep='\r\n', buffersize=2)]
+        assert text == [line.encode() for line in ('56\r\n', '78')]
 
 
 def test_takes_multiple_arguments():
@@ -71,11 +78,11 @@ def test_gh606():
         with open(fn, 'wb') as f:
             f.write(bin_data)
 
-        stop = len(bin_euro) * 10 + len(bin_linesep)
+        stop = len(bin_euro) * 10 + len(bin_linesep) + 1
         res = ''.join(textblock(fn, 1, stop, encoding=encoding)).encode(encoding)
         assert res == ((yen * 10) + linesep).encode(encoding)
 
-        stop = len(bin_euro) * 10 + len(bin_linesep)
+        stop = len(bin_euro) * 10 + len(bin_linesep) + 1
         res = ''.join(textblock(fn, 0, stop, encoding=encoding)).encode(encoding)
         assert res == ((euro * 10) + linesep + (yen * 10) + linesep).encode(encoding)
 
