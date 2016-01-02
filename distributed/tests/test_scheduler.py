@@ -682,3 +682,12 @@ def test_delete_data(s, a, b):
 
     yield s.delete_data(keys=['x', 'y'])
     assert set(a.data) | set(b.data) == {'z'}
+
+
+@gen_cluster()
+def test_rpc(s, a, b):
+    aa = s.rpc(ip=a.ip, port=a.port)
+    aa2 = s.rpc(ip=a.ip, port=a.port)
+    bb = s.rpc(ip=b.ip, port=b.port)
+    assert aa is aa2
+    assert aa is not bb

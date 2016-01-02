@@ -160,6 +160,8 @@ class Scheduler(Server):
         self.resource_interval = resource_interval
         self.resource_log_size = resource_log_size
 
+        self._rpcs = dict()
+
         self.plugins = []
 
         self.compute_handlers = {'update-graph': self.update_graph,
@@ -180,6 +182,12 @@ class Scheduler(Server):
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
+
+    def rpc(self, ip, port):
+        """ Cached rpc objects """
+        if (ip, port) not in self._rpcs:
+            self._rpcs[(ip, port)] = rpc(ip=ip, port=port)
+        return self._rpcs[(ip, port)]
 
     @property
     def address(self):
@@ -789,8 +797,8 @@ class Scheduler(Server):
                 self.in_play.remove(key)
 
         # TODO: ignore missing workers
-        coroutines = [rpc(ip=worker[0], port=worker[1]).delete_data(
-                                keys=keys, report=False, close=True)
+        coroutines = [self.rpc(ip=worker[0], port=worker[1]).delete_data(
+                                keys=keys, report=False)
                       for worker, keys in d.items()]
         for worker, keys in d.items():
             logger.debug("Remove %d keys from worker %s", len(keys), worker)
