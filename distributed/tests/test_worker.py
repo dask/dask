@@ -2,17 +2,16 @@ from operator import add
 import os
 import shutil
 import sys
-from time import sleep
 
 from distributed.center import Center
-from distributed.core import read, write, rpc, connect
+from distributed.core import rpc
 from distributed.sizeof import sizeof
-from distributed.utils import ignoring
 from distributed.worker import Worker
 from distributed.utils_test import loop, _test_cluster, inc
+import pytest
 
 from tornado import gen
-from tornado.ioloop import IOLoop
+from tornado.ioloop import TimeoutError
 
 
 def test_worker_ncores():
@@ -237,6 +236,20 @@ def test_worker_with_port_zero(loop):
         assert w.port > 1024
 
     loop.run_sync(f)
+
+@pytest.mark.slow
+def test_worker_waits_for_center_to_come_up(loop):
+    @gen.coroutine
+    def f():
+        w = Worker('127.0.0.1', 8007, ip='127.0.0.1')
+        yield w._start()
+
+    try:
+        loop.run_sync(f, timeout=4)
+    except TimeoutError:
+        pass
+
+
 """
 
 def test_close():
