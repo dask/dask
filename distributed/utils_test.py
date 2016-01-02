@@ -341,7 +341,7 @@ def end_cluster(s, workers):
     s.stop()
 
 
-def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)]):
+def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10):
     """ Coroutine test with small cluster
 
     @gen_cluster()
@@ -362,7 +362,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)]):
 
             s, workers = loop.run_sync(lambda: start_cluster(ncores))
             try:
-                loop.run_sync(lambda: cor(s, *workers))
+                loop.run_sync(lambda: cor(s, *workers), timeout=timeout)
             finally:
                 loop.run_sync(lambda: end_cluster(s, workers))
                 loop.stop()
