@@ -2,17 +2,15 @@ from operator import add
 import os
 import shutil
 import sys
-from time import sleep
 
 from distributed.center import Center
-from distributed.core import read, write, rpc, connect
+from distributed.core import rpc
 from distributed.sizeof import sizeof
-from distributed.utils import ignoring
 from distributed.worker import Worker
 from distributed.utils_test import loop, _test_cluster, inc
 
 from tornado import gen
-from tornado.ioloop import IOLoop, TimeoutError
+from tornado.ioloop import TimeoutError
 
 
 def test_worker_ncores():

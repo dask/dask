@@ -22,7 +22,7 @@ from .client import _gather, pack_data, gather_from_workers
 from .compatibility import reload
 from .core import rpc, Server, pingpong
 from .sizeof import sizeof
-from .utils import funcname, get_ip, ignoring
+from .utils import funcname, get_ip
 
 _ncores = ThreadPool()._processes
 
