@@ -400,7 +400,7 @@ def test_garbage_collection(s, a, b):
 @gen_cluster()
 def test_garbage_collection_with_scatter(s, a, b):
     e = Executor((s.ip, s.port), start=False)
-    yield e._start(delete_batch_time=0)
+    yield e._start()
 
     [a] = yield e._scatter([1])
     assert a.key in e.futures
@@ -422,10 +422,10 @@ def test_garbage_collection_with_scatter(s, a, b):
     yield e._shutdown()
 
 
-@gen_cluster()
-def dont_test_recompute_released_key(s, a, b):
+@gen_cluster(timeout=1000)
+def test_recompute_released_key(s, a, b):
     e = Executor((s.ip, s.port), start=False)
-    yield e._start(delete_batch_time=0)
+    yield e._start()
 
     x = e.submit(inc, 100)
     result1 = yield x._result()
@@ -454,7 +454,7 @@ def slowinc(x):
 def test_stress_gc(loop):
     n = 100
     with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), delete_batch_time=0.5, loop=loop) as e:
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             x = e.submit(slowinc, 1)
             for i in range(n):
                 x = e.submit(slowinc, x)
@@ -468,7 +468,7 @@ def test_long_tasks_dont_trigger_timeout(loop):
     def f(c, a, b):
         e = Executor((c.ip, c.port), start=False,
                 loop=loop)
-        yield e._start(delete_batch_time=0)
+        yield e._start()
 
         from time import sleep
         x = e.submit(sleep, 3)
@@ -481,7 +481,7 @@ def test_long_tasks_dont_trigger_timeout(loop):
 @gen_cluster()
 def test_missing_data_heals(s, a, b):
     e = Executor((s.ip, s.port), start=False)
-    yield e._start(delete_batch_time=0)
+    yield e._start()
 
     x = e.submit(inc, 1)
     y = e.submit(inc, x)
@@ -644,8 +644,8 @@ def test_restrictions_get(s, a, b):
     dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
     restrictions = {'y': {a.ip}, 'z': {b.ip}}
 
-    result = yield e._get(dsk, 'z', restrictions)
-    assert result == 3
+    result = yield e._get(dsk, ['y', 'z'], restrictions)
+    assert result == [2, 3]
     assert 'y' in a.data
     assert 'z' in b.data
 

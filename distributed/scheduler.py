@@ -5,6 +5,7 @@ from datetime import datetime
 from functools import partial
 import logging
 from math import ceil
+import socket
 from time import time
 import uuid
 
@@ -21,7 +22,7 @@ from dask.order import order
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server, send_recv)
 from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
-from .utils import All, ignoring, clear_queue, _deps, get_ip
+from .utils import All, ignoring, clear_queue, _deps, get_ip, ignore_exceptions
 
 
 logger = logging.getLogger(__name__)
@@ -115,12 +116,11 @@ class Scheduler(Server):
     *  **loop:** ``IOLoop``:
         The running Torando IOLoop
     """
-    def __init__(self, center=None, delete_batch_time=1, loop=None,
+    def __init__(self, center=None, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, ip=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
-        self.delete_queue = Queue()
         self.streams = []
         self.status = None
         self.coroutines = []
@@ -157,7 +157,6 @@ class Scheduler(Server):
         self.loop = loop or IOLoop.current()
         self.io_loop = self.loop
 
-        self.delete_batch_time = delete_batch_time
         self.resource_interval = resource_interval
         self.resource_log_size = resource_log_size
 
@@ -230,12 +229,9 @@ class Scheduler(Server):
         self.worker_queues = {addr: Queue() for addr in self.ncores}
 
         with ignoring(AttributeError):
-            self._delete_coroutine.cancel()
-        with ignoring(AttributeError):
             for c in self._worker_coroutines:
                 c.cancel()
 
-        self._delete_coroutine = self.delete()
         self._worker_coroutines = [self.worker(w) for w in self.ncores]
 
         self.heal_state()
@@ -281,7 +277,6 @@ class Scheduler(Server):
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
         n = 0
-        self.delete_queue.put_nowait({'op': 'close'}); n += 1
         for w, nc in self.ncores.items():
             for i in range(nc):
                 self.worker_queues[w].put_nowait({'op': 'close'}); n += 1
@@ -340,7 +335,7 @@ class Scheduler(Server):
                 with ignoring(KeyError):
                     s.remove(key)
                 if not s and dep:
-                    self.release_key(dep)
+                    self.release_keys([dep])
 
         self.report({'op': 'key-in-memory',
                      'key': key,
@@ -382,12 +377,15 @@ class Scheduler(Server):
             if stack:
                 self.ensure_occupied(worker)
 
-    def release_key(self, key):
+    def release_keys(self, keys):
         """ Release key from distributed memory if its ready """
-        logger.debug("Release key %s", key)
-        if key not in self.held_data and not self.waiting_data.get(key):
-            self.delete_queue.put_nowait({'op': 'delete-task',
-                                          'key': key})
+        logger.debug("Release key %s", keys)
+        keys2 = {k for k in keys if k not in self.held_data
+                                      and not self.waiting_data.get(k)}
+        if keys2:
+            self.delete_data(keys=keys2)  # async
+
+        for key in keys2:
             for w in self.who_has[key]:
                 self.has_what[w].remove(key)
             del self.who_has[key]
@@ -585,12 +583,13 @@ class Scheduler(Server):
             except Exception as e:
                 logger.exception(e)
 
-    def release_held_data(self, key=None):
+    def release_held_data(self, keys=None):
         """ Mark that a key is no longer externally required to be in memory """
-        if key in self.held_data:
-            logger.debug("Release key: %s", key)
-            self.held_data.remove(key)
-            self.release_key(key)
+        keys = {k for k in keys if k in self.held_data}
+        if keys:
+            logger.debug("Release keys: %s", keys)
+            self.held_data -= keys
+            self.release_keys(keys)
 
     def heal_state(self):
         """ Recover from catastrophic change """
@@ -606,8 +605,8 @@ class Scheduler(Server):
         if self.stacks:
             for key in add_keys:
                 self.mark_ready_to_run(key)
-        for key in set(self.who_has) & released - self.held_data:
-            self.delete_queue.put_nowait({'op': 'delete-task', 'key': key})
+
+        self.delete_data(keys=set(self.who_has) & released - self.held_data)
         self.in_play.update(self.who_has)
         self.log_state("After Heal")
 
@@ -788,48 +787,26 @@ class Scheduler(Server):
                       'worker': ident})
         logger.debug("Close worker core, %s, %d", ident, i)
 
-
     @gen.coroutine
-    def delete(self):
-        """ Delete extraneous intermediates from distributed memory
+    def delete_data(self, stream=None, keys=None):
+        who_has2 = {k: v for k, v in self.who_has.items() if k in keys}
+        d = defaultdict(list)
 
-        This coroutine manages a connection to the center in order to send keys
-        that should be removed from distributed memory.  We batch several keys that
-        come in over the ``delete_queue`` into a list.  Roughly once a second we
-        send this list of keys over to the center which then handles deleting
-        these keys from workers' memory.::
+        for key in keys:
+            for worker in self.who_has[key]:
+                self.has_what[worker].remove(key)
+                d[worker].append(key)
+            del self.who_has[key]
 
-            worker \                                /-> worker node
-            worker -> scheduler -> delete -> center --> worker node
-            worker /                                \-> worker node
+        # TODO: ignore missing workers
+        coroutines = [rpc(ip=worker[0], port=worker[1]).delete_data(
+                                keys=keys, report=False, close=True)
+                      for worker, keys in d.items()]
+        for worker, keys in d.items():
+            logger.debug("Remove %d keys from worker %s", len(keys), worker)
+        yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
 
-        **Incoming Messages**
-
-        - delete-task: holds a key to be deleted
-        - close: close this coroutine
-        """
-        batch = list()
-        last = time()
-
-        while True:
-            msg = yield self.delete_queue.get()
-            if msg['op'] == 'close':
-                break
-
-            # TODO: trigger coroutine to go off in a second if no activity
-            batch.append(msg['key'])
-            if batch and time() - last > self.delete_batch_time:  # One second batching
-                logger.debug("Ask center to delete %d keys", len(batch))
-                last = time()
-                if self.center:
-                    yield self.center.delete_data(keys=batch)
-                batch = list()
-
-        if batch and self.center:
-            yield self.center.delete_data(keys=batch)
-
-        self.put({'op': 'delete-finished'})
-        logger.debug('Delete finished')
+        raise Return(b'OK')
 
     @gen.coroutine
     def nanny_listen(self, ip, port):

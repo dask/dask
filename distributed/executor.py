@@ -206,7 +206,7 @@ class Executor(object):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
-    def __init__(self, address, start=True, delete_batch_time=1, loop=None):
+    def __init__(self, address, start=True, loop=None):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
@@ -214,7 +214,7 @@ class Executor(object):
         self._start_arg = address
 
         if start:
-            self.start(delete_batch_time=delete_batch_time)
+            self.start()
 
     def start(self, **kwargs):
         """ Start scheduler running in separate thread """
@@ -302,7 +302,7 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self._send_to_scheduler({'op': 'release-held-data', 'key': key})
+        self._send_to_scheduler({'op': 'release-held-data', 'keys': [key]})
 
     @gen.coroutine
     def _handle_report(self, start_event):

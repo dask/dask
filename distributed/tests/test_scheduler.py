@@ -440,7 +440,7 @@ def test_scheduler(s, a, b):
            'dsk': {'x': (inc, 1),
                    'y': (inc, 'x'),
                    'z': (inc, 'y')},
-           'keys': ['z']})
+           'keys': ['x', 'z']})
     while True:
         msg = yield report.get()
         if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
@@ -673,3 +673,12 @@ def test_scheduler_as_center():
     assert s.who_has == {}
 
     yield s.close()
+
+
+@gen_cluster()
+def test_delete_data(s, a, b):
+    yield s.scatter(data={'x': 1, 'y': 2, 'z': 3})
+    assert set(a.data) | set(b.data) == {'x', 'y', 'z'}
+
+    yield s.delete_data(keys=['x', 'y'])
+    assert set(a.data) | set(b.data) == {'z'}
