@@ -8,6 +8,7 @@ from distributed.core import rpc
 from distributed.sizeof import sizeof
 from distributed.worker import Worker
 from distributed.utils_test import loop, _test_cluster, inc
+import pytest
 
 from tornado import gen
 from tornado.ioloop import TimeoutError
@@ -236,7 +237,7 @@ def test_worker_with_port_zero(loop):
 
     loop.run_sync(f)
 
-
+@pytest.mark.slow
 def test_worker_waits_for_center_to_come_up(loop):
     @gen.coroutine
     def f():
@@ -244,7 +245,7 @@ def test_worker_waits_for_center_to_come_up(loop):
         yield w._start()
 
     try:
-        loop.run_sync(f, timeout=5)
+        loop.run_sync(f, timeout=4)
     except TimeoutError:
         pass
 
