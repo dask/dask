@@ -334,8 +334,8 @@ class Scheduler(Server):
                 s = self.waiting_data[dep]
                 with ignoring(KeyError):
                     s.remove(key)
-                if not s and dep:
-                    self.release_keys([dep])
+                if not s and dep and dep not in self.held_data:
+                    self.delete_data(keys=[dep])
 
         self.report({'op': 'key-in-memory',
                      'key': key,
@@ -376,23 +376,6 @@ class Scheduler(Server):
         for worker, stack in new_stacks.items():
             if stack:
                 self.ensure_occupied(worker)
-
-    def release_keys(self, keys):
-        """ Release key from distributed memory if its ready """
-        logger.debug("Release key %s", keys)
-        keys2 = {k for k in keys if k not in self.held_data
-                                      and not self.waiting_data.get(k)}
-        if keys2:
-            self.delete_data(keys=keys2)  # async
-
-        for key in keys2:
-            for w in self.who_has[key]:
-                self.has_what[w].remove(key)
-            del self.who_has[key]
-            if key in self.waiting_data:
-                del self.waiting_data[key]
-            if key in self.in_play:
-                self.in_play.remove(key)
 
     def update_data(self, who_has=None, nbytes=None):
         """
@@ -585,11 +568,14 @@ class Scheduler(Server):
 
     def release_held_data(self, keys=None):
         """ Mark that a key is no longer externally required to be in memory """
-        keys = {k for k in keys if k in self.held_data}
+        keys = set(keys)
+        keys &= self.held_data
         if keys:
             logger.debug("Release keys: %s", keys)
             self.held_data -= keys
-            self.release_keys(keys)
+            keys2 = {k for k in keys if not self.waiting_data.get(k)}
+            if keys2:
+                self.delete_data(keys=keys2)  # async
 
     def heal_state(self):
         """ Recover from catastrophic change """
@@ -797,6 +783,10 @@ class Scheduler(Server):
                 self.has_what[worker].remove(key)
                 d[worker].append(key)
             del self.who_has[key]
+            if key in self.waiting_data:
+                del self.waiting_data[key]
+            if key in self.in_play:
+                self.in_play.remove(key)
 
         # TODO: ignore missing workers
         coroutines = [rpc(ip=worker[0], port=worker[1]).delete_data(
