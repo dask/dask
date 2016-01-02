@@ -3,7 +3,7 @@ import sys
 import dask
 import dask.dataframe as dd
 from distributed import Executor
-from distributed.utils_test import cluster, _test_cluster, slow, loop
+from distributed.utils_test import cluster, slow, loop, gen_cluster
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
         futures_to_dask_array, _stack, stack)
@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 import pytest
+from toolz import identity
 
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -33,24 +34,22 @@ def assert_equal(a, b):
         assert a == b
 
 
-def test__futures_to_dask_dataframe(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False, loop=loop)
-        yield e._start()
+@gen_cluster()
+def test__futures_to_dask_dataframe(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
 
-        remote_dfs = e.map(lambda x: x, dfs)
-        ddf = yield _futures_to_dask_dataframe(remote_dfs, divisions=True,
-                executor=e)
+    remote_dfs = e.map(identity, dfs)
+    ddf = yield _futures_to_dask_dataframe(remote_dfs, divisions=True,
+            executor=e)
 
-        assert isinstance(ddf, dd.DataFrame)
-        assert ddf.divisions == (0, 30, 60, 80)
-        expr = ddf.x.sum()
-        result = yield e._get(expr.dask, expr._keys())
-        assert result == [sum([df.x.sum() for df in dfs])]
+    assert isinstance(ddf, dd.DataFrame)
+    assert ddf.divisions == (0, 30, 60, 80)
+    expr = ddf.x.sum()
+    result = yield e._get(expr.dask, expr._keys())
+    assert result == [sum([df.x.sum() for df in dfs])]
 
-        yield e._shutdown()
-    _test_cluster(f)
+    yield e._shutdown()
 
 
 def test_futures_to_dask_dataframe(loop):
@@ -95,52 +94,48 @@ def test_dataframes(loop):
                 assert_equal(local, remote)
 
 
-def test__futures_to_dask_array(loop):
+@gen_cluster()
+def test__futures_to_dask_array(s, a, b):
     import dask.array as da
-    @gen.coroutine
-    def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False, loop=loop)
-        yield e._start()
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
 
-        remote_arrays = [[[e.submit(np.full, (2, 3, 4), i + j + k)
-                            for i in range(2)]
-                            for j in range(2)]
-                            for k in range(4)]
+    remote_arrays = [[[e.submit(np.full, (2, 3, 4), i + j + k)
+                        for i in range(2)]
+                        for j in range(2)]
+                        for k in range(4)]
 
-        x = yield _futures_to_dask_array(remote_arrays, executor=e)
-        assert x.chunks == ((2, 2, 2, 2), (3, 3), (4, 4))
-        assert x.dtype == np.full((), 0).dtype
+    x = yield _futures_to_dask_array(remote_arrays, executor=e)
+    assert x.chunks == ((2, 2, 2, 2), (3, 3), (4, 4))
+    assert x.dtype == np.full((), 0).dtype
 
-        assert isinstance(x, da.Array)
-        expr = x.sum()
-        result = yield e._get(expr.dask, expr._keys())
-        assert isinstance(result[0], np.number)
+    assert isinstance(x, da.Array)
+    expr = x.sum()
+    result = yield e._get(expr.dask, expr._keys())
+    assert isinstance(result[0], np.number)
 
-        yield e._shutdown()
-    _test_cluster(f)
+    yield e._shutdown()
 
 
-def test__stack(loop):
+@gen_cluster()
+def test__stack(s, a, b):
     import dask.array as da
-    @gen.coroutine
-    def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False, loop=loop)
-        yield e._start()
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
 
-        arrays = e.map(np.ones, [(5, 5)] * 6)
-        y = yield _stack(arrays, axis=0)
-        assert y.shape == (6, 5, 5)
-        assert y.chunks == ((1, 1, 1, 1, 1, 1), (5,), (5,))
+    arrays = e.map(np.ones, [(5, 5)] * 6)
+    y = yield _stack(arrays, axis=0)
+    assert y.shape == (6, 5, 5)
+    assert y.chunks == ((1, 1, 1, 1, 1, 1), (5,), (5,))
 
-        y_results = yield e._get(y.dask, y._keys())
-        yy = da.Array._finalize(y, y_results)
+    y_results = yield e._get(y.dask, y._keys())
+    yy = da.Array._finalize(y, y_results)
 
-        assert isinstance(yy, np.ndarray)
-        assert yy.shape == y.shape
-        assert (yy == 1).all()
+    assert isinstance(yy, np.ndarray)
+    assert yy.shape == y.shape
+    assert (yy == 1).all()
 
-        yield e._shutdown()
-    _test_cluster(f)
+    yield e._shutdown()
 
 
 def test_stack(loop):
@@ -158,45 +153,43 @@ def test_stack(loop):
             assert isinstance(remote[2, :, 1].compute(get=e.get), np.ndarray)
 
 
-def test__dask_array_collections(loop):
+@gen_cluster()
+def test__dask_array_collections(s, a, b):
     import dask.array as da
-    @gen.coroutine
-    def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False, loop=loop)
-        yield e._start()
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
 
-        x_dsk = {('x', i, j): np.random.random((3, 3)) for i in range(3)
-                                                       for j in range(2)}
-        y_dsk = {('y', i, j): np.random.random((3, 3)) for i in range(2)
-                                                       for j in range(3)}
-        x_futures = yield e._scatter(x_dsk)
-        y_futures = yield e._scatter(y_dsk)
+    x_dsk = {('x', i, j): np.random.random((3, 3)) for i in range(3)
+                                                   for j in range(2)}
+    y_dsk = {('y', i, j): np.random.random((3, 3)) for i in range(2)
+                                                   for j in range(3)}
+    x_futures = yield e._scatter(x_dsk)
+    y_futures = yield e._scatter(y_dsk)
 
-        dt = np.random.random(0).dtype
-        x_local = da.Array(x_dsk, 'x', ((3, 3, 3), (3, 3)), dt)
-        y_local = da.Array(y_dsk, 'y', ((3, 3), (3, 3, 3)), dt)
+    dt = np.random.random(0).dtype
+    x_local = da.Array(x_dsk, 'x', ((3, 3, 3), (3, 3)), dt)
+    y_local = da.Array(y_dsk, 'y', ((3, 3), (3, 3, 3)), dt)
 
-        x_remote = da.Array(x_futures, 'x', ((3, 3, 3), (3, 3)), dt)
-        y_remote = da.Array(y_futures, 'y', ((3, 3), (3, 3, 3)), dt)
+    x_remote = da.Array(x_futures, 'x', ((3, 3, 3), (3, 3)), dt)
+    y_remote = da.Array(y_futures, 'y', ((3, 3), (3, 3, 3)), dt)
 
-        exprs = [lambda x, y: x.T + y,
-                 lambda x, y: x.mean() + y.mean(),
-                 lambda x, y: x.dot(y).std(axis=0),
-                 lambda x, y: x - x.mean(axis=1)[:, None]]
+    exprs = [lambda x, y: x.T + y,
+             lambda x, y: x.mean() + y.mean(),
+             lambda x, y: x.dot(y).std(axis=0),
+             lambda x, y: x - x.mean(axis=1)[:, None]]
 
-        for expr in exprs:
-            local = expr(x_local, y_local)
-            local_results = dask.get(local.dask, local._keys())
-            local_result = da.Array._finalize(local, local_results)
+    for expr in exprs:
+        local = expr(x_local, y_local)
+        local_results = dask.get(local.dask, local._keys())
+        local_result = da.Array._finalize(local, local_results)
 
-            remote = expr(x_remote, y_remote)
-            remote_results = yield e._get(remote.dask, remote._keys())
-            remote_result = da.Array._finalize(remote, remote_results)
+        remote = expr(x_remote, y_remote)
+        remote_results = yield e._get(remote.dask, remote._keys())
+        remote_result = da.Array._finalize(remote, remote_results)
 
-            assert np.all(local_result == remote_result)
+        assert np.all(local_result == remote_result)
 
-        yield e._shutdown()
-    _test_cluster(f)
+    yield e._shutdown()
 
 
 @pytest.mark.skipif(sys.platform!='linux',

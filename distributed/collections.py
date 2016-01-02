@@ -15,26 +15,35 @@ from .executor import default_executor, Future
 from .utils import sync, ignoring
 
 
+def index_min(df):
+    return df.index.min()
+
+def index_max(df):
+    return df.index.max()
+
+def get_columns(df):
+    return df.columns
+
 @gen.coroutine
 def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
     executor = default_executor(executor)
-    columns = executor.submit(lambda df: df.columns, futures[0])
+    columns = executor.submit(get_columns, futures[0])
     if divisions is True:
-        divisions = executor.map(lambda df: df.index.min(), futures)
-        divisions.append(executor.submit(lambda df: df.index.max(), futures[-1]))
-        divisions = yield executor._gather(divisions)
-        if sorted(divisions) != divisions:
-            divisions = [None] * (len(futures) + 1)
-    elif divisions in (None, False):
-        divisions = [None] * (len(futures) + 1)
+        divisions = executor.map(index_min, futures)
+        divisions.append(executor.submit(index_max, futures[-1]))
+        divisions2 = yield executor._gather(divisions)
+        if sorted(divisions2) != divisions2:
+            divisions2 = [None] * (len(futures) + 1)
+    elif divisions2 in (None, False):
+        divisions2 = [None] * (len(futures) + 1)
     else:
         raise NotImplementedError()
-    columns = yield columns._result()
+    columns2 = yield columns._result()
 
     name = 'distributed-pandas-to-dask-' + tokenize(*futures)
     dsk = {(name, i): f for i, f in enumerate(futures)}
 
-    raise gen.Return(dd.DataFrame(dsk, name, columns, divisions))
+    raise gen.Return(dd.DataFrame(dsk, name, columns2, divisions2))
 
 
 def futures_to_dask_dataframe(futures, divisions=None, executor=None):
