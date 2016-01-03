@@ -552,6 +552,10 @@ class Scheduler(Server):
 
         This happens whenever the Executor calls submit, map, get, or compute.
         """
+        for k in list(dsk):
+            if dsk[k] is k:
+                del dsk[k]
+
         update_state(self.dask, self.dependencies, self.dependents,
                 self.held_data, self.who_has, self.in_play,
                 self.waiting, self.waiting_data, dsk, keys)

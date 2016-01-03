@@ -710,3 +710,23 @@ def test_delete_callback(s, a, b):
     assert not a.data
 
     assert s._delete_periodic_callback.is_running()
+
+
+@gen_cluster()
+def test_self_aliases(s, a, b):
+    a.data['a'] = 1
+    s.update_data(who_has={'a': {a.address}}, nbytes={'a': 10})
+    s.update_graph(dsk={'a': 'a', 'b': (inc, 'a')},
+                   keys=['b'])
+
+    assert 'a' not in s.dask
+
+    sched, report = Queue(), Queue()
+    s.handle_queues(sched, report)
+    msg = yield report.get()
+    assert msg['op'] == 'stream-start'
+
+    while True:
+        msg = yield report.get()
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'b':
+            break
