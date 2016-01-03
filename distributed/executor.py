@@ -689,7 +689,7 @@ class Executor(object):
                          [v._keys() for v in val])
                     for opt, val in groups.items()])
         names = ['finalize-%s' % tokenize(v) for v in variables]
-        dsk2 = {name: (v._finalize, v, v._keys()) for name, v in zip(names, variables)}
+        dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
 
         dsk3 = {k: unpack_remotedata(v)[0] for k, v in merge(dsk, dsk2).items()}
 
