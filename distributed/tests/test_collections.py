@@ -3,7 +3,7 @@ import sys
 import dask
 import dask.dataframe as dd
 from distributed import Executor
-from distributed.utils_test import cluster, slow, loop, gen_cluster
+from distributed.utils_test import cluster, loop, gen_cluster
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
         futures_to_dask_array, _stack, stack)
@@ -62,36 +62,43 @@ def test_futures_to_dask_dataframe(loop):
             assert ddf.x.sum().compute(get=e.get) == sum([df.x.sum() for df in dfs])
 
 
-@slow
-def test_dataframes(loop):
+@gen_cluster()
+def test_dataframes(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
     dfs = [pd.DataFrame({'x': np.random.random(100),
                          'y': np.random.random(100)},
                         index=list(range(i, i + 100)))
            for i in range(0, 100*10, 100)]
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            remote_dfs = e.map(lambda x: x, dfs)
-            rdf = futures_to_dask_dataframe(remote_dfs, divisions=True)
-            name = 'foo'
-            ldf = dd.DataFrame({(name, i): df for i, df in enumerate(dfs)},
-                               name, dfs[0].columns,
-                               list(range(0, 1000, 100)) + [999])
 
-            assert rdf.divisions == ldf.divisions
-            tm.assert_frame_equal(rdf.compute(get=e.get),
-                                  ldf.compute(get=dask.get))
+    remote_dfs = e.map(lambda x: x, dfs)
+    rdf = yield _futures_to_dask_dataframe(remote_dfs, divisions=True)
+    name = 'foo'
+    ldf = dd.DataFrame({(name, i): df for i, df in enumerate(dfs)},
+                       name, dfs[0].columns,
+                       list(range(0, 1000, 100)) + [999])
 
-            exprs = [lambda df: df.x.mean(),
-                     lambda df: df.y.std(),
-                     lambda df: df.assign(z=df.x + df.y).drop_duplicates(),
-                     lambda df: df.index,
-                     lambda df: df.x,
-                     lambda df: df.x.cumsum(),
-                     lambda df: df.loc[50:75]]
-            for f in exprs:
-                local = f(ldf).compute(get=dask.get)
-                remote = f(rdf).compute(get=e.get)
-                assert_equal(local, remote)
+    assert rdf.divisions == ldf.divisions
+
+    remote, = e.compute(rdf)
+    result = yield remote._result()
+
+    tm.assert_frame_equal(result,
+                          ldf.compute(get=dask.get))
+
+    exprs = [lambda df: df.x.mean(),
+             lambda df: df.y.std(),
+             lambda df: df.assign(z=df.x + df.y).drop_duplicates(),
+             lambda df: df.index,
+             lambda df: df.x,
+             lambda df: df.x.cumsum(),
+             lambda df: df.loc[50:75]]
+    for f in exprs:
+        local = f(ldf).compute(get=dask.get)
+        remote, = e.compute(f(rdf))
+        remote = yield remote._result()
+        assert_equal(local, remote)
 
 
 @gen_cluster()
@@ -128,8 +135,8 @@ def test__stack(s, a, b):
     assert y.shape == (6, 5, 5)
     assert y.chunks == ((1, 1, 1, 1, 1, 1), (5,), (5,))
 
-    y_results = yield e._get(y.dask, y._keys())
-    yy = da.Array._finalize(y, y_results)
+    y_result, = e.compute(y)
+    yy = yield y_result._result()
 
     assert isinstance(yy, np.ndarray)
     assert yy.shape == y.shape
@@ -179,15 +186,12 @@ def test__dask_array_collections(s, a, b):
              lambda x, y: x - x.mean(axis=1)[:, None]]
 
     for expr in exprs:
-        local = expr(x_local, y_local)
-        local_results = dask.get(local.dask, local._keys())
-        local_result = da.Array._finalize(local, local_results)
+        local = expr(x_local, y_local).compute(get=dask.get)
 
-        remote = expr(x_remote, y_remote)
-        remote_results = yield e._get(remote.dask, remote._keys())
-        remote_result = da.Array._finalize(remote, remote_results)
+        remote, = e.compute(expr(x_remote, y_remote))
+        remote = yield remote._result()
 
-        assert np.all(local_result == remote_result)
+        assert np.all(local == remote)
 
     yield e._shutdown()
 
