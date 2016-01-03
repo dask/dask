@@ -111,7 +111,7 @@ def compute(*args, **kwargs):
 
     results_iter = iter(results)
     return tuple(a if not isinstance(a, Base)
-                   else a._finalize(a, next(results_iter))
+                   else a._finalize(next(results_iter))
                    for a in args)
 
 

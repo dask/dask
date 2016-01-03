@@ -60,7 +60,7 @@ def optimize(dsk, keys, **kwargs):
     return optimize(dsk, keys, **kwargs)
 
 
-def finalize(self, results):
+def finalize(results):
     return _concat(results)
 
 
@@ -692,18 +692,21 @@ class _Frame(Base):
         return self._constructor(dsk, name, num.column_info,
                                  divisions=[None, None])
 
-    def _cum_agg(self, token, chunk, aggregate, axis, skipna=True):
+    def _cum_agg(self, token, chunk, aggregate, axis, skipna=True,
+                 chunk_kwargs=None):
         """ Wrapper for cumulative operation """
 
         axis = self._validate_axis(axis)
 
         if axis == 1:
             name = '{0}{1}(axis=1)'.format(self._token_prefix, token)
-            return map_partitions(chunk, self.column_info, self, token=name)
+            return map_partitions(chunk, self.column_info, self, token=name,
+                    **chunk_kwargs)
         else:
             # cumulate each partitions
             name1 = '{0}{1}-map'.format(self._token_prefix, token)
-            cumpart = map_partitions(chunk, self.column_info, self, token=name1)
+            cumpart = map_partitions(chunk, self.column_info, self,
+                    token=name1, **chunk_kwargs)
 
             name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
             cumlast = map_partitions(_take_last, self.column_info, cumpart,
@@ -730,15 +733,19 @@ class _Frame(Base):
 
     @derived_from(pd.DataFrame)
     def cumsum(self, axis=None, skipna=True):
-        chunk = lambda x: self._partition_type.cumsum(x, axis=axis, skipna=skipna)
-        return self._cum_agg('cumsum', chunk=chunk, aggregate=operator.add,
-                             axis=axis, skipna=skipna)
+        return self._cum_agg('cumsum',
+                             chunk=self._partition_type.cumsum,
+                             aggregate=operator.add,
+                             axis=axis, skipna=skipna,
+                             chunk_kwargs=dict(axis=axis, skipna=skipna))
 
     @derived_from(pd.DataFrame)
     def cumprod(self, axis=None, skipna=True):
-        chunk = lambda x: self._partition_type.cumprod(x, axis=axis, skipna=skipna)
-        return self._cum_agg('cumprod', chunk=chunk, aggregate=operator.mul,
-                             axis=axis, skipna=skipna)
+        return self._cum_agg('cumprod',
+                             chunk=self._partition_type.cumprod,
+                             aggregate=operator.mul,
+                             axis=axis, skipna=skipna,
+                             chunk_kwargs=dict(axis=axis, skipna=skipna))
 
     @derived_from(pd.DataFrame)
     def cummax(self, axis=None, skipna=True):
@@ -747,9 +754,11 @@ class _Frame(Base):
                 return x.where((x > y) | x.isnull(), y, axis=x.ndim - 1)
             else:       # scalar
                 return x if x > y else y
-        chunk = lambda x: self._partition_type.cummax(x, axis=axis, skipna=skipna)
-        return self._cum_agg('cummax', chunk=chunk, aggregate=aggregate,
-                             axis=axis, skipna=skipna)
+        return self._cum_agg('cummax',
+                             chunk=self._partition_type.cummax,
+                             aggregate=aggregate,
+                             axis=axis, skipna=skipna,
+                             chunk_kwargs=dict(axis=axis, skipna=skipna))
 
     @derived_from(pd.DataFrame)
     def cummin(self, axis=None, skipna=True):
@@ -758,9 +767,11 @@ class _Frame(Base):
                 return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
             else:       # scalar
                 return x if x < y else y
-        chunk = lambda x: self._partition_type.cummin(x, axis=axis, skipna=skipna)
-        return self._cum_agg('cummin', chunk=chunk, aggregate=aggregate,
-                             axis=axis, skipna=skipna)
+        return self._cum_agg('cummin',
+                             chunk=self._partition_type.cummin,
+                             aggregate=aggregate,
+                             axis=axis, skipna=skipna,
+                             chunk_kwargs=dict(axis=axis, skipna=skipna))
 
     @derived_from(pd.DataFrame)
     def where(self, cond, other=np.nan):
