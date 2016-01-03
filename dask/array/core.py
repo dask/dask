@@ -729,11 +729,16 @@ def blockdims_from_blockshape(shape, chunks):
                               for d, bd in zip(shape, chunks))
 
 
-def finalize(arr, results):
-    if arr.shape:
+def finalize(results):
+    if not results:
         return concatenate3(results)
-    else:
-        return unpack_singleton(results)
+    results2 = results
+    while isinstance(results2, (tuple, list)):
+        if len(results2) > 1:
+            return concatenate3(results)
+        else:
+            results2 = results2[0]
+    return unpack_singleton(results)
 
 
 class Array(Base):
@@ -1640,7 +1645,7 @@ def unpack_singleton(x):
     >>> unpack_singleton(np.array(np.datetime64('2000-01-01')))
     array(datetime.date(2000, 1, 1), dtype='datetime64[D]')
     """
-    while True:
+    while isinstance(x, (list, tuple)):
         try:
             x = x[0]
         except (IndexError, TypeError, KeyError):

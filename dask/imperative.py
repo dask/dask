@@ -215,7 +215,7 @@ class Value(base.Base):
     """
     __slots__ = ('_key', '_dasks')
     _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
-    _finalize = staticmethod(lambda a, r: r[0])
+    _finalize = staticmethod(lambda r: r[0])
     _default_get = staticmethod(threaded.get)
 
     def __init__(self, name, dasks):

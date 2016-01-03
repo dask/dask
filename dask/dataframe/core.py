@@ -60,7 +60,7 @@ def optimize(dsk, keys, **kwargs):
     return optimize(dsk, keys, **kwargs)
 
 
-def finalize(self, results):
+def finalize(results):
     return _concat(results)
 
 
@@ -730,7 +730,8 @@ class _Frame(Base):
 
     @derived_from(pd.DataFrame)
     def cumsum(self, axis=None, skipna=True):
-        chunk = lambda x: self._partition_type.cumsum(x, axis=axis, skipna=skipna)
+        func = self._partition_type.cumsum
+        chunk = lambda x: func(x, axis=axis, skipna=skipna)
         return self._cum_agg('cumsum', chunk=chunk, aggregate=operator.add,
                              axis=axis, skipna=skipna)
 

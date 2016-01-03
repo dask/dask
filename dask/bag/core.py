@@ -174,9 +174,7 @@ def to_textfiles(b, path, name_function=str, encoding=system_encoding):
     return Bag(merge(b.dask, dsk), name, b.npartitions)
 
 
-def finalize(bag, results):
-    if isinstance(bag, Item):
-        return results[0]
+def finalize(results):
     if isinstance(results, Iterator):
         results = list(results)
     if isinstance(results[0], Iterable) and not isinstance(results[0], str):
@@ -186,10 +184,14 @@ def finalize(bag, results):
     return results
 
 
+def finalize_item(results):
+    return results[0]
+
+
 class Item(Base):
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(mpget)
-    _finalize = staticmethod(finalize)
+    _finalize = staticmethod(finalize_item)
 
     def __init__(self, dsk, key):
         self.dask = dsk
