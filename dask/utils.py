@@ -4,17 +4,23 @@ from collections import Iterator
 from contextlib import contextmanager
 from errno import ENOENT
 import functools
+import io
 import os
 import sys
 import shutil
 import struct
-import types
-import gzip
 import tempfile
 import inspect
 import codecs
+from sys import getdefaultencoding
 
-from .compatibility import unicode, long, getargspec
+from .compatibility import long, getargspec, BZ2File, GzipFile
+
+
+system_encoding = getdefaultencoding()
+if system_encoding == 'ascii':
+    system_encoding = 'utf-8'
+
 
 def raises(err, lamda):
     try:
@@ -135,15 +141,29 @@ def filetexts(d, open=open):
             os.remove(filename)
 
 
-opens = {'gzip': gzip.open}
+compressions = {'gz': 'gzip', 'bz2': 'bz2'}
 
 
-def get_bom(fn):
+def infer_compression(filename):
+    extension = os.path.splitext(filename)[-1].strip('.')
+    return compressions.get(extension, None)
+
+
+opens = {'gzip': GzipFile, 'bz2': BZ2File}
+
+
+def open(filename, mode='rb', compression=None, **kwargs):
+    if compression == 'infer':
+        compression = infer_compression(filename)
+    return opens.get(compression, io.open)(filename, mode, **kwargs)
+
+
+def get_bom(fn, compression=None):
     """
     Get the Byte Order Mark (BOM) if it exists.
     """
     boms = set((codecs.BOM_UTF16, codecs.BOM_UTF16_BE, codecs.BOM_UTF16_LE))
-    with open(fn, 'rb') as f:
+    with open(fn, mode='rb', compression=compression) as f:
         f.seek(0)
         bom = f.read(2)
         f.seek(0)
@@ -166,75 +186,105 @@ def get_bin_linesep(encoding, linesep):
         return linesep.encode(encoding)
 
 
-def next_linesep(fo, seek, encoding, linesep):
-    bin_linesep = get_bin_linesep(encoding, linesep)
-    data = b''
-    data_len = 0
+def textblock(filename, start, end, compression=None, encoding=system_encoding,
+              linesep=os.linesep, buffersize=4096):
+    """Pull out a block of text from a file given start and stop bytes.
 
-    while bin_linesep not in data:
-        data_len += 1
-        fo.seek(seek)
-        data = fo.read(data_len)
-        if len(data) < data_len:
-            break  # eof
-
-    stop = seek + data_len
-    start = stop - len(bin_linesep)
-    return start, stop
-
-
-def textblock(file, start, stop, compression=None, encoding=None,
-              linesep=None):
-    """ Pull out a block of text from a file given start and stop bytes
-
-    This gets data starting/ending from the next linesep delimiter
+    This gets data starting/ending from the next linesep delimiter. Each block
+    consists of bytes in the range [start,end[, i.e. the stop byte is excluded.
+    If `start` is 0, then `start` corresponds to the true start byte. If
+    `start` is greater than 0 and does not point to the beginning of a new
+    line, then `start` is incremented until it corresponds to the start byte of
+    the next line. If `end` does not point to the beginning of a new line, then
+    the line that begins before `end` is included in the block although its
+    last byte exceeds `end`.
 
     Examples
     --------
-
-    >> with open('myfile.txt', 'w') as f:
+    >> with open('myfile.txt', 'wb') as f:
     ..     f.write('123\n456\n789\nabc')
 
-    >> f = open('myfile.txt')
+    In the example below, 1 and 10 don't line up with endlines.
 
-    In the example below, 1 and 10 don't line up with endlines
-
-    >> textblock(f, 1, 10)
+    >> u''.join(textblock('myfile.txt', 1, 10))
     '456\n789\n'
     """
-    if isinstance(file, (str, unicode)):
-        myopen = opens.get(compression, open)
-        f = myopen(file, 'rb')
-        try:
-            result = textblock(f, start, stop, compression=None,
-                               encoding=encoding, linesep=linesep)
-        finally:
-            f.close()
-        return result
+    # Make sure `linesep` is not a byte string because
+    # `io.TextIOWrapper` in Python versions other than 2.7 dislike byte
+    # strings for the `newline` argument.
+    linesep = str(linesep)
 
-    if encoding is None:
-        encoding = getattr(file, 'encoding', 'utf-8')
-        if encoding is None:
-            encoding = 'utf-8'
+    # Get byte representation of the line separator.
+    bin_linesep = get_bin_linesep(encoding, linesep)
+    bin_linesep_len = len(bin_linesep)
 
-    if linesep is None:
-        linesep = os.linesep
+    if buffersize < bin_linesep_len:
+        error = ('`buffersize` ({0:d}) must be at least as large as the '
+                 'number of line separator bytes ({1:d}).')
+        raise ValueError(error.format(buffersize, bin_linesep_len))
 
-    if start:
-        startstart, startstop = next_linesep(file, start, encoding, linesep)
-    else:
-        startstart = start
-        startstop = start
+    chunksize = end - start
 
-    if stop is None:
-        file.seek(start)
-        return file.read()
+    with open(filename, 'rb', compression) as f:
+        with io.BufferedReader(f) as fb:
+            # If `start` does not correspond to the beginning of the file, we
+            # need to move the file pointer to `start - len(bin_linesep)`,
+            # search for the position of the next a line separator, and set
+            # `start` to the position after that line separator.
+            if start > 0:
+                # `start` is decremented by `len(bin_linesep)` to detect the
+                # case where the original `start` value corresponds to the
+                # beginning of a line.
+                start = max(0, start - bin_linesep_len)
+                # Set the file pointer to `start`.
+                fb.seek(start)
+                # Number of bytes to shift the file pointer before reading a
+                # new chunk to make sure that a multi-byte line separator, that
+                # is split by the chunk reader, is still detected.
+                shift = 1 - bin_linesep_len
+                while True:
+                    buf = f.read(buffersize)
+                    if not buf:
+                        raise StopIteration
+                    try:
+                        # Find the position of the next line separator and add
+                        # `len(bin_linesep)` which yields the position of the
+                        # first byte of the next line.
+                        start += buf.index(bin_linesep)
+                        start += bin_linesep_len
+                    except ValueError:
+                        # No line separator was found in the current chunk.
+                        # Before reading the next chunk, we move the file
+                        # pointer back `len(bin_linesep) - 1` bytes to make
+                        # sure that a multi-byte line separator, that may have
+                        # been split by the chunk reader, is still detected.
+                        start += len(buf)
+                        start += shift
+                        fb.seek(shift, os.SEEK_CUR)
+                    else:
+                        # We have found the next line separator, so we need to
+                        # set the file pointer to the first byte of the next
+                        # line.
+                        fb.seek(start)
+                        break
 
-    stopstart, stopstop = next_linesep(file, stop, encoding, linesep)
+            with io.TextIOWrapper(fb, encoding, newline=linesep) as fbw:
+                # Retrieve and yield lines until the file pointer reaches
+                # `end`.
+                while start < end:
+                    line = next(fbw)
+                    # We need to encode the line again to get the byte length
+                    # in order to correctly update `start`.
+                    bin_line_len = len(line.encode(encoding))
+                    if chunksize < bin_line_len:
+                        error = ('`chunksize` ({0:d}) is less than the line '
+                                 'length ({1:d}). This may cause duplicate '
+                                 'processing of this line. It is advised to '
+                                 'increase `chunksize`.')
+                        raise IOError(error.format(chunksize, bin_line_len))
 
-    file.seek(startstop)
-
-    return file.read(stopstop - startstop)
+                    yield line
+                    start += bin_line_len
 
 
 def concrete(seq):
