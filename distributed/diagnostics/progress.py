@@ -88,6 +88,9 @@ class Progress(SchedulerPlugin):
         self.all_keys.update(keys)
         self.keys |= errors & self.all_keys
 
+        if not self.keys:
+            self.stop(exception=None, key=None)
+
         logger.debug("Set up Progress keys")
         return errors
 
@@ -223,70 +226,6 @@ class MultiProgress(Progress):
             key = next(k for k in concat(self.keys.values()) if k in
                     self.scheduler.exceptions_blame)
             self.stop(exception=True, key=key)
-
-
-class TextProgressBar(Progress):
-    """ ProgressBar that emits result to stdout
-
-    This is suitable for console use.  See ``Progress`` for more information
-
-    See Also
-    --------
-    progress: User function
-    Progress: Super class with most of the logic
-    ProgressWidget: Widget version suitable for the notebook
-    """
-    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, width=40,
-            complete=False):
-        self._width = width
-        self._timer = None
-        Progress.__init__(self, keys, scheduler, minimum, dt, complete=complete)
-
-    def _start(self):
-        if not self._running:
-            # Start background thread
-            self._running = True
-            self._timer = threading.Thread(target=self._timer_func)
-            self._timer.daemon = True
-            self._timer.start()
-
-        self._update()
-
-    def stop(self, exception=None, key=None, timeout=10):
-        Progress.stop(self, exception, key=None)
-        self._update()
-        if self._running:
-            self._running = False
-            self._timer.join(timeout=timeout)
-            self.last_duration = self.elapsed
-            if self.last_duration < self._minimum:
-                return
-            else:
-                self._update()
-            sys.stdout.write('\n')
-            sys.stdout.flush()
-
-    def _timer_func(self):
-        """Background thread for updating the progress bar"""
-        while self._running:
-            if self.elapsed > self._minimum:
-                self._update()
-            time.sleep(self._dt)
-
-    def _update(self):
-        ntasks = len(self.all_keys)
-        ndone = ntasks - len(self.keys)
-        self._draw_bar(ndone / ntasks if ntasks else 1.0, self.elapsed)
-
-    def _draw_bar(self, frac, elapsed):
-        bar = '#' * int(self._width * frac)
-        percent = int(100 * frac)
-        elapsed = format_time(elapsed)
-        msg = '\r[{0:<{1}}] | {2}% Completed | {3}'.format(bar, self._width,
-                                                           percent, elapsed)
-        with ignoring(ValueError):
-            sys.stdout.write(msg)
-            sys.stdout.flush()
 
 
 class ProgressWidget(Progress):
