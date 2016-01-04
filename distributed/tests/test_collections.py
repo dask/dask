@@ -62,7 +62,7 @@ def test_futures_to_dask_dataframe(loop):
             assert ddf.x.sum().compute(get=e.get) == sum([df.x.sum() for df in dfs])
 
 
-@gen_cluster()
+@gen_cluster(timeout=120)
 def test_dataframes(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -101,7 +101,7 @@ def test_dataframes(s, a, b):
         assert_equal(local, remote)
 
 
-@gen_cluster()
+@gen_cluster(timeout=60)
 def test__futures_to_dask_array(s, a, b):
     import dask.array as da
     e = Executor((s.ip, s.port), start=False)
