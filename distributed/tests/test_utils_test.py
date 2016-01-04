@@ -1,16 +1,19 @@
 from distributed.utils_test import (cluster, loop, scheduler, gen_cluster,
-        gen_test)
+        gen_test, cluster_center)
 from distributed.core import rpc
 from distributed import Scheduler, Worker
 from tornado import gen
 
 def test_cluster(loop):
-    with cluster() as (c, [a, b]):
-        pass
+    with cluster() as (s, [a, b]):
+        s = rpc(ip='127.0.0.1', port=s['port'])
+        ident = loop.run_sync(s.identity)
+        assert ident['type'] == 'Scheduler'
+        assert len(ident['workers']) == 2
 
 
 def test_scheduler(loop):
-    with cluster() as (c, [a, b]):
+    with cluster_center() as (c, [a, b]):
         with scheduler(c['port']) as sport:
             r = rpc(ip='127.0.0.1', port=sport)
             resp = loop.run_sync(r.ncores)

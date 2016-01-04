@@ -70,7 +70,7 @@ def run_center(q):
     loop.start()
 
 
-def run_scheduler(q, center_port, **kwargs):
+def run_scheduler(q, center_port=None, **kwargs):
     from distributed import Scheduler
     from tornado.ioloop import IOLoop, PeriodicCallback
     import logging
@@ -79,10 +79,12 @@ def run_scheduler(q, center_port, **kwargs):
     PeriodicCallback(lambda: None, 500).start()
     logging.getLogger("tornado").setLevel(logging.CRITICAL)
 
-    scheduler = Scheduler(('127.0.0.1', center_port), **kwargs)
+    center = ('127.0.0.1', center_port) if center_port else None
+    scheduler = Scheduler(center=center, **kwargs)
     scheduler.listen(0)
 
-    loop.run_sync(scheduler.sync_center)
+    if center_port:
+        loop.run_sync(scheduler.sync_center)
     done = scheduler.start()
 
     q.put(scheduler.port)
@@ -150,6 +152,56 @@ def scheduler(cport, **kwargs):
 
 @contextmanager
 def cluster(nworkers=2, nanny=False):
+    if nanny:
+        _run_worker = run_nanny
+    else:
+        _run_worker = run_worker
+    scheduler_q = Queue()
+    scheduler = Process(target=run_scheduler, args=(scheduler_q,))
+    scheduler.start()
+    sport = scheduler_q.get()
+
+    workers = []
+    for i in range(nworkers):
+        q = Queue()
+        fn = '_test_worker-%s' % uuid.uuid1()
+        proc = Process(target=_run_worker, args=(q, sport),
+                        kwargs={'ncores': 1, 'local_dir': fn})
+        workers.append({'proc': proc, 'queue': q, 'dir': fn})
+
+    for worker in workers:
+        worker['proc'].start()
+
+    for worker in workers:
+        worker['port'] = worker['queue'].get()
+
+    loop = IOLoop()
+    s = rpc(ip='127.0.0.1', port=sport)
+    start = time()
+    try:
+        while True:
+            ncores = loop.run_sync(s.ncores)
+            if len(ncores) == nworkers:
+                break
+            if time() - start > 5:
+                raise Exception("Timeout on cluster creation")
+
+        yield {'proc': scheduler, 'port': sport}, workers
+    finally:
+        logger.debug("Closing out test cluster")
+        for port in [sport] + [w['port'] for w in workers]:
+            with ignoring(socket.error, TimeoutError, StreamClosedError):
+                loop.run_sync(lambda: disconnect('127.0.0.1', port),
+                              timeout=0.5)
+        for proc in [scheduler] + [w['proc'] for w in workers]:
+            with ignoring(Exception):
+                proc.terminate()
+        for fn in glob('_test_worker-*'):
+            shutil.rmtree(fn)
+
+
+@contextmanager
+def cluster_center(nworkers=2, nanny=False):
     if nanny:
         _run_worker = run_nanny
     else:
