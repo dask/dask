@@ -281,7 +281,7 @@ def dealias(dsk, keys=None):
     aliases = set((k for k, task in dsk.items() if ishashable(task) and task in dsk))
     roots = set((k for k, v in dependents.items() if not v))
 
-    dsk2 = inline(dsk, aliases - roots, inline_constants=False)
+    dsk2 = inline(dsk, aliases - roots - keys, inline_constants=False)
     dsk3 = dsk2.copy()
 
     dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk2)
