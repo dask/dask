@@ -65,8 +65,10 @@ def remove_full_slices(dsk, keys):
     {'a': (range, 5),
      'e': (getitem, 'a', (slice(None, 5, None),))}
     """
-    full_slice_keys = set(k for k, task in dsk.items() if is_full_slice(task))
-    dsk2 = dict((k, task[1] if k in full_slice_keys else task)
+    keys = set(keys)
+    full_slice_keys = set(k for k, task in dsk.items()
+                            if is_full_slice(task))
+    dsk2 = dict((k, task[1] if k in full_slice_keys and k not in keys else task)
                  for k, task in dsk.items())
     dsk3 = dealias(dsk2, keys)
     return dsk3
