@@ -896,7 +896,8 @@ class Scheduler(Server):
         # All quiet
         resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
         assert all(resp == b'OK' for resp in resps)
-        yield self.sync_center()
+        if self.center:
+            yield self.sync_center()
         self.start()
 
         # self.who_has.clear()

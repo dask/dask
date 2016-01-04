@@ -1118,6 +1118,16 @@ def test_restart():
         c.stop()
 
 
+def test_restart_sync_no_center(loop):
+    with cluster(nanny=True) as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            x = e.submit(inc, 1)
+            e.restart()
+            assert x.cancelled()
+            y = e.submit(inc, 2)
+            assert y.result() == 3
+
+
 def test_restart_sync(loop):
     with cluster_center(nanny=True) as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
