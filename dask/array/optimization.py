@@ -19,13 +19,13 @@ def optimize(dsk, keys, **kwargs):
     3.  Inline fast functions like getitem and np.transpose
     """
     keys = list(flatten(keys))
-    fast_functions=kwargs.get('fast_functions',
+    fast_functions = kwargs.get('fast_functions',
                              set([getarray, getitem, np.transpose]))
     dsk2 = cull(dsk, keys)
     dsk3 = remove_full_slices(dsk2, keys)
     dsk4 = fuse(dsk3, keys)
     dsk5 = valmap(rewrite_rules.rewrite, dsk4)
-    dsk6 = inline_functions(dsk5, fast_functions=fast_functions)
+    dsk6 = inline_functions(dsk5, keys, fast_functions=fast_functions)
     return dsk6
 
 

@@ -157,7 +157,8 @@ def _deps(dsk, arg):
     ['x']
     >>> _deps(dsk, ['x', 'y'])
     ['x', 'y']
-
+    >>> _deps(dsk, {'a': 'x'})
+    ['x']
     >>> _deps(dsk, (add, 'x', (inc, 'y')))  # doctest: +SKIP
     ['x', 'y']
     """
@@ -168,6 +169,8 @@ def _deps(dsk, arg):
         return result
     if isinstance(arg, list):
         return sum([_deps(dsk, a) for a in arg], [])
+    if isinstance(arg, dict):
+        return sum([_deps(dsk, v) for v in arg.values()], [])
     try:
         if arg not in dsk:
             return []
