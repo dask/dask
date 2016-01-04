@@ -5,6 +5,7 @@ from datetime import datetime
 from functools import partial
 import logging
 from math import ceil
+import socket
 from time import time
 import uuid
 
@@ -12,16 +13,16 @@ from toolz import frequencies, memoize, concat, identity, valmap
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
 from dask.core import istask, get_deps, reverse_dict
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server)
+        Server, send_recv)
 from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
-from .utils import All, ignoring, clear_queue, _deps, get_ip
+from .utils import All, ignoring, clear_queue, _deps, get_ip, ignore_exceptions
 
 
 logger = logging.getLogger(__name__)
@@ -112,19 +113,22 @@ class Scheduler(Server):
         A dict mapping a key to another key on which it depends that has failed
     *  **resource_logs:** ``list``:
         A list of dicts from the nannies, tracking resources on the workers
+    *  **deleted_keys:** ``{key: {workers}}``
+        Locations of workers that have keys that should be deleted
     *  **loop:** ``IOLoop``:
         The running Torando IOLoop
     """
-    def __init__(self, center=None, delete_batch_time=1, loop=None,
+    def __init__(self, center=None, loop=None,
             resource_interval=1, resource_log_size=1000,
-            max_buffer_size=MAX_BUFFER_SIZE, ip=None, **kwargs):
+            max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
+            ip=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
-        self.delete_queue = Queue()
         self.streams = []
         self.status = None
         self.coroutines = []
         self.ip = ip or get_ip()
+        self.delete_interval = delete_interval
 
         if center:
             self.center = coerce_to_rpc(center)
@@ -148,6 +152,7 @@ class Scheduler(Server):
         self.waiting = dict()
         self.waiting_data = dict()
         self.who_has = defaultdict(set)
+        self.deleted_keys = defaultdict(set)
 
         self.exceptions = dict()
         self.tracebacks = dict()
@@ -157,9 +162,10 @@ class Scheduler(Server):
         self.loop = loop or IOLoop.current()
         self.io_loop = self.loop
 
-        self.delete_batch_time = delete_batch_time
         self.resource_interval = resource_interval
         self.resource_log_size = resource_log_size
+
+        self._rpcs = dict()
 
         self.plugins = []
 
@@ -181,6 +187,12 @@ class Scheduler(Server):
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
+
+    def rpc(self, ip, port):
+        """ Cached rpc objects """
+        if (ip, port) not in self._rpcs:
+            self._rpcs[(ip, port)] = rpc(ip=ip, port=port)
+        return self._rpcs[(ip, port)]
 
     @property
     def address(self):
@@ -230,13 +242,15 @@ class Scheduler(Server):
         self.worker_queues = {addr: Queue() for addr in self.ncores}
 
         with ignoring(AttributeError):
-            self._delete_coroutine.cancel()
-        with ignoring(AttributeError):
             for c in self._worker_coroutines:
                 c.cancel()
 
-        self._delete_coroutine = self.delete()
         self._worker_coroutines = [self.worker(w) for w in self.ncores]
+        self._delete_periodic_callback = \
+                PeriodicCallback(callback=self.clear_data_from_workers,
+                                 callback_time=self.delete_interval,
+                                 io_loop=self.loop)
+        self._delete_periodic_callback.start()
 
         self.heal_state()
 
@@ -270,6 +284,7 @@ class Scheduler(Server):
         if self.center:
             yield self.center.close(close=True)
             self.center.close_streams()
+        self.status = 'closed'
 
     @gen.coroutine
     def cleanup(self):
@@ -280,7 +295,6 @@ class Scheduler(Server):
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
         n = 0
-        self.delete_queue.put_nowait({'op': 'close'}); n += 1
         for w, nc in self.ncores.items():
             for i in range(nc):
                 self.worker_queues[w].put_nowait({'op': 'close'}); n += 1
@@ -338,8 +352,8 @@ class Scheduler(Server):
                 s = self.waiting_data[dep]
                 with ignoring(KeyError):
                     s.remove(key)
-                if not s and dep:
-                    self.release_key(dep)
+                if not s and dep and dep not in self.held_data:
+                    self.delete_data(keys=[dep])
 
         self.report({'op': 'key-in-memory',
                      'key': key,
@@ -380,20 +394,6 @@ class Scheduler(Server):
         for worker, stack in new_stacks.items():
             if stack:
                 self.ensure_occupied(worker)
-
-    def release_key(self, key):
-        """ Release key from distributed memory if its ready """
-        logger.debug("Release key %s", key)
-        if key not in self.held_data and not self.waiting_data.get(key):
-            self.delete_queue.put_nowait({'op': 'delete-task',
-                                          'key': key})
-            for w in self.who_has[key]:
-                self.has_what[w].remove(key)
-            del self.who_has[key]
-            if key in self.waiting_data:
-                del self.waiting_data[key]
-            if key in self.in_play:
-                self.in_play.remove(key)
 
     def update_data(self, who_has=None, nbytes=None):
         """
@@ -552,6 +552,10 @@ class Scheduler(Server):
 
         This happens whenever the Executor calls submit, map, get, or compute.
         """
+        for k in list(dsk):
+            if dsk[k] is k:
+                del dsk[k]
+
         update_state(self.dask, self.dependencies, self.dependents,
                 self.held_data, self.who_has, self.in_play,
                 self.waiting, self.waiting_data, dsk, keys)
@@ -584,12 +588,16 @@ class Scheduler(Server):
             except Exception as e:
                 logger.exception(e)
 
-    def release_held_data(self, key=None):
+    def release_held_data(self, keys=None):
         """ Mark that a key is no longer externally required to be in memory """
-        if key in self.held_data:
-            logger.debug("Release key: %s", key)
-            self.held_data.remove(key)
-            self.release_key(key)
+        keys = set(keys)
+        keys &= self.held_data
+        if keys:
+            logger.debug("Release keys: %s", keys)
+            self.held_data -= keys
+            keys2 = {k for k in keys if not self.waiting_data.get(k)}
+            if keys2:
+                self.delete_data(keys=keys2)  # async
 
     def heal_state(self):
         """ Recover from catastrophic change """
@@ -605,8 +613,8 @@ class Scheduler(Server):
         if self.stacks:
             for key in add_keys:
                 self.mark_ready_to_run(key)
-        for key in set(self.who_has) & released - self.held_data:
-            self.delete_queue.put_nowait({'op': 'delete-task', 'key': key})
+
+        self.delete_data(keys=set(self.who_has) & released - self.held_data)
         self.in_play.update(self.who_has)
         self.log_state("After Heal")
 
@@ -754,7 +762,8 @@ class Scheduler(Server):
                 who_has = msg['who_has']
                 task = msg['task']
                 if not istask(task):
-                    response, content = yield worker.update_data(data={key: task})
+                    response, content = yield worker.update_data(
+                            data={key: task}, report=self.center is not None)
                     assert response == b'OK', response
                     nbytes = content['nbytes'][key]
                 else:
@@ -786,48 +795,38 @@ class Scheduler(Server):
                       'worker': ident})
         logger.debug("Close worker core, %s, %d", ident, i)
 
-
     @gen.coroutine
-    def delete(self):
-        """ Delete extraneous intermediates from distributed memory
+    def clear_data_from_workers(self):
+        """ This is intended to be run periodically,
 
-        This coroutine manages a connection to the center in order to send keys
-        that should be removed from distributed memory.  We batch several keys that
-        come in over the ``delete_queue`` into a list.  Roughly once a second we
-        send this list of keys over to the center which then handles deleting
-        these keys from workers' memory.::
-
-            worker \                                /-> worker node
-            worker -> scheduler -> delete -> center --> worker node
-            worker /                                \-> worker node
-
-        **Incoming Messages**
-
-        - delete-task: holds a key to be deleted
-        - close: close this coroutine
+        The ``self._delete_periodic_callback`` attribute holds a PeriodicCallback
+        that runs this every ``self.delete_interval`` milliseconds``.
         """
-        batch = list()
-        last = time()
+        if self.deleted_keys:
+            d = self.deleted_keys.copy()
+            self.deleted_keys.clear()
 
-        while True:
-            msg = yield self.delete_queue.get()
-            if msg['op'] == 'close':
-                break
+            coroutines = [self.rpc(ip=worker[0], port=worker[1]).delete_data(
+                                    keys=keys, report=False)
+                          for worker, keys in d.items()]
+            for worker, keys in d.items():
+                logger.debug("Remove %d keys from worker %s", len(keys), worker)
+            yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
 
-            # TODO: trigger coroutine to go off in a second if no activity
-            batch.append(msg['key'])
-            if batch and time() - last > self.delete_batch_time:  # One second batching
-                logger.debug("Ask center to delete %d keys", len(batch))
-                last = time()
-                if self.center:
-                    yield self.center.delete_data(keys=batch)
-                batch = list()
+        raise Return(b'OK')
 
-        if batch and self.center:
-            yield self.center.delete_data(keys=batch)
+    def delete_data(self, stream=None, keys=None):
+        who_has2 = {k: v for k, v in self.who_has.items() if k in keys}
 
-        self.put({'op': 'delete-finished'})
-        logger.debug('Delete finished')
+        for key in keys:
+            for worker in self.who_has[key]:
+                self.has_what[worker].remove(key)
+                self.deleted_keys[worker].add(key)
+            del self.who_has[key]
+            if key in self.waiting_data:
+                del self.waiting_data[key]
+            if key in self.in_play:
+                self.in_play.remove(key)
 
     @gen.coroutine
     def nanny_listen(self, ip, port):

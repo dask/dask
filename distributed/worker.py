@@ -149,17 +149,25 @@ class Worker(Server):
     def compute(self, stream, function=None, key=None, args=(), kwargs={},
             needed=[], who_has=None, report=True):
         """ Execute function """
-        needed = [n for n in needed if n not in self.data]
+        if needed:
+            needed = [n for n in needed if n not in self.data]
+        if who_has:
+            who_has = {k: v for k, v in who_has.items() if k not in self.data}
 
         # gather data from peers
         if needed or who_has:
-            logger.info("gather %d keys from peers: %s", len(needed), str(needed))
             try:
-                if who_has is not None:
+                if who_has:
+                    logger.info("gather %d keys from peers: %s", len(who_has),
+                            str(who_has))
                     other = yield gather_from_workers(who_has)
-                else:
+                elif needed:
+                    logger.info("gather %d keys from peers: %s", len(needed),
+                            str(needed))
                     other = yield _gather(self.center, needed=needed)
                     other = dict(zip(needed, other))
+                else:
+                    raise ValueError()
             except KeyError as e:
                 logger.warn("Could not find data during gather in compute", e)
                 raise Return((b'missing-data', e))

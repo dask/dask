@@ -284,3 +284,89 @@ def _test_scheduler(f, loop=None, b_ip='127.0.0.1'):
     loop = loop or IOLoop.current()
     loop.run_sync(g)
     _global_executor[0] = None
+
+
+def gen_test(timeout=10):
+    """ Coroutine test
+
+    @gen_test(timeout=5)
+    def test_foo():
+        yield ...  # use tornado coroutines
+    """
+    def _(func):
+        def test_func():
+            IOLoop.clear_instance()
+            loop = IOLoop()
+            loop.make_current()
+
+            cor = gen.coroutine(func)
+            try:
+                loop.run_sync(cor, timeout=timeout)
+            finally:
+                loop.stop()
+                loop.close()
+        return test_func
+    return _
+
+
+
+from .scheduler import Scheduler
+from .worker import Worker
+from .executor import Executor
+
+@gen.coroutine
+def start_cluster(ncores):
+    s = Scheduler(ip='127.0.0.1')
+    s.listen(0)
+    workers = [Worker(s.ip, s.port, ncores=v, ip=k) for k, v in ncores]
+
+    IOLoop.current().add_callback(s.start)
+    yield [w._start() for w in workers]
+
+    start = time()
+    while len(s.ncores) < len(ncores):
+        yield gen.sleep(0.01)
+        if time() - start > 5:
+            raise Exception("Cluster creation timeout")
+    raise gen.Return((s, workers))
+
+@gen.coroutine
+def end_cluster(s, workers):
+    logger.debug("Closing out test cluster")
+    for w in workers:
+        with ignoring(TimeoutError, StreamClosedError, OSError):
+            yield w._close()
+        if os.path.exists(w.local_dir):
+            shutil.rmtree(w.local_dir)
+    s.stop()
+
+
+def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10):
+    """ Coroutine test with small cluster
+
+    @gen_cluster()
+    def test_foo(scheduler, worker1, worker2):
+        yield ...  # use tornado coroutines
+
+    See also:
+        start
+        end
+    """
+    def _(func):
+        cor = gen.coroutine(func)
+
+        def test_func():
+            IOLoop.clear_instance()
+            loop = IOLoop()
+            loop.make_current()
+
+            s, workers = loop.run_sync(lambda: start_cluster(ncores))
+            try:
+                loop.run_sync(lambda: cor(s, *workers), timeout=timeout)
+            finally:
+                loop.run_sync(lambda: end_cluster(s, workers))
+                loop.stop()
+                loop.close()
+
+        return test_func
+    return _
