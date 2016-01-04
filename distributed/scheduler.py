@@ -935,14 +935,19 @@ class Scheduler(Server):
                 for worker, log in logs.items()}
 
     @gen.coroutine
-    def feed(self, stream, function=None, initial=None, interval=1, **kwargs):
-        if initial:
-            response = initial(self)
-            yield write(stream, response)
-        while True:
-            response = function(self)
-            yield write(stream, response)
-            yield gen.sleep(interval)
+    def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
+        state = setup(self) if setup else None
+        try:
+            while True:
+                if state is None:
+                    response = function(self)
+                else:
+                    response = function(self, state)
+                yield write(stream, response)
+                yield gen.sleep(interval)
+        except (OSError, IOError, StreamClosedError):
+            if teardown:
+                teardown(self, state)
 
     def get_who_has(self, stream, keys=None):
         if keys is not None:
