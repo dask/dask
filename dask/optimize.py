@@ -165,7 +165,7 @@ def inline(dsk, keys=None, inline_constants=True):
     return rv
 
 
-def inline_functions(dsk, fast_functions=None, inline_constants=False):
+def inline_functions(dsk, output, fast_functions=None, inline_constants=False):
     """ Inline cheap functions into larger operations
 
     Examples
@@ -174,13 +174,24 @@ def inline_functions(dsk, fast_functions=None, inline_constants=False):
     ...        'i': (inc, 'x'),
     ...        'd': (double, 'y'),
     ...        'x': 1, 'y': 1}
-    >>> inline_functions(dsk, [inc])  # doctest: +SKIP
+    >>> inline_functions(dsk, [], [inc])  # doctest: +SKIP
     {'out': (add, (inc, 'x'), 'd'),
      'd': (double, 'y'),
+     'x': 1, 'y': 1}
+
+    Protect output keys.  In the example below ``i`` is not inlined because it
+    is marked as an output key.
+
+    >>> inline_functions(dsk, ['i', 'out'], [inc, double])  # doctest: +SKIP
+    {'out': (add, 'i', (double, 'y')),
+     'i': (inc, 'x'),
      'x': 1, 'y': 1}
     """
     if not fast_functions:
         return dsk
+
+    output = set(output)
+
     fast_functions = set(fast_functions)
 
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
@@ -189,7 +200,8 @@ def inline_functions(dsk, fast_functions=None, inline_constants=False):
     keys = [k for k, v in dsk.items()
               if istask(v)
               and functions_of(v).issubset(fast_functions)
-              and dependents[k]]
+              and dependents[k]
+              and k not in output]
     if keys:
         return inline(dsk, keys, inline_constants=inline_constants)
     else:
@@ -269,7 +281,7 @@ def dealias(dsk, keys=None):
     aliases = set((k for k, task in dsk.items() if ishashable(task) and task in dsk))
     roots = set((k for k, v in dependents.items() if not v))
 
-    dsk2 = inline(dsk, aliases - roots, inline_constants=False)
+    dsk2 = inline(dsk, aliases - roots - keys, inline_constants=False)
     dsk3 = dsk2.copy()
 
     dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk2)

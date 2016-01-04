@@ -71,6 +71,14 @@ def test_optimize_slicing():
 
     assert remove_full_slices(dsk, []) == expected
 
+    # protect output keys
+    expected = {'a': (range, 10),
+                'c': (getarray, 'a', (slice(None, None, None),)),
+                'd': (getarray, 'c', (slice(None, 5, None),)),
+                'e': (getarray, 'd', (slice(None, None, None),))}
+
+    assert remove_full_slices(dsk, ['c', 'd', 'e']) == expected
+
 
 def test_fuse_slice():
     assert fuse_slice(slice(10, 15), slice(0, 5, 2)) == slice(10, 15, 2)

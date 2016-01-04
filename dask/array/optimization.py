@@ -19,13 +19,13 @@ def optimize(dsk, keys, **kwargs):
     3.  Inline fast functions like getitem and np.transpose
     """
     keys = list(flatten(keys))
-    fast_functions=kwargs.get('fast_functions',
+    fast_functions = kwargs.get('fast_functions',
                              set([getarray, getitem, np.transpose]))
     dsk2 = cull(dsk, keys)
     dsk3 = remove_full_slices(dsk2, keys)
     dsk4 = fuse(dsk3, keys)
     dsk5 = valmap(rewrite_rules.rewrite, dsk4)
-    dsk6 = inline_functions(dsk5, fast_functions=fast_functions)
+    dsk6 = inline_functions(dsk5, keys, fast_functions=fast_functions)
     return dsk6
 
 
@@ -65,8 +65,10 @@ def remove_full_slices(dsk, keys):
     {'a': (range, 5),
      'e': (getitem, 'a', (slice(None, 5, None),))}
     """
-    full_slice_keys = set(k for k, task in dsk.items() if is_full_slice(task))
-    dsk2 = dict((k, task[1] if k in full_slice_keys else task)
+    keys = set(keys)
+    full_slice_keys = set(k for k, task in dsk.items()
+                            if is_full_slice(task))
+    dsk2 = dict((k, task[1] if k in full_slice_keys and k not in keys else task)
                  for k, task in dsk.items())
     dsk3 = dealias(dsk2, keys)
     return dsk3
