@@ -10,7 +10,7 @@ from tornado.ioloop import IOLoop
 
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.utils_test import cluster, loop, _test_cluster
+from distributed.utils_test import cluster, loop, _test_cluster, cluster_center
 from distributed.client import (RemoteData, _gather, _scatter, _delete, _clear,
         scatter_to_workers, pack_data, gather, scatter, delete, clear)
 
@@ -103,6 +103,7 @@ def test_gather_with_missing_worker(loop):
 
         c.who_has['z'].add(bad)
         c.has_what[bad].add('z')
+        c.ncores['z'] = 4
 
         c.who_has['z'].add(a.address)
         c.has_what[a.address].add('z')
@@ -129,7 +130,7 @@ def test_pack_data():
 
 
 def test_gather_errors_voluminously(loop):
-    with cluster() as (c, [a, b]):
+    with cluster_center() as (c, [a, b]):
         try:
             gather(('127.0.0.1', c['port']), ['x', 'y', 'z'])
         except KeyError as e:
@@ -139,7 +140,7 @@ def test_gather_errors_voluminously(loop):
 @pytest.mark.skipif(sys.platform!='linux',
                     reason='KQueue error - uncertain cause')
 def test_gather_scatter(loop):
-    with cluster() as (c, [a, b]):
+    with cluster_center() as (c, [a, b]):
         data = {'x': 1, 'y': 2, 'z': 3}
         addr = '127.0.0.1', c['port']
         rds = scatter(addr, data)

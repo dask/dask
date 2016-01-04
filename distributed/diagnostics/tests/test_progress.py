@@ -8,7 +8,7 @@ from dask.core import get_deps
 from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
-        div, dec)
+        div, dec, cluster_center)
 from distributed.utils import All
 from distributed.utils_test import inc
 from distributed.diagnostics.progress import (Progress, TextProgressBar,
@@ -190,7 +190,7 @@ def test_TextProgressBar_empty(loop, capsys):
 
 
 def test_TextProgressBar_sync(loop, capsys):
-    with cluster() as (c, [a, b]):
+    with cluster_center() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             f = e.submit(lambda: 1)
             g = e.submit(lambda: 2)
@@ -220,7 +220,7 @@ def test_Progress_no_scheduler():
 
 
 def test_progress_function(loop, capsys):
-    with cluster() as (c, [a, b]):
+    with cluster_center() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             f = e.submit(lambda: 1)
             g = e.submit(lambda: 2)
