@@ -52,41 +52,119 @@ else:
     def _getargspec(func):
         return inspect.getargspec(func)
 
-    if sys.version_info[1] <= 6:
-        class BZ2File(bz2.BZ2File, BufferedIOBase):
+    if sys.version_info[1] <= 7:
+        class BZ2File(BufferedIOBase):
             def __init__(self, *args, **kwargs):
-                super(BZ2File, self).__init__(*args, **kwargs)
+                self.__obj = bz2.BZ2File(*args, **kwargs)
+
+            def close(self):
+                return self.__obj.close()
+
+            @property
+            def closed(self):
+                return self.__obj.closed
+
+            def flush(self):
+                pass
+
+            def isatty(self):
+                return self.__obj.isatty()
+
+            def read(self, *args, **kwargs):
+                return self.__obj.read(*args, **kwargs)
+
+            def read1(self, *args, **kwargs):
+                return self.__obj.read(*args, **kwargs)
 
             def readable(self):
-                return 'r' in self.mode
+                return 'r' in self.__obj.mode
 
-            def writable(self):
-                return 'w' in self.mode
+            def readline(self, *args, **kwargs):
+                return self.__obj.readline(*args, **kwargs)
+
+            def readlines(self, *args, **kwargs):
+                return self.__obj.readlines(*args, **kwargs)
+
+            def seek(self, *args, **kwargs):
+                self.__obj.seek(*args, **kwargs)
+                return self.tell()
 
             def seekable(self):
                 return self.readable()
 
-            def read1(self, size=-1):
-                return self.read(size)
+            def tell(self):
+                return self.__obj.tell()
 
-        class GzipFile(gzip.GzipFile, BufferedIOBase):
-            def __init__(self, *args, **kwargs):
-                super(GzipFile, self).__init__(*args, **kwargs)
-
-            def readable(self):
-                return self.mode == gzip.READ
+            def truncate(self, *args, **kwargs):
+                return self.__obj.truncate(*args, **kwargs)
 
             def writable(self):
-                return self.mode == gzip.WRITE
+                return 'w' in self.__obj.mode
 
-            def seekable(self):
-                # TODO: Can we really hard-code True here?
-                return True
+            def write(self, *args, **kwargs):
+                return self.__obj.write(*args, **kwargs)
 
-            def read1(self, size=-1):
-                return self.read(size)
+            def writelines(self, *args, **kwargs):
+                return self.__obj.writelines(*args, **kwargs)
     else:
         BZ2File = bz2.BZ2File
+
+    if sys.version_info[1] <= 6:
+        class GzipFile(BufferedIOBase):
+            def __init__(self, *args, **kwargs):
+                self.__obj = gzip.GzipFile(*args, **kwargs)
+
+            def close(self):
+                return self.__obj.close()
+
+            @property
+            def closed(self):
+                return self.__obj.fileobj is None
+
+            def flush(self, *args, **kwargs):
+                return self.__obj.flush(*args, **kwargs)
+
+            def isatty(self):
+                return self.__obj.isatty()
+
+            def read(self, *args, **kwargs):
+                return self.__obj.read(*args, **kwargs)
+
+            def read1(self, *args, **kwargs):
+                return self.__obj.read(*args, **kwargs)
+
+            def readable(self):
+                return self.__obj.mode == gzip.READ
+
+            def readline(self, *args, **kwargs):
+                return self.__obj.readline(*args, **kwargs)
+
+            def readlines(self, *args, **kwargs):
+                return self.__obj.readlines(*args, **kwargs)
+
+            def seek(self, *args, **kwargs):
+                self.__obj.seek(*args, **kwargs)
+                return self.tell()
+
+            def seekable(self):
+                # See https://hg.python.org/cpython/file/2.7/Lib/gzip.py#l421
+                return True
+
+            def tell(self):
+                return self.__obj.tell()
+
+            def truncate(self, *args, **kwargs):
+                return self.__obj.truncate(*args, **kwargs)
+
+            def writable(self):
+                return self.__obj.mode == gzip.WRITE
+
+            def write(self, *args, **kwargs):
+                return self.__obj.write(*args, **kwargs)
+
+            def writelines(self, *args, **kwargs):
+                return self.__obj.writelines(*args, **kwargs)
+    else:
         GzipFile = gzip.GzipFile
 
 

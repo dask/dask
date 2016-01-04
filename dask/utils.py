@@ -225,8 +225,7 @@ def textblock(filename, start, end, compression=None, encoding=system_encoding,
 
     chunksize = end - start
 
-    f = open(filename, 'rb', compression)
-    try:
+    with open(filename, 'rb', compression) as f:
         with io.BufferedReader(f) as fb:
             # If `start` does not correspond to the beginning of the file, we
             # need to move the file pointer to `start - len(bin_linesep)`,
@@ -286,8 +285,6 @@ def textblock(filename, start, end, compression=None, encoding=system_encoding,
 
                     yield line
                     start += bin_line_len
-    finally:
-        f.close()
 
 
 def concrete(seq):

@@ -39,25 +39,18 @@ Frank,600
 """.strip()
 
 
-def test_read_csv():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunkbytes=30)
+@pytest.mark.parametrize('myopen,compression',
+                         [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2')])
+def test_read_csv(myopen, compression):
+    text_ = text if compression is None else text.encode()
+    with filetext(text_, open=myopen) as fn:
+        f = dd.read_csv(fn, chunkbytes=30, compression=compression)
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
-                  pd.read_csv(fn))
-
-
-def test_read_gzip_csv():
-    with filetext(text.encode(), open=GzipFile) as fn:
-        f = dd.read_csv(fn, chunkbytes=30, compression='gzip')
-        assert list(f.columns) == ['name', 'amount']
-        assert f.npartitions > 1
-        result = f.compute(get=dask.get)
-        assert eq(result.reset_index(drop=True),
-                  pd.read_csv(fn, compression='gzip'))
+                  pd.read_csv(fn, compression=compression))
 
 
 def test_file_size():
