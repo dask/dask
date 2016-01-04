@@ -32,6 +32,8 @@
 
 [sinhrks](https://github.com/sinhrks)
 
+[Sigurd Spieckermann](https://github.com/sisp)
+
 [Stuart Owen](http://stuartowen.com/)
 
 [Tom Augspurger](https://github.com/TomAugspurger)
