@@ -733,16 +733,18 @@ class _Frame(Base):
 
     @derived_from(pd.DataFrame)
     def cumsum(self, axis=None, skipna=True):
+        cumsum = lambda x, **kwargs: x.cumsum(**kwargs)
         return self._cum_agg('cumsum',
-                             chunk=self._partition_type.cumsum,
+                             chunk=cumsum,
                              aggregate=operator.add,
                              axis=axis, skipna=skipna,
                              chunk_kwargs=dict(axis=axis, skipna=skipna))
 
     @derived_from(pd.DataFrame)
     def cumprod(self, axis=None, skipna=True):
+        cumprod = lambda x, **kwargs: x.cumprod(**kwargs)
         return self._cum_agg('cumprod',
-                             chunk=self._partition_type.cumprod,
+                             chunk=cumprod,
                              aggregate=operator.mul,
                              axis=axis, skipna=skipna,
                              chunk_kwargs=dict(axis=axis, skipna=skipna))
@@ -754,8 +756,9 @@ class _Frame(Base):
                 return x.where((x > y) | x.isnull(), y, axis=x.ndim - 1)
             else:       # scalar
                 return x if x > y else y
+        cummax = lambda x, **kwargs: x.cummax(**kwargs)
         return self._cum_agg('cummax',
-                             chunk=self._partition_type.cummax,
+                             chunk=cummax,
                              aggregate=aggregate,
                              axis=axis, skipna=skipna,
                              chunk_kwargs=dict(axis=axis, skipna=skipna))
@@ -767,8 +770,9 @@ class _Frame(Base):
                 return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
             else:       # scalar
                 return x if x < y else y
+        cummin = lambda x, **kwargs: x.cummin(**kwargs)
         return self._cum_agg('cummin',
-                             chunk=self._partition_type.cummin,
+                             chunk=cummin,
                              aggregate=aggregate,
                              axis=axis, skipna=skipna,
                              chunk_kwargs=dict(axis=axis, skipna=skipna))
