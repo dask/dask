@@ -3,6 +3,7 @@ import os
 import sys
 from time import time
 
+import pytest
 from tornado.tcpclient import TCPClient
 from tornado.iostream import StreamClosedError
 from tornado import gen
@@ -98,6 +99,7 @@ def test_nanny_process_failure(loop):
 
 
 def test_monitor_resources(loop):
+    pytest.importorskip('psutil')
     c = Center(ip='127.0.0.1')
     c.listen(0)
     n = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')

@@ -152,7 +152,10 @@ class Nanny(Server):
         return (self.ip, self.worker_port)
 
     def resource_collect(self):
-        import psutil
+        try:
+            import psutil
+        except ImportError:
+            return {}
         p = psutil.Process(self.process.pid)
         return {'timestamp': datetime.now(),
                 'cpu_percent': psutil.cpu_percent(),
