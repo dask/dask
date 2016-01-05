@@ -12,7 +12,7 @@ from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
 from distributed.utils import All
 from distributed.utils_test import inc
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
-        MultiProgress, progress, dependent_keys)
+        MultiProgress, dependent_keys)
 
 def test_dependent_keys():
     a, b, c, d, e, f, g = 'abcdefg'
@@ -106,16 +106,6 @@ def test_multiprogress(loop):
 def test_Progress_no_scheduler():
     with pytest.raises(ValueError):
         Progress([])
-
-
-def test_progress_function(loop, capsys):
-    with cluster_center() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            f = e.submit(lambda: 1)
-            g = e.submit(lambda: 2)
-
-            progress([[f], [[g]]], notebook=False)
-            check_bar_completed(capsys)
 
 
 def test_robust_to_bad_plugin(loop):
