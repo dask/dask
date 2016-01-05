@@ -18,7 +18,7 @@ setup(name='distributed',
       maintainer_email='mrocklin@gmail.com',
       license='BSD',
       install_requires=requires,
-      packages=['distributed'],
+      packages=['distributed', 'distributed.diagnostics'],
       long_description=(open('README.md').read() if os.path.exists('README.md')
                         else ''),
       scripts=[os.path.join('bin', name)
