@@ -58,7 +58,7 @@ def test_unpicklable_results_genreate_errors():
         result = get(dsk, 'x')
     except Exception as e:
         # can't use type because pickle / cPickle distinction
-        assert type(e).__name__ == 'PicklingError'
+        assert type(e).__name__ in ('PicklingError', 'AttributeError')
 
 
 def test_reuse_pool():
