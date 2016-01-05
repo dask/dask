@@ -183,7 +183,9 @@ class Scheduler(Server):
                          'feed': self.feed,
                          'terminate': self.close,
                          'broadcast': self.broadcast,
-                         'ncores': self.get_ncores}
+                         'ncores': self.get_ncores,
+                         'has_what': self.get_has_what,
+                         'who_has': self.get_who_has}
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
@@ -894,7 +896,8 @@ class Scheduler(Server):
         # All quiet
         resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
         assert all(resp == b'OK' for resp in resps)
-        yield self.sync_center()
+        if self.center:
+            yield self.sync_center()
         self.start()
 
         # self.who_has.clear()
@@ -933,17 +936,37 @@ class Scheduler(Server):
                 for worker, log in logs.items()}
 
     @gen.coroutine
-    def feed(self, stream, function=None, initial=None, interval=1, **kwargs):
-        if initial:
-            response = initial(self)
-            yield write(stream, response)
-        while True:
-            response = function(self)
-            yield write(stream, response)
-            yield gen.sleep(interval)
+    def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
+        state = setup(self) if setup else None
+        try:
+            while True:
+                if state is None:
+                    response = function(self)
+                else:
+                    response = function(self, state)
+                yield write(stream, response)
+                yield gen.sleep(interval)
+        except (OSError, IOError, StreamClosedError):
+            if teardown:
+                teardown(self, state)
 
-    def get_ncores(self, stream=None):
-        return self.ncores
+    def get_who_has(self, stream, keys=None):
+        if keys is not None:
+            return {k: self.who_has[k] for k in keys}
+        else:
+            return self.who_has
+
+    def get_has_what(self, stream, keys=None):
+        if keys is not None:
+            return {k: self.has_what[k] for k in keys}
+        else:
+            return self.has_what
+
+    def get_ncores(self, stream, addresses=None):
+        if addresses is not None:
+            return {k: self.ncores.get(k, None) for k in addresses}
+        else:
+            return self.ncores
 
     @gen.coroutine
     def broadcast(self, stream, msg=None):

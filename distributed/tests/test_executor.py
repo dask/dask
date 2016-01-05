@@ -22,8 +22,9 @@ from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
-from distributed.utils_test import (cluster, slow, _test_cluster,
-        _test_scheduler, loop, inc, dec, div, throws, gen_cluster, gen_test)
+from distributed.utils_test import (cluster, cluster_center, slow,
+        _test_cluster, _test_scheduler, loop, inc, dec, div, throws,
+        gen_cluster, gen_test)
 
 
 @gen_cluster()
@@ -124,8 +125,8 @@ def test_Future_exception(s, a, b):
 
 
 def test_Future_exception_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             x = e.submit(div, 1, 0)
             assert isinstance(x.exception(), ZeroDivisionError)
 
@@ -206,15 +207,15 @@ def test_gc(s, a, b):
 
 
 def test_thread(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             x = e.submit(inc, 1)
             assert x.result() == 2
 
 
 def test_sync_exceptions(loop):
-    with cluster() as (c, [a, b]):
-        e = Executor(('127.0.0.1', c['port']), start=True, loop=loop)
+    with cluster() as (s, [a, b]):
+        e = Executor(('127.0.0.1', s['port']), loop=loop)
 
         x = e.submit(div, 10, 2)
         assert x.result() == 5
@@ -269,8 +270,8 @@ def test_gather(s, a, b):
 
 
 def test_gather_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             x = e.submit(inc, 1)
             assert e.gather(x) == 2
 
@@ -293,8 +294,8 @@ def test_get(s, a, b):
 
 
 def test_get_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             assert e.get({'x': (inc, 1)}, 'x') == 2
 
 
@@ -349,8 +350,8 @@ def test__as_completed(s, a, b):
 
 
 def test_as_completed(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             x = e.submit(inc, 1)
             y = e.submit(inc, 2)
             z = e.submit(inc, 1)
@@ -361,8 +362,8 @@ def test_as_completed(loop):
 
 
 def test_wait_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             x = e.submit(inc, 1)
             y = e.submit(inc, 2)
 
@@ -453,8 +454,8 @@ def slowinc(x):
 
 def test_stress_gc(loop):
     n = 100
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             x = e.submit(slowinc, 1)
             for i in range(n):
                 x = e.submit(slowinc, x)
@@ -669,8 +670,8 @@ def dont_test_bad_restrictions_raise_exception(s, a, b):
 
 
 def test_submit_after_failed_worker(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             L = e.map(inc, range(10))
             wait(L)
             a['proc'].terminate()
@@ -679,8 +680,8 @@ def test_submit_after_failed_worker(loop):
 
 
 def test_gather_after_failed_worker(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             L = e.map(inc, range(10))
             wait(L)
             a['proc'].terminate()
@@ -690,8 +691,8 @@ def test_gather_after_failed_worker(loop):
 
 @slow
 def test_gather_then_submit_after_failed_workers(loop):
-    with cluster(nworkers=4) as (c, [w, x, y, z]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster(nworkers=4) as (s, [w, x, y, z]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             L = e.map(inc, range(20))
             wait(L)
             w['proc'].terminate()
@@ -881,11 +882,11 @@ def test_global_executors(loop):
     assert not _global_executor[0]
     with pytest.raises(ValueError):
         default_executor()
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             assert _global_executor == [e]
             assert default_executor() is e
-            with Executor(('127.0.0.1', c['port']), loop=loop) as f:
+            with Executor(('127.0.0.1', s['port']), loop=loop) as f:
                 assert _global_executor == [f]
                 assert default_executor() is f
                 assert default_executor(e) is e
@@ -999,8 +1000,8 @@ def test_get_with_error(s, a, b):
 
 
 def test_get_with_error_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
             with pytest.raises(ZeroDivisionError):
                 y = e.get(dsk, 'y')
@@ -1019,10 +1020,10 @@ def test_directed_scatter(s, a, b):
 
 
 def test_directed_scatter_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            e.scatter([1, 2, 3], workers=[('127.0.0.1', b['port'])])
-            has_what = sync(e.loop, e.center.has_what)
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            futures = e.scatter([1, 2, 3], workers=[('127.0.0.1', b['port'])])
+            has_what = sync(loop, e.scheduler.has_what)
             assert len(has_what[('127.0.0.1', b['port'])]) == 3
             assert len(has_what[('127.0.0.1', a['port'])]) == 0
 
@@ -1055,8 +1056,8 @@ def test_traceback(s, a, b):
 
 
 def test_traceback_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             x = e.submit(div, 1, 0)
             tb = x.traceback()
             if sys.version_info[0] >= 3:
@@ -1117,8 +1118,18 @@ def test_restart():
         c.stop()
 
 
+def test_restart_sync_no_center(loop):
+    with cluster(nanny=True) as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            x = e.submit(inc, 1)
+            e.restart()
+            assert x.cancelled()
+            y = e.submit(inc, 2)
+            assert y.result() == 3
+
+
 def test_restart_sync(loop):
-    with cluster(nanny=True) as (c, [a, b]):
+    with cluster_center(nanny=True) as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:
             assert len(e.scheduler.has_what) == 2
             x = e.submit(div, 1, 2)
@@ -1142,7 +1153,7 @@ def test_restart_sync(loop):
 
 
 def test_restart_fast(loop):
-    with cluster(nanny=True) as (c, [a, b]):
+    with cluster_center(nanny=True) as (c, [a, b]):
         with Executor(('127.0.0.1', c['port'])) as e:
             L = e.map(sleep, range(10))
 
@@ -1222,8 +1233,8 @@ def test_upload_file(s, a, b):
 
 
 def test_upload_file_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port'])) as e:
             def g():
                 import myfile
                 return myfile.x
@@ -1247,8 +1258,8 @@ def test_upload_file_exception(s, a, b):
 
 
 def test_upload_file_exception_sync(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port'])) as e:
             with tmp_text('myfile.py', 'syntax-error!') as fn:
                 with pytest.raises(SyntaxError):
                     e.upload_file(fn)
@@ -1340,8 +1351,8 @@ def test_async_compute(s, a, b):
 
 
 def test_sync_compute(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port'])) as e:
             from dask.imperative import do, value
             x = value(1)
             y = do(inc)(x)
@@ -1431,8 +1442,8 @@ def test_remote_submit_on_Future(s, a, b):
 
 
 def test_start_is_idempotent(loop):
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             e.start()
             e.start()
             e.start()

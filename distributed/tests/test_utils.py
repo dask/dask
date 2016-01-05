@@ -2,6 +2,7 @@ from distributed.utils import All, sync, is_kernel
 from distributed.utils_test import loop, inc, throws
 import pytest
 from threading import Thread
+import threading
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
@@ -41,15 +42,18 @@ def test_All(loop):
 
 def test_sync(loop):
     e = Event()
+    e2 = threading.Event()
 
     @gen.coroutine
     def wait_until_event():
+        e2.set()
         yield e.wait()
 
     thread = Thread(target=loop.run_sync, args=(wait_until_event,))
     thread.daemon = True
     thread.start()
 
+    e2.wait()
     result = sync(loop, inc, 1)
     assert result == 2
 
@@ -73,6 +77,15 @@ def test_sync_error(loop):
 
     loop.add_callback(e.set)
     thread.join()
+
+
+def test_sync_inactive_loop(loop):
+    @gen.coroutine
+    def f(x):
+        raise gen.Return(x + 1)
+
+    y = sync(loop, f, 1)
+    assert y == 2
 
 
 def test_is_kernel():

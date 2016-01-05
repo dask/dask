@@ -623,25 +623,50 @@ def test_add_worker(s, a, b):
 
 @gen_cluster()
 def test_feed(s, a, b):
-    def initial(scheduler):
-        return scheduler.id
-
     def func(scheduler):
         return scheduler.processing, scheduler.stacks
 
     stream = yield connect(s.ip, s.port)
     yield write(stream, {'op': 'feed',
                          'function': func,
-                         'initial': initial,
                          'interval': 0.01})
-    response = yield read(stream)
-    assert response == s.id
 
     for i in range(5):
         response = yield read(stream)
         expected = s.processing, s.stacks
 
     stream.close()
+
+
+@gen_cluster()
+def test_feed_setup_teardown(s, a, b):
+    def setup(scheduler):
+        return 1
+
+    def func(scheduler, state):
+        assert state == 1
+        return b'OK'
+
+    def teardown(scheduler, state):
+        scheduler.flag = 'done'
+
+    stream = yield connect(s.ip, s.port)
+    yield write(stream, {'op': 'feed',
+                         'function': func,
+                         'setup': setup,
+                         'teardown': teardown,
+                         'interval': 0.01})
+
+
+    for i in range(5):
+        response = yield read(stream)
+        assert response == b'OK'
+
+    stream.close()
+    start = time()
+    while not hasattr(s, 'flag'):
+        yield gen.sleep(0.01)
+        assert time() - start < 5
 
 
 @gen_test()
