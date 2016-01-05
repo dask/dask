@@ -76,7 +76,10 @@ def All(*args):
 def sync(loop, func, *args, **kwargs):
     """ Run coroutine in loop running in separate thread """
     if not loop._running:
-        return loop.run_sync(lambda: func(*args, **kwargs))
+        try:
+            return loop.run_sync(lambda: func(*args, **kwargs))
+        except RuntimeError:  # loop already running
+            pass
 
     from threading import Event
     e = Event()
