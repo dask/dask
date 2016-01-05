@@ -69,7 +69,8 @@ def tmpfile(extension='', dir=None):
             if os.path.isdir(filename):
                 shutil.rmtree(filename)
             else:
-                os.remove(filename)
+                with ignoring(OSError):
+                    os.remove(filename)
 
 
 @contextmanager
@@ -244,7 +245,7 @@ def textblock(filename, start, end, compression=None, encoding=system_encoding,
                 shift = 1 - bin_linesep_len
                 while True:
                     buf = f.read(buffersize)
-                    if not buf:
+                    if len(buf) < bin_linesep_len:
                         raise StopIteration
                     try:
                         # Find the position of the next line separator and add

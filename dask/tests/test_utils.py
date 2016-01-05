@@ -17,8 +17,9 @@ def test_textblock(myopen, compression):
         assert text == ('456 789 '.replace(' ', os.linesep)).encode()
         assert set(map(len, text.split())) == set([3])
 
-        assert ''.join(textblock(fn, 0, 4, compression)).encode() == ('123' + os.linesep).encode()
-        assert ''.join(textblock(fn, 4, 4, compression)).encode() == b''
+        k = 3 + len(os.linesep)
+        assert ''.join(textblock(fn, 0, k, compression)).encode() == ('123' + os.linesep).encode()
+        assert ''.join(textblock(fn, k, k, compression)).encode() == b''
 
 
 def test_textblock_multibyte_linesep():
