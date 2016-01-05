@@ -23,17 +23,12 @@ A user computes the addition of two variables already on the cluster, then pulls
 Step 1: Executor
 ----------------
 
-``z`` begins its life when the ``Executor.submit`` function enqueues the following
-message on the ``scheduler_queue``::
+``z`` begins its life when the ``Executor.submit`` function sends the following
+message to the ``Scheduler``::
 
     {'op': 'update-graph',
      'dsk': {'z': (add, x, y)},
      'keys': ['z']}
-
-Which tells the scheduler (running in a separate thread) to merge this little
-dask graph onto the full graph and to keep the key ``'z'`` around until told
-otherwise and not to garbage collect it.  (Actually, the key will be something
-like ``'add-8fea4942f8524dd28b45'``, but ``'z'`` is easier to type.
 
 The executor then creates a ``Future`` object with the key ``'z'`` and returns
 that object back to the user.  This happens even before the message has been
@@ -43,19 +38,20 @@ received by the scheduler.  The status of the future says ``'pending'``.
 Step 2: Arrive in the Scheduler
 -------------------------------
 
-The scheduler eventually arrives at the message provided by the executor,
-telling it to update its state with this little graph that shows how to compute
-``z``.  It goes ahead and does so::
+A few milliseconds later, the scheduler receives this message on an open socket.
 
-    dsk.update[msg['dsk']]
+The scheduler updates its state with this little graph that shows how to compute
+``z``.::
 
-But it also has *a lot* of other work to do.  Notably, it has to identify that
-``x`` and ``y`` are themselves futures, and connect all of those dependencies.
-This is a long and detail oriented process that involves updating roughly 10
-sets and dictionaries.  Interested readers should investigate
-``distributed/scheduler.py::update_state()``.  While this is fairly complex and
-tedious to describe rest assured that it all happens in constant time and in
-about a millisecond.
+    scheduler.dask.update[msg['dsk']]
+
+The scheduler also updates *a lot* of other state.  Notably, it has to identify
+that ``x`` and ``y`` are themselves variables, and connect all of those
+dependencies.  This is a long and detail oriented process that involves
+updating roughly 10 sets and dictionaries.  Interested readers should
+investigate ``distributed/scheduler.py::update_state()``.  While this is fairly
+complex and tedious to describe rest assured that it all happens in constant
+time and in about a millisecond.
 
 
 Step 3: Select a Worker
@@ -91,13 +87,15 @@ the top of the stack (note, that this may be some time after the last section
 if other tasks placed themselves on top of the worker's stack in the meantime.)
 
 We place ``z`` into a ``worker_queue`` associated with that worker and a
-``worker_core`` coroutine pulls it out.  ``z``'s function and the keys associated
-to its arguments are packed up into a message that looks like this::
+``worker_core`` coroutine pulls it out.  ``z``'s function, the keys associated
+to its arguments, and the locations of workers that hold those keys are packed
+up into a message that looks like this::
 
     {'op': 'compute',
      'function': execute_task,
      'args': ((add, 'x', 'y'),),
-     'needed': ['x', 'y'],
+     'who_has': {'x': {(worker_host, port)},
+                 'y': {(worker_host, port), (worker_host, port)}},
      'key': 'z'}
 
 This message is serialized and sent across a TCP socket to the worker.
@@ -107,13 +105,10 @@ Step 5: Execute on the Worker
 -----------------------------
 
 The worker unpacks the message, and notices that it needs to have both ``x``
-and ``y``.  If the worker does not already have both of these then it asks the
-center where it can get them::
-
-    Worker: Hey Center, where can I find 'y'?
-    Center: Hey Worker, Try any of these locations {Alice, Bob, ...}
-    Worker: Hey Alice, can you send me 'y'?
-    Alice: Hey Worker, here's the value for 'y', ...
+and ``y``.  If the worker does not already have both of these then it gathers
+them from the workers listed in the ``who_has`` dictionary also in the message.
+For each key that it doesn't have it selects a valid worker from ``who_has`` at
+random and gathers data from it.
 
 After this exchange, the worker has both the value for ``x`` and the value for
 ``z``.  So it launches the computation ``add(x, y)`` in a local
@@ -143,10 +138,11 @@ The scheduler receives this message and does a few things:
 1.  It notes that the worker has a free core, and sends up another task if
     available
 2.  If ``x`` or ``y`` are no longer needed then it sends a message out to
-    delete them from local memory.
-3.  It triggers an ``Event`` that the ``z`` ``Future`` knows about, waking up
-    any client code waiting on ``z``'s future.  In particular, this wakes up
-    the ``z.result()`` command executed by the user originally.
+    relevant workers to delete them from local memory.
+3.  It sends a message to all of the clients that ``z`` is ready and so all
+    client ``Future`` objects that are currently waiting should, wake up.  In
+    particular, this wakes up the ``z.result()`` command executed by the user
+    originally.
 
 
 Step 7:  Gather
@@ -173,16 +169,16 @@ The user leaves this part of their code and the local variable ``z`` goes out
 of scope.  The Python garbage collector cleans it up.  This triggers a
 decremented reference on the executor (we didn't mention this, but when we
 created the ``Future`` we also started a reference count.)  If this is the only
-instance of a Future pointing to ``z`` then we send a message down to the
-scheduler (in the other thread) that it is OK to release ``z``.  The user no
-longer requires it to persist.
+instance of a Future pointing to ``z`` then we send a message up to the
+scheduler that it is OK to release ``z``.  The user no longer requires it to
+persist.
 
 The scheduler receives this message and, if there are no computations that
-might depend on ``z`` in the immediate future, it sends a message to the ``delete``
-coroutine (along the ``delete_queue``) that it should delete ``z`` from distributed
-memory.  Every second or so the delete coroutine sends a batch of variables to
-be deleted out to the ``Center``, a remote process, which then goes and informs
-various workers that they can clear out ``z`` from their local dictionaries.
+might depend on ``z`` in the immediate future, it removes elements of this key
+from local scheduler state and adds the key to a list of keys to be deleted
+periodically.  Every 500 ms a message goes out to relevant workers telling them
+which keys they can delete from their local memory.  The graph/recipe to create
+the result of ``z`` persists in the scheduler for all time.
 
 Overhead
 --------

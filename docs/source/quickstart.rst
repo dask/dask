@@ -6,17 +6,17 @@ Install
 
 ::
 
-    $ pip install distributed
+    $ pip install distributed --upgrade
 
 Setup Cluster
 -------------
 
 Set up a fake cluster on your local computer::
 
-   $ dcenter & \
-     dworker 127.0.0.1:8787 & \
-     dworker 127.0.0.1:8787 & \
-     dworker 127.0.0.1:8787 &
+   $ dscheduler
+   $ dworker 127.0.0.1:8786
+   $ dworker 127.0.0.1:8786
+   $ dworker 127.0.0.1:8786
 
 Or if you can ssh into your own computer (or others) then use the ``dcluster``
 command, providing hostnames or IP addresses::
@@ -36,7 +36,7 @@ IP/port.::
 .. code-block:: python
 
    >>> from distributed import Executor
-   >>> executor = Executor('127.0.0.1:8787')
+   >>> executor = Executor('127.0.0.1:8786')
 
 Map and Submit Functions
 ~~~~~~~~~~~~~~~~~~~~~~~~

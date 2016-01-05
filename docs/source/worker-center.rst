@@ -1,16 +1,15 @@
-Worker-Center
-=============
+Worker
+======
 
 We build a distributed network from two kinds of nodes.
 
-*  A single Center node
+*  A single scheduler node
 *  Several Worker nodes
 
 .. image:: images/network.png
    :alt: distributed network
 
-Worker
-------
+This page describes the worker nodes.
 
 Serve Data
 ~~~~~~~~~~
@@ -35,6 +34,7 @@ data from one worker and send it to another.
 However, this is only an example, typically one does not manually manage data
 transfer between workers.  They handle that as necessary on their own.
 
+
 Compute
 ~~~~~~~
 
@@ -56,9 +56,10 @@ actual result stays on the remote worker.
    >>> metadata
    {'nbytes': 1024}
 
-The worker also reports back to the center whenever it completes a computation.
-Metadata storage is centralized but all data transfer is peer-to-peer.  Here is
-a quick example of what happens during a call to ``compute``::
+The worker also reports back to the center/scheduler whenever it completes a
+computation.  Metadata storage is centralized but all data transfer is
+peer-to-peer.  Here is a quick example of what happens during a call to
+``compute``::
 
    client:  Hey Alice!   Compute ``z <- add(x, a)``
 
@@ -72,11 +73,3 @@ a quick example of what happens during a call to ``compute``::
 
 
 .. autoclass:: distributed.worker.Worker
-
-
-Center
-------
-
-Centers hold metadata about what data resides on which workers.
-
-.. autoclass:: distributed.center.Center

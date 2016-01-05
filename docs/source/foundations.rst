@@ -20,7 +20,7 @@ is welcome.
 Concurrency with Tornado Coroutines
 -----------------------------------
 
-Worker and Center nodes operate concurrently.  They serve several overlapping
+Worker and Scheduler nodes operate concurrently.  They serve several overlapping
 requests and perform several overlapping computations at the same time without
 blocking.  There are several approaches for concurrent programming, we've
 chosen to use Tornado for the following reasons:
@@ -36,8 +36,8 @@ chosen to use Tornado for the following reasons:
 Communication with Tornado Streams (raw sockets)
 ------------------------------------------------
 
-Workers, the Center, and clients must all communicate with each other over the
-network.  We use *raw sockets* as mediated by tornado streams.  We separate
+Workers, the Scheduler, and clients communicate with each other over the
+network.  They use *raw sockets* as mediated by tornado streams.  We separate
 messages by a sentinel value.
 
 .. autofunction:: distributed.core.read
@@ -47,10 +47,10 @@ messages by a sentinel value.
 Servers
 -------
 
-The Worker and Center nodes serve requests over TCP.  Both the Worker and
-Center objects inherit from a ``Server`` class.  This Server class thinly wraps
-``tornado.tcpserver.TCPServer``.  These servers expect requests of a
-particular form.
+Worker and Scheduler nodes serve requests over TCP.  Both Worker and Scheduler
+objects inherit from a ``Server`` class.  This Server class thinly wraps
+``tornado.tcpserver.TCPServer``.  These servers expect requests of a particular
+form.
 
 .. autoclass:: distributed.core.Server
 
@@ -160,8 +160,7 @@ with the stream data case above.
 Everything is a Server
 ----------------------
 
-The Center, Workers, Scheduler, and Nanny objects all inherit from Server.
-Each maintains separate state and serves separate functions but all communicate
-in the way shown above.  They talk to each other by opening connections,
-writing messages that trigger remote functions, and then collect the results
-with read.
+Workers, Scheduler, and Nanny objects all inherit from Server.  Each maintains
+separate state and serves separate functions but all communicate in the way
+shown above.  They talk to each other by opening connections, writing messages
+that trigger remote functions, and then collect the results with read.

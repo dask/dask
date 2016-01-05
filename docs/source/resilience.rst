@@ -10,7 +10,7 @@ User code failures
 
 When a function raises an error that error is kept and transmitted to the
 executor on request.  Any attempt to gather that result *or any dependent
-result* will raise that exception
+result* will raise that exception.
 
 .. code-block:: python
 
@@ -19,6 +19,10 @@ result* will raise that exception
 
    >>> x = executor.submit(div, 1, 0)
    >>> x.result()
+   ZeroDivisionError: division by zero
+
+   >>> y = executor.submit(add, x, 10)
+   >>> y.result()  # same error as above
    ZeroDivisionError: division by zero
 
 This does not affect the smooth operation of the scheduler or worker in any
@@ -52,22 +56,17 @@ Hardware Failures
 -----------------
 
 It is not clear under which circumstances the local process will know that the
-remote worker has closed the connection.  The fool-proof solution to this
-problem is to depend on regular checks from each of the workers (so called
-heart-beating).  The ``distributed`` library does not do this at this time.
+remote worker has closed the connection.  If the socket does not close cleanly
+then the system will wait for a timeout, roughly three seconds, before marking
+the worker as failed and resuming smooth operation.
 
 
-Local Failures
---------------
+Scheduler Failure
+-----------------
 
-Your own process containing the executor might die.  There is currently no
+The process containing the scheduler might die.  There is currently no
 persistence mechanism to record and recover the scheduler state.  The data will
 remain on the cluster until cleared.
-
-.. code-block:: python
-
-    >>> from distributed.client import clear
-    >>> clear('center-ip:8787')
 
 
 Restart and Nanny Processes
@@ -81,11 +80,11 @@ workers in an inconvenient state that makes them unresponsive.  The
 1.  Sends a soft shutdown signal to all of the coroutines watching workers
 2.  Sends a hard kill signal to each worker's Nanny process, which oversees
     that worker.  This Nanny process terminates the worker process
-    ungracefully and unregisters that worker from the Center.
+    ungracefully and unregisters that worker from the Scheduler.
 3.  Clears out all scheduler state and sets all Future's status to
     ``'cancelled'``
 4.  Sends a restart signal to all Nanny processes, which in turn restart clean
-    Worker processes and register these workers with the Center.  New workers
+    Worker processes and register these workers with the Scheduler.  New workers
     may not have the same port as their previous iterations.  The
     ``.nannies`` dictionary on the Executor serves as an accurate set of
     aliases if necessary.
@@ -96,5 +95,5 @@ scheduler.  Any data or computations not saved to persistent storage are
 lost.  This process is very robust to a number of failure modes, including
 non-responsive or swamped workers but not including full hardware failures.
 
-Currently the user may experience a number of Error logging messages from
+Currently the user may experience a few error logging messages from
 Tornado upon closing their session.  These can safely be ignored.

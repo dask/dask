@@ -4,12 +4,12 @@ Executor
 The Executor is the primary entry point for users of ``distributed``.
 
 After you :doc:`setup a cluster <setup>`, initialize an ``Executor`` by
-pointing it to the address of a ``Center`` or ``Scheduler`` nodes:
+pointing it to the address of a ``Scheduler``:
 
 .. code-block:: python
 
    >>> from distributed import Executor
-   >>> executor = Executor('127.0.0.1:8787')
+   >>> executor = Executor('127.0.0.1:8786')
 
 Usage
 -----
@@ -151,8 +151,8 @@ When things go wrong, restart the cluster with the ``.restart()`` method.
 
    >>> executor.restart()
 
-This both resets the local scheduler state and restarts all worker processes.
-All current data and computations will be lost.  All existing futures set their
+This both resets the scheduler state and all of the worker processes.  All
+current data and computations will be lost.  All existing futures set their
 status to ``'cancelled'``.
 
 See :doc:`resilience <resilence>` for more information.

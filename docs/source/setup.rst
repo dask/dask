@@ -1,8 +1,9 @@
 Setup Network
 =============
 
-A ``distributed`` network consists of one ``Center`` node and several
+A ``distributed`` network consists of one ``Scheduler`` node and several
 ``Worker`` nodes.  One can set these up in a variety of ways
+
 
 ``dcluster``
 ------------
@@ -28,38 +29,38 @@ Or you can specify a hostfile that includes a list of hosts::
    $ dcluster --hostfile hostfile.txt
 
 
-``dcenter`` and ``dworker``
+``dscheduler`` and ``dworker``
 ---------------------------
 
-Alternatively you can launch the ``dcenter`` and ``dworker`` processes in some
-other way either by manually SSHing into remote nodes or by using a deployment
-system like SunGrid Engine.
+Alternatively you can launch the ``dscheduler`` and ``dworker`` processes in
+some other way either by manually SSHing into remote nodes or by using a
+deployment system like SunGrid Engine.
 
-Launch ``dcenter`` on one node::
+Launch ``dscheduler`` on one node::
 
    $ dcenter
-   Start center at 192.168.0.1:8787
+   Start scheduler at 192.168.0.1:8786
 
 Then launch ``dworker`` on the rest of the nodes, providing the address to the
-node that hosts ``dcenter``::
+node that hosts ``dscheduler``::
 
-   $ dworker 192.168.0.1:8787
-   Start worker at:            192.168.0.2:8788
-   Registered with center at:  192.168.0.1:8787
+   $ dworker 192.168.0.1:8786
+   Start worker at:            192.168.0.2:12345
+   Registered with center at:  192.168.0.1:8786
 
-   $ dworker 192.168.0.1:8787
-   Start worker at:            192.168.0.3:8788
-   Registered with center at:  192.168.0.1:8787
+   $ dworker 192.168.0.1:8786
+   Start worker at:            192.168.0.3:12346
+   Registered with center at:  192.168.0.1:8786
 
-   $ dworker 192.168.0.1:8787
-   Start worker at:            192.168.0.4:8788
-   Registered with center at:  192.168.0.1:8787
+   $ dworker 192.168.0.1:8786
+   Start worker at:            192.168.0.4:12347
+   Registered with center at:  192.168.0.1:8786
 
 
-``Center`` and ``Worker`` objects
+``Scheduler`` and ``Worker`` objects
 ---------------------------------
 
-Alternatively you can start up the ``distributed.center.Center`` and
+Alternatively you can start up the ``distributed.scheduler.Scheduler`` and
 ``distributed.worker.Worker`` objects within a Python session manually.
 
 
@@ -67,7 +68,7 @@ Cleanup
 -------
 
 It is common and safe to terminate the cluster by just killing the processes.
-The workers and center have no persistent state.
+The workers and scheduler have no persistent state.
 
 Programmatically you can use the client interface (``rpc``) to call the
-``terminate`` methods on the workers and centers.
+``terminate`` methods on the workers and schedulers.
