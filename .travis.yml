@@ -25,7 +25,7 @@ install:
   - python setup.py install
 
 script:
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage run $(which py.test) distributed -m "not avoid_travis" --doctest-modules --verbose; else py.test -m "not avoid_travis" distributed --verbose; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage run $(which py.test) distributed -m "not avoid_travis" --doctest-modules --verbose -s; else py.test -m "not avoid_travis" distributed --verbose -s; fi
 
 after_success:
     - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
