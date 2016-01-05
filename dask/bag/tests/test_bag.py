@@ -328,12 +328,12 @@ def test_from_filenames_gzip():
                   (io.TextIOWrapper,
                    (io.BufferedReader,
                     (open, os.path.abspath('foo.json.gz'), 'rb', 'gzip')),
-                   system_encoding, None, '\n')),
+                   system_encoding, None, os.linesep)),
                  (list,
                   (io.TextIOWrapper,
                    (io.BufferedReader,
                     (open, os.path.abspath('bar.json.gz'), 'rb', 'gzip')),
-                   system_encoding, None, '\n'))]))
+                   system_encoding, None, os.linesep))]))
 
 
 def test_from_filenames_bz2():
@@ -344,12 +344,12 @@ def test_from_filenames_bz2():
                   (io.TextIOWrapper,
                    (io.BufferedReader,
                     (open, os.path.abspath('foo.json.bz2'), 'rb', 'bz2')),
-                   system_encoding, None, '\n')),
+                   system_encoding, None, os.linesep)),
                  (list,
                   (io.TextIOWrapper,
                    (io.BufferedReader,
                     (open, os.path.abspath('bar.json.bz2'), 'rb', 'bz2')),
-                   system_encoding, None, '\n'))]))
+                   system_encoding, None, os.linesep))]))
 
 
 def test_from_filenames_large():
@@ -384,8 +384,8 @@ def test_from_filenames_large_gzip():
         f.write(b'Hello, world!\n' * 100)
         f.close()
 
-        b = db.from_filenames(fn, chunkbytes=100)
-        c = db.from_filenames(fn)
+        b = db.from_filenames(fn, chunkbytes=100, linesep='\n')
+        c = db.from_filenames(fn, linesep='\n')
         assert len(b.dask) > 5
         assert list(b) == list(c)
 

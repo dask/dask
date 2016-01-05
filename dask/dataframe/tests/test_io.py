@@ -44,13 +44,14 @@ Frank,600
 def test_read_csv(myopen, compression):
     text_ = text if compression is None else text.encode()
     with filetext(text_, open=myopen) as fn:
-        f = dd.read_csv(fn, chunkbytes=30, compression=compression)
+        f = dd.read_csv(fn, chunkbytes=30, compression=compression,
+                lineterminator='\n')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
-                  pd.read_csv(fn, compression=compression))
+                  pd.read_csv(fn, compression=compression, lineterminator='\n'))
 
 
 def test_file_size():

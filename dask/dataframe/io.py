@@ -187,7 +187,7 @@ def fill_kwargs(fn, **kwargs):
 
     kwargs['dtype'] = dtype
 
-    return head.columns, kwargs
+    return head.columns.map(lambda s: s.strip()), kwargs
 
 
 @wraps(pd.read_csv)
