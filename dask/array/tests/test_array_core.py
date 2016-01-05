@@ -1734,6 +1734,10 @@ def test_broadcast_chunks():
     with pytest.raises(ValueError):
         broadcast_chunks(a, b)
 
+    a = ((1,), (5, 5),)
+    b = ((1,), (5, 5),)
+    assert broadcast_chunks(a, b) == a
+
 
 def test_chunks_error():
     x = np.ones((10, 10))

@@ -601,7 +601,10 @@ def broadcast_chunks(*chunkss):
     result = []
     for i in range(n):
         step1 = [c[i] for c in chunkss2]
-        step2 = [c for c in step1 if c != (1,)]
+        if all(c == (1,) for c in step1):
+            step2 = step1
+        else:
+            step2 = [c for c in step1 if c != (1,)]
         if len(set(step2)) != 1:
             raise ValueError("Chunks do not align: %s" % str(step2))
         result.append(step2[0])
