@@ -13,12 +13,11 @@ Release per project:
 
 *   and push to github
 
-        git push blaze master
-        git push blaze --tags
+        git push blaze master --tags
 
 *  Upload to PyPI
 
-        python setup.py register sdist upload
+        python setup.py register sdist bdist upload
 
 *   Update anaconda recipe.
 

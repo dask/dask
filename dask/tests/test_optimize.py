@@ -133,7 +133,7 @@ def test_inline_functions():
            d: (double, y),
            x: 1, y: 1}
 
-    result = inline_functions(dsk, fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions=set([inc]))
     expected = {'out': (add, (inc, x), d),
                 d: (double, y),
                 x: 1, y: 1}
@@ -145,13 +145,13 @@ def test_inline_ignores_curries_and_partials():
            'a': (partial(add, 1), 'x'),
            'b': (inc, 'a')}
 
-    result = inline_functions(dsk, fast_functions=set([add]))
+    result = inline_functions(dsk, [], fast_functions=set([add]))
     assert 'a' not in set(result.keys())
 
 
 def test_inline_doesnt_shrink_fast_functions_at_top():
     dsk = {'x': (inc, 'y'), 'y': 1}
-    result = inline_functions(dsk, fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions=set([inc]))
     assert result == dsk
 
 
@@ -164,8 +164,15 @@ def test_inline_traverses_lists():
     expected = {'out': (sum, [(inc, x), d]),
                 d: (double, y),
                 x: 1, y: 1}
-    result = inline_functions(dsk, fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions=set([inc]))
     assert result == expected
+
+
+def test_inline_protects_output_keys():
+    dsk = {'x': (inc, 1), 'y': (double, 'x')}
+    assert inline_functions(dsk, [], [inc]) == {'y': (double, (inc, 1))}
+    assert inline_functions(dsk, ['x'], [inc]) == {'y': (double, 'x'),
+                                                   'x': (inc, 1)}
 
 
 def test_functions_of():
@@ -207,6 +214,19 @@ def test_dealias():
                 'c': (identity, 'a')}
 
     assert dealias(dsk)  == expected
+
+
+def test_dealias_keys():
+    dsk = {'a': (inc, 1),
+           'b': 'a',
+           'c': (inc, 2),
+           'd': 'c'}
+
+    assert dealias(dsk) == {'b': (inc, 1), 'd': (inc, 2)}
+
+    assert dealias(dsk, keys=['a', 'b', 'd']) == {'a': (inc, 1),
+                                                  'b': (identity, 'a'),
+                                                  'd': (inc, 2)}
 
 
 def test_equivalent():

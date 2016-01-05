@@ -16,7 +16,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
         from_array, from_bcolz, from_dask_array)
-from dask.compatibility import StringIO
+from dask.compatibility import StringIO, BZ2File, GzipFile
 
 from dask.utils import filetext, tmpfile, ignoring
 from dask.async import get_sync
@@ -39,32 +39,26 @@ Frank,600
 """.strip()
 
 
-def test_read_csv():
-    with filetext(text) as fn:
-        f = dd.read_csv(fn, chunkbytes=30)
+@pytest.mark.parametrize('myopen,compression',
+                         [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2')])
+def test_read_csv(myopen, compression):
+    text_ = text if compression is None else text.encode()
+    with filetext(text_, open=myopen) as fn:
+        f = dd.read_csv(fn, chunkbytes=30, compression=compression,
+                lineterminator='\n')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
-                  pd.read_csv(fn))
-
-
-def test_read_gzip_csv():
-    with filetext(text.encode(), open=gzip.open) as fn:
-        f = dd.read_csv(fn, chunkbytes=30, compression='gzip')
-        assert list(f.columns) == ['name', 'amount']
-        assert f.npartitions > 1
-        result = f.compute(get=dask.get)
-        assert eq(result.reset_index(drop=True),
-                  pd.read_csv(fn, compression='gzip'))
+                  pd.read_csv(fn, compression=compression, lineterminator='\n'))
 
 
 def test_file_size():
     counts = (len(text), len(text) + text.count('\n'))
     with filetext(text) as fn:
         assert file_size(fn) in counts
-    with filetext(text.encode(), open=gzip.open) as fn:
+    with filetext(text.encode(), open=GzipFile) as fn:
         assert file_size(fn, 'gzip') in counts
 
 
