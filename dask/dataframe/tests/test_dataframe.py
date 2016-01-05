@@ -864,6 +864,15 @@ def test_reductions():
         assert eq(dds.nunique(), pds.nunique())
         assert eq(dds.nbytes, pds.nbytes)
 
+        assert eq(dds.sum(skipna=False), pds.sum(skipna=False))
+        assert eq(dds.min(skipna=False), pds.min(skipna=False))
+        assert eq(dds.max(skipna=False), pds.max(skipna=False))
+        assert eq(dds.std(skipna=False), pds.std(skipna=False))
+        assert eq(dds.var(skipna=False), pds.var(skipna=False))
+        assert eq(dds.std(skipna=False, ddof=0), pds.std(skipna=False, ddof=0))
+        assert eq(dds.var(skipna=False, ddof=0), pds.var(skipna=False, ddof=0))
+        assert eq(dds.mean(skipna=False), pds.mean(skipna=False))
+
     assert_dask_graph(d.b.sum(), 'series-sum')
     assert_dask_graph(d.b.min(), 'series-min')
     assert_dask_graph(d.b.max(), 'series-max')
@@ -1010,6 +1019,62 @@ def test_reductions_frame_dtypes():
 
     numerics = ddf[['int', 'float']]
     assert numerics._get_numeric_data().dask == numerics.dask
+
+def test_reductions_frame_nan():
+    df = pd.DataFrame({'a': [1, 2, np.nan, 4, 5, 6, 7, 8],
+                       'b': [1, 2, np.nan, np.nan, np.nan, 5, np.nan, np.nan],
+                       'c': [np.nan] * 8})
+    ddf = dd.from_pandas(df, 3)
+    assert eq(df.sum(), ddf.sum())
+    assert eq(df.min(), ddf.min())
+    assert eq(df.max(), ddf.max())
+    assert eq(df.count(), ddf.count())
+    assert eq(df.std(), ddf.std())
+    assert eq(df.var(), ddf.var())
+    assert eq(df.std(ddof=0), ddf.std(ddof=0))
+    assert eq(df.var(ddof=0), ddf.var(ddof=0))
+    assert eq(df.mean(), ddf.mean())
+
+    assert eq(df.sum(skipna=False), ddf.sum(skipna=False))
+    assert eq(df.min(skipna=False), ddf.min(skipna=False))
+    assert eq(df.max(skipna=False), ddf.max(skipna=False))
+    assert eq(df.std(skipna=False), ddf.std(skipna=False))
+    assert eq(df.var(skipna=False), ddf.var(skipna=False))
+    assert eq(df.std(skipna=False, ddof=0), ddf.std(skipna=False, ddof=0))
+    assert eq(df.var(skipna=False, ddof=0), ddf.var(skipna=False, ddof=0))
+    assert eq(df.mean(skipna=False), ddf.mean(skipna=False))
+
+    assert eq(df.sum(axis=1, skipna=False), ddf.sum(axis=1, skipna=False))
+    assert eq(df.min(axis=1, skipna=False), ddf.min(axis=1, skipna=False))
+    assert eq(df.max(axis=1, skipna=False), ddf.max(axis=1, skipna=False))
+    assert eq(df.std(axis=1, skipna=False), ddf.std(axis=1, skipna=False))
+    assert eq(df.var(axis=1, skipna=False), ddf.var(axis=1, skipna=False))
+    assert eq(df.std(axis=1, skipna=False, ddof=0),
+              ddf.std(axis=1, skipna=False, ddof=0))
+    assert eq(df.var(axis=1, skipna=False, ddof=0),
+              ddf.var(axis=1, skipna=False, ddof=0))
+    assert eq(df.mean(axis=1, skipna=False), ddf.mean(axis=1, skipna=False))
+
+    assert eq(df.cumsum(), ddf.cumsum())
+    assert eq(df.cummin(), ddf.cummin())
+    assert eq(df.cummax(), ddf.cummax())
+    assert eq(df.cumprod(), ddf.cumprod())
+
+    assert eq(df.cumsum(skipna=False), ddf.cumsum(skipna=False))
+    assert eq(df.cummin(skipna=False), ddf.cummin(skipna=False))
+    assert eq(df.cummax(skipna=False), ddf.cummax(skipna=False))
+    assert eq(df.cumprod(skipna=False), ddf.cumprod(skipna=False))
+
+    assert eq(df.cumsum(axis=1), ddf.cumsum(axis=1))
+    assert eq(df.cummin(axis=1), ddf.cummin(axis=1))
+    assert eq(df.cummax(axis=1), ddf.cummax(axis=1))
+    assert eq(df.cumprod(axis=1), ddf.cumprod(axis=1))
+
+    assert eq(df.cumsum(axis=1, skipna=False), ddf.cumsum(axis=1, skipna=False))
+    assert eq(df.cummin(axis=1, skipna=False), ddf.cummin(axis=1, skipna=False))
+    assert eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
+    assert eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
+
 
 def test_describe():
     # prepare test case which approx quantiles will be the same as actuals
@@ -2089,6 +2154,15 @@ def test_sample():
     assert eq(c, d)
 
     assert a.sample(0.5)._name != a.sample(0.5)._name
+
+
+def test_sample_without_replacement():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+    b = a.sample(0.7, replace=False)
+    bb = b.index.compute()
+    assert len(bb) == len(set(bb))
 
 
 def test_datetime_accessor():

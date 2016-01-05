@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+import codecs
 from fnmatch import fnmatch
-from functools import wraps, partial
+from functools import wraps
 from glob import glob
 from math import ceil
 from operator import getitem
@@ -14,8 +15,8 @@ import pandas as pd
 import numpy as np
 from toolz import merge, assoc, dissoc
 
-from ..compatibility import BytesIO, unicode, range, apply
-from ..utils import textblock, file_size, get_bom
+from ..compatibility import StringIO, unicode, range, apply
+from ..utils import textblock, file_size, get_bom, system_encoding
 from ..base import tokenize
 from .. import array as da
 from ..async import get_sync
@@ -30,9 +31,23 @@ csv_defaults = {'compression': None}
 
 
 def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
-    block = textblock(fn, i*chunkbytes, (i+1) * chunkbytes, compression,
-                      encoding=kwargs.get('encoding'))
-    block = BytesIO(bom + block)
+    kwargs = kwargs.copy()
+    linesep = kwargs.get('lineterminator', os.linesep)
+    encoding = kwargs.pop('encoding', system_encoding)
+
+    start = i * chunkbytes
+    end = start + chunkbytes
+
+    if encoding == 'utf-16':
+        bom_encoding = {codecs.BOM_UTF16_BE: 'utf-16-be',
+                        codecs.BOM_UTF16_LE: 'utf-16-le'}
+        if not bom:
+            bom = codecs.BOM_UTF16
+        if i > 0:
+            encoding = bom_encoding[bom]
+
+    block = StringIO(u''.join(textblock(fn, start, end, compression, encoding,
+                                        linesep)))
     try:
         return pd.read_csv(block, **kwargs)
     except ValueError as e:
@@ -68,6 +83,8 @@ def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
         #       as apporpriate
 
         raise ValueError(msg)
+    finally:
+        block.close()
 
 
 def clean_kwargs(kwargs):
@@ -170,7 +187,7 @@ def fill_kwargs(fn, **kwargs):
 
     kwargs['dtype'] = dtype
 
-    return head.columns, kwargs
+    return head.columns.map(lambda s: s.strip()), kwargs
 
 
 @wraps(pd.read_csv)
@@ -192,7 +209,7 @@ def read_csv(fn, **kwargs):
 
     token = tokenize(os.path.getmtime(fn), kwargs)
     name = 'read-csv-%s-%s' % (fn, token)
-    bom = get_bom(fn)
+    bom = get_bom(fn, kwargs.get('compression', None))
 
     # Chunk sizes and numbers
     total_bytes = file_size(fn, kwargs['compression'])

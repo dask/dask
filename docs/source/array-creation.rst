@@ -95,6 +95,19 @@ specify ``chunks`` in one of three ways
 Your chunks input will be normalized and stored in the third and most explicit
 form.
 
+A good choice of ``chunks`` follows the following rules:
+
+1.  A chunk should be small enough to fit comfortably in memory.  We'll
+    have many chunks in memory at once.
+2.  A chunk must be large enough so that computations on that chunk take
+    significantly longer than the 1ms overhead per task that dask scheduling
+    incurs.  A task should take longer than 100ms.
+3.  Chunks should align with the computation that you want to do.  For example
+    if you plan to frequently slice along a particular dimension then it's more
+    efficient if your chunks are aligned so that you have to touch fewer
+    chunks.  If you want to add two arrays then its convenient if those arrays
+    have matching chunks patterns.
+
 
 Example
 ```````

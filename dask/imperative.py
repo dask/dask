@@ -6,7 +6,7 @@ from itertools import chain, count
 import operator
 import uuid
 
-from toolz import merge, unique, curry
+from toolz import merge, unique, curry, first
 
 from .optimize import cull, fuse
 from .utils import concrete, funcname
@@ -71,7 +71,7 @@ def to_task_dasks(expr):
         name = tokenize(expr, pure=True)
         keys = expr._keys()
         dsk = expr._optimize(expr.dask, keys)
-        dsk[name] = (expr._finalize, expr, (concrete, keys))
+        dsk[name] = (expr._finalize, (concrete, keys))
         return name, [dsk]
     if isinstance(expr, tuple) and type(expr) != tuple:
         return expr, []
@@ -215,7 +215,7 @@ class Value(base.Base):
     """
     __slots__ = ('_key', '_dasks')
     _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
-    _finalize = staticmethod(lambda a, r: r[0])
+    _finalize = staticmethod(first)
     _default_get = staticmethod(threaded.get)
 
     def __init__(self, name, dasks):

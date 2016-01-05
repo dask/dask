@@ -165,7 +165,7 @@ def inline(dsk, keys=None, inline_constants=True):
     return rv
 
 
-def inline_functions(dsk, fast_functions=None, inline_constants=False):
+def inline_functions(dsk, output, fast_functions=None, inline_constants=False):
     """ Inline cheap functions into larger operations
 
     Examples
@@ -174,13 +174,24 @@ def inline_functions(dsk, fast_functions=None, inline_constants=False):
     ...        'i': (inc, 'x'),
     ...        'd': (double, 'y'),
     ...        'x': 1, 'y': 1}
-    >>> inline_functions(dsk, [inc])  # doctest: +SKIP
+    >>> inline_functions(dsk, [], [inc])  # doctest: +SKIP
     {'out': (add, (inc, 'x'), 'd'),
      'd': (double, 'y'),
+     'x': 1, 'y': 1}
+
+    Protect output keys.  In the example below ``i`` is not inlined because it
+    is marked as an output key.
+
+    >>> inline_functions(dsk, ['i', 'out'], [inc, double])  # doctest: +SKIP
+    {'out': (add, 'i', (double, 'y')),
+     'i': (inc, 'x'),
      'x': 1, 'y': 1}
     """
     if not fast_functions:
         return dsk
+
+    output = set(output)
+
     fast_functions = set(fast_functions)
 
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
@@ -189,7 +200,8 @@ def inline_functions(dsk, fast_functions=None, inline_constants=False):
     keys = [k for k, v in dsk.items()
               if istask(v)
               and functions_of(v).issubset(fast_functions)
-              and dependents[k]]
+              and dependents[k]
+              and k not in output]
     if keys:
         return inline(dsk, keys, inline_constants=inline_constants)
     else:
@@ -222,7 +234,7 @@ def unwrap_partial(func):
     return func
 
 
-def dealias(dsk):
+def dealias(dsk, keys=None):
     """ Remove aliases from dask
 
     Removes and renames aliases using ``inline``.  Keeps aliases at the top of
@@ -230,6 +242,10 @@ def dealias(dsk):
 
     Aliases are not expected by schedulers.  It's unclear that this is a legal
     state.
+
+    Optional ``keys`` keyword argument allows us to protect keys from being
+    deleted.  This is useful to protect keys that would be expected by a
+    scheduler.
 
     Examples
     --------
@@ -245,14 +261,27 @@ def dealias(dsk):
      'd': (sum, 'a'),
      'e': (identity, 'd'),
      'f': (inc, 'd')}
+
+    >>> dsk = {'a': (range, 5),
+    ...        'b': 'a'}
+    >>> dealias(dsk)  # doctest: +SKIP
+    {'b': (range, 5)}
+
+    >>> dealias(dsk, keys=['a', 'b'])  # doctest: +SKIP
+    {'a': (range, 5),
+     'b': (identity, 5)}
     """
+    keys = keys or set()
+    if not isinstance(keys, set):
+        keys = set(keys)
+
     dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
     dependents = reverse_dict(dependencies)
 
     aliases = set((k for k, task in dsk.items() if ishashable(task) and task in dsk))
     roots = set((k for k, v in dependents.items() if not v))
 
-    dsk2 = inline(dsk, aliases - roots, inline_constants=False)
+    dsk2 = inline(dsk, aliases - roots - keys, inline_constants=False)
     dsk3 = dsk2.copy()
 
     dependencies = dict((k, get_dependencies(dsk2, k)) for k in dsk2)
@@ -260,7 +289,7 @@ def dealias(dsk):
 
     for k in roots & aliases:
         k2 = dsk3[k]
-        if len(dependents[k2]) == 1:
+        if len(dependents[k2]) == 1 and k2 not in keys:
             dsk3[k] = dsk3[k2]
             del dsk3[k2]
         else:
