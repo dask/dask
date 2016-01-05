@@ -1,3 +1,4 @@
+import logging
 from timeit import default_timer
 import sys
 
@@ -10,7 +11,10 @@ from .progress import format_time, Progress, MultiProgress
 
 from ..core import connect, read, write
 from ..executor import default_executor
-from ..utils import sync, ignoring, key_split
+from ..utils import sync, ignoring, key_split, is_kernel
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_scheduler(scheduler):
@@ -200,8 +204,8 @@ class MultiProgressWidget(MultiProgressBar):
     def __init__(self, keys, scheduler=None, minimum=0, interval=0.1, func=key_split,
                  complete=False):
         super(MultiProgressWidget, self).__init__(keys, scheduler, func, interval, complete)
-
-        # Set up widgets
+        from ipywidgets import VBox
+        self.widget = VBox([])
 
     def make_widget(self, all):
         from ipywidgets import FloatProgress, HBox, VBox, HTML
@@ -223,9 +227,10 @@ class MultiProgressWidget(MultiProgressBar):
             key_order = list(key_order)
 
         self.bar_widgets = VBox([ HBox([ self.bar_texts[key], self.bars[key], self.bar_labels[key] ]) for key in key_order ])
-        self.widget = VBox([self.elapsed_time, self.bar_widgets])
+        self.widget.children = (self.elapsed_time, self.bar_widgets)
 
     def _ipython_display_(self, **kwargs):
+        IOLoop.current().add_callback(self.listen)
         return self.widget._ipython_display_(**kwargs)
 
     def _draw_stop(self, remaining, status, exception=None, key=None, **kwargs):
@@ -240,7 +245,7 @@ class MultiProgressWidget(MultiProgressBar):
         """
 
     def _draw_bar(self, remaining, all, status, **kwargs):
-        if not hasattr(self, 'widget'):
+        if self.keys and not self.widget.children:
             self.make_widget(all)
         for k, ntasks in all.items():
             ndone = ntasks - remaining[k]

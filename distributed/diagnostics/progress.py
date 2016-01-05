@@ -9,7 +9,7 @@ from toolz import valmap, groupby, concat
 from tornado.ioloop import PeriodicCallback, IOLoop
 
 from .plugin import SchedulerPlugin
-from ..utils import ignoring, sync, is_kernel, key_split
+from ..utils import sync, key_split
 from ..executor import default_executor
 
 
