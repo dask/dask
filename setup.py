@@ -11,7 +11,7 @@ if sys.version_info < (3, 4):
     requires.append('singledispatch')
 
 setup(name='distributed',
-      version='1.6.1',
+      version='1.7.0',
       description='Distributed computing',
       url='http://distributed.readthedocs.org/en/latest/',
       maintainer='Matthew Rocklin',
