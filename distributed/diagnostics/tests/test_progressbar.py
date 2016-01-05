@@ -1,11 +1,10 @@
 import pytest
 
 from tornado import gen
-from tornado.queues import Queue
 
 from distributed import Executor, Scheduler
 from distributed.diagnostics.progressbar import TextProgressBar, progress
-from distributed.utils_test import (cluster, scheduler, slow, _test_cluster, loop, inc,
+from distributed.utils_test import (cluster, _test_cluster, loop, inc,
         div, dec, cluster_center)
 from time import time, sleep
 
@@ -88,8 +87,8 @@ def check_bar_completed(capsys, width=40):
 
 
 def test_progress_function(loop, capsys):
-    with cluster_center() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             f = e.submit(lambda: 1)
             g = e.submit(lambda: 2)
 
