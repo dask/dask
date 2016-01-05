@@ -8,27 +8,25 @@ from .progress import format_time, Progress
 import sys
 
 
-class TextProgressBar(object):
-    def __init__(self, keys, scheduler=None, minimum=0, interval=0.1, width=40,
-            loop=None, complete=True, start=True):
-        if scheduler is None:
-            scheduler = default_executor().scheduler
-            self.scheduler = scheduler.ip, scheduler.port
-        else:
-            if isinstance(scheduler, str):
-                scheduler = scheduler.split(':')
-            self.scheduler = scheduler
+def get_scheduler(scheduler):
+    if scheduler is None:
+        scheduler = default_executor().scheduler
+        return scheduler.ip, scheduler.port
+    if isinstance(scheduler, str):
+        scheduler = scheduler.split(':')
+    if isinstance(scheduler, tuple):
+        return scheduler
+    raise TypeError("Expected None, string, or tuple")
 
-        self.keys = [k.key if hasattr(k, 'key') else k for k in keys]
-        self.minimum = minimum
+
+class ProgressBar(object):
+    def __init__(self, keys, scheduler=None, interval=0.1, complete=True):
+        self.scheduler = get_scheduler(scheduler)
+
+        self.keys = {k.key if hasattr(k, 'key') else k for k in keys}
         self.interval = interval
-        self.width = width
         self.complete = complete
         self._start_time = default_timer()
-        self.loop = loop or IOLoop()
-
-        if start:
-            sync(self.loop, self.listen)
 
     @property
     def elapsed(self):
@@ -46,7 +44,7 @@ class TextProgressBar(object):
 
         def func(scheduler, p):
             return {'all': len(p.all_keys),
-                    'left': len(p.keys),
+                    'remaining': len(p.keys),
                     'status': p.status}
 
         self.stream = yield connect(*self.scheduler)
@@ -59,18 +57,74 @@ class TextProgressBar(object):
         while True:
             self._last_response = response = yield read(self.stream)
             self.status = response['status']
-            self._draw_bar((1 - response['left'] / response['all'])
-                           if response['all'] else 1.0, self.elapsed)
+            self._draw_bar(**response)
             if response['status'] in ('error', 'finished'):
                 self.stream.close()
+                self._draw_stop(**response)
                 break
 
-    def _draw_bar(self, frac, elapsed):
+    def _draw_stop(self, **kwargs):
+        pass
+
+
+class TextProgressBar(ProgressBar):
+    def __init__(self, keys, scheduler=None, interval=0.1, width=40,
+                       loop=None, complete=True, start=True):
+        super(TextProgressBar, self).__init__(keys, scheduler, interval,
+                                              complete)
+        self.width = width
+        self.loop = loop or IOLoop()
+
+        if start:
+            sync(self.loop, self.listen)
+
+    def _draw_bar(self, remaining, all, **kwargs):
+        frac = (1 - remaining / all) if all else 1.0
         bar = '#' * int(self.width * frac)
         percent = int(100 * frac)
-        elapsed = format_time(elapsed)
+        elapsed = format_time(self.elapsed)
         msg = '\r[{0:<{1}}] | {2}% Completed | {3}'.format(bar, self.width,
                                                            percent, elapsed)
         with ignoring(ValueError):
             sys.stdout.write(msg)
             sys.stdout.flush()
+
+
+class ProgressWidget(ProgressBar):
+    """ ProgressBar that uses an IPython ProgressBar widget for the notebook
+
+    See Also
+    --------
+    progress: User function
+    Progress: Super class with most of the logic
+    TextProgressBar: Text version suitable for the console
+    """
+    def __init__(self, keys, scheduler=None, interval=0.1,
+                complete=False, loop=None, start=True):
+        super(ProgressWidget, self).__init__(keys, scheduler, interval,
+                                             complete)
+
+        from ipywidgets import FloatProgress, HBox, VBox, HTML
+        self.elapsed_time = HTML('')
+        self.bar = FloatProgress(min=0, max=1, description='', height = '10px')
+        self.bar_text = HTML('', width = "140px")
+
+        self.bar_widget = HBox([ self.bar_text, self.bar ])
+        self.widget = VBox([self.elapsed_time, self.bar_widget])
+
+    def _ipython_display_(self, **kwargs):
+        IOLoop.current().add_callback(self.listen)
+        return self.widget._ipython_display_(**kwargs)
+
+    def _draw_stop(self, remaining, status, **kwargs):
+        if status == 'error':
+            self.bar.bar_style = 'danger'
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Warning:</b> the computation terminated due to an error after ' + format_time(self.elapsed) + '</div>'
+        elif not remaining:
+            self.bar.bar_style = 'success'
+
+    def _draw_bar(self, remaining, all, **kwargs):
+        ndone = all - remaining
+        self.elapsed_time.value = '<div style=\"padding: 0px 10px 5px 10px\"><b>Elapsed time:</b> ' + format_time(self.elapsed) + '</div>'
+        self.bar.value = ndone / all if all else 1.0
+        self.bar_text.value = '<div style="padding: 0px 10px 0px 10px; text-align:right;">%d / %d</div>' % (ndone, all)

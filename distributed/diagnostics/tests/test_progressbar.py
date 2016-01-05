@@ -16,9 +16,16 @@ def test_text_progressbar(capsys, loop):
             futures = e.map(inc, range(10))
             p = TextProgressBar(futures, interval=0.01)
             e.gather(futures)
-            sleep(0.2)
+
+            start = time()
+            while p.status != 'finished':
+                sleep(0.01)
+                assert time() - start < 5
+
             check_bar_completed(capsys)
-            assert p._last_response == {'all': 10, 'left': 0}
+            assert p._last_response == {'all': 10,
+                                        'remaining': 0,
+                                        'status': 'finished'}
             assert p.stream.closed()
 
 

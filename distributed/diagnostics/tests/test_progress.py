@@ -11,9 +11,8 @@ from distributed.utils_test import (cluster, slow, _test_cluster, loop, inc,
         div, dec, cluster_center)
 from distributed.utils import All
 from distributed.utils_test import inc
-from distributed.diagnostics.progress import (Progress,
-        SchedulerPlugin, ProgressWidget, MultiProgress, progress,
-        dependent_keys)
+from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
+        MultiProgress, progress, dependent_keys)
 
 def test_dependent_keys():
     a, b, c, d, e, f, g = 'abcdefg'

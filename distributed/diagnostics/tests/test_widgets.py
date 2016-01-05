@@ -71,35 +71,29 @@ from distributed.scheduler import Scheduler
 from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, _test_cluster, loop, inc,
         div, dec, throws)
-from distributed.diagnostics.progress import (ProgressWidget,
-        MultiProgressWidget, progress)
+from distributed.diagnostics.progressbar import ProgressWidget
 
 
 def test_progressbar_widget(loop):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
+        s.listen(0)
         yield s.sync_center()
         done = s.start()
-        sched, report = Queue(), Queue(); s.handle_queues(sched, report)
-        msg = yield report.get(); assert msg['op'] == 'stream-start'
 
         s.update_graph(dsk={'x': (inc, 1),
                             'y': (inc, 'x'),
                             'z': (inc, 'y')},
                        keys=['z'])
-        progress = ProgressWidget(['z'], scheduler=s)
 
-        while True:
-            msg = yield report.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
-                break
+        progress = ProgressWidget(['z'], scheduler=(s.ip, s.port), start=False)
+        yield progress.listen()
 
-        progress._update()
         assert progress.bar.value == 1.0
         assert '3 / 3' in progress.bar_text.value
 
-        sched.put_nowait({'op': 'close'})
+        s.close()
         yield done
 
     _test_cluster(f, loop)

@@ -234,7 +234,6 @@ class ProgressWidget(Progress):
     See Also
     --------
     progress: User function
-    Progress: Super class with most of the logic
     TextProgressBar: Text version suitable for the console
     """
     def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
