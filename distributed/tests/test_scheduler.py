@@ -521,6 +521,7 @@ def test_multi_queues(s, a, b):
 
 @gen_test(timeout=30)
 def test_monitor_resources():
+    pytest.importorskip('psutil')
     c = Center('127.0.0.1')
     c.listen(0)
     a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')

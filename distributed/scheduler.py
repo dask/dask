@@ -838,6 +838,8 @@ class Scheduler(Server):
                              'interval': self.resource_interval})
         while not stream.closed():
             msg = yield read(stream)
+            if not msg:
+                stream.close()
             self.resource_logs[(ip, port)].append(msg)
 
     @gen.coroutine
@@ -938,6 +940,8 @@ class Scheduler(Server):
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
         state = setup(self) if setup else None
+        if isinstance(state, gen.Future):
+            state = yield state
         try:
             while True:
                 if state is None:

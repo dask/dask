@@ -7,6 +7,7 @@ from timeit import default_timer
 import dask
 from toolz import valmap, groupby, concat
 from tornado.ioloop import PeriodicCallback, IOLoop
+from tornado import gen
 
 from .plugin import SchedulerPlugin
 from ..utils import sync, key_split
@@ -58,27 +59,32 @@ class Progress(SchedulerPlugin):
     This class performs no visualization.  However it is used by other classes,
     notably TextProgressBar and ProgressWidget, which do perform visualization.
     """
-    def __init__(self, keys, scheduler=None, minimum=0, dt=0.1, complete=False):
-        keys = {k.key if hasattr(k, 'key') else k for k in keys}
-        self.setup_pre(keys, scheduler, minimum, dt, complete)
+    def __init__(self, keys, scheduler, minimum=0, dt=0.1, complete=False):
+        self.keys = {k.key if hasattr(k, 'key') else k for k in keys}
+        self.scheduler = scheduler
+        self.complete = complete
+        self._minimum = minimum
+        self._dt = dt
+        self.last_duration = 0
+        self._start_time = default_timer()
+        self._running = False
+        self.status = None
 
-        def clear_errors(errors):
-            for k in errors:
-                self.task_erred(None, k, None, True)
+    @gen.coroutine
+    def setup(self):
+        keys = self.keys
 
-        if self.scheduler.loop._thread_ident == threading.current_thread().ident:
-            errors = self.setup(keys, complete)
-        else:
-            errors = sync(self.scheduler.loop, self.setup, keys, complete)
-        clear_errors(errors)
+        while not keys.issubset(self.scheduler.dask):
+            yield gen.sleep(0.05)
 
-    def setup(self, keys, complete):
+        self.keys = None
+
         self.scheduler.add_plugin(self)  # subtle race condition here
         self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
                 self.scheduler.processing, self.scheduler.stacks,
                 self.scheduler.dependencies, self.scheduler.exceptions,
-                complete=complete)
-        if not complete:
+                complete=self.complete)
+        if not self.complete:
             self.keys = self.all_keys.copy()
         else:
             self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
@@ -92,31 +98,9 @@ class Progress(SchedulerPlugin):
             self.stop(exception=None, key=None)
 
         logger.debug("Set up Progress keys")
-        return errors
 
-    def setup_pre(self, keys, scheduler, minimum, dt, complete):
-        if scheduler is None:
-            executor = default_executor()
-            if executor is None:
-                raise ValueError("Can not find scheduler.\n"
-                 "Either create an executor or supply scheduler as an argument")
-            else:
-                scheduler = default_executor().scheduler
-
-        while not keys.issubset(scheduler.dask):
-            time.sleep(0.05)
-
-        self.scheduler = scheduler
-
-        self._start_time = default_timer()
-
-        self._minimum = minimum
-        self._dt = dt
-        self.last_duration = 0
-        self.keys = None
-
-        self._running = False
-        self.status = None
+        for k in errors:
+            self.task_erred(None, k, None, True)
 
     def start(self):
         self.status = 'running'
@@ -187,8 +171,32 @@ class MultiProgress(Progress):
         Progress.__init__(self, keys, scheduler, minimum=minimum, dt=dt,
                             complete=complete)
 
-    def setup(self, keys, complete):
-        errors = Progress.setup(self, keys, complete)
+    @gen.coroutine
+    def setup(self):
+        keys = self.keys
+
+        while not keys.issubset(self.scheduler.dask):
+            yield gen.sleep(0.05)
+
+        self.keys = None
+
+        self.scheduler.add_plugin(self)  # subtle race condition here
+        self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
+                self.scheduler.processing, self.scheduler.stacks,
+                self.scheduler.dependencies, self.scheduler.exceptions,
+                complete=self.complete)
+        if not self.complete:
+            self.keys = self.all_keys.copy()
+        else:
+            self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
+                    self.scheduler.processing, self.scheduler.stacks,
+                    self.scheduler.dependencies, self.scheduler.exceptions,
+                    complete=False)
+        self.all_keys.update(keys)
+        self.keys |= errors & self.all_keys
+
+        if not self.keys:
+            self.stop(exception=None, key=None)
 
         # Group keys by func name
         self.keys = valmap(set, groupby(self.func, self.keys))
@@ -197,8 +205,9 @@ class MultiProgress(Progress):
             if k not in self.keys:
                 self.keys[k] = set()
 
+        for k in errors:
+            self.task_erred(None, k, None, True)
         logger.debug("Set up Progress keys")
-        return errors
 
     def task_finished(self, scheduler, key, worker, nbytes):
         s = self.keys.get(self.func(key), None)

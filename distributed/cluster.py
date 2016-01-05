@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-import paramiko
 from time import sleep
 import socket
 import os
@@ -28,6 +27,7 @@ class bcolors:
     UNDERLINE = '\033[4m'
 
 def async_ssh(cmd_dict):
+    import paramiko
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 

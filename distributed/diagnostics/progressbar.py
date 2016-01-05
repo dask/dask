@@ -46,10 +46,12 @@ class ProgressBar(object):
         complete = self.complete
         keys = self.keys
 
+        @gen.coroutine
         def setup(scheduler):
             p = Progress(keys, scheduler, complete=complete)
             scheduler.add_plugin(p)
-            return p
+            yield p.setup()
+            raise gen.Return(p)
 
         def func(scheduler, p):
             return {'all': len(p.all_keys),
@@ -57,6 +59,7 @@ class ProgressBar(object):
                     'status': p.status}
 
         self.stream = yield connect(*self.scheduler)
+        logger.debug("Progressbar Connected to scheduler")
 
         yield write(self.stream, {'op': 'feed',
                                   'setup': setup,
@@ -71,6 +74,8 @@ class ProgressBar(object):
                 self.stream.close()
                 self._draw_stop(**response)
                 break
+
+        logger.debug("Progressbar disconnected from scheduler")
 
     def _draw_stop(self, **kwargs):
         pass
@@ -159,10 +164,12 @@ class MultiProgressBar(object):
         keys = self.keys
         func = self.func
 
+        @gen.coroutine
         def setup(scheduler):
             p = MultiProgress(keys, scheduler, complete=complete, func=func)
             scheduler.add_plugin(p)
-            return p
+            yield p.setup()
+            raise gen.Return(p)
 
         def function(scheduler, p):
             return {'all': valmap(len, p.all_keys),
@@ -170,6 +177,7 @@ class MultiProgressBar(object):
                     'status': p.status}
 
         self.stream = yield connect(*self.scheduler)
+        logger.debug("Progressbar Connected to scheduler")
 
         yield write(self.stream, {'op': 'feed',
                                   'setup': setup,
@@ -184,6 +192,7 @@ class MultiProgressBar(object):
                 self.stream.close()
                 self._draw_stop(**response)
                 break
+        logger.debug("Progressbar disconnected from scheduler")
 
     def _draw_stop(self, **kwargs):
         pass
