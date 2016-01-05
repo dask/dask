@@ -940,6 +940,8 @@ class Scheduler(Server):
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
         state = setup(self) if setup else None
+        if isinstance(state, gen.Future):
+            state = yield state
         try:
             while True:
                 if state is None:

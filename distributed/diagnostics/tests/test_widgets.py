@@ -83,6 +83,9 @@ def test_progressbar_widget(s, a, b):
     assert progress.bar.value == 1.0
     assert '3 / 3' in progress.bar_text.value
 
+    progress = ProgressWidget(['z'], scheduler=(s.ip, s.port))
+    yield progress.listen()
+
 
 @gen_cluster()
 def test_multi_progressbar_widget(s, a, b):

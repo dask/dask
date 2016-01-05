@@ -6,7 +6,7 @@ from tornado.queues import Queue
 
 from dask.core import get_deps
 from distributed.scheduler import Scheduler
-from distributed.utils_test import gen_cluster, cluster, inc, dec
+from distributed.utils_test import gen_cluster, cluster, inc, dec, gen_test
 from distributed.utils import All
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
         MultiProgress, dependent_keys)
@@ -36,6 +36,7 @@ def test_many_Progresss(s, a, b):
                    keys=['z'])
 
     bars = [Progress(keys=['z'], scheduler=s) for i in range(10)]
+    yield [b.setup() for b in bars]
 
     while True:
         msg = yield report.get()
@@ -56,6 +57,7 @@ def test_multiprogress(s, a, b):
                    keys=['y-2'])
 
     p = MultiProgress(['y-2'], scheduler=s, func=lambda s: s.split('-')[0])
+    yield p.setup()
 
     assert p.keys == {'x': {'x-1', 'x-2', 'x-3'},
                       'y': {'y-1', 'y-2'}}
@@ -77,11 +79,6 @@ def test_multiprogress(s, a, b):
                       'y': set()}
 
     assert p.status == 'finished'
-
-
-def test_Progress_no_scheduler():
-    with pytest.raises(ValueError):
-        Progress([])
 
 
 @gen_cluster()
