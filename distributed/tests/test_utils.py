@@ -1,4 +1,4 @@
-from distributed.utils import All, sync, is_kernel
+from distributed.utils import All, sync, is_kernel, ensure_ip
 from distributed.utils_test import loop, inc, throws
 import pytest
 from threading import Thread
@@ -91,3 +91,8 @@ def test_sync_inactive_loop(loop):
 def test_is_kernel():
     pytest.importorskip('IPython')
     assert is_kernel() is False
+
+
+def test_ensure_ip():
+    assert ensure_ip('localhost') == '127.0.0.1'
+    assert ensure_ip('123.123.123.123') == '123.123.123.123'
