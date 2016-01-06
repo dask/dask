@@ -5,3 +5,4 @@ To build a local copy of the dask docs::
   conda create -n daskdocs --file requirements-docs.txt
   source activate daskdocs
   make html
+  open build/html/index.html
