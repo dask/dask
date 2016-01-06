@@ -34,7 +34,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
         aggregate = partial(aggregate, dtype=dtype)
 
     # Normalize split_every
-    split_every = split_every or _globals.get('split_every', 32)
+    split_every = split_every or _globals.get('split_every', 4)
     if isinstance(split_every, dict):
         split_every = dict((k, split_every.get(k, 2)) for k in axis)
     elif isinstance(split_every, int):
