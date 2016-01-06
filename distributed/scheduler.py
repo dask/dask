@@ -22,7 +22,8 @@ from dask.order import order
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server, send_recv)
 from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
-from .utils import All, ignoring, clear_queue, _deps, get_ip, ignore_exceptions
+from .utils import (All, ignoring, clear_queue, _deps, get_ip,
+        ignore_exceptions, ensure_ip)
 
 
 logger = logging.getLogger(__name__)
@@ -564,6 +565,8 @@ class Scheduler(Server):
 
         cover_aliases(self.dask, dsk)
 
+        restrictions = {k: set(map(ensure_ip, v))
+                        for k, v in restrictions.items()}
         self.restrictions.update(restrictions)
 
         new_keyorder = order(dsk)  # TODO: define order wrt old graph
