@@ -1,11 +1,31 @@
 language: python
 sudo: false
+services:
+  - docker
+
 matrix:
   fast_finish: true
   include:
     - python: "2.7"
     - python: "3.4"
     - python: "3.5"
+      env: HDFS=false
+    - python: "3.5"
+      env: HDFS=true
+      sudo: true
+      dist: trusty
+
+before_install:
+  - |
+    if [[ $HDFS == true ]]; then
+        pwd
+        pushd continuous_integration
+        docker build -t distributed-hdfs .
+        popd
+        docker run -d -p 8020:8020 -p 50070:50070 -v $(pwd):/distributed distributed-hdfs
+        export CONTAINER_ID=$(docker ps -l -q)
+        sleep 60  # Wait for namenode and datanode
+    fi;
 
 install:
   # Install conda
@@ -24,8 +44,23 @@ install:
   # Install distributed
   - python setup.py install
 
+  - |
+    if [[ $HDFS == true ]]; then
+        pwd
+        docker exec -it $CONTAINER_ID python setup.py install
+    fi;
+
 script:
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage run $(which py.test) distributed -m "not avoid_travis" --doctest-modules --verbose; else py.test -m "not avoid_travis" distributed --verbose; fi
+    - |
+      if [[ $HDFS == true ]]; then
+        pwd
+        docker exec -it $CONTAINER_ID py.test distributed/tests/test_hdfs.py --verbose
+      elif [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then
+        coverage run $(which py.test) distributed -m "not avoid_travis" \
+            --doctest-modules --verbose;
+      else
+        py.test -m "not avoid_travis" distributed --verbose;
+      fi;
 
 after_success:
     - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
