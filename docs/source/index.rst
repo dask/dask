@@ -50,7 +50,7 @@ parallel in a variety of contexts.
    :width: 80%
    :align: center
 
-**Collections:**
+**Collections**
 
 Dask collections are the main interaction point for users. They look like
 NumPy and pandas but generate dask graphs internally. If you are a dask *user*
@@ -71,7 +71,7 @@ then you should start here.
    dataframe.rst
    imperative.rst
 
-**Graphs:**
+**Graphs**
 
 Dask graphs encode algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
@@ -92,7 +92,7 @@ dask collections.  If you are a *developer*, you should start here.
    custom-graphs.rst
    optimize.rst
 
-**Scheduling:**
+**Scheduling**
 
 Schedulers execute task graphs.  After a collection produces a graph we execute
 this graph in parallel, either using all of the cores on a single workstation
@@ -100,11 +100,12 @@ or using a distributed cluster.
 
 * :doc:`scheduler-overview`
 * :doc:`shared`
+* :doc:`scheduling-policy`
 
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: Schedulers
+   :caption: Scheduling
 
    scheduler-overview.rst
    shared.rst
@@ -132,12 +133,14 @@ help make debugging and profiling graph execution easier.
 * :doc:`glossary`
 * :doc:`faq`
 * :doc:`spark`
+* :doc:`caching`
 * :doc:`get-involved`
+* :doc:`license`
 
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: More information
+   :caption: Help & reference
 
    install.rst
    glossary.rst
