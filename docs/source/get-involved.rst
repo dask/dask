@@ -2,7 +2,7 @@ Get involved
 ============
 
 Join the dask mailing list!
-----------------------
+---------------------------
 
 We welcome you to join the `dask mailing list <https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev>`_, where users and the project developers:
 
