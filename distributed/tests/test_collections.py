@@ -52,6 +52,17 @@ def test__futures_to_dask_dataframe(s, a, b):
     yield e._shutdown()
 
 
+@gen_cluster()
+def test_no_divisions(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+    dfs = e.map(tm.makeTimeDataFrame, range(5, 10))
+
+    df = yield _futures_to_dask_dataframe(dfs)
+    assert not df.known_divisions
+    assert list(df.columns) == list(tm.makeTimeDataFrame(5).columns)
+
+
 def test_futures_to_dask_dataframe(loop):
     with cluster() as (c, [a, b]):
         with Executor(('127.0.0.1', c['port']), loop=loop) as e:

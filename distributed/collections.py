@@ -34,7 +34,7 @@ def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
         divisions2 = yield executor._gather(divisions)
         if sorted(divisions2) != divisions2:
             divisions2 = [None] * (len(futures) + 1)
-    elif divisions2 in (None, False):
+    elif divisions in (None, False):
         divisions2 = [None] * (len(futures) + 1)
     else:
         raise NotImplementedError()
