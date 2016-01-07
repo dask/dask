@@ -47,9 +47,10 @@ def test_get_block_locations():
 ip = get_ip()
 
 
-@gen_cluster([(ip, 1), (ip, 2)])
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60)
 def test_read_binary(s, a, b):
     with make_hdfs() as hdfs:
+        assert hdfs._handle > 0
         data = b'a' * int(1e8)
         fn = '/tmp/test/file'
 
@@ -65,5 +66,6 @@ def test_read_binary(s, a, b):
         futures = read_binary(fn, hdfs=hdfs)
         assert len(futures) == len(blocks)
         assert futures[0].executor is e
-        assert b''.join(e.gather(futures)) == data
+        results = yield e._gather(futures)
+        assert b''.join(results) == data
         assert s.restrictions
