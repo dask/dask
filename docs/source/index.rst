@@ -108,6 +108,7 @@ or using a distributed cluster.
 
    scheduler-overview.rst
    shared.rst
+   scheduling-policy.rst
 
 **Inspecting and Diagnosing Graphs**
 
@@ -144,6 +145,7 @@ help make debugging and profiling graph execution easier.
    spark.rst
    caching.rst
    get-involved.rst
+   license.rst
 
 **Contact**
 
