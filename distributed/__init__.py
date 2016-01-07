@@ -8,4 +8,4 @@ from .nanny import Nanny
 from .executor import Executor, wait, as_completed, default_executor
 from .scheduler import Scheduler
 
-__version__ = '1.7.0'
+__version__ = '1.7.1'
