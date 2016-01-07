@@ -22,16 +22,20 @@ In this sample test, you will create a conda environment and name it dasktest. A
 .. code::
 
    conda create -n dasktest dask
-source activate dasktest
-python
+   source activate dasktest
+   python
 
-import dask.array
-import numpy
-a=dask.array.random.normal(6,.1,size=(4,4),chunks=(2,2))
-numpy.array(a)
+.. code::
 
-quit()
-source deactivate
+   import dask.array
+   import numpy
+   a=dask.array.random.normal(6,.1,size=(4,4),chunks=(2,2))
+   numpy.array(a)
+   quit()
+
+.. code::
+
+   source deactivate
 
 If dask is installed correctly, this will print out a 4x4 array of random numbers close to 6, similar to:
 
