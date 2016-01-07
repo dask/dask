@@ -143,7 +143,6 @@ help make debugging and profiling graph execution easier.
 * :doc:`spark`
 * :doc:`caching`
 * :doc:`get-involved`
-* :doc:`license`
 
 .. toctree::
    :maxdepth: 1
@@ -156,7 +155,6 @@ help make debugging and profiling graph execution easier.
    spark.rst
    caching.rst
    get-involved.rst
-   license.rst
 
 **Contact**
 
@@ -166,11 +164,12 @@ help make debugging and profiling graph execution easier.
 * For chat, see `gitter chat room`_
 
 Dask is part of the Blaze_ project supported and offered by 
-`Continuum Analytics`_ and contributors under a :doc:`BSD3 license<license>`.
-
+`Continuum Analytics`_ and contributors under a `3-clause BSD 
+license`_.
 
 .. _Blaze: http://continuum.io/open-source/blaze
 .. _`Continuum Analytics`: http://continuum.io
+.. _`3-clause BSD license`: https://github.com/blaze/dask/blob/master/LICENSE.txt
 
 .. _`#dask tag`: http://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/blaze/dask/issues
