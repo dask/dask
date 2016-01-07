@@ -12,10 +12,12 @@ Dask has several elements that appear to intersect this space and as such we are
 Summary
 -------
 
-* You should probably use Spark if you have petabytes of JSON files, a simple workflow, and a thousand node
-  cluster. 
-* You should probably use dask if you have 10s-1000s of gigabytes of binary or numeric data, complex algorithms, and a large   multi-core workstation.
-* If you have a terabyte or less of CSV or JSON data, forget both Spark *and* Dask and use Postgres_ or MongoDB_ instead.
+* You should probably use Spark if you have petabytes of JSON files, a simple 
+  workflow, and a thousand node cluster. 
+* You should probably use dask if you have 10s-1000s of gigabytes of binary or 
+  numeric data, complex algorithms, and a large   multi-core workstation.
+* If you have a terabyte or less of CSV or JSON data, forget both Spark *and* 
+  Dask and use Postgres_ or MongoDB_ instead.
 
 General
 ------------
