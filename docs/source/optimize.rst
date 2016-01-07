@@ -177,7 +177,7 @@ In summary, the above operations accomplish the following:
 3. Inlined cheap computations using ``inline_functions``, improving parallelism, and
 4. Fused linear tasks together to ensure they run on the same worker using ``fuse``.
 
- As stated previously, these optimizations
+As stated previously, these optimizations
 are already performed automatically in the dask collections. Users not working
 with custom graphs or computations should rarely need to directly
 interact with them.
