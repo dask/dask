@@ -14,4 +14,4 @@ Opportunistic caching:
   A caching mechanism that automatically picks out and stores useful tasks.
 
 Tuple: 
-  A sequence of immutable Python objects. Tuples and lists are both sequences. The difference between tuples and lists is that tuples use parenthesis and are immutable (cannot be changed), whereas lists use square brackets and are mutable (can be changed).
+  A sequence of immutable Python objects. Tuples and lists are both sequences. The difference between tuples and lists is that tuples use parentheses and are immutable (cannot be changed), whereas lists use square brackets and are mutable (can be changed).
