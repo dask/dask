@@ -1,15 +1,14 @@
 Install Dask
 ============
 
-Dask is available to Anaconda users via either the conda or pip commands, both 
-of which are included in Anaconda. If you do not already have Anaconda, `download 
-Anaconda now <https://www.continuum.io/downloads>`_.
+Dask can be installed from source, or can be installed with a single command with 
+pip or with `Anaconda <https://www.continuum.io/downloads>`_.
 
-Dask can then be installed using ``conda``::
+To install Dask with Anaconda::
 
     conda install dask
 
-Or dask can be installed with ``pip``::
+And to install Dask with ``pip``::
 
     pip install dask
 
