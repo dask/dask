@@ -1,7 +1,9 @@
 Install Dask
 ============
 
-Dask is available to Anaconda users via either the conda or pip commands, both of which are included in Anaconda. If you do not already have Anaconda, `download Anaconda now <https://www.continuum.io/downloads>`_.
+Dask is available to Anaconda users via either the conda or pip commands, both 
+of which are included in Anaconda. If you do not already have Anaconda, `download 
+Anaconda now <https://www.continuum.io/downloads>`_.
 
 Dask can then be installed using ``conda``::
 
@@ -15,9 +17,13 @@ Or dask can be installed with ``pip``::
 Test dask install
 -----------------
 
-Because dask is a Python library, rather than a graphical program or command line program, to test that dask is working you can run a small Python program. 
+Because dask is a Python library, rather than a graphical program or command 
+line program, to test that dask is working you can run a small Python program. 
 
-In this sample test, you will create a conda environment and name it dasktest. Activate the environment, then at the command line type `python` to start an interactive Python shell, run a brief set of commands to display an array of random numbers, then quit and deactivate the dasktest environment:
+In this sample test, you will create a conda environment and name it dasktest. 
+Activate the environment, then at the command line type `python` to start an 
+interactive Python shell, run a brief set of commands to display an array of 
+random numbers, then quit and deactivate the dasktest environment:
 
 .. code::
 
@@ -37,7 +43,8 @@ In this sample test, you will create a conda environment and name it dasktest. A
 
    source deactivate
 
-If dask is installed correctly, this will print out a 4x4 array of random numbers close to 6, similar to:
+If dask is installed correctly, this will print out a 4x4 array of random 
+numbers close to 6, similar to:
 
 .. code::
 
