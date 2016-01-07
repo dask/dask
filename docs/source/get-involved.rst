@@ -16,8 +16,8 @@ Open issues with dask are tracked on GitHub at https://github.com/blaze/dask/iss
 2.  Create a new issue to report it!
 
 
-Join the dask mailing list!
----------------------------
+Join the dask mailing list
+--------------------------
 
 We welcome you to join the `dask mailing list <https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev>`_, 
 where users and the project developers:
@@ -35,9 +35,11 @@ Dask has a `gitter chat room <https://gitter.im/blaze/dask>`_.
 
 
 Get paid support
----------------------
+----------------
 
-Paid training and support options:
+Dask is an open source project that was started by and is currently primarily 
+developed by employees of `Continuum Analytics, Inc. <https://www.continuum.io/>`_. 
+In addition to the previous options, Continuum offers paid training and support:
 
 * `Python training <https://www.continuum.io/training>`_ — online and on-premises.
 * `Consulting <https://www.continuum.io/consulting>`_ — leverage our expertise to solve your analytics puzzles.
