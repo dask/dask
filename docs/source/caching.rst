@@ -65,7 +65,7 @@ reading through the dataset only once:
    >>> dd.compute(df.amount.max(), df.amount.min())
    (1000, -1000)
 
-If we know that this column fits in memory. then we can also explicitly 
+If we know that this column fits in memory then we can also explicitly 
 compute the column and then continue forward with straight Pandas:
 
 .. code-block:: python
