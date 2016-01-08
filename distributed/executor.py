@@ -7,6 +7,7 @@ from functools import wraps, partial
 import itertools
 import logging
 import os
+from time import sleep
 import uuid
 
 import dask
@@ -227,6 +228,8 @@ class Executor(object):
         self.loop.add_callback(pc.start)
         _global_executor[0] = self
         self._loop_thread.start()
+        while not self.loop._running:
+            sleep(0.001)
         sync(self.loop, self._start, **kwargs)
 
     def _send_to_scheduler(self, msg):
