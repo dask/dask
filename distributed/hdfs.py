@@ -58,4 +58,4 @@ def read_binary(fn, executor=None, hdfs=None):
 
     logger.debug("Read %d blocks of binary bytes from %s", len(blocks), fn)
     return executor.map(read, filenames, offsets, lengths,
-                        hdfs=hdfs, workers=workers)
+                        hdfs=hdfs, workers=workers, allow_other_workers=True)

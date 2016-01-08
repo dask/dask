@@ -69,3 +69,4 @@ def test_read_binary(s, a, b):
         results = yield e._gather(futures)
         assert b''.join(results) == data
         assert s.restrictions
+        assert {f.key for f in futures}.issubset(s.loose_restrictions)
