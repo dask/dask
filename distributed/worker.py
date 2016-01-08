@@ -126,9 +126,10 @@ class Worker(Server):
                 'center': (self.center.ip, self.center.port)}
 
     @gen.coroutine
-    def _close(self, timeout=10):
-        yield gen.with_timeout(timedelta(seconds=timeout),
-                self.center.unregister(address=(self.ip, self.port)))
+    def _close(self, report=True, timeout=10):
+        if report:
+            yield gen.with_timeout(timedelta(seconds=timeout),
+                    self.center.unregister(address=(self.ip, self.port)))
         self.center.close_streams()
         self.stop()
         self.executor.shutdown()
@@ -137,8 +138,8 @@ class Worker(Server):
         self.status = 'closed'
 
     @gen.coroutine
-    def terminate(self, stream):
-        yield self._close()
+    def terminate(self, stream, report=True):
+        yield self._close(report=report)
         raise Return(b'OK')
 
     @property

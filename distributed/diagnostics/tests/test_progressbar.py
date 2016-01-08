@@ -13,7 +13,7 @@ def test_text_progressbar(capsys, loop):
     with cluster(nanny=True) as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             futures = e.map(inc, range(10))
-            p = TextProgressBar(futures, interval=0.01)
+            p = TextProgressBar(futures, interval=0.01, complete=True)
             e.gather(futures)
 
             start = time()

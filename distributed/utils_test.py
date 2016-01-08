@@ -387,7 +387,7 @@ def end_cluster(s, workers):
     logger.debug("Closing out test cluster")
     for w in workers:
         with ignoring(TimeoutError, StreamClosedError, OSError):
-            yield w._close()
+            yield w._close(report=False)
         if os.path.exists(w.local_dir):
             shutil.rmtree(w.local_dir)
     s.stop()

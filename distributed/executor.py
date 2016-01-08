@@ -7,6 +7,7 @@ from functools import wraps, partial
 import itertools
 import logging
 import os
+from time import sleep
 import uuid
 
 import dask
@@ -17,7 +18,7 @@ from toolz import first, groupby, merge
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
@@ -223,8 +224,12 @@ class Executor(object):
         from threading import Thread
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.daemon = True
+        pc = PeriodicCallback(lambda: None, 1000, io_loop=self.loop)
+        self.loop.add_callback(pc.start)
         _global_executor[0] = self
         self._loop_thread.start()
+        while not self.loop._running:
+            sleep(0.001)
         sync(self.loop, self._start, **kwargs)
 
     def _send_to_scheduler(self, msg):
@@ -249,7 +254,7 @@ class Executor(object):
             if ident['type'] == 'Center':
                 self.center = r
                 self.scheduler = Scheduler(self.center, loop=self.loop,
-                        **kwargs)
+                                           **kwargs)
                 self.scheduler.listen(0)
             elif ident['type'] == 'Scheduler':
                 self.scheduler = r
@@ -397,6 +402,10 @@ class Executor(object):
         key = kwargs.pop('key', None)
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
+        allow_other_workers = kwargs.pop('allow_other_workers', False)
+
+        if allow_other_workers not in (True, False, None):
+            raise TypeError("allow_other_workers= must be True or False")
 
         if key is None:
             if pure:
@@ -412,10 +421,17 @@ class Executor(object):
         else:
             task = (func,) + args
 
+        if allow_other_workers and workers is None:
+            raise ValueError("Only use allow_other_workers= if using workers=")
+
+        if isinstance(workers, str):
+            workers = [workers]
         if workers is not None:
             restrictions = {key: workers}
+            loose_restrictions = {key} if allow_other_workers else set()
         else:
             restrictions = {}
+            loose_restrictions = set()
 
         task2, _ = unpack_remotedata(task)
 
@@ -423,7 +439,8 @@ class Executor(object):
         self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': {key: task2},
                                 'keys': [key],
-                                'restrictions': restrictions})
+                                'restrictions': restrictions,
+                                'loose_restrictions': loose_restrictions})
 
         return Future(key, self)
 
@@ -457,6 +474,11 @@ class Executor(object):
         """
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
+        allow_other_workers = kwargs.pop('allow_other_workers', False)
+
+        if allow_other_workers and workers is None:
+            raise ValueError("Only use allow_other_workers= if using workers=")
+
         if not callable(func):
             raise TypeError("First input to map must be a callable function")
         iterables = [list(it) for it in iterables]
@@ -477,6 +499,8 @@ class Executor(object):
 
         dsk = {key: unpack_remotedata(task)[0] for key, task in dsk.items()}
 
+        if isinstance(workers, str):
+            workers = [workers]
         if isinstance(workers, (list, set)):
             if workers and isinstance(first(workers), (list, set)):
                 if len(workers) != len(keys):
@@ -489,12 +513,20 @@ class Executor(object):
             restrictions = {}
         else:
             raise TypeError("Workers must be a list or set of workers or None")
+        if allow_other_workers not in (True, False, None):
+            raise TypeError("allow_other_workers= must be True or False")
+        if allow_other_workers is True:
+            loose_restrictions = set(keys)
+        else:
+            loose_restrictions = set()
+
 
         logger.debug("map(%s, ...)", funcname(func))
         self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': dsk,
                                 'keys': keys,
-                                'restrictions': restrictions})
+                                'restrictions': restrictions,
+                                'loose_restrictions': loose_restrictions})
 
         return [Future(key, self) for key in keys]
 

@@ -4,11 +4,13 @@ from collections import Iterable
 from contextlib import contextmanager
 import logging
 import os
+import re
 import socket
 import sys
 import tempfile
 
 from dask import istask
+from toolz import memoize
 from tornado import gen
 
 
@@ -205,9 +207,23 @@ def log_errors():
         raise
 
 
+@memoize
+def ensure_ip(hostname):
+    """ Ensure that address is an IP address
+
+    >>> ensure_ip('localhost')
+    '127.0.0.1'
+    >>> ensure_ip('123.123.123.123')  # pass through IP addresses
+    '123.123.123.123'
+    """
+    if re.match('\d+\.\d+\.\d+\.\d+', hostname):  # is IP
+        return hostname
+    else:
+        return socket.gethostbyname(hostname)
+
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+                    level=logging.DEBUG)
 
 # http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
 stream = logging.StreamHandler(sys.stderr)

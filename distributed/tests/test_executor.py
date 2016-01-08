@@ -3,6 +3,7 @@ from operator import add, sub
 
 from collections import Iterator
 from concurrent.futures import CancelledError
+from datetime import timedelta
 import os
 import shutil
 import sys
@@ -1473,3 +1474,57 @@ def test_executor_with_scheduler(loop):
         assert result == 12
 
     _test_scheduler(f)
+
+
+@pytest.mark.skipif(sys.platform!='linux',
+                    reason="Need 127.0.0.2 to mean localhost")
+@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)])
+def test_allow_restrictions(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(inc, 1, workers=a.ip)
+    yield x._result()
+    assert s.who_has[x.key] == {a.address}
+    assert not s.loose_restrictions
+
+    x = e.submit(inc, 2, workers=a.ip, allow_other_workers=True)
+    yield x._result()
+    assert s.who_has[x.key] == {a.address}
+    assert x.key in s.loose_restrictions
+
+    L = e.map(inc, range(3, 13), workers=a.ip, allow_other_workers=True)
+    yield _wait(L)
+    assert all(s.who_has[f.key] == {a.address} for f in L)
+    assert {f.key for f in L}.issubset(s.loose_restrictions)
+
+    """
+    x = e.submit(inc, 14, workers='127.0.0.3')
+    with ignoring(gen.TimeoutError):
+        yield gen.with_timeout(timedelta(seconds=0.1), x._result())
+        assert False
+    assert not s.who_has[x.key]
+    assert x.key not in s.loose_restrictions
+    """
+
+    x = e.submit(inc, 15, workers='127.0.0.3', allow_other_workers=True)
+    yield x._result()
+    assert s.who_has[x.key]
+    assert x.key in s.loose_restrictions
+
+    L = e.map(inc, range(15, 25), workers='127.0.0.3', allow_other_workers=True)
+    yield _wait(L)
+    assert all(s.who_has[f.key] for f in L)
+    assert {f.key for f in L}.issubset(s.loose_restrictions)
+
+    with pytest.raises(ValueError):
+        e.submit(inc, 1, allow_other_workers=True)
+
+    with pytest.raises(ValueError):
+        e.map(inc, [1], allow_other_workers=True)
+
+    with pytest.raises(TypeError):
+        e.submit(inc, 20, workers='127.0.0.1', allow_other_workers='Hello!')
+
+    with pytest.raises(TypeError):
+        e.map(inc, [20], workers='127.0.0.1', allow_other_workers='Hello!')
