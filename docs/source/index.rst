@@ -16,14 +16,14 @@ and by leveraging all the cores of a modern CPU.
 Dask use cases
 ==============
 
-* **Scientific computing library developers:** Projects like `xray`_ and `scikit-image`_ 
+* **Scientific computing libraries:** Projects like `xray`_ and `scikit-image`_ 
   use dask.array for fast interactive analysis of large numeric datasets.
-* **Users with large unstructured or semi-structured data:** Dask.bag excels at 
+* **Large unstructured or semi-structured data:** Dask.bag excels at 
   processing large JSON blobs and log files.
-* **Users scaling pandas-like data analysis to large datasets:** Dask.dataframe 
+* **Scaling pandas-like data analysis to large datasets:** Dask.dataframe 
   implements a part of the pandas interface, and can process data files larger than 
   available memory.
-* **Algorithm developers:** Working directly with dask graphs or dask.imperative 
+* **Algorithm development:** Working directly with dask graphs or dask.imperative 
   is an excellent way to implement and test new algorithms in fields such as linear 
   algebra, optimization, and machine learning.
 
