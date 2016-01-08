@@ -397,6 +397,10 @@ class Executor(object):
         key = kwargs.pop('key', None)
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
+        allow_other_workers = kwargs.pop('allow_other_workers', False)
+
+        if allow_other_workers not in (True, False, None):
+            raise TypeError("allow_other_workers= must be True or False")
 
         if key is None:
             if pure:
@@ -412,10 +416,17 @@ class Executor(object):
         else:
             task = (func,) + args
 
+        if allow_other_workers and workers is None:
+            raise ValueError("Only use allow_other_workers= if using workers=")
+
+        if isinstance(workers, str):
+            workers = [workers]
         if workers is not None:
             restrictions = {key: workers}
+            loose_restrictions = {key} if allow_other_workers else set()
         else:
             restrictions = {}
+            loose_restrictions = set()
 
         task2, _ = unpack_remotedata(task)
 
@@ -423,7 +434,8 @@ class Executor(object):
         self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': {key: task2},
                                 'keys': [key],
-                                'restrictions': restrictions})
+                                'restrictions': restrictions,
+                                'loose_restrictions': loose_restrictions})
 
         return Future(key, self)
 
@@ -457,6 +469,11 @@ class Executor(object):
         """
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
+        allow_other_workers = kwargs.pop('allow_other_workers', False)
+
+        if allow_other_workers and workers is None:
+            raise ValueError("Only use allow_other_workers= if using workers=")
+
         if not callable(func):
             raise TypeError("First input to map must be a callable function")
         iterables = [list(it) for it in iterables]
@@ -477,6 +494,8 @@ class Executor(object):
 
         dsk = {key: unpack_remotedata(task)[0] for key, task in dsk.items()}
 
+        if isinstance(workers, str):
+            workers = [workers]
         if isinstance(workers, (list, set)):
             if workers and isinstance(first(workers), (list, set)):
                 if len(workers) != len(keys):
@@ -489,12 +508,20 @@ class Executor(object):
             restrictions = {}
         else:
             raise TypeError("Workers must be a list or set of workers or None")
+        if allow_other_workers not in (True, False, None):
+            raise TypeError("allow_other_workers= must be True or False")
+        if allow_other_workers is True:
+            loose_restrictions = set(keys)
+        else:
+            loose_restrictions = set()
+
 
         logger.debug("map(%s, ...)", funcname(func))
         self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': dsk,
                                 'keys': keys,
-                                'restrictions': restrictions})
+                                'restrictions': restrictions,
+                                'loose_restrictions': loose_restrictions})
 
         return [Future(key, self) for key in keys]
 

@@ -90,6 +90,9 @@ class Scheduler(Server):
         is empty unless a key has been specifically restricted to only run on
         certain hosts.  These restrictions don't include a worker port.  Any
         worker on that hostname is deemed valid.
+    * **loose_retrictions:** ``{key}``:
+        Set of keys for which we are allow to violate restrictions (see above)
+        if not valid workers are present.
     * **held_data:** ``{key}``:
         A set of keys that we are not allowed to garbage collect
     * **in_play:** ``{key}``:
@@ -149,6 +152,7 @@ class Scheduler(Server):
         self.nannies = dict()
         self.processing = dict()
         self.restrictions = dict()
+        self.loose_restrictions = set()
         self.stacks = dict()
         self.waiting = dict()
         self.waiting_data = dict()
@@ -235,7 +239,8 @@ class Scheduler(Server):
         """ Clear out old state and restart all running coroutines """
         collections = [self.dask, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.in_play, self.keyorder,
-                self.nbytes, self.processing, self.restrictions]
+                self.nbytes, self.processing, self.restrictions,
+                self.loose_restrictions]
         for collection in collections:
             collection.clear()
 
@@ -325,7 +330,8 @@ class Scheduler(Server):
             del self.waiting[key]
 
         new_worker = decide_worker(self.dependencies, self.stacks,
-                self.who_has, self.restrictions, self.nbytes, key)
+                self.who_has, self.restrictions, self.loose_restrictions,
+                self.nbytes, key)
 
         self.stacks[new_worker].append(key)
         self.ensure_occupied(new_worker)
@@ -391,7 +397,8 @@ class Scheduler(Server):
             keys = self.dask
         new_stacks = assign_many_tasks(
                 self.dependencies, self.waiting, self.keyorder, self.who_has,
-                self.stacks, self.restrictions, self.nbytes,
+                self.stacks, self.restrictions, self.loose_restrictions,
+                self.nbytes,
                 [k for k in keys if k in self.waiting and not self.waiting[k]])
         logger.debug("Seed ready tasks: %s", new_stacks)
         for worker, stack in new_stacks.items():
@@ -550,7 +557,8 @@ class Scheduler(Server):
         logger.info("Register %s", str(address))
         return b'OK'
 
-    def update_graph(self, dsk=None, keys=None, restrictions={}):
+    def update_graph(self, dsk=None, keys=None, restrictions=None,
+                     loose_restrictions=None):
         """ Add new computations to the internal dask graph
 
         This happens whenever the Executor calls submit, map, get, or compute.
@@ -565,9 +573,12 @@ class Scheduler(Server):
 
         cover_aliases(self.dask, dsk)
 
-        restrictions = {k: set(map(ensure_ip, v))
-                        for k, v in restrictions.items()}
-        self.restrictions.update(restrictions)
+        if restrictions:
+            restrictions = {k: set(map(ensure_ip, v))
+                            for k, v in restrictions.items()}
+            self.restrictions.update(restrictions)
+        if loose_restrictions:
+            self.loose_restrictions |= loose_restrictions
 
         new_keyorder = order(dsk)  # TODO: define order wrt old graph
         for key in new_keyorder:
@@ -589,7 +600,7 @@ class Scheduler(Server):
 
         for plugin in self.plugins[:]:
             try:
-                plugin.update_graph(self, dsk, keys, restrictions)
+                plugin.update_graph(self, dsk, keys, restrictions or {})
             except Exception as e:
                 logger.exception(e)
 
@@ -984,7 +995,8 @@ class Scheduler(Server):
         raise Return(dict(zip(workers, results)))
 
 
-def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
+def decide_worker(dependencies, stacks, who_has, restrictions,
+                  loose_restrictions, nbytes, key):
     """ Decide which worker should take task
 
     >>> dependencies = {'c': {'b'}, 'b': {'a'}}
@@ -992,22 +1004,26 @@ def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
     >>> who_has = {'a': {('alice', 8000)}}
     >>> nbytes = {'a': 100}
     >>> restrictions = {}
+    >>> loose_restrictions = set()
 
     We choose the worker that has the data on which 'b' depends (alice has 'a')
 
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions,
+    ...               loose_restrictions, nbytes, 'b')
     ('alice', 8000)
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
 
     >>> who_has = {'a': {('alice', 8000), ('bob', 8000)}}
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions,
+    ...               loose_restrictions, nbytes, 'b')
     ('bob', 8000)
 
     Optionally provide restrictions of where jobs are allowed to occur
 
     >>> restrictions = {'b': {'alice', 'charile'}}
-    >>> decide_worker(dependencies, stacks, who_has, restrictions, nbytes, 'b')
+    >>> decide_worker(dependencies, stacks, who_has, restrictions,
+    ...               loose_restrictions, nbytes, 'b')
     ('alice', 8000)
 
     If the task requires data communication, then we choose to minimize the
@@ -1019,7 +1035,7 @@ def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
     >>> nbytes = {'a': 1, 'b': 1000}
     >>> stacks = {('alice', 8000): [], ('bob', 8000): []}
 
-    >>> decide_worker(dependencies, stacks, who_has, {}, nbytes, 'c')
+    >>> decide_worker(dependencies, stacks, who_has, {}, set(), nbytes, 'c')
     ('bob', 8000)
     """
     deps = dependencies[key]
@@ -1033,7 +1049,11 @@ def decide_worker(dependencies, stacks, who_has, restrictions, nbytes, key):
         if not workers:
             workers = {w for w in stacks if w[0] in r}
             if not workers:
-                raise ValueError("Task has no valid workers", key, r)
+                if key in loose_restrictions:
+                    return decide_worker(dependencies, stacks, who_has,
+                                         {}, set(), nbytes, key)
+                else:
+                    raise ValueError("Task has no valid workers", key, r)
     if not workers or not stacks:
         raise ValueError("No workers found")
 
@@ -1292,7 +1312,7 @@ _round_robin = [0]
 
 
 def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
-        restrictions, nbytes, keys):
+        restrictions, loose_restrictions, nbytes, keys):
     """ Assign many new ready tasks to workers
 
     Often at the beginning of computation we have to assign many new leaves to
@@ -1336,7 +1356,7 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
 
     for key in ready:
         worker = decide_worker(dependencies, stacks, who_has, restrictions,
-                nbytes, key)
+                loose_restrictions, nbytes, key)
         new_stacks[worker].append(key)
         stacks[worker].append(key)
 
