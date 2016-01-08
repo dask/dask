@@ -17,7 +17,7 @@ from toolz import first, groupby, merge
 from tornado import gen
 from tornado.gen import Return
 from tornado.locks import Event
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
@@ -223,6 +223,8 @@ class Executor(object):
         from threading import Thread
         self._loop_thread = Thread(target=self.loop.start)
         self._loop_thread.daemon = True
+        pc = PeriodicCallback(lambda: None, 1000, io_loop=self.loop)
+        self.loop.add_callback(pc.start)
         _global_executor[0] = self
         self._loop_thread.start()
         sync(self.loop, self._start, **kwargs)
@@ -249,7 +251,7 @@ class Executor(object):
             if ident['type'] == 'Center':
                 self.center = r
                 self.scheduler = Scheduler(self.center, loop=self.loop,
-                        **kwargs)
+                                           **kwargs)
                 self.scheduler.listen(0)
             elif ident['type'] == 'Scheduler':
                 self.scheduler = r
