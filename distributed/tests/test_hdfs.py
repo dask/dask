@@ -44,6 +44,21 @@ def test_get_block_locations():
         assert L[2]['filename'] == L[3]['filename'] == fn_2
 
 
+def test_get_block_locations_nested():
+    with make_hdfs() as hdfs:
+        data = b'a'
+
+        for i in range(3):
+            hdfs.mkdir('/tmp/test/data-%d' % i)
+            for j in range(2):
+                fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
+                with hdfs.open(fn, 'w', repl=1) as f:
+                    f.write(data)
+
+        L =  get_block_locations(hdfs, '/tmp/test/')
+        assert len(L) == 6
+
+
 ip = get_ip()
 
 
