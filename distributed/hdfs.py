@@ -4,6 +4,7 @@ from __future__ import print_function, division, absolute_import
 import logging
 import os
 
+from hdfs3 import HDFileSystem
 from toolz import merge
 
 from .executor import default_executor
@@ -33,7 +34,7 @@ def get_block_locations(hdfs, filename):
             for block in hdfs.get_block_locations(fn)]
 
 
-def read_binary(fn, executor=None, hdfs=None):
+def read_binary(fn, executor=None, hdfs=None, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
     Parameters
@@ -43,12 +44,14 @@ def read_binary(fn, executor=None, hdfs=None):
     executor: Executor (optional)
         defaults to most recently created executor
     hdfs: HDFileSystem
+    **hdfs_auth: keyword arguments
+        Extra keywords to send to ``hdfs3.HDFileSystem``
 
     Returns
     -------
     List of ``distributed.Future`` objects
     """
-    assert hdfs  # TODO: support global singleton
+    hdfs = hdfs or HDFileSystem(**hdfs_auth)
     executor = default_executor(executor)
     blocks = get_block_locations(hdfs, fn)
     filenames = [d['filename'] for d in blocks]
