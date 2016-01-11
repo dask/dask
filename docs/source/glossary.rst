@@ -32,6 +32,11 @@ Dask dataframe:
   pandas dataframes but operate on datasets larger than memory using multiple 
   threads. Dask.dataframe does not implement the complete pandas interface.
 
+GIL
+  The Global Interpreter Lock is a CPython feature that stops threads from 
+  manipulating Python objects in parallel. The GIL prevents Python from sharing
+  non thread-safe code between multiple threads.
+
 Opportunistic caching: 
   Dask's :doc:`caching` monitors tasks to measure their past computation cost, 
   storage cost, and frequency of use, and to predict their future frequency of 

@@ -8,7 +8,7 @@ Internal Design
 
 Dask arrays define a large array with a grid of blocks of smaller arrays.
 These arrays may be concrete, or functions that produce arrays.  We define a
-dask array with from the following components
+dask array with the following components
 
 *  A dask with a special set of keys designating blocks
    e.g. ``('x', 0, 0), ('x', 0, 1), ...``
