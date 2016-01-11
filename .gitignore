@@ -8,3 +8,5 @@ log.*
 log
 .coverage
 .DS_Store
+*.swp
+*.swo

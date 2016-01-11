@@ -26,7 +26,7 @@ static notebook with more data and profiling is on `nbviewer
 Dask.dataframe copies the pandas API
 ------------------------------------
 
-Because the ``dask.dataframe`` API is a subset of the pandas API it should be
+Because the ``dask.dataframe`` application programming interface (API) is a subset of the pandas API it should be
 familiar to pandas users.  There are some slight alterations due to the
 parallel nature of dask:
 
@@ -45,7 +45,7 @@ parallel nature of dask:
 
    >>> df2 = df[df.y == 'a'].x + 1
 
-As with all dask collections (e.g. Array, Bag, DataFrame) one triggers
+As with all dask collections (for example Array, Bag, DataFrame) one triggers
 computation by calling the ``.compute()`` method:
 
 .. code-block:: python
@@ -61,7 +61,7 @@ Threaded Scheduling
 
 By default ``dask.dataframe`` uses the multi-threaded scheduler.
 This exposes some parallelism when pandas or the underlying numpy operations
-release the global interpreter lock, or GIL.  Generally pandas is more GIL 
+release the global interpreter lock (GIL).  Generally pandas is more GIL 
 bound than NumPy, so multi-core speed-ups are not as pronounced for 
 ``dask.dataframe`` as they are for ``dask.array``.  This is changing, and 
 the pandas development team is actively working on releasing the GIL.
@@ -74,7 +74,7 @@ Dask.dataframe covers a small but well-used portion of the pandas API.
 This limitation is for two reasons:
 
 1.  The pandas API is *huge*
-2.  Some operations are genuinely hard to do in parallel (e.g. sort).
+2.  Some operations are genuinely hard to do in parallel (for example sort).
 
 Additionally, some important operations like ``set_index`` work, but are slower
 than in pandas because they may write out to disk.
