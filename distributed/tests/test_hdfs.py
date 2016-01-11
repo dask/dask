@@ -85,3 +85,28 @@ def test_read_binary(s, a, b):
         assert b''.join(results) == data
         assert s.restrictions
         assert {f.key for f in futures}.issubset(s.loose_restrictions)
+
+
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60)
+def test_get_block_locations_nested(s, a, b):
+    with make_hdfs() as hdfs:
+        data = b'a'
+
+        for i in range(3):
+            hdfs.mkdir('/tmp/test/data-%d' % i)
+            for j in range(2):
+                fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
+                with hdfs.open(fn, 'w', repl=1) as f:
+                    f.write(data)
+
+        L =  get_block_locations(hdfs, '/tmp/test/')
+        assert len(L) == 6
+
+
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+
+        futures = read_binary('/tmp/test/', hdfs=hdfs)
+        results = yield e._gather(futures)
+        assert len(results) == 6
+        assert all(x == b'a' for x in results)

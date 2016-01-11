@@ -50,8 +50,8 @@ def read_binary(fn, executor=None, hdfs=None):
     """
     assert hdfs  # TODO: support global singleton
     executor = default_executor(executor)
-    blocks = hdfs.get_block_locations(fn)
-    filenames = [fn] * len(blocks) # TODO https://github.com/blaze/hdfs3/issues/18
+    blocks = get_block_locations(hdfs, fn)
+    filenames = [d['filename'] for d in blocks]
     offsets = [d['offset'] for d in blocks]
     lengths = [d['length'] for d in blocks]
     workers = [d['hosts'] for d in blocks]
