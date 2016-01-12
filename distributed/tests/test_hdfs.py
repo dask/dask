@@ -5,6 +5,7 @@ from tornado import gen
 
 pytest.importorskip('hdfs3')
 
+from dask.imperative import Value
 from hdfs3 import HDFileSystem
 
 from distributed.utils_test import gen_cluster
@@ -102,11 +103,38 @@ def test_get_block_locations_nested(s, a, b):
         L =  get_block_locations(hdfs, '/tmp/test/')
         assert len(L) == 6
 
-
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
         futures = read_binary('/tmp/test/', hdfs=hdfs)
         results = yield e._gather(futures)
+        assert len(results) == 6
+        assert all(x == b'a' for x in results)
+
+
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60)
+def test_lazy_values(s, a, b):
+    with make_hdfs() as hdfs:
+        data = b'a'
+
+        for i in range(3):
+            hdfs.mkdir('/tmp/test/data-%d' % i)
+            for j in range(2):
+                fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
+                with hdfs.open(fn, 'w', repl=1) as f:
+                    f.write(data)
+
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+
+        values = read_binary('/tmp/test/', hdfs=hdfs, lazy=True)
+        assert all(isinstance(v, Value) for v in values)
+
+        while not s.restrictions:
+            yield gen.sleep(0.01)
+        assert not s.dask
+
+        results = e.compute(*values, sync=False)
+        results = yield e._gather(results)
         assert len(results) == 6
         assert all(x == b'a' for x in results)

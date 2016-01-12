@@ -4,6 +4,7 @@ from __future__ import print_function, division, absolute_import
 import logging
 import os
 
+from dask.imperative import Value
 from hdfs3 import HDFileSystem
 from toolz import merge
 
@@ -34,7 +35,7 @@ def get_block_locations(hdfs, filename):
             for block in hdfs.get_block_locations(fn)]
 
 
-def read_binary(fn, executor=None, hdfs=None, **hdfs_auth):
+def read_binary(fn, executor=None, hdfs=None, lazy=False, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
     Parameters
@@ -58,7 +59,21 @@ def read_binary(fn, executor=None, hdfs=None, **hdfs_auth):
     offsets = [d['offset'] for d in blocks]
     lengths = [d['length'] for d in blocks]
     workers = [d['hosts'] for d in blocks]
+    names = ['read-binary-%s-%d-%d' % (fn, offset, length)
+            for fn, offset, length in zip(filenames, offsets, lengths)]
+
 
     logger.debug("Read %d blocks of binary bytes from %s", len(blocks), fn)
-    return executor.map(read, filenames, offsets, lengths,
-                        hdfs=hdfs, workers=workers, allow_other_workers=True)
+    if lazy:
+        restrictions = dict(zip(names, workers))
+        executor._send_to_scheduler({'op': 'update-graph',
+                                    'dsk': {},
+                                    'keys': [],
+                                    'restrictions': restrictions,
+                                    'loose_restrictions': set(names)})
+        values = [Value(name, [{name: (read, fn, offset, length, hdfs)}])
+                  for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
+        return values
+    else:
+        return executor.map(read, filenames, offsets, lengths,
+                            hdfs=hdfs, workers=workers, allow_other_workers=True)
