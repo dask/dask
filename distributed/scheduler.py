@@ -75,8 +75,9 @@ class Scheduler(Server):
         Dictionary like dependents but excludes keys already computed
     * **ncores:** ``{worker: int}``:
         Number of cores owned by each worker
-    * **nannies:** ``{worker: port}``:
-        Port of nanny process for each worker
+    * **services:** ``{worker: {str: port}}``:
+        Ports of other running services on each worker.
+        E.g. ``{('192.168.1.100', 8000): {'http': 9001, 'nanny': 9002}}``
     * **who_has:** ``{key: {worker}}``:
         Where each key lives.  The current state of distributed memory.
     * **has_what:** ``{worker: {key}}``:
@@ -115,8 +116,6 @@ class Scheduler(Server):
         A dict mapping keys to remote tracebacks stored as a list of strings
     *  **exceptions_blame:** ``{key: key}``:
         A dict mapping a key to another key on which it depends that has failed
-    *  **resource_logs:** ``list``:
-        A list of dicts from the nannies, tracking resources on the workers
     *  **deleted_keys:** ``{key: {workers}}``
         Locations of workers that have keys that should be deleted
     *  **loop:** ``IOLoop``:
@@ -149,7 +148,7 @@ class Scheduler(Server):
         self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
-        self.nannies = dict()
+        self.services = defaultdict(dict)
         self.processing = dict()
         self.restrictions = dict()
         self.loose_restrictions = set()
@@ -162,7 +161,6 @@ class Scheduler(Server):
         self.exceptions = dict()
         self.tracebacks = dict()
         self.exceptions_blame = dict()
-        self.resource_logs = dict()
 
         self.loop = loop or IOLoop.current()
         self.io_loop = self.loop
@@ -220,20 +218,11 @@ class Scheduler(Server):
     @gen.coroutine
     def sync_center(self):
         """ Connect to center, determine available workers """
-        self.ncores, self.has_what, self.who_has, self.nannies = yield [
+        self.ncores, self.has_what, self.who_has, self.services = yield [
                 self.center.ncores(),
                 self.center.has_what(),
                 self.center.who_has(),
-                self.center.nannies()]
-
-        self._nanny_coroutines = []
-        for (ip, wport), nport in self.nannies.items():
-            if not nport:
-                continue
-            if (ip, nport) not in self.resource_logs:
-                self.resource_logs[(ip, nport)] = deque(maxlen=self.resource_log_size)
-
-            self._nanny_coroutines.append(self.nanny_listen(ip, nport))
+                self.center.services()]
 
     def start(self, start_queues=True):
         """ Clear out old state and restart all running coroutines """
@@ -531,7 +520,7 @@ class Scheduler(Server):
         del self.ncores[address]
         del self.stacks[address]
         del self.processing[address]
-        del self.nannies[address]
+        del self.services[address]
         if not self.stacks:
             logger.critical("Lost all workers")
         missing_keys = set()
@@ -548,9 +537,9 @@ class Scheduler(Server):
             self.heal_state()
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
-                   nanny_port=None):
+                   services=None):
         self.ncores[address] = ncores
-        self.nannies[address] = nanny_port
+        self.services[address] = services
         if address not in self.processing:
             self.has_what[address] = set()
             self.processing[address] = set()
@@ -852,18 +841,6 @@ class Scheduler(Server):
                 self.in_play.remove(key)
 
     @gen.coroutine
-    def nanny_listen(self, ip, port):
-        """ Listen to a nanny for monitoring information """
-        stream = yield connect(ip=ip, port=port)
-        yield write(stream, {'op': 'monitor_resources',
-                             'interval': self.resource_interval})
-        while not stream.closed():
-            msg = yield read(stream)
-            if not msg:
-                stream.close()
-            self.resource_logs[(ip, port)].append(msg)
-
-    @gen.coroutine
     def scatter(self, stream=None, data=None, workers=None):
         """ Send data out to workers """
         if not self.ncores:
@@ -902,19 +879,21 @@ class Scheduler(Server):
         for q in self.scheduler_queues + self.report_queues:
             clear_queue(q)
 
-        nannies = self.nannies.copy()
+        nannies = {addr: d['nanny'] for addr, d in self.services.items()}
 
         for addr in nannies:
             self.remove_worker(address=addr, heal=False)
 
-        logger.debug("Send kill signal to nannies")
+        logger.debug("Send kill signal to nannies: %s", nannies)
         nannies = [rpc(ip=ip, port=n_port)
                    for (ip, w_port), n_port in nannies.items()]
         yield All([nanny.kill() for nanny in nannies])
+        logger.debug("Received done signal from nannies")
 
         while self.ncores:
             yield gen.sleep(0.01)
 
+        logger.debug("Workers all removed.  Sending startup signal")
 
         # All quiet
         resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
@@ -923,8 +902,7 @@ class Scheduler(Server):
             yield self.sync_center()
         self.start()
 
-        # self.who_has.clear()
-        # self.has_what.clear()
+        logger.debug("All workers reporting in")
 
         self.report({'op': 'restart'})
         for plugin in self.plugins[:]:
@@ -943,21 +921,9 @@ class Scheduler(Server):
                 set(self.has_what) == \
                 set(self.stacks) == \
                 set(self.processing) == \
-                set(self.nannies) == \
+                set(self.services) == \
                 set(self.worker_queues)):
             raise ValueError("Workers not the same in all collections")
-
-    def diagnostic_resources(self, n=100):
-        now = datetime.now()
-        workers = {(ip, nport): (ip, wport)
-                   for (ip, wport), nport in self.nannies.items()}
-        logs = {workers[nanny]: list(log)[-n:]
-                for nanny, log in self.resource_logs.items()}
-        return {worker: {'cpu': [d['cpu_percent'] for d in log],
-                         'memory': [d['memory_percent'] for d in log],
-                         'time': [(d['timestamp'] - now).total_seconds()
-                                  for d in log]}
-                for worker, log in logs.items()}
 
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):

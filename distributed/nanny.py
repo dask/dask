@@ -182,7 +182,7 @@ def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
     loop = IOLoop()
     loop.make_current()
     worker = Worker(center_ip, center_port, ncores=ncores, ip=ip,
-                    nanny_port=nanny_port, local_dir=local_dir)
+                    service_ports={'nanny': nanny_port}, local_dir=local_dir)
 
     @gen.coroutine
     def start():
