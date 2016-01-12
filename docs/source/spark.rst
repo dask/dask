@@ -6,22 +6,20 @@ PySpark_.  Spark is growing to become a dominant name today in Big Data
 analysis alongside Hadoop, for which MRJob_ is possibly the dominant
 Python layer.
 
-Dask has several elements that appear to intersect this space and as such we
-often receive the following question:
-
-*How does Dask compare with Spark?*
+Dask has several elements that appear to intersect this space and we are often 
+asked, "How does Dask compare with Spark?"
 
 Answering such comparison questions in an unbiased and informed way is hard,
 particularly when the differences can be somewhat technical.  This document
 tries to do this; we welcome any corrections.
 
-Brief Answer
-------------
+Summary
+-------
 
 Apache Spark is more mature and better integrates with HDFS.  It handles
 resiliency and was originally built to scale up to thousands of workers.
 
-Dask is pip installable, doesn't use the Java Virtual Machine (JVM), and was
+Dask can be installed with conda or pip, doesn't use the Java Virtual Machine (JVM), and was
 originally built to handle numeric workloads in a large single workstation very
 efficiently.
 
@@ -40,7 +38,7 @@ run in standalone mode on a single machine.
 Dask began its life building out parallel algorithms for numerical array
 computations on a single computer.  As such it thinks well about low-latency
 scheduling, low memory footprints, shared memory, and efficient use of local
-disk.  That being said dask can run on a :doc:`distributed cluster <distributed>`.
+disk.  That being said dask can run on a distributed cluster.
 
 
 Java Python Performance
@@ -78,7 +76,7 @@ Dask has an advantage for Python users because it is itself a Python library,
 so serialization and debugging when things go wrong happens more smoothly.
 
 However, dask only benefits Python users while Spark is useful in a
-variety of JVM languages (Scala, Java, Clojure) as well as limited support in
+variety of JVM languages (Scala, Java, Clojure) and also has limited support in
 Python and R.  New Spark projects like the DataFrame skip serialization and
 boxed execution issues by forgoing the Python process entirely and instead have
 Python code drive native Scala code.  APIs for these libraries tend to lag a

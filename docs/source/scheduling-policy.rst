@@ -6,12 +6,12 @@ Scheduling in Depth
 The default shared memory scheduler used by most dask collections lives in
 ``dask/async.py``. This scheduler dynamically schedules tasks to new workers as
 they become available.  It operates in a shared memory environment without
-consideration to data locality (all worker have access to all data equally.)
+consideration to data locality, all workers have access to all data equally.
 
 We find that our workloads are best served by trying to minimize the memory
 footprint.  This document talks about our policies to accomplish this in our
-scheduling budget of one millisecond per task (irrespective of the number of
-tasks.)
+scheduling budget of one millisecond per task, irrespective of the number of
+tasks.
 
 Generally we are faced with the following situation:  A worker arrives with a
 newly completed task.  We update our data structures of execution state and
@@ -47,24 +47,24 @@ on to the next.  This encourages our workers to complete blocks/subtrees of our
 graph before moving on to new blocks/subtrees.
 
 And so to encourage this "depth first behavior" we do a depth first search and
-number all nodes according to their number in the DFS traversal.  We use this
-number to break ties when adding tasks on to the stack.  Please note that while
-we spoke of optimizing the many-distinct-subtree case above this choice is
-entirely local and applies quite generally beyond this case.  Anything that
-behaves even remotely like the many-distinct-subtree case will benefit
-accordingly (and this case is quite common in normal workloads.)
+number all nodes according to their number in the depth first search (DFS) 
+traversal.  We use this number to break ties when adding tasks on to the stack.  
+Please note that while we spoke of optimizing the many-distinct-subtree case 
+above this choice is entirely local and applies quite generally beyond this 
+case.  Anything that behaves even remotely like the many-distinct-subtree case 
+will benefit accordingly, and this case is quite common in normal workloads.
 
-And yet we have glossed over another tie breaker.  When performing the depth
-first search when we arrive at a node with many children we can choose the
+And yet we have glossed over another tie breaker. Performing the depth
+first search, when we arrive at a node with many children we can choose the
 order in which to traverse the children.  We resolve this tie breaker by
 selecting those children whose result is depended upon by the most nodes.  This
-dependence can be either direct (those nodes that take that data as input) or
-indirect (any ancestor node in the graph.)  This emphasizing traversing first
-those nodes that are parts of critical paths (long vertical chains rest on top
-of this node's result) and nodes whose data serves as a broker / is depended
-upon by many nodes in the future.  We choose to dive down into these subtrees
-first in our depth first search so that future computations don't get stuck
-waiting for them to complete.
+dependence can be either direct for those nodes that take that data as input or
+indirect for any ancestor node in the graph.  This emphasizing traversing first
+those nodes that are parts of critical paths having long vertical chains that
+rest on top of this node's result, and nodes whose data is depended upon by
+many nodes in the future.  We choose to dive down into these subtrees first in
+our depth first search so that future computations don't get stuck waiting for
+them to complete.
 
 And so we have three tie breakers
 

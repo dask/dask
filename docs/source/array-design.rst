@@ -8,13 +8,13 @@ Internal Design
 
 Dask arrays define a large array with a grid of blocks of smaller arrays.
 These arrays may be concrete, or functions that produce arrays.  We define a
-dask array with from the following components
+dask array with the following components
 
 *  A dask with a special set of keys designating blocks
-   e.g. ``('x', 0, 0), ('x', 0, 1), ...``
-*  A sequence of chunk sizes along each dimension called ``chunks``
-   e.g. ``((5, 5, 5, 5), (8, 8, 8))``
-*  A name to identify which keys in the dask refer to this array, e.g. ``'x'``
+   such as ``('x', 0, 0), ('x', 0, 1), ...``
+*  A sequence of chunk sizes along each dimension called ``chunks``,
+   for example ``((5, 5, 5, 5), (8, 8, 8))``
+*  A name to identify which keys in the dask refer to this array, like ``'x'``
 
 Keys of the dask graph
 ----------------------
@@ -23,7 +23,7 @@ By special convention we refer to each block of the array with a tuple of the
 form ``(name, i, j, k)`` for ``i, j, k`` being the indices of the block,
 ranging from ``0`` to the number of blocks in that dimension.  The dask must
 hold key-value pairs referring to these keys.  It likely also holds other
-key-value pairs required to eventually compute the desired values, e.g.
+key-value pairs required to eventually compute the desired values, for example
 
 .. code-block:: python
 
@@ -59,11 +59,11 @@ anti-symmetric shapes.
 
 Some ways in which ``chunks`` reflects properties of our array
 
-1.  ``len(x.chunks) == x.ndims``: The length of chunks is the number of dimensions
-2.  ``map(sum, chunks) == shape``: The sum of each internal chunk, is the
+1.  ``len(x.chunks) == x.ndim``: The length of chunks is the number of dimensions
+2.  ``tuple(map(sum, x.chunks)) == x.shape``: The sum of each internal chunk, is the
     length of that dimension.
-3.  The length of each internal chunk is the number of keys in that dimension,
-    e.g. for ``chunks == ((a, b), (d, e, f))`` and name == ``'x'``
+3.  The length of each internal chunk is the number of keys in that dimension.
+    For instance, for ``chunks == ((a, b), (d, e, f))`` and name == ``'x'``
     our array has tasks with the following keys::
 
        ('x', 0, 0), ('x', 0, 1), ('x', 0, 2)
@@ -103,8 +103,8 @@ identity matrix
 .. code-block:: python
 
    def eye(n, blocksize):
-       chunks = ((blocksize,) * n // blocksize,
-                 (blocksize,) * n // blocksize)
+       chunks = ((blocksize,) * (n // blocksize),
+                 (blocksize,) * (n // blocksize))
 
        name = 'eye' + next(tokens)  # unique identifier
 
@@ -114,7 +114,6 @@ identity matrix
                 for i in range(n // blocksize)
                 for j in range(n // blocksize)}
 
-
        dtype = np.eye(0).dtype  # take dtype default from numpy
 
-       return Array(dsk, name, chunks, dtype)
+       return dask.array.Array(dsk, name, chunks, dtype)
