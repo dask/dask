@@ -4,6 +4,8 @@ from __future__ import print_function, division, absolute_import
 from itertools import product
 from operator import getitem
 
+import dask
+from dask.context import _globals
 import dask.array as da
 import dask.dataframe as dd
 from dask.base import tokenize
@@ -42,6 +44,10 @@ def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
 
     name = 'distributed-pandas-to-dask-' + tokenize(*futures)
     dsk = {(name, i): f for i, f in enumerate(futures)}
+
+    if _globals['get'] != executor.get:
+        print("Setting global dask scheduler to use distributed")
+        dask.set_options(get=executor.get)
 
     raise gen.Return(dd.DataFrame(dsk, name, columns2, divisions2))
 
@@ -86,6 +92,10 @@ def _futures_to_dask_array(futures, executor=None):
     keys = list(product([name], *map(range, futures.shape)))
     values = list(futures.flat)
     dsk = dict(zip(keys, values))
+
+    if _globals['get'] != executor.get:
+        print("Setting global dask scheduler to use distributed")
+        dask.set_options(get=executor.get)
 
     raise gen.Return(da.Array(dsk, name, chunks, dtype))
 
