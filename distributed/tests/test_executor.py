@@ -1540,3 +1540,22 @@ def test_bad_address():
         Executor('127.0.0.1:1234', timeout=0.1)
     except (IOError, gen.TimeoutError) as e:
         assert "connect" in str(e).lower()
+
+
+@gen_cluster()
+def test_long_error(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    def bad(x):
+        raise ValueError('a' * 1000000)
+
+    x = e.submit(bad, 10)
+
+    try:
+        yield x._result()
+    except ValueError as e:
+        assert len(str(e)) < 1000000
+
+    tb = yield x._traceback()
+    assert all(len(line) < 100000 for line in tb)

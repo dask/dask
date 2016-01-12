@@ -216,11 +216,22 @@ class Worker(Server):
         except Exception as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             tb = traceback.format_tb(exc_traceback)
+            tb = [line[:10000] for line in tb]
+            if len(str(e)) > 10000:
+                try:
+                    e = type(e)("Long error message",
+                                str(e)[:10000])
+                except:
+                    e = Exception("Long error message",
+                                  type(e),
+                                  str(e)[:10000])
+
             logger.warn(" Compute Failed\n"
                 "Function: %s\n"
                 "args:     %s\n"
-                "kwargs:   %s\n", funcname(function), str(args2), str(kwargs2),
-                exc_info=True)
+                "kwargs:   %s\n",
+                str(funcname(function))[:1000], str(args2)[:1000],
+                str(kwargs2)[:1000], exc_info=True)
             out = (b'error', (e, tb))
 
         logger.debug("Send compute response to client: %s, %s", key, out)
