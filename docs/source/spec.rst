@@ -110,7 +110,7 @@ Because we accept lists of keys as keys, we support nested lists.
    [[1, 2], [3, 6]]
 
 Internally ``get`` can be arbitrarily complex, calling out to distributed
-computing, using caches, etc.
+computing, using caches, and so on.
 
 
 Why use tuples

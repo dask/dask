@@ -2,9 +2,9 @@ Custom Graphs
 =============
 
 There may be times that you want to do parallel computing, but your application 
-doesn't fit neatly into something like dask.array or dask.bag.  In these cases, 
-you can interact directly with the dask schedulers.  These schedulers operate 
-well as standalone modules.
+doesn't fit neatly into something like ``dask.array`` or ``dask.bag``.  In these
+cases, you can interact directly with the dask schedulers.  These schedulers 
+operate well as standalone modules.
 
 This separation provides a release valve for complex situations and allows
 advanced projects additional opportunities for parallel execution, even if
@@ -22,8 +22,8 @@ Example
    :align: right
 
 As discussed in the :doc:`motivation <graphs>` and :doc:`specification <spec>`
-sections, the schedulers take a task graph (a dict of tuples of functions) and
-a list of desired keys from that graph.
+sections, the schedulers take a task graph which is a dict of tuples of 
+functions, and a list of desired keys from that graph.
 
 Here is a mocked out example building a graph for a traditional clean and
 analyze pipeline:

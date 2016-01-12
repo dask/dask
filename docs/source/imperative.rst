@@ -70,7 +70,7 @@ The ``dask.imperative`` interface consists of two functions:
 ``Value`` supports *most* python operations, each of which creates another
 ``Value`` representing the result:
 
-- Most operators (``*``, ``-``, etc...)
+- Most operators (``*``, ``-``, and so on)
 - Item access and slicing (``a[0]``)
 - Attribute access (``a.size``)
 - Method calls (``a.index(0)``)
