@@ -38,7 +38,7 @@ run in standalone mode on a single machine.
 Dask began its life building out parallel algorithms for numerical array
 computations on a single computer.  As such it thinks well about low-latency
 scheduling, low memory footprints, shared memory, and efficient use of local
-disk.  That being said dask can run on a :doc:`distributed cluster <distributed>`.
+disk.  That being said dask can run on a distributed cluster.
 
 
 Java Python Performance
