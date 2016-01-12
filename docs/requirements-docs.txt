@@ -2,3 +2,4 @@ numpydoc
 toolz
 cloudpickle
 pandas>=0.16.0
+dask

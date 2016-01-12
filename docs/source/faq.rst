@@ -31,9 +31,9 @@ Frequently Asked Questions
         >>> x = da.from_array(dataset, chunks=(1000, 1000))
 
     In this case chunks is a tuple defining the shape of each chunk of your
-    array; e.g. "Please break ``dataset`` into 1000 by 1000 chunks."
+    array; for example "Please break ``dataset`` into 1000 by 1000 chunks."
 
-    However internally dask uses a different representation (a tuple of tuples)
+    However internally dask uses a different representation, a tuple of tuples,
     to handle uneven chunk sizes that inevitably occur during computation.
 
 
@@ -43,8 +43,8 @@ Frequently Asked Questions
     Here are some general guidelines.  The strongest guide is memory:
 
     1.  The size of your blocks should fit in memory.
-    2.  Actually, several blocks should fit in memory at once (assuming you
-        want multi-core)
+    2.  Actually, several blocks should fit in memory at once, assuming you
+        want multi-core
     3.  The size of the blocks should be large enough to hide scheduling
         overhead, which is a couple of milliseconds per task
     4.  Generally I shoot for 10MB-100MB sized chunks
@@ -90,7 +90,7 @@ Frequently Asked Questions
         >>> dask.set_options(cache=cache)  # sets global state
         >>> y = x.dot(x.T).compute()
 
-    However, while using an on-disk cache is a great fallback performance is
+    However, while using an on-disk cache is a great fallback performance, it's
     always best if we can keep from spilling to disk.  You could try one of the
     following
 

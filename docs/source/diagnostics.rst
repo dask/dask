@@ -1,7 +1,7 @@
 Diagnostics
 ===========
 
-Profiling parallel code can be tricky. ``dask.diagnostics`` provides
+Profiling parallel code can be tricky, but ``dask.diagnostics`` provides
 functionality to aid in profiling and inspecting dask graph execution.
 
 
@@ -11,7 +11,9 @@ Scheduler Callbacks
 Schedulers based on ``dask.async.get_async`` (currently
 ``dask.async.get_sync``, ``dask.threaded.get``, and
 ``dask.multiprocessing.get``) accept four callbacks, allowing for inspection of
-dask execution. The callbacks are:
+dask execution. 
+
+The callbacks are:
 
 1. ``start(dask, state)``
 
@@ -31,8 +33,8 @@ dask execution. The callbacks are:
 4. ``finish(dask, state, errored)``
 
    Run at the end of execution, right before the result is returned. Receives
-   the dask, the scheduler state, and a boolean indicating whether the exit was
-   due to an error or not.
+   the dask, the scheduler state, and a boolean indicating whether or not the exit was
+   due to an error.
 
 These are internally represented as tuples of length 4, stored in the order
 presented above.  Callbacks for common use cases are provided in
@@ -42,8 +44,8 @@ Profiler
 --------
 
 The ``Profiler`` class builds on the scheduler callbacks described above to
-profile dask execution at the task level. This can be used as a contextmanager
-around calls to ``get`` or ``compute`` to profile the computation.
+profile dask execution at the task level. This can be used as a context manager
+around calls to ``get`` or ``compute`` to profile the computation:
 
 
 .. code-block:: python
@@ -66,7 +68,7 @@ During execution the profiler records the following information for each task:
 5. Worker id
 
 These results can then be accessed by the ``results`` method. This returns a
-list of ``namedtuple`` objects containing the data for each task.
+list of ``namedtuple`` objects containing the data for each task:
 
 .. code-block:: python
 
@@ -78,7 +80,7 @@ list of ``namedtuple`` objects containing the data for each task.
              worker_id=4367847424)
 
 These can be analyzed separately, or viewed in a bokeh plot using the provided
-``visualize`` method.
+``visualize`` method:
 
 .. code-block:: python
 
@@ -99,8 +101,8 @@ The ``ProgressBar`` class displays a progress bar in the terminal or notebook
 during computation. This can be nice feedback during long running graph
 execution.
 
-As with ``Profiler``, this can be used as a contextmanager around calls to
-``compute``.
+As with ``Profiler``, this can be used as a context manager around calls to
+``compute``:
 
 .. code-block:: python
 
@@ -127,9 +129,9 @@ Custom Callbacks
 ----------------
 
 Custom diagnostics can be created using the callback mechanism described above.
-To add your own, it's recommended to subclass the ``Callback`` class, and
-define your own methods. Below we create a class that prints the name of every
-key as it's computed.
+To add your own,  subclass the ``Callback`` class, and
+define your own methods. Here we create a class that prints the name of every
+key as it's computed:
 
 .. code-block:: python
 
@@ -139,7 +141,7 @@ key as it's computed.
             """Print the key of every task as it's started"""
             print("Computing: {0}!".format(repr(key)))
 
-This can now be used as a contextmanager during computation:
+This can now be used as a context manager during computation:
 
 .. code-block:: python
 
@@ -151,7 +153,7 @@ This can now be used as a contextmanager during computation:
     Computing 'b'!
     Computing 'c'!
 
-Alternatively, functions can be passed in as keyword arguments to ``Callback``:
+Alternatively, functions may be passed in as keyword arguments to ``Callback``:
 
 .. code-block:: python
 
