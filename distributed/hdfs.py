@@ -5,7 +5,6 @@ import logging
 import os
 
 from dask.imperative import Value
-from hdfs3 import HDFileSystem
 from toolz import merge
 
 from .executor import default_executor
@@ -13,10 +12,6 @@ from .utils import ignoring
 
 
 logger = logging.getLogger(__name__)
-
-
-with ignoring(ImportError):
-    import hdfs3
 
 
 def read(fn, offset, length, hdfs=None):
@@ -52,6 +47,7 @@ def read_binary(fn, executor=None, hdfs=None, lazy=False, **hdfs_auth):
     -------
     List of ``distributed.Future`` objects
     """
+    from hdfs3 import HDFileSystem
     hdfs = hdfs or HDFileSystem(**hdfs_auth)
     executor = default_executor(executor)
     blocks = get_block_locations(hdfs, fn)
