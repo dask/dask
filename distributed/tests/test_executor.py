@@ -1528,3 +1528,15 @@ def test_allow_restrictions(s, a, b):
 
     with pytest.raises(TypeError):
         e.map(inc, [20], workers='127.0.0.1', allow_other_workers='Hello!')
+
+
+def test_bad_address():
+    try:
+        Executor('123.123.123.123:1234', timeout=0.1)
+    except (IOError, gen.TimeoutError) as e:
+        assert "connect" in str(e).lower()
+
+    try:
+        Executor('127.0.0.1:1234', timeout=0.1)
+    except (IOError, gen.TimeoutError) as e:
+        assert "connect" in str(e).lower()

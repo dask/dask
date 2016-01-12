@@ -16,7 +16,7 @@ from dask.core import flatten
 from dask.compatibility import apply
 from toolz import first, groupby, merge
 from tornado import gen
-from tornado.gen import Return
+from tornado.gen import Return, TimeoutError
 from tornado.locks import Event
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
@@ -249,8 +249,11 @@ class Executor(object):
             ip, port = tuple(self._start_arg.split(':'))
             self._start_arg = (ip, int(port))
         if isinstance(self._start_arg, tuple):
-            r = coerce_to_rpc(self._start_arg)
-            ident = yield r.identity()
+            r = coerce_to_rpc(self._start_arg, timeout=timeout)
+            try:
+                ident = yield r.identity()
+            except (StreamClosedError, OSError):
+                raise IOError("Could not connect to %s:%d" % self._start_arg)
             if ident['type'] == 'Center':
                 self.center = r
                 self.scheduler = Scheduler(self.center, loop=self.loop,
