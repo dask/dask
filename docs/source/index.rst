@@ -17,7 +17,7 @@ Dask use cases
 ==============
 
 * Dask powers parallel array libraries in climate science (`xray`_), image 
-  processing (`scikit-image`_) , and genomics (`scikit-allel`).
+  processing (`scikit-image`_) , and genomics (`scikit-allel`_).
 * Dask enables data scientists to process tens of gigabytes of data on a laptop 
   using familiar NumPy and Pandas interfaces.
 * Dask enables researchers to rapidly prototype and deploy novel algorithms on a 
