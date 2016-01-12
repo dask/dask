@@ -207,7 +207,7 @@ class Executor(object):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
-    def __init__(self, address, start=True, loop=None):
+    def __init__(self, address, start=True, loop=None, timeout=3):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
@@ -215,7 +215,7 @@ class Executor(object):
         self._start_arg = address
 
         if start:
-            self.start()
+            self.start(timeout=timeout)
 
     def start(self, **kwargs):
         """ Start scheduler running in separate thread """
@@ -241,7 +241,7 @@ class Executor(object):
             raise NotImplementedError()
 
     @gen.coroutine
-    def _start(self, **kwargs):
+    def _start(self, timeout=3, **kwargs):
         if isinstance(self._start_arg, Scheduler):
             self.scheduler = self._start_arg
             self.center = self._start_arg.center
