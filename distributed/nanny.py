@@ -23,7 +23,7 @@ class Nanny(Server):
     them as necessary.
     """
     def __init__(self, center_ip, center_port, ip=None,
-                ncores=None, loop=None, local_dir=None, **kwargs):
+                ncores=None, loop=None, local_dir=None, services=None, **kwargs):
         self.ip = ip or get_ip()
         self.worker_port = None
         self.ncores = ncores
@@ -33,6 +33,7 @@ class Nanny(Server):
         self.process = None
         self.loop = loop or IOLoop.current()
         self.center = rpc(ip=center_ip, port=center_port)
+        self.services = services
 
         handlers = {'instantiate': self.instantiate,
                     'kill': self._kill,
@@ -95,7 +96,7 @@ class Nanny(Server):
         self.process = Process(target=run_worker,
                                args=(q, self.ip, self.center.ip,
                                      self.center.port, self.ncores,
-                                     self.port, self.local_dir))
+                                     self.port, self.local_dir, self.services))
         self.process.daemon = True
         self.process.start()
         while True:
@@ -174,7 +175,7 @@ class Nanny(Server):
 
 
 def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
-        local_dir):
+        local_dir, services):
     """ Function run by the Nanny when creating the worker """
     from distributed import Worker
     from tornado.ioloop import IOLoop
@@ -182,7 +183,8 @@ def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
     loop = IOLoop()
     loop.make_current()
     worker = Worker(center_ip, center_port, ncores=ncores, ip=ip,
-                    service_ports={'nanny': nanny_port}, local_dir=local_dir)
+                    service_ports={'nanny': nanny_port}, local_dir=local_dir,
+                    services=services)
 
     @gen.coroutine
     def start():

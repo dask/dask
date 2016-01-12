@@ -108,7 +108,7 @@ class Worker(Server):
         self.listen(port)
         for k, v in self.services.items():
             v.listen(0)
-            self.service_ports[k] = v
+            self.service_ports[k] = v.port
 
         logger.info('Start worker at        %15s:%d', self.ip, self.port)
         for k, v in self.service_ports.items():
