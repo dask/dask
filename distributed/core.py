@@ -277,12 +277,13 @@ class rpc(object):
 
     >>> remote.close_streams()  # doctest: +SKIP
     """
-    def __init__(self, stream=None, ip=None, port=None):
+    def __init__(self, stream=None, ip=None, port=None, timeout=3):
         self.streams = dict()
         if stream:
             self.streams[stream] = True
         self.ip = ip
         self.port = port
+        self.timeout = timeout
 
     @gen.coroutine
     def live_stream(self):
@@ -311,7 +312,7 @@ class rpc(object):
             if open:
                 break
         if not open or stream.closed():
-            stream = yield connect(self.ip, self.port)
+            stream = yield connect(self.ip, self.port, timeout=self.timeout)
             self.streams[stream] = True
         for s in to_clear:
             del self.streams[s]
@@ -333,14 +334,14 @@ class rpc(object):
         return _
 
 
-def coerce_to_rpc(o):
+def coerce_to_rpc(o, **kwargs):
     if isinstance(o, tuple):
-        return rpc(ip=o[0], port=o[1])
+        return rpc(ip=o[0], port=o[1], **kwargs)
     if isinstance(o, str):
         ip, port = o.split(':')
-        return rpc(ip=ip, port=int(port))
+        return rpc(ip=ip, port=int(port), **kwargs)
     elif isinstance(o, IOStream):
-        return rpc(stream=o)
+        return rpc(stream=o, **kwargs)
     elif isinstance(o, rpc):
         return o
     else:
