@@ -12,22 +12,21 @@ Dask has several elements that appear to intersect this space and as such we are
 Summary
 -------
 
-* You should probably use Spark if you have petabytes of JSON files, a simple 
-  workflow, and a thousand node cluster. 
-* You should probably use dask if you have 10s-1000s of gigabytes of binary or 
-  numeric data, complex algorithms, and a large   multi-core workstation.
-* If you have a terabyte or less of CSV or JSON data, forget both Spark *and* 
-  Dask and use Postgres_ or MongoDB_ instead.
-
-General
-------------
-
 Dask can be installed with conda or pip, doesn't use the Java Virtual Machine (JVM), and was
 originally built to handle numeric workloads in a large single workstation very
 efficiently.
 
 Apache Spark is more mature and better integrates with HDFS.  It handles
 resiliency and was originally built to scale up to thousands of workers.
+
+At the risk of being a bit glib:
+
+* You should probably use dask if you have 10s-1000s of gigabytes of binary or 
+  numeric data, complex algorithms, and a large multi-core workstation.
+* You should probably use Spark if you have petabytes of JSON files, a simple 
+  workflow, and a thousand node cluster. 
+* If you have a terabyte or less of CSV or JSON data, forget both Spark *and* 
+  Dask and use Postgres_ or MongoDB_ instead.
 
 User-facing differences
 -----------------------

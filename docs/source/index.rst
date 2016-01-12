@@ -174,5 +174,4 @@ license`_.
 .. _`gitter chat room`: https://gitter.im/blaze/dask
 .. _`xray`: http://xray.readthedocs.org/en/stable/dask.html
 .. _`scikit-image`: http://scikit-image.org/docs/stable/
-.. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
 .. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
