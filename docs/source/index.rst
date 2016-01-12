@@ -16,16 +16,12 @@ and by leveraging all the cores of a modern CPU.
 Dask use cases
 ==============
 
-* **Scientific computing libraries:** Projects like `xray`_ and `scikit-image`_ 
-  use dask.array for fast interactive analysis of large numeric datasets.
-* **Large unstructured or semi-structured data:** Dask.bag excels at 
-  processing large JSON blobs and log files.
-* **Scaling pandas-like data analysis to large datasets:** Dask.dataframe 
-  implements a part of the pandas interface, and can process data files larger than 
-  available memory.
-* **Algorithm development:** Working directly with dask graphs or dask.imperative 
-  is an excellent way to implement and test new algorithms in fields such as linear 
-  algebra, optimization, and machine learning.
+* Dask powers parallel array libraries in climate science (`xray`_), image 
+  processing (`scikit-image`_) , and genomics (`scikit-allel`_).
+* Dask enables data scientists to process tens of gigabytes of data on a laptop 
+  using familiar NumPy and Pandas interfaces.
+* Dask enables researchers to rapidly prototype and deploy novel algorithms on a 
+  single machine or a distributed cluster.
 
 Dask user intro
 ===============
@@ -80,7 +76,10 @@ then you should start here.
 
 Dask graphs encode algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  If you are a *developer*, you should start here.
+dask collections.  Working directly with dask graphs is an excellent way to 
+implement and test new algorithms in fields such as linear algebra, 
+optimization, and machine learning.  If you are a *developer*, you should start 
+here.
 
 * :doc:`graphs`
 * :doc:`spec`

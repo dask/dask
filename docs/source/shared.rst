@@ -99,11 +99,9 @@ Linear scaling with number of tasks
 ```````````````````````````````````
 
 As we increase the number of tasks in a graph, we see that the scheduling
-overhead grows linearly.  The asymptotic (approaching a value or curve 
-arbitrarily closely) cost per task depends on the scheduler.  The schedulers 
-that depend on some sort of asynchronous pool have costs in the few 
-milliseconds.  The schedulers that are single threaded are
-down in the microsecond range.
+overhead grows linearly.  The asymptotic cost per task depends on the scheduler.  
+The schedulers that depend on some sort of asynchronous pool have costs of a few 
+milliseconds and the single threaded schedulers have costs of a few microseconds.
 
 .. image:: images/scaling-nodes.png
 
