@@ -310,7 +310,6 @@ def _test_scheduler(f, loop=None, b_ip='127.0.0.1'):
     def g():
         s = Scheduler(ip='127.0.0.1')
         done = s.start()
-        s.listen(0)
         a = Worker('127.0.0.1', s.port, ncores=2, ip='127.0.0.1')
         yield a._start()
         b = Worker('127.0.0.1', s.port, ncores=1, ip=b_ip)
@@ -369,10 +368,9 @@ from .executor import Executor
 @gen.coroutine
 def start_cluster(ncores, Worker=Worker):
     s = Scheduler(ip='127.0.0.1')
-    s.listen(0)
+    done = s.start()
     workers = [Worker(s.ip, s.port, ncores=v, ip=k) for k, v in ncores]
 
-    IOLoop.current().add_callback(s.start)
     yield [w._start() for w in workers]
 
     start = time()

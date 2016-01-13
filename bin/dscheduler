@@ -33,10 +33,8 @@ def go(center, port):
     if center:
         loop.run_sync(scheduler.sync_center)
     done = scheduler.start()
-    scheduler.listen(port)
 
     try:
-        logger.info("Start Scheduler at %s:%s", ip, port)
         loop.start()
     except KeyboardInterrupt:
         logger.info("End scheduler at %s:%d", ip, port)
