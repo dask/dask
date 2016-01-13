@@ -10,8 +10,11 @@ from hdfs3 import HDFileSystem
 
 from distributed.utils_test import gen_cluster
 from distributed.utils import get_ip
-from distributed.hdfs import read_binary, get_block_locations, read
+from distributed.hdfs import read_binary, get_block_locations
 from distributed import Executor
+
+
+ip = get_ip()
 
 
 @contextmanager
@@ -26,30 +29,6 @@ def make_hdfs():
     finally:
         if hdfs.exists('/tmp/test'):
             hdfs.rm('/tmp/test')
-
-
-def test_read():
-    fn = '/tmp/test/a'
-    delimiter = b'\n'
-    data = delimiter.join([b'123', b'456', b'789'])
-    with make_hdfs() as hdfs:
-        with hdfs.open(fn, 'w') as f:
-            f.write(data)
-
-        assert read(fn, 0, 1, hdfs, delimiter=b'\n') == b'123'
-        assert read(fn, 0, 2, hdfs, delimiter=b'\n') == b'123'
-        assert read(fn, 0, 3, hdfs, delimiter=b'\n') == b'123'
-        assert read(fn, 0, 5, hdfs, delimiter=b'\n') == b'123\n456'
-        assert read(fn, 0, 8, hdfs, delimiter=b'\n') == b'123\n456\n789'
-        assert read(fn, 0, 100, hdfs, delimiter=b'\n') == b'123\n456\n789'
-        assert read(fn, 1, 1, hdfs, delimiter=b'\n') == b''
-        assert read(fn, 1, 5, hdfs, delimiter=b'\n') == b'456'
-        assert read(fn, 1, 8, hdfs, delimiter=b'\n') == b'456\n789'
-
-        for ols in [[(0, 3), (3, 3), (6, 3), (9, 2)],
-                    [(0, 4), (4, 4), (8, 4)]]:
-            out = [read(fn, o, l, hdfs, b'\n') for o, l in ols]
-            assert delimiter.join(filter(None, out)) == data
 
 
 def test_get_block_locations():
@@ -69,6 +48,35 @@ def test_get_block_locations():
         assert L[2]['filename'] == L[3]['filename'] == fn_2
 
 
+@gen_cluster([(ip, 1)], timeout=60)
+def dont_test_dataframes(s, a):  # slow
+    pytest.importorskip('pandas')
+    n = 3000000
+    fn = '/tmp/test/file.csv'
+    with make_hdfs() as hdfs:
+        data = (b'name,amount,id\r\n' +
+                b'Alice,100,1\r\nBob,200,2\r\n' * n)
+        with hdfs.open(fn, 'w') as f:
+            f.write(data)
+
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+
+        futures = read_binary(fn, hdfs=hdfs, delimiter=b'\r\n')
+        assert len(futures) > 1
+
+        def load(b, **kwargs):
+            assert b
+            from io import BytesIO
+            import pandas as pd
+            bio = BytesIO(b)
+            return pd.read_csv(bio, **kwargs)
+
+        dfs = e.map(load, futures, names=['name', 'amount', 'id'], skiprows=1)
+        dfs2 = yield e._gather(dfs)
+        assert sum(map(len, dfs2)) == n * 2 - 1
+
+
 def test_get_block_locations_nested():
     with make_hdfs() as hdfs:
         data = b'a'
@@ -82,9 +90,6 @@ def test_get_block_locations_nested():
 
         L =  get_block_locations(hdfs, '/tmp/test/')
         assert len(L) == 6
-
-
-ip = get_ip()
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
