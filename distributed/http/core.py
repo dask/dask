@@ -1,11 +1,20 @@
 
+import logging
 import json
 
 from toolz import first
 from tornado import web
 from tornado.httpserver import HTTPServer
 
+
+logger = logging.getLogger(__name__)
+
+
 class JSON(web.RequestHandler):
+    def initialize(self, worker):
+        logger.debug("Connection %s", self.request.uri)
+        self.worker = worker
+
     def write(self, obj):
         return super(JSON, self).write(json.dumps(obj))
 

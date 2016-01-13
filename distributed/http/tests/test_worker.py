@@ -22,6 +22,10 @@ def test_simple(s, a, b):
     assert response['ncores'] == a.ncores
     assert response['status'] == a.status
 
+    response = yield client.fetch('http://localhost:%d/resources.json' % port)
+    response = json.loads(response.body.decode())
+    assert 0 < response['memory_percent'] < 100
+
 
 @gen_cluster()
 def test_services(s, a, b):
