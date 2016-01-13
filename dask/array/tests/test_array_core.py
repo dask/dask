@@ -1766,3 +1766,10 @@ def test_dont_dealias_outputs():
 
     a = da.Array(dsk, 'x', chunks=(2, 2), shape=(4, 4))
     eq(a, np.ones((4, 4)))
+
+
+def test_timedelta_op():
+    x = np.array([np.timedelta64(10, 'h')])
+    y = np.timedelta64(1, 'h')
+    a = da.from_array(x, chunks=(1,)) / y
+    assert a.compute() == x / y
