@@ -75,6 +75,8 @@ class Scheduler(Server):
         Dictionary like dependents but excludes keys already computed
     * **ncores:** ``{worker: int}``:
         Number of cores owned by each worker
+    * **services:** ``{str: port}``:
+        Other services running on this scheduler, like HTTP
     * **worker_services:** ``{worker: {str: port}}``:
         Ports of other running services on each worker.
         E.g. ``{('192.168.1.100', 8000): {'http': 9001, 'nanny': 9002}}``
@@ -124,7 +126,7 @@ class Scheduler(Server):
     def __init__(self, center=None, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
-            ip=None, **kwargs):
+            ip=None, services=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
         self.streams = []
@@ -148,7 +150,6 @@ class Scheduler(Server):
         self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
-        self.services = dict()
         self.worker_services = defaultdict(dict)
         self.processing = dict()
         self.restrictions = dict()
@@ -190,6 +191,11 @@ class Scheduler(Server):
                          'ncores': self.get_ncores,
                          'has_what': self.get_has_what,
                          'who_has': self.get_who_has}
+
+        services = services or {}
+        self.services = {k: v(self) for k, v in services.items()}
+        for v in self.services.values():
+            v.listen(0)
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)

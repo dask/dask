@@ -11,15 +11,14 @@ logger = logging.getLogger(__name__)
 
 class Info(JSON):
     def get(self):
-        resp = {'ncores': self.server.ncores,
-                'nkeys': len(self.server.data),
+        resp = {'ncores': list(self.server.ncores.items()),
                 'status': self.server.status}
         self.write(resp)
 
 
-def HTTPWorker(worker):
+def HTTPScheduler(scheduler):
     application = MyApp(web.Application([
-        (r'/info.json', Info, {'server': worker}),
-        (r'/resources.json', Resources, {'server': worker}),
+        (r'/info.json', Info, {'server': scheduler}),
+        (r'/resources.json', Resources, {'server': scheduler}),
         ]))
     return application
