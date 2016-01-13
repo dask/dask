@@ -4,7 +4,8 @@ import logging
 import os
 
 from toolz import first
-from tornado import web
+from tornado import web, gen
+from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 
 from ..utils import log_errors
@@ -41,6 +42,17 @@ def resource_collect(pid=None):
 class Resources(JSON):
     def get(self):
         self.write(resource_collect())
+
+
+class Proxy(web.RequestHandler):
+    def initialize(self):
+        logger.debug("Connection %s", self.request.uri)
+
+    @gen.coroutine
+    def get(self, ip, port, rest):
+        client = AsyncHTTPClient()
+        response = yield client.fetch("http://%s:%s/%s" % (ip, port, rest))
+        self.write(response.body)  # TODO: capture more data of response
 
 
 class MyApp(HTTPServer):
