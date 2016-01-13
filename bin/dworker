@@ -8,7 +8,7 @@ import click
 from distributed import Nanny, Worker, sync
 from distributed.utils import get_ip
 from distributed.worker import _ncores
-from distributed.http_worker import HTTPWorker
+from distributed.http import HTTPWorker
 from tornado.ioloop import IOLoop
 from tornado import gen
 

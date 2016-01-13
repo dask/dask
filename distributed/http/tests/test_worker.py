@@ -7,7 +7,7 @@ from tornado.httpserver import HTTPServer
 
 from distributed.utils_test import gen_cluster, gen_test
 from distributed import Worker
-from distributed.http_worker import HTTPWorker
+from distributed.http.worker import HTTPWorker
 
 
 @gen_cluster()
