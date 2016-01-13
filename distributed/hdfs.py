@@ -48,7 +48,7 @@ def get_block_locations(hdfs, filename):
             for block in hdfs.get_block_locations(fn)]
 
 
-def read_binary(fn, executor=None, hdfs=None, lazy=False, **hdfs_auth):
+def read_binary(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
     Parameters
@@ -85,9 +85,9 @@ def read_binary(fn, executor=None, hdfs=None, lazy=False, **hdfs_auth):
                                     'keys': [],
                                     'restrictions': restrictions,
                                     'loose_restrictions': set(names)})
-        values = [Value(name, [{name: (read, fn, offset, length, hdfs)}])
+        values = [Value(name, [{name: (read, fn, offset, length, hdfs, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
         return values
     else:
         return executor.map(read, filenames, offsets, lengths,
-                            hdfs=hdfs, workers=workers, allow_other_workers=True)
+                            hdfs=hdfs, delimiter=delimiter, workers=workers, allow_other_workers=True)
