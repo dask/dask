@@ -1559,3 +1559,22 @@ def test_long_error(s, a, b):
 
     tb = yield x._traceback()
     assert all(len(line) < 100000 for line in tb)
+
+
+@gen_cluster()
+def test_map_on_futures_with_kwargs(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    def f(x, y=10):
+        return x + y
+
+    futures = e.map(inc, range(10))
+    futures2 = e.map(f, futures, y=20)
+    results = yield e._gather(futures2)
+    assert results == [i + 1 + 20 for i in range(10)]
+
+    future = e.submit(inc, 100)
+    future2 = e.submit(f, future, y=200)
+    result = yield future2._result()
+    assert result == 100 + 1 + 200

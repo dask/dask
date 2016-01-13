@@ -420,7 +420,7 @@ class Executor(object):
             return Future(key, self)
 
         if kwargs:
-            task = (apply, func, args, kwargs)
+            task = (apply, func, (tuple, list(args)), kwargs)
         else:
             task = (func,) + args
 
@@ -497,7 +497,7 @@ class Executor(object):
             dsk = {key: (func,) + args
                    for key, args in zip(keys, zip(*iterables))}
         else:
-            dsk = {key: (apply, func, args, kwargs)
+            dsk = {key: (apply, func, (tuple, list(args)), kwargs)
                    for key, args in zip(keys, zip(*iterables))}
 
         dsk = {key: unpack_remotedata(task)[0] for key, task in dsk.items()}
