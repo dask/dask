@@ -36,7 +36,7 @@ class Center(Server):
         Set of keys owned by a particular worker
     *   ``ncores:: {worker: int}``
         Number of cores per worker
-    *   ``services:: {worker: {str: port}}``:
+    *   ``worker_services:: {worker: {str: port}}``:
         Ports of other running services on each worker.
         E.g. ``{('192.168.1.100', 8000): {'http': 9001, 'nanny': 9002}}``
 
@@ -73,7 +73,7 @@ class Center(Server):
      ('bob', 8788): 4,
      ('charlie', 8788): 4}
 
-    >>> center.services # doctest: +SKIP
+    >>> center.worker_services # doctest: +SKIP
     {('alice', 8788): {'nanny', 8789},
      ('bob', 8788): {'nanny', 8789},
      ('charlie', 8788): {'nanny', 8789}}
@@ -87,14 +87,14 @@ class Center(Server):
         self.who_has = defaultdict(set)
         self.has_what = defaultdict(set)
         self.ncores = dict()
-        self.services = defaultdict(dict)
+        self.worker_services = defaultdict(dict)
         self.status = None
 
         d = {func.__name__: func
              for func in [self.add_keys, self.remove_keys, self.get_who_has,
                           self.get_has_what, self.register, self.get_ncores,
                           self.unregister, self.delete_data, self.terminate,
-                          self.get_services, self.broadcast]}
+                          self.get_worker_services, self.broadcast]}
         d = {k[len('get_'):] if k.startswith('get_') else k: v for k, v in
                 d.items()}
         d['ping'] = pingpong
@@ -116,7 +116,7 @@ class Center(Server):
         for key in keys:
             self.who_has[key].add(address)
         self.ncores[address] = ncores
-        self.services[address] = services
+        self.worker_services[address] = services
         logger.info("Register %s", str(address))
         return b'OK'
 
@@ -127,7 +127,7 @@ class Center(Server):
         with ignoring(KeyError):
             del self.ncores[address]
         with ignoring(KeyError):
-            del self.services[address]
+            del self.worker_services[address]
         for key in keys:
             s = self.who_has[key]
             s.remove(address)
@@ -168,11 +168,11 @@ class Center(Server):
         else:
             return self.ncores
 
-    def get_services(self, stream, addresses=None):
+    def get_worker_services(self, stream, addresses=None):
         if addresses is not None:
-            return {k: self.services.get(k, None) for k in addresses}
+            return {k: self.worker_services.get(k, None) for k in addresses}
         else:
-            return self.services
+            return self.worker_services
 
     @gen.coroutine
     def delete_data(self, stream, keys=None):

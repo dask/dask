@@ -34,4 +34,4 @@ def test_services(s, a, b):
     yield c._start()
     assert isinstance(c.services['http'], HTTPServer)
     assert c.service_ports['http'] == c.services['http'].port
-    assert s.services[c.address]['http'] == c.service_ports['http']
+    assert s.worker_services[c.address]['http'] == c.service_ports['http']

@@ -75,7 +75,7 @@ class Scheduler(Server):
         Dictionary like dependents but excludes keys already computed
     * **ncores:** ``{worker: int}``:
         Number of cores owned by each worker
-    * **services:** ``{worker: {str: port}}``:
+    * **worker_services:** ``{worker: {str: port}}``:
         Ports of other running services on each worker.
         E.g. ``{('192.168.1.100', 8000): {'http': 9001, 'nanny': 9002}}``
     * **who_has:** ``{key: {worker}}``:
@@ -148,7 +148,8 @@ class Scheduler(Server):
         self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
-        self.services = defaultdict(dict)
+        self.services = dict()
+        self.worker_services = defaultdict(dict)
         self.processing = dict()
         self.restrictions = dict()
         self.loose_restrictions = set()
@@ -218,11 +219,11 @@ class Scheduler(Server):
     @gen.coroutine
     def sync_center(self):
         """ Connect to center, determine available workers """
-        self.ncores, self.has_what, self.who_has, self.services = yield [
+        self.ncores, self.has_what, self.who_has, self.worker_services = yield [
                 self.center.ncores(),
                 self.center.has_what(),
                 self.center.who_has(),
-                self.center.services()]
+                self.center.worker_services()]
 
     def start(self, start_queues=True):
         """ Clear out old state and restart all running coroutines """
@@ -520,7 +521,7 @@ class Scheduler(Server):
         del self.ncores[address]
         del self.stacks[address]
         del self.processing[address]
-        del self.services[address]
+        del self.worker_services[address]
         if not self.stacks:
             logger.critical("Lost all workers")
         missing_keys = set()
@@ -539,7 +540,7 @@ class Scheduler(Server):
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
                    services=None):
         self.ncores[address] = ncores
-        self.services[address] = services
+        self.worker_services[address] = services
         if address not in self.processing:
             self.has_what[address] = set()
             self.processing[address] = set()
@@ -879,7 +880,7 @@ class Scheduler(Server):
         for q in self.scheduler_queues + self.report_queues:
             clear_queue(q)
 
-        nannies = {addr: d['nanny'] for addr, d in self.services.items()}
+        nannies = {addr: d['nanny'] for addr, d in self.worker_services.items()}
 
         for addr in nannies:
             self.remove_worker(address=addr, heal=False)
@@ -921,7 +922,7 @@ class Scheduler(Server):
                 set(self.has_what) == \
                 set(self.stacks) == \
                 set(self.processing) == \
-                set(self.services) == \
+                set(self.worker_services) == \
                 set(self.worker_queues)):
             raise ValueError("Workers not the same in all collections")
 
