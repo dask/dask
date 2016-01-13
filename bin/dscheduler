@@ -33,7 +33,7 @@ def go(center, port):
     scheduler = Scheduler(center, services={'http': HTTPScheduler})
     if center:
         loop.run_sync(scheduler.sync_center)
-    done = scheduler.start()
+    done = scheduler.start(port)
 
     try:
         loop.start()

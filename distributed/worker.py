@@ -110,10 +110,10 @@ class Worker(Server):
             v.listen(0)
             self.service_ports[k] = v.port
 
-        logger.info('Start worker at        %15s:%d', self.ip, self.port)
+        logger.info('      Start worker at: %20s:%d', self.ip, self.port)
         for k, v in self.service_ports.items():
-            logger.info('  Service %-12s %15s:%d' % (k, self.ip, v))
-        logger.info('Waiting to connect to       %s:%d',
+            logger.info('  %16s at: %20s:%d' % (k, self.ip, v))
+        logger.info('Waiting to connect to: %20s:%d',
                     self.center.ip, self.center.port)
         while True:
             try:
@@ -125,7 +125,7 @@ class Worker(Server):
                 logger.debug("Unable to register with center.  Waiting")
                 yield gen.sleep(0.5)
         assert resp == b'OK'
-        logger.info('Registered with center at:  %s:%d',
+        logger.info('        Registered to: %20s:%d',
                     self.center.ip, self.center.port)
         self.status = 'running'
 
