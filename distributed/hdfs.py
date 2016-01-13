@@ -6,6 +6,7 @@ import os
 
 from dask.imperative import Value
 from toolz import merge
+from hdfs3.utils import seek_delimiter
 
 from .executor import default_executor
 from .utils import ignoring
@@ -14,9 +15,26 @@ from .utils import ignoring
 logger = logging.getLogger(__name__)
 
 
-def read(fn, offset, length, hdfs=None):
+def read(fn, offset, length, hdfs=None, delimiter=None):
     """ Read a block of bytes from a particular file """
     with hdfs.open(fn, 'r') as f:
+        if delimiter:
+            f.seek(offset)
+            seek_delimiter(f, delimiter, 2**16)
+            start = f.tell()
+            length -= start - offset
+
+            f.seek(start + length)
+            seek_delimiter(f, delimiter, 2**16)
+            end = f.tell()
+            eof = not f.read(1)
+
+            offset = start
+            length = end - start
+
+            if length and not eof:
+                length -= len(delimiter)
+
         f.seek(offset)
         bytes = f.read(length)
         logger.debug("Read %d bytes from %s:%d", len(bytes), fn, offset)

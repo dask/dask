@@ -10,7 +10,7 @@ from hdfs3 import HDFileSystem
 
 from distributed.utils_test import gen_cluster
 from distributed.utils import get_ip
-from distributed.hdfs import read_binary, get_block_locations
+from distributed.hdfs import read_binary, get_block_locations, read
 from distributed import Executor
 
 
@@ -26,6 +26,30 @@ def make_hdfs():
     finally:
         if hdfs.exists('/tmp/test'):
             hdfs.rm('/tmp/test')
+
+
+def test_read():
+    fn = '/tmp/test/a'
+    delimiter = b'\n'
+    data = delimiter.join([b'123', b'456', b'789'])
+    with make_hdfs() as hdfs:
+        with hdfs.open(fn, 'w') as f:
+            f.write(data)
+
+        assert read(fn, 0, 1, hdfs, delimiter=b'\n') == b'123'
+        assert read(fn, 0, 2, hdfs, delimiter=b'\n') == b'123'
+        assert read(fn, 0, 3, hdfs, delimiter=b'\n') == b'123'
+        assert read(fn, 0, 5, hdfs, delimiter=b'\n') == b'123\n456'
+        assert read(fn, 0, 8, hdfs, delimiter=b'\n') == b'123\n456\n789'
+        assert read(fn, 0, 100, hdfs, delimiter=b'\n') == b'123\n456\n789'
+        assert read(fn, 1, 1, hdfs, delimiter=b'\n') == b''
+        assert read(fn, 1, 5, hdfs, delimiter=b'\n') == b'456'
+        assert read(fn, 1, 8, hdfs, delimiter=b'\n') == b'456\n789'
+
+        for ols in [[(0, 3), (3, 3), (6, 3), (9, 2)],
+                    [(0, 4), (4, 4), (8, 4)]]:
+            out = [read(fn, o, l, hdfs, b'\n') for o, l in ols]
+            assert delimiter.join(filter(None, out)) == data
 
 
 def test_get_block_locations():
