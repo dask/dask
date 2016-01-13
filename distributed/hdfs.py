@@ -2,6 +2,7 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+from math import log
 import os
 
 from dask.imperative import Value
@@ -64,3 +65,56 @@ def read_binary(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs
     else:
         return executor.map(hdfs.read_block, filenames, offsets, lengths,
                             delimiter=delimiter, workers=workers, allow_other_workers=True)
+
+
+def write(fn, data, hdfs=None):
+    """ Write bytes to HDFS """
+    if not isinstance(data, bytes):
+        raise TypeError("Data to write to HDFS must be of type bytes, got %s" %
+                        type(data).__name__)
+    with hdfs.open(fn, 'w') as f:
+        f.write(data)
+    return len(data)
+
+
+def write_binary(path, futures, executor=None, hdfs=None, **hdfs_auth):
+    """ Write bytestring futures to HDFS
+
+    Parameters
+    ----------
+    path: string
+        Path on HDFS to write data.  Either globstring like ``/data/file.*.dat``
+        or a directory name like ``/data`` (directory will be created)
+    futures: list
+        List of futures.  Each future should refer to a block of bytes.
+    executor: Executor
+    hdfs: HDFileSystem
+
+    Returns
+    -------
+    Futures that wait until writing is complete.  Returns the number of bytes
+    written.
+
+    Examples
+    --------
+
+    >>> write_binary('/data/file.*.dat', futures, hdfs=hdfs)  # doctest: +SKIP
+    >>> write_binary('/data/', futures, hdfs=hdfs)  # doctest: +SKIP
+    """
+    from hdfs3 import HDFileSystem
+    hdfs = hdfs or HDFileSystem(**hdfs_auth)
+    executor = default_executor(executor)
+
+    n = len(futures)
+    n_digits = int(log(n) / log(10))
+    template = '%0' + str(n_digits) + 'd'
+
+    if '*' in path:
+        dirname = os.path.split(path)[0]
+        hdfs.mkdir(dirname)
+        filenames = [path.replace('*', template % i) for i in range(n)]
+    else:
+        hdfs.mkdir(path)
+        filenames = [os.path.join(path, template % i) for i in range(n)]
+
+    return executor.map(write, filenames, futures, hdfs=hdfs)
