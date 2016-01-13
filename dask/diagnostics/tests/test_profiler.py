@@ -218,7 +218,7 @@ def test_cache_profiler_plot():
 @pytest.mark.skipif("not psutil")
 def test_plot_multiple():
     from dask.diagnostics.profile_visualize import visualize
-    from bokeh.plotting import GridPlot
+    from bokeh.models import GridPlot
     with ResourceProfiler(dt=0.01) as rprof:
         with prof:
             get(dsk2, 'c')
@@ -246,7 +246,7 @@ def test_saves_file():
 
         assert os.path.exists(fn)
         with open(fn) as f:
-            assert 'HTML' in f.read()
+            assert 'html' in f.read().lower()
 
 
 @pytest.mark.skipif("not bokeh")
