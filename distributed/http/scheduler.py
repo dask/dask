@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class Info(JSON):
     def get(self):
-        resp = {'ncores': list(self.server.ncores.items()),
+        resp = {'ncores': {'%s:%d' % k: n for k, n in self.server.ncores.items()},
                 'status': self.server.status}
         self.write(resp)
 

@@ -19,8 +19,7 @@ def test_simple(s, a, b):
 
     response = yield client.fetch('http://localhost:%d/info.json' % server.port)
     response = json.loads(response.body.decode())
-    ncores = {tuple(k): v for k, v in response['ncores']}
-    assert ncores == s.ncores
+    assert response['ncores'] == {'%s:%d' % k: v for k, v in s.ncores.items()}
     assert response['status'] == a.status
 
 

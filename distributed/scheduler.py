@@ -194,6 +194,8 @@ class Scheduler(Server):
 
         services = services or {}
         self.services = {k: v(self) for k, v in services.items()}
+        for v in self.services.values():
+            v.listen(0)
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
@@ -266,13 +268,11 @@ class Scheduler(Server):
 
         if self.status != 'running':
             self.listen(port)
-            for v in self.services.values():
-                v.listen(0)
 
             self.status = 'running'
-            logger.info("Start Scheduler at %s:%s", self.ip, self.port)
+            logger.info("Start Scheduler at: %20s:%s", self.ip, self.port)
             for k, v in self.services.items():
-                logger.info("  %20s at %s:%s", k, self.ip, v.port)
+                logger.info("  %13s at: %20s:%s", k, self.ip, v.port)
 
         return self.finished()
 
