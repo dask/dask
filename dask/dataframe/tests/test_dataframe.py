@@ -2485,3 +2485,18 @@ def test_dataframe_itertuples():
 
     for (a, b) in zip(df.itertuples(), ddf.itertuples()):
         assert a == b
+
+
+def test_from_imperative():
+    from dask import do
+    dfs = [do(tm.makeTimeDataFrame)(i) for i in range(1, 5)]
+    df = dd.from_imperative(dfs, columns=['A', 'B', 'C', 'D'])
+
+    assert (df.compute().columns == df.columns).all()
+    assert list(df.map_partitions(len).compute()) == [1, 2, 3, 4]
+
+    ss = [df.A for df in dfs]
+    s = dd.from_imperative(ss, columns='A')
+
+    assert s.compute().name == s.name
+    assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]

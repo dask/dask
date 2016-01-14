@@ -1998,7 +1998,7 @@ def partial_by_order(op, other):
         other_arg = other[0][1]
     else:
         other_arg = '...'
-    f.__name__ = '{0}({1})'.format(op.__name__, other_arg)
+    f.__name__ = '{0}({1})'.format(op.__name__, str(other_arg))
     return f
 
 
