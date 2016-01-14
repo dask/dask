@@ -813,3 +813,35 @@ def to_bag(df, index=False):
     dsk = dict(((name, i), (func, block)) for (i, block) in enumerate(df._keys()))
     dsk.update(df._optimize(df.dask, df._keys()))
     return Bag(dsk, name, df.npartitions)
+
+
+def from_imperative(dfs, columns, divisions=None):
+    """ Create DataFrame from many imperative objects
+
+    Parameters
+    ----------
+    dfs: list of Values
+        An iterable of dask.imperative.Value objects, such as come from dask.do
+        These comprise the individual partitions of the resulting dataframe
+    columns: list or string
+        The list of column names if the result is a DataFrame
+        Or the single column name if the result is a Series
+    divisions: list or None
+    """
+    from dask.imperative import Value
+    if isinstance(dfs, Value):
+        dfs = [dfs]
+    dsk = merge(df.dask for df in dfs)
+
+    name = 'from-imperative-' + tokenize(*dfs)
+    names = [(name, i) for i in range(len(dfs))]
+    values = [df.key for df in dfs]
+    dsk2 = dict(zip(names, values))
+
+    if divisions is None:
+        divisions = [None] * (len(dfs) + 1)
+
+    if isinstance(columns, str):
+        return Series(merge(dsk, dsk2), name, columns, divisions)
+    else:
+        return DataFrame(merge(dsk, dsk2), name, columns, divisions)
