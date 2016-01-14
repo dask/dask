@@ -2,7 +2,7 @@
 Dask
 ====
 
-Dask is a simple task scheduling system that uses directed acyclic graphs (DAGs) 
+Dask is a simple task scheduling system that uses directed acyclic graphs (DAGs)
 of tasks to break up large computations into many small ones.
 
 **Dask enables parallel computing** through task scheduling and blocked algorithms.
@@ -16,18 +16,18 @@ and by leveraging all the cores of a modern CPU.
 Dask use cases
 ==============
 
-* Dask powers parallel array libraries in climate science (`xray`_), image 
+* Dask powers parallel array libraries in climate science (`xarray`_), image
   processing (`scikit-image`_) , and genomics (`scikit-allel`_).
-* Dask enables data scientists to process tens of gigabytes of data on a laptop 
+* Dask enables data scientists to process tens of gigabytes of data on a laptop
   using familiar NumPy and Pandas interfaces.
-* Dask enables researchers to rapidly prototype and deploy novel algorithms on a 
+* Dask enables researchers to rapidly prototype and deploy novel algorithms on a
   single machine or a distributed cluster.
 
 Dask user intro
 ===============
 
-Users interact with dask either by making graphs directly, or through the 
-*dask collections* which provide larger-than-memory counterparts to existing 
+Users interact with dask either by making graphs directly, or through the
+*dask collections* which provide larger-than-memory counterparts to existing
 popular libraries:
 
 * ``dask.array`` = ``numpy`` + ``threading``
@@ -76,9 +76,9 @@ then you should start here.
 
 Dask graphs encode algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  Working directly with dask graphs is an excellent way to 
-implement and test new algorithms in fields such as linear algebra, 
-optimization, and machine learning.  If you are a *developer*, you should start 
+dask collections.  Working directly with dask graphs is an excellent way to
+implement and test new algorithms in fields such as linear algebra,
+optimization, and machine learning.  If you are a *developer*, you should start
 here.
 
 * :doc:`graphs`
@@ -159,8 +159,8 @@ help make debugging and profiling graph execution easier.
 * For community discussion please use `blaze-dev@continuum.io`_
 * For chat, see `gitter chat room`_
 
-Dask is part of the Blaze_ project supported and offered by 
-`Continuum Analytics`_ and contributors under a `3-clause BSD 
+Dask is part of the Blaze_ project supported and offered by
+`Continuum Analytics`_ and contributors under a `3-clause BSD
 license`_.
 
 .. _Blaze: http://continuum.io/open-source/blaze
@@ -171,7 +171,7 @@ license`_.
 .. _`GitHub issue tracker`: https://github.com/blaze/dask/issues
 .. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
 .. _`gitter chat room`: https://gitter.im/blaze/dask
-.. _`xray`: http://xray.readthedocs.org/en/stable/dask.html
+.. _`xarray`: http://xray.readthedocs.org/en/stable/
 .. _`scikit-image`: http://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
 .. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
