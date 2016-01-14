@@ -6,6 +6,7 @@ from math import log
 import os
 
 from dask.imperative import Value
+from tornado import gen
 from toolz import merge
 
 from .executor import default_executor
@@ -50,7 +51,6 @@ def read_binary(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs
     names = ['read-binary-%s-%d-%d' % (fn, offset, length)
             for fn, offset, length in zip(filenames, offsets, lengths)]
 
-
     logger.debug("Read %d blocks of binary bytes from %s", len(blocks), fn)
     if lazy:
         restrictions = dict(zip(names, workers))
@@ -65,6 +65,44 @@ def read_binary(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs
     else:
         return executor.map(hdfs.read_block, filenames, offsets, lengths,
                             delimiter=delimiter, workers=workers, allow_other_workers=True)
+
+
+def buffer_to_csv(b, **kwargs):
+    from io import BytesIO
+    import pandas as pd
+    bio = BytesIO(b)
+    return pd.read_csv(bio, **kwargs)
+
+
+@gen.coroutine
+def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
+        header=True, names=None, **kwargs):
+    from hdfs3 import HDFileSystem
+    from dask import do
+    import pandas as pd
+    hdfs = hdfs or HDFileSystem()
+    executor = default_executor(executor)
+    kwargs['lineterminator'] = lineterminator
+    filenames = hdfs.glob(fn)
+    blockss = [read_binary(fn, executor, hdfs, lazy=True, delimiter=lineterminator)
+               for fn in filenames]
+    if names is None and header:
+        with hdfs.open(filenames[0]) as f:
+            head = pd.read_csv(f, nrows=5, **kwargs)
+            names = head.columns
+
+    dfs1 = [[do(buffer_to_csv)(blocks[0], names=names, skiprows=1, **kwargs)] +
+            [do(buffer_to_csv)(b, names=names, **kwargs) for b in blocks[1:]]
+            for blocks in blockss]
+    dfs2 = sum(dfs1, [])
+    if lazy:
+        from dask.dataframe import from_imperative
+        raise gen.Return(from_imperative(dfs2, columns=names))
+    else:
+        futures = executor.compute(*dfs2)
+        from distributed.collections import _futures_to_dask_dataframe
+        df = yield _futures_to_dask_dataframe(futures)
+        raise gen.Return(df)
 
 
 def write(fn, data, hdfs=None):

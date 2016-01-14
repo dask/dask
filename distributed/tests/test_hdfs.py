@@ -10,7 +10,8 @@ from hdfs3 import HDFileSystem
 
 from distributed.utils_test import gen_cluster
 from distributed.utils import get_ip
-from distributed.hdfs import read_binary, get_block_locations, write_binary
+from distributed.hdfs import (read_binary, get_block_locations, write_binary,
+        _read_csv)
 from distributed import Executor
 from distributed.executor import _wait
 
@@ -191,3 +192,41 @@ def test_write_binary(s, a, b):
         yield _wait(futures)
 
         assert len(hdfs.ls('/tmp/test/data2/')) == 3
+
+
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60)
+def test_read_csv(s, a, b):
+    with make_hdfs() as hdfs:
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+
+        with hdfs.open('/tmp/test/1.csv', 'w') as f:
+            f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
+
+        with hdfs.open('/tmp/test/2.csv', 'w') as f:
+            f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
+
+        df = yield _read_csv('/tmp/test/*.csv', header=True, lineterminator='\n')
+        result, = e.compute(df.id.sum(), sync=False)
+        result = yield result._result()
+        assert result == 1 + 2 + 3 + 4
+
+
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60)
+def test_read_csv_lazy(s, a, b):
+    with make_hdfs() as hdfs:
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+
+        with hdfs.open('/tmp/test/1.csv', 'w') as f:
+            f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
+
+        with hdfs.open('/tmp/test/2.csv', 'w') as f:
+            f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
+
+        df = yield _read_csv('/tmp/test/*.csv', header=True, lazy=True, lineterminator='\n')
+        yield gen.sleep(0.5)
+        assert not s.dask
+
+        result = yield e.compute(df.id.sum(), sync=False)[0]._result()
+        assert result == 1 + 2 + 3 + 4
