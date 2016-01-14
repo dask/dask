@@ -2500,3 +2500,14 @@ def test_from_imperative():
 
     assert s.compute().name == s.name
     assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
+
+
+def test_to_imperative():
+    from dask.imperative import Value
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    a, b = ddf.to_imperative()
+    assert isinstance(a, Value)
+    assert isinstance(b, Value)
+
+    assert eq(a.compute(), df.iloc[:2])

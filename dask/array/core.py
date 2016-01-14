@@ -1348,6 +1348,14 @@ class Array(Base):
         out._chunks = chunks
         return out
 
+    def to_imperative(self):
+        """ Convert Array into dask Values
+
+        Returns a nested list of values, one value per chunk.
+        """
+        from ..imperative import Value
+        return deepmap(lambda k: Value(k, [self.dask]), self._keys())
+
 
 def ensure_int(f):
     i = int(f)

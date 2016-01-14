@@ -1773,3 +1773,11 @@ def test_timedelta_op():
     y = np.timedelta64(1, 'h')
     a = da.from_array(x, chunks=(1,)) / y
     assert a.compute() == x / y
+
+
+def test_to_imperative():
+    x = da.random.random((4, 4), chunks=(2, 2))
+    y = x + 10
+
+    [[a, b], [c, d]] = y.to_imperative()
+    assert eq(a.compute(), y[:2, :2])

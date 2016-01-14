@@ -515,6 +515,14 @@ class _Frame(Base):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
+    def to_imperative(self):
+        """ Convert dataframe into dask Values
+
+        Returns a list of values, one value per partition.
+        """
+        from ..imperative import Value
+        return [Value(k, [self.dask]) for k in self._keys()]
+
     @classmethod
     def _get_unary_operator(cls, op):
         return lambda self: elemwise(op, self)
