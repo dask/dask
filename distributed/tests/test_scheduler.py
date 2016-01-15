@@ -551,49 +551,6 @@ def test_multi_queues(s, a, b):
                 break
 
 
-@gen_test(timeout=30)
-def test_monitor_resources():
-    pytest.importorskip('psutil')
-    c = Center('127.0.0.1')
-    c.listen(0)
-    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
-    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
-    s = Scheduler((c.ip, c.port), resource_interval=0.01, resource_log_size=3)
-
-    yield a._start()
-    yield b._start()
-    yield s.sync_center()
-    done = s.start()
-
-    try:
-        assert s.ncores == {('127.0.0.1', a.worker_port): 2,
-                            ('127.0.0.1', b.worker_port): 2}
-        assert s.nannies == {(n.ip, n.worker_port): n.port
-                             for n in [a, b]}
-
-        while any(len(v) < 3 for v in s.resource_logs.values()):
-            yield gen.sleep(0.01)
-
-        yield gen.sleep(0.1)
-
-        assert set(s.resource_logs) == {a.address, b.address}
-        assert all(len(v) == 3 for v in s.resource_logs.values())
-
-        d = s.diagnostic_resources(n=2)
-        assert set(d) == {a.worker_address, b.worker_address}
-        assert set(d[a.worker_address]).issubset({'cpu', 'memory', 'time'})
-        assert all(len(v) == 2 for v in d[a.worker_address].values())
-
-        s.put({'op': 'close'})
-        yield done
-    finally:
-        with ignoring(TimeoutError, StreamClosedError, OSError):
-            yield a._close(timeout=0.5)
-        with ignoring(TimeoutError, StreamClosedError, OSError):
-            yield b._close(timeout=0.5)
-        c.stop()
-
-
 @gen_cluster()
 def test_server(s, a, b):
     stream = yield connect('127.0.0.1', s.port)
@@ -646,7 +603,7 @@ def test_add_worker(s, a, b):
     s.update_graph(dsk=dsk, keys=list(dsk))
 
     s.add_worker(address=w.address, keys=list(w.data),
-                 ncores=w.ncores, nanny_port=w.nanny_port)
+                 ncores=w.ncores, services=s.services)
 
     for k in w.data:
         assert w.address in s.who_has[k]
@@ -705,7 +662,6 @@ def test_feed_setup_teardown(s, a, b):
 @gen_test()
 def test_scheduler_as_center():
     s = Scheduler()
-    s.listen(0)
     done = s.start()
     a = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=1)
     a.data.update({'x': 1, 'y': 2})

@@ -8,6 +8,7 @@ import click
 from distributed import Nanny, Worker, sync
 from distributed.utils import get_ip
 from distributed.worker import _ncores
+from distributed.http import HTTPWorker
 from tornado.ioloop import IOLoop
 from tornado import gen
 
@@ -44,9 +45,12 @@ def go(center, host, port, nthreads, nprocs, no_nanny):
     if nprocs > 1 and port != 0:
         raise ValueError("Can not specify a port when using multiple processes")
 
+    services = {'http': HTTPWorker}
+
     loop = IOLoop.current()
     t = Worker if no_nanny else Nanny
-    nannies = [t(center_ip, center_port, ncores=nthreads, ip=host)
+    nannies = [t(center_ip, center_port, ncores=nthreads, ip=host,
+                 services=services)
                 for i in range(nprocs)]
 
     for nanny in nannies:

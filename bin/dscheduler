@@ -7,6 +7,7 @@ import socket
 import click
 from distributed import  Scheduler, sync
 from distributed.utils import get_ip
+from distributed.http import HTTPScheduler
 from tornado.ioloop import IOLoop
 
 logger = logging.getLogger('distributed.scheduler')
@@ -29,14 +30,12 @@ def go(center, port):
             break
 
     loop = IOLoop.current()
-    scheduler = Scheduler(center)
+    scheduler = Scheduler(center, services={'http': HTTPScheduler})
     if center:
         loop.run_sync(scheduler.sync_center)
-    done = scheduler.start()
-    scheduler.listen(port)
+    done = scheduler.start(port)
 
     try:
-        logger.info("Start Scheduler at %s:%s", ip, port)
         loop.start()
     except KeyboardInterrupt:
         logger.info("End scheduler at %s:%d", ip, port)

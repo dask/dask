@@ -32,7 +32,6 @@ def test_TextProgressBar_error(loop, capsys):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        s.listen(0)
         yield s.sync_center()
         done = s.start()
 
@@ -62,7 +61,6 @@ def test_TextProgressBar_empty(loop, capsys):
     @gen.coroutine
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
-        s.listen(0)
         yield s.sync_center()
         done = s.start()
 

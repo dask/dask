@@ -69,10 +69,10 @@ class Worker(Server):
     """
 
     def __init__(self, center_ip, center_port, ip=None, ncores=None,
-                 loop=None, nanny_port=None, local_dir=None, **kwargs):
+                 loop=None, local_dir=None, services=None, service_ports=None,
+                 **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
-        self.nanny_port = nanny_port
         self.ncores = ncores or _ncores
         self.data = dict()
         self.loop = loop or IOLoop.current()
@@ -81,6 +81,11 @@ class Worker(Server):
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
         self.active = set()
+        if services is not None:
+            self.services = {k: v(self) for k, v in services.items()}
+        else:
+            self.services = dict()
+        self.service_ports = service_ports or dict()
 
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
@@ -101,21 +106,26 @@ class Worker(Server):
     @gen.coroutine
     def _start(self, port=0):
         self.listen(port)
+        for k, v in self.services.items():
+            v.listen(0)
+            self.service_ports[k] = v.port
 
-        logger.info('Start worker at             %s:%d', self.ip, self.port)
-        logger.info('Waiting to connect to       %s:%d',
+        logger.info('      Start worker at: %20s:%d', self.ip, self.port)
+        for k, v in self.service_ports.items():
+            logger.info('  %16s at: %20s:%d' % (k, self.ip, v))
+        logger.info('Waiting to connect to: %20s:%d',
                     self.center.ip, self.center.port)
         while True:
             try:
                 resp = yield self.center.register(
                         ncores=self.ncores, address=(self.ip, self.port),
-                        nanny_port=self.nanny_port, keys=list(self.data))
+                        keys=list(self.data), services=self.service_ports)
                 break
             except (OSError, StreamClosedError):
                 logger.debug("Unable to register with center.  Waiting")
                 yield gen.sleep(0.5)
         assert resp == b'OK'
-        logger.info('Registered with center at:  %s:%d',
+        logger.info('        Registered to: %20s:%d',
                     self.center.ip, self.center.port)
         self.status = 'running'
 
