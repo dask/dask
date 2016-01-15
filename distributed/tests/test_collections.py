@@ -1,3 +1,4 @@
+from datetime import timedelta
 import sys
 
 import dask
@@ -113,7 +114,7 @@ def test_dataframes(s, a, b):
     for f in exprs:
         local = f(ldf).compute(get=dask.get)
         remote, = e.compute(f(rdf))
-        remote = yield remote._result()
+        remote = yield gen.with_timeout(timedelta(seconds=5), remote._result())
         assert_equal(local, remote)
 
 

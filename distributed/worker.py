@@ -159,18 +159,19 @@ class Worker(Server):
         if needed or who_has:
             try:
                 if who_has:
-                    logger.info("gather %d keys from peers: %s", len(who_has),
-                            str(who_has))
+                    logger.info("gather %d keys from peers: %s",
+                                len(who_has), str(who_has))
                     other = yield gather_from_workers(who_has)
                 elif needed:
-                    logger.info("gather %d keys from peers: %s", len(needed),
-                            str(needed))
+                    logger.info("gather %d keys from peers: %s",
+                                len(needed), str(needed))
                     other = yield _gather(self.center, needed=needed)
                     other = dict(zip(needed, other))
                 else:
                     raise ValueError()
             except KeyError as e:
-                logger.warn("Could not find data during gather in compute", e)
+                logger.warn("Could not find data during gather in compute",
+                            exc_info=True)
                 raise Return((b'missing-data', e))
             data2 = merge(self.data, other)
         else:
