@@ -114,7 +114,7 @@ class Nanny(Server):
         raise gen.Return(b'OK')
 
     def cleanup(self):
-        if os.path.exists(self.worker_dir):
+        if self.worker_dir and os.path.exists(self.worker_dir):
             shutil.rmtree(self.worker_dir)
         self.worker_dir = None
 

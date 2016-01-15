@@ -1585,5 +1585,38 @@ def test_failed_worker_without_warning(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    result = yield e.submit(inc, 1)._result()
-    assert result == 2
+    L = e.map(inc, range(10))
+    yield _wait(L)
+
+    ncores1 = s.ncores.copy()
+
+    a.process.terminate()
+    start = time()
+    while not a.process.is_alive():
+        yield gen.sleep(0.01)
+        assert time() - start < 5
+
+    start = time()
+    while s.ncores == ncores1:
+        yield gen.sleep(0.01)
+        assert time() - start < 5
+
+    start = time()
+    while len(s.ncores) < 2:
+        yield gen.sleep(0.01)
+        assert time() - start < 5
+
+    yield _wait(L)
+
+    L2 = e.map(inc, range(10, 20))
+    yield _wait(L2)
+    assert all(len(keys) > 0 for keys in s.has_what.values())
+    ncores2 = s.ncores.copy()
+
+    yield e._restart()
+
+    L = e.map(inc, range(10))
+    yield _wait(L)
+    assert all(len(keys) > 0 for keys in s.has_what.values())
+
+    assert not (set(ncores2) & set(s.ncores))  # no overlap
