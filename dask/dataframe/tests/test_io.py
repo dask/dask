@@ -618,6 +618,12 @@ def test_multiple_read_csv_has_deterministic_name():
         os.remove('_foo.2.csv')
 
 
+def test_csv_with_integer_names():
+    with filetext('alice,1\nbob,2') as fn:
+        df = dd.read_csv(fn, header=None)
+        assert list(df.columns) == [0, 1]
+
+
 @pytest.mark.slow
 def test_read_csv_of_modified_file_has_different_name():
     with filetext(text) as fn:
