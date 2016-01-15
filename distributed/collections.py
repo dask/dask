@@ -157,3 +157,41 @@ def _stack(futures, axis=0, executor=None):
 def stack(futures, axis=0, executor=None):
     executor = default_executor(executor)
     return sync(executor.loop, _stack, futures, executor=executor)
+
+
+@gen.coroutine
+def _futures_to_collection(futures, executor=None, **kwargs):
+    executor = default_executor(executor)
+    element = futures
+    while not isinstance(element, Future):
+        element = element[0]
+
+    typ = yield executor.submit(type, element)._result()
+    if 'pandas' in typ.__module__:
+        func = _futures_to_dask_dataframe
+    elif 'numpy' in typ.__module__:
+        func = _futures_to_dask_array
+    else:
+        raise NotImplementedError("First future of type %s.  Expected "
+                "numpy or pandas object" % typ.__name__)
+
+    result = yield func(futures, executor=executor, **kwargs)
+    raise gen.Return(result)
+
+
+def futures_to_collection(futures, executor=None, **kwargs):
+    """ Convert futures into a dask collection
+
+    Convert a list of futures pointing to a pandas dataframe into one logical
+    dask.dataframe or a nested list of numpy arrays into a logical dask.array.
+
+    The type of the collection will be chosen based on the type of the futures.
+
+    See also
+    --------
+    futures_to_dask_array
+    futures_to_dask_dataframe
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _futures_to_collection, futures,
+                executor=executor, **kwargs)

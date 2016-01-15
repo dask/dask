@@ -6,7 +6,8 @@ from distributed import Executor
 from distributed.utils_test import cluster, loop, gen_cluster
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
-        futures_to_dask_array, _stack, stack)
+        futures_to_dask_array, _stack, stack, _futures_to_collection,
+        futures_to_collection)
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -71,6 +72,10 @@ def test_futures_to_dask_dataframe(loop):
 
             assert isinstance(ddf, dd.DataFrame)
             assert ddf.x.sum().compute(get=e.get) == sum([df.x.sum() for df in dfs])
+
+            ddf2 = futures_to_collection(remote_dfs, divisions=True)
+            assert type(ddf) == type(ddf2)
+            assert ddf.dask == ddf2.dask
 
 
 @gen_cluster(timeout=120)
@@ -222,3 +227,26 @@ def test_futures_to_dask_array(loop):
 
             assert x.sum().compute(get=e.get) == 162
             assert (x + x.T).sum().compute(get=e.get) == 162 * 2
+
+            y = futures_to_collection(remote_arrays, executor=e)
+            assert x.dask == y.dask
+
+
+@gen_cluster()
+def test__futures_to_collection(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    remote_dfs = e.map(identity, dfs)
+    ddf = yield _futures_to_collection(remote_dfs, divisions=True)
+    ddf2 = yield _futures_to_dask_dataframe(remote_dfs, divisions=True)
+    assert isinstance(ddf, dd.DataFrame)
+
+    assert ddf.dask == ddf2.dask
+
+    remote_arrays = e.map(np.arange, range(3, 5))
+    x = yield _futures_to_collection(remote_arrays)
+    y = yield _futures_to_dask_array(remote_arrays)
+
+    assert type(x) == type(y)
+    assert x.dask == y.dask

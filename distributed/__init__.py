@@ -8,4 +8,10 @@ from .nanny import Nanny
 from .executor import Executor, wait, as_completed, default_executor
 from .scheduler import Scheduler
 
+try:
+    from .collections import futures_to_collection
+except ImportError:
+    pass
+
+
 __version__ = '1.7.3'
