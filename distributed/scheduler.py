@@ -928,17 +928,19 @@ class Scheduler(Server):
             except Exception as e:
                 logger.exception(e)
 
-    def validate(self, allow_overlap=False):
+    def validate(self, allow_overlap=False, allow_bad_stacks=False):
+        released = set(self.dask) - self.in_play
         validate_state(self.dependencies, self.dependents, self.waiting,
                 self.waiting_data, self.who_has, self.stacks,
-                self.processing, None, set(), self.in_play,
-                allow_overlap=allow_overlap)
-        assert (set(self.ncores) == \
+                self.processing, None, released, self.in_play,
+                allow_overlap=allow_overlap, allow_bad_stacks=allow_bad_stacks)
+        if not (set(self.ncores) == \
                 set(self.has_what) == \
                 set(self.stacks) == \
                 set(self.processing) == \
                 set(self.nannies) == \
-                set(self.worker_queues))
+                set(self.worker_queues)):
+            raise ValueError("Workers not the same in all collections")
 
     def diagnostic_resources(self, n=100):
         now = datetime.now()
@@ -1122,8 +1124,9 @@ def update_state(dsk, dependencies, dependents, held_data,
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
         who_has, stacks, processing, finished_results, released, in_play,
-        allow_overlap=False, **kwargs):
-    """ Validate a current runtime state
+        allow_overlap=False, allow_bad_stacks=False, **kwargs):
+    """
+    Validate a current runtime state
 
     This performs a sequence of checks on the entire graph, running in about
     linear time.  This raises assert errors if anything doesn't check out.
@@ -1144,23 +1147,24 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
                    key in in_processing,
                    who_has.get(key) is not None,
                    key in released])
-        if allow_overlap:
-            assert val >= 1
-        else:
-            assert val == 1
+        if (allow_overlap and val < 1) or (not allow_overlap and val != 1):
+            raise ValueError("Key exists in wrong number of places", key, val)
 
-        assert (key in released) != (key in in_play)
+        if not (key in released) != (key in in_play):
+            raise ValueError("Key released != in_play", key)
 
         if not all(map(check_key, dependencies[key])):# Recursive case
-            assert False
+            raise ValueError("Failed to check dependencies")
 
         if who_has.get(key):
             assert not any(key in waiting.get(dep, ())
                            for dep in dependents.get(key, ()))
             assert not waiting.get(key)
 
-        if key in in_stacks or key in in_processing:
-            assert all(who_has.get(dep) for dep in dependencies[key])
+        if not allow_bad_stacks and (key in in_stacks or key in in_processing):
+            if not all(who_has.get(dep) for dep in dependencies[key]):
+                raise ValueError("Key in stacks/processing without all deps",
+                                 key)
             assert not waiting.get(key)
 
         if finished_results is not None:
