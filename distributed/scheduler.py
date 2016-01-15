@@ -482,6 +482,13 @@ class Scheduler(Server):
         --------
         heal_missing_data
         """
+        if key and worker:
+            try:
+                self.processing[worker].remove(key)
+            except KeyError:
+                logger.debug("Tried to remove %s from %s, but it wasn't there",
+                             key, worker)
+
         missing = set(missing)
         logger.debug("Recovering missing data: %s", missing)
         for k in missing:
@@ -492,15 +499,13 @@ class Scheduler(Server):
         self.my_heal_missing_data(missing)
 
         if key and worker:
-            with ignoring(KeyError):
-                self.processing[worker].remove(key)
-                logger.debug("Tried to remove %s from %s, but it wasn't there",
-                             key, worker)
             self.waiting[key] = missing
             logger.debug('task missing data, %s, %s', key, self.waiting)
             self.ensure_occupied(worker)
 
         self.seed_ready_tasks()
+
+        # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def log_state(self, msg=''):
         """ Log current full state of the scheduler """
