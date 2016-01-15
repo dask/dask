@@ -42,7 +42,27 @@ class Worker(Server):
     Center to gather data from other workers when necessary to perform a
     computation.
 
-    You can start a worker with the ``dworker`` command line application.
+    You can start a worker with the ``dworker`` command line application::
+
+        $ dworker scheduler-ip:port
+
+    **State**
+
+    * **data:** ``{key: object}``:
+        Dictionary mapping keys to actual values
+    * **active:** ``{key}``:
+        Set of keys currently under computation
+    * **ncores::* ``int``:
+        Number of cores used by this worker process
+    * **executor:** ``concurrent.futures.ThreadPoolExecutor``:
+        Executor used to perform computation
+    * **local_dir:** ``path``:
+        Path on local machine to store temporary files
+    * **center:** ``rpc``:
+        Location of center or scheduler.  See ``.ip/.port`` attributes.
+    * **services:** ``{str: Server}``:
+        Auxiliary web servers running on this worker
+    * **service_ports:** ``{str: port}``:
 
     Examples
     --------

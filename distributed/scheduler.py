@@ -84,6 +84,8 @@ class Scheduler(Server):
         Where each key lives.  The current state of distributed memory.
     * **has_what:** ``{worker: {key}}``:
         What worker has what keys.  The transpose of who_has.
+    * **nbytes:** ``{key: int}``:
+        Number of bytes for a key as reported by workers holding that key.
     * **processing:** ``{worker: {keys}}``:
         Set of keys currently in execution on each worker
     * **stacks:** ``{worker: [keys]}``:
