@@ -3,13 +3,13 @@ import logging
 
 from tornado import web
 
-from .core import JSON, MyApp, Resources
+from .core import RequestHandler, MyApp, Resources
 
 
 logger = logging.getLogger(__name__)
 
 
-class Info(JSON):
+class Info(RequestHandler):
     def get(self):
         resp = {'ncores': self.server.ncores,
                 'nkeys': len(self.server.data),

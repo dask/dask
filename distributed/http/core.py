@@ -14,14 +14,11 @@ from ..utils import log_errors
 logger = logging.getLogger(__name__)
 
 
-class JSON(web.RequestHandler):
-    def initialize(self, server):
+class RequestHandler(web.RequestHandler):
+    def initialize(self, server=None):
         logger.debug("Connection %s", self.request.uri)
-        self.server = server
-
-    def write(self, obj):
-        with log_errors():
-            super(JSON, self).write(json.dumps(obj))
+        if server:
+            self.server = server
 
 
 def resource_collect(pid=None):
@@ -39,15 +36,12 @@ def resource_collect(pid=None):
             'net_io_counters': psutil.net_io_counters()}
 
 
-class Resources(JSON):
+class Resources(RequestHandler):
     def get(self):
         self.write(resource_collect())
 
 
-class Proxy(web.RequestHandler):
-    def initialize(self):
-        logger.debug("Connection %s", self.request.uri)
-
+class Proxy(RequestHandler):
     @gen.coroutine
     def get(self, ip, port, rest):
         client = AsyncHTTPClient()

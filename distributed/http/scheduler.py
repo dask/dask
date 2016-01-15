@@ -5,20 +5,20 @@ import logging
 from tornado import web, gen
 from tornado.httpclient import AsyncHTTPClient
 
-from .core import JSON, MyApp, Resources, Proxy
+from .core import RequestHandler, MyApp, Resources, Proxy
 
 
 logger = logging.getLogger(__name__)
 
 
-class Info(JSON):
+class Info(RequestHandler):
     def get(self):
         resp = {'ncores': {'%s:%d' % k: n for k, n in self.server.ncores.items()},
                 'status': self.server.status}
         self.write(resp)
 
 
-class Broadcast(JSON):
+class Broadcast(RequestHandler):
     @gen.coroutine
     def get(self, rest):
         addresses = [(ip, port, d['http'])
