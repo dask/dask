@@ -13,6 +13,7 @@ ENV LIBHDFS3_CONF /etc/hadoop/conf/hdfs-site.xml
 RUN /opt/conda/bin/conda install -y -q libxml2 krb5 boost uuid ipython pytest pip pandas
 RUN /opt/conda/bin/conda install -y -q libhdfs3 libgsasl libntlm -c blaze
 RUN /opt/conda/bin/pip install git+https://github.com/blaze/hdfs3
+RUN /opt/conda/bin/pip install git+https://github.com/blaze/dask --upgrade
 
 
 # Cloudera repositories
