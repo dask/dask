@@ -482,6 +482,13 @@ class Scheduler(Server):
         --------
         heal_missing_data
         """
+        if key and worker:
+            try:
+                self.processing[worker].remove(key)
+            except KeyError:
+                logger.debug("Tried to remove %s from %s, but it wasn't there",
+                             key, worker)
+
         missing = set(missing)
         logger.debug("Recovering missing data: %s", missing)
         for k in missing:
@@ -492,13 +499,13 @@ class Scheduler(Server):
         self.my_heal_missing_data(missing)
 
         if key and worker:
-            with ignoring(KeyError):
-                self.processing[worker].remove(key)
             self.waiting[key] = missing
             logger.debug('task missing data, %s, %s', key, self.waiting)
             self.ensure_occupied(worker)
 
         self.seed_ready_tasks()
+
+        # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def log_state(self, msg=''):
         """ Log current full state of the scheduler """
@@ -619,7 +626,7 @@ class Scheduler(Server):
         """ Recover from catastrophic change """
         logger.debug("Heal state")
         self.log_state("Before Heal")
-        state = heal(self.dependencies, self.dependents, set(self.who_has),
+        state = heal(self.dependencies, self.dependents, self.who_has,
                 self.stacks, self.processing, self.waiting, self.waiting_data)
         released = state['released']
         self.in_play.clear(); self.in_play.update(state['in_play'])
@@ -926,18 +933,19 @@ class Scheduler(Server):
             except Exception as e:
                 logger.exception(e)
 
-    def validate(self, allow_overlap=False):
-        in_memory = {k for k, v in self.who_has.items() if v}
+    def validate(self, allow_overlap=False, allow_bad_stacks=False):
+        released = set(self.dask) - self.in_play
         validate_state(self.dependencies, self.dependents, self.waiting,
-                self.waiting_data, in_memory, self.stacks,
-                self.processing, None, set(), self.in_play,
-                allow_overlap=allow_overlap)
-        assert (set(self.ncores) == \
+                self.waiting_data, self.who_has, self.stacks,
+                self.processing, None, released, self.in_play,
+                allow_overlap=allow_overlap, allow_bad_stacks=allow_bad_stacks)
+        if not (set(self.ncores) == \
                 set(self.has_what) == \
                 set(self.stacks) == \
                 set(self.processing) == \
                 set(self.nannies) == \
-                set(self.worker_queues))
+                set(self.worker_queues)):
+            raise ValueError("Workers not the same in all collections")
 
     def diagnostic_resources(self, n=100):
         now = datetime.now()
@@ -1120,9 +1128,10 @@ def update_state(dsk, dependencies, dependents, held_data,
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
-        in_memory, stacks, processing, finished_results, released, in_play,
-        allow_overlap=False, **kwargs):
-    """ Validate a current runtime state
+        who_has, stacks, processing, finished_results, released, in_play,
+        allow_overlap=False, allow_bad_stacks=False, **kwargs):
+    """
+    Validate a current runtime state
 
     This performs a sequence of checks on the entire graph, running in about
     linear time.  This raises assert errors if anything doesn't check out.
@@ -1141,33 +1150,34 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
         val = sum([key in waiting,
                    key in in_stacks,
                    key in in_processing,
-                   key in in_memory,
+                   who_has.get(key) is not None,
                    key in released])
-        if allow_overlap:
-            assert val >= 1
-        else:
-            assert val == 1
+        if (allow_overlap and val < 1) or (not allow_overlap and val != 1):
+            raise ValueError("Key exists in wrong number of places", key, val)
 
-        assert (key in released) != (key in in_play)
+        if not (key in released) != (key in in_play):
+            raise ValueError("Key released != in_play", key)
 
         if not all(map(check_key, dependencies[key])):# Recursive case
-            assert False
+            raise ValueError("Failed to check dependencies")
 
-        if key in in_memory:
+        if who_has.get(key):
             assert not any(key in waiting.get(dep, ())
                            for dep in dependents.get(key, ()))
             assert not waiting.get(key)
 
-        if key in in_stacks or key in in_processing:
-            assert all(dep in in_memory for dep in dependencies[key])
+        if not allow_bad_stacks and (key in in_stacks or key in in_processing):
+            if not all(who_has.get(dep) for dep in dependencies[key]):
+                raise ValueError("Key in stacks/processing without all deps",
+                                 key)
             assert not waiting.get(key)
 
         if finished_results is not None:
             if key in finished_results:
-                assert key in in_memory
+                assert who_has.get(key)
                 assert key in keys
 
-            if key in keys and key in in_memory:
+            if key in keys and who_has.get(key):
                 assert key in finished_results
 
         return True
@@ -1217,7 +1227,7 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
     return result
 
 
-def heal(dependencies, dependents, in_memory, stacks, processing, waiting,
+def heal(dependencies, dependents, who_has, stacks, processing, waiting,
         waiting_data, **kwargs):
     """ Make a possibly broken runtime state consistent
 
@@ -1256,29 +1266,29 @@ def heal(dependencies, dependents, in_memory, stacks, processing, waiting,
     def make_accessible(key):
         if key in new_released:
             new_released.remove(key)
-        if key in in_memory:
+        if who_has.get(key):
             return
 
         for dep in dependencies[key]:
             make_accessible(dep)  # recurse
 
         waiting[key] = {dep for dep in dependencies[key]
-                            if dep not in in_memory}
+                            if not who_has.get(dep)}
 
     for key in outputs:
         make_accessible(key)
 
     waiting_data.update({key: {dep for dep in dependents[key]
                               if dep not in new_released
-                              and dep not in in_memory}
+                              and not who_has.get(dep)}
                     for key in dependents
                     if key not in new_released})
 
     def unrunnable(key):
         return (key in new_released
-             or key in in_memory
+             or who_has.get(key)
              or waiting.get(key)
-             or not all(dep in in_memory for dep in dependencies[key]))
+             or not all(who_has.get(dep) for dep in dependencies[key]))
 
     for key in list(filter(unrunnable, rev_stacks)):
         remove_from_stacks(key)
@@ -1291,9 +1301,9 @@ def heal(dependencies, dependents, in_memory, stacks, processing, waiting,
             assert not waiting[key]
             del waiting[key]
 
-    finished_results = {key for key in outputs if key in in_memory}
+    finished_results = {key for key in outputs if who_has.get(key)}
 
-    in_play = (in_memory
+    in_play = ({k for k, v in who_has.items() if v}
             | set(waiting)
             | (set.union(*processing.values()) if processing else set())
             | set(concat(stacks.values())))
@@ -1301,7 +1311,7 @@ def heal(dependencies, dependents, in_memory, stacks, processing, waiting,
     output = {'keys': outputs,
              'dependencies': dependencies, 'dependents': dependents,
              'waiting': waiting, 'waiting_data': waiting_data,
-             'in_memory': in_memory, 'processing': processing, 'stacks': stacks,
+             'who_has': who_has, 'processing': processing, 'stacks': stacks,
              'finished_results': finished_results, 'released': new_released,
              'in_play': in_play}
     validate_state(**output)
@@ -1364,8 +1374,7 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
 
 
 def heal_missing_data(dsk, dependencies, dependents, held_data,
-                      in_memory, in_play,
-                      waiting, waiting_data, missing):
+                      who_has, in_play, waiting, waiting_data, missing):
     """ Return to healthy state after discovering missing data
 
     When we identify that we're missing certain keys we rewind runtime state to
@@ -1382,10 +1391,10 @@ def heal_missing_data(dsk, dependencies, dependents, held_data,
         for dep in dependencies[key]:
             ensure_key(dep)
             waiting_data[dep].add(key)
-        waiting[key] = {dep for dep in dependencies[key] if dep not in in_memory}
+        waiting[key] = {dep for dep in dependencies[key] if not who_has.get(dep)}
         logger.debug("Added key to waiting: %s", key)
         waiting_data[key] = {dep for dep in dependents[key] if dep in in_play
-                                                    and dep not in in_memory}
+                                                    and not who_has.get(dep)}
         in_play.add(key)
 
     for key in missing:

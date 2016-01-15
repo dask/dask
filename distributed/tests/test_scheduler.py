@@ -17,12 +17,15 @@ from distributed.scheduler import (validate_state, heal, update_state,
 from distributed.utils_test import inc, ignoring
 
 
+alice = 'alice'
+bob = 'bob'
+
 def test_heal():
     dsk = {'x': 1, 'y': (inc, 'x')}
     dependencies = {'x': set(), 'y': {'x'}}
     dependents = {'x': {'y'}, 'y': set()}
 
-    in_memory = set()
+    who_has = dict()
     stacks = {'alice': [], 'bob': []}
     processing = {'alice': set(), 'bob': set()}
 
@@ -32,19 +35,19 @@ def test_heal():
 
     local = {k: v for k, v in locals().items() if '@' not in k}
 
-    output = heal(dependencies, dependents, in_memory, stacks, processing,
+    output = heal(dependencies, dependents, who_has, stacks, processing,
             {}, {})
 
     assert output['dependencies'] == dependencies
     assert output['dependents'] == dependents
-    assert output['in_memory'] == in_memory
+    assert output['who_has'] == who_has
     assert output['processing'] == processing
     assert output['stacks'] == stacks
     assert output['waiting'] == waiting
     assert output['waiting_data'] == waiting_data
     assert output['released'] == set()
 
-    state = {'in_memory': set(),
+    state = {'who_has': dict(),
              'stacks': {'alice': ['x'], 'bob': []},
              'processing': {'alice': set(), 'bob': set()},
              'waiting': {}, 'waiting_data': {}}
@@ -63,7 +66,7 @@ def test_heal_2():
                   'a': {'b'}, 'b': {'c'}, 'c': {'result'},
                   'result': set()}
 
-    state = {'in_memory': {'y', 'a'},  # missing 'b'
+    state = {'who_has': {'y': {alice}, 'a': {alice}},  # missing 'b'
              'stacks': {'alice': ['z'], 'bob': []},
              'processing': {'alice': set(), 'bob': set(['c'])},
              'waiting': {}, 'waiting_data': {}}
@@ -73,7 +76,7 @@ def test_heal_2():
     assert output['waiting_data'] == {'a': {'b'}, 'b': {'c'}, 'c': {'result'},
                                       'y': {'z'}, 'z': {'result'},
                                       'result': set()}
-    assert output['in_memory'] == set(['y', 'a'])
+    assert output['who_has'] == {'y': {alice}, 'a': {alice}}
     assert output['stacks'] == {'alice': ['z'], 'bob': []}
     assert output['processing'] == {'alice': set(), 'bob': set()}
     assert output['released'] == {'x'}
@@ -84,7 +87,7 @@ def test_heal_restarts_leaf_tasks():
            'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
     dependents, dependencies = get_deps(dsk)
 
-    state = {'in_memory': set(),  # missing 'b'
+    state = {'who_has': dict(),  # missing 'b'
              'stacks': {'alice': ['a'], 'bob': ['x']},
              'processing': {'alice': set(), 'bob': set()},
              'waiting': {}, 'waiting_data': {}}
@@ -101,7 +104,7 @@ def test_heal_culls():
            'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
     dependencies, dependents = get_deps(dsk)
 
-    state = {'in_memory': {'c', 'y'},
+    state = {'who_has': {'c': {alice}, 'y': {alice}},
              'stacks': {'alice': ['a'], 'bob': []},
              'processing': {'alice': set(), 'bob': set('y')},
              'waiting': {}, 'waiting_data': {}}
@@ -330,7 +333,7 @@ def test_validate_state():
     waiting = {'y': {'x'}, 'x': set()}
     dependents = {'x': {'y'}, 'y': set()}
     waiting_data = {'x': {'y'}}
-    in_memory = set()
+    who_has = dict()
     stacks = {'alice': [], 'bob': []}
     processing = {'alice': set(), 'bob': set()}
     finished_results = set()
@@ -339,7 +342,7 @@ def test_validate_state():
 
     validate_state(**locals())
 
-    in_memory.add('x')
+    who_has['x'] = {alice}
     with pytest.raises(Exception):
         validate_state(**locals())
 
@@ -368,7 +371,7 @@ def test_validate_state():
     with pytest.raises(Exception):
         validate_state(**locals())
 
-    in_memory.add('y')
+    who_has['y'] = {alice}
     with pytest.raises(Exception):
         validate_state(**locals())
 
@@ -428,7 +431,7 @@ def test_fill_missing_data():
     waiting_data = {'z': set()}
 
     held_data = {'z'}
-    in_memory = {'z'}
+    who_has = {'z': {alice}}
     processing = set()
     released = set()
     in_play = {'z'}
@@ -438,11 +441,11 @@ def test_fill_missing_data():
     e_in_play = {'x', 'y', 'z'}
 
     lost = {'z'}
-    in_memory.remove('z')
+    del who_has['z']
     in_play.remove('z')
 
     heal_missing_data(dsk, dependencies, dependents, held_data,
-                      in_memory, in_play,
+                      who_has, in_play,
                       waiting, waiting_data, lost)
 
     assert waiting == e_waiting

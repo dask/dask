@@ -35,9 +35,11 @@ def test_worker(loop):
         aa = rpc(ip=a.ip, port=a.port)
         bb = rpc(ip=b.ip, port=b.port)
 
+        assert not a.active
         response, _ = yield aa.compute(key='x', function=add,
                                        args=[1, 2], needed=[],
                                        close=True)
+        assert not a.active
         assert response == b'OK'
         assert a.data['x'] == 3
         assert c.who_has['x'] == set([(a.ip, a.port)])
@@ -54,6 +56,7 @@ def test_worker(loop):
 
         response, (error, traceback) = yield bb.compute(key='z',
                 function=bad_func, args=(), needed=(), close=True)
+        assert not b.active
         assert response == b'error'
         assert isinstance(error, ZeroDivisionError)
         if sys.version_info[0] >= 3:

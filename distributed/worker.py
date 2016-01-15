@@ -80,6 +80,7 @@ class Worker(Server):
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
+        self.active = set()
 
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
@@ -150,31 +151,38 @@ class Worker(Server):
     def compute(self, stream, function=None, key=None, args=(), kwargs={},
             needed=[], who_has=None, report=True):
         """ Execute function """
+        self.active.add(key)
         if needed:
+            local_data = {k: self.data[k] for k in needed if k in self.data}
             needed = [n for n in needed if n not in self.data]
-        if who_has:
+        elif who_has:
+            local_data = {k: self.data[k] for k in who_has if k in self.data}
             who_has = {k: v for k, v in who_has.items() if k not in self.data}
+        else:
+            local_data = {}
 
         # gather data from peers
         if needed or who_has:
             try:
                 if who_has:
-                    logger.info("gather %d keys from peers: %s", len(who_has),
-                            str(who_has))
+                    logger.info("gather %d keys from peers: %s",
+                                len(who_has), str(who_has))
                     other = yield gather_from_workers(who_has)
                 elif needed:
-                    logger.info("gather %d keys from peers: %s", len(needed),
-                            str(needed))
+                    logger.info("gather %d keys from peers: %s",
+                                len(needed), str(needed))
                     other = yield _gather(self.center, needed=needed)
                     other = dict(zip(needed, other))
                 else:
                     raise ValueError()
             except KeyError as e:
-                logger.warn("Could not find data during gather in compute", e)
+                logger.warn("Could not find data during gather in compute",
+                            exc_info=True)
+                self.active.remove(key)
                 raise Return((b'missing-data', e))
-            data2 = merge(self.data, other)
+            data2 = merge(local_data, other)
         else:
-            data2 = self.data
+            data2 = local_data
 
         # Fill args with data
         args2 = pack_data(args, data2)
@@ -235,6 +243,7 @@ class Worker(Server):
             out = (b'error', (e, tb))
 
         logger.debug("Send compute response to client: %s, %s", key, out)
+        self.active.remove(key)
         raise Return(out)
 
     @gen.coroutine
