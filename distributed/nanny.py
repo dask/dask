@@ -134,7 +134,7 @@ class Nanny(Server):
                 yield gen.sleep(wait_seconds)
 
     @gen.coroutine
-    def _close(self, stream=None, timeout=5):
+    def _close(self, stream=None, timeout=5, report=None):
         """ Close the nanny process, stop listening """
         logger.info("Closing Nanny at %s:%d", self.ip, self.port)
         yield self._kill(timeout=timeout)

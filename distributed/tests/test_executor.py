@@ -15,7 +15,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
 
-from distributed import Center, Worker
+from distributed import Center, Worker, Nanny
 from distributed.core import rpc
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
@@ -1578,3 +1578,12 @@ def test_map_on_futures_with_kwargs(s, a, b):
     future2 = e.submit(f, future, y=200)
     result = yield future2._result()
     assert result == 100 + 1 + 200
+
+
+@gen_cluster(Worker=Nanny)
+def test_failed_worker_without_warning(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    result = yield e.submit(inc, 1)._result()
+    assert result == 2

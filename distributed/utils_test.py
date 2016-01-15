@@ -367,7 +367,7 @@ from .worker import Worker
 from .executor import Executor
 
 @gen.coroutine
-def start_cluster(ncores):
+def start_cluster(ncores, Worker=Worker):
     s = Scheduler(ip='127.0.0.1')
     s.listen(0)
     workers = [Worker(s.ip, s.port, ncores=v, ip=k) for k, v in ncores]
@@ -388,12 +388,13 @@ def end_cluster(s, workers):
     for w in workers:
         with ignoring(TimeoutError, StreamClosedError, OSError):
             yield w._close(report=False)
-        if os.path.exists(w.local_dir):
+        if w.local_dir and os.path.exists(w.local_dir):
             shutil.rmtree(w.local_dir)
     s.stop()
 
 
-def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10):
+def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
+        Worker=Worker):
     """ Coroutine test with small cluster
 
     @gen_cluster()
@@ -412,7 +413,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10):
             loop = IOLoop()
             loop.make_current()
 
-            s, workers = loop.run_sync(lambda: start_cluster(ncores))
+            s, workers = loop.run_sync(lambda: start_cluster(ncores,
+                                                             Worker=Worker))
             try:
                 loop.run_sync(lambda: cor(s, *workers), timeout=timeout)
             finally:
