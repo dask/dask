@@ -1,7 +1,9 @@
 from contextlib import contextmanager
 
 import boto3
+from dask.imperative import Value
 from distributed import Executor
+from distributed.executor import _wait
 from distributed.s3 import get_objects_from_bucket, read_content_from_keys, read_contents
 from distributed.utils import get_ip
 from distributed.utils_test import gen_cluster
@@ -51,7 +53,7 @@ def test_read_keys_from_bucket():
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
-def test_read_contents(s):
+def test_read_contents(s,a,e):
     with make_s3('distributed-test') as bucket:
         data = b'a'
 
@@ -62,10 +64,29 @@ def test_read_contents(s):
 
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
-
         futures = read_contents('distributed-test')
         assert len(futures) == 6
         results = yield e._gather(futures)
         assert len(results) == 6
         assert all(x == b'a' for x in results)
 
+
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60)
+def test_read_contents_lazy(s,a,e):
+    with make_s3('distributed-test') as bucket:
+        data = b'a'
+
+        for i in range(3):
+            for j in range(2):
+                fn = 'tmp/test/data-%d/file-%d.csv' % (i, j)
+                bucket.put_object(Key=fn, Body=data)
+
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+        values = read_contents('distributed-test', lazy=True)
+        assert all(isinstance(v, Value) for v in values)
+        results = e.compute(*values, sync=False)
+        yield _wait(results)
+        results = yield e._gather(results)
+        assert len(results) == 6
+        assert all(x == b'a' for x in results)
