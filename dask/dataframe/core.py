@@ -476,13 +476,12 @@ class _Frame(Base):
             Fraction of axis items to return.
         replace: boolean, optional
             Sample with or without replacement. Default = False.
-        random_state: int or np.random.RandomState
-            If int create a new RandomState with this as the seed
-        Otherwise draw from the passed RandomState
+        random_state: int or ``np.random.RandomState``
+            If int we create a new RandomState with this as the seed
+            Otherwise we draw from the passed RandomState
 
         See Also
         --------
-
             dask.DataFrame.random_split, pd.DataFrame.sample
         """
 
