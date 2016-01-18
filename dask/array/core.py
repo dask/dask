@@ -1289,13 +1289,13 @@ class Array(Base):
         from .ghost import map_overlap
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
-    @wraps(np.ndarray.cumsum)
     def cumsum(self, axis, dtype=None):
+        """ See da.cumsum for docstring """
         from .reductions import cumsum
         return cumsum(self, axis, dtype)
 
-    @wraps(np.ndarray.cumprod)
     def cumprod(self, axis, dtype=None):
+        """ See da.cumprod for docstring """
         from .reductions import cumprod
         return cumprod(self, axis, dtype)
 
