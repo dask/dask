@@ -1,16 +1,16 @@
 Dask Arrays Quickstart
 ======================
 
-Dask Array implements a subset of the NumPy ndarray interface cutting up large
-arrays into many small pieces. This lets you work with arrays larger than memory
-and use all of your cores without having to learn a new syntax.
+Dask Array implements a subset of the NumPy ndarray interface and can cut large 
+arrays into many small pieces. This lets you work with arrays larger than 
+memory and use all of your cores without having to learn a new syntax.
 
 Installation Testing
 --------------------
 
 Because ``dask.array`` is a Python library, rather than a graphical program or
-command line program, to test that dask.array is working you can run a small
-Python program. 
+command line program, to test that dask.array is working you can use the Python 
+interpreter. 
 
 In this sample test, install ``dask.array``, run python, and then run a brief
 set of commands to display an array of random numbers:
@@ -33,13 +33,13 @@ numbers close to 6, similar to:
 .. code::
 
    >>>array([[ 6.11636086,  6.02888376,  6.02715362,  6.09789198],
-       [ 6.17750019,  6.10241887,  6.0984278 ,  5.80852248],
-       [ 6.00780242,  6.03833159,  6.0115587 ,  6.06790745],
-       [ 5.9882688 ,  5.91056546,  5.9793473 ,  5.93219086]])
+             [ 6.17750019,  6.10241887,  6.0984278 ,  5.80852248],
+             [ 6.00780242,  6.03833159,  6.0115587 ,  6.06790745],
+             [ 5.9882688 ,  5.91056546,  5.9793473 ,  5.93219086]])
 
 Array Creation
 --------------
-Dask Arrays can be crated from functions that return NumPy-like objects.  NumPy
+Dask Arrays can be created from functions that return NumPy-like objects.  NumPy
 arrays themselves and other iterable objects like those from reading HDF5 and
 NetCDF can be easily converted into Dask Arrays.
 
@@ -64,7 +64,7 @@ You can load the data into a Dask Array by means of the function
   import h5py
   import dask.array as da
 
-  f = h5py.File('data.h5py', 'r')
+  f = h5py.File('data.hdf5', 'r')
   d = f['group1/dataset']
   dsk = da.from_array(d, chunks = (100, 100))
 
