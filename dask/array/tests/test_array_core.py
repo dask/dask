@@ -1781,3 +1781,23 @@ def test_to_imperative():
 
     [[a, b], [c, d]] = y.to_imperative()
     assert eq(a.compute(), y[:2, :2])
+
+
+def test_cumulative():
+    x = da.arange(20, chunks=5)
+    y = x.cumsum(axis=0)
+    eq(x.cumsum(axis=0), np.arange(20).cumsum())
+    eq(x.cumprod(axis=0), np.arange(20).cumprod())
+
+    a = np.random.random((20, 24))
+    x = da.from_array(a, chunks=(6, 5))
+    eq(x.cumsum(axis=0), a.cumsum(axis=0))
+    eq(x.cumsum(axis=1), a.cumsum(axis=1))
+    eq(x.cumprod(axis=0), a.cumprod(axis=0))
+    eq(x.cumprod(axis=1), a.cumprod(axis=1))
+
+    a = np.random.random((20, 24, 13))
+    x = da.from_array(a, chunks=(6, 5, 4))
+    for axis in [0, 1, 2]:
+        eq(x.cumsum(axis=axis), a.cumsum(axis=axis))
+        eq(x.cumprod(axis=axis), a.cumprod(axis=axis))
