@@ -23,7 +23,7 @@ def get_block_locations(hdfs, filename):
             for block in hdfs.get_block_locations(fn)]
 
 
-def read_binary(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_auth):
+def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
     Parameters
@@ -84,7 +84,7 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
     executor = default_executor(executor)
     kwargs['lineterminator'] = lineterminator
     filenames = hdfs.glob(fn)
-    blockss = [read_binary(fn, executor, hdfs, lazy=True, delimiter=lineterminator)
+    blockss = [read_bytes(fn, executor, hdfs, lazy=True, delimiter=lineterminator)
                for fn in filenames]
     if names is None and header:
         with hdfs.open(filenames[0]) as f:
@@ -105,7 +105,7 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
         raise gen.Return(df)
 
 
-def write(fn, data, hdfs=None):
+def write_block_to_hdfs(fn, data, hdfs=None):
     """ Write bytes to HDFS """
     if not isinstance(data, bytes):
         raise TypeError("Data to write to HDFS must be of type bytes, got %s" %
@@ -155,4 +155,4 @@ def write_binary(path, futures, executor=None, hdfs=None, **hdfs_auth):
         hdfs.mkdir(path)
         filenames = [os.path.join(path, template % i) for i in range(n)]
 
-    return executor.map(write, filenames, futures, hdfs=hdfs)
+    return executor.map(write_block_to_hdfs, filenames, futures, hdfs=hdfs)

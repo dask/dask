@@ -10,7 +10,7 @@ from hdfs3 import HDFileSystem
 
 from distributed.utils_test import gen_cluster
 from distributed.utils import get_ip
-from distributed.hdfs import (read_binary, get_block_locations, write_binary,
+from distributed.hdfs import (read_bytes, get_block_locations, write_binary,
         _read_csv)
 from distributed import Executor
 from distributed.executor import _wait
@@ -64,7 +64,7 @@ def dont_test_dataframes(s, a):  # slow
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        futures = read_binary(fn, hdfs=hdfs, delimiter=b'\r\n')
+        futures = read_bytes(fn, hdfs=hdfs, delimiter=b'\r\n')
         assert len(futures) > 1
 
         def load(b, **kwargs):
@@ -95,7 +95,7 @@ def test_get_block_locations_nested():
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
-def test_read_binary(s, a, b):
+def test_read_bytes(s, a, b):
     with make_hdfs() as hdfs:
         assert hdfs._handle > 0
         data = b'a' * int(1e8)
@@ -110,7 +110,7 @@ def test_read_binary(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        futures = read_binary(fn, hdfs=hdfs)
+        futures = read_bytes(fn, hdfs=hdfs)
         assert len(futures) == len(blocks)
         assert futures[0].executor is e
         results = yield e._gather(futures)
@@ -137,7 +137,7 @@ def test_get_block_locations_nested(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        futures = read_binary('/tmp/test/', hdfs=hdfs)
+        futures = read_bytes('/tmp/test/', hdfs=hdfs)
         results = yield e._gather(futures)
         assert len(results) == 6
         assert all(x == b'a' for x in results)
@@ -158,7 +158,7 @@ def test_lazy_values(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        values = read_binary('/tmp/test/', hdfs=hdfs, lazy=True)
+        values = read_bytes('/tmp/test/', hdfs=hdfs, lazy=True)
         assert all(isinstance(v, Value) for v in values)
 
         while not s.restrictions:
