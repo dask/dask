@@ -115,7 +115,7 @@ def write_block_to_hdfs(fn, data, hdfs=None):
     return len(data)
 
 
-def write_binary(path, futures, executor=None, hdfs=None, **hdfs_auth):
+def write_bytes(path, futures, executor=None, hdfs=None, **hdfs_auth):
     """ Write bytestring futures to HDFS
 
     Parameters
@@ -136,8 +136,8 @@ def write_binary(path, futures, executor=None, hdfs=None, **hdfs_auth):
     Examples
     --------
 
-    >>> write_binary('/data/file.*.dat', futures, hdfs=hdfs)  # doctest: +SKIP
-    >>> write_binary('/data/', futures, hdfs=hdfs)  # doctest: +SKIP
+    >>> write_bytes('/data/file.*.dat', futures, hdfs=hdfs)  # doctest: +SKIP
+    >>> write_bytes('/data/', futures, hdfs=hdfs)  # doctest: +SKIP
     """
     from hdfs3 import HDFileSystem
     hdfs = hdfs or HDFileSystem(**hdfs_auth)

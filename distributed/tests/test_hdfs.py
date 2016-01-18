@@ -10,7 +10,7 @@ from hdfs3 import HDFileSystem
 
 from distributed.utils_test import gen_cluster
 from distributed.utils import get_ip
-from distributed.hdfs import (read_bytes, get_block_locations, write_binary,
+from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
         _read_csv)
 from distributed import Executor
 from distributed.executor import _wait
@@ -172,7 +172,7 @@ def test_lazy_values(s, a, b):
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
-def test_write_binary(s, a, b):
+def test_write_bytes(s, a, b):
     with make_hdfs() as hdfs:
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
@@ -180,7 +180,7 @@ def test_write_binary(s, a, b):
         data = [b'123', b'456', b'789']
         remote_data = yield e._scatter(data)
 
-        futures = write_binary('/tmp/test/data/file.*.dat', remote_data, hdfs=hdfs)
+        futures = write_bytes('/tmp/test/data/file.*.dat', remote_data, hdfs=hdfs)
         yield _wait(futures)
 
         assert len(hdfs.ls('/tmp/test/data/')) == 3
@@ -188,7 +188,7 @@ def test_write_binary(s, a, b):
             assert f.read() == b'456'
 
 
-        futures = write_binary('/tmp/test/data2/', remote_data, hdfs=hdfs)
+        futures = write_bytes('/tmp/test/data2/', remote_data, hdfs=hdfs)
         yield _wait(futures)
 
         assert len(hdfs.ls('/tmp/test/data2/')) == 3
