@@ -38,7 +38,7 @@ deployment system like SunGrid Engine.
 
 Launch ``dscheduler`` on one node::
 
-   $ dcenter
+   $ dscheduler
    Start scheduler at 192.168.0.1:8786
 
 Then launch ``dworker`` on the rest of the nodes, providing the address to the
