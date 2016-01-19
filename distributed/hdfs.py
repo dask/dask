@@ -2,6 +2,7 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+import json
 from math import log
 import os
 import io
@@ -109,16 +110,30 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
         df = yield _futures_to_dask_dataframe(futures)
         raise gen.Return(df)
 
-def avro_body(data, av):
-    """Read records from binary data using the avro reader object av,
-    which defined the metadata."""
-    import fastavro._reader as fa
-    sync = av._header['sync']
+
+def avro_body(data, header):
+    """ Convert bytes and header to Python objects
+
+    Parameters
+    ----------
+    data: bytestring
+        bulk avro data, without header information
+    header: dict
+        Header information such as collected from ``fastavro.reader(f)._header``
+
+    Returns
+    -------
+    List of deserialized Python objects, probably dictionaries
+    """
+    import fastavro
+    sync = header['sync']
     if not data.endswith(sync):
         # Read delimited should keep end-of-block delimiter
         data = data + sync
     stream = io.BytesIO(data)
-    return list(fa._iter_avro(stream, av._header, av.codec, av.schema, None))
+    schema = json.loads(header['meta']['avro.schema'])
+    return list(fastavro._reader._iter_avro(stream, header, header['meta']['avro.codec'],
+        schema, schema))
 
 
 def avro_to_df(b, av):
@@ -146,7 +161,7 @@ def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
         blockss.extend([read_bytes(fn, executor, hdfs, lazy=True,
                         delimiter=sync, not_zero=True) for fn in filenames])
 
-    dfs1 = [do(avro_to_df)(b, av) for b in blockss]
+    dfs1 = [do(avro_body)(b, av) for blocks in blockss for b in blocks]
     if lazy:
         from dask.dataframe import from_imperative
         names = [c['name'] for c in av.schema['fields']]
