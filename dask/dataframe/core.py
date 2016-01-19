@@ -900,11 +900,6 @@ class Series(_Frame):
         return self.name
 
     @property
-    def columns(self):
-        """ Return 1 element tuple containing the name """
-        return (self.name,)
-
-    @property
     def nbytes(self):
         return reduction(self, lambda s: s.nbytes, np.sum, token='nbytes')
 
@@ -2217,7 +2212,8 @@ def quantile(df, q):
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
-    assert len(df.columns) == 1
+    assert (isinstance(df, DataFrame) and len(df.columns) == 1 or
+            isinstance(df, Series))
     from dask.array.percentile import _percentile, merge_percentiles
 
     # currently, only Series has quantile method

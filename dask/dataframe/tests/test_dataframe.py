@@ -103,9 +103,9 @@ def test_attributes():
 def test_column_names():
     assert d.columns == ('a', 'b')
     assert d[['b', 'a']].columns == ('b', 'a')
-    assert d['a'].columns == ('a',)
-    assert (d['a'] + 1).columns == ('a',)
-    assert (d['a'] + d['b']).columns == (None,)
+    assert d['a'].name == 'a'
+    assert (d['a'] + 1).name == 'a'
+    assert (d['a'] + d['b']).name == None
 
 
 def test_set_index():
