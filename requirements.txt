@@ -3,3 +3,4 @@ toolz
 cloudpickle
 dask
 click
+boto3
