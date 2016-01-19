@@ -3,10 +3,7 @@ from contextlib import contextmanager
 import pytest
 from tornado import gen
 
-pytest.importorskip('hdfs3')
-
 from dask.imperative import Value
-from hdfs3 import HDFileSystem
 
 from distributed.utils_test import gen_cluster
 from distributed.utils import get_ip
@@ -14,6 +11,15 @@ from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
         _read_csv)
 from distributed import Executor
 from distributed.executor import _wait
+
+
+pytest.importorskip('hdfs3')
+from hdfs3 import HDFileSystem
+try:
+    hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
+    hdfs.df()
+except:
+    pytestmark = pytest.mark.skipif('True')
 
 
 ip = get_ip()

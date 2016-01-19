@@ -81,8 +81,8 @@ def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None, lazy=Fa
     [<Future: status: finished, key: read_content_from_keys-00092e8a75141837c1e9b717b289f9d2>,
      <Future: status: finished, key: read_content_from_keys-4f0f2cbcf4573a373cc62467ffbfd30d>]
     >>> futures[0].result()  # doctest: +SKIP
-    b'{"amount": 100, "name": "Alice"}\n{"amount": 200, "name": "Bob"}\n
-      {"amount": 300, "name": "Charlie"}\n{"amount": 400, "name": "Dennis"}\n'
+    b'{"amount": 100, "name": "Alice"}\\n{"amount": 200, "name": "Bob"}\\n
+      {"amount": 300, "name": "Charlie"}\\n{"amount": 400, "name": "Dennis"}\\n'
 
     """
     executor = default_executor(executor)

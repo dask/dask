@@ -597,7 +597,7 @@ def test_add_worker(s, a, b):
     w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1')
     w.data[('x', 5)] = 6
     w.data['y'] = 1
-    yield w._start(8020)
+    yield w._start(0)
 
     dsk = {('x', i): (inc, i) for i in range(10)}
     s.update_graph(dsk=dsk, keys=list(dsk))

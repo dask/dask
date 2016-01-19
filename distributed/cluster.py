@@ -148,30 +148,26 @@ def async_ssh(cmd_dict):
     ssh.close()
 
 
-def start_center(logdir, center_addr, center_port,
-                 ssh_username, ssh_port, ssh_private_key):
-
-    cmd = 'dcenter --host {addr} --port {port}'.format(
-        addr = center_addr, port = center_port, logdir = logdir)
+def start_scheduler(logdir, addr, port, ssh_username, ssh_port, ssh_private_key):
+    cmd = 'dscheduler --port {port} --strict-port'.format(port=port, logdir=logdir)
 
     # Optionally re-direct stdout and stderr to a logfile
     if logdir is not None:
         cmd = 'mkdir -p {logdir} && ' + cmd
-        cmd += '&> {logdir}/dcenter_{addr}:{port}.log'.format(
-            addr = center_addr, port = center_port, logdir = logdir)
+        cmd += '&> {logdir}/dscheduler_{addr}:{port}.log'.format(addr=addr,
+                port=port, logdir=logdir)
 
     # Format output labels we can prepend to each line of output, and create
     # a 'status' key to keep track of jobs that terminate prematurely.
     label = (bcolors.BOLD +
-             'center {addr}:{port}'.format(addr = center_addr,
-                                           port = center_port) +
+             'scheduler {addr}:{port}'.format(addr=addr, port=port) +
              bcolors.ENDC)
 
     # Create a command dictionary, which contains everything we need to run and
     # interact with this command.
     input_queue = Queue()
     output_queue = Queue()
-    cmd_dict = {'cmd': cmd, 'label': label, 'address': center_addr, 'port': center_port,
+    cmd_dict = {'cmd': cmd, 'label': label, 'address': addr, 'port': port,
                 'input_queue': input_queue, 'output_queue': output_queue,
                 'ssh_username': ssh_username, 'ssh_port': ssh_port,
                 'ssh_private_key': ssh_private_key}
@@ -182,11 +178,11 @@ def start_center(logdir, center_addr, center_port,
 
     return merge(cmd_dict, {'thread': thread})
 
-def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs,
+def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, nprocs,
                  ssh_username, ssh_port, ssh_private_key):
 
-    cmd = 'dworker {center_addr}:{center_port} --host {worker_addr} --nthreads {nthreads} --nprocs {nprocs}'.format(
-        center_addr = center_addr, center_port = center_port,
+    cmd = 'dworker {scheduler_addr}:{scheduler_port} --host {worker_addr} --nthreads {nthreads} --nprocs {nprocs}'.format(
+        scheduler_addr = scheduler_addr, scheduler_port = scheduler_port,
         worker_addr = worker_addr,
         nthreads = nthreads,
         nprocs = nprocs)
@@ -194,7 +190,7 @@ def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs
     # Optionally redirect stdout and stderr to a logfile
     if logdir is not None:
         cmd = 'mkdir -p {logdir} && ' + cmd
-        cmd += '&> {logdir}/dcenter_{addr}.log'.format(
+        cmd += '&> {logdir}/dscheduler_{addr}.log'.format(
             addr = worker_addr, logdir = logdir)
 
     label = 'worker {addr}'.format(addr = worker_addr)
@@ -217,11 +213,11 @@ def start_worker(logdir, center_addr, center_port, worker_addr, nthreads, nprocs
 
 
 class Cluster(object):
-    def __init__(self, center_addr, center_port, worker_addrs, nthreads = 0, nprocs = 1,
+    def __init__(self, scheduler_addr, scheduler_port, worker_addrs, nthreads = 0, nprocs = 1,
                  ssh_username = None, ssh_port = 22, ssh_private_key = None, logdir = None):
 
-        self.center_addr = center_addr
-        self.center_port = center_port
+        self.scheduler_addr = scheduler_addr
+        self.scheduler_port = scheduler_port
         self.nthreads = nthreads
         self.nprocs = nprocs
 
@@ -239,8 +235,8 @@ class Cluster(object):
         # Keep track of all running threads
         self.threads = []
 
-        # Start the center node
-        self.center = start_center(logdir, center_addr, center_port, ssh_username, ssh_port, ssh_private_key)
+        # Start the scheduler node
+        self.scheduler = start_scheduler(logdir, scheduler_addr, scheduler_port, ssh_username, ssh_port, ssh_private_key)
 
         # Start worker nodes
         self.workers = []
@@ -250,7 +246,7 @@ class Cluster(object):
     def monitor_remote_processes(self):
 
         # Form a list containing all processes, since we treat them equally from here on out.
-        all_processes = [self.center] + self.workers
+        all_processes = [self.scheduler] + self.workers
 
         try:
             while True:
@@ -268,11 +264,11 @@ class Cluster(object):
             pass   # Return execution to the calling process
 
     def add_worker(self, address):
-        self.workers.append(start_worker(self.logdir, self.center_addr, self.center_port, address, self.nthreads,
+        self.workers.append(start_worker(self.logdir, self.scheduler_addr, self.scheduler_port, address, self.nthreads,
                                          self.nprocs, self.ssh_username, self.ssh_port, self.ssh_private_key))
 
     def shutdown(self):
-        all_processes = [self.center] + self.workers
+        all_processes = [self.scheduler] + self.workers
 
         for process in all_processes:
             process['input_queue'].put('shutdown')
