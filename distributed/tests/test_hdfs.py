@@ -128,6 +128,22 @@ def test_read_bytes(s, a, b):
         assert {f.key for f in futures}.issubset(s.loose_restrictions)
 
 
+def test_read_bytes_sync(loop):
+    with make_hdfs() as hdfs:
+        assert hdfs._handle > 0
+        data = b'a' * int(1e3)
+
+        for fn in ['/tmp/test/file.%d' % i for i in range(100)]:
+            with hdfs.open(fn, 'w', repl=1) as f:
+                f.write(data)
+
+        with cluster() as (s, [a, b]):
+            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+                futures = read_bytes('/tmp/test/file.*')
+                results = e.gather(futures)
+                assert b''.join(results) == 100 * data
+
+
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
 def test_get_block_locations_nested(s, a, b):
     with make_hdfs() as hdfs:
