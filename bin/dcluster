@@ -4,15 +4,15 @@ from distributed.cluster import Cluster
 import click
 import os
 
-@click.command(help = """Launch a distributed cluster over SSH. A 'dcenter' process will run on the
-                         first host specified in [HOSTNAMES] or in the hostfile (unless --center is specified
+@click.command(help = """Launch a distributed cluster over SSH. A 'dscheduler' process will run on the
+                         first host specified in [HOSTNAMES] or in the hostfile (unless --scheduler is specified
                          explicitly). One or more 'dworker' processes will be run each host in [HOSTNAMES] or
                          in the hostfile. Use command line flags to adjust how many dworker process are run on
                          each host (--nworkers) and how many cpus are used by each dworker process (--ncores).""")
-@click.option('--center', default=None, type=str,
-              help="Specify center node.  Defaults to first address.")
-@click.option('--center-port', default=8787, type=int,
-              help="Specify center port number.  Defaults to port 8787.")
+@click.option('--scheduler', default=None, type=str,
+              help="Specify scheduler node.  Defaults to first address.")
+@click.option('--scheduler-port', default=8786, type=int,
+              help="Specify scheduler port number.  Defaults to port 8786.")
 @click.option('--nthreads', default=0, type=int,
               help="Number of threads per worker process. Defaults to number of cores divided by the number of proceses per host.")
 @click.option('--nprocs', default=1, type=int,
@@ -28,9 +28,9 @@ import os
               help="Private key file to use for SSH connections.")
 
 @click.option('--log-directory', default=None, type=click.Path(exists=True),
-              help="Directory to use on all cluster nodes for the output of dcenter and dworker commands.")
+              help="Directory to use on all cluster nodes for the output of dscheduler and dworker commands.")
 @click.pass_context
-def start(ctx, center, center_port, hostnames, hostfile, nthreads, nprocs,
+def start(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
           ssh_username, ssh_port, ssh_private_key, log_directory):
     try:
         hostnames = list(hostnames)
@@ -39,23 +39,23 @@ def start(ctx, center, center_port, hostnames, hostfile, nthreads, nprocs,
                 hosts = f.read().split()
             hostnames.extend(hosts)
 
-        if not center:
-            center = hostnames[0]
+        if not scheduler:
+            scheduler = hostnames[0]
 
     except IndexError:
         print(ctx.get_help())
         exit(1)
 
-    c = Cluster(center, center_port, hostnames, nthreads, nprocs,
+    c = Cluster(scheduler, scheduler_port, hostnames, nthreads, nprocs,
                 ssh_username, ssh_port, ssh_private_key, log_directory)
 
     import distributed
     print('\n---------------------------------------------------------------')
-    print('                    Distributed v{version}\n'.format(version = distributed.__version__))
+    print('                    Distributed v{version}\n'.format(version=distributed.__version__))
     print('Worker nodes:'.format(n=len(hostnames)))
     for i, host in enumerate(hostnames):
         print('  {num}: {host}'.format(num = i, host = host))
-    print('\nCenter node: {addr}:{port}'.format(addr = center, port = center_port))
+    print('\nscheduler node: {addr}:{port}'.format(addr=scheduler, port=scheduler_port))
     print('---------------------------------------------------------------\n\n')
 
     # Monitor the output of remote processes.  This blocks until the user issues a KeyboardInterrupt.
