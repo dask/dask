@@ -18,7 +18,8 @@ from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          moment,
                          argmin, argmax,
                          nansum, nanmean, nanstd, nanvar, nanmin,
-                         nanmax, nanargmin, nanargmax)
+                         nanmax, nanargmin, nanargmax,
+                         cumsum, cumprod)
 from .percentile import percentile
 with ignoring(ImportError):
     from .reductions import nanprod

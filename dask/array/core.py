@@ -1289,6 +1289,16 @@ class Array(Base):
         from .ghost import map_overlap
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
+    def cumsum(self, axis, dtype=None):
+        """ See da.cumsum for docstring """
+        from .reductions import cumsum
+        return cumsum(self, axis, dtype)
+
+    def cumprod(self, axis, dtype=None):
+        """ See da.cumprod for docstring """
+        from .reductions import cumprod
+        return cumprod(self, axis, dtype)
+
     @wraps(squeeze)
     def squeeze(self):
         return squeeze(self)
