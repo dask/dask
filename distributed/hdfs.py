@@ -12,7 +12,7 @@ from tornado import gen
 from toolz import merge
 
 from .executor import default_executor
-from .utils import ignoring
+from .utils import ignoring, sync
 
 
 logger = logging.getLogger(__name__)
@@ -148,19 +148,7 @@ def avro_to_df(b, av):
 
 @gen.coroutine
 def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
-    """ Read avro encoded data from bytes on HDFS
-
-    Parameters
-    ----------
-    fn: string
-        filename or globstring of avro files on HDFS
-    lazy: boolean, optional
-        If True return dask Value objects
-
-    Returns
-    -------
-    List of futures of Python objects
-    """
+    """ See distributed.hdfs.read_avro for docstring """
     from hdfs3 import HDFileSystem
     from dask import do
     import fastavro
@@ -189,6 +177,24 @@ def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
     else:
         futures = executor.compute(*lazy_values)
         raise gen.Return(futures)
+
+
+def read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
+    """ Read avro encoded data from bytes on HDFS
+
+    Parameters
+    ----------
+    fn: string
+        filename or globstring of avro files on HDFS
+    lazy: boolean, optional
+        If True return dask Value objects
+
+    Returns
+    -------
+    List of futures of Python objects
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _read_avro, fn, executor, hdfs, lazy, **kwargs)
 
 
 def write_block_to_hdfs(fn, data, hdfs=None):

@@ -8,10 +8,10 @@ from tornado import gen
 
 from dask.imperative import Value
 
-from distributed.utils_test import gen_cluster
+from distributed.utils_test import gen_cluster, cluster, loop
 from distributed.utils import get_ip
 from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
-        _read_csv, _read_avro, avro_body)
+        _read_csv, _read_avro, avro_body, read_avro)
 from distributed import Executor
 from distributed.executor import _wait, Future
 
@@ -302,3 +302,20 @@ def test_avro(s, a, b):
         L = yield _read_avro('/tmp/test/*.avro', lazy=True)
         assert isinstance(L, list)
         assert all(isinstance(x, Value) for x in L)
+
+
+def test_avro_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            avro_files = {'/tmp/test/1.avro': avro_bytes,
+                          '/tmp/test/2.avro': avro_bytes}
+
+            with make_hdfs() as hdfs:
+                for k, v in avro_files.items():
+                    with hdfs.open(k, 'w') as f:
+                        f.write(v)
+
+                futures = read_avro('/tmp/test/*.avro')
+                assert all(isinstance(f, Future) for f in futures)
+                L = e.gather(futures)
+                assert L[0][:5] == data[:5]
