@@ -131,11 +131,12 @@ def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
     executor = default_executor(executor)
     filenames = hdfs.glob(fn)
     blockss = []
-    with hdfs.open(filenames[0]) as f:
+    with hdfs.open(filenames[0], 'r') as f:
         av = fastavro.reader(f)
         sync = av._header['sync']
     filenames = hdfs.glob(fn)
-    blockss = [read_bytes(fn, executor, hdfs, lazy=True, delimiter=sync)
+    blockss = [read_bytes(fn, executor, hdfs, lazy=True, delimiter=sync,
+                          non_zero=True)
                for fn in filenames]
                    
     
