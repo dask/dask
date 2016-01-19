@@ -145,7 +145,6 @@ def test_svd_compressed_deterministic():
     assert all(da.compute((u == u2).all(), (s == s2).all(), (vt == vt2).all()))
 
 
-
 def _check_lu_result(p, l, u, A):
     assert np.allclose(p.dot(l).dot(u), A)
 
@@ -224,3 +223,98 @@ def test_lu_errors():
     A = np.random.random_integers(0, 10, (20, 20))
     dA = da.from_array(A, chunks=(5, 4))
     assert raises(ValueError, lambda: da.linalg.lu(dA))
+
+
+def test_solve_triangular_vector():
+    import scipy.linalg
+
+    for shape, chunk in [(20, 10), (50, 10), (70, 20)]:
+        np.random.seed(1)
+
+        A = np.random.random_integers(1, 10, (shape, shape))
+        b = np.random.random_integers(1, 10, shape)
+
+        # upper
+        Au = np.triu(A)
+        dAu = da.from_array(Au, (chunk, chunk))
+        db = da.from_array(b, chunk)
+        res = da.linalg.solve_triangular(dAu, db)
+        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Au, b))
+        assert np.allclose(dAu.dot(res).compute(), b)
+
+        # lower
+        Al = np.tril(A)
+        dAl = da.from_array(Al, (chunk, chunk))
+        db = da.from_array(b, chunk)
+        res = da.linalg.solve_triangular(dAl, db, lower=True)
+        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Al, b, lower=True))
+        assert np.allclose(dAl.dot(res).compute(), b)
+
+
+def test_solve_triangular_matrix():
+    import scipy.linalg
+
+    for shape, chunk in [(20, 10), (50, 10), (50, 20)]:
+        np.random.seed(1)
+
+        A = np.random.random_integers(1, 10, (shape, shape))
+        b = np.random.random_integers(1, 10, (shape, 5))
+
+        # upper
+        Au = np.triu(A)
+        dAu = da.from_array(Au, (chunk, chunk))
+        db = da.from_array(b, (chunk, 5))
+        res = da.linalg.solve_triangular(dAu, db)
+        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Au, b))
+        assert np.allclose(dAu.dot(res).compute(), b)
+
+        # lower
+        Al = np.tril(A)
+        dAl = da.from_array(Al, (chunk, chunk))
+        db = da.from_array(b, (chunk, 5))
+        res = da.linalg.solve_triangular(dAl, db, lower=True)
+        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Al, b, lower=True))
+        assert np.allclose(dAl.dot(res).compute(), b)
+
+
+
+def test_solve_triangular_matrix2():
+    import scipy.linalg
+
+    for shape, chunk in [(20, 10), (50, 10), (50, 20)]:
+        np.random.seed(1)
+
+        A = np.random.random_integers(1, 10, (shape, shape))
+        b = np.random.random_integers(1, 10, (shape, shape))
+
+        # upper
+        Au = np.triu(A)
+        dAu = da.from_array(Au, (chunk, chunk))
+        db = da.from_array(b, (chunk, chunk))
+        res = da.linalg.solve_triangular(dAu, db)
+        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Au, b))
+        assert np.allclose(dAu.dot(res).compute(), b)
+
+        # lower
+        Al = np.tril(A)
+        dAl = da.from_array(Al, (chunk, chunk))
+        db = da.from_array(b, (chunk, chunk))
+        res = da.linalg.solve_triangular(dAl, db, lower=True)
+        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Al, b, lower=True))
+        assert np.allclose(dAl.dot(res).compute(), b)
+
+
+def test_solve_triangular_errors():
+    A = np.random.random_integers(0, 10, (10, 10, 10))
+    b = np.random.random_integers(1, 10, 10)
+    dA = da.from_array(A, chunks=(5, 5, 5))
+    db = da.from_array(b, chunks=5)
+    assert raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
+
+    A = np.random.random_integers(0, 10, (10, 10))
+    b = np.random.random_integers(1, 10, 10)
+    dA = da.from_array(A, chunks=(3, 3))
+    db = da.from_array(b, chunks=5)
+    assert raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
+
+
