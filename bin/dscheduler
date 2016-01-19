@@ -15,38 +15,29 @@ logger = logging.getLogger('distributed.scheduler')
 
 ip = get_ip()
 
+import signal
+
+def handle_signal(sig, frame):
+    IOLoop.instance().add_callback(IOLoop.instance().stop)
+
+signal.signal(signal.SIGINT, handle_signal)
+signal.signal(signal.SIGTERM, handle_signal)
 
 @click.command()
 @click.argument('center', type=str, default='')
 @click.option('--port', type=int, default=8786, help="Serving port")
-@click.option('--strict-port', is_flag=True,
-              help="Fail if chosen port is busy")
-def go(center, port, strict_port):
-    while True:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.bind(('127.0.0.1', port))
-        except socket.error:
-            if strict_port:
-                sleep(1)
-                logger.info("Port %d blocked - sleeping", port)
-            else:
-                port += 1
-        else:
-            sock.close()
-            break
-
+def go(center, port):
     loop = IOLoop.current()
     scheduler = Scheduler(center, services={'http': HTTPScheduler})
     if center:
         loop.run_sync(scheduler.sync_center)
     done = scheduler.start(port)
 
-    try:
-        loop.start()
-    except KeyboardInterrupt:
-        logger.info("End scheduler at %s:%d", ip, port)
-        scheduler.stop()
+    loop.start()
+    loop.close()
+    scheduler.stop()
+
+    logging.info("End scheduler at %s:%d", ip, port)
 
 if __name__ == '__main__':
     go()
