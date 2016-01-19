@@ -110,6 +110,8 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
         raise gen.Return(df)
 
 def avro_body(data, av):
+    """Read records from binary data using the avro reader object av,
+    which defined the metadata."""
     import fastavro._reader as fa
     sync = av._header['sync']
     if not data.endswith(sync):
@@ -119,27 +121,27 @@ def avro_body(data, av):
     return list(fa._iter_avro(stream, av._header, av.codec, av.schema, None))
 
 def avro_to_df(b, av):
+    """Parse avro binary data with header av into a pandas dataframe"""
     import pandas as pd
     return pd.DataFrame(data=avro_body(b, av))
 
 @gen.coroutine
 def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
+    """Read avro data from the filespec fn (can be globby) in HDFS into
+    a dask dataframe. Uses the geader in the first file only."""
     from hdfs3 import HDFileSystem
     from dask import do
     import fastavro
     hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
     filenames = hdfs.glob(fn)
-    blockss = []
     with hdfs.open(filenames[0], 'r') as f:
         av = fastavro.reader(f)
         sync = av._header['sync']
     filenames = hdfs.glob(fn)
     blockss = [read_bytes(fn, executor, hdfs, lazy=True, delimiter=sync,
-                          non_zero=True)
-               for fn in filenames]
-                   
-    
+                          not_zero=True) for fn in filenames]
+
     dfs1 = [do(avro_to_df)(b, av) for b in blockss]
     if lazy:
         from dask.dataframe import from_imperative
