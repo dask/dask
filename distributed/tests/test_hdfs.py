@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 from io import BytesIO
-import json
 
 import pytest
 import fastavro
@@ -268,7 +267,6 @@ def test_avro_body():
 
     for b in (avro_bytes, subset):
         b = b.split(sync, 1)[1]
-        header['meta'] = json.dumps(header['meta'])
         L = avro_body(b, header)
         assert isinstance(L, (list, tuple))
         assert isinstance(L[0], dict)
@@ -305,16 +303,15 @@ def test_avro(s, a, b):
 
 
 def test_avro_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            avro_files = {'/tmp/test/1.avro': avro_bytes,
-                          '/tmp/test/2.avro': avro_bytes}
+    avro_files = {'/tmp/test/1.avro': avro_bytes,
+                  '/tmp/test/2.avro': avro_bytes}
+    with make_hdfs() as hdfs:
+        for k, v in avro_files.items():
+            with hdfs.open(k, 'w') as f:
+                f.write(v)
 
-            with make_hdfs() as hdfs:
-                for k, v in avro_files.items():
-                    with hdfs.open(k, 'w') as f:
-                        f.write(v)
-
+        with cluster() as (s, [a, b]):
+            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 futures = read_avro('/tmp/test/*.avro')
                 assert all(isinstance(f, Future) for f in futures)
                 L = e.gather(futures)

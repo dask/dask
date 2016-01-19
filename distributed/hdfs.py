@@ -119,15 +119,13 @@ def avro_body(data, header):
     data: bytestring
         bulk avro data, without header information
     header: bytestring
-        Header information encoded as json such as collected from
-        ``fastavro.reader(f)._header``
+        Header information collected from ``fastavro.reader(f)._header``
 
     Returns
     -------
     List of deserialized Python objects, probably dictionaries
     """
     import fastavro
-    header['meta'] = json.loads(header['meta'])  # TODO: remove once distributed handles nesting better
     sync = header['sync']
     if not data.endswith(sync):
         # Read delimited should keep end-of-block delimiter
@@ -168,7 +166,6 @@ def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
                                    delimiter=header['sync'], not_zero=True)
                         for fn in filenames])
 
-    header['meta'] = json.dumps(header['meta'])
     lazy_values = [do(avro_body)(b, header) for blocks in blockss
                                             for b in blocks]
 
