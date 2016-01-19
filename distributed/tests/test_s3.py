@@ -2,7 +2,8 @@ import boto3
 from dask.imperative import Value
 from distributed import Executor
 from distributed.executor import _wait
-from distributed.s3 import read_bytes, get_list_of_summary_objects, read_content_from_keys
+from distributed.s3 import (read_bytes, get_list_of_summary_objects,
+        read_content_from_keys, get_s3)
 from distributed.utils import get_ip
 from distributed.utils_test import gen_cluster
 
@@ -55,7 +56,7 @@ def test_list_summary_object_with_prefix_and_delimiter():
                                      u'nested/nested2/file2']
 
 
-@gen_cluster(timeout=60)
+@gen_cluster()
 def test_read_bytes(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -66,7 +67,7 @@ def test_read_bytes(s, a, b):
     assert set(results) == set(files.values())
 
 
-@gen_cluster(timeout=60)
+@gen_cluster()
 def test_read_bytes_lazy(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -78,3 +79,10 @@ def test_read_bytes_lazy(s, a, b):
     results = yield e._gather(results)
 
     assert set(results) == set(files.values())
+
+
+def test_get_s3():
+    assert get_s3(True) is get_s3(True)
+    assert get_s3(False) is get_s3(False)
+    assert get_s3(True) is not get_s3(False)
+    assert 'boto3' in type(get_s3(True)).__module__

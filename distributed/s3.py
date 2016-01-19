@@ -6,13 +6,26 @@ from botocore.handlers import disable_signing
 
 DEFAULT_PAGE_LENGTH = 1000
 
+_conn = {True: None, False: None}
+
+def get_s3(anon):
+    """ Get S3 connection
+
+    Caches connection for future use
+    """
+    if not _conn[anon]:
+        s3 = boto3.resource('s3')
+        if anon:
+            s3.meta.client.meta.events.register('choose-signer.s3.*',
+                    disable_signing)
+        _conn[anon] = s3
+    return _conn[anon]
+
 
 def get_list_of_summary_objects(bucket_name, prefix='', delimiter='',
         page_size=DEFAULT_PAGE_LENGTH, anon=False):
-    s3 = boto3.resource('s3')
-    if anon:
-        s3.meta.client.meta.events.register('choose-signer.s3.*',
-                disable_signing)
+    s3 = get_s3(anon)
+
     L = list(s3.Bucket(bucket_name)
                .objects.filter(Prefix=prefix, Delimiter=delimiter)
                .page_size(page_size))
@@ -20,12 +33,7 @@ def get_list_of_summary_objects(bucket_name, prefix='', delimiter='',
 
 
 def read_content_from_keys(bucket, key, anon=False):
-    import boto3
-    s3 = boto3.resource('s3')
-    if anon:
-        s3.meta.client.meta.events.register('choose-signer.s3.*',
-                disable_signing)
-
+    s3 = get_s3(anon)
     return s3.Object(bucket, key).get()['Body'].read()
 
 
