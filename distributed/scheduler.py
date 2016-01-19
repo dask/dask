@@ -1405,9 +1405,18 @@ def cover_aliases(dsk, new_keys):
 
 
 def execute_task(task):
-    """ Evaluate a nested task """
+    """ Evaluate a nested task
+
+    >>> inc = lambda x: x + 1
+    >>> execute_task((inc, 1))
+    2
+    >>> execute_task((sum, [1, 2, (inc, 3)]))
+    7
+    """
     if istask(task):
         func, args = task[0], task[1:]
         return func(*map(execute_task, args))
+    elif isinstance(task, list):
+        return list(map(execute_task, task))
     else:
         return task
