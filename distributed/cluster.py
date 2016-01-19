@@ -149,7 +149,7 @@ def async_ssh(cmd_dict):
 
 
 def start_scheduler(logdir, addr, port, ssh_username, ssh_port, ssh_private_key):
-    cmd = 'dscheduler --port {port} --strict-port'.format(port=port, logdir=logdir)
+    cmd = 'dscheduler --port {port}'.format(port=port, logdir=logdir)
 
     # Optionally re-direct stdout and stderr to a logfile
     if logdir is not None:

@@ -52,7 +52,7 @@ class Worker(Server):
         Dictionary mapping keys to actual values
     * **active:** ``{key}``:
         Set of keys currently under computation
-    * **ncores::* ``int``:
+    * **ncores:** ``int``:
         Number of cores used by this worker process
     * **executor:** ``concurrent.futures.ThreadPoolExecutor``:
         Executor used to perform computation
