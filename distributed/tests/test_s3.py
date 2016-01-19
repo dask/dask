@@ -31,12 +31,20 @@ def test_get_list_of_summary_objects():
     assert len(L) == 2
     assert list(map(lambda o: o.key, L)) == sorted(list(files))
 
+    L2 = get_list_of_summary_objects('s3://' + test_bucket_name, prefix='/test/accounts',
+                                    anon=True)
+
+    assert L == L2
+
 
 def test_read_keys_from_bucket():
     for k, data in files.items():
         file_contents = read_content_from_keys('distributed-test', k, anon=True)
 
         assert file_contents == data
+
+    assert (read_content_from_keys('s3://distributed-test', k, anon=True) ==
+            read_content_from_keys('distributed-test', k, anon=True))
 
 
 def test_list_summary_object_with_prefix_and_delimiter():
@@ -72,7 +80,7 @@ def test_read_bytes_lazy(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    values = read_bytes(test_bucket_name, prefix='test/', lazy=True, anon=True)
+    values = read_bytes(test_bucket_name, 'test/', lazy=True, anon=True)
     assert all(isinstance(v, Value) for v in values)
 
     results = e.compute(*values, sync=False)
