@@ -24,7 +24,8 @@ def get_block_locations(hdfs, filename):
             for block in hdfs.get_block_locations(fn)]
 
 
-def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_auth):
+def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
+               not_zero=False, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
     Parameters
@@ -34,6 +35,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_
     executor: Executor (optional)
         defaults to most recently created executor
     hdfs: HDFileSystem
+    not_zero: force seek of start-of-file delimiter, discarding header
     **hdfs_auth: keyword arguments
         Extra keywords to send to ``hdfs3.HDFileSystem``
 
@@ -47,6 +49,8 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_
     blocks = get_block_locations(hdfs, fn)
     filenames = [d['filename'] for d in blocks]
     offsets = [d['offset'] for d in blocks]
+    if not_zero:
+        offsets = [max([o, 1]) for o in offsets]
     lengths = [d['length'] for d in blocks]
     workers = [d['hosts'] for d in blocks]
     names = ['read-binary-%s-%d-%d' % (fn, offset, length)
@@ -105,81 +109,40 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
         df = yield _futures_to_dask_dataframe(futures)
         raise gen.Return(df)
 
-def avro_header(f):
-    import json
+def avro_body(data, av):
     import fastavro._reader as fa
-
-    f.seek(0)
-    header = fa.read_data(f, fa.HEADER_SCHEMA)
-    metadata = dict((k, fa.btou(v)) for k, v in fa.iteritems(header['meta']))
-    schema =  json.loads(metadata['avro.schema'])
-    codec = metadata.get('avro.codec', 'null')
-    
-    fa.acquaint_schema(schema, fa.READERS)
-    sync_marker = header['sync']
-    
-    read_block = fa.BLOCK_READERS.get(codec)
-    if not read_block:
-        raise ValueError('Unrecognized codec: %r' % codec)
-    return schema, sync_marker, f.tell(), codec
-
-def avro_body(data, schema, sync_marker, codec):
-    import fastavro._reader as fa
-
-    if not data.endswith(sync_marker):
+    sync = av._header['sync']
+    if not data.endswith(sync):
         ## Read delimited should keep end-of-block delimiter
-        data = data + sync_marker
+        data = data + sync
     stream = io.BytesIO(data)
-    block_count = 0
-    read_block = fa.BLOCK_READERS.get(codec)
-    while True:
-        block_count = fa.read_long(stream, None)
-        block_fo = read_block(stream)    
-        for i in fa.xrange(block_count):
-            yield fa.read_data(block_fo, schema, None)    
-        fa.skip_sync(stream, sync_marker)
+    return list(fa._iter_avro(stream, av._header, av.codec, av.schema, None))
 
-def avro_to_df(b, schema, marker, codec):
+def avro_to_df(b, av):
     import pandas as pd
-    return pd.DataFrame(data=avro_body(b, schema, marker, codec))
+    return pd.DataFrame(data=avro_body(b, av))
 
 @gen.coroutine
 def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
     from hdfs3 import HDFileSystem
     from dask import do
+    import fastavro
     hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
     filenames = hdfs.glob(fn)
     blockss = []
-    for fn in filenames:
-        f = hdfs.open(fn)
-        schema, marker, offset, codec = avro_header(f)
-        blocks = hdfs.get_block_locations(fn)
-        offsets = [d['offset'] for d in blocks]
-        offsets[0] = offset - len(marker)
-        lengths = [d['length'] for d in blocks]
-        workers = [d['hosts'] for d in blocks]
-        names = ['read-binary-%s-%d-%d' % (fn, offset, length)
-            for fn, offset, length in zip(filenames, offsets, lengths)]
-
-        if lazy:
-            restrictions = dict(zip(names, workers))
-            executor._send_to_scheduler({'op': 'update-graph',
-                                        'dsk': {},
-                                        'keys': [],
-                                        'restrictions': restrictions,
-                                        'loose_restrictions': set(names)})
-            blockss.extend([Value(name, [{name: (hdfs.read_block, fn, offset, length, marker)}])
-                      for name, fn, offset, length in zip(names, filenames, offsets, lengths)])
-        else:
-            blockss.extend(executor.map(hdfs.read_block, filenames, offsets, lengths,
-                                delimiter=marker, workers=workers, allow_other_workers=True))
-    logger.debug("Read %d blocks of binary bytes from %s", len(blocks), fn)
-
-    dfs1 = [do(avro_to_df)(b, schema, marker, codec) for b in blockss]
+    with hdfs.open(filenames[0]) as f:
+        av = fastavro.reader(f)
+        sync = av._header['sync']
+    filenames = hdfs.glob(fn)
+    blockss = [read_bytes(fn, executor, hdfs, lazy=True, delimiter=sync)
+               for fn in filenames]
+                   
+    
+    dfs1 = [do(avro_to_df)(b, av) for b in blockss]
     if lazy:
         from dask.dataframe import from_imperative
-        names = [c['name'] for c in schema['fields']]
+        names = [c['name'] for c in av.schema['fields']]
         raise gen.Return(from_imperative(dfs1, names))
     else:
         futures = executor.compute(*dfs1)
