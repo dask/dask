@@ -893,6 +893,13 @@ class Series(_Frame):
         """ Return data type """
         return self.head().dtype
 
+    def __getattr__(self, key):
+        head = self.head()
+        if key == 'cat' and isinstance(head.dtype, pd.core.dtypes.CategoricalDtype):
+            return head.cat
+        else:
+            raise AttributeError("'Series' object has no attribute %r" % key)
+
     @property
     def column_info(self):
         """ Return Series.name """
