@@ -1801,3 +1801,27 @@ def test_cumulative():
     for axis in [0, 1, 2]:
         eq(x.cumsum(axis=axis), a.cumsum(axis=axis))
         eq(x.cumprod(axis=axis), a.cumprod(axis=axis))
+
+
+def test_tril_triu():
+    A = np.random.randn(20, 20)
+    for chunk in [5, 4]:
+        dA = da.from_array(A, (chunk, chunk))
+
+        assert np.allclose(da.triu(dA).compute(), np.triu(A))
+        assert np.allclose(da.tril(dA).compute(), np.tril(A))
+
+        for k in [-25, -20, -19, -15, -14, -9, -8, -6, -5, -1,
+                  1, 4, 5, 6, 8, 10, 11, 15, 16, 19, 20, 21]:
+            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
+            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
+
+def test_tril_triu_errors():
+    A = np.random.random_integers(0, 10, (10, 10, 10))
+    dA = da.from_array(A, chunks=(5, 5, 5))
+    assert raises(ValueError, lambda: da.triu(dA))
+
+    A = np.random.random_integers(0, 10, (30, 35))
+    dA = da.from_array(A, chunks=(5, 5))
+    assert raises(NotImplementedError, lambda: da.triu(dA))
+
