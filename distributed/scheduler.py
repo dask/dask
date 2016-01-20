@@ -721,6 +721,7 @@ class Scheduler(Server):
                 msg = yield next_message()  # in_queue.get()
             except Exception as e:
                 logger.exception(e)
+                continue
             logger.debug("scheduler receives message %s", msg)
             op = msg.pop('op')
 

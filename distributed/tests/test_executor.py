@@ -1641,4 +1641,3 @@ def test_badly_serialized_input(s, a, b):
 
     L = yield e._gather(futures)
     assert list(L) == list(map(inc, range(10)))
-    import pdb; pdb.set_trace()
