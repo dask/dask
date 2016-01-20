@@ -2511,3 +2511,12 @@ def test_to_imperative():
     assert isinstance(b, Value)
 
     assert eq(a.compute(), df.iloc[:2])
+
+
+def test_dataframe_categoricals():
+    df = pd.DataFrame({'x': list('a'*5 + 'b'*5 + 'c'*5),
+                       'y': range(15)})
+    df.x = df.x.astype('category')
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert (df.x.cat.categories == pd.Index(['a', 'b', 'c'])).all()
+    assert not hasattr(df.y, 'cat')

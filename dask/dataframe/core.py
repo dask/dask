@@ -893,6 +893,13 @@ class Series(_Frame):
         """ Return data type """
         return self.head().dtype
 
+    def __getattr__(self, key):
+        if key == 'cat':
+            head = self.head()
+            if isinstance(head.dtype, pd.core.dtypes.CategoricalDtype):
+                return head.cat
+        raise AttributeError("'Series' object has no attribute %r" % key)
+
     @property
     def column_info(self):
         """ Return Series.name """
@@ -1278,12 +1285,9 @@ class DataFrame(_Frame):
 
     def __getattr__(self, key):
         try:
-            return object.__getattribute__(self, key)
-        except AttributeError as e:
-            try:
-                return self[key]
-            except KeyError as e:
-                raise AttributeError(e)
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(e)
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
@@ -1959,12 +1963,9 @@ class GroupBy(_GroupBy):
 
     def __getattr__(self, key):
         try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            try:
-                return self[key]
-            except KeyError:
-                raise AttributeError()
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(e)
 
 
 class SeriesGroupBy(_GroupBy):
@@ -2557,16 +2558,14 @@ class Accessor(object):
                       dir(self.ns)))
 
     def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            if key in dir(self.ns):
-                if isinstance(getattr(self.ns, key), property):
-                    return self._property_map(key)
-                else:
-                    return partial(self._function_map, key)
+        if key in dir(self.ns):
+            if isinstance(getattr(self.ns, key), property):
+                return self._property_map(key)
             else:
-                raise
+                return partial(self._function_map, key)
+        else:
+            raise AttributeError(key)
+
 
 class DatetimeAccessor(Accessor):
     """ Accessor object for datetimelike properties of the Series values.
