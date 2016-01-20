@@ -6,6 +6,7 @@ pytest.importorskip('numpy')
 import numpy as np
 import dask.array as da
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
+from dask.utils import raises
 
 
 def same_keys(a, b):
@@ -141,3 +142,87 @@ def test_svd_compressed_deterministic():
     u2, s2, vt2 = svd_compressed(x, 3, seed=1234)
 
     assert all(da.compute((u == u2).all(), (s == s2).all(), (vt == vt2).all()))
+
+
+
+def _check_lu_result(p, l, u, A):
+    assert np.allclose(p.dot(l).dot(u).compute(), A)
+
+    # check triangulars
+    la = l.compute()
+    assert np.allclose(la, np.tril(la))
+    ua = u.compute()
+    assert np.allclose(ua, np.triu(ua))
+    return True
+
+
+def test_lu_1():
+    import scipy.linalg
+
+    A1 = np.array([[7, 3, -1, 2], [3, 8, 1, -4],
+                  [-1, 1, 4, -1], [2, -4, -1, 6] ])
+
+    A2 = np.array([[ 7,  0,  0,  0,  0,  0],
+                   [ 0,  8,  0,  0,  0,  0],
+                   [ 0,  0,  4,  0,  0,  0],
+                   [ 0,  0,  0,  6,  0,  0],
+                   [ 0,  0,  0,  0,  3,  0],
+                   [ 0,  0,  0,  0,  0,  5]])
+    # without shuffle
+    for A, chunk in zip([A1, A2], [2, 2]):
+        dA = da.from_array(A, chunks=(chunk, chunk))
+        p, l, u = scipy.linalg.lu(A)
+        dp, dl, du = da.linalg.lu(dA)
+        assert np.allclose(p, dp.compute())
+        assert np.allclose(l, dl.compute())
+        assert np.allclose(u, du.compute())
+        assert _check_lu_result(dp, dl, du, A)
+
+    A3 = np.array([[ 7,  3,  2,  1,  4,  1],
+                   [ 7, 11,  5,  2,  5,  2],
+                   [21, 25, 16, 10, 16,  5],
+                   [21, 41, 18, 13, 16, 11],
+                   [14, 46, 23, 24, 21, 22],
+                   [ 0, 56, 29, 17, 14, 8]])
+
+    # with shuffle
+    for A, chunk in zip([A3], [2]):
+        dA = da.from_array(A, chunks=(chunk, chunk))
+        p, l, u = scipy.linalg.lu(A)
+        dp, dl, du = da.linalg.lu(dA)
+        assert _check_lu_result(dp, dl, du, A)
+
+
+def test_lu_2():
+
+    import scipy.linalg
+
+    for size in (10, 20, 30, 50):
+        np.random.seed(10)
+        A = np.random.random_integers(0, 10, (size, size))
+
+        dA = da.from_array(A, chunks=(5, 5))
+        dp, dl, du = da.linalg.lu(dA)
+        assert _check_lu_result(dp, dl, du, A)
+
+    for size in (50, 100, 200):
+        np.random.seed(10)
+        A = np.random.random_integers(0, 10, (size, size))
+
+        dA = da.from_array(A, chunks=(25, 25))
+        dp, dl, du = da.linalg.lu(dA)
+        assert _check_lu_result(dp, dl, du, A)
+
+
+def test_lu_errors():
+    A = np.random.random_integers(0, 10, (10, 10, 10))
+    dA = da.from_array(A, chunks=(5, 5, 5))
+    assert raises(ValueError, lambda: da.linalg.lu(dA))
+
+    A = np.random.random_integers(0, 10, (10, 8))
+    dA = da.from_array(A, chunks=(5, 4))
+    assert raises(ValueError, lambda: da.linalg.lu(dA))
+
+    A = np.random.random_integers(0, 10, (20, 20))
+    dA = da.from_array(A, chunks=(5, 4))
+    assert raises(ValueError, lambda: da.linalg.lu(dA))
