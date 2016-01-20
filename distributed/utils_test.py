@@ -422,3 +422,18 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
 
         return test_func
     return _
+
+
+@contextmanager
+def make_hdfs():
+    from hdfs3 import HDFileSystem
+    hdfs = HDFileSystem(host='localhost', port=8020)
+    if hdfs.exists('/tmp/test'):
+        hdfs.rm('/tmp/test')
+    hdfs.mkdir('/tmp/test')
+
+    try:
+        yield hdfs
+    finally:
+        if hdfs.exists('/tmp/test'):
+            hdfs.rm('/tmp/test')
