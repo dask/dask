@@ -9,8 +9,6 @@ data dependencies between tasks.
 
 See :doc:`the quickstart <quickstart>` to get started.
 
-*Disclaimer: Distributed is new (started 2015-09-12) and under active
-development.  Please pardon our dust.*
 
 Motivation
 ----------
