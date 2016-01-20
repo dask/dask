@@ -191,7 +191,8 @@ def fill_kwargs(fn, **kwargs):
 
     kwargs['dtype'] = dtype
 
-    return head.columns.map(lambda s: s.strip()), kwargs
+    return (head.columns.map(lambda s: s.strip() if isinstance(s, str) else s),
+            kwargs)
 
 
 @wraps(pd.read_csv)

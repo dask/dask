@@ -476,13 +476,12 @@ class _Frame(Base):
             Fraction of axis items to return.
         replace: boolean, optional
             Sample with or without replacement. Default = False.
-        random_state: int or np.random.RandomState
-            If int create a new RandomState with this as the seed
-        Otherwise draw from the passed RandomState
+        random_state: int or ``np.random.RandomState``
+            If int we create a new RandomState with this as the seed
+            Otherwise we draw from the passed RandomState
 
         See Also
         --------
-
             dask.DataFrame.random_split, pd.DataFrame.sample
         """
 
@@ -514,6 +513,14 @@ class _Frame(Base):
     def to_csv(self, filename, **kwargs):
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
+
+    def to_imperative(self):
+        """ Convert dataframe into dask Values
+
+        Returns a list of values, one value per partition.
+        """
+        from ..imperative import Value
+        return [Value(k, [self.dask]) for k in self._keys()]
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -886,15 +893,17 @@ class Series(_Frame):
         """ Return data type """
         return self.head().dtype
 
+    def __getattr__(self, key):
+        if key == 'cat':
+            head = self.head()
+            if isinstance(head.dtype, pd.core.dtypes.CategoricalDtype):
+                return head.cat
+        raise AttributeError("'Series' object has no attribute %r" % key)
+
     @property
     def column_info(self):
         """ Return Series.name """
         return self.name
-
-    @property
-    def columns(self):
-        """ Return 1 element tuple containing the name """
-        return (self.name,)
 
     @property
     def nbytes(self):
@@ -1276,12 +1285,9 @@ class DataFrame(_Frame):
 
     def __getattr__(self, key):
         try:
-            return object.__getattribute__(self, key)
-        except AttributeError as e:
-            try:
-                return self[key]
-            except KeyError as e:
-                raise AttributeError(e)
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(e)
 
     def __dir__(self):
         return sorted(set(dir(type(self)) + list(self.__dict__) +
@@ -1957,12 +1963,9 @@ class GroupBy(_GroupBy):
 
     def __getattr__(self, key):
         try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            try:
-                return self[key]
-            except KeyError:
-                raise AttributeError()
+            return self[key]
+        except KeyError as e:
+            raise AttributeError(e)
 
 
 class SeriesGroupBy(_GroupBy):
@@ -2209,7 +2212,8 @@ def quantile(df, q):
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
-    assert len(df.columns) == 1
+    assert (isinstance(df, DataFrame) and len(df.columns) == 1 or
+            isinstance(df, Series))
     from dask.array.percentile import _percentile, merge_percentiles
 
     # currently, only Series has quantile method
@@ -2554,16 +2558,14 @@ class Accessor(object):
                       dir(self.ns)))
 
     def __getattr__(self, key):
-        try:
-            return object.__getattribute__(self, key)
-        except AttributeError:
-            if key in dir(self.ns):
-                if isinstance(getattr(self.ns, key), property):
-                    return self._property_map(key)
-                else:
-                    return partial(self._function_map, key)
+        if key in dir(self.ns):
+            if isinstance(getattr(self.ns, key), property):
+                return self._property_map(key)
             else:
-                raise
+                return partial(self._function_map, key)
+        else:
+            raise AttributeError(key)
+
 
 class DatetimeAccessor(Accessor):
     """ Accessor object for datetimelike properties of the Series values.

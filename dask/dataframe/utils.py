@@ -189,8 +189,6 @@ def _check_dask(dsk, check_names=True):
             assert isinstance(result, pd.Index)
         elif isinstance(dsk, dd.Series):
             assert isinstance(result, pd.Series)
-            assert isinstance(dsk.columns, tuple)
-            assert len(dsk.columns) == 1
             if check_names:
                 assert dsk.name == result.name, (dsk.name, result.name)
         elif isinstance(dsk, dd.DataFrame):

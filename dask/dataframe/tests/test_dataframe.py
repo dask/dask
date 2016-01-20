@@ -103,9 +103,9 @@ def test_attributes():
 def test_column_names():
     assert d.columns == ('a', 'b')
     assert d[['b', 'a']].columns == ('b', 'a')
-    assert d['a'].columns == ('a',)
-    assert (d['a'] + 1).columns == ('a',)
-    assert (d['a'] + d['b']).columns == (None,)
+    assert d['a'].name == 'a'
+    assert (d['a'] + 1).name == 'a'
+    assert (d['a'] + d['b']).name == None
 
 
 def test_set_index():
@@ -2500,3 +2500,23 @@ def test_from_imperative():
 
     assert s.compute().name == s.name
     assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
+
+
+def test_to_imperative():
+    from dask.imperative import Value
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    a, b = ddf.to_imperative()
+    assert isinstance(a, Value)
+    assert isinstance(b, Value)
+
+    assert eq(a.compute(), df.iloc[:2])
+
+
+def test_dataframe_categoricals():
+    df = pd.DataFrame({'x': list('a'*5 + 'b'*5 + 'c'*5),
+                       'y': range(15)})
+    df.x = df.x.astype('category')
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert (df.x.cat.categories == pd.Index(['a', 'b', 'c'])).all()
+    assert not hasattr(df.y, 'cat')
