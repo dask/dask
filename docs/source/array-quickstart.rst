@@ -37,64 +37,22 @@ numbers close to 6, similar to:
              [ 6.00780242,  6.03833159,  6.0115587 ,  6.06790745],
              [ 5.9882688 ,  5.91056546,  5.9793473 ,  5.93219086]])
 
-Array Creation
---------------
-Dask Arrays can be created from functions that return NumPy-like objects.  NumPy
-arrays themselves and other iterable objects like those from reading HDF5 and
-NetCDF can be easily converted into Dask Arrays.
-
-For example, if you create a HDF5 data file with some random numbers:
-
-.. code-block:: Python
-
-  import h5py
-  import numpy as np
-
-  m = np.random.random(size = (10000, 1000))
-
-  with h5py.File('data.hdf5', 'w') as wf:
-      g = wf.create_group('group1')
-      g.create_dataset('dataset', data = m)
-
-You can load the data into a Dask Array by means of the function
-``from_array``:
-
-.. code-block:: Python
-
-  import h5py
-  import dask.array as da
-
-  f = h5py.File('data.hdf5', 'r')
-  d = f['group1/dataset']
-  dsk = da.from_array(d, chunks = (100, 100))
-
-The ``chunks`` argument tells ``dask.array`` how to break up the underlying
-array into chunks. For recommendations on how to choose chunk sizes see
-:doc:`array-creation`.
-
-You can also use ``from_array`` with netCDF datasets:
-
-.. code-block:: Python
-
-  from netCDF4 import Dataset
-  import dask.array as da
-
-  rootgp = Dataset('data.nc', 'r')
-  nds = rootgp.variables['data']
-  d = da.from_array(nds, chunks=(100, 100))
-  rootgp.close()
-
-There are more advanced methods to create a ``dask.array``, for example you can
-:doc:`stack and concatenate </stack>` two existing arrays into a new one.
-
+For more information on how to create Dask Arrays see: :doc:`array-creation`.
 
 Basics
 ------
 
 Working with Dask Arrays is straightforward since they inherit most of the
 functionalities from Numpy's ndarrays. The one special thing about a
-``dask.array`` is that you have to call ``compute()`` to trigger the computation
-process.
+``dask.array`` is that you have to call ``compute()`` to trigger the
+computation process.
+
+A Dask Array is a :doc:`Dask Graph </spec>` with a special structure. You can
+do operations with Dask Arrays, but the result of calling ``compute`` is not a
+Dask Array, in most cases it will return a Numpy ndarray or a numeric type.
+A consequence is that even tough the data involved in the computations
+can be larger than memory, you have to ensure that your result will fit in
+memory.
 
 The example below shows some of the features supported by Dask Arrays:
 
@@ -115,5 +73,4 @@ The example below shows some of the features supported by Dask Arrays:
   # Matrix multiplication
   d = da.dot(a, b).compute()
 
-Fancy indexing and :doc:`slicing` are also supported. For array operations that
-require communication between adjacent blocks see :doc:`ghost`.
+Fancy indexing and :doc:`slicing` are also supported. 
