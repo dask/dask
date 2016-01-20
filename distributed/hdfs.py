@@ -82,7 +82,7 @@ def buffer_to_csv(b, **kwargs):
 
 @gen.coroutine
 def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
-        header=True, names=None, **kwargs):
+        header=True, names=None, collection=True, **kwargs):
     from hdfs3 import HDFileSystem
     from dask import do
     import pandas as pd
@@ -103,12 +103,37 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
     dfs2 = sum(dfs1, [])
     if lazy:
         from dask.dataframe import from_imperative
-        raise gen.Return(from_imperative(dfs2, columns=names))
+        if collection:
+            raise gen.Return(from_imperative(dfs2, columns=names))
+        else:
+            raise gen.Return(dfs2)
+
     else:
         futures = executor.compute(*dfs2)
         from distributed.collections import _futures_to_dask_dataframe
-        df = yield _futures_to_dask_dataframe(futures)
-        raise gen.Return(df)
+        if collection:
+            df = yield _futures_to_dask_dataframe(futures)
+            raise gen.Return(df)
+        else:
+            raise gen.Return(futures)
+
+
+def read_csv(fn, executor=None, hdfs=None, lazy=False, **kwargs):
+    """ Read CSV encoded data from bytes on HDFS
+
+    Parameters
+    ----------
+    fn: string
+        filename or globstring of avro files on HDFS
+    lazy: boolean, optional
+        If True return dask Value objects
+
+    Returns
+    -------
+    List of futures of Python objects
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _read_csv, fn, executor, hdfs, lazy, **kwargs)
 
 
 def avro_body(data, header):

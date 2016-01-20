@@ -9,7 +9,7 @@ from dask.imperative import Value
 from distributed.utils_test import gen_cluster, cluster, loop, make_hdfs
 from distributed.utils import get_ip
 from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
-        _read_csv, _read_avro, avro_body, read_avro)
+        _read_csv, read_csv)
 from distributed import Executor
 from distributed.executor import _wait, Future
 
@@ -202,6 +202,31 @@ def test_write_bytes(s, a, b):
         yield _wait(futures)
 
         assert len(hdfs.ls('/tmp/test/data2/')) == 3
+
+
+def test_read_csv_sync(loop):
+    import dask.dataframe as dd
+    import pandas as pd
+    with make_hdfs() as hdfs:
+        with hdfs.open('/tmp/test/1.csv', 'w') as f:
+            f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
+
+        with hdfs.open('/tmp/test/2.csv', 'w') as f:
+            f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
+
+        with cluster(nworkers=1) as (s, [a]):
+            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+                futures = read_csv('/tmp/test/*.csv', lineterminator='\n',
+                                   header=True, collection=False)
+                assert all(isinstance(f, Future) for f in futures)
+                L = e.gather(futures)
+                assert isinstance(L[0], pd.DataFrame)
+                assert list(L[0].columns) == ['name', 'amount', 'id']
+
+                df = read_csv('/tmp/test/*.csv', lineterminator='\n',
+                              header=True, collection=True)
+                assert isinstance(df, dd.DataFrame)
+                assert list(df.head().iloc[0]) == ['Alice', 100, 1]
 
 
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60)

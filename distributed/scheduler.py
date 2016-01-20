@@ -717,7 +717,10 @@ class Scheduler(Server):
         put({'op': 'stream-start'})
 
         while True:
-            msg = yield next_message()  # in_queue.get()
+            try:
+                msg = yield next_message()  # in_queue.get()
+            except Exception as e:
+                logger.exception(e)
             logger.debug("scheduler receives message %s", msg)
             op = msg.pop('op')
 

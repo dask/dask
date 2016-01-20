@@ -1620,3 +1620,25 @@ def test_failed_worker_without_warning(s, a, b):
     assert all(len(keys) > 0 for keys in s.has_what.values())
 
     assert not (set(ncores2) & set(s.ncores))  # no overlap
+
+
+class BadlySerializedObject(object):
+    def __getstate__(self):
+        return 1
+    def __setstate__(self, state):
+        raise TypeError("hello!")
+
+
+@gen_cluster()
+def test_badly_serialized_input(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    o = BadlySerializedObject()
+
+    future = e.submit(inc, o)
+    futures = e.map(inc, range(10))
+
+    L = yield e._gather(futures)
+    assert list(L) == list(map(inc, range(10)))
+    import pdb; pdb.set_trace()
