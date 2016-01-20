@@ -49,7 +49,7 @@ computation process.
 
 A Dask Array is a :doc:`Dask Graph </spec>` with a special structure. You can
 do operations with Dask Arrays, but the result of calling ``compute`` is not a
-Dask Array, in most cases it will return a Numpy ndarray or a numeric type.
+Dask Array. In most cases it will return a Numpy ndarray or a numeric type.
 A consequence is that even tough the data involved in the computations
 can be larger than memory, you have to ensure that your result will fit in
 memory.

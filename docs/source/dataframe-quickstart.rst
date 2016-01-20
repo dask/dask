@@ -17,7 +17,7 @@ dataframe of random numbers:
 
 .. code:: Python
 
-   import dask.dataframe
+   import dask.dataframe as dd
    import numpy as np
    df = dd.from_array(np.random.randn(10,4))
    print(df.compute())
@@ -27,7 +27,7 @@ and 10 rows similar to:
 
 .. code::
 
-   0         1         2         3
+             0         1         2         3
    0  0.866856  1.046474  0.740312 -0.850970
    1  0.860024 -1.425839 -0.990913  0.503083
    2 -0.010060  0.055972  0.687935  0.527395
@@ -44,17 +44,17 @@ For more information on how to create Dask DataFrames see:
 
 Basics
 ------
-Dask.dataframe supports a small but well used subset of the Pandas API. 
+Dask.dataframe supports a small but powerful subset of the Pandas API. 
 
 A Dask DataFrame is a :doc:`Dask Graph </spec>` with a special structure. You
-can do operations with Dask DataFrames but you have to call ``compute()`` to
+can do operations with Dask DataFrames but you must call ``compute()`` to
 trigger the computation process. The result of calling ``compute`` is not a
-Dask DataFrame, for operations that return a dataframe it will be a Pandas
-DataFrame, aggregation operations will return other types.  A consequence
+Dask DataFrame. For operations that return a dataframe it will be a Pandas
+DataFrame, and aggregation operations will return other types.  A consequence
 is that even tough the data involved in the computations can be larger than
-memory, you have to ensure that your result will fit in memory.
+memory, you must ensure that your result will fit in memory.
 
-I you are already familiar with Pandas, using Dask DataFrame is
+If you are already familiar with Pandas, using Dask DataFrame is
 straightforward. For example, if you want to read a csv file:
 
 .. code::
@@ -68,7 +68,7 @@ straightforward. For example, if you want to read a csv file:
    6,f
 
 you can use ``read_csv`` from ``dask.dataframe`` to load the data into a Dask
-DataFrame. Many other Pandas functions are also supported, some of them are:
+DataFrame. Many other Pandas functions are also supported, including these:
 
 .. code-block:: Python
 
@@ -94,6 +94,7 @@ DataFrame. Many other Pandas functions are also supported, some of them are:
    df.x.var().compute()
 
    tf = df.groupby('x').y.max()
+   tf.compute()
 
    # Value counts
    cf = df.x.value_counts()
