@@ -27,6 +27,7 @@ if PY3:
         else:
             return func(*args)
     range = range
+    reduce = functools.reduce
     operator_div = operator.truediv
 
     def _getargspec(func):
@@ -47,6 +48,7 @@ else:
     long = long
     apply = apply
     range = xrange
+    reduce = reduce
     operator_div = operator.div
 
     def _getargspec(func):

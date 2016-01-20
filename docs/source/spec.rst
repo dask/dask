@@ -70,13 +70,20 @@ their computed values (like ``1``, and ``2``) *before* calling the ``add`` funct
 Entry Point - The ``get`` function
 ----------------------------------
 
-The ``get`` function serves as entry point to computation.
-This function gets the value associated to the given key.  That key may
-refer to stored data, as is the case with ``'x'``, or a task as is the case with
-``'z'``.  In the latter case, ``get`` should perform all necessary computation
-to retrieve the computed value.
+The ``get`` function serves as entry point to computation for all
+:doc:`schedulers <scheduler-overview>`.  This function gets the value
+associated to the given key.  That key may refer to stored data, as is the case
+with ``'x'``, or a task as is the case with ``'z'``.  In the latter case,
+``get`` should perform all necessary computation to retrieve the computed
+value.
+
+.. _scheduler: scheduler-overview.rst
 
 .. code-block:: python
+
+   >>> from dask.threaded import get
+
+   >>> from operator import add
 
    >>> dsk = {'x': 1,
    ...        'y': 2,
@@ -110,7 +117,7 @@ Because we accept lists of keys as keys, we support nested lists.
    [[1, 2], [3, 6]]
 
 Internally ``get`` can be arbitrarily complex, calling out to distributed
-computing, using caches, etc.
+computing, using caches, and so on.
 
 
 Why use tuples

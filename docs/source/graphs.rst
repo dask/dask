@@ -8,7 +8,7 @@ Motivation
 ----------
 
 Normally, humans write programs and then compilers/interpreters interpret them
-(e.g.  ``python``, ``javac``, ``clang``).  Sometimes humans disagree with how
+(for example  ``python``, ``javac``, ``clang``).  Sometimes humans disagree with how
 these compilers/interpreters choose to interpret and execute their programs.
 In these cases humans often bring the analysis, optimization, and execution of
 code into the code itself.
@@ -19,16 +19,16 @@ structure of our program explicitly as data within the program itself.
 
 A common approach to parallel execution in user-space is *task scheduling*.  In
 task scheduling we break our program into many medium-sized tasks or units of
-computation (often a function call on a non-trivial amount of data).  We
+computation, often a function call on a non-trivial amount of data.  We
 represent these tasks as nodes in a graph with edges between nodes if one task
 depends on data produced by another.  We call upon a *task scheduler* to
 execute this graph in a way that respects these data dependencies and leverages
-parallelism where possible (e.g. multiple independent tasks can be run
-simultaneously.)
+parallelism where possible, multiple independent tasks can be run
+simultaneously.
 
 Many solutions exist.  This is a common approach in parallel execution
 frameworks.  Often task scheduling logic hides within other larger frameworks
-(Luigi, Storm, Spark, IPython Parallel, etc.) and so is often reinvented.
+(Luigi, Storm, Spark, IPython Parallel, and so on) and so is often reinvented.
 
 Dask is a specification that encodes task schedules with minimal incidental
 complexity using terms common to all Python projects, namely dicts, tuples,
@@ -82,6 +82,5 @@ graphs.  Each scheduler works differently, providing different performance
 guarantees and operating in different contexts.  These implementations are not
 special and others can write different schedulers better suited to other
 applications or architectures easily.  Systems that emit dask graphs (like
-``dask.array``, ``dask.bag``, etc.) may leverage the appropriate scheduler for
+``dask.array``, ``dask.bag``, and so on) may leverage the appropriate scheduler for
 the application and hardware.
-

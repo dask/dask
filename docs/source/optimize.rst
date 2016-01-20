@@ -59,7 +59,7 @@ Suppose you had a custom dask graph for doing a word counting task:
                'print3': (print_and_return, 'out3')}
 
 .. image:: images/optimize_dask1.png
-   :width: 30 %
+   :width: 65 %
    :alt: The original dask
 
 Here we're counting the occurence of the words ``'orange``, ``'apple'``, and
@@ -99,7 +99,7 @@ function:
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask2.png
-   :width: 30 %
+   :width: 60 %
    :alt: After culling
 
 Looking at the task graph above, there are multiple accesses to constants such
@@ -115,7 +115,7 @@ improve efficiency using the ``inline`` function. For example:
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask3.png
-   :width: 20 %
+   :width: 40 %
    :alt: After inlining
 
 Now we have two sets of *almost* linear task chains. The only link between them
@@ -134,7 +134,7 @@ can be used:
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask4.png
-   :width: 20 %
+   :width: 40 %
    :alt: After inlining functions
 
 Now we have a set of purely linear tasks. We'd like to have the scheduler run
@@ -151,7 +151,7 @@ One option is just to merge these linear chains into one big task using the
     word list has 2 occurrences of orange, out of 7 words
 
 .. image:: images/optimize_dask5.png
-   :width: 20 %
+   :width: 40 %
    :alt: After fusing
 
 

@@ -16,7 +16,8 @@ import numpy as np
 from toolz import merge, assoc, dissoc
 
 from ..compatibility import StringIO, unicode, range, apply
-from ..utils import textblock, file_size, get_bom, system_encoding
+from ..utils import (textblock, file_size, get_bom, system_encoding,
+                     infer_compression)
 from ..base import tokenize
 from .. import array as da
 from ..async import get_sync
@@ -27,7 +28,7 @@ from .shuffle import set_partition
 
 
 lock = Lock()
-csv_defaults = {'compression': None}
+csv_defaults = {'compression': 'infer'}
 
 
 def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
@@ -157,6 +158,9 @@ def fill_kwargs(fn, **kwargs):
             raise ValueError("No files found matching name %s" % fn)
         fn = filenames[0]
 
+    if kwargs['compression'] == 'infer':
+        kwargs['compression'] = infer_compression(fn)
+
     if 'names' not in kwargs:
         kwargs['names'] = csv_names(fn, **kwargs)
         if 'header' not in kwargs:
@@ -187,7 +191,8 @@ def fill_kwargs(fn, **kwargs):
 
     kwargs['dtype'] = dtype
 
-    return head.columns.map(lambda s: s.strip()), kwargs
+    return (head.columns.map(lambda s: s.strip() if isinstance(s, str) else s),
+            kwargs)
 
 
 @wraps(pd.read_csv)
@@ -809,3 +814,35 @@ def to_bag(df, index=False):
     dsk = dict(((name, i), (func, block)) for (i, block) in enumerate(df._keys()))
     dsk.update(df._optimize(df.dask, df._keys()))
     return Bag(dsk, name, df.npartitions)
+
+
+def from_imperative(dfs, columns, divisions=None):
+    """ Create DataFrame from many imperative objects
+
+    Parameters
+    ----------
+    dfs: list of Values
+        An iterable of dask.imperative.Value objects, such as come from dask.do
+        These comprise the individual partitions of the resulting dataframe
+    columns: list or string
+        The list of column names if the result is a DataFrame
+        Or the single column name if the result is a Series
+    divisions: list or None
+    """
+    from dask.imperative import Value
+    if isinstance(dfs, Value):
+        dfs = [dfs]
+    dsk = merge(df.dask for df in dfs)
+
+    name = 'from-imperative-' + tokenize(*dfs)
+    names = [(name, i) for i in range(len(dfs))]
+    values = [df.key for df in dfs]
+    dsk2 = dict(zip(names, values))
+
+    if divisions is None:
+        divisions = [None] * (len(dfs) + 1)
+
+    if isinstance(columns, str):
+        return Series(merge(dsk, dsk2), name, columns, divisions)
+    else:
+        return DataFrame(merge(dsk, dsk2), name, columns, divisions)

@@ -6,11 +6,8 @@ PySpark_.  Spark is growing to become a dominant name today in Big Data
 analysis alongside Hadoop, for which MRJob_ is possibly the dominant
 Python layer.
 
-Dask has several elements that appear to intersect this space and as such we are often asked, 
-"How does Dask compare with Spark?"
-
-Summary
--------
+Dask has several elements that appear to intersect this space and we are often
+asked, "How does Dask compare with Spark?"
 
 * You should probably use Spark if you have petabytes of JSON files, a simple 
   workflow, and a thousand node cluster. 
@@ -19,12 +16,15 @@ Summary
 * If you have a terabyte or less of CSV or JSON data, forget both Spark *and* 
   Dask and use Postgres_ or MongoDB_ instead.
 
-General
-------------
+Summary
+-------
 
-Dask can be installed with conda or pip, doesn't use the Java Virtual Machine (JVM), and was
-originally built to handle numeric workloads in a large single workstation very
-efficiently.
+Apache Spark is more mature and better integrates with HDFS.  It handles
+resiliency and was originally built to scale up to thousands of workers.
+
+Dask is trivially installable, doesn't use the Java Virtual Machine (JVM),
+and was originally built to handle numeric workloads in a large single
+workstation very efficiently.
 
 Apache Spark is more mature and better integrates with HDFS.  It handles
 resiliency and was originally built to scale up to thousands of workers.
@@ -38,7 +38,9 @@ Scale
 Dask began its life building out parallel algorithms for numerical array
 computations on a single computer.  As such it thinks well about low-latency
 scheduling, low memory footprints, shared memory, and efficient use of local
-disk.  That being said dask can run on a distributed cluster.
+disk.  That being said dask can run on a distributed_ cluster.
+
+.. _distributed: http://distributed.readthedocs.org/
 
 Spark began its life aimed at the thousand node cluster case.  As
 such it thinks well about worker failures and integration with data-local
@@ -83,6 +85,17 @@ and forth makes extra trips both through a distributed cluster and also through
 extra serialization layers (see py4j_) and computation layers.  Limitations
 like the Java heap size and large Java stack traces come as a surprise to users
 accustomed to native code execution.
+
+Dask has an advantage for Python users because it is itself a Python library,
+so serialization and debugging when things go wrong happens more smoothly.
+
+However, dask only benefits Python users while Spark is useful in a
+variety of JVM languages (Scala, Java, Clojure) and also has limited support in
+Python and R.  New Spark projects like the DataFrame skip serialization and
+boxed execution issues by forgoing the Python process entirely and instead have
+Python code drive native Scala code.  APIs for these libraries tend to lag a
+bit behind their Scala counterparts.
+
 
 Scope
 ~~~~~

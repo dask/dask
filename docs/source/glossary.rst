@@ -2,12 +2,9 @@ Glossary
 ========
 
 Context manager: 
-  A Python context manager uses the "with" statement to acquire a resource such 
-  as a file, network socket, database, or other mutual exclusion lock before 
-  performing an operation that requires it, and ensures that the resource is 
-  released cleanly at the end of the operation, even if the operation ends 
-  abnormally in some way, such as being interrupted by an exception. Context 
-  managers are described in `PEP 343 <https://www.python.org/dev/peps/pep-0343/>`_ 
+  Python uses context managers and the "with" statement to handle mutual exclusion 
+  locks for resources such as files, network sockets, and databases, as 
+  described in `PEP 343 <https://www.python.org/dev/peps/pep-0343/>`_ 
   and the `Python documentation <https://docs.python.org/3/library/contextlib.html>`_.
 
 Dask array:
@@ -33,11 +30,9 @@ Dask dataframe:
   threads. Dask.dataframe does not implement the complete pandas interface.
 
 GIL
-  The Global Interpreter Lock is a CPython feature that stops threads from 
-  manipulating Python objects in parallel. The GIL prevents Python from sharing
-  non thread-safe code between multiple threads.
+  CPython's `Global Interpreter Lock <https://wiki.python.org/moin/GlobalInterpreterLock>`_ 
+  synchronizes threads safely but can affect performance.
 
 Opportunistic caching: 
-  Dask's :doc:`caching` monitors tasks to measure their past computation cost, 
-  storage cost, and frequency of use, and to predict their future frequency of 
-  use, and uses this information to choose automatically which tasks to cache.
+  Dask's :doc:`caching` monitors tasks and caches them according to predicted 
+  future use.

@@ -1,4 +1,5 @@
 import gzip
+from itertools import product
 import pandas as pd
 import numpy as np
 import pandas.util.testing as tm
@@ -18,7 +19,7 @@ from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
         from_array, from_bcolz, from_dask_array)
 from dask.compatibility import StringIO, BZ2File, GzipFile
 
-from dask.utils import filetext, tmpfile, ignoring
+from dask.utils import filetext, tmpfile, ignoring, compressions
 from dask.async import get_sync
 
 from dask.dataframe.utils import eq
@@ -39,11 +40,15 @@ Frank,600
 """.strip()
 
 
-@pytest.mark.parametrize('myopen,compression',
-                         [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2')])
-def test_read_csv(myopen, compression):
+@pytest.mark.parametrize('open_comp_pair,infer',
+                         list(product([(open, None), (GzipFile, 'gzip'),
+                                       (BZ2File, 'bz2')], (True, False))))
+def test_read_csv(open_comp_pair, infer):
+    myopen, compression = open_comp_pair
     text_ = text if compression is None else text.encode()
-    with filetext(text_, open=myopen) as fn:
+    ext = dict((v, k) for (k, v) in compressions.items()).get(compression, '')
+    with filetext(text_, open=myopen, extension=ext) as fn:
+        compression = 'infer' if infer else compression
         f = dd.read_csv(fn, chunkbytes=30, compression=compression,
                 lineterminator='\n')
         assert list(f.columns) == ['name', 'amount']
@@ -611,6 +616,12 @@ def test_multiple_read_csv_has_deterministic_name():
     finally:
         os.remove('_foo.1.csv')
         os.remove('_foo.2.csv')
+
+
+def test_csv_with_integer_names():
+    with filetext('alice,1\nbob,2') as fn:
+        df = dd.read_csv(fn, header=None)
+        assert list(df.columns) == [0, 1]
 
 
 @pytest.mark.slow
