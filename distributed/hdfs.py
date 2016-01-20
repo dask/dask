@@ -2,15 +2,17 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+import json
 from math import log
 import os
+import io
 
 from dask.imperative import Value
 from tornado import gen
 from toolz import merge
 
 from .executor import default_executor
-from .utils import ignoring
+from .utils import ignoring, sync
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,8 @@ def get_block_locations(hdfs, filename):
             for block in hdfs.get_block_locations(fn)]
 
 
-def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_auth):
+def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
+               not_zero=False, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
     Parameters
@@ -33,6 +36,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_
     executor: Executor (optional)
         defaults to most recently created executor
     hdfs: HDFileSystem
+    not_zero: force seek of start-of-file delimiter, discarding header
     **hdfs_auth: keyword arguments
         Extra keywords to send to ``hdfs3.HDFileSystem``
 
@@ -46,6 +50,8 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None, **hdfs_
     blocks = get_block_locations(hdfs, fn)
     filenames = [d['filename'] for d in blocks]
     offsets = [d['offset'] for d in blocks]
+    if not_zero:
+        offsets = [max([o, 1]) for o in offsets]
     lengths = [d['length'] for d in blocks]
     workers = [d['hosts'] for d in blocks]
     names = ['read-binary-%s-%d-%d' % (fn, offset, length)
@@ -103,6 +109,89 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
         from distributed.collections import _futures_to_dask_dataframe
         df = yield _futures_to_dask_dataframe(futures)
         raise gen.Return(df)
+
+
+def avro_body(data, header):
+    """ Convert bytes and header to Python objects
+
+    Parameters
+    ----------
+    data: bytestring
+        bulk avro data, without header information
+    header: bytestring
+        Header information collected from ``fastavro.reader(f)._header``
+
+    Returns
+    -------
+    List of deserialized Python objects, probably dictionaries
+    """
+    import fastavro
+    sync = header['sync']
+    if not data.endswith(sync):
+        # Read delimited should keep end-of-block delimiter
+        data = data + sync
+    stream = io.BytesIO(data)
+    schema = header['meta']['avro.schema']
+    schema = json.loads(schema)
+    codec = header['meta']['avro.codec']
+    return list(fastavro._reader._iter_avro(stream, header, codec,
+        schema, schema))
+
+
+def avro_to_df(b, av):
+    """Parse avro binary data with header av into a pandas dataframe"""
+    import pandas as pd
+    return pd.DataFrame(data=avro_body(b, av))
+
+
+@gen.coroutine
+def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
+    """ See distributed.hdfs.read_avro for docstring """
+    from hdfs3 import HDFileSystem
+    from dask import do
+    import fastavro
+    hdfs = hdfs or HDFileSystem()
+    executor = default_executor(executor)
+
+    filenames = hdfs.glob(fn)
+    blockss = []
+
+    for fn in filenames:
+        with hdfs.open(fn, 'r') as f:
+            av = fastavro.reader(f)
+            header = av._header
+        schema = json.loads(header['meta']['avro.schema'])
+
+        blockss.extend([read_bytes(fn, executor, hdfs, lazy=True,
+                                   delimiter=header['sync'], not_zero=True)
+                        for fn in filenames])
+
+    lazy_values = [do(avro_body)(b, header) for blocks in blockss
+                                            for b in blocks]
+
+    if lazy:
+        raise gen.Return(lazy_values)
+    else:
+        futures = executor.compute(*lazy_values)
+        raise gen.Return(futures)
+
+
+def read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
+    """ Read avro encoded data from bytes on HDFS
+
+    Parameters
+    ----------
+    fn: string
+        filename or globstring of avro files on HDFS
+    lazy: boolean, optional
+        If True return dask Value objects
+
+    Returns
+    -------
+    List of futures of Python objects
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _read_avro, fn, executor, hdfs, lazy, **kwargs)
 
 
 def write_block_to_hdfs(fn, data, hdfs=None):

@@ -1,42 +1,30 @@
 from contextlib import contextmanager
+from io import BytesIO
 
 import pytest
 from tornado import gen
 
 from dask.imperative import Value
 
-from distributed.utils_test import gen_cluster
+from distributed.utils_test import gen_cluster, cluster, loop, make_hdfs
 from distributed.utils import get_ip
 from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
-        _read_csv)
+        _read_csv, _read_avro, avro_body, read_avro)
 from distributed import Executor
-from distributed.executor import _wait
+from distributed.executor import _wait, Future
 
 
 pytest.importorskip('hdfs3')
 from hdfs3 import HDFileSystem
 try:
-    hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
+    hdfs = HDFileSystem(host='localhost', port=8020)
     hdfs.df()
+    del hdfs
 except:
     pytestmark = pytest.mark.skipif('True')
 
 
 ip = get_ip()
-
-
-@contextmanager
-def make_hdfs():
-    hdfs = HDFileSystem(host='localhost', port=8020)
-    if hdfs.exists('/tmp/test'):
-        hdfs.rm('/tmp/test')
-    hdfs.mkdir('/tmp/test')
-
-    try:
-        yield hdfs
-    finally:
-        if hdfs.exists('/tmp/test'):
-            hdfs.rm('/tmp/test')
 
 
 def test_get_block_locations():
@@ -123,6 +111,22 @@ def test_read_bytes(s, a, b):
         assert b''.join(results) == data
         assert s.restrictions
         assert {f.key for f in futures}.issubset(s.loose_restrictions)
+
+
+def test_read_bytes_sync(loop):
+    with make_hdfs() as hdfs:
+        assert hdfs._handle > 0
+        data = b'a' * int(1e3)
+
+        for fn in ['/tmp/test/file.%d' % i for i in range(100)]:
+            with hdfs.open(fn, 'w', repl=1) as f:
+                f.write(data)
+
+        with cluster(nworkers=1) as (s, [a]):
+            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+                futures = read_bytes('/tmp/test/file.*')
+                results = e.gather(futures)
+                assert b''.join(results) == 100 * data
 
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
