@@ -9,6 +9,7 @@ from hdfs3 import HDFileSystem
 try:
     hdfs = HDFileSystem(host='localhost', port=8020)
     hdfs.df()
+    del hdfs
 except:
     pytestmark = pytest.mark.skipif('True')
 
@@ -90,7 +91,7 @@ def test_avro_sync(loop):
             with hdfs.open(k, 'w') as f:
                 f.write(v)
 
-        with cluster() as (s, [a, b]):
+        with cluster(nworkers=1) as (s, [a]):
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 futures = read_avro('/tmp/test/*.avro')
                 assert all(isinstance(f, Future) for f in futures)

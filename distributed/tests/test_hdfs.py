@@ -19,6 +19,7 @@ from hdfs3 import HDFileSystem
 try:
     hdfs = HDFileSystem(host='localhost', port=8020)
     hdfs.df()
+    del hdfs
 except:
     pytestmark = pytest.mark.skipif('True')
 
@@ -121,7 +122,7 @@ def test_read_bytes_sync(loop):
             with hdfs.open(fn, 'w', repl=1) as f:
                 f.write(data)
 
-        with cluster() as (s, [a, b]):
+        with cluster(nworkers=1) as (s, [a]):
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 futures = read_bytes('/tmp/test/file.*')
                 results = e.gather(futures)
