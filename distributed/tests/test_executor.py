@@ -1648,6 +1648,10 @@ def test_badly_serialized_input_stderr(capsys):
         with Executor(('127.0.0.1', s['port'])) as e:
             o = BadlySerializedObject()
             future = e.submit(inc, o)
-            sleep(0.1)
-            out, err = capsys.readouterr()
-            assert 'hello!' in err
+
+            start = time()
+            while True:
+                out, err = capsys.readouterr()
+                if 'hello!' in err:
+                    break
+                assert time() - start < 20
