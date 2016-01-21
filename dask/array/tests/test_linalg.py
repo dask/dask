@@ -7,7 +7,7 @@ import numpy as np
 import dask.array as da
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
 from dask.utils import raises
-from dask.array.utils import eq
+from dask.array.utils import assert_eq
 
 
 def same_keys(a, b):
@@ -28,9 +28,9 @@ def test_tsqr_regular_blocks():
     q = np.array(q)
     r = np.array(r)
 
-    eq(mat, np.dot(q, r))  # accuracy check
-    eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
-    eq(r, np.triu(r))  # r must be upper triangular
+    assert_eq(mat, np.dot(q, r))  # accuracy check
+    assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
+    assert_eq(r, np.triu(r))  # r must be upper triangular
 
 
 def test_tsqr_irregular_blocks():
@@ -43,9 +43,9 @@ def test_tsqr_irregular_blocks():
     q = np.array(q)
     r = np.array(r)
 
-    eq(mat2, np.dot(q, r))  # accuracy check
-    eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
-    eq(r, np.triu(r))  # r must be upper triangular
+    assert_eq(mat2, np.dot(q, r))  # accuracy check
+    assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
+    assert_eq(r, np.triu(r))  # r must be upper triangular
 
 
 def test_tsqr_svd_regular_blocks():
@@ -61,10 +61,10 @@ def test_tsqr_svd_regular_blocks():
 
     s_exact = np.linalg.svd(mat)[1]
 
-    eq(mat, usvt)  # accuracy check
-    eq(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
-    eq(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
-    eq(s, s_exact)  # s must contain the singular values
+    assert_eq(mat, usvt)  # accuracy check
+    assert_eq(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
+    assert_eq(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
+    assert_eq(s, s_exact)  # s must contain the singular values
 
 
 def test_tsqr_svd_irregular_blocks():
@@ -81,10 +81,10 @@ def test_tsqr_svd_irregular_blocks():
 
     s_exact = np.linalg.svd(mat2)[1]
 
-    eq(mat2, usvt)  # accuracy check
-    eq(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
-    eq(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
-    eq(s, s_exact)  # s must contain the singular values
+    assert_eq(mat2, usvt)  # accuracy check
+    assert_eq(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
+    assert_eq(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
+    assert_eq(s, s_exact)  # s must contain the singular values
 
 
 def test_linalg_consistent_names():
@@ -120,7 +120,7 @@ def test_svd_compressed():
     usvt = np.dot(u, np.dot(np.diag(s), vt))
 
     tol = 0.2
-    eq(np.linalg.norm(mat - usvt),
+    assert_eq(np.linalg.norm(mat - usvt),
               np.linalg.norm(mat),
               rtol=tol, atol=tol)  # average accuracy check
 
@@ -131,9 +131,9 @@ def test_svd_compressed():
     s_exact = np.linalg.svd(mat)[1]
     s_exact = s_exact[:r]
 
-    eq(np.eye(r, r), np.dot(u.T, u))  # u must be orthonormal
-    eq(np.eye(r, r), np.dot(vt, vt.T))  # v must be orthonormal
-    eq(s, s_exact)  # s must contain the singular values
+    assert_eq(np.eye(r, r), np.dot(u.T, u))  # u must be orthonormal
+    assert_eq(np.eye(r, r), np.dot(vt, vt.T))  # v must be orthonormal
+    assert_eq(s, s_exact)  # s must contain the singular values
 
 
 def test_svd_compressed_deterministic():
@@ -171,9 +171,9 @@ def test_lu_1():
         dA = da.from_array(A, chunks=(chunk, chunk))
         p, l, u = scipy.linalg.lu(A)
         dp, dl, du = da.linalg.lu(dA)
-        eq(p, dp)
-        eq(l, dl)
-        eq(u, du)
+        assert_eq(p, dp)
+        assert_eq(l, dl)
+        assert_eq(u, du)
         _check_lu_result(dp, dl, du, A)
 
     A3 = np.array([[ 7,  3,  2,  1,  4,  1],

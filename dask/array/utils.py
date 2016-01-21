@@ -3,7 +3,7 @@ import numpy as np
 from .core import Array
 from ..async import get_sync
 
-def eq(a, b, **kwargs):
+def assert_eq(a, b, **kwargs):
     if isinstance(a, Array):
         adt = a._dtype
         a = a.compute(get=get_sync)
