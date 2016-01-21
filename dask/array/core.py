@@ -2717,7 +2717,7 @@ def triu(m, k=0):
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
     dsk.update(m.dask)
-    return Array(dsk, name, shape=m.shape, chunks=m.chunks)
+    return Array(dsk, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
 def tril(m, k=0):
@@ -2767,7 +2767,7 @@ def tril(m, k=0):
             else:
                 dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
     dsk.update(m.dask)
-    return Array(dsk, name, shape=m.shape, chunks=m.chunks)
+    return Array(dsk, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
 def chunks_from_arrays(arrays):

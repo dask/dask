@@ -442,8 +442,8 @@ def lu(a):
                 # l_permuted is not referred in lower triangulars
 
     dsk.update(a.dask)
-    p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=a.dtype)
-    l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=a.dtype)
-    u = Array(dsk, name_u, shape=a.shape, chunks=a.chunks, dtype=a.dtype)
+    p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks)
+    l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks)
+    u = Array(dsk, name_u, shape=a.shape, chunks=a.chunks)
 
     return p, l, u
