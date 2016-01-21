@@ -509,7 +509,7 @@ def cumreduction(func, binop, ident, x, axis, dtype=None):
     dsk = dict()
     for ind in indices:
         shape = tuple(x.chunks[i][ii] if i != axis else 1
-                    for i, ii in enumerate(ind))
+                      for i, ii in enumerate(ind))
         dsk[(name, 'extra') + ind] = (np.full, shape, ident, m.dtype)
         dsk[(name,) + ind] = (m.name,) + ind
 
@@ -519,9 +519,9 @@ def cumreduction(func, binop, ident, x, axis, dtype=None):
                                  for ii, nb in enumerate(x.numblocks)]))
         for old, ind in zip(last_indices, indices):
             last = (name, 'extra') + old
-            current = (m.name,) + ind
             this_slice = (name, 'extra') + ind
-            dsk[this_slice] = (binop, last, (operator.getitem, current, slc))
+            dsk[this_slice] = (binop, (name, 'extra') + old,
+                                      (operator.getitem, (m.name,) + old, slc))
             dsk[(name,) + ind] = (binop, this_slice, (m.name,) + ind)
 
     return Array(merge(dsk, m.dask), name, x.chunks, m.dtype)
