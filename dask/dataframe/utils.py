@@ -225,19 +225,19 @@ def _maybe_sort(a):
     return a.sort_index()
 
 
-def eq(a, b, check_names=True, ignore_index=False):
+def eq(a, b, check_names=True, **kwargs):
     a = _check_dask(a, check_names=check_names)
     b = _check_dask(b, check_names=check_names)
     if isinstance(a, pd.DataFrame):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
-        tm.assert_frame_equal(a, b)
+        tm.assert_frame_equal(a, b, **kwargs)
     elif isinstance(a, pd.Series):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
-        tm.assert_series_equal(a, b, check_names=check_names)
+        tm.assert_series_equal(a, b, check_names=check_names, **kwargs)
     elif isinstance(a, pd.Index):
-        tm.assert_index_equal(a, b)
+        tm.assert_index_equal(a, b, **kwargs)
     else:
         if a == b:
             return True

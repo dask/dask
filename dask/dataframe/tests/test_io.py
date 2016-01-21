@@ -843,4 +843,5 @@ def test_parse_dates_multi_column():
         ddf = dd.read_csv(fn, parse_dates=[['date', 'time']])
         df = pd.read_csv(fn, parse_dates=[['date', 'time']])
 
-        eq(df, ddf)
+        assert (df.columns == ddf.columns).all()
+        assert len(df) == len(ddf)
