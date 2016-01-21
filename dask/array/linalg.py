@@ -122,8 +122,11 @@ def tsqr(data, name=None, compute_svd=False):
     dsk_r.update(dsk_r_st2)
 
     if not compute_svd:
-        q = Array(dsk_q, name_q_st3, shape=data.shape, chunks=data.chunks)
-        r = Array(dsk_r, name_r_st2, shape=(n, n), chunks=(n, n))
+        qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
+        q = Array(dsk_q, name_q_st3, shape=data.shape, chunks=data.chunks,
+                  dtype=qq.dtype)
+        r = Array(dsk_r, name_r_st2, shape=(n, n), chunks=(n, n),
+                  dtype=rr.dtype)
         return q, r
     else:
         # In-core SVD computation
@@ -163,9 +166,13 @@ def tsqr(data, name=None, compute_svd=False):
         dsk_v.update(dsk_svd_st2)
         dsk_v.update(dsk_v_st2)
 
-        u = Array(dsk_u, name_u_st4, shape=data.shape, chunks=data.chunks)
-        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=(n, n))
-        v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=(n, n))
+        uu, ss, vv = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
+
+        u = Array(dsk_u, name_u_st4, shape=data.shape, chunks=data.chunks,
+                  dtype=uu.dtype)
+        s = Array(dsk_s, name_s_st2, shape=(n,), chunks=(n, n), dtype=ss.dtype)
+        v = Array(dsk_v, name_v_st2, shape=(n, n), chunks=(n, n),
+                  dtype=vv.dtype)
         return u, s, v
 
 
@@ -442,8 +449,9 @@ def lu(a):
                 # l_permuted is not referred in lower triangulars
 
     dsk.update(a.dask)
-    p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks)
-    l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks)
-    u = Array(dsk, name_u, shape=a.shape, chunks=a.chunks)
+    pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
+    p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
+    l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
+    u = Array(dsk, name_u, shape=a.shape, chunks=a.chunks, dtype=uu.dtype)
 
     return p, l, u
