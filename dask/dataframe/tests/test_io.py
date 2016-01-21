@@ -817,3 +817,30 @@ def test_none_usecols():
     with filetext(text) as fn:
         df = dd.read_csv(fn, usecols=None)
         eq(df, pd.read_csv(fn, usecols=None))
+
+
+
+pdmc_text = """
+ID,date,time
+10,2003-11-04,180036
+11,2003-11-05,125640
+12,2003-11-01,2519
+13,2003-10-22,142559
+14,2003-10-24,163113
+15,2003-10-20,170133
+16,2003-11-11,160448
+17,2003-11-03,171759
+18,2003-11-07,190928
+19,2003-10-21,84623
+20,2003-10-25,192207
+21,2003-11-13,180156
+22,2003-11-15,131037
+""".strip()
+
+
+def test_parse_dates_multi_column():
+    with filetext(pdmc_text) as fn:
+        ddf = dd.read_csv(fn, parse_dates=[['date', 'time']])
+        df = pd.read_csv(fn, parse_dates=[['date', 'time']])
+
+        eq(df, ddf)
