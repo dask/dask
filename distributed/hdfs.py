@@ -53,7 +53,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
     if not_zero:
         offsets = [max([o, 1]) for o in offsets]
     lengths = [d['length'] for d in blocks]
-    workers = [d['hosts'] for d in blocks]
+    workers = [[h.decode() for h in d['hosts']] for d in blocks]
     names = ['read-binary-%s-%d-%d' % (fn, offset, length)
             for fn, offset, length in zip(filenames, offsets, lengths)]
 

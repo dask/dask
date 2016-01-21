@@ -91,7 +91,6 @@ def test_get_block_locations_nested():
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
 def test_read_bytes(s, a, b):
     with make_hdfs() as hdfs:
-        assert hdfs._handle > 0
         data = b'a' * int(1e8)
         fn = '/tmp/test/file'
 
@@ -115,7 +114,6 @@ def test_read_bytes(s, a, b):
 
 def test_read_bytes_sync(loop):
     with make_hdfs() as hdfs:
-        assert hdfs._handle > 0
         data = b'a' * int(1e3)
 
         for fn in ['/tmp/test/file.%d' % i for i in range(100)]:
