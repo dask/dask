@@ -1643,6 +1643,8 @@ def test_badly_serialized_input(s, a, b):
     assert list(L) == list(map(inc, range(10)))
 
 
+@pytest.mark.skipif(sys.version_info < (3,),
+                    reason="logger doesnt pipe to stderr")
 def test_badly_serialized_input_stderr(capsys):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port'])) as e:
@@ -1651,6 +1653,7 @@ def test_badly_serialized_input_stderr(capsys):
 
             start = time()
             while True:
+                sleep(0.01)
                 out, err = capsys.readouterr()
                 if 'hello!' in err:
                     break

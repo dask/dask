@@ -355,7 +355,7 @@ class Executor(object):
                 with ignoring(AttributeError):
                     self._restart_event.set()
             if msg['op'] == 'scheduler-error':
-                logger.info("Scheduler exception:")
+                logger.warn("Scheduler exception:")
                 logger.exception(msg['exception'])
 
     @gen.coroutine
