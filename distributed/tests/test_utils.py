@@ -1,4 +1,5 @@
-from distributed.utils import All, sync, is_kernel, ensure_ip
+from distributed.utils import (All, sync, is_kernel, ensure_ip,
+        truncate_exception)
 from distributed.utils_test import loop, inc, throws
 import pytest
 from threading import Thread
@@ -96,3 +97,15 @@ def test_is_kernel():
 def test_ensure_ip():
     assert ensure_ip('localhost') == '127.0.0.1'
     assert ensure_ip('123.123.123.123') == '123.123.123.123'
+
+
+def test_truncate_exception():
+    e = ValueError('a'*1000)
+    assert len(str(e)) >= 1000
+    f = truncate_exception(e, 100)
+    assert type(f) == type(e)
+    assert len(str(f)) < 200
+    assert 'aaaa' in str(f)
+
+    e = ValueError('a')
+    assert truncate_exception(e) is e

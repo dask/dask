@@ -8,7 +8,6 @@ from multiprocessing.pool import ThreadPool
 import os
 import pkg_resources
 import tempfile
-import traceback
 import shutil
 import sys
 
@@ -22,7 +21,7 @@ from .client import _gather, pack_data, gather_from_workers
 from .compatibility import reload
 from .core import rpc, Server, pingpong
 from .sizeof import sizeof
-from .utils import funcname, get_ip
+from .utils import funcname, get_ip, get_traceback, truncate_exception
 
 _ncores = ThreadPool()._processes
 
@@ -252,25 +251,17 @@ class Worker(Server):
                                 response.decode())
             out = (b'OK', {'nbytes': sizeof(result)})
         except Exception as e:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            tb = traceback.format_tb(exc_traceback)
-            tb = [line[:10000] for line in tb]
-            if len(str(e)) > 10000:
-                try:
-                    e = type(e)("Long error message",
-                                str(e)[:10000])
-                except:
-                    e = Exception("Long error message",
-                                  type(e),
-                                  str(e)[:10000])
+            tb = get_traceback()
+            e2 = truncate_exception(e, 1000)
 
             logger.warn(" Compute Failed\n"
                 "Function: %s\n"
                 "args:     %s\n"
                 "kwargs:   %s\n",
                 str(funcname(function))[:1000], str(args2)[:1000],
-                str(kwargs2)[:1000], exc_info=True)
-            out = (b'error', (e, tb))
+                str(kwargs2)[:1000])
+
+            out = (b'error', (e2, tb))
 
         logger.debug("Send compute response to client: %s, %s", key, out)
         self.active.remove(key)

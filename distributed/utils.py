@@ -8,6 +8,7 @@ import re
 import socket
 import sys
 import tempfile
+import traceback
 
 from dask import istask
 from toolz import memoize
@@ -220,6 +221,28 @@ def ensure_ip(hostname):
         return hostname
     else:
         return socket.gethostbyname(hostname)
+
+
+def get_traceback():
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    tb = traceback.format_tb(exc_traceback)
+    tb = [line[:10000] for line in tb]
+    return tb
+
+
+def truncate_exception(e, n=10000):
+    """ Truncate exception to be about a certain length """
+    if len(str(e)) > n:
+        try:
+            return type(e)("Long error message",
+                           str(e)[:n])
+        except:
+            return Exception("Long error message",
+                              type(e),
+                              str(e)[:n])
+    else:
+        return e
+
 
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',

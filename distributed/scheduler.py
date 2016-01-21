@@ -23,7 +23,7 @@ from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server, send_recv)
 from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
-        ignore_exceptions, ensure_ip)
+        ignore_exceptions, ensure_ip, get_traceback, truncate_exception)
 
 
 logger = logging.getLogger(__name__)
@@ -720,6 +720,9 @@ class Scheduler(Server):
             try:
                 msg = yield next_message()  # in_queue.get()
             except Exception as e:
+                put({'op': 'scheduler-error',
+                     'exception': truncate_exception(e),
+                     'traceback': get_traceback()})
                 logger.exception(e)
                 continue
             logger.debug("scheduler receives message %s", msg)
