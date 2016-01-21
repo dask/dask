@@ -714,8 +714,6 @@ class Executor(object):
         """
         sync = kwargs.pop('sync', False)
         assert not kwargs
-        if sync:
-            return dask.compute(*args, get=self.get)
 
         variables = [a for a in args if isinstance(a, Base)]
 
@@ -741,7 +739,10 @@ class Executor(object):
             else:
                 futures.append(arg)
 
-        return futures
+        if sync:
+            return self.gather(futures)
+        else:
+            return futures
 
     @gen.coroutine
     def _restart(self):
