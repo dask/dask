@@ -719,6 +719,8 @@ class Scheduler(Server):
         while True:
             try:
                 msg = yield next_message()  # in_queue.get()
+            except AssertionError:
+                raise
             except Exception as e:
                 put({'op': 'scheduler-error',
                      'exception': truncate_exception(e),
