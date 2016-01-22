@@ -1,3 +1,5 @@
+import difflib
+import os
 import numpy as np
 
 from .core import Array
@@ -15,7 +17,10 @@ def assert_eq(a, b, **kwargs):
     else:
         bdt = getattr(b, 'dtype', None)
 
-    assert str(adt) == str(bdt)
+    if str(adt) != str(bdt):
+        diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
+        raise AssertionError('string repr are different' + os.linesep +
+                             os.linesep.join(diff))
 
     try:
         assert np.allclose(a, b, **kwargs)
