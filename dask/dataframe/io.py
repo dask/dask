@@ -187,7 +187,10 @@ def fill_kwargs(fn, **kwargs):
 
     if kwargs.get('parse_dates'):
         for col in kwargs['parse_dates']:
-            del dtype[col]
+            if isinstance(col, (tuple, list)):
+                del dtype['_'.join(col)]
+            else:
+                del dtype[col]
 
     kwargs['dtype'] = dtype
 
@@ -246,11 +249,11 @@ def csv_names(fn, encoding='utf-8', compression=None, names=None,
     try:
         kwargs['nrows'] = 5
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, parse_dates=parse_dates, **kwargs)
+                names=names, **kwargs)
     except StopIteration:
         kwargs['nrows'] = None
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, parse_dates=parse_dates, **kwargs)
+                names=names, **kwargs)
     return list(df.columns)
 
 
