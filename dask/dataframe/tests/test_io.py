@@ -845,3 +845,18 @@ def test_parse_dates_multi_column():
 
         assert (df.columns == ddf.columns).all()
         assert len(df) == len(ddf)
+
+
+sep_text = """
+name###amount
+alice###100
+bob###200
+charlie###300"""
+
+def test_read_csv_sep():
+    with filetext(sep_text) as fn:
+        ddf = dd.read_csv(fn, sep="###")
+        df = pd.read_csv(fn, sep="###")
+
+        assert (df.columns == ddf.columns).all()
+        assert len(df) == len(ddf)
