@@ -1,8 +1,8 @@
-Dask Bag Quickstart
-===================
+Bag Quickstart
+==============
 
 A Dask Bag is a multiset, a set that allows repetition of its elements but
-doesn't guarantee ordering, particular elements can be accessed. The common
+doesn't guarantee ordering, particular elements can't be accessed. The common
 use for ``dask.bag`` is to process unstructured or semi-structured data.
 
 Installation Testing
@@ -61,7 +61,7 @@ you can use ``from_filenames`` and map ``json.loads`` to read the data into a
    result.compute()
 
    # coerce to a dictionary
-   dict(result())
+   dict(result)
 
    # count elements
    b.count().compute()

@@ -67,8 +67,11 @@ then you should start here.
    :hidden:
    :caption: Collections
 
+   array-quickstart.rst
    array.rst
+   bag-quickstart.rst
    bag.rst
+   dataframe-quickstart.rst
    dataframe.rst
    imperative.rst
 

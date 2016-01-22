@@ -1,5 +1,5 @@
-Dask Arrays Quickstart
-======================
+Array Quickstart
+=================
 
 Dask Array implements a subset of the NumPy ndarray interface and can cut large 
 arrays into many small pieces. This lets you work with arrays larger than 
