@@ -350,3 +350,17 @@ def test_solve():
         assert_eq(res, scipy.linalg.solve(A, b))
         assert_eq(dA.dot(res), b.astype(float))
 
+
+def test_inv():
+    import scipy.linalg
+
+    for shape, chunk in [(20, 10), (50, 10)]:
+        np.random.seed(1)
+
+        A = np.random.random_integers(1, 10, (shape, shape))
+        dA = da.from_array(A, (chunk, chunk))
+
+        res = da.linalg.inv(dA)
+        assert_eq(res, scipy.linalg.inv(A))
+        assert_eq(dA.dot(res), np.eye(shape, dtype=float))
+
