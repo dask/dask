@@ -387,13 +387,18 @@ def lu(a):
     name_p_inv = 'lu-p-inv-' + token
     name_l_permuted = 'lu-l-permute-' + token
     name_u_transposed = 'lu-u-transpose-' + token
+    name_plu_dot = 'lu-plu-dot-' + token
+    name_lu_dot = 'lu-lu-dot-' + token
 
     dsk = {}
     for i in range(min(vdim, hdim)):
         target = (a.name, i, i)
         if i > 0:
-            prevs = [(np.dot, (name_l_permuted, i, p),
-                      (name_u, p, i)) for p in range(i)]
+            prevs = []
+            for p in range(i):
+                prev = name_plu_dot, i, p, p, i
+                dsk[prev] = (np.dot, (name_l_permuted, i, p), (name_u, p, i))
+                prevs.append(prev)
             target = (operator.sub, target, (sum, prevs))
         # diagonal block
         dsk[name_lu, i, i] = (scipy.linalg.lu, target)
@@ -402,8 +407,11 @@ def lu(a):
         for j in range(i + 1, hdim):
             target = (np.dot, (name_p_inv, i, i), (a.name, i, j))
             if i > 0:
-                prevs = [(np.dot, (name_l, i, p),
-                          (name_u, p, j)) for p in range(i)]
+                prevs = []
+                for p in range(i):
+                    prev = name_lu_dot, i, p, p, j
+                    dsk[prev] = (np.dot, (name_l, i, p), (name_u, p, j))
+                    prevs.append(prev)
                 target = (operator.sub, target, (sum, prevs))
             dsk[name_lu, i, j] = (_solve_triangular_lower,
                                   (name_l, i, i), target)
@@ -412,8 +420,11 @@ def lu(a):
         for k in range(i + 1, vdim):
             target = (a.name, k, i)
             if i > 0:
-                prevs = [(np.dot, (name_l_permuted, k, p),
-                          (name_u, p, i)) for p in range(i)]
+                prevs = []
+                for p in range(i):
+                    prev = name_plu_dot, k, p, p, i
+                    dsk[prev] = (np.dot, (name_l_permuted, k, p), (name_u, p, i))
+                    prevs.append(prev)
                 target = (operator.sub, target, (sum, prevs))
             # solving x.dot(u) = target is equal to u.T.dot(x.T) = target.T
             dsk[name_lu, k, i] = (np.transpose,
@@ -445,7 +456,7 @@ def lu(a):
                 dsk[name_p, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
                 dsk[name_l, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
                 dsk[name_u, i, j] = (name_lu, i, j)
-                # l_permuted is not referred in lower triangulars
+                # l_permuted is not referred in upper triangulars
 
     dsk.update(a.dask)
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
@@ -495,6 +506,10 @@ def solve_triangular(a, b, lower=False):
     token = tokenize(a, b, lower)
     name = 'solve-triangular-' + token
 
+    # for internal calculation
+    # (name, i, j, k, l) corresponds to a_ij.dot(b_kl)
+    name_mdot = 'solve-tri-dot-' + token
+
     def _b_init(i, j):
         if b.ndim == 1:
             return b.name, i
@@ -513,18 +528,28 @@ def solve_triangular(a, b, lower=False):
             for j in range(hchunks):
                 target = _b_init(i, j)
                 if i > 0:
-                    prevs = (sum, [(np.dot, (a.name, i, k), _key(k, j)) for k in range(i)])
-                    target = (operator.sub, target, prevs)
+                    prevs = []
+                    for k in range(i):
+                        prev = name_mdot, i, k, k, j
+                        dsk[prev] = (np.dot, (a.name, i, k), _key(k, j))
+                        prevs.append(prev)
+                    target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (_solve_triangular_lower, (a.name, i, i), target)
     else:
         for i in range(vchunks):
             for j in range(hchunks):
                 target = _b_init(i, j)
                 if i < vchunks - 1:
-                    prevs = (sum, [(np.dot, (a.name, i, k), _key(k, j)) for k in range(i + 1, vchunks)])
-                    target = (operator.sub, target, prevs)
+                    prevs = []
+                    for k in range(i + 1, vchunks):
+                        prev = name_mdot, i, k, k, j
+                        dsk[prev] = (np.dot, (a.name, i, k), _key(k, j))
+                        prevs.append(prev)
+                    target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (scipy.linalg.solve_triangular, (a.name, i, i), target)
 
     dsk.update(a.dask)
     dsk.update(b.dask)
-    return Array(dsk, name, shape=b.shape, chunks=b.chunks)
+    res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
+                                  np.array([0, 1], dtype=b.dtype))
+    return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)

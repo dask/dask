@@ -239,16 +239,16 @@ def test_solve_triangular_vector():
         dAu = da.from_array(Au, (chunk, chunk))
         db = da.from_array(b, chunk)
         res = da.linalg.solve_triangular(dAu, db)
-        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Au, b))
-        assert np.allclose(dAu.dot(res).compute(), b)
+        assert_eq(res, scipy.linalg.solve_triangular(Au, b))
+        assert_eq(dAu.dot(res), b.astype(float))
 
         # lower
         Al = np.tril(A)
         dAl = da.from_array(Al, (chunk, chunk))
         db = da.from_array(b, chunk)
         res = da.linalg.solve_triangular(dAl, db, lower=True)
-        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Al, b, lower=True))
-        assert np.allclose(dAl.dot(res).compute(), b)
+        assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
+        assert_eq(dAl.dot(res), b.astype(float))
 
 
 def test_solve_triangular_matrix():
@@ -265,16 +265,16 @@ def test_solve_triangular_matrix():
         dAu = da.from_array(Au, (chunk, chunk))
         db = da.from_array(b, (chunk, 5))
         res = da.linalg.solve_triangular(dAu, db)
-        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Au, b))
-        assert np.allclose(dAu.dot(res).compute(), b)
+        assert_eq(res, scipy.linalg.solve_triangular(Au, b))
+        assert_eq(dAu.dot(res), b.astype(float))
 
         # lower
         Al = np.tril(A)
         dAl = da.from_array(Al, (chunk, chunk))
         db = da.from_array(b, (chunk, 5))
         res = da.linalg.solve_triangular(dAl, db, lower=True)
-        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Al, b, lower=True))
-        assert np.allclose(dAl.dot(res).compute(), b)
+        assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
+        assert_eq(dAl.dot(res), b.astype(float))
 
 
 
@@ -292,16 +292,16 @@ def test_solve_triangular_matrix2():
         dAu = da.from_array(Au, (chunk, chunk))
         db = da.from_array(b, (chunk, chunk))
         res = da.linalg.solve_triangular(dAu, db)
-        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Au, b))
-        assert np.allclose(dAu.dot(res).compute(), b)
+        assert_eq(res, scipy.linalg.solve_triangular(Au, b))
+        assert_eq(dAu.dot(res), b.astype(float))
 
         # lower
         Al = np.tril(A)
         dAl = da.from_array(Al, (chunk, chunk))
         db = da.from_array(b, (chunk, chunk))
         res = da.linalg.solve_triangular(dAl, db, lower=True)
-        assert np.allclose(res.compute(), scipy.linalg.solve_triangular(Al, b, lower=True))
-        assert np.allclose(dAl.dot(res).compute(), b)
+        assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
+        assert_eq(dAl.dot(res), b.astype(float))
 
 
 def test_solve_triangular_errors():
