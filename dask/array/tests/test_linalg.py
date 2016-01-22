@@ -277,7 +277,6 @@ def test_solve_triangular_matrix():
         assert_eq(dAl.dot(res), b.astype(float))
 
 
-
 def test_solve_triangular_matrix2():
     import scipy.linalg
 
@@ -317,4 +316,37 @@ def test_solve_triangular_errors():
     db = da.from_array(b, chunks=5)
     assert raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
 
+
+def test_solve():
+    import scipy.linalg
+
+    for shape, chunk in [(20, 10), (50, 10)]:
+        np.random.seed(1)
+
+        A = np.random.random_integers(1, 10, (shape, shape))
+        dA = da.from_array(A, (chunk, chunk))
+
+        # vector
+        b = np.random.random_integers(1, 10, shape)
+        db = da.from_array(b, (chunk, chunk))
+
+        res = da.linalg.solve(dA, db)
+        assert_eq(res, scipy.linalg.solve(A, b))
+        assert_eq(dA.dot(res), b.astype(float))
+
+        # tall-and-skinny matrix
+        b = np.random.random_integers(1, 10, (shape, 5))
+        db = da.from_array(b, (chunk, 5))
+
+        res = da.linalg.solve(dA, db)
+        assert_eq(res, scipy.linalg.solve(A, b))
+        assert_eq(dA.dot(res), b.astype(float))
+
+        # matrix
+        b = np.random.random_integers(1, 10, (shape, shape))
+        db = da.from_array(b, (chunk, chunk))
+
+        res = da.linalg.solve(dA, db)
+        assert_eq(res, scipy.linalg.solve(A, b))
+        assert_eq(dA.dot(res), b.astype(float))
 

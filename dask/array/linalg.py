@@ -553,3 +553,27 @@ def solve_triangular(a, b, lower=False):
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
+
+
+def solve(a, b):
+    """
+    Solve the equation ``a x = b`` for ``x`` with LU decomposition and
+    forward / backward substitutions.
+
+    Parameters
+    ----------
+    a : (M, M) array_like
+        A square matrix.
+    b : (M,) or (M, N) array_like
+        Right-hand side matrix in ``a x = b``.
+
+    Returns
+    -------
+    x : (M,) or (M, N) Array
+        Solution to the system ``a x = b``.  Shape of the return matches the
+        shape of `b`.
+    """
+    p, l, u = lu(a)
+    uy = solve_triangular(l, p.T.dot(b), lower=True)
+    return solve_triangular(u, uy)
+
