@@ -110,6 +110,7 @@ def clean_kwargs(kwargs):
             or isinstance(col, (tuple, list)) and all(c in kwargs['usecols']
                                                       for c in col)
             or col in kwargs['usecols']]
+
     return kwargs
 
 
@@ -179,20 +180,21 @@ def fill_kwargs(fn, **kwargs):
         kwargs['parse_dates'] = [col for col in head.dtypes.index
                            if np.issubdtype(head.dtypes[col], np.datetime64)]
 
-    new_dtype = dict(head.dtypes)
-    dtype = kwargs.get('dtype', dict())
-    for k, v in dict(head.dtypes).items():
-        if k not in dtype:
-            dtype[k] = v
+    if 'sep' not in kwargs:
+        new_dtype = dict(head.dtypes)
+        dtype = kwargs.get('dtype', dict())
+        for k, v in dict(head.dtypes).items():
+            if k not in dtype:
+                dtype[k] = v
 
-    if kwargs.get('parse_dates'):
-        for col in kwargs['parse_dates']:
-            if isinstance(col, (tuple, list)):
-                del dtype['_'.join(col)]
-            else:
-                del dtype[col]
+        if kwargs.get('parse_dates'):
+            for col in kwargs['parse_dates']:
+                if isinstance(col, (tuple, list)):
+                    del dtype['_'.join(col)]
+                else:
+                    del dtype[col]
 
-    kwargs['dtype'] = dtype
+        kwargs['dtype'] = dtype
 
     return (head.columns.map(lambda s: s.strip() if isinstance(s, str) else s),
             kwargs)
