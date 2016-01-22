@@ -1548,14 +1548,14 @@ def test_long_error(s, a, b):
     yield e._start()
 
     def bad(x):
-        raise ValueError('a' * 1000000)
+        raise ValueError('a' * 100000)
 
     x = e.submit(bad, 10)
 
     try:
         yield x._result()
     except ValueError as e:
-        assert len(str(e)) < 1000000
+        assert len(str(e)) < 100000
 
     tb = yield x._traceback()
     assert all(len(line) < 100000 for line in tb)
@@ -1641,3 +1641,19 @@ def test_badly_serialized_input(s, a, b):
 
     L = yield e._gather(futures)
     assert list(L) == list(map(inc, range(10)))
+
+
+@pytest.mark.xfail
+def test_badly_serialized_input_stderr(capsys):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port'])) as e:
+            o = BadlySerializedObject()
+            future = e.submit(inc, o)
+
+            start = time()
+            while True:
+                sleep(0.01)
+                out, err = capsys.readouterr()
+                if 'hello!' in err:
+                    break
+                assert time() - start < 20

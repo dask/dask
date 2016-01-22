@@ -6,6 +6,7 @@ import json
 from math import log
 import os
 import io
+import sys
 
 from dask.imperative import Value
 from tornado import gen
@@ -23,6 +24,18 @@ def get_block_locations(hdfs, filename):
     return [merge({'filename': fn}, block)
             for fn in hdfs.glob(filename)
             for block in hdfs.get_block_locations(fn)]
+
+def read_block_from_hdfs(host, port, filename, offset, length, delimiter):
+    from hdfs3 import HDFileSystem
+    if sys.version_info[0] == 2:
+        from locket import lock_file
+        with lock_file('.lock'):
+            hdfs = HDFileSystem(host=host, port=port)
+            bytes = hdfs.read_block(filename, offset, length, delimiter)
+    else:
+        hdfs = HDFileSystem(host=host, port=port)
+        bytes = hdfs.read_block(filename, offset, length, delimiter)
+    return bytes
 
 
 def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
@@ -53,7 +66,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
     if not_zero:
         offsets = [max([o, 1]) for o in offsets]
     lengths = [d['length'] for d in blocks]
-    workers = [d['hosts'] for d in blocks]
+    workers = [[h.decode() for h in d['hosts']] for d in blocks]
     names = ['read-binary-%s-%d-%d' % (fn, offset, length)
             for fn, offset, length in zip(filenames, offsets, lengths)]
 
@@ -65,7 +78,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
                                     'keys': [],
                                     'restrictions': restrictions,
                                     'loose_restrictions': set(names)})
-        values = [Value(name, [{name: (hdfs.read_block, fn, offset, length, delimiter)}])
+        values = [Value(name, [{name: (read_block_from_hdfs, hdfs.host, hdfs.port, fn, offset, length, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
         return values
     else:
@@ -89,7 +102,7 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
     hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
     kwargs['lineterminator'] = lineterminator
-    filenames = hdfs.glob(fn)
+    filenames = sorted(hdfs.glob(fn))
     blockss = [read_bytes(fn, executor, hdfs, lazy=True, delimiter=lineterminator)
                for fn in filenames]
     if names is None and header:
