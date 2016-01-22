@@ -17,10 +17,23 @@ def test_simple(s, a, b):
     server.listen(0)
     client = AsyncHTTPClient()
 
+
     response = yield client.fetch('http://localhost:%d/info.json' % server.port)
     response = json.loads(response.body.decode())
     assert response['ncores'] == {'%s:%d' % k: v for k, v in s.ncores.items()}
     assert response['status'] == a.status
+
+@gen_cluster()
+def test_processing(s, a, b):
+    server = HTTPScheduler(s)
+    server.listen(0)
+    client = AsyncHTTPClient()
+
+    s.processing[a.address].add(('foo-1', 1))
+
+    response = yield client.fetch('http://localhost:%d/processing.json' % server.port)
+    response = json.loads(response.body.decode())
+    assert response == {'%s:%d' % a.address: ['foo'], '%s:%d' % b.address: []}
 
 
 @gen_cluster()
