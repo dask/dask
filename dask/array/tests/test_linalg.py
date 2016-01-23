@@ -364,3 +364,21 @@ def test_inv():
         assert_eq(res, scipy.linalg.inv(A))
         assert_eq(dA.dot(res), np.eye(shape, dtype=float))
 
+
+def _get_symmat(size):
+    np.random.seed(1)
+    A = np.random.random_integers(1, 20, (size, size))
+    lA = np.tril(A)
+    return lA.dot(lA.T)
+
+
+def test_cholesky():
+    import scipy.linalg
+
+    for shape, chunk in [(20, 10), (12, 3), (30, 3), (30, 6)]:
+        A = _get_symmat(shape)
+        dA = da.from_array(A, (chunk, chunk))
+        assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A))
+        assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True))
+
+
