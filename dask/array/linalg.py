@@ -6,7 +6,7 @@ import numpy as np
 
 from ..base import tokenize
 from ..compatibility import reduce
-from .core import top, dotmany, Array
+from .core import top, dotmany, Array, eye
 from .random import RandomState
 
 
@@ -576,4 +576,22 @@ def solve(a, b):
     p, l, u = lu(a)
     uy = solve_triangular(l, p.T.dot(b), lower=True)
     return solve_triangular(u, uy)
+
+
+def inv(a):
+    """
+    Compute the inverse of a matrix with LU decomposition and
+    forward / backward substitutions.
+
+    Parameters
+    ----------
+    a : array_like
+        Square matrix to be inverted.
+
+    Returns
+    -------
+    ainv : Array
+        Inverse of the matrix `a`.
+    """
+    return solve(a, eye(a.shape[0], chunks=a.chunks[0][0]))
 
