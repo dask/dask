@@ -578,10 +578,7 @@ def solve(a, b, sym_pos=False):
         shape of `b`.
     """
     if sym_pos:
-        u = cholesky(a)
-        lname = u.name.replace('cholesky-upper-', 'cholesky-')
-        # to use the same dask graph
-        l = Array(a.dask, lname, shape=u.shape, chunks=u.chunks, dtype=u.dtype)
+        l, u = _cholesky(a)
     else:
         p, l, u = lu(a)
         b = p.T.dot(b)
@@ -631,6 +628,18 @@ def cholesky(a, lower=False):
         Upper- or lower-triangular Cholesky factor of `a`.
     """
 
+    l, u = _cholesky(a)
+    if lower:
+        return l
+    else:
+        return u
+
+
+def _cholesky(a):
+    """
+    Private function to perform Cholesky decomposition, which returns both
+    lower and upper triangulars.
+    """
     import scipy.linalg
 
     if a.ndim != 2:
@@ -691,9 +700,9 @@ def cholesky(a, lower=False):
 
     dsk.update(a.dask)
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
-    if lower:
-        return Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
-    else:
-        # do not use .T, because part of transposed blocks are already calculated
-        return Array(dsk, name_upper, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+
+    lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    # do not use .T, because part of transposed blocks are already calculated
+    upper = Array(dsk, name_upper, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    return lower, upper
 
