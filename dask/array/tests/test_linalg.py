@@ -4,6 +4,8 @@ import pytest
 pytest.importorskip('numpy')
 
 import numpy as np
+import scipy.linalg
+
 import dask.array as da
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
 from dask.utils import raises
@@ -154,8 +156,6 @@ def _check_lu_result(p, l, u, A):
 
 
 def test_lu_1():
-    import scipy.linalg
-
     A1 = np.array([[7, 3, -1, 2], [3, 8, 1, -4],
                   [-1, 1, 4, -1], [2, -4, -1, 6] ])
 
@@ -190,25 +190,25 @@ def test_lu_1():
         _check_lu_result(dp, dl, du, A)
 
 
-def test_lu_2():
-
+@pytest.mark.parametrize('size', [10, 20, 30, 50])
+def test_lu_2(size):
     import scipy.linalg
+    np.random.seed(10)
+    A = np.random.random_integers(0, 10, (size, size))
 
-    for size in (10, 20, 30, 50):
-        np.random.seed(10)
-        A = np.random.random_integers(0, 10, (size, size))
+    dA = da.from_array(A, chunks=(5, 5))
+    dp, dl, du = da.linalg.lu(dA)
+    _check_lu_result(dp, dl, du, A)
 
-        dA = da.from_array(A, chunks=(5, 5))
-        dp, dl, du = da.linalg.lu(dA)
-        _check_lu_result(dp, dl, du, A)
 
-    for size in (50, 100, 200):
-        np.random.seed(10)
-        A = np.random.random_integers(0, 10, (size, size))
+@pytest.mark.parametrize('size', [50, 100, 200])
+def test_lu_3(size):
+    np.random.seed(10)
+    A = np.random.random_integers(0, 10, (size, size))
 
-        dA = da.from_array(A, chunks=(25, 25))
-        dp, dl, du = da.linalg.lu(dA)
-        _check_lu_result(dp, dl, du, A)
+    dA = da.from_array(A, chunks=(25, 25))
+    dp, dl, du = da.linalg.lu(dA)
+    _check_lu_result(dp, dl, du, A)
 
 
 def test_lu_errors():
@@ -225,82 +225,76 @@ def test_lu_errors():
     assert raises(ValueError, lambda: da.linalg.lu(dA))
 
 
-def test_solve_triangular_vector():
-    import scipy.linalg
+@pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10), (70, 20)])
+def test_solve_triangular_vector(shape, chunk):
+    np.random.seed(1)
 
-    for shape, chunk in [(20, 10), (50, 10), (70, 20)]:
-        np.random.seed(1)
+    A = np.random.random_integers(1, 10, (shape, shape))
+    b = np.random.random_integers(1, 10, shape)
 
-        A = np.random.random_integers(1, 10, (shape, shape))
-        b = np.random.random_integers(1, 10, shape)
+    # upper
+    Au = np.triu(A)
+    dAu = da.from_array(Au, (chunk, chunk))
+    db = da.from_array(b, chunk)
+    res = da.linalg.solve_triangular(dAu, db)
+    assert_eq(res, scipy.linalg.solve_triangular(Au, b))
+    assert_eq(dAu.dot(res), b.astype(float))
 
-        # upper
-        Au = np.triu(A)
-        dAu = da.from_array(Au, (chunk, chunk))
-        db = da.from_array(b, chunk)
-        res = da.linalg.solve_triangular(dAu, db)
-        assert_eq(res, scipy.linalg.solve_triangular(Au, b))
-        assert_eq(dAu.dot(res), b.astype(float))
-
-        # lower
-        Al = np.tril(A)
-        dAl = da.from_array(Al, (chunk, chunk))
-        db = da.from_array(b, chunk)
-        res = da.linalg.solve_triangular(dAl, db, lower=True)
-        assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
-        assert_eq(dAl.dot(res), b.astype(float))
+    # lower
+    Al = np.tril(A)
+    dAl = da.from_array(Al, (chunk, chunk))
+    db = da.from_array(b, chunk)
+    res = da.linalg.solve_triangular(dAl, db, lower=True)
+    assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
+    assert_eq(dAl.dot(res), b.astype(float))
 
 
-def test_solve_triangular_matrix():
-    import scipy.linalg
+@pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10), (50, 20)])
+def test_solve_triangular_matrix(shape, chunk):
+    np.random.seed(1)
 
-    for shape, chunk in [(20, 10), (50, 10), (50, 20)]:
-        np.random.seed(1)
+    A = np.random.random_integers(1, 10, (shape, shape))
+    b = np.random.random_integers(1, 10, (shape, 5))
 
-        A = np.random.random_integers(1, 10, (shape, shape))
-        b = np.random.random_integers(1, 10, (shape, 5))
+    # upper
+    Au = np.triu(A)
+    dAu = da.from_array(Au, (chunk, chunk))
+    db = da.from_array(b, (chunk, 5))
+    res = da.linalg.solve_triangular(dAu, db)
+    assert_eq(res, scipy.linalg.solve_triangular(Au, b))
+    assert_eq(dAu.dot(res), b.astype(float))
 
-        # upper
-        Au = np.triu(A)
-        dAu = da.from_array(Au, (chunk, chunk))
-        db = da.from_array(b, (chunk, 5))
-        res = da.linalg.solve_triangular(dAu, db)
-        assert_eq(res, scipy.linalg.solve_triangular(Au, b))
-        assert_eq(dAu.dot(res), b.astype(float))
-
-        # lower
-        Al = np.tril(A)
-        dAl = da.from_array(Al, (chunk, chunk))
-        db = da.from_array(b, (chunk, 5))
-        res = da.linalg.solve_triangular(dAl, db, lower=True)
-        assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
-        assert_eq(dAl.dot(res), b.astype(float))
+    # lower
+    Al = np.tril(A)
+    dAl = da.from_array(Al, (chunk, chunk))
+    db = da.from_array(b, (chunk, 5))
+    res = da.linalg.solve_triangular(dAl, db, lower=True)
+    assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
+    assert_eq(dAl.dot(res), b.astype(float))
 
 
-def test_solve_triangular_matrix2():
-    import scipy.linalg
+@pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10), (50, 20)])
+def test_solve_triangular_matrix2(shape, chunk):
+    np.random.seed(1)
 
-    for shape, chunk in [(20, 10), (50, 10), (50, 20)]:
-        np.random.seed(1)
+    A = np.random.random_integers(1, 10, (shape, shape))
+    b = np.random.random_integers(1, 10, (shape, shape))
 
-        A = np.random.random_integers(1, 10, (shape, shape))
-        b = np.random.random_integers(1, 10, (shape, shape))
+    # upper
+    Au = np.triu(A)
+    dAu = da.from_array(Au, (chunk, chunk))
+    db = da.from_array(b, (chunk, chunk))
+    res = da.linalg.solve_triangular(dAu, db)
+    assert_eq(res, scipy.linalg.solve_triangular(Au, b))
+    assert_eq(dAu.dot(res), b.astype(float))
 
-        # upper
-        Au = np.triu(A)
-        dAu = da.from_array(Au, (chunk, chunk))
-        db = da.from_array(b, (chunk, chunk))
-        res = da.linalg.solve_triangular(dAu, db)
-        assert_eq(res, scipy.linalg.solve_triangular(Au, b))
-        assert_eq(dAu.dot(res), b.astype(float))
-
-        # lower
-        Al = np.tril(A)
-        dAl = da.from_array(Al, (chunk, chunk))
-        db = da.from_array(b, (chunk, chunk))
-        res = da.linalg.solve_triangular(dAl, db, lower=True)
-        assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
-        assert_eq(dAl.dot(res), b.astype(float))
+    # lower
+    Al = np.tril(A)
+    dAl = da.from_array(Al, (chunk, chunk))
+    db = da.from_array(b, (chunk, chunk))
+    res = da.linalg.solve_triangular(dAl, db, lower=True)
+    assert_eq(res, scipy.linalg.solve_triangular(Al, b, lower=True))
+    assert_eq(dAl.dot(res), b.astype(float))
 
 
 def test_solve_triangular_errors():
@@ -317,52 +311,48 @@ def test_solve_triangular_errors():
     assert raises(ValueError, lambda: da.linalg.solve_triangular(dA, db))
 
 
-def test_solve():
-    import scipy.linalg
+@pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10)])
+def test_solve(shape, chunk):
+    np.random.seed(1)
 
-    for shape, chunk in [(20, 10), (50, 10)]:
-        np.random.seed(1)
+    A = np.random.random_integers(1, 10, (shape, shape))
+    dA = da.from_array(A, (chunk, chunk))
 
-        A = np.random.random_integers(1, 10, (shape, shape))
-        dA = da.from_array(A, (chunk, chunk))
+    # vector
+    b = np.random.random_integers(1, 10, shape)
+    db = da.from_array(b, (chunk, chunk))
 
-        # vector
-        b = np.random.random_integers(1, 10, shape)
-        db = da.from_array(b, (chunk, chunk))
+    res = da.linalg.solve(dA, db)
+    assert_eq(res, scipy.linalg.solve(A, b))
+    assert_eq(dA.dot(res), b.astype(float))
 
-        res = da.linalg.solve(dA, db)
-        assert_eq(res, scipy.linalg.solve(A, b))
-        assert_eq(dA.dot(res), b.astype(float))
+    # tall-and-skinny matrix
+    b = np.random.random_integers(1, 10, (shape, 5))
+    db = da.from_array(b, (chunk, 5))
 
-        # tall-and-skinny matrix
-        b = np.random.random_integers(1, 10, (shape, 5))
-        db = da.from_array(b, (chunk, 5))
+    res = da.linalg.solve(dA, db)
+    assert_eq(res, scipy.linalg.solve(A, b))
+    assert_eq(dA.dot(res), b.astype(float))
 
-        res = da.linalg.solve(dA, db)
-        assert_eq(res, scipy.linalg.solve(A, b))
-        assert_eq(dA.dot(res), b.astype(float))
+    # matrix
+    b = np.random.random_integers(1, 10, (shape, shape))
+    db = da.from_array(b, (chunk, chunk))
 
-        # matrix
-        b = np.random.random_integers(1, 10, (shape, shape))
-        db = da.from_array(b, (chunk, chunk))
-
-        res = da.linalg.solve(dA, db)
-        assert_eq(res, scipy.linalg.solve(A, b))
-        assert_eq(dA.dot(res), b.astype(float))
+    res = da.linalg.solve(dA, db)
+    assert_eq(res, scipy.linalg.solve(A, b))
+    assert_eq(dA.dot(res), b.astype(float))
 
 
-def test_inv():
-    import scipy.linalg
+@pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10)])
+def test_inv(shape, chunk):
+    np.random.seed(1)
 
-    for shape, chunk in [(20, 10), (50, 10)]:
-        np.random.seed(1)
+    A = np.random.random_integers(1, 10, (shape, shape))
+    dA = da.from_array(A, (chunk, chunk))
 
-        A = np.random.random_integers(1, 10, (shape, shape))
-        dA = da.from_array(A, (chunk, chunk))
-
-        res = da.linalg.inv(dA)
-        assert_eq(res, scipy.linalg.inv(A))
-        assert_eq(dA.dot(res), np.eye(shape, dtype=float))
+    res = da.linalg.inv(dA)
+    assert_eq(res, scipy.linalg.inv(A))
+    assert_eq(dA.dot(res), np.eye(shape, dtype=float))
 
 
 def _get_symmat(size):
@@ -372,47 +362,44 @@ def _get_symmat(size):
     return lA.dot(lA.T)
 
 
-def test_solve_sym_pos():
-    import scipy.linalg
+@pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (30, 6)])
+def test_solve_sym_pos(shape, chunk):
+    np.random.seed(1)
 
-    for shape, chunk in [(20, 10), (30, 6)]:
-        np.random.seed(1)
+    A = _get_symmat(shape)
+    dA = da.from_array(A, (chunk, chunk))
 
-        A = _get_symmat(shape)
-        dA = da.from_array(A, (chunk, chunk))
+    # vector
+    b = np.random.random_integers(1, 10, shape)
+    db = da.from_array(b, (chunk, chunk))
 
-        # vector
-        b = np.random.random_integers(1, 10, shape)
-        db = da.from_array(b, (chunk, chunk))
+    res = da.linalg.solve(dA, db, sym_pos=True)
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
+    assert_eq(dA.dot(res), b.astype(float))
 
-        res = da.linalg.solve(dA, db, sym_pos=True)
-        assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-        assert_eq(dA.dot(res), b.astype(float))
+    # tall-and-skinny matrix
+    b = np.random.random_integers(1, 10, (shape, 5))
+    db = da.from_array(b, (chunk, 5))
 
-        # tall-and-skinny matrix
-        b = np.random.random_integers(1, 10, (shape, 5))
-        db = da.from_array(b, (chunk, 5))
+    res = da.linalg.solve(dA, db, sym_pos=True)
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
+    assert_eq(dA.dot(res), b.astype(float))
 
-        res = da.linalg.solve(dA, db, sym_pos=True)
-        assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-        assert_eq(dA.dot(res), b.astype(float))
+    # matrix
+    b = np.random.random_integers(1, 10, (shape, shape))
+    db = da.from_array(b, (chunk, chunk))
 
-        # matrix
-        b = np.random.random_integers(1, 10, (shape, shape))
-        db = da.from_array(b, (chunk, chunk))
-
-        res = da.linalg.solve(dA, db, sym_pos=True)
-        assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-        assert_eq(dA.dot(res), b.astype(float))
+    res = da.linalg.solve(dA, db, sym_pos=True)
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
+    assert_eq(dA.dot(res), b.astype(float))
 
 
-def test_cholesky():
-    import scipy.linalg
+@pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (12, 3), (30, 3), (30, 6)])
+def test_cholesky(shape, chunk):
 
-    for shape, chunk in [(20, 10), (12, 3), (30, 3), (30, 6)]:
-        A = _get_symmat(shape)
-        dA = da.from_array(A, (chunk, chunk))
-        assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A))
-        assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True))
+    A = _get_symmat(shape)
+    dA = da.from_array(A, (chunk, chunk))
+    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A))
+    assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True))
 
 
