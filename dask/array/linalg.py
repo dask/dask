@@ -555,10 +555,11 @@ def solve_triangular(a, b, lower=False):
     return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
 
 
-def solve(a, b):
+def solve(a, b, sym_pos=False):
     """
-    Solve the equation ``a x = b`` for ``x`` with LU decomposition and
-    forward / backward substitutions.
+    Solve the equation ``a x = b`` for ``x``. By default, use LU
+    decomposition and forward / backward substitutions. When ``sym_pos`` is
+    ``True``, use Cholesky decomposition.
 
     Parameters
     ----------
@@ -566,6 +567,9 @@ def solve(a, b):
         A square matrix.
     b : (M,) or (M, N) array_like
         Right-hand side matrix in ``a x = b``.
+    sym_pos : bool
+        Assume a is symmetric and positive definite. If ``True``, use Cholesky
+        decomposition.
 
     Returns
     -------
@@ -573,8 +577,12 @@ def solve(a, b):
         Solution to the system ``a x = b``.  Shape of the return matches the
         shape of `b`.
     """
-    p, l, u = lu(a)
-    uy = solve_triangular(l, p.T.dot(b), lower=True)
+    if sym_pos:
+        l, u = _cholesky(a)
+    else:
+        p, l, u = lu(a)
+        b = p.T.dot(b)
+    uy = solve_triangular(l, b, lower=True)
     return solve_triangular(u, uy)
 
 
@@ -594,4 +602,107 @@ def inv(a):
         Inverse of the matrix `a`.
     """
     return solve(a, eye(a.shape[0], chunks=a.chunks[0][0]))
+
+
+def _cholesky_lower(a):
+    import scipy.linalg
+    return scipy.linalg.cholesky(a, lower=True)
+
+
+def cholesky(a, lower=False):
+    """
+    Returns the Cholesky decomposition, :math:`A = L L^*` or
+    :math:`A = U^* U` of a Hermitian positive-definite matrix A.
+
+    Parameters
+    ----------
+    a : (M, M) array_like
+        Matrix to be decomposed
+    lower : bool, optional
+        Whether to compute the upper or lower triangular Cholesky
+        factorization.  Default is upper-triangular.
+
+    Returns
+    -------
+    c : (M, M) Array
+        Upper- or lower-triangular Cholesky factor of `a`.
+    """
+
+    l, u = _cholesky(a)
+    if lower:
+        return l
+    else:
+        return u
+
+
+def _cholesky(a):
+    """
+    Private function to perform Cholesky decomposition, which returns both
+    lower and upper triangulars.
+    """
+    import scipy.linalg
+
+    if a.ndim != 2:
+        raise ValueError('Dimension must be 2 to perform cholesky decomposition')
+
+    xdim, ydim = a.shape
+    if xdim != ydim:
+        raise ValueError('Input must be a square matrix to perform cholesky decomposition')
+    if not len(set(a.chunks[0] + a.chunks[1])) == 1:
+        msg = ('All chunks must be a square matrix to perform cholesky decomposition. '
+               'Use .rechunk method to change the size of chunks.')
+        raise ValueError(msg)
+
+    vdim = len(a.chunks[0])
+    hdim = len(a.chunks[1])
+
+    token = tokenize(a)
+    name = 'cholesky-' + token
+
+    # (name_lt_dot, i, j, k, l) corresponds to l_ij.dot(l_kl.T)
+    name_lt_dot = 'cholesky-lt-dot-' + token
+    # because transposed results are needed for calculation,
+    # we can build graph for upper triangular simultaneously
+    name_upper = 'cholesky-upper-' + token
+
+    # calculates lower triangulars because subscriptions get simpler
+    dsk = {}
+    for i in range(vdim):
+        for j in range(hdim):
+            if i < j:
+                dsk[name, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
+                dsk[name_upper, j, i] = (name, i, j)
+            elif i == j:
+                target = (a.name, i, j)
+                if i > 0:
+                    prevs = []
+                    for p in range(i):
+                        prev = name_lt_dot, i, p, i, p
+                        dsk[prev] = (np.dot, (name, i, p), (name_upper, p, i))
+                        prevs.append(prev)
+                    target = (operator.sub, target, (sum, prevs))
+                dsk[name, i, i] = (_cholesky_lower, target)
+                dsk[name_upper, i, i] = (np.transpose, (name, i, i))
+            else:
+                # solving x.dot(L11.T) = (A21 - L20.dot(L10.T)) is equal to
+                # L11.dot(x.T) = A21.T - L10.dot(L20.T)
+                # L11.dot(x.T) = A12 - L10.dot(L02)
+                target = (a.name, j, i)
+                if j > 0:
+                    prevs = []
+                    for p in range(j):
+                        prev = name_lt_dot, j, p, i, p
+                        dsk[prev] = (np.dot, (name, j, p), (name_upper, p, i))
+                        prevs.append(prev)
+                    target = (operator.sub, target, (sum, prevs))
+                dsk[name_upper, j, i] = (_solve_triangular_lower,(name, j, j), target)
+                dsk[name, i, j] = (np.transpose, (name_upper, j, i))
+
+    dsk.update(a.dask)
+    cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
+
+    lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    # do not use .T, because part of transposed blocks are already calculated
+    upper = Array(dsk, name_upper, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    return lower, upper
 
