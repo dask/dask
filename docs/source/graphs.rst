@@ -84,4 +84,3 @@ special and others can write different schedulers better suited to other
 applications or architectures easily.  Systems that emit dask graphs (like
 ``dask.array``, ``dask.bag``, and so on) may leverage the appropriate scheduler for
 the application and hardware.
-

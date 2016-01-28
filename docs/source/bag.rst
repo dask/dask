@@ -251,6 +251,7 @@ comes at cost.  Bags have the following known limitations:
     Using ``Bag.foldby`` requires more thought.
 4.  The implementation backing ``Bag.groupby`` is under heavy churn.
 
+.. _dask-bag-api:
 
 API
 ---

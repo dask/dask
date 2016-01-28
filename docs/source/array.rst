@@ -7,6 +7,7 @@ blocked algorithms and task scheduling.
 .. toctree::
    :maxdepth: 1
 
+   array-quickstart.rst
    array-overview.rst
    array-design.rst
    array-creation.rst
