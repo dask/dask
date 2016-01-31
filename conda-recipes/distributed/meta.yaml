@@ -1,0 +1,36 @@
+package:
+  name: distributed
+  version: "1.7.4"
+
+source:
+  path: ../..
+
+requirements:
+  build:
+    - python
+    - tornado
+    - toolz
+    - cloudpickle
+    - dask
+    - click
+    - boto3
+
+  run:
+    - python
+    - tornado
+    - toolz
+    - cloudpickle
+    - dask
+    - click
+    - boto3
+
+test:
+  imports:
+    - distributed
+    - distributed.diagnostics
+    - distributed.http
+
+about:
+  home: http://distributed.readthedocs.org/en/latest/
+  license: BSD
+  summary: 'Distributed computing'

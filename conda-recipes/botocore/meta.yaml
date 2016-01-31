@@ -1,0 +1,41 @@
+package:
+  name: botocore
+  version: "1.3.23"
+
+source:
+  fn: botocore-1.3.23.tar.gz
+  url: https://pypi.python.org/packages/source/b/botocore/botocore-1.3.23.tar.gz
+  md5: 464900da5330632950a6c5752c7fb8de
+
+requirements:
+  build:
+    - python
+    - jmespath >=0.7.1,<1.0.0
+    - python-dateutil >=2.1,<3.0.0
+    - docutils >=0.10
+
+  run:
+    - python
+    - jmespath >=0.7.1,<1.0.0
+    - python-dateutil >=2.1,<3.0.0
+    - docutils >=0.10
+
+test:
+  imports:
+    - botocore
+    - botocore.docs
+    - botocore.docs.bcdoc
+    - botocore.vendored
+    - botocore.vendored.requests
+    - botocore.vendored.requests.packages
+    - botocore.vendored.requests.packages.chardet
+    - botocore.vendored.requests.packages.urllib3
+    - botocore.vendored.requests.packages.urllib3.contrib
+    - botocore.vendored.requests.packages.urllib3.packages
+    - botocore.vendored.requests.packages.urllib3.packages.ssl_match_hostname
+    - botocore.vendored.requests.packages.urllib3.util
+
+about:
+  home: https://github.com/boto/botocore
+  license: Apache Software License
+  summary: 'Low-level, data-driven core of boto 3.'
