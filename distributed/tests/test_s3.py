@@ -70,9 +70,11 @@ def test_read_bytes(s, a, b):
     yield e._start()
 
     futures = read_bytes(test_bucket_name, prefix='test/', anon=True)
-    assert len(futures) == len(files)
+    assert len(futures) >= len(files)
     results = yield e._gather(futures)
-    assert set(results) == set(files.values())
+    assert set(results).issuperset(set(files.values()))
+
+    yield e._shutdown()
 
 
 @gen_cluster()
@@ -86,7 +88,9 @@ def test_read_bytes_lazy(s, a, b):
     results = e.compute(*values, sync=False)
     results = yield e._gather(results)
 
-    assert set(results) == set(files.values())
+    assert set(results).issuperset(set(files.values()))
+
+    yield e._shutdown()
 
 
 def test_get_s3():
