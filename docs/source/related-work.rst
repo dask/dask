@@ -205,7 +205,7 @@ PEP-3184_.  It has a few notable differences:
    It is preferable to submit Future objects directly rather than wait on them
    before submission.
 *  The ``map`` function returns ``Future`` objects, not concrete results.  The
-  ``map`` function returns immediately.
+   ``map`` function returns immediately.
 *  It is not yet possible to cancel a ``Future`` (though this is theoretically
    possible please raise an issue if this is of concrete importance to you.)
 *  Distributed generally does not support timeouts or callbacks
