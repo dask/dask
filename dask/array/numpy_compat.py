@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+import warnings
 
 try:
     isclose = np.isclose
@@ -24,13 +25,14 @@ except AttributeError:
 # Taken from scikit-learn:
 # https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/fixes.py#L84
 try:
-    if (not np.allclose(np.divide(.4, 1, casting="unsafe"),
-                        np.divide(.4, 1, casting="unsafe", dtype=np.float))
-            or not np.allclose(np.divide(1, .5, dtype='i8'), 2)
-            or not np.allclose(np.divide(.4, 1), .4)):
-        raise TypeError('Divide not working with dtype: '
-                        'https://github.com/numpy/numpy/issues/3484')
-    divide = np.divide
+    with warnings.catch_warnings():
+        if (not np.allclose(np.divide(.4, 1, casting="unsafe"),
+                            np.divide(.4, 1, casting="unsafe", dtype=np.float))
+                or not np.allclose(np.divide(1, .5, dtype='i8'), 2)
+                or not np.allclose(np.divide(.4, 1), .4)):
+            raise TypeError('Divide not working with dtype: '
+                            'https://github.com/numpy/numpy/issues/3484')
+        divide = np.divide
 
 except TypeError:
     # Divide with dtype doesn't work on Python 3
