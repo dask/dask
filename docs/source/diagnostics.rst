@@ -38,7 +38,7 @@ The callbacks are:
    the exit was due to an error.
 
 These are internally represented as tuples of length 4, stored in the order
-presented above.  Callbacks for common use cases are provided in
+presented above. Callbacks for common use cases are provided in
 ``dask.diagnostics``.
 
 
@@ -47,7 +47,7 @@ Progress Bar
 
 The ``ProgressBar`` class builds on the scheduler callbacks described above to
 display a progress bar in the terminal or notebook during computation. This can
-be a nice feedback during long running graph execution.  It can be used as a
+be a nice feedback during long running graph execution. It can be used as a
 context manager around calls to ``get`` or ``compute`` to profile the
 computation:
 
@@ -75,16 +75,6 @@ To unregister from the global callbacks, call the ``unregister`` method:
 .. code-block:: python
 
     >>> pbar.unregister()
-
-Note that multiple diagnostic tools can be used concurrently by using multiple
-context managers:
-
-.. code-block:: python
-
-    >>> with ProgressBar(), Profiler() as prof:
-    ...     out = res.compute()
-    [########################################] | 100% Completed | 17.1 s
-    >>> prof.visualize()
 
 
 Profiling
@@ -142,7 +132,7 @@ task:
 
 Where the size metric is the output of a function called on the result of each
 task. The default metric is to count each task (``metric`` is 1 for all tasks).
-Other functions may used as a metric instead through the ``metric`` keyword.
+Other functions may be used as a metric instead through the ``metric`` keyword.
 For example, the ``nbytes`` function found in ``cachey`` can be used to measure
 the number of bytes in the scheduler cache:
 
@@ -157,7 +147,7 @@ Example
 ^^^^^^^
 
 As an example to demonstrate using the diagnostics, we'll profile some linear
-algebra done with ``dask.array``.  We'll create a random array, take its QR
+algebra done with ``dask.array``. We'll create a random array, take its QR
 decomposition, and then reconstruct the initial array by multiplying the Q and
 R components together. Note that since the profilers (and all diagnostics) are
 just context managers, multiple profilers can be used in a with block:
@@ -165,6 +155,7 @@ just context managers, multiple profilers can be used in a with block:
 .. code-block:: python
 
     >>> import dask.array as da
+    >>> from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
     >>> a = da.random.random(size=(10000, 1000), chunks=(1000, 1000))
     >>> q, r = da.linalg.qr(a)
     >>> a2 = q.dot(r)
@@ -211,7 +202,7 @@ These can be analyzed separately, or viewed in a bokeh plot using the provided
             width="650" height="330" style="border:none"></iframe>
 
 To view multiple profilers at the same time, the ``dask.diagnostics.visualize``
-function can be used. This takes a list of profilers, and creates a verticle
+function can be used. This takes a list of profilers, and creates a vertical
 stack of plots aligned along the x-axis:
 
 .. code-block:: python
@@ -245,27 +236,26 @@ Looking at the above figure, from top to bottom:
    coloring is the same as for the ``Profiler`` plot, and that the task
    represented by each line can be found by hovering over the line.
 
-From these plots we can see that the initial tasks (calls to ``random`` and
-``qr`` for each chunk) are run concurrently, but only use slightly more than
-100\% CPU. This is because the call to ``numpy.qr`` currently doesn't release
-the global interpreter lock, so those calls can't truly be done in parallel.
-Next, there's reduction step where all the blocks are combined. This requires
-all the results from the first step to be held in memory, as shown by the
-increased number of results in the cache, and increase in memory usage.
-Immediately after this task ends, the number of elements in the cache
-decreases, showing that they were only needed for this step. Finally, there's
-an interleaved set of calls to ``dot`` and ``sum`` on the outputs. Looking at
-the CPU plot shows that these run both concurrently and in parallel, as the CPU
-percentage spikes up to around 250\%.
+From these plots we can see that the initial tasks (calls to
+``numpy.random.random`` and ``numpy.linalg.qr`` for each chunk) are run
+concurrently, but only use slightly more than 100\% CPU. This is because the
+call to ``numpy.linalg.qr`` currently doesn't release the global interpreter
+lock, so those calls can't truly be done in parallel. Next, there's a reduction
+step where all the blocks are combined. This requires all the results from the
+first step to be held in memory, as shown by the increased number of results in
+the cache, and increase in memory usage. Immediately after this task ends, the
+number of elements in the cache decreases, showing that they were only needed
+for this step. Finally, there's an interleaved set of calls to ``dot`` and
+``sum``. Looking at the CPU plot shows that these run both concurrently and in
+parallel, as the CPU percentage spikes up to around 250\%.
 
 
 Custom Callbacks
 ----------------
 
 Custom diagnostics can be created using the callback mechanism described above.
-To add your own,  subclass the ``Callback`` class, and
-define your own methods. Here we create a class that prints the name of every
-key as it's computed:
+To add your own, subclass the ``Callback`` class, and define your own methods.
+Here we create a class that prints the name of every key as it's computed:
 
 .. code-block:: python
 
