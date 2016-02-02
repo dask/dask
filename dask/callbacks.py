@@ -10,7 +10,7 @@ class Callback(object):
 
     Create a callback with functions of the following signatures:
 
-    >>> def start(dsk, state):
+    >>> def start(dsk):
     ...     pass
     >>> def pretask(key, dsk, state):
     ...     pass

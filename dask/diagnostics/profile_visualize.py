@@ -178,10 +178,12 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
         for f in figs[1:]:
             f.x_range = top.x_range
             f.title = None
-            f.min_border_top = 20
-        for f in figs[:1]:
+            f.min_border_top -= 30
+            f.plot_height -= 30
+        for f in figs[:-1]:
             f.xaxis.axis_label = None
-            f.min_border_bottom = 20
+            f.min_border_bottom -= 30
+            f.plot_height -= 30
         for f in figs:
             f.min_border_left = 75
             f.min_border_right = 75
@@ -193,7 +195,7 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     return p
 
 
-def plot_tasks(results, dsk, palette='GnBu', label_size=60, **kwargs):
+def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -273,7 +275,7 @@ def plot_tasks(results, dsk, palette='GnBu', label_size=60, **kwargs):
     return p
 
 
-def plot_resources(results, palette='GnBu', **kwargs):
+def plot_resources(results, palette='YlGnBu', **kwargs):
     """Plot resource usage in a bokeh plot.
 
     Parameters
@@ -316,7 +318,7 @@ def plot_resources(results, palette='GnBu', **kwargs):
     return p
 
 
-def plot_cache(results, dsk, start_time, metric_name, palette='GnBu',
+def plot_cache(results, dsk, start_time, metric_name, palette='YlGnBu',
                label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
@@ -359,9 +361,9 @@ def plot_cache(results, dsk, start_time, metric_name, palette='GnBu',
             for v in vals:
                 cnts[v.cache_time] += v.metric
                 cnts[v.free_time] -= v.metric
-            data[k] = list(accumulate(add, pluck(1, sorted(cnts.items()))))
+            data[k] = [0] + list(accumulate(add, pluck(1, sorted(cnts.items()))))
 
-        tics = [i - start_time for i in tics]
+        tics = [0] + [i - start_time for i in tics]
         p = bp.figure(x_range=[0, max(tics)], **defaults)
 
         for (key, val), color in zip(data.items(), get_colors(palette, data.keys())):
@@ -371,9 +373,6 @@ def plot_cache(results, dsk, start_time, metric_name, palette='GnBu',
 
     else:
         p = bp.figure(y_range=[0, 10], x_range=[0, 10], **defaults)
-    p.grid.grid_line_color = None
-    p.axis.axis_line_color = None
-    p.axis.major_tick_line_color = None
     p.yaxis.axis_label = "Cache Size ({0})".format(metric_name)
     p.xaxis.axis_label = "Time (s)"
 
