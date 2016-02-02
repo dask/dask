@@ -532,7 +532,8 @@ def from_dask_array(x, columns=None):
     for c in x.chunks[0]:
         divisions.append(divisions[-1] + c)
 
-    index = [(range, a, b) for a, b in zip(divisions[:-1], divisions[1:])]
+    index = [(np.arange, a, b, 1, 'i8') for a, b in
+             zip(divisions[:-1], divisions[1:])]
 
     divisions[-1] -= 1
 
