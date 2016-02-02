@@ -201,7 +201,7 @@ def _futures_to_collection(futures, executor=None, **kwargs):
         func = _futures_to_dask_dataframe
     elif 'numpy' in typ.__module__:
         func = _futures_to_dask_array
-    elif issubclass(typ, Iterable):
+    elif issubclass(typ, (tuple, list, set, frozenset)):
         func = _futures_to_dask_bag
     else:
         raise NotImplementedError("First future of type %s.  Expected "
