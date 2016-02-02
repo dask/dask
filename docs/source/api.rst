@@ -40,6 +40,11 @@ Executor
 .. autoclass:: Executor
    :members:
 
+CompatibleExecutor
+------------------
+
+.. autoclass:: CompatibleExecutor
+    :members: map
 
 Future
 ------

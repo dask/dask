@@ -18,8 +18,8 @@ from tornado import gen
 from distributed import Center, Worker, Nanny
 from distributed.core import rpc
 from distributed.client import WrappedKey
-from distributed.executor import (Executor, Future, _wait, wait, _as_completed,
-        as_completed, tokenize, _global_executor, default_executor)
+from distributed.executor import (Executor, Future, CompatibleExecutor, _wait, wait,
+        _as_completed, as_completed, tokenize, _global_executor, default_executor)
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
@@ -95,6 +95,18 @@ def test_map(s, a, b):
     L6 = e.map(f, range(5), y=y)
     results = yield e._gather(L6)
     assert results == list(range(20, 25))
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test_aaa_compatible_map(s, a, b):
+    e = CompatibleExecutor((s.ip, s.port), start=False)
+    yield e._start()
+
+    results = e.map(inc, range(5))
+    assert not isinstance(results, list)
+    assert list(results) == list(map(inc, range(5)))
 
     yield e._shutdown()
 

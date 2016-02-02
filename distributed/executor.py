@@ -805,6 +805,31 @@ class Executor(object):
             raise result
 
 
+class CompatibleExecutor(Executor):
+    """ A concurrent.futures-compatible Executor
+
+    A subclass of Executor that conforms to concurrent.futures API,
+    allowing swapping in for other Executors.
+    """
+
+    def map(self, func, *iterables, **kwargs):
+        """ Map a function on a sequence of arguments
+
+        Returns
+        -------
+        iter_results: iterable
+            Iterable yielding results of the map.
+
+        See Also
+        --------
+        Executor.map: for more info
+        """
+        list_of_futures = super(CompatibleExecutor, self).map(
+                                func, *iterables, **kwargs)
+        for f in list_of_futures:
+            yield f.result()
+
+
 @gen.coroutine
 def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
     if timeout is not None:
