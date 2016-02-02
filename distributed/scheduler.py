@@ -266,7 +266,9 @@ class Scheduler(Server):
 
         for cor in self.coroutines:
             if cor.done():
-                raise cor.exception()
+                exc = cor.exception()
+                if exc:
+                    raise exc
 
         if self.status != 'running':
             self.listen(port)
