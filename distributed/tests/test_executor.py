@@ -7,6 +7,7 @@ from datetime import timedelta
 import os
 import shutil
 import sys
+from threading import Thread
 from time import sleep, time
 
 import pytest
@@ -98,15 +99,24 @@ def test_map(s, a, b):
 
     yield e._shutdown()
 
-
 @gen_cluster()
-def test_aaa_compatible_map(s, a, b):
+def test_compatible_map(s, a, b):
     e = CompatibleExecutor((s.ip, s.port), start=False)
     yield e._start()
 
     results = e.map(inc, range(5))
     assert not isinstance(results, list)
-    assert list(results) == list(map(inc, range(5)))
+    # Since this map blocks as it waits for results,
+    # waiting here will block the current IOLoop,
+    # which happens to also be running the test Workers.
+    # So wait on the results in a background thread to avoid blocking.
+    f = gen.Future()
+    def wait_on_results():
+        f.set_result(list(results))
+    Thread(target=wait_on_results).start()
+    result_list = yield f
+    # getting map results blocks
+    assert result_list == list(map(inc, range(5)))
 
     yield e._shutdown()
 
