@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from distributed.cluster import Cluster
 import click
 import os

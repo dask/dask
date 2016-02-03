@@ -19,9 +19,14 @@ setup(name='distributed',
       maintainer_email='mrocklin@gmail.com',
       license='BSD',
       install_requires=requires,
-      packages=['distributed', 'distributed.diagnostics', 'distributed.http'],
+      packages=['distributed', 'distributed.cli', 'distributed.diagnostics', 'distributed.http'],
       long_description=(open('README.md').read() if os.path.exists('README.md')
                         else ''),
-      scripts=[os.path.join('bin', name)
-               for name in ['dcenter', 'dworker', 'dcluster', 'dscheduler']],
+      entry_points='''
+        [console_scripts]
+        dcenter=distributed.cli.dcenter:go
+        dscheduler=distributed.cli.dscheduler:go
+        dcluster=distributed.cli.dcluster:start
+        dworker=distributed.cli.dworker:go
+      ''',
       zip_safe=False)
