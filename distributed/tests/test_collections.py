@@ -8,6 +8,7 @@ from distributed.utils_test import cluster, loop, gen_cluster
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
         futures_to_dask_array, _stack, stack, _futures_to_collection,
+        _futures_to_dask_bag, futures_to_dask_bag,
         futures_to_collection)
 import numpy as np
 import pandas as pd
@@ -64,6 +65,8 @@ def test_no_divisions(s, a, b):
     assert not df.known_divisions
     assert list(df.columns) == list(tm.makeTimeDataFrame(5).columns)
 
+    yield e._shutdown()
+
 
 def test_futures_to_dask_dataframe(loop):
     with cluster() as (c, [a, b]):
@@ -116,6 +119,8 @@ def test_dataframes(s, a, b):
         remote, = e.compute(f(rdf))
         remote = yield gen.with_timeout(timedelta(seconds=5), remote._result())
         assert_equal(local, remote)
+
+    yield e._shutdown()
 
 
 @gen_cluster(timeout=60)
@@ -213,6 +218,46 @@ def test__dask_array_collections(s, a, b):
     yield e._shutdown()
 
 
+@gen_cluster()
+def test__futures_to_dask_bag(s, a, b):
+    import dask.bag as db
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    L = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    futures = yield e._scatter(L)
+
+    rb = yield _futures_to_dask_bag(futures)
+    assert isinstance(rb, db.Bag)
+    assert rb.npartitions == len(L)
+
+    lb = db.from_sequence([1, 2, 3, 4, 5, 6, 7, 8, 9], npartitions=3)
+
+    exprs = [lambda x: x.map(lambda x: x + 1).sum(),
+             lambda x: x.filter(lambda x: x % 2)]
+
+    for expr in exprs:
+        local = expr(lb).compute(get=dask.get)
+        remote, = e.compute(expr(rb))
+        remote = yield remote._result()
+
+        assert local == remote
+
+    yield e._shutdown()
+
+
+def test_futures_to_dask_bag(loop):
+    import dask.bag as db
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            data = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+            futures = e.scatter(data)
+            b = futures_to_dask_bag(futures)
+
+            assert isinstance(b, db.Bag)
+            assert b.map(lambda x: x + 1).sum().compute(get=e.get) == sum(range(2, 11))
+
+
 @pytest.mark.skipif(sys.platform!='linux',
                     reason='KQueue error - uncertain cause')
 def test_futures_to_dask_array(loop):
@@ -251,3 +296,12 @@ def test__futures_to_collection(s, a, b):
 
     assert type(x) == type(y)
     assert x.dask == y.dask
+
+    remote_lists = yield e._scatter([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    b = yield _futures_to_collection(remote_lists)
+    c = yield _futures_to_dask_bag(remote_lists)
+
+    assert type(b) == type(c)
+    assert b.dask == b.dask
+
+    yield e._shutdown()

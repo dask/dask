@@ -1,12 +1,14 @@
 """ This file is experimental and may disappear without warning """
 from __future__ import print_function, division, absolute_import
 
+from collections import Iterable
 from itertools import product
 from operator import getitem
 
 import dask
 from dask.context import _globals
 import dask.array as da
+import dask.bag as db
 import dask.dataframe as dd
 from dask.base import tokenize
 import numpy as np
@@ -160,6 +162,34 @@ def stack(futures, axis=0, executor=None):
 
 
 @gen.coroutine
+def _futures_to_dask_bag(futures, executor=None):
+    executor = default_executor(executor)
+
+    name = 'bag-from-futures-' + tokenize(*futures)
+    dsk = {(name, i): future for i, future in enumerate(futures)}
+
+    if _globals['get'] != executor.get:
+        print("Setting global dask scheduler to use distributed")
+        dask.set_options(get=executor.get)
+
+    raise gen.Return(db.Bag(dsk, name, len(futures)))
+
+
+def futures_to_dask_bag(futures, executor=None):
+    """ Convert a list of futures into a dask.bag
+
+    The futures should be point to Python iterables
+
+    Parameters
+    ----------
+    futures: iterable of Futures
+    executor: Executor (optional)
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _futures_to_dask_bag, futures,
+                executor=executor)
+
+@gen.coroutine
 def _futures_to_collection(futures, executor=None, **kwargs):
     executor = default_executor(executor)
     element = futures
@@ -171,6 +201,8 @@ def _futures_to_collection(futures, executor=None, **kwargs):
         func = _futures_to_dask_dataframe
     elif 'numpy' in typ.__module__:
         func = _futures_to_dask_array
+    elif issubclass(typ, (tuple, list, set, frozenset)):
+        func = _futures_to_dask_bag
     else:
         raise NotImplementedError("First future of type %s.  Expected "
                 "numpy or pandas object" % typ.__name__)
