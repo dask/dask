@@ -234,3 +234,7 @@ def test_value_picklable():
 def test_imperative_compute_forward_kwargs():
     x = value(1) + 2
     x.compute(bogus_keyword=10)
+
+
+def test_do_method_descriptor():
+    do(bytes.decode)(b'')  # does not err

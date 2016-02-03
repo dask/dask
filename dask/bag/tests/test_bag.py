@@ -8,7 +8,8 @@ from toolz import (merge, join, pipe, filter, identity, merge_with, take,
 import math
 from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
-        _parse_s3_URI, inline_singleton_lists, optimize, system_encoding)
+        _parse_s3_URI, inline_singleton_lists, optimize, system_encoding,
+        from_imperative)
 from dask.compatibility import BZ2File, GzipFile
 from dask.utils import filetexts, tmpfile, raises, open
 from dask.async import get_sync
@@ -718,3 +719,11 @@ def test_to_imperative():
     assert all(isinstance(x, Value) for x in [a, b, c])
     assert b.compute() == [4, 5]
 
+
+def test_from_imperative():
+    from dask.imperative import value
+    a, b, c = value([1, 2, 3]), value([4, 5, 6]), value([7, 8, 9])
+    bb = from_imperative([a, b, c])
+
+    assert isinstance(bb, Bag)
+    assert list(bb) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
