@@ -9,7 +9,7 @@ import uuid
 from toolz import merge, unique, curry, first
 
 from .optimize import cull, fuse
-from .utils import concrete, funcname
+from .utils import concrete, funcname, ignoring
 from . import base
 from .compatibility import apply
 from . import threaded
@@ -174,9 +174,12 @@ def do(func, pure=False):
     >>> out1.key == out2.key
     True
     """
-    @wraps(func)
     def _dfunc(*args, **kwargs):
         return applyfunc(func, args, kwargs, pure=pure)
+
+    with ignoring(AttributeError):
+        _dfunc = wraps(func)(_dfunc)
+
     return _dfunc
 
 
