@@ -21,7 +21,7 @@ with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
-from ..base import Base, normalize_token
+from ..base import Base, normalize_token, tokenize
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
         StringIO, GzipFile, BZ2File)
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
@@ -1264,3 +1264,33 @@ def reify(seq):
     if seq and isinstance(seq[0], Iterator):
         seq = list(map(list, seq))
     return seq
+
+
+def from_imperative(values):
+    """ Create bag from many imperative objects
+
+    Parameters
+    ----------
+    values: list of Values
+        An iterable of dask.imperative.Value objects, such as come from dask.do
+        These comprise the individual partitions of the resulting bag
+
+    Returns
+    -------
+    Bag
+
+    Examples
+    --------
+    >>> b = from_imperative([x, y, z])  # doctest: +SKIP
+    """
+    from dask.imperative import Value
+    if isinstance(values, Value):
+        values = [values]
+    dsk = merge(v.dask for v in values)
+
+    name = 'bag-from-imperative-' + tokenize(*values)
+    names = [(name, i) for i in range(len(values))]
+    values = [v.key for v in values]
+    dsk2 = dict(zip(names, values))
+
+    return Bag(merge(dsk, dsk2), name, len(values))
