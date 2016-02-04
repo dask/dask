@@ -1621,17 +1621,17 @@ def test_failed_worker_without_warning(s, a, b):
     start = time()
     while not a.process.is_alive():
         yield gen.sleep(0.01)
-        assert time() - start < 5
+        assert time() - start < 10
 
     start = time()
     while s.ncores == ncores1:
         yield gen.sleep(0.01)
-        assert time() - start < 5
+        assert time() - start < 10
 
     start = time()
     while len(s.ncores) < 2:
         yield gen.sleep(0.01)
-        assert time() - start < 5
+        assert time() - start < 10
 
     yield _wait(L)
 
