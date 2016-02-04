@@ -19,8 +19,9 @@ from tornado import gen
 from distributed import Center, Worker, Nanny
 from distributed.core import rpc
 from distributed.client import WrappedKey
-from distributed.executor import (Executor, Future, CompatibleExecutor, _wait, wait,
-        _as_completed, as_completed, tokenize, _global_executor, default_executor)
+from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
+        wait, _as_completed, as_completed, tokenize, _global_executor,
+        default_executor, _first_completed)
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
@@ -369,7 +370,11 @@ def test__as_completed(s, a, b):
     assert queue.qsize() == 3
     assert {queue.get(), queue.get(), queue.get()} == {a, b, c}
 
+    result = yield _first_completed([a, b, c])
+    assert result in [a, b, c]
+
     yield e._shutdown()
+
 
 
 def test_as_completed(loop):

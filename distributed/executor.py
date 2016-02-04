@@ -887,6 +887,19 @@ def _as_completed(fs, queue):
             queue.put_nowait(f)
 
 
+@gen.coroutine
+def _first_completed(futures):
+    """ Return a single completed future
+
+    See Also:
+        _as_completed
+    """
+    q = Queue()
+    yield _as_completed(futures, q)
+    result = yield q.get()
+    raise gen.Return(result)
+
+
 def as_completed(fs):
     """ Return futures in the order in which they complete
 
