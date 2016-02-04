@@ -625,10 +625,14 @@ class Executor(object):
         if isinstance(q_or_i, Iterator):
             get = next
         if isinstance(q_or_i, pyQueue):
-            get =  pyQueue.get
+            get = pyQueue.get
 
         while True:
-            d = get(q_or_i)
+            try:
+                d = get(q_or_i)
+            except StopIteration:
+                break
+
             [f] = self.scatter([d])
             qout.put(f)
 
@@ -639,6 +643,17 @@ class Executor(object):
 
         Optionally provide a set of workers to constrain the scatter.  Specify
         workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
+
+        Parameters
+        ----------
+        data: list, Iterator, Queue of elements
+        workers: list of tuples
+
+        Returns
+        -------
+        List of futures or Iterator/Queue of list of futures. Input type
+        matches output type, e.g. list->list, iterator->iterator, ...
+
 
         Examples
         --------
