@@ -1699,6 +1699,9 @@ def test_repr(s, a, b):
 def test_repr_sync(loop):
     with cluster(nworkers=3) as (s, [a, b, c]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            assert e.scheduler.ip in str(e)
-            assert str(e.scheduler.port) in repr(e)
-            assert str(3) in str(e)  # nworkers
+            s = str(e)
+            r = repr(e)
+            assert e.scheduler.ip in s
+            assert str(e.scheduler.port) in r
+            assert str(3) in s  # nworkers
+            assert 'threads' in s
