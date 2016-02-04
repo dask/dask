@@ -9,7 +9,6 @@ import logging
 import os
 from time import sleep
 import uuid
-from distributed.compatibility import Queue as pyQueue
 from threading import Thread
 
 import dask
@@ -28,9 +27,9 @@ from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
 from .utils import All, sync, funcname, ignoring
+from .compatibility import Queue as pyQueue
 
 logger = logging.getLogger(__name__)
-
 
 _global_executor = [None]
 
@@ -955,8 +954,7 @@ def as_completed(fs):
         raise NotImplementedError(
         "as_completed on many event loops not yet supported")
 
-    from .compatibility import Queue
-    queue = Queue()
+    queue = pyQueue()
 
     coroutine = lambda: _as_completed(fs, queue)
     loop.add_callback(coroutine)
