@@ -1,12 +1,14 @@
 import json
+import sys
 
 from tornado.ioloop import IOLoop
-from tornado import web
+from tornado import web, gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 
-from distributed import Scheduler
-from distributed.utils_test import gen_cluster, gen_test
+from distributed import Scheduler, Executor
+from distributed.executor import _wait
+from distributed.utils_test import gen_cluster, gen_test, inc
 from distributed.http.scheduler import HTTPScheduler
 from distributed.http.worker import HTTPWorker
 
@@ -17,13 +19,13 @@ def test_simple(s, a, b):
     server.listen(0)
     client = AsyncHTTPClient()
 
-
     response = yield client.fetch('http://localhost:%d/info.json' % server.port)
     response = json.loads(response.body.decode())
     assert response['ncores'] == {'%s:%d' % k: v for k, v in s.ncores.items()}
     assert response['status'] == a.status
 
     server.stop()
+
 
 @gen_cluster()
 def test_processing(s, a, b):
@@ -35,7 +37,7 @@ def test_processing(s, a, b):
 
     response = yield client.fetch('http://localhost:%d/processing.json' % server.port)
     response = json.loads(response.body.decode())
-    assert response == {'%s:%d' % a.address: ['foo'], '%s:%d' % b.address: []}
+    assert response == {a.address_string: ['foo'], b.address_string: []}
 
     server.stop()
 
@@ -81,8 +83,8 @@ def test_broadcast(s, a, b):
     s_response = yield client.fetch('http://localhost:%d/broadcast/info.json'
                                     % ss.port)
     assert (json.loads(s_response.body.decode()) ==
-            {'%s:%d' % a.address: json.loads(a_response.body.decode()),
-             '%s:%d' % b.address: json.loads(b_response.body.decode())})
+            {a.address_string: json.loads(a_response.body.decode()),
+             b.address_string: json.loads(b_response.body.decode())})
 
     ss.stop()
     aa.stop()
@@ -94,3 +96,40 @@ def test_services():
     s = Scheduler(services={'http': HTTPScheduler})
     assert isinstance(s.services['http'], HTTPServer)
     assert s.services['http'].port
+
+
+@gen_cluster()
+def test_with_data(s, a, b):
+    ss = HTTPScheduler(s)
+    ss.listen(0)
+
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    L = e.map(inc, [1, 2, 3])
+    L2 = yield e._scatter(['Hello', 'world!'])
+    yield _wait(L)
+
+    client = AsyncHTTPClient()
+    response = yield client.fetch('http://localhost:%s/memory-load.json' %
+                                  ss.port)
+    out = json.loads(response.body.decode())
+
+    assert all(isinstance(v, int) for v in out.values())
+    assert set(out) == {a.address_string, b.address_string}
+    assert sum(out.values()) == sum(map(sys.getsizeof,
+                                        [1, 2, 3, 'Hello', 'world!']))
+
+    response = yield client.fetch('http://localhost:%s/memory-load-by-key.json'
+                                  % ss.port)
+    out = json.loads(response.body.decode())
+    assert set(out) == {a.address_string, b.address_string}
+    assert all(isinstance(v, dict) for v in out.values())
+    assert all(k in {'inc', 'data'} for d in out.values() for k in d)
+    assert all(isinstance(v, int) for d in out.values() for v in d.values())
+
+    assert sum(v for d in out.values() for v in d.values()) == \
+            sum(map(sys.getsizeof, [1, 2, 3, 'Hello', 'world!']))
+
+    ss.stop()
+    yield e._shutdown()
