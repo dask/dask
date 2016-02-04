@@ -217,6 +217,17 @@ class Executor(object):
         if start:
             self.start(timeout=timeout)
 
+    def __str__(self):
+        if hasattr(self, '_loop_thread'):
+            n = sync(self.loop, self.scheduler.ncores)
+            return '<Executor: scheduler=%s:%d nworkers=%d>' % (
+                    self.scheduler.ip, self.scheduler.port, len(n))
+        else:
+            return '<Executor: scheduler=%s:%d>' % (
+                    self.scheduler.ip, self.scheduler.port)
+
+    __repr__ = __str__
+
     def start(self, **kwargs):
         """ Start scheduler running in separate thread """
         if hasattr(self, '_loop_thread'):

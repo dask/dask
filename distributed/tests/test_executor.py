@@ -1679,3 +1679,21 @@ def test_badly_serialized_input_stderr(capsys):
                 if 'hello!' in err:
                     break
                 assert time() - start < 20
+
+
+@gen_cluster()
+def test_repr(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    assert s.ip in str(e)
+    assert str(s.port) in repr(e)
+
+    yield e._shutdown()
+
+def test_repr_sync(loop):
+    with cluster(nworkers=3) as (s, [a, b, c]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            assert e.scheduler.ip in str(e)
+            assert str(e.scheduler.port) in repr(e)
+            assert str(3) in str(e)  # nworkers
