@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict
+from collections import defaultdict, Iterator
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
 from functools import wraps, partial
@@ -9,6 +9,8 @@ import logging
 import os
 from time import sleep
 import uuid
+from distributed.compatibility import Queue as pyQueue
+from threading import Thread
 
 import dask
 from dask.base import tokenize, normalize_token, Base
@@ -55,7 +57,6 @@ class Future(WrappedKey):
     We can get the result or the exception and traceback from the future
 
     >>> my_future.result()  # doctest: +SKIP
-    3
 
     See Also
     --------
@@ -619,10 +620,23 @@ class Executor(object):
 
         raise gen.Return(out)
 
+    def _threaded_scatter(self, q_or_i, qout):
+        """ Internal function for scattering Iterable/Queue data
+        """
+        if isinstance(q_or_i, Iterator):
+            get = next
+        if isinstance(q_or_i, pyQueue):
+            get =  pyQueue.get
+
+        while True:
+            d = get(q_or_i)
+            [f] = self.scatter([d])
+            qout.put(f)
+
     def scatter(self, data, workers=None):
         """ Scatter data into distributed memory
 
-        Accepts a list of data elements or dict of key-value pairs
+        Accepts a list/Queue/Iter. of data elements or dict of key-value pairs
 
         Optionally provide a set of workers to constrain the scatter.  Specify
         workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
@@ -645,7 +659,23 @@ class Executor(object):
         --------
         Executor.gather: Gather data back to local process
         """
-        return sync(self.loop, self._scatter, data, workers=workers)
+        if isinstance(data, Iterator) or isinstance(data, pyQueue):
+            logger.debug("Starting thread for streaming data")
+            qout = pyQueue()
+
+            t = Thread(target=self._threaded_scatter, args=(data, qout))
+            t.daemon = True
+            t.start()
+
+            if isinstance(data, Iterator):
+                def _():
+                    while True:
+                        yield qout.get()
+                return _()
+            else:
+                return qout
+        else:
+            return sync(self.loop, self._scatter, data, workers=workers)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):

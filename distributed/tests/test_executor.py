@@ -1072,6 +1072,34 @@ def test_directed_scatter_sync(loop):
             assert len(has_what[('127.0.0.1', a['port'])]) == 0
 
 
+def test_iterator_scatter(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
+
+            aa = ee.scatter([1,2,3])
+            assert [1,2,3] == ee.gather(aa)
+
+            g = (i for i in range(10))
+            futures = ee.scatter(g)
+            assert isinstance(futures, Iterator)
+
+            a = next(futures)
+            assert ee.gather(a) == 0
+
+
+def test_queue_scatter(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
+            from distributed.compatibility import Queue
+            q = Queue()
+            [q.put(d) for d in range(10)]
+
+            futures = ee.scatter(q)
+            assert isinstance(futures, Queue)
+            a = futures.get()
+            assert ee.gather(a) == 0
+
+
 @gen_cluster()
 def test_many_submits_spread_evenly(s, a, b):
     e = Executor((s.ip, s.port), start=False)
