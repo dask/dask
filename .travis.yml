@@ -10,6 +10,10 @@ matrix:
     - python: "3.4"
     - python: "3.5"
       env: HDFS=false
+    - python: "2.7"
+      env: HDFS=true
+      sudo: true
+      dist: trusty
     - python: "3.5"
       env: HDFS=true
       sudo: true
@@ -18,6 +22,12 @@ matrix:
 before_install:
   - |
     if [[ $HDFS == true ]]; then
+        if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+          export DOCKER_ENV=/opt/conda;
+        else
+          export DOCKER_ENV=/opt/conda/envs/py3;
+        fi
+        echo $DOCKER_ENV
         pwd
         pushd continuous_integration
         docker build -t distributed-hdfs .
@@ -47,14 +57,14 @@ install:
   - |
     if [[ $HDFS == true ]]; then
         pwd
-        docker exec -it $CONTAINER_ID python setup.py install
+        docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/python setup.py install
     fi;
 
 script:
     - |
       if [[ $HDFS == true ]]; then
         pwd
-        docker exec -it $CONTAINER_ID py.test distributed/tests/test_hdfs.py distributed/tests/test_avro.py --verbose
+        docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/py.test distributed/tests/test_hdfs.py distributed/tests/test_avro.py --verbose
       elif [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then
         coverage run $(which py.test) distributed -m "not avoid_travis" \
             --doctest-modules --verbose;
