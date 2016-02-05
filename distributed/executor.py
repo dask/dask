@@ -27,7 +27,7 @@ from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
 from .utils import All, sync, funcname, ignoring
-from .compatibility import Queue as pyQueue
+from .compatibility import Queue as pyQueue, Empty
 
 logger = logging.getLogger(__name__)
 
@@ -581,10 +581,22 @@ class Executor(object):
         result = pack_data(futures2, data)
         raise gen.Return(result)
 
+    def _threaded_gather(self, qin, qout):
+        """ Internal function for gathering Queue
+        """
+        while True:
+            d = qin.get()
+            f = self.gather(d)
+            qout.put(f)
+
     def gather(self, futures):
         """ Gather futures from distributed memory
 
         Accepts a future or any nested core container of futures
+
+        Returns
+        -------
+        Future results
 
         Examples
         --------
@@ -600,7 +612,17 @@ class Executor(object):
         --------
         Executor.scatter: Send data out to cluster
         """
-        return sync(self.loop, self._gather, futures)
+        if isinstance(futures, Iterator):
+            # note: calling list(e.gather(f)) is blocking
+            return (self.gather(f) for f in futures)
+        elif isinstance(futures, pyQueue):
+            qout = pyQueue()
+            t = Thread(target=self._threaded_gather, args=(futures, qout))
+            t.daemon = True
+            t.start()
+            return qout
+        else:
+            return sync(self.loop, self._gather, futures)
 
     @gen.coroutine
     def _scatter(self, data, workers=None):
