@@ -1607,7 +1607,7 @@ def test_map_on_futures_with_kwargs(s, a, b):
     assert result == 100 + 1 + 200
 
 
-@gen_cluster(Worker=Nanny)
+@gen_cluster(Worker=Nanny, timeout=60)
 def test_failed_worker_without_warning(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()

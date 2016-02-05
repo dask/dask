@@ -554,6 +554,8 @@ class Scheduler(Server):
         if heal:
             self.heal_state()
 
+        return b'OK'
+
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
                    services=None):
         self.ncores[address] = ncores
