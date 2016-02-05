@@ -113,14 +113,14 @@ def test_read_bytes(s, a, b):
 
 
 def test_read_bytes_sync(loop):
-    with make_hdfs() as hdfs:
-        data = b'a' * int(1e3)
+    with cluster(nworkers=3) as (s, [a, b, c]):
+        with make_hdfs() as hdfs:
+            data = b'a' * int(1e3)
 
-        for fn in ['/tmp/test/file.%d' % i for i in range(100)]:
-            with hdfs.open(fn, 'w', repl=1) as f:
-                f.write(data)
+            for fn in ['/tmp/test/file.%d' % i for i in range(100)]:
+                with hdfs.open(fn, 'w', repl=1) as f:
+                    f.write(data)
 
-        with cluster(nworkers=3) as (s, [a, b, c]):
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 futures = read_bytes('/tmp/test/file.*')
                 results = e.gather(futures)
@@ -205,14 +205,14 @@ def test_write_bytes(s, a, b):
 def test_read_csv_sync(loop):
     import dask.dataframe as dd
     import pandas as pd
-    with make_hdfs() as hdfs:
-        with hdfs.open('/tmp/test/1.csv', 'w') as f:
-            f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
+    with cluster(nworkers=3) as (s, [a, b, c]):
+        with make_hdfs() as hdfs:
+            with hdfs.open('/tmp/test/1.csv', 'w') as f:
+                f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-        with hdfs.open('/tmp/test/2.csv', 'w') as f:
-            f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
+            with hdfs.open('/tmp/test/2.csv', 'w') as f:
+                f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        with cluster(nworkers=3) as (s, [a, b, c]):
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 futures = read_csv('/tmp/test/*.csv', lineterminator='\n',
                                    header=True, collection=False)

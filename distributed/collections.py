@@ -15,7 +15,7 @@ import numpy as np
 from tornado import gen
 from toolz import compose
 
-from .executor import default_executor, Future
+from .executor import default_executor, Future, _first_completed
 from .utils import sync, ignoring
 
 
@@ -31,7 +31,8 @@ def get_columns(df):
 @gen.coroutine
 def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
     executor = default_executor(executor)
-    columns = executor.submit(get_columns, futures[0])
+    f = yield _first_completed(futures)
+    columns = executor.submit(get_columns, f)
     if divisions is True:
         divisions = executor.map(index_min, futures)
         divisions.append(executor.submit(index_max, futures[-1]))
@@ -134,7 +135,8 @@ def _stack(futures, axis=0, executor=None):
     assert all(isinstance(f, Future) for f in futures)  # flat list
 
     shapes = executor.map(lambda x: x.shape, futures[:10])
-    dtype = executor.submit(get_dtype, futures[0])
+    f = yield _first_completed(futures)
+    dtype = executor.submit(get_dtype, f)
 
     shapes, dtype = yield executor._gather([shapes, dtype])
 

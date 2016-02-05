@@ -554,6 +554,8 @@ class Scheduler(Server):
         if heal:
             self.heal_state()
 
+        return b'OK'
+
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
                    services=None):
         self.ncores[address] = ncores
@@ -570,6 +572,9 @@ class Scheduler(Server):
 
         logger.info("Register %s", str(address))
         return b'OK'
+
+    def remove_client(self):
+        logger.info("Lost connection to client")
 
     def update_graph(self, dsk=None, keys=None, restrictions=None,
                      loose_restrictions=None):
@@ -721,8 +726,9 @@ class Scheduler(Server):
         while True:
             try:
                 msg = yield next_message()  # in_queue.get()
-            except AssertionError:
-                raise
+            except (StreamClosedError, AssertionError):
+                self.remove_client()
+                break
             except Exception as e:
                 put({'op': 'scheduler-error',
                      'exception': truncate_exception(e),
