@@ -1,4 +1,4 @@
-tornado
+tornado >= 4.2
 toolz
 cloudpickle
 dask
