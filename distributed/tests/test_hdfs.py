@@ -39,9 +39,11 @@ def test_get_block_locations():
             f.write(data)
 
         L =  get_block_locations(hdfs, '/tmp/test/')
-        assert L == get_block_locations(hdfs, fn_1) + get_block_locations(hdfs, fn_2)
-        assert L[0]['filename'] == L[1]['filename'] == fn_1
-        assert L[2]['filename'] == L[3]['filename'] == fn_2
+        aa = get_block_locations(hdfs, fn_1)
+        bb = get_block_locations(hdfs, fn_2)
+        assert (L == aa + bb) or (L == bb +  aa)
+        assert L[0]['filename'] == L[1]['filename']
+        assert L[2]['filename'] == L[3]['filename']
 
 
 @gen_cluster([(ip, 1)], timeout=60)

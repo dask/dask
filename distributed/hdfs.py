@@ -19,11 +19,19 @@ from .utils import ignoring, sync
 logger = logging.getLogger(__name__)
 
 
+def walk_glob(hdfs, path):
+    if b'*' not in path and hdfs.info(path)['kind'] == 'directory':
+        return [fn for fn in hdfs.walk(path) if fn[-1] != '/']
+    else:
+        return hdfs.glob(path)
+
+
 def get_block_locations(hdfs, filename):
     """ Get block locations from a filename or globstring """
     return [merge({'filename': fn}, block)
-            for fn in hdfs.glob(filename)
+            for fn in walk_glob(hdfs, filename)
             for block in hdfs.get_block_locations(fn)]
+
 
 def read_block_from_hdfs(host, port, filename, offset, length, delimiter):
     from hdfs3 import HDFileSystem
@@ -94,7 +102,7 @@ def buffer_to_csv(b, **kwargs):
 
 
 @gen.coroutine
-def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
+def _read_csv(path, executor=None, hdfs=None, lazy=False, lineterminator='\n',
         header=True, names=None, collection=True, **kwargs):
     from hdfs3 import HDFileSystem
     from dask import do
@@ -102,7 +110,8 @@ def _read_csv(fn, executor=None, hdfs=None, lazy=False, lineterminator='\n',
     hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
     kwargs['lineterminator'] = lineterminator
-    filenames = sorted(hdfs.glob(fn))
+
+    filenames = walk_glob(hdfs, path)
     blockss = [read_bytes(fn, executor, hdfs, lazy=True, delimiter=lineterminator)
                for fn in filenames]
     if names is None and header:
@@ -183,7 +192,7 @@ def avro_to_df(b, av):
 
 
 @gen.coroutine
-def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
+def _read_avro(path, executor=None, hdfs=None, lazy=False, **kwargs):
     """ See distributed.hdfs.read_avro for docstring """
     from hdfs3 import HDFileSystem
     from dask import do
@@ -191,9 +200,9 @@ def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
     hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
 
-    filenames = hdfs.glob(fn)
-    blockss = []
+    filenames = walk_glob(hdfs, path)
 
+    blockss = []
     for fn in filenames:
         with hdfs.open(fn, 'r') as f:
             av = fastavro.reader(f)
@@ -202,7 +211,7 @@ def _read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
 
         blockss.extend([read_bytes(fn, executor, hdfs, lazy=True,
                                    delimiter=header['sync'], not_zero=True)
-                        for fn in filenames])
+                       for fn in filenames])  # TODO: why is filenames used twice?
 
     lazy_values = [do(avro_body)(b, header) for blocks in blockss
                                             for b in blocks]
