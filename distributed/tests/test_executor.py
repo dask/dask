@@ -1124,22 +1124,25 @@ def test_iterator_gather(loop):
         with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
 
             i_in = list(range(10))
+
             g = (d for d in i_in)
-            futures = ee.scatter(g)
-            assert isinstance(futures, Iterator)
-
-            a = next(futures)
-            assert ee.gather(a) == 0
-
             futures = ee.scatter(g)
             assert isinstance(futures, Iterator)
 
             ff = ee.gather(futures)
             assert isinstance(ff, Iterator)
 
-            i_out = [f for f in range(10)]
+            i_out = list(ff)
             assert i_out == i_in
 
+            i_in = [1,2,3,StopIteration,4,5]
+
+            g = (d for d in i_in)
+            futures = ee.scatter(g)
+
+            ff = ee.gather(futures)
+            i_out = list(ff)
+            assert i_out == i_in
 
 @gen_cluster()
 def test_many_submits_spread_evenly(s, a, b):

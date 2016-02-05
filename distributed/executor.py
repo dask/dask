@@ -613,7 +613,6 @@ class Executor(object):
         Executor.scatter: Send data out to cluster
         """
         if isinstance(futures, Iterator):
-            # note: calling list(e.gather(f)) is blocking
             return (self.gather(f) for f in futures)
         elif isinstance(futures, pyQueue):
             qout = pyQueue()
@@ -653,6 +652,7 @@ class Executor(object):
             try:
                 d = get(q_or_i)
             except StopIteration:
+                qout.put(StopIteration)
                 break
 
             [f] = self.scatter([d])
@@ -706,7 +706,9 @@ class Executor(object):
             if isinstance(data, Iterator):
                 def _():
                     while True:
-                        yield qout.get()
+                        result = qout.get()
+                        if result == StopIteration: break
+                        yield result
                 return _()
             else:
                 return qout
