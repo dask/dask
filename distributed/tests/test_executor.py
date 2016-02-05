@@ -1092,7 +1092,8 @@ def test_queue_scatter(loop):
         with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
             from distributed.compatibility import Queue
             q = Queue()
-            [q.put(d) for d in range(10)]
+            for d in range(10):
+                q.put(d)
 
             futures = ee.scatter(q)
             assert isinstance(futures, Queue)
@@ -1107,7 +1108,8 @@ def test_queue_gather(loop):
             q = Queue()
 
             qin = list(range(10))
-            [q.put(d) for d in qin]
+            for d in qin:
+                q.put(d)
 
             futures = ee.scatter(q)
             assert isinstance(futures, Queue)
@@ -1115,7 +1117,9 @@ def test_queue_gather(loop):
             ff = ee.gather(futures)
             assert isinstance(ff, Queue)
 
-            qout = [ff.get() for f in range(10)]
+            qout = []
+            for f in range(10):
+                qout.append(ff.get())
             assert qout == qin
 
 

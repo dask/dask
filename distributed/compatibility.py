@@ -3,14 +3,12 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 if sys.version_info[0] == 2:
-    from Queue import Queue
-    from Queue import Empty
+    from Queue import Queue, Empty
     reload = reload
 
 
 if sys.version_info[0] == 3:
-    from queue import Queue
-    from queue import Empty
+    from queue import Queue, Empty
     from importlib import reload
 
 

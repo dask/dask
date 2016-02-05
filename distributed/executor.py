@@ -668,13 +668,12 @@ class Executor(object):
 
         Parameters
         ----------
-        data: list, Iterator, Queue of elements
-        workers: list of tuples
+        data: list, Iterator, or Queue of elements
+        workers (optional): list of tuples
 
         Returns
         -------
-        List of futures or Iterator/Queue of list of futures. Input type
-        matches output type, e.g. list->list, iterator->iterator, ...
+        List, iterator, or queue of futures, matching the type of the input
 
 
         Examples
