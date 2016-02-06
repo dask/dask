@@ -19,8 +19,9 @@ from tornado import gen
 from distributed import Center, Worker, Nanny
 from distributed.core import rpc
 from distributed.client import WrappedKey
-from distributed.executor import (Executor, Future, CompatibleExecutor, _wait, wait,
-        _as_completed, as_completed, tokenize, _global_executor, default_executor)
+from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
+        wait, _as_completed, as_completed, tokenize, _global_executor,
+        default_executor, _first_completed)
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
@@ -369,7 +370,11 @@ def test__as_completed(s, a, b):
     assert queue.qsize() == 3
     assert {queue.get(), queue.get(), queue.get()} == {a, b, c}
 
+    result = yield _first_completed([a, b, c])
+    assert result in [a, b, c]
+
     yield e._shutdown()
+
 
 
 def test_as_completed(loop):
@@ -1602,7 +1607,7 @@ def test_map_on_futures_with_kwargs(s, a, b):
     assert result == 100 + 1 + 200
 
 
-@gen_cluster(Worker=Nanny)
+@gen_cluster(Worker=Nanny, timeout=60)
 def test_failed_worker_without_warning(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -1616,14 +1621,14 @@ def test_failed_worker_without_warning(s, a, b):
     start = time()
     while not a.process.is_alive():
         yield gen.sleep(0.01)
-        assert time() - start < 5
+        assert time() - start < 10
 
     yield gen.sleep(0.5)
 
     start = time()
     while len(s.ncores) < 2:
         yield gen.sleep(0.01)
-        assert time() - start < 5
+        assert time() - start < 10
 
     yield _wait(L)
 
@@ -1676,3 +1681,24 @@ def test_badly_serialized_input_stderr(capsys):
                 if 'hello!' in err:
                     break
                 assert time() - start < 20
+
+
+@gen_cluster()
+def test_repr(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    assert s.ip in str(e)
+    assert str(s.port) in repr(e)
+
+    yield e._shutdown()
+
+def test_repr_sync(loop):
+    with cluster(nworkers=3) as (s, [a, b, c]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            s = str(e)
+            r = repr(e)
+            assert e.scheduler.ip in s
+            assert str(e.scheduler.port) in r
+            assert str(3) in s  # nworkers
+            assert 'threads' in s

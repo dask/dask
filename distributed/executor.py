@@ -217,6 +217,18 @@ class Executor(object):
         if start:
             self.start(timeout=timeout)
 
+    def __str__(self):
+        if hasattr(self, '_loop_thread'):
+            n = sync(self.loop, self.scheduler.ncores)
+            return '<Executor: scheduler=%s:%d workers=%d threads=%d>' % (
+                    self.scheduler.ip, self.scheduler.port, len(n),
+                    sum(n.values()))
+        else:
+            return '<Executor: scheduler=%s:%d>' % (
+                    self.scheduler.ip, self.scheduler.port)
+
+    __repr__ = __str__
+
     def start(self, **kwargs):
         """ Start scheduler running in separate thread """
         if hasattr(self, '_loop_thread'):
@@ -874,6 +886,19 @@ def _as_completed(fs, queue):
         future = firsts[wait_iterator.current_index]
         for f in groups[future.key]:
             queue.put_nowait(f)
+
+
+@gen.coroutine
+def _first_completed(futures):
+    """ Return a single completed future
+
+    See Also:
+        _as_completed
+    """
+    q = Queue()
+    yield _as_completed(futures, q)
+    result = yield q.get()
+    raise gen.Return(result)
 
 
 def as_completed(fs):
