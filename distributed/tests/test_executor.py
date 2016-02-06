@@ -114,7 +114,9 @@ def test_compatible_map(s, a, b):
     f = gen.Future()
     def wait_on_results():
         f.set_result(list(results))
-    Thread(target=wait_on_results).start()
+    t = Thread(target=wait_on_results)
+    t.daemon = True
+    t.start()
     result_list = yield f
     # getting map results blocks
     assert result_list == list(map(inc, range(5)))

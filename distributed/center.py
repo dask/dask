@@ -52,8 +52,8 @@ class Center(Server):
 
     Of you can create one in Python:
 
-    >>> center = Center('192.168.0.123')
-    >>> center.listen(8787)
+    >>> center = Center('192.168.0.123')  # doctest: +SKIP
+    >>> center.listen(8787)  # doctest: +SKIP
 
     >>> center.has_what  # doctest: +SKIP
     {('alice', 8788):   {'x', 'y'}

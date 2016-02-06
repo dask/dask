@@ -126,6 +126,7 @@ def scheduler(cport, **kwargs):
     q = Queue()
 
     proc = Process(target=run_scheduler, args=(q, cport), kwargs=kwargs)
+    proc.daemon = True
     proc.start()
 
     sport = q.get()
@@ -158,6 +159,7 @@ def cluster(nworkers=2, nanny=False):
         _run_worker = run_worker
     scheduler_q = Queue()
     scheduler = Process(target=run_scheduler, args=(scheduler_q,))
+    scheduler.daemon = True
     scheduler.start()
     sport = scheduler_q.get()
 
@@ -208,6 +210,7 @@ def cluster_center(nworkers=2, nanny=False):
         _run_worker = run_worker
     center_q = Queue()
     center = Process(target=run_center, args=(center_q,))
+    center.daemon = True
     center.start()
     cport = center_q.get()
 
