@@ -1572,6 +1572,7 @@ def test_allow_restrictions(s, a, b):
         e.map(inc, [20], workers='127.0.0.1', allow_other_workers='Hello!')
 
 
+@pytest.mark.skipif('True', reason='because')
 def test_bad_address():
     try:
         Executor('123.123.123.123:1234', timeout=0.1)
@@ -1806,3 +1807,25 @@ def test_waiting_data(s, a, b):
     assert not s.waiting_data[y.key]
 
     yield e._shutdown()
+
+
+@gen_cluster()
+def test_multi_executor(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    f = Executor((s.ip, s.port), start=False)
+    yield f._start()
+
+    assert set(s.streams) == {e.id, f.id}
+
+    x = e.submit(inc, 1)
+    y = f.submit(inc, 2)
+    y2 = e.submit(inc, 2)
+
+    assert y.key == y2.key
+
+    yield _wait([x, y])
+
+    assert s.wants_what == {e.id: {x.key, y.key}, f.id: {y.key}}
+    assert s.who_wants == {x.key: {e.id}, y.key: {e.id, f.id}}

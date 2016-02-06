@@ -554,7 +554,7 @@ def test_multi_queues(s, a, b):
 @gen_cluster()
 def test_server(s, a, b):
     stream = yield connect('127.0.0.1', s.port)
-    yield write(stream, {'op': 'start-control'})
+    yield write(stream, {'op': 'register-client', 'client': 'ident'})
     yield write(stream, {'op': 'update-graph',
                          'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
                          'keys': ['y']})

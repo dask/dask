@@ -212,6 +212,7 @@ class Executor(object):
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop()
         self.coroutines = []
+        self.id = str(uuid.uuid1())
         self._start_arg = address
 
         if start:
@@ -274,7 +275,8 @@ class Executor(object):
             elif ident['type'] == 'Scheduler':
                 self.scheduler = r
                 self.scheduler_stream = yield connect(*self._start_arg)
-                yield write(self.scheduler_stream, {'op': 'start-control'})
+                yield write(self.scheduler_stream, {'op': 'register-client',
+                                                    'client': self.id})
                 if 'center' in ident:
                     cip, cport = ident['center']
                     self.center = rpc(ip=cip, port=cport)
@@ -458,7 +460,8 @@ class Executor(object):
                                 'dsk': {key: task2},
                                 'keys': [key],
                                 'restrictions': restrictions,
-                                'loose_restrictions': loose_restrictions})
+                                'loose_restrictions': loose_restrictions,
+                                'client': self.id})
 
         return Future(key, self)
 

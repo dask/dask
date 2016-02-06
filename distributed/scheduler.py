@@ -131,7 +131,7 @@ class Scheduler(Server):
             ip=None, services=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
-        self.streams = []
+        self.streams = dict()
         self.status = None
         self.coroutines = []
         self.ip = ip or get_ip()
@@ -161,6 +161,8 @@ class Scheduler(Server):
         self.waiting_data = dict()
         self.who_has = defaultdict(set)
         self.deleted_keys = defaultdict(set)
+        self.who_wants = defaultdict(set)
+        self.wants_what = defaultdict(set)
 
         self.exceptions = dict()
         self.tracebacks = dict()
@@ -182,7 +184,7 @@ class Scheduler(Server):
                                  'release-held-data': self.release_held_data,
                                  'restart': self.restart}
 
-        self.handlers = {'start-control': self.control_stream,
+        self.handlers = {'register-client': self.control_stream,
                          'scatter': self.scatter,
                          'register': self.add_worker,
                          'unregister': self.remove_worker,
@@ -576,7 +578,7 @@ class Scheduler(Server):
     def remove_client(self):
         logger.info("Lost connection to client")
 
-    def update_graph(self, dsk=None, keys=None, restrictions=None,
+    def update_graph(self, client=None, dsk=None, keys=None, restrictions=None,
                      loose_restrictions=None):
         """ Add new computations to the internal dask graph
 
@@ -616,6 +618,10 @@ class Scheduler(Server):
         for key in keys:
             if self.who_has[key]:
                 self.mark_key_in_memory(key)
+
+        for k in keys:
+            self.who_wants[k].add(client)
+            self.wants_what[client].add(k)
 
         for plugin in self.plugins[:]:
             try:
@@ -700,7 +706,7 @@ class Scheduler(Server):
         """ Publish updates to all listening Queues and Streams """
         for q in self.report_queues:
             q.put_nowait(msg)
-        for s in self.streams:
+        for s in self.streams.values():
             try:
                 write(s, msg)  # asynchrnous
             except StreamClosedError:
@@ -723,20 +729,19 @@ class Scheduler(Server):
         return future
 
     @gen.coroutine
-    def control_stream(self, stream, address=None):
+    def control_stream(self, stream, address=None, client=None):
         """ Listen to messages from an IOStream """
-        ident = str(uuid.uuid1())
-        logger.info("Connection to %s, %s", type(self).__name__, ident)
-        self.streams.append(stream)
+        logger.info("Connection to %s, %s", type(self).__name__, client)
+        self.streams[client] = stream
         try:
             yield self.handle_messages(stream, stream)
         finally:
             if not stream.closed():
                 yield write(stream, {'op': 'stream-closed'})
                 stream.close()
-            self.streams.remove(stream)
+            del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
-                    ident)
+                        client)
 
     @gen.coroutine
     def handle_messages(self, in_queue, report):
