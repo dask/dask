@@ -1618,10 +1618,7 @@ def test_failed_worker_without_warning(s, a, b):
         yield gen.sleep(0.01)
         assert time() - start < 5
 
-    start = time()
-    while s.ncores == ncores1:
-        yield gen.sleep(0.01)
-        assert time() - start < 5
+    yield gen.sleep(0.5)
 
     start = time()
     while len(s.ncores) < 2:
