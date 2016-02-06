@@ -135,124 +135,7 @@ class WrappedKey(object):
     pass
 
 
-class RemoteData(WrappedKey):
-    """ Data living on a remote worker
-
-    ``RemoteData`` objects represent key-value pairs living on remote workers.
-    ``RemoteData`` objects know their center ip/port and the relevant key
-
-    >>> rd = RemoteData('x', '127.0.0.1', 8787)
-
-    One can download the value of a ``RemoteData`` object with the ``get``
-    method or ``_get`` coroutine.
-
-    >>> rd.get()  # doctest: +SKIP
-    123
-
-    However it is often best to leave data on the network for as long as
-    possible.  Client modules like ``Pool`` often know how to deal with
-    RemoteData objects intelligently, keeping data on the cluster.
-
-    >>> pool = Pool('127.0.0.1:8787')  # doctest: +SKIP
-    >>> rd2 = pool.apply(lambda x: x * 10, rd)  # doctest: +SKIP
-
-    The Pool can also gather several remote data objects at once with a small
-    number of connections.
-
-    >>> pool.gather([rd, rd2])  # doctest: +SKIP
-    (123, 1230)
-    """
-    trash = defaultdict(set)
-
-    def __init__(self, key, center_ip, center_port, status=None,
-                       result=no_default):
-        self.key = key
-        self.status = status
-        self.center = rpc(ip=center_ip, port=center_port)
-        self._result = result
-
-    def __getstate__(self):
-        return (self.key, self.status, self.center.ip, self.center.port)
-
-    def __setstate__(self, state):
-        self.key = state[0]
-        self.status = state[1]
-        self.center = rpc(ip=state[2], port=state[3])
-        self.result = no_default
-
-    def __str__(self):
-        if len(self.key) > 13:
-            key = self.key[:10] + '...'
-        else:
-            key = self.key
-        return "RemoteData<center=%s:%d, key=%s>" % (self.center.ip,
-                self.center.port, key)
-
-    __repr__ = __str__
-
-    @gen.coroutine
-    def _get(self, raiseit=True):
-        who_has = yield self.center.who_has(
-                keys=[self.key], close=True)
-        ip, port = random.choice(list(who_has[self.key]))
-        result = yield rpc(ip=ip, port=port).get_data(keys=[self.key], close=True)
-
-        self._result = result[self.key]
-
-        if raiseit and self.status == b'error':
-            raise self._result
-        else:
-            raise Return(self._result)
-
-    def get(self):
-        """ Get the value of a single RemoteData object
-
-        See also:
-            Pool.gather: gather values from many RemoteData objects at once
-        """
-        if self._result is not no_default:
-            return self._result
-        else:
-            result = IOLoop().run_sync(lambda: self._get(raiseit=False))
-            if self.status == b'error':
-                raise result
-            else:
-                return result
-
-    @gen.coroutine
-    def _delete(self):
-        yield self.center.delete_data(keys=[self.key], close=True)
-
-    """
-    def delete(self):
-        sync(self._delete(), self.loop)
-    """
-
-    def __del__(self):
-        RemoteData.trash[(self.center.ip, self.center.port)].add(self.key)
-
-    @classmethod
-    @gen.coroutine
-    def _garbage_collect(cls, ip=None, port=None):
-        if ip and port:
-            keys = cls.trash[(ip, port)]
-            cors = [rpc(ip=ip, port=port).delete_data(keys=keys, close=True)]
-            n = len(keys)
-        else:
-            cors = [rpc(ip=ip, port=port).delete_data(keys=keys, close=True)
-                    for (ip, port), keys in cls.trash.items()]
-            n = len(set.union(*cls.trash.values()))
-
-        results = yield cors
-        assert all(result == b'OK' for result in results)
-        raise Return(n)
-
-    @classmethod
-    def garbage_collect(cls, ip=None, port=None):
-        return IOLoop().run_sync(lambda: cls._garbage_collect(ip, port))
-
-
-def scatter(center, data, key=None):
+def scatter(center, data):
     """ Scatter data to workers
 
     Parameters
@@ -276,17 +159,17 @@ def scatter(center, data, key=None):
     distributed.client._scatter:
     distributed.client.scatter_to_workers:
     """
-    func = lambda: _scatter(center, data, key)
+    func = lambda: _scatter(center, data)
     result = IOLoop().run_sync(func)
     return result
 
 
 @gen.coroutine
-def _scatter(center, data, key=None):
+def _scatter(center, data):
     center = coerce_to_rpc(center)
     ncores = yield center.ncores()
 
-    result, who_has, nbytes = yield scatter_to_workers(center, ncores, data, key=key)
+    result, who_has, nbytes = yield scatter_to_workers(center, ncores, data)
     raise Return(result)
 
 
@@ -297,7 +180,7 @@ _round_robin_counter = [0]
 
 
 @gen.coroutine
-def scatter_to_workers(center, ncores, data, key=None, report=True):
+def scatter_to_workers(center, ncores, data, report=True):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
@@ -314,9 +197,6 @@ def scatter_to_workers(center, ncores, data, key=None, report=True):
         ip, port = center
     else:
         raise TypeError("Bad type for center")
-
-    if key is None:
-        key = str(uuid.uuid1())
 
     if isinstance(ncores, Iterable) and not isinstance(ncores, dict):
         k = len(data) // len(ncores)
@@ -349,12 +229,7 @@ def scatter_to_workers(center, ncores, data, key=None, report=True):
 
     who_has = {k: [w for w, _, _ in v] for k, v in groupby(1, L).items()}
 
-    result = [RemoteData(b, ip, port, result=c)
-                for a, b, c in L]
-    if in_type is dict:
-        result = dict(zip(names, result))
-
-    raise Return((result, who_has, nbytes))
+    raise Return((names, who_has, nbytes))
 
 
 @gen.coroutine

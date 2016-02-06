@@ -599,19 +599,19 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None):
-        remotes = yield self.scheduler.scatter(data=data, workers=workers)
-        if isinstance(remotes, list):
-            remotes = [Future(r.key, self) for r in remotes]
-            keys = {r.key for r in remotes}
-        elif isinstance(remotes, dict):
-            remotes = {k: Future(v.key, self) for k, v in remotes.items()}
-            keys = set(remotes)
+        keys = yield self.scheduler.scatter(data=data, workers=workers)
+        if isinstance(data, (tuple, list, set, frozenset)):
+            out = type(data)([Future(k, self) for k in keys])
+        elif isinstance(data, dict):
+            out = {k: Future(k, self) for k in keys}
+        else:
+            raise TypeError("")
 
         for key in keys:
             self.futures[key]['status'] = 'finished'
             self.futures[key]['event'].set()
 
-        raise gen.Return(remotes)
+        raise gen.Return(out)
 
     def scatter(self, data, workers=None):
         """ Scatter data into distributed memory

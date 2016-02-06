@@ -106,7 +106,7 @@ class Center(Server):
         return first(self._sockets.values()).getsockname()[1]
 
     @gen.coroutine
-    def terminate(self, stream):
+    def terminate(self, stream=None):
         self.stop()
         return b'OK'
 

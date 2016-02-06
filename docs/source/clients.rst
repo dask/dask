@@ -6,16 +6,6 @@ network with the Executor abstraction.
 
 This is built with lower level functions described below.
 
-RemoteData
-----------
-
-The data within worker nodes forms a poorman's distributed key-value store.  We
-can refer to an item in this key-value store with a ``RemoteData`` object.
-
-.. autoclass:: distributed.client.RemoteData
-   :members: get
-
-
 Scatter/Gather
 --------------
 
