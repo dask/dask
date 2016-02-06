@@ -1708,6 +1708,7 @@ def test_repr(s, a, b):
 
     yield e._shutdown()
 
+
 def test_repr_sync(loop):
     with cluster(nworkers=3) as (s, [a, b, c]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:

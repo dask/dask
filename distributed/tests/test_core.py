@@ -5,7 +5,8 @@ import socket
 from tornado import gen, ioloop
 import pytest
 
-from distributed.core import read, write, pingpong, Server, rpc, connect
+from distributed.core import (read, write, pingpong, Server, rpc, connect,
+        coerce_to_rpc)
 from distributed.utils_test import slow, loop
 
 def test_server(loop):
@@ -130,3 +131,18 @@ def test_ports(loop):
         assert server3.port > 1024
     finally:
         server3.stop()
+
+
+def test_errors(loop):
+    s = Server({})
+    try:
+        s.port
+    except OSError as e:
+        assert '.listen' in str(e)
+
+
+def test_coerce_to_rpc():
+    r = coerce_to_rpc(('127.0.0.1', 8000))
+    assert (r.ip, r.port) == ('127.0.0.1', 8000)
+    r = coerce_to_rpc('127.0.0.1:8000')
+    assert (r.ip, r.port) == ('127.0.0.1', 8000)
