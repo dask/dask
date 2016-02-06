@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 def walk_glob(hdfs, path):
-    if b'*' not in path and hdfs.info(path)['kind'] == 'directory':
-        return [fn for fn in hdfs.walk(path) if fn[-1] != '/']
+    if '*' not in path and hdfs.info(path)['kind'] == 'directory':
+        return sorted([fn for fn in hdfs.walk(path) if fn[-1] != '/'])
     else:
-        return hdfs.glob(path)
+        return sorted(hdfs.glob(path))
 
 
 def get_block_locations(hdfs, filename):
@@ -82,10 +82,10 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
     if lazy:
         restrictions = dict(zip(names, workers))
         executor._send_to_scheduler({'op': 'update-graph',
-                                    'dsk': {},
-                                    'keys': [],
-                                    'restrictions': restrictions,
-                                    'loose_restrictions': set(names)})
+                                     'dsk': {},
+                                     'keys': [],
+                                     'restrictions': restrictions,
+                                     'loose_restrictions': set(names)})
         values = [Value(name, [{name: (read_block_from_hdfs, hdfs.host, hdfs.port, fn, offset, length, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
         return values
@@ -105,6 +105,7 @@ def buffer_to_csv(b, **kwargs):
 def _read_csv(path, executor=None, hdfs=None, lazy=False, lineterminator='\n',
         header=True, names=None, collection=True, **kwargs):
     from hdfs3 import HDFileSystem
+    from hdfs3.core import ensure_bytes
     from dask import do
     import pandas as pd
     hdfs = hdfs or HDFileSystem()
@@ -112,7 +113,8 @@ def _read_csv(path, executor=None, hdfs=None, lazy=False, lineterminator='\n',
     kwargs['lineterminator'] = lineterminator
 
     filenames = walk_glob(hdfs, path)
-    blockss = [read_bytes(fn, executor, hdfs, lazy=True, delimiter=lineterminator)
+    blockss = [read_bytes(fn, executor, hdfs, lazy=True,
+                          delimiter=ensure_bytes(lineterminator))
                for fn in filenames]
     if names is None and header:
         with hdfs.open(filenames[0]) as f:
@@ -178,9 +180,9 @@ def avro_body(data, header):
         # Read delimited should keep end-of-block delimiter
         data = data + sync
     stream = io.BytesIO(data)
-    schema = header['meta']['avro.schema']
+    schema = header['meta']['avro.schema'].decode()
     schema = json.loads(schema)
-    codec = header['meta']['avro.codec']
+    codec = header['meta']['avro.codec'].decode()
     return list(fastavro._reader._iter_avro(stream, header, codec,
         schema, schema))
 
@@ -207,7 +209,7 @@ def _read_avro(path, executor=None, hdfs=None, lazy=False, **kwargs):
         with hdfs.open(fn, 'r') as f:
             av = fastavro.reader(f)
             header = av._header
-        schema = json.loads(header['meta']['avro.schema'])
+        schema = json.loads(header['meta']['avro.schema'].decode())
 
         blockss.extend([read_bytes(fn, executor, hdfs, lazy=True,
                                    delimiter=header['sync'], not_zero=True)

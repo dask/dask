@@ -47,7 +47,7 @@ def test_metadata():
     assert 'alice' not in c.has_what
     assert 'alice' not in c.ncores
 
-    c.stop()
+    yield c.terminate()
 
 """
 def test_delete_data():

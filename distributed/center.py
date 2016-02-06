@@ -52,8 +52,8 @@ class Center(Server):
 
     Of you can create one in Python:
 
-    >>> center = Center('192.168.0.123')
-    >>> center.listen(8787)
+    >>> center = Center('192.168.0.123')  # doctest: +SKIP
+    >>> center.listen(8787)  # doctest: +SKIP
 
     >>> center.has_what  # doctest: +SKIP
     {('alice', 8788):   {'x', 'y'}
@@ -106,7 +106,7 @@ class Center(Server):
         return first(self._sockets.values()).getsockname()[1]
 
     @gen.coroutine
-    def terminate(self, stream):
+    def terminate(self, stream=None):
         self.stop()
         return b'OK'
 

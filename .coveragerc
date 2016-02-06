@@ -1,0 +1,16 @@
+[run]
+include = 
+    distributed/*
+omit =
+    distributed/tests/test*
+    distributed/hdfs.py
+    distributed/cluster.py
+    distributed/*/tests/test*
+    distributed/compatibility.py
+
+[report]
+show_missing = True
+
+[html]
+directory = coverage_html_report
+

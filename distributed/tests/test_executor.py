@@ -114,7 +114,9 @@ def test_compatible_map(s, a, b):
     f = gen.Future()
     def wait_on_results():
         f.set_result(list(results))
-    Thread(target=wait_on_results).start()
+    t = Thread(target=wait_on_results)
+    t.daemon = True
+    t.start()
     result_list = yield f
     # getting map results blocks
     assert result_list == list(map(inc, range(5)))
@@ -885,11 +887,24 @@ def test__scatter(s, a, b):
     assert s.nbytes == {'y': sizeof(20), x.key: sizeof(10)}
     assert xx == [10]
 
-    z = e.submit(add, x, d['y'])  # submit works on RemoteData
+    z = e.submit(add, x, d['y'])  # submit works on Future
     result = yield z._result()
     assert result == 10 + 20
     result = yield e._gather([z, x])
     assert result == [30, 10]
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test_scatter_hash(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    [a] = yield e._scatter([1])
+    [b] = yield e._scatter([1])
+
+    assert a.key == b.key
 
     yield e._shutdown()
 
@@ -1692,6 +1707,7 @@ def test_repr(s, a, b):
     assert str(s.port) in repr(e)
 
     yield e._shutdown()
+
 
 def test_repr_sync(loop):
     with cluster(nworkers=3) as (s, [a, b, c]):

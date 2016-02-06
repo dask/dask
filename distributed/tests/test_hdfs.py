@@ -113,6 +113,8 @@ def test_read_bytes(s, a, b):
         assert s.restrictions
         assert {f.key for f in futures}.issubset(s.loose_restrictions)
 
+        yield e._shutdown()
+
 
 def test_read_bytes_sync(loop):
     with cluster(nworkers=3) as (s, [a, b, c]):
@@ -152,6 +154,8 @@ def test_get_block_locations_nested(s, a, b):
         assert len(results) == 6
         assert all(x == b'a' for x in results)
 
+        yield e._shutdown()
+
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
 def test_lazy_values(s, a, b):
@@ -180,6 +184,8 @@ def test_lazy_values(s, a, b):
         assert len(results) == 6
         assert all(x == b'a' for x in results)
 
+        yield e._shutdown()
+
 
 @gen_cluster([(ip, 1), (ip, 2)], timeout=60)
 def test_write_bytes(s, a, b):
@@ -197,11 +203,12 @@ def test_write_bytes(s, a, b):
         with hdfs.open('/tmp/test/data/file.1.dat') as f:
             assert f.read() == b'456'
 
-
         futures = write_bytes('/tmp/test/data2/', remote_data, hdfs=hdfs)
         yield _wait(futures)
 
         assert len(hdfs.ls('/tmp/test/data2/')) == 3
+
+        yield e._shutdown()
 
 
 def test_read_csv_sync(loop):
@@ -245,6 +252,7 @@ def test_read_csv(s, a, b):
         result, = e.compute(df.id.sum(), sync=False)
         result = yield result._result()
         assert result == 1 + 2 + 3 + 4
+        yield e._shutdown()
 
 
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60)
@@ -265,3 +273,5 @@ def test_read_csv_lazy(s, a, b):
 
         result = yield e.compute(df.id.sum(), sync=False)[0]._result()
         assert result == 1 + 2 + 3 + 4
+
+        yield e._shutdown()

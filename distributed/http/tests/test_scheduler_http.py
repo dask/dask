@@ -23,6 +23,8 @@ def test_simple(s, a, b):
     assert response['ncores'] == {'%s:%d' % k: v for k, v in s.ncores.items()}
     assert response['status'] == a.status
 
+    server.stop()
+
 @gen_cluster()
 def test_processing(s, a, b):
     server = HTTPScheduler(s)
@@ -34,6 +36,8 @@ def test_processing(s, a, b):
     response = yield client.fetch('http://localhost:%d/processing.json' % server.port)
     response = json.loads(response.body.decode())
     assert response == {'%s:%d' % a.address: ['foo'], '%s:%d' % b.address: []}
+
+    server.stop()
 
 
 @gen_cluster()
@@ -48,6 +52,8 @@ def test_proxy(s, a, b):
     s_response = yield client.fetch('http://localhost:%d/proxy/%s:%d/info.json'
                                     % (server.port, a.ip, worker.port))
     assert s_response.body.decode() == c_response.body.decode()
+    server.stop()
+    worker.stop()
 
 
 @gen_cluster()
@@ -77,6 +83,10 @@ def test_broadcast(s, a, b):
     assert (json.loads(s_response.body.decode()) ==
             {'%s:%d' % a.address: json.loads(a_response.body.decode()),
              '%s:%d' % b.address: json.loads(b_response.body.decode())})
+
+    ss.stop()
+    aa.stop()
+    bb.stop()
 
 
 @gen_test()

@@ -174,6 +174,7 @@ def start_scheduler(logdir, addr, port, ssh_username, ssh_port, ssh_private_key)
 
     # Start the thread
     thread = Thread(target=async_ssh, args=[cmd_dict])
+    thread.daemon = True
     thread.start()
 
     return merge(cmd_dict, {'thread': thread})
@@ -206,6 +207,7 @@ def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, 
 
     # Start the thread
     thread = Thread(target=async_ssh, args=[cmd_dict])
+    thread.daemon = True
     thread.start()
 
     return merge(cmd_dict, {'thread': thread})

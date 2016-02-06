@@ -177,25 +177,25 @@ class Nanny(Server):
 def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
         local_dir, services):
     """ Function run by the Nanny when creating the worker """
-    from distributed import Worker
-    from tornado.ioloop import IOLoop
-    IOLoop.clear_instance()
-    loop = IOLoop()
-    loop.make_current()
+    from distributed import Worker  # pragma: no cover
+    from tornado.ioloop import IOLoop  # pragma: no cover
+    IOLoop.clear_instance()  # pragma: no cover
+    loop = IOLoop()  # pragma: no cover
+    loop.make_current()  # pragma: no cover
     worker = Worker(center_ip, center_port, ncores=ncores, ip=ip,
                     service_ports={'nanny': nanny_port}, local_dir=local_dir,
-                    services=services)
+                    services=services)  # pragma: no cover
 
-    @gen.coroutine
+    @gen.coroutine  # pragma: no cover
     def start():
-        try:
-            yield worker._start()
-        except Exception as e:
-            logger.exception(e)
-            q.put(e)
+        try:  # pragma: no cover
+            yield worker._start()  # pragma: no cover
+        except Exception as e:  # pragma: no cover
+            logger.exception(e)  # pragma: no cover
+            q.put(e)  # pragma: no cover
         else:
-            assert worker.port
-            q.put({'port': worker.port, 'dir': worker.local_dir})
+            assert worker.port  # pragma: no cover
+            q.put({'port': worker.port, 'dir': worker.local_dir})  # pragma: no cover
 
-    loop.add_callback(start)
-    loop.start()
+    loop.add_callback(start)  # pragma: no cover
+    loop.start()  # pragma: no cover

@@ -165,6 +165,9 @@ class Worker(Server):
         self.executor.shutdown()
         if os.path.exists(self.local_dir):
             shutil.rmtree(self.local_dir)
+
+        for k, v in self.services.items():
+            v.stop()
         self.status = 'closed'
 
     @gen.coroutine
