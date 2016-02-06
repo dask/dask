@@ -66,14 +66,13 @@ script:
         pwd
         docker exec -it $CONTAINER_ID $DOCKER_ENV/bin/py.test distributed/tests/test_hdfs.py distributed/tests/test_avro.py --verbose
       elif [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then
-        coverage run $(which py.test) distributed -m "not avoid_travis" \
-            --doctest-modules --verbose;
+        coverage run $(which py.test) distributed -m "not avoid_travis" --verbose;
       else
         py.test -m "not avoid_travis" distributed --verbose;
       fi;
 
 after_success:
-    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage report --show-missing; pip install coveralls ; coveralls ; fi
+    - if [[ $TRAVIS_PYTHON_VERSION == '3.4' ]]; then coverage report; pip install coveralls ; coveralls ; fi
 
 notifications:
   email: false
