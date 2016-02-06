@@ -415,7 +415,7 @@ def _concat_dfs(dfs, name, join='outer'):
     dsk = dict()
     i = 0
 
-    empties = [df._empty_partition for df in dfs]
+    empties = [df._pd for df in dfs]
     dummy = pd.concat(empties, axis=0, join=join)
 
     if isinstance(dummy, pd.Series):

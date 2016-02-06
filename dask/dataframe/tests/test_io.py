@@ -426,14 +426,14 @@ def test_DataFrame_from_dask_array():
 
     df = from_dask_array(x, ['a', 'b', 'c'])
     assert isinstance(df, dd.DataFrame)
-    assert df.columns == ('a', 'b', 'c')
+    tm.assert_index_equal(df.columns, pd.Index(['a', 'b', 'c']))
     assert list(df.divisions) == [0, 4, 8, 9]
     assert (df.compute(get=get_sync).values == x.compute(get=get_sync)).all()
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=['a', 'b', 'c'])
     assert isinstance(df, dd.DataFrame)
-    assert df2.columns == df.columns
+    tm.assert_index_equal(df2.columns, df.columns)
     assert df2.divisions == df.divisions
 
 

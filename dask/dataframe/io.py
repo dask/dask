@@ -376,9 +376,10 @@ def from_pandas(data, npartitions, sort=True):
     """
     if isinstance(getattr(data, 'index', None), pd.MultiIndex):
         raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
-    columns = getattr(data, 'columns', getattr(data, 'name', None))
-    if columns is None and not isinstance(data, pd.Series):
+
+    if not isinstance(data, (pd.Series, pd.DataFrame)):
         raise TypeError("Input must be a pandas DataFrame or Series")
+
     nrows = len(data)
     chunksize = int(ceil(nrows / npartitions))
     if sort and not data.index.is_monotonic_increasing:
@@ -394,7 +395,7 @@ def from_pandas(data, npartitions, sort=True):
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))
     dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
-    return getattr(core, type(data).__name__)(dsk, name, columns, divisions)
+    return _Frame(dsk, name, data, divisions)
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):

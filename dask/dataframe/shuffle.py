@@ -71,11 +71,15 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     shuffle
     partd
     """
+
     if isinstance(index, _Frame):
         assert df.divisions == index.divisions
-        columns = df.columns
+        metadata = df._empty_partition
+        metadata.index.name = index.name
     else:
-        columns = tuple([c for c in df.columns if c != index])
+        columns = [c for c in df.columns if c != index]
+        metadata = df._empty_partition[columns]
+        metadata.index.name = index
 
     token = tokenize(df, index, divisions)
     always_new_token = uuid.uuid1().hex
@@ -137,7 +141,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     if compute:
         dsk = cull(dsk, list(dsk4.keys()))
 
-    return DataFrame(dsk, name, columns, divisions)
+    return DataFrame(dsk, name, metadata, divisions)
 
 
 def barrier(args):

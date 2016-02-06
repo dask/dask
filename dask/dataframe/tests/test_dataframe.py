@@ -100,11 +100,20 @@ def test_attributes():
 
 
 def test_column_names():
-    assert d.columns == ('a', 'b')
-    assert d[['b', 'a']].columns == ('b', 'a')
+    tm.assert_index_equal(d.columns, pd.Index(['a', 'b']))
+    tm.assert_index_equal(d[['b', 'a']].columns, pd.Index(['b', 'a']))
     assert d['a'].name == 'a'
     assert (d['a'] + 1).name == 'a'
     assert (d['a'] + d['b']).name == None
+
+
+def test_index_names():
+    assert d.index.name is None
+
+    df = pd.DataFrame(np.random.randn(10, 5),
+                      index=pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], name='x'))
+    ddf = dd.from_pandas(df, 3)
+    assert ddf.index.name == 'x'
 
 
 def test_set_index():
@@ -119,13 +128,16 @@ def test_set_index():
 
     d2 = d.set_index('b', npartitions=3)
     assert d2.npartitions == 3
+    assert d2.index.name == 'b'
     assert eq(d2, full.set_index('b'))
 
     d3 = d.set_index(d.b, npartitions=3)
     assert d3.npartitions == 3
+    assert d3.index.name == 'b'
     assert eq(d3, full.set_index(full.b))
 
     d4 = d.set_index('b')
+    assert d4.index.name == 'b'
     assert eq(d4, full.set_index('b'))
 
 
@@ -290,7 +302,7 @@ def test_map_partitions_column_info():
     a = dd.from_pandas(df, npartitions=2)
 
     b = dd.map_partitions(lambda x: x, a.columns, a)
-    assert b.columns == a.columns
+    tm.assert_index_equal(b.columns, a.columns)
     assert eq(df, b)
 
     b = dd.map_partitions(lambda x: x, a.x.name, a.x)
@@ -316,7 +328,7 @@ def test_map_partitions_method_names():
 
     b = a.map_partitions(lambda x: x)
     assert isinstance(b, dd.DataFrame)
-    assert b.columns == a.columns
+    tm.assert_index_equal(b.columns, a.columns)
 
     b = a.map_partitions(lambda df: df.x + 1, columns=None)
     assert isinstance(b, dd.Series)
@@ -1358,7 +1370,7 @@ def test_reset_index():
     exp = df.reset_index()
 
     assert len(res.index.compute()) == len(exp.index)
-    assert res.columns == tuple(exp.columns)
+    tm.assert_index_equal(res.columns, exp.columns)
     assert_array_almost_equal(res.compute().values, exp.values)
 
 

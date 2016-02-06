@@ -115,9 +115,9 @@ def _check_dask(dsk, check_names=True):
                 assert dsk.name == result.name, (dsk.name, result.name)
         elif isinstance(dsk, dd.DataFrame):
             assert isinstance(result, pd.DataFrame), type(result)
-            assert isinstance(dsk.columns, tuple)
+            assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
             if check_names:
-                columns = pd.Index(dsk.columns)
+                columns = dsk.columns
                 tm.assert_index_equal(columns, result.columns)
         elif isinstance(dsk, dd.core.Scalar):
             assert (np.isscalar(result) or

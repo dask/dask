@@ -157,12 +157,8 @@ class _Frame(Base):
     _finalize = staticmethod(finalize)
 
     def __new__(cls, dsk, _name, metadata, divisions):
-        if isinstance(metadata, (Series, pd.Series)):
-            metadata = metadata.name
-        elif isinstance(metadata, (DataFrame, pd.DataFrame)):
-            metadata = metadata.columns
-
-        if np.isscalar(metadata) or metadata is None:
+        if (np.isscalar(metadata) or metadata is None or
+            isinstance(metadata, (Series, pd.Series))):
             return Series(dsk, _name, metadata, divisions)
         else:
             return DataFrame(dsk, _name, metadata, divisions)
@@ -202,7 +198,9 @@ class _Frame(Base):
         name = self._name + '-index'
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
-        return Index(merge(dsk, self.dask), name, None, self.divisions)
+
+        idx_name = self._empty_partition.index.name
+        return Index(merge(dsk, self.dask), name, idx_name, self.divisions)
 
     @property
     def known_divisions(self):
@@ -280,7 +278,7 @@ class _Frame(Base):
 
         >>> df.map_partitions(lambda df: df.head(), columns=df.columns)  # doctest: +SKIP
         """
-        if columns == no_default:
+        if columns is no_default:
             columns = self.column_info
         return map_partitions(func, columns, self, *args, **kwargs)
 
@@ -717,7 +715,8 @@ class _Frame(Base):
                     token=name1, **chunk_kwargs)
 
             name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
-            cumlast = map_partitions(_take_last, self.column_info, cumpart,
+            # cumlast must be a Series or Scalar, thus do not pass column_info
+            cumlast = map_partitions(_take_last, None, cumpart,
                                      skipna, token=name2)
 
             name = '{0}{1}'.format(self._token_prefix, token)
@@ -859,11 +858,24 @@ class Series(_Frame):
     _partition_type = pd.Series
     _token_prefix = 'series-'
 
-    def __new__(cls, dsk, _name, name, divisions):
+    def __new__(cls, dsk, _name, metadata, divisions):
         result = object.__new__(cls)
         result.dask = dsk
         result._name = _name
-        result.name = name
+
+        if isinstance(metadata, cls):
+            result.name = metadata.name
+            result._dtype = metadata._dtype
+            result._metadata = metadata._metadata
+        elif isinstance(metadata, cls._partition_type):
+            result.name = metadata.name
+            result._dtype = metadata.dtype
+            result._metadata = metadata.iloc[0:0]
+        else:
+            result.name = metadata
+            result._dtype = None
+            result._metadata = None
+
         result.divisions = tuple(divisions)
         return result
 
@@ -882,7 +894,11 @@ class Series(_Frame):
     @property
     def _empty_partition(self):
         """ Return empty dummy to emulate the result """
-        return self._partition_type(name=self.name)
+        if self._metadata is None:
+            # do not use dtype, as it may trigger calculation
+            self._metadata = self._partition_type(name=self.name,
+                                                  dtype=self._dtype)
+        return self._metadata
 
     @property
     def ndim(self):
@@ -892,7 +908,9 @@ class Series(_Frame):
     @property
     def dtype(self):
         """ Return data type """
-        return self.head().dtype
+        if self._dtype is None:
+            self._dtype = self.head().dtype
+        return self._dtype
 
     def __getattr__(self, key):
         if key == 'cat':
@@ -1207,11 +1225,24 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _token_prefix = 'dataframe-'
 
-    def __new__(cls, dask, name, columns, divisions):
+    def __new__(cls, dask, name, metadata, divisions):
         result = object.__new__(cls)
         result.dask = dask
         result._name = name
-        result.columns = tuple(columns)
+
+        if isinstance(metadata, cls):
+            result.columns = metadata.columns
+            result._dtypes = metadata._dtypes
+            result._metadata = metadata._metadata
+        elif isinstance(metadata, cls._partition_type):
+            result.columns = metadata.columns
+            result._dtypes = metadata.dtypes
+            result._metadata = metadata.iloc[0:0]
+        else:
+            result.columns = pd.Index(metadata)
+            result._dtypes = None
+            result._metadata = None
+
         result.divisions = tuple(divisions)
         return result
 
@@ -1230,7 +1261,16 @@ class DataFrame(_Frame):
     @property
     def _empty_partition(self):
         """ Return empty dummy to emulate the result """
-        return self._partition_type(columns=self.columns)
+        if self._metadata is None:
+            if self._dtypes is None:
+                self._metadata = self._partition_type(columns=self.columns)
+            else:
+                # do not use dtype, as it may trigger calculation
+                empty = dict(zip(self.columns,
+                                 [np.array([], dtype=dt) for dt in self._dtypes]))
+                self._metadata = self._partition_type(empty,
+                                                      columns=self.columns)
+        return self._metadata
 
     def __getitem__(self, key):
         if np.isscalar(key):
@@ -1285,14 +1325,12 @@ class DataFrame(_Frame):
         """ Return dimensionality """
         return 2
 
-    @cache_readonly
-    def _dtypes(self):
-        """ for cache, cache_readonly hides docstring """
-        return self._get(self.dask, self._keys()[0]).dtypes
-
     @property
     def dtypes(self):
         """ Return data types """
+        if self._dtypes is None:
+            # cache
+            self._dtypes = self._get(self.dask, self._keys()[0]).dtypes
         return self._dtypes
 
     @derived_from(pd.DataFrame)
@@ -1323,7 +1361,7 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def reset_index(self):
-        new_columns = ['index'] + list(self.columns)
+        new_columns = pd.Index(['index'] + list(self.columns))
         reset_index = self._partition_type.reset_index
         out = self.map_partitions(reset_index, columns=new_columns)
         out.divisions = [None] * (self.npartitions + 1)
@@ -1344,13 +1382,13 @@ class DataFrame(_Frame):
 
         # Figure out columns of the output
         df2 = self._empty_partition.assign(**dict((k, []) for k in kwargs))
-        return elemwise(_assign, self, *pairs, columns=list(df2.columns))
+        return elemwise(_assign, self, *pairs, columns=df2.columns)
 
     @derived_from(pd.DataFrame)
     def rename(self, index=None, columns=None):
         if index is not None:
             raise ValueError("Cannot rename index.")
-        column_info = (self._empty_partition.rename(columns=columns).columns)
+        column_info = self._empty_partition.rename(columns=columns).columns
         func = pd.DataFrame.rename
         # *args here is index, columns but columns arg is already used
         return map_partitions(func, column_info, self, None, columns)
@@ -1454,7 +1492,7 @@ class DataFrame(_Frame):
         if axis != 1:
             raise NotImplementedError("Drop currently only works for axis=1")
 
-        columns = list(self._empty_partition.drop(labels, axis=axis).columns)
+        columns = self._empty_partition.drop(labels, axis=axis).columns
         return elemwise(pd.DataFrame.drop, self, labels, axis, columns=columns)
 
     @derived_from(pd.DataFrame)
@@ -1536,7 +1574,7 @@ class DataFrame(_Frame):
             if right is not None:
                 left = self._empty_partition
                 right = pd.DataFrame(columns=right)
-                columns = op(left, right, axis=axis).columns.tolist()
+                columns = op(left, right, axis=axis).columns
             else:
                 columns = self.columns
 
@@ -1710,7 +1748,7 @@ def elemwise(op, *args, **kwargs):
     dsk = dict(((_name, i), (op2,) + frs) for i, frs in enumerate(zip(*keys)))
     dsk = merge(dsk, *[d.dask for d in dasks])
 
-    if columns == no_default:
+    if columns is no_default:
         if len(dfs) >= 2 and len(dasks) != len(dfs):
             # should not occur in current funcs
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
@@ -1827,7 +1865,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
                       (_concat,
                         (list, [(a, i) for i in range(args[0].npartitions)])))}
 
-    if columns == no_default:
+    if columns is no_default:
         return_type = type(args[0])
         columns = None
     else:
