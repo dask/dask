@@ -12,19 +12,21 @@ from distributed.http.worker import HTTPWorker
 
 @gen_cluster()
 def test_simple(s, a, b):
-    port = 9898
     server = HTTPWorker(a)
-    server.listen(port)
+    server.listen(0)
     client = AsyncHTTPClient()
 
-    response = yield client.fetch('http://localhost:%d/info.json' % port)
+    response = yield client.fetch('http://localhost:%d/info.json' % server.port)
     response = json.loads(response.body.decode())
     assert response['ncores'] == a.ncores
     assert response['status'] == a.status
 
-    response = yield client.fetch('http://localhost:%d/resources.json' % port)
+    response = yield client.fetch('http://localhost:%d/resources.json' %
+            server.port)
     response = json.loads(response.body.decode())
     assert 0 < response['memory_percent'] < 100
+
+    server.stop()
 
 
 @gen_cluster()

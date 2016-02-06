@@ -83,7 +83,6 @@ def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None, lazy=Fa
     >>> futures[0].result()  # doctest: +SKIP
     b'{"amount": 100, "name": "Alice"}\\n{"amount": 200, "name": "Bob"}\\n
       {"amount": 300, "name": "Charlie"}\\n{"amount": 400, "name": "Dennis"}\\n'
-
     """
     executor = default_executor(executor)
     s3_objects = get_list_of_summary_objects(bucket_name, prefix,
