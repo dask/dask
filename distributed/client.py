@@ -11,6 +11,7 @@ from tornado.gen import Return
 from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
+from dask.base import tokenize
 from toolz import merge, concat, groupby, drop
 
 from .core import rpc, coerce_to_rpc
@@ -327,7 +328,12 @@ def scatter_to_workers(center, ncores, data, key=None, report=True):
     if isinstance(data, dict):
         names, data = list(zip(*data.items()))
     else:
-        names = ('%s-%d' % (key, i) for i in count(0))
+        names = []
+        for x in data:
+            try:
+                names.append(tokenize(x))
+            except:
+                names.append(str(uuid.uuid1()))
 
     worker_iter = drop(_round_robin_counter[0] % len(workers), cycle(workers))
     _round_robin_counter[0] += len(data)

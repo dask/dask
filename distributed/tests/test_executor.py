@@ -897,6 +897,19 @@ def test__scatter(s, a, b):
 
 
 @gen_cluster()
+def test_scatter_hash(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    [a] = yield e._scatter([1])
+    [b] = yield e._scatter([1])
+
+    assert a.key == b.key
+
+    yield e._shutdown()
+
+
+@gen_cluster()
 def test_get_releases_data(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()

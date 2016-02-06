@@ -625,14 +625,14 @@ class Executor(object):
         --------
         >>> e = Executor('127.0.0.1:8787')  # doctest: +SKIP
         >>> e.scatter([1, 2, 3])  # doctest: +SKIP
-        [RemoteData<center=127.0.0.1:8787, key=d1d26ff2-8...>,
-         RemoteData<center=127.0.0.1:8787, key=d1d26ff2-8...>,
-         RemoteData<center=127.0.0.1:8787, key=d1d26ff2-8...>]
-        >>> e.scatter({'x': 1, 'y': 2, 'z': 3})  # doctest: +SKIP
-        {'x': RemoteData<center=127.0.0.1:8787, key=x>,
-         'y': RemoteData<center=127.0.0.1:8787, key=y>,
-         'z': RemoteData<center=127.0.0.1:8787, key=z>}
+        [<Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
+         <Future: status: finished, key: 58e78e1b34eb49a68c65b54815d1b158>,
+         <Future: status: finished, key: d3395e15f605bc35ab1bac6341a285e2>]
 
+        >>> e.scatter({'x': 1, 'y': 2, 'z': 3})  # doctest: +SKIP
+        {'x': <Future: status: finished, key: x>,
+         'y': <Future: status: finished, key: y>,
+         'z': <Future: status: finished, key: z>}
         >>> e.scatter([1, 2, 3], workers=[('hostname', 8788)])  # doctest: +SKIP
 
         See Also
