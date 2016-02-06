@@ -588,6 +588,10 @@ class Scheduler(Server):
             if dsk[k] is k:
                 del dsk[k]
 
+        for k in keys:
+            self.who_wants[k].add(client)
+            self.wants_what[client].add(k)
+
         update_state(self.dask, self.dependencies, self.dependents,
                 self.held_data, self.who_has, self.in_play,
                 self.waiting, self.waiting_data, dsk, keys)
@@ -618,10 +622,6 @@ class Scheduler(Server):
         for key in keys:
             if self.who_has[key]:
                 self.mark_key_in_memory(key)
-
-        for k in keys:
-            self.who_wants[k].add(client)
-            self.wants_what[client].add(k)
 
         for plugin in self.plugins[:]:
             try:
@@ -706,7 +706,11 @@ class Scheduler(Server):
         """ Publish updates to all listening Queues and Streams """
         for q in self.report_queues:
             q.put_nowait(msg)
-        for s in self.streams.values():
+        if 'key' in msg:
+            streams = {self.streams.get(c, ()) for c in self.who_wants[msg['key']]}
+        else:
+            streams = self.streams.values()
+        for s in streams:
             try:
                 write(s, msg)  # asynchrnous
             except StreamClosedError:

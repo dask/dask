@@ -1829,3 +1829,5 @@ def test_multi_executor(s, a, b):
 
     assert s.wants_what == {e.id: {x.key, y.key}, f.id: {y.key}}
     assert s.who_wants == {x.key: {e.id}, y.key: {e.id, f.id}}
+
+    yield e._shutdown()

@@ -547,7 +547,8 @@ class Executor(object):
                                 'dsk': dsk,
                                 'keys': keys,
                                 'restrictions': restrictions,
-                                'loose_restrictions': loose_restrictions})
+                                'loose_restrictions': loose_restrictions,
+                                'client': self.id})
 
         return [Future(key, self) for key in keys]
 
@@ -654,7 +655,8 @@ class Executor(object):
         self._send_to_scheduler({'op': 'update-graph',
                                 'dsk': dsk3,
                                 'keys': flatkeys,
-                                'restrictions': restrictions or {}})
+                                'restrictions': restrictions or {},
+                                'client': self.id})
 
         packed = pack_data(keys, futures)
         if raise_on_error:
@@ -745,8 +747,9 @@ class Executor(object):
         dsk3 = {k: unpack_remotedata(v)[0] for k, v in merge(dsk, dsk2).items()}
 
         self._send_to_scheduler({'op': 'update-graph',
-                                'dsk': dsk3,
-                                'keys': names})
+                                 'dsk': dsk3,
+                                 'keys': names,
+                                 'client': self.id})
 
         i = 0
         futures = []

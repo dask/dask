@@ -462,40 +462,42 @@ def div(x, y):
 
 @gen_cluster()
 def test_scheduler(s, a, b):
-    sched, report = Queue(), Queue()
-    s.handle_queues(sched, report)
-    msg = yield report.get()
+    stream = yield connect(s.ip, s.port)
+    yield write(stream, {'op': 'register-client', 'client': 'ident'})
+    msg = yield read(stream)
     assert msg['op'] == 'stream-start'
 
     # Test update graph
-    s.put({'op': 'update-graph',
-           'dsk': {'x': (inc, 1),
-                   'y': (inc, 'x'),
-                   'z': (inc, 'y')},
-           'keys': ['x', 'z']})
+    yield write(stream, {'op': 'update-graph',
+                         'dsk': {'x': (inc, 1),
+                                 'y': (inc, 'x'),
+                                 'z': (inc, 'y')},
+                         'keys': ['x', 'z'],
+                         'client': 'ident'})
     while True:
-        msg = yield report.get()
+        msg = yield read(stream)
         if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
             break
 
     assert a.data.get('x') == 2 or b.data.get('x') == 2
 
     # Test erring tasks
-    s.put({'op': 'update-graph',
-           'dsk': {'a': (div, 1, 0),
-                   'b': (inc, 'a')},
-           'keys': ['a', 'b']})
+    yield write(stream, {'op': 'update-graph',
+                         'dsk': {'a': (div, 1, 0),
+                                 'b': (inc, 'a')},
+                         'keys': ['a', 'b'],
+                         'client': 'ident'})
 
     while True:
-        msg = yield report.get()
+        msg = yield read(stream)
         if msg['op'] == 'task-erred' and msg['key'] == 'b':
             break
 
     # Test missing data
-    s.put({'op': 'missing-data',
-           'missing': ['z']})
+    yield write(stream, {'op': 'missing-data', 'missing': ['z']})
+
     while True:
-        msg = yield report.get()
+        msg = yield read(stream)
         if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
             break
 
@@ -503,15 +505,17 @@ def test_scheduler(s, a, b):
     for w in [a, b]:
         if 'z' in w.data:
             del w.data['z']
-    s.put({'op': 'update-graph',
-           'dsk': {'zz': (inc, 'z')},
-           'keys': ['zz']})
+    yield write(stream, {'op': 'update-graph',
+                         'dsk': {'zz': (inc, 'z')},
+                         'keys': ['zz'],
+                         'client': 'ident'})
     while True:
-        msg = yield report.get()
+        msg = yield read(stream)
         if msg['op'] == 'key-in-memory' and msg['key'] == 'zz':
             break
 
-    s.put({'op': 'close'})
+    write(stream, {'op': 'close'})
+    stream.close()
 
 
 @gen_cluster()
@@ -557,7 +561,8 @@ def test_server(s, a, b):
     yield write(stream, {'op': 'register-client', 'client': 'ident'})
     yield write(stream, {'op': 'update-graph',
                          'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
-                         'keys': ['y']})
+                         'keys': ['y'],
+                         'client': 'ident'})
 
     while True:
         msg = yield read(stream)
@@ -568,6 +573,7 @@ def test_server(s, a, b):
     msg = yield read(stream)
     assert msg == {'op': 'stream-closed'}
     assert stream.closed()
+    stream.close()
 
 
 @gen_cluster()
@@ -743,3 +749,32 @@ def test_self_aliases(s, a, b):
         msg = yield report.get()
         if msg['op'] == 'key-in-memory' and msg['key'] == 'b':
             break
+
+
+@gen_cluster()
+def test_filtered_communication(s, a, b):
+    e = yield connect(ip=s.ip, port=s.port)
+    f = yield connect(ip=s.ip, port=s.port)
+    yield write(e, {'op': 'register-client', 'client': 'e'})
+    yield write(f, {'op': 'register-client', 'client': 'f'})
+    yield read(e)
+    yield read(f)
+
+    assert set(s.streams) == {'e', 'f'}
+
+    yield write(e, {'op': 'update-graph',
+                    'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
+                    'client': 'e',
+                    'keys': ['y']})
+
+    yield write(f, {'op': 'update-graph',
+                    'dsk': {'x': (inc, 1), 'z': (add, 'x', 10)},
+                    'client': 'f',
+                    'keys': ['z']})
+
+    msg = yield read(e)
+    assert msg['op'] == 'key-in-memory'
+    assert msg['key'] == 'y'
+    msg = yield read(f)
+    assert msg['op'] == 'key-in-memory'
+    assert msg['key'] == 'z'
