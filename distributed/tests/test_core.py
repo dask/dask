@@ -105,6 +105,8 @@ def test_identity(loop):
         assert a['type'] == 'Server'
         assert a['id'] == b['id']
 
+        server.stop()
+
     loop.run_sync(f)
 
 

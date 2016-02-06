@@ -88,6 +88,7 @@ def test_nanny_process_failure():
     assert not os.path.exists(second_dir)
     assert not os.path.exists(first_dir)
     assert first_dir != n.worker_dir
+    nn.close_streams()
     c.stop()
 
 
