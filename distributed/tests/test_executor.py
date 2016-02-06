@@ -887,7 +887,7 @@ def test__scatter(s, a, b):
     assert s.nbytes == {'y': sizeof(20), x.key: sizeof(10)}
     assert xx == [10]
 
-    z = e.submit(add, x, d['y'])  # submit works on RemoteData
+    z = e.submit(add, x, d['y'])  # submit works on Future
     result = yield z._result()
     assert result == 10 + 20
     result = yield e._gather([z, x])

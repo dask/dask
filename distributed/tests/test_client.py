@@ -185,3 +185,8 @@ def test_scatter_round_robins_between_calls(loop):
         assert b.data
 
     _test_cluster(f)
+
+
+def test_str():
+    r = RemoteData('a'*100, '127.0.0.1', 8000)
+    assert len(str(r)) < 100
