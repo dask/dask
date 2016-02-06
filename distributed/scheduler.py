@@ -68,7 +68,7 @@ class Scheduler(Server):
     * **dependencies:** ``{key: {key}}``:
         Dictionary showing which keys depend on which others
     * **dependents:** ``{key: {key}}``:
-        Dictionary showing which keys are dependent on  which others
+        Dictionary showing which keys are dependent on which others
     * **waiting:** ``{key: {key}}``:
         Dictionary like dependencies but excludes keys already computed
     * **waiting_data:** ``{key: {key}}``:
@@ -633,6 +633,42 @@ class Scheduler(Server):
             keys2 = {k for k in keys if not self.waiting_data.get(k)}
             if keys2:
                 self.delete_data(keys=keys2)  # async
+
+        changed = True
+        while changed:
+            changed = False
+            for key in keys:
+                if key in self.dask and not self.dependents.get(key):
+                    self.forget(key)
+                    changed = True
+
+    def forget(self, key):
+        """ Forget a key if no one cares about it
+
+        This removes all knowledge of how to produce a key from the scheduler.
+        This is almost exclusively called by release_held_data
+        """
+        assert not self.dependents[key] and key not in self.held_data
+        if key in self.dask:
+            del self.dask[key]
+            del self.dependents[key]
+            for dep in self.dependencies[key]:
+                s = self.dependents[dep]
+                s.remove(key)
+                if not s and dep not in self.held_data:
+                    self.forget(dep)
+            del self.dependencies[key]
+            if key in self.restrictions:
+                del self.restrictions[key]
+            if key in self.loose_restrictions:
+                self.loose_restrictions.remove(key)
+            del self.keyorder[key]
+            if key in self.exceptions:
+                del self.exceptions[key]
+            if key in self.exceptions_blame:
+                del self.exceptions_blame[key]
+        if key in self.who_has:
+            self.delete_keys([key])
 
     def heal_state(self):
         """ Recover from catastrophic change """

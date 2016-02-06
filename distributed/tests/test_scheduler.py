@@ -647,7 +647,6 @@ def test_feed_setup_teardown(s, a, b):
                          'teardown': teardown,
                          'interval': 0.01})
 
-
     for i in range(5):
         response = yield read(stream)
         assert response == b'OK'

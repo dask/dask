@@ -1709,6 +1709,75 @@ def test_repr(s, a, b):
     yield e._shutdown()
 
 
+@gen_cluster()
+def test_forget_simple(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(inc, 1)
+    y = e.submit(inc, 2)
+    z = e.submit(add, x, y, workers=[a.ip], allow_other_workers=True)
+
+    yield _wait([x, y, z])
+    assert not s.waiting_data[x.key]
+    assert not s.waiting_data[y.key]
+
+    assert set(s.dask) == {x.key, y.key, z.key}
+
+    s.release_held_data([x.key])
+    assert x.key in s.dask
+    s.release_held_data([z.key])
+    for coll in [s.dask, s.dependencies, s.dependents, s.waiting,
+            s.waiting_data, s.who_has, s.restrictions, s.loose_restrictions,
+            s.held_data, s.in_play, s.keyorder, s.exceptions,
+            s.exceptions_blame]:
+        assert x.key not in coll
+        assert z.key not in coll
+
+    assert z.key not in s.dependents[y.key]
+
+    s.release_held_data([y.key])
+    assert not s.dask
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test_forget_complex(s, A, B):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    a, b, c, d = yield e._scatter(list(range(4)))
+    ab = e.submit(add, a, b)
+    cd = e.submit(add, c, d)
+    ac = e.submit(add, a, c)
+    acab = e.submit(add, ac, ab)
+
+    yield _wait([a,b,c,d,ab,ac,cd,acab])
+
+    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+
+    s.release_held_data([ab.key])
+    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+
+    s.release_held_data([b.key])
+    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+
+    s.release_held_data([acab.key])
+    assert set(s.dask) == {f.key for f in [ac,cd]}
+    assert b.key not in s.who_has
+
+    start = time()
+    while b.key in A.data or b.key in B.data:
+        yield gen.sleep(0.01)
+        assert time() < start + 10
+
+    s.release_held_data([ac.key])
+    assert set(s.dask) == {f.key for f in [cd]}
+
+    yield e._shutdown()
+
+
 def test_repr_sync(loop):
     with cluster(nworkers=3) as (s, [a, b, c]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
@@ -1718,3 +1787,22 @@ def test_repr_sync(loop):
             assert str(e.scheduler.port) in r
             assert str(3) in s  # nworkers
             assert 'threads' in s
+
+
+@gen_cluster()
+def test_waiting_data(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(inc, 1)
+    y = e.submit(inc, 2)
+    z = e.submit(add, x, y, workers=[a.ip], allow_other_workers=True)
+
+    yield _wait([x, y, z])
+
+    assert x.key not in s.waiting_data[x.key]
+    assert y.key not in s.waiting_data[y.key]
+    assert not s.waiting_data[x.key]
+    assert not s.waiting_data[y.key]
+
+    yield e._shutdown()

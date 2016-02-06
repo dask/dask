@@ -85,7 +85,8 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
                                      'dsk': {},
                                      'keys': [],
                                      'restrictions': restrictions,
-                                     'loose_restrictions': set(names)})
+                                     'loose_restrictions': set(names),
+                                     'client': executor.id})
         values = [Value(name, [{name: (read_block_from_hdfs, hdfs.host, hdfs.port, fn, offset, length, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
         return values
