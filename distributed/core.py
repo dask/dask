@@ -76,8 +76,8 @@ class Server(TCPServer):
     ...     return x + y
 
     >>> handlers = {'ping': pingpong, 'add': add}
-    >>> server = Server(handlers)
-    >>> server.listen(8000)
+    >>> server = Server(handlers)  # doctest: +SKIP
+    >>> server.listen(8000)  # doctest: +SKIP
 
     **Message Format**
 
