@@ -482,13 +482,13 @@ def slowinc(x):
     return x + 1
 
 
-def test_stress_gc(loop):
-    n = 100
+@pytest.mark.parametrize(('func', 'n'), [(slowinc, 100), (inc, 1000)])
+def test_stress_gc(loop, func, n):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            x = e.submit(slowinc, 1)
+            x = e.submit(func, 1)
             for i in range(n):
-                x = e.submit(slowinc, x)
+                x = e.submit(func, x)
 
             assert x.result() == n + 2
 
@@ -1471,7 +1471,7 @@ def test_remote_scatter_gather(s, a, b):
     yield e._shutdown()
 
 
-@gen_cluster()
+@gen_cluster(timeout=1000)
 def test_remote_submit_on_Future(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()

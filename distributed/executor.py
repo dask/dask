@@ -210,7 +210,7 @@ class Executor(object):
     def __init__(self, address, start=True, loop=None, timeout=3):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
-        self.loop = loop or IOLoop()
+        self.loop = loop or IOLoop() if start else IOLoop.current()
         self.coroutines = []
         self.id = str(uuid.uuid1())
         self._start_arg = address
@@ -249,7 +249,7 @@ class Executor(object):
         if isinstance(self.scheduler, Scheduler):
             self.loop.add_callback(self.scheduler_queue.put_nowait, msg)
         elif isinstance(self.scheduler_stream, IOStream):
-            write(self.scheduler_stream, msg)
+            self.loop.add_callback(write, self.scheduler_stream, msg)
         else:
             raise NotImplementedError()
 
@@ -457,11 +457,11 @@ class Executor(object):
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self._send_to_scheduler({'op': 'update-graph',
-                                'dsk': {key: task2},
-                                'keys': [key],
-                                'restrictions': restrictions,
-                                'loose_restrictions': loose_restrictions,
-                                'client': self.id})
+                                 'dsk': {key: task2},
+                                 'keys': [key],
+                                 'restrictions': restrictions,
+                                 'loose_restrictions': loose_restrictions,
+                                 'client': self.id})
 
         return Future(key, self)
 
@@ -544,11 +544,11 @@ class Executor(object):
 
         logger.debug("map(%s, ...)", funcname(func))
         self._send_to_scheduler({'op': 'update-graph',
-                                'dsk': dsk,
-                                'keys': keys,
-                                'restrictions': restrictions,
-                                'loose_restrictions': loose_restrictions,
-                                'client': self.id})
+                                 'dsk': dsk,
+                                 'keys': keys,
+                                 'restrictions': restrictions,
+                                 'loose_restrictions': loose_restrictions,
+                                 'client': self.id})
 
         return [Future(key, self) for key in keys]
 
@@ -571,7 +571,7 @@ class Executor(object):
             if response == b'error':
                 logger.debug("Couldn't gather keys %s", data)
                 self._send_to_scheduler({'op': 'missing-data',
-                                        'missing': data.args})
+                                         'missing': data.args})
                 for key in data.args:
                     self.futures[key]['event'].clear()
             else:
@@ -653,10 +653,10 @@ class Executor(object):
         dsk3 = {k: v for k, v in dsk2.items() if (k == v) is not True}
 
         self._send_to_scheduler({'op': 'update-graph',
-                                'dsk': dsk3,
-                                'keys': flatkeys,
-                                'restrictions': restrictions or {},
-                                'client': self.id})
+                                 'dsk': dsk3,
+                                 'keys': flatkeys,
+                                 'restrictions': restrictions or {},
+                                 'client': self.id})
 
         packed = pack_data(keys, futures)
         if raise_on_error:
