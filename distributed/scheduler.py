@@ -637,6 +637,11 @@ class Scheduler(Server):
                 del self.who_wants[k]
                 self.release_held_data([k])
 
+    def client_wants_keys(self, keys=None, client=None):
+        for k in keys:
+            self.who_wants[k].add(client)
+            self.wants_what[client].add(k)
+
     def release_held_data(self, keys=None):
         """ Mark that a key is no longer externally required to be in memory """
         keys = set(keys)
@@ -927,20 +932,20 @@ class Scheduler(Server):
                 self.in_play.remove(key)
 
     @gen.coroutine
-    def scatter(self, stream=None, data=None, workers=None):
+    def scatter(self, stream=None, data=None, workers=None, client=None):
         """ Send data out to workers """
         if not self.ncores:
             raise ValueError("No workers yet found.  "
                              "Try syncing with center.\n"
                              "  e.sync_center()")
         ncores = workers if workers is not None else self.ncores
-        remotes, who_has, nbytes = yield scatter_to_workers(
+        keys, who_has, nbytes = yield scatter_to_workers(
                                             self.center or self.address,
                                             ncores, data,
                                             report=not not self.center)
         self.update_data(who_has=who_has, nbytes=nbytes)
-
-        raise gen.Return(remotes)
+        self.client_wants_keys(keys=keys, client=client)
+        raise gen.Return(keys)
 
     @gen.coroutine
     def gather(self, stream=None, keys=None):

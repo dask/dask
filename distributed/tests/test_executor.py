@@ -437,6 +437,7 @@ def test_garbage_collection_with_scatter(s, a, b):
     assert a.key in e.futures
     assert a.status == 'finished'
     assert a.event.is_set()
+    assert s.who_wants[a.key] == {e.id}
 
     assert e.refcount[a.key] == 1
     a.__del__()
@@ -1831,6 +1832,7 @@ def test_multi_executor(s, a, b):
     assert s.who_wants == {x.key: {e.id}, y.key: {e.id, f.id}}
 
     yield e._shutdown()
+    yield f._shutdown()
 
 
 @gen_cluster()
@@ -1879,3 +1881,4 @@ def test_multi_garbage_collection(s, a, b):
     assert not s.who_wants
 
     yield e._shutdown()
+    yield f._shutdown()

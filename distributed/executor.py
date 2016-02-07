@@ -604,7 +604,8 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None):
-        keys = yield self.scheduler.scatter(data=data, workers=workers)
+        keys = yield self.scheduler.scatter(data=data, workers=workers,
+                                            client=self.id)
         if isinstance(data, (tuple, list, set, frozenset)):
             out = type(data)([Future(k, self) for k in keys])
         elif isinstance(data, dict):
