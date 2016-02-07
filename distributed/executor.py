@@ -582,8 +582,7 @@ class Executor(object):
         raise gen.Return(result)
 
     def _threaded_gather(self, qin, qout):
-        """ Internal function for gathering Queue
-        """
+        """ Internal function for gathering Queue """
         while True:
             d = qin.get()
             f = self.gather(d)
@@ -592,7 +591,8 @@ class Executor(object):
     def gather(self, futures):
         """ Gather futures from distributed memory
 
-        Accepts a future or any nested core container of futures
+        Accepts a future, nested container of futures, iterator, or queue.
+        The return type will match the input type.
 
         Returns
         -------
@@ -608,13 +608,17 @@ class Executor(object):
         >>> e.gather([x, [x], x])  # support lists and dicts # doctest: +SKIP
         [3, [3], 3]
 
+        >>> seq = e.gather(iter([x, x]))  # support iterators # doctest: +SKIP
+        >>> next(seq)  # doctest: +SKIP
+        3
+
         See Also
         --------
         Executor.scatter: Send data out to cluster
         """
         if isinstance(futures, Iterator):
             return (self.gather(f) for f in futures)
-        elif isinstance(futures, pyQueue):
+        elif type(futures) is pyQueue:
             qout = pyQueue()
             t = Thread(target=self._threaded_gather, args=(futures, qout))
             t.daemon = True
@@ -641,11 +645,10 @@ class Executor(object):
         raise gen.Return(out)
 
     def _threaded_scatter(self, q_or_i, qout):
-        """ Internal function for scattering Iterable/Queue data
-        """
+        """ Internal function for scattering Iterable/Queue data """
         if isinstance(q_or_i, Iterator):
             get = next
-        if isinstance(q_or_i, pyQueue):
+        elif type(q_or_i) is pyQueue:  # py2 Queue doesn't support mro
             get = pyQueue.get
 
         while True:
@@ -661,20 +664,17 @@ class Executor(object):
     def scatter(self, data, workers=None):
         """ Scatter data into distributed memory
 
-        Accepts a list/Queue/Iter. of data elements or dict of key-value pairs
-
-        Optionally provide a set of workers to constrain the scatter.  Specify
-        workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
-
         Parameters
         ----------
-        data: list, Iterator, or Queue of elements
-        workers (optional): list of tuples
+        data: list, iterator, dict, or Queue
+            Data to scatter out to workers.  Output type matches input type.
+        workers: list of tuples (optional)
+            Optionally constrain locations of data.
+            Specify workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
 
         Returns
         -------
-        List, iterator, or queue of futures, matching the type of the input
-
+        List, dict, iterator, or queue of futures matching the type of input.
 
         Examples
         --------
@@ -688,13 +688,20 @@ class Executor(object):
         {'x': <Future: status: finished, key: x>,
          'y': <Future: status: finished, key: y>,
          'z': <Future: status: finished, key: z>}
-        >>> e.scatter([1, 2, 3], workers=[('hostname', 8788)])  # doctest: +SKIP
+
+        Constrain location of data to subset of workers
+        >>> e.scatter([1, 2, 3], workers=[('hostname', 8788)])   # doctest: +SKIP
+
+        Handle streaming sequences of data with iterators or queues
+        >>> seq = e.scatter(iter([1, 2, 3]))  # doctest: +SKIP
+        >>> next(seq)  # doctest: +SKIP
+        <Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
 
         See Also
         --------
         Executor.gather: Gather data back to local process
         """
-        if isinstance(data, Iterator) or isinstance(data, pyQueue):
+        if isinstance(data, Iterator) or type(data) is pyQueue:
             logger.debug("Starting thread for streaming data")
             qout = pyQueue()
 
@@ -706,7 +713,8 @@ class Executor(object):
                 def _():
                     while True:
                         result = qout.get()
-                        if result == StopIteration: break
+                        if result == StopIteration:
+                            break
                         yield result
                 return _()
             else:

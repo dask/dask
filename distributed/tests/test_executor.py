@@ -1139,7 +1139,7 @@ def test_iterator_gather(loop):
             i_out = list(ff)
             assert i_out == i_in
 
-            i_in = [1,2,3,StopIteration,4,5]
+            i_in = ['a', 'b', 'c', StopIteration, 'd', 'e']
 
             g = (d for d in i_in)
             futures = ee.scatter(g)
