@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from contextlib import contextmanager
 from io import BytesIO
 
@@ -6,10 +8,11 @@ from tornado import gen
 
 from dask.imperative import Value
 
+from distributed.compatibility import unicode
 from distributed.utils_test import gen_cluster, cluster, loop, make_hdfs
 from distributed.utils import get_ip
 from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
-        _read_csv, read_csv)
+        _read_csv, read_csv, _read_text, read_text)
 from distributed import Executor
 from distributed.executor import _wait, Future
 
@@ -277,3 +280,75 @@ def test_read_csv_lazy(s, a, b):
         assert result == 1 + 2 + 3 + 4
 
         yield e._shutdown()
+
+
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60)
+def test__read_text(s, a, b):
+    with make_hdfs() as hdfs:
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+
+        with hdfs.open('/tmp/test/text.1.txt', 'w') as f:
+            f.write('Alice 100\nBob 200\nCharlie 300'.encode())
+
+        with hdfs.open('/tmp/test/text.2.txt', 'w') as f:
+            f.write('Dan 400\nEdith 500\nFrank 600'.encode())
+
+        with hdfs.open('/tmp/test/other.txt', 'w') as f:
+            f.write('a b\nc d'.encode())
+
+        b = yield _read_text('/tmp/test/text.*.txt',
+                             collection=True, lazy=True)
+        yield gen.sleep(0.5)
+        assert not s.dask
+
+        future, = e.compute(b.str.strip().str.split().map(len))
+        result = yield future._result()
+        assert result == [2, 2, 2, 2, 2, 2]
+
+        b = yield _read_text('/tmp/test/other.txt',
+                             collection=True, lazy=False)
+        future, = e.compute(b.str.split().concat())
+        result = yield future._result()
+        assert result == ['a', 'b', 'c', 'd']
+
+        L = yield _read_text('/tmp/test/text.*.txt',
+                             collection=False, lazy=False)
+        assert all(isinstance(x, Future) for x in L)
+
+        L = yield _read_text('/tmp/test/text.*.txt',
+                             collection=False, lazy=True)
+        assert all(isinstance(x, Value) for x in L)
+
+        yield e._shutdown()
+
+
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60)
+def test__read_text_unicode(s, a, b):
+    fn = '/tmp/test/data.txt'
+    data = b'abcd\xc3\xa9'
+    with make_hdfs() as hdfs:
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+
+        with hdfs.open(fn, 'w') as f:
+            f.write(b'\n'.join([data, data]))
+
+        [f] = yield _read_text(fn, collection=False, lazy=False)
+        result = yield f._result()
+        assert len(result) == 2
+        assert list(map(unicode.strip, result)) == [data.decode('utf-8')] * 2
+        assert len(result[0]) == 5
+
+        yield e._shutdown()
+
+
+def test_read_text_sync(loop):
+    with make_hdfs() as hdfs:
+        with hdfs.open('/tmp/test/data.txt', 'w') as f:
+            f.write(b'hello\nworld')
+
+        with cluster(nworkers=3) as (s, [a, b, c]):
+            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+                b = read_text('/tmp/test/*.txt')
+                assert list(b.str.upper()) == ['HELLO', 'WORLD']

@@ -12,6 +12,7 @@ from dask.imperative import Value
 from tornado import gen
 from toolz import merge
 
+from .compatibility import unicode
 from .executor import default_executor
 from .utils import ignoring, sync
 
@@ -151,7 +152,7 @@ def read_csv(fn, executor=None, hdfs=None, lazy=False, **kwargs):
     Parameters
     ----------
     fn: string
-        filename or globstring of avro files on HDFS
+        filename or globstring of CSV files on HDFS
     lazy: boolean, optional
         If True return dask Value objects
 
@@ -297,3 +298,58 @@ def write_bytes(path, futures, executor=None, hdfs=None, **hdfs_auth):
         filenames = [os.path.join(path, template % i) for i in range(n)]
 
     return executor.map(write_block_to_hdfs, filenames, futures, hdfs=hdfs)
+
+
+@gen.coroutine
+def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
+               executor=None, hdfs=None, lazy=False, collection=True):
+    from hdfs3 import HDFileSystem
+    from dask import do
+    import pandas as pd
+    hdfs = hdfs or HDFileSystem()
+    executor = default_executor(executor)
+
+    filenames = sorted(hdfs.glob(fn))
+    blocks = [block for fn in filenames
+                    for block in read_bytes(fn, executor, hdfs, lazy=True,
+                                            delimiter=lineterminator.encode())]
+    strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
+    lines = [do(unicode.split)(s, lineterminator) for s in strings]
+
+    if lazy:
+        from dask.bag import from_imperative
+        if collection:
+            raise gen.Return(from_imperative(lines))
+        else:
+            raise gen.Return(lines)
+
+    else:
+        futures = executor.compute(*lines)
+        from distributed.collections import _futures_to_dask_bag
+        if collection:
+            b = yield _futures_to_dask_bag(futures)
+            raise gen.Return(b)
+        else:
+            raise gen.Return(futures)
+
+
+def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
+              executor=None, hdfs=None, lazy=False, collection=True):
+    """ Read text lines from HDFS
+
+    Parameters
+    ----------
+    fn: string
+        filename or globstring of files on HDFS
+    collection: boolean, optional
+        Whether or not to return a high level collection
+    lazy: boolean, optional
+        Whether or not to start reading immediately
+
+    Returns
+    -------
+    Dask bag (if collection=True) or Futures or dask values
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _read_text, fn, encoding, errors,
+            lineterminator, executor, hdfs, lazy, collection)
