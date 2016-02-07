@@ -27,7 +27,7 @@ from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
 from .utils import All, sync, funcname, ignoring
-from .compatibility import Queue as pyQueue, Empty
+from .compatibility import Queue as pyQueue, Empty, isqueue
 
 logger = logging.getLogger(__name__)
 
@@ -616,14 +616,14 @@ class Executor(object):
         --------
         Executor.scatter: Send data out to cluster
         """
-        if isinstance(futures, Iterator):
-            return (self.gather(f) for f in futures)
-        elif type(futures) is pyQueue:
+        if isqueue(futures):
             qout = pyQueue()
             t = Thread(target=self._threaded_gather, args=(futures, qout))
             t.daemon = True
             t.start()
             return qout
+        elif isinstance(futures, Iterator):
+            return (self.gather(f) for f in futures)
         else:
             return sync(self.loop, self._gather, futures)
 
@@ -646,10 +646,10 @@ class Executor(object):
 
     def _threaded_scatter(self, q_or_i, qout):
         """ Internal function for scattering Iterable/Queue data """
-        if isinstance(q_or_i, Iterator):
-            get = next
-        elif type(q_or_i) is pyQueue:  # py2 Queue doesn't support mro
+        if isqueue(q_or_i):  # py2 Queue doesn't support mro
             get = pyQueue.get
+        elif isinstance(q_or_i, Iterator):
+            get = next
 
         while True:
             try:
@@ -701,7 +701,7 @@ class Executor(object):
         --------
         Executor.gather: Gather data back to local process
         """
-        if isinstance(data, Iterator) or type(data) is pyQueue:
+        if isqueue(data) or isinstance(data, Iterator):
             logger.debug("Starting thread for streaming data")
             qout = pyQueue()
 
@@ -709,7 +709,7 @@ class Executor(object):
             t.daemon = True
             t.start()
 
-            if isinstance(data, Iterator):
+            if not isqueue(data) and isinstance(data, Iterator):
                 def _():
                     while True:
                         result = qout.get()

@@ -6,9 +6,18 @@ if sys.version_info[0] == 2:
     from Queue import Queue, Empty
     reload = reload
 
+    def isqueue(o):
+        return (hasattr(o, 'queue') and
+                hasattr(o, '__module__') and
+                o.__module__ == 'Queue')
+
+
 if sys.version_info[0] == 3:
     from queue import Queue, Empty
     from importlib import reload
+
+    def isqueue(o):
+        return isinstance(o, Queue)
 
 
 try:
