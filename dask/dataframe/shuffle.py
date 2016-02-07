@@ -10,8 +10,9 @@ from toolz import merge
 from ..optimize import cull
 from ..base import tokenize
 from .core import DataFrame, Series, _Frame
-from .utils import (strip_categories, shard_df_on_index, _categorize,
-                    get_categories)
+from dask.dataframe.categorical import (strip_categories, _categorize,
+                                        get_categories)
+from .utils import shard_df_on_index
 
 
 def set_index(df, index, npartitions=None, compute=True, **kwargs):

@@ -33,6 +33,7 @@ return_scalar = '__return_scalar__'
 
 pd.computation.expressions.set_use_numexpr(False)
 
+
 def _concat(args, **kwargs):
     """ Generic concat operation """
     if not args:
@@ -967,42 +968,10 @@ class Series(_Frame):
         pandas.Series.resample
         """
 
-        # Validate Inputs
-        rule = pd.datetools.to_offset(rule)
-        day_nanos = pd.datetools.Day().nanos
-        if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
-            raise NotImplementedError('Resampling frequency %s that does'
-                                      ' not evenly divide a day is not '
-                                      'implemented' % rule)
-        kwargs = {'fill_method': fill_method, 'limit': limit,
-                  'loffset': loffset, 'base': base,
-                  'convention': convention != 'start', 'kind': kind}
-        err = ', '.join('`{0}`'.format(k) for (k, v) in kwargs.items() if v)
-        if err:
-            raise NotImplementedError('Keywords: ' + err)
-
-        # Create a grouper to determine closed and label conventions
-        newdivs, outdivs = _resample_bin_and_out_divs(self.divisions, rule,
-                                                      closed, label)
-
-        # Repartition divs into bins. These won't match labels after mapping
-        partitioned = self.repartition(newdivs, force=True)
-
-        kwargs = {'how': how, 'closed': closed, 'label': label}
-        name = tokenize(self, rule, kwargs)
-        dsk = partitioned.dask
-        def func(series, start, end, closed):
-            out = series.resample(rule, **kwargs)
-            return out.reindex(pd.date_range(start, end, freq=rule, closed=closed))
-
-        keys = partitioned._keys()
-        args = zip(keys, outdivs, outdivs[1:], ['left']*(len(keys)-1) + [None])
-        for i, (k, s, e, c) in enumerate(args):
-            dsk[(name, i)] = (func, k, s, e, c)
-
-        if how == 'ohlc':
-            return DataFrame(dsk, name, ['open', 'high', 'low', 'close'], outdivs)
-        return Series(dsk, name, self.name, outdivs)
+        from .tseries.resample import _resample
+        return _resample(self, rule, how=how, axis=axis, fill_method=fill_method,
+                         closed=closed, label=label, convention=convention,
+                         kind=kind, loffset=loffset, limit=limit, base=base)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
@@ -1043,6 +1012,7 @@ class Series(_Frame):
 
     @derived_from(pd.Series)
     def groupby(self, index, **kwargs):
+        from dask.dataframe.groupby import SeriesGroupBy
         return SeriesGroupBy(self, index, **kwargs)
 
     @derived_from(pd.Series)
@@ -1348,9 +1318,11 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def groupby(self, key, **kwargs):
-        return GroupBy(self, key, **kwargs)
+        from dask.dataframe.groupby import DataFrameGroupBy
+        return DataFrameGroupBy(self, key, **kwargs)
 
     def categorize(self, columns=None, **kwargs):
+        from dask.dataframe.categorical import categorize
         return categorize(self, columns, **kwargs)
 
     @derived_from(pd.DataFrame)
@@ -1799,242 +1771,6 @@ def _maybe_from_pandas(dfs):
     return dfs
 
 
-def _groupby_apply(df, ind, func):
-    return df.groupby(ind).apply(func)
-
-def _groupby_apply_level0(df, func):
-    return df.groupby(level=0).apply(func)
-
-def _groupby_getitem_apply(df, ind, key, func):
-    return df.groupby(ind)[key].apply(func)
-
-def _groupby_level0_getitem_apply(df, key, func):
-    return df.groupby(level=0)[key].apply(func)
-
-def _groupby_get_group(df, by_key, get_key, columns):
-    grouped = df.groupby(by_key)
-    if isinstance(columns, tuple):
-        columns = list(columns)
-    if get_key in grouped.groups:
-        return grouped[columns].get_group(get_key)
-    else:
-        # to create empty DataFrame/Series, which has the same
-        # dtype as the original
-        return df[0:0][columns]
-
-
-class _GroupBy(object):
-
-    def _aca_agg(self, token, func, aggfunc=None):
-        if aggfunc is None:
-            aggfunc = func
-
-        if isinstance(self.index, Series):
-
-            def chunk(df, index, func=func, key=self.key):
-                if isinstance(df, pd.Series):
-                    return func(df.groupby(index))
-                else:
-                    return func(df.groupby(index)[key])
-
-            agg = lambda df: aggfunc(df.groupby(level=0))
-            token = self._token_prefix + token
-
-            return aca([self.df, self.index], chunk=chunk, aggregate=agg,
-                       columns=self.key, token=token)
-        else:
-            def chunk(df, index=self.index, func=func, key=self.key):
-                return func(df.groupby(index)[key])
-
-            if isinstance(self.index, list):
-                levels = list(range(len(self.index)))
-            else:
-                levels = 0
-            agg = lambda df: aggfunc(df.groupby(level=levels))
-            token = self._token_prefix + token
-
-            return aca(self.df, chunk=chunk, aggregate=agg,
-                       columns=self.key, token=token)
-
-    @derived_from(pd.core.groupby.GroupBy)
-    def sum(self):
-        return self._aca_agg(token='sum', func=lambda x: x.sum())
-
-    @derived_from(pd.core.groupby.GroupBy)
-    def min(self):
-        return self._aca_agg(token='min', func=lambda x: x.min())
-
-    @derived_from(pd.core.groupby.GroupBy)
-    def max(self):
-        return self._aca_agg(token='max', func=lambda x: x.max())
-
-    @derived_from(pd.core.groupby.GroupBy)
-    def count(self):
-        return self._aca_agg(token='count', func=lambda x: x.count(),
-                             aggfunc=lambda x: x.sum())
-
-    @derived_from(pd.core.groupby.GroupBy)
-    def mean(self):
-        return 1.0 * self.sum() / self.count()
-
-    @derived_from(pd.core.groupby.GroupBy)
-    def get_group(self, key):
-        token = self._token_prefix + 'get_group'
-        return map_partitions(_groupby_get_group, self.column_info,
-                              self.df,
-                              self.index, key, self.column_info, token=token)
-
-
-class GroupBy(_GroupBy):
-
-    _token_prefix = 'dataframe-groupby-'
-
-    def __init__(self, df, index=None, key=None, **kwargs):
-        self.df = df
-        self.index = index
-        self.kwargs = kwargs
-
-        if not kwargs.get('as_index', True):
-            msg = ("The keyword argument `as_index=False` is not supported in "
-                   "dask.dataframe.groupby")
-            raise NotImplementedError(msg)
-
-        if isinstance(index, list):
-            for i in index:
-                if i not in df.columns:
-                    raise KeyError("Columns not found: '{0}'".format(i))
-            _key = [c for c in df.columns if c not in index]
-
-        elif isinstance(index, Series):
-            assert index.divisions == df.divisions
-            # check whether given Series is taken from given df and unchanged.
-            # If any operations are performed, _name will be changed to
-            # e.g. "elemwise-xxxx"
-            if (index.name is not None and
-                index._name == self.df._name + '.' + index.name):
-                _key = [c for c in df.columns if c != index.name]
-            else:
-                _key = list(df.columns)
-        else:
-            if index not in df.columns:
-                raise KeyError("Columns not found: '{0}'".format(index))
-            _key = [c for c in df.columns if c != index]
-
-        self.key = key or _key
-
-    @property
-    def column_info(self):
-        return self.df.columns
-
-    def apply(self, func, columns=None):
-        """ Apply function to each group.
-
-        If the grouper does not align with the index then this causes a full
-        shuffle.  The order of rows within each group may not be preserved.
-        """
-        if (isinstance(self.index, Series) and
-            self.index._name == self.df.index._name):
-            df = self.df
-            return map_partitions(_groupby_apply_level0,
-                                  columns or self.df.columns,
-                                  self.df, func)
-        else:
-            from .shuffle import shuffle
-            # df = set_index(self.df, self.index, **self.kwargs)
-            df = shuffle(self.df, self.index, **self.kwargs)
-            return map_partitions(_groupby_apply,
-                                  columns or self.df.columns,
-                                  self.df, self.index, func)
-
-    def __getitem__(self, key):
-        if isinstance(key, list):
-            for k in key:
-                if k not in self.df.columns:
-                    raise KeyError("Columns not found: '{0}'".format(k))
-            return GroupBy(self.df, index=self.index, key=key, **self.kwargs)
-        else:
-            if key not in self.df.columns:
-                raise KeyError("Columns not found: '{0}'".format(key))
-            return SeriesGroupBy(self.df, self.index, key)
-
-    def __dir__(self):
-        return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      list(self.df.columns)))
-
-    def __getattr__(self, key):
-        try:
-            return self[key]
-        except KeyError as e:
-            raise AttributeError(e)
-
-
-class SeriesGroupBy(_GroupBy):
-
-    _token_prefix = 'series-groupby-'
-
-    def __init__(self, df, index, key=None, **kwargs):
-        self.df = df
-        self.index = index
-        self.key = key
-        self.kwargs = kwargs
-
-        if isinstance(df, Series):
-            if not isinstance(index, Series):
-                raise TypeError("A dask Series must be used as the index for a"
-                                " Series groupby.")
-            if not df.divisions == index.divisions:
-                raise NotImplementedError("The Series and index of the groupby"
-                                          " must have the same divisions.")
-
-    @property
-    def column_info(self):
-        return self.key
-
-    def apply(self, func, columns=None):
-        """ Apply function to each group.
-
-        If the grouper does not align with the index then this causes a full
-        shuffle.  The order of rows within each group may not be preserved.
-        """
-        # df = set_index(self.df, self.index, **self.kwargs)
-        if self.index._name == self.df.index._name:
-            df = self.df
-            return map_partitions(_groupby_level0_getitem_apply,
-                                  self.df, self.key, func,
-                                  columns=columns)
-        else:
-            from .shuffle import shuffle
-            df = shuffle(self.df, self.index, **self.kwargs)
-            return map_partitions(_groupby_apply,
-                                  columns or self.df.columns,
-                                  self.df, self.index, func)
-
-    def nunique(self):
-        def chunk(df, index):
-            # we call set_index here to force a possibly duplicate index
-            # for our reduce step
-            if isinstance(df, pd.DataFrame):
-                grouped = (df.groupby(index)
-                        .apply(pd.DataFrame.drop_duplicates, subset=self.key))
-                grouped.index = grouped.index.get_level_values(level=0)
-            else:
-                if isinstance(index, np.ndarray):
-                    assert len(index) == len(df)
-                    index = pd.Series(index, index=df.index)
-                grouped = pd.concat([df, index], axis=1).drop_duplicates()
-            return grouped
-
-        def agg(df):
-            if isinstance(self.df, Series):
-                return df.groupby(df.columns[1])[df.columns[0]].nunique()
-            else:
-                return df.groupby(level=0)[self.key].nunique()
-
-        return aca([self.df, self.index],
-                   chunk=chunk, aggregate=agg, columns=self.key,
-                   token='series-groupby-nunique')
-
-
 def apply_concat_apply(args, chunk=None, aggregate=None,
                        columns=no_default, token=None):
     """ Apply a function to blocks, the concat, then apply again
@@ -2172,38 +1908,6 @@ def _rename(columns, df):
         return df
 
 
-def categorize_block(df, categories):
-    """ Categorize a dataframe with given categories
-
-    df: DataFrame
-    categories: dict mapping column name to iterable of categories
-    """
-    df = df.copy()
-    for col, vals in categories.items():
-        df[col] = pd.Categorical(df[col], categories=vals, ordered=False)
-    return df
-
-
-def categorize(df, columns=None, **kwargs):
-    """
-    Convert columns of dataframe to category dtype
-
-    This aids performance, both in-memory and in spilling to disk
-    """
-    if columns is None:
-        dtypes = df.dtypes
-        columns = [name for name, dt in zip(dtypes.index, dtypes.values)
-                    if dt == 'O']
-    if not isinstance(columns, (list, tuple)):
-        columns = [columns]
-
-    distincts = [df[col].drop_duplicates() for col in columns]
-    values = compute(*distincts, **kwargs)
-
-    func = partial(categorize_block, categories=dict(zip(columns, values)))
-    return df.map_partitions(func, columns=df.columns)
-
-
 def quantile(df, q):
     """ Approximate quantiles of Series / single column DataFrame
 
@@ -2277,45 +1981,6 @@ def pd_split(df, p, random_state=None):
     index = pseudorandom(len(df), p, random_state)
     return [df.iloc[index == i] for i in range(len(p))]
 
-
-def _resample_bin_and_out_divs(divisions, rule, closed, label):
-    rule = pd.datetools.to_offset(rule)
-    g = pd.TimeGrouper(rule, how='count', closed=closed, label=label)
-
-    # Determine bins to apply `how` to. Disregard labeling scheme.
-    divs = pd.Series(range(len(divisions)), index=divisions)
-    temp = divs.resample(rule, how='count', closed=closed, label='left')
-    tempdivs = temp.loc[temp > 0].index
-
-    # Cleanup closed == 'right' and label == 'right'
-    res = pd.offsets.Nano() if hasattr(rule, 'delta') else pd.offsets.Day()
-    if g.closed == 'right':
-        newdivs = tempdivs + res
-    else:
-        newdivs = tempdivs
-    if g.label == 'right':
-        outdivs = tempdivs + rule
-    else:
-        outdivs = tempdivs
-
-    newdivs = newdivs.tolist()
-    outdivs = outdivs.tolist()
-
-    # Adjust ends
-    if newdivs[0] < divisions[0]:
-        newdivs[0] = divisions[0]
-    if newdivs[-1] < divisions[-1]:
-        if len(newdivs) < len(divs):
-            setter = lambda a, val: a.append(val)
-        else:
-            setter = lambda a, val: a.__setitem__(-1, val)
-        setter(newdivs, divisions[-1])
-        if outdivs[-1] > divisions[-1]:
-            setter(outdivs, outdivs[-1])
-        elif outdivs[-1] < divisions[-1]:
-            setter(outdivs, temp.index[-1])
-
-    return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
 def _take_last(a, skipna=True):
     """

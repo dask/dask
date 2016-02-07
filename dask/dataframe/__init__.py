@@ -1,5 +1,5 @@
 from .core import (DataFrame, Series, Index, _Frame, map_partitions,
-        repartition)
+                   repartition)
 from .io import (read_csv, from_array, from_bcolz, from_array, from_bcolz,
                  from_pandas, from_dask_array, from_castra, read_hdf,
                  from_imperative)
