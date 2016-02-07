@@ -215,16 +215,15 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
         dsk[(name, i)] = (pd.DataFrame.join, a, b, None, how,
                           lsuffix, rsuffix)
 
-    # fake column names
-    j = left_empty.join(right_empty, None, how, lsuffix, rsuffix)
+    # fake result
+    result = left_empty.join(right_empty, None, how, lsuffix, rsuffix)
+    return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk),
+                     name, result, divisions)
 
-    return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk), name,
-                     j.columns, divisions)
 
-
-def pdmerge(left, right, how, left_on, right_on,
-            left_index, right_index, suffixes,
-            default_left_columns, default_right_columns):
+def _pdmerge(left, right, how, left_on, right_on,
+             left_index, right_index, suffixes,
+             default_left_columns, default_right_columns):
 
     if not len(left):
         left = pd.DataFrame(columns=default_left_columns)
@@ -269,12 +268,12 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     # fake column names
     left_empty = lhs._pd
     right_empty = rhs._pd
-    j = pd.merge(left_empty, right_empty, how, None,
-                 left_on=left_on, right_on=right_on,
-                 left_index=left_index, right_index=right_index,
-                 suffixes=suffixes)
+    dummy = pd.merge(left_empty, right_empty, how, None,
+                     left_on=left_on, right_on=right_on,
+                     left_index=left_index, right_index=right_index,
+                     suffixes=suffixes)
 
-    merger = partial(pdmerge, suffixes=suffixes,
+    merger = partial(_pdmerge, suffixes=suffixes,
                      default_left_columns=list(lhs.columns),
                      default_right_columns=list(rhs.columns))
 
@@ -293,9 +292,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
                 for i in range(npartitions))
 
     divisions = [None] * (npartitions + 1)
-
     return DataFrame(toolz.merge(lhs2.dask, rhs2.dask, dsk),
-                     name, j.columns, divisions)
+                     name, dummy, divisions)
 
 
 def _pdconcat(dfs, axis=0, join='outer'):
@@ -345,11 +343,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     dfs2, divisions, parts = align_partitions(*dfs)
 
     empties = [df._pd for df in dfs]
-    result = pd.concat(empties, axis=axis, join=join)
-    if isinstance(result, pd.Series):
-        columns = result.name
-    else:
-        columns = result.columns.tolist()
+    dummy = pd.concat(empties, axis=axis, join=join)
 
     parts2 = [[df if df is not None else empty
                for df, empty in zip(part, empties)]
@@ -359,9 +353,8 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     dsk = dict(((name, i), (_pdconcat, part, axis, join))
                 for i, part in enumerate(parts2))
 
-    return_type = _get_return_type(dfs[0], columns)
-    return return_type(toolz.merge(dsk, *[df.dask for df in dfs2]),
-                       name, columns, divisions)
+    return _Frame(toolz.merge(dsk, *[df.dask for df in dfs2]),
+                  name, dummy, divisions)
 
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
@@ -559,11 +552,19 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             # concat will not regard Series as row
             dfs = _maybe_from_pandas(dfs)
             name = 'concat-{0}'.format(tokenize(*dfs))
+<<<<<<< 67169c91bb885da8c073313194763838ad7b4e2b
             dsk, dummy = _concat_dfs(dfs, name, join=join)
 
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
             return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
                           name, dummy, divisions)
+=======
+            dsk, empty = _concat_dfs(dfs, name, join=join)
+
+            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+            return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
+                          name, empty, divisions)
+>>>>>>> Fix io and merge to preserve metadata
 
 def _append(df, other, divisions):
     """ Internal function to append 2 dd.DataFrame/Series instances """

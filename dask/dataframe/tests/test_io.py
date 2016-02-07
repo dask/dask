@@ -16,7 +16,7 @@ import threading
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.io import (read_csv, file_size,  dataframe_from_ctable,
-        from_array, from_bcolz, from_dask_array)
+                               from_array, from_bcolz, from_dask_array)
 from dask.compatibility import StringIO, BZ2File, GzipFile
 
 from dask.utils import filetext, tmpfile, ignoring, compressions
@@ -53,10 +53,12 @@ def test_read_csv(open_comp_pair, infer):
                 lineterminator='\n')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
+        assert f._know_dtype
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
                   pd.read_csv(fn, compression=compression, lineterminator='\n'))
+
 
 
 def test_file_size():
@@ -66,7 +68,6 @@ def test_file_size():
     with filetext(text.encode(), open=GzipFile) as fn:
         assert file_size(fn, 'gzip') in counts
 
-
 def test_read_multiple_csv():
     try:
         with open('_foo.1.csv', 'w') as f:
@@ -74,9 +75,11 @@ def test_read_multiple_csv():
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
         df = dd.read_csv('_foo.*.csv')
+        assert df._know_dtype
 
         assert (len(read_csv('_foo.*.csv').compute()) ==
                 len(read_csv('_foo.1.csv').compute()) * 2)
+
     finally:
         os.remove('_foo.1.csv')
         os.remove('_foo.2.csv')
@@ -99,6 +102,7 @@ def test_consistent_dtypes():
     with filetext(text) as fn:
         df = dd.read_csv(fn, chunkbytes=30)
         assert isinstance(df.amount.sum().compute(), float)
+        assert df._know_dtype
 
 datetime_csv_file = """
 name,amount,when
@@ -112,6 +116,7 @@ Dan,400,2014-01-01
 def test_read_csv_index():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunkbytes=20, index='amount')
+        assert f._know_dtype
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
@@ -123,8 +128,7 @@ def test_read_csv_index():
                 assert (block.index >= f.divisions[i]).all()
 
         expected = pd.read_csv(fn).set_index('amount')
-
-        eq(result, expected)
+        assert eq(result, expected)
 
 
 def test_usecols():
@@ -203,13 +207,15 @@ def test_from_array():
     x = np.arange(10 * 3).reshape(10, 3)
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert list(d.columns) == [0, 1, 2]
+    assert d._know_dtype
+    tm.assert_index_equal(d.columns, pd.Index([0, 1, 2]))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
     d = dd.from_array(x, chunksize=4, columns=list('abc'))
     assert isinstance(d, dd.DataFrame)
-    assert list(d.columns) == ['a', 'b', 'c']
+    assert d._know_dtype
+    tm.assert_index_equal(d.columns, pd.Index(['a', 'b', 'c']))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
@@ -221,10 +227,36 @@ def test_from_array_with_record_dtype():
                  dtype=[('a', 'i4'), ('b', 'i4')])
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
+    assert d._know_dtype
     assert list(d.columns) == ['a', 'b']
     assert d.divisions == (0, 4, 8, 9)
 
     assert (d.compute().to_records(index=False) == x).all()
+
+
+def test_dummy_from_array():
+    x = np.array([[1, 2], [3, 4]], dtype=np.int64)
+    res = dd.io._dummy_from_array(x)
+    assert isinstance(res, pd.DataFrame)
+    assert res['0'].dtype == np.int64
+    assert res['1'].dtype == np.int64
+
+    x = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
+    res = dd.io._dummy_from_array(x, columns=['a', 'b'])
+    assert isinstance(res, pd.DataFrame)
+    assert res['a'].dtype == np.float64
+    assert res['b'].dtype == np.float64
+
+    x = np.array([1., 2., 3.], dtype=np.float64)
+    res = dd.io._dummy_from_array(x)
+    assert isinstance(res, pd.Series)
+    assert res.dtype == np.float64
+
+    x = np.array([1, 2, 3], dtype=np.object_)
+    res = dd.io._dummy_from_array(x, columns='x')
+    assert isinstance(res, pd.Series)
+    assert res.name == 'x'
+    assert res.dtype == np.object_
 
 
 def test_from_bcolz_multiple_threads():
@@ -470,12 +502,12 @@ def test_from_dask_array_compat_numpy_array():
     d1 = from_dask_array(x)       # dask
     assert isinstance(d1, dd.DataFrame)
     assert (d1.compute().values == x.compute()).all()
-    assert d1.columns == (0, 1, 2)
+    tm.assert_index_equal(d1.columns, pd.Index([0, 1, 2]))
 
     d2 = from_array(x.compute())  # numpy
     assert isinstance(d1, dd.DataFrame)
     assert (d2.compute().values == x.compute()).all()
-    assert d2.columns == (0, 1, 2)
+    tm.assert_index_equal(d2.columns, pd.Index([0, 1, 2]))
 
     msg = r"""Length mismatch: Expected axis has 3 elements, new values have 1 elements"""
     with tm.assertRaisesRegexp(ValueError, msg):
@@ -487,12 +519,12 @@ def test_from_dask_array_compat_numpy_array():
     d1 = from_dask_array(x, columns=['a', 'b', 'c'])       # dask
     assert isinstance(d1, dd.DataFrame)
     assert (d1.compute().values == x.compute()).all()
-    assert d1.columns == ('a', 'b', 'c')
+    tm.assert_index_equal(d1.columns, pd.Index(['a', 'b', 'c']))
 
     d2 = from_array(x.compute(), columns=['a', 'b', 'c'])  # numpy
     assert isinstance(d1, dd.DataFrame)
     assert (d2.compute().values == x.compute()).all()
-    assert d2.columns == ('a', 'b', 'c')
+    tm.assert_index_equal(d2.columns, pd.Index(['a', 'b', 'c']))
 
 
 def test_from_dask_array_compat_numpy_array_1d():
@@ -522,22 +554,23 @@ def test_from_dask_array_compat_numpy_array_1d():
     d1 = from_dask_array(x, columns=['name'])       # dask
     assert isinstance(d1, dd.DataFrame)
     assert (d1.compute().values == x.compute()).all()
-    assert d1.columns == ('name', )
+    tm.assert_index_equal(d1.columns, pd.Index(['name']))
 
     d2 = from_array(x.compute(), columns=['name'])  # numpy
     assert isinstance(d1, dd.DataFrame)
     assert (d2.compute().values == x.compute()).all()
-    assert d2.columns == ('name', )
+    tm.assert_index_equal(d2.columns, pd.Index(['name']))
+
 
 def test_from_dask_array_struct_dtype():
     x = np.array([(1, 'a'), (2, 'b')], dtype=[('a', 'i4'), ('b', 'object')])
     y = da.from_array(x, chunks=(1,))
     df = dd.from_dask_array(y)
-    assert tuple(df.columns) == y.dtype.names
-    eq(df, pd.DataFrame(x))
+    tm.assert_index_equal(df.columns, pd.Index(['a', 'b']))
+    assert eq(df, pd.DataFrame(x))
 
-    eq(dd.from_dask_array(y, columns=['b', 'a']),
-       pd.DataFrame(x, columns=['b', 'a']))
+    assert eq(dd.from_dask_array(y, columns=['b', 'a']),
+              pd.DataFrame(x, columns=['b', 'a']))
 
 
 def test_to_castra():

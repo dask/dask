@@ -1249,7 +1249,6 @@ class DataFrame(_Frame):
         result._name = name
 
         result._pd_cache, result._know_dtype = cls._build_pd(metadata)
-
         result.divisions = tuple(divisions)
         return result
 
