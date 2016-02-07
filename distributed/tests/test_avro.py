@@ -82,6 +82,8 @@ def test_avro(s, a, b):
         assert isinstance(L, list)
         assert all(isinstance(x, Value) for x in L)
 
+    yield e._shutdown()
+
 
 def test_avro_sync(loop):
     avro_files = {'/tmp/test/1.avro': avro_bytes,
