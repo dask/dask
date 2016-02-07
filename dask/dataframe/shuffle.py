@@ -74,11 +74,11 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
 
     if isinstance(index, _Frame):
         assert df.divisions == index.divisions
-        metadata = df._empty_partition
+        metadata = df._pd
         metadata.index.name = index.name
     else:
         columns = [c for c in df.columns if c != index]
-        metadata = df._empty_partition[columns]
+        metadata = df._pd[columns]
         metadata.index.name = index
 
     token = tokenize(df, index, divisions)

@@ -75,12 +75,12 @@ class Scalar(Base):
     _default_get = staticmethod(threaded.get)
     _finalize = staticmethod(finalize)
 
-    def __init__(self, dsk, _name, name=None, divisions=None):
+    def __init__(self, dsk, _name, metadata=None, divisions=None):
         self.dask = dsk
         self._name = _name
         self.divisions = [None, None]
 
-        # name and divisions are ignored.
+        # metadata and divisions are ignored.
         # There are dummies to be compat with Series and DataFrame
 
     def __array__(self):
@@ -182,6 +182,32 @@ class _Frame(Base):
         return len(self.divisions) - 1
 
     @property
+    def _pd(self):
+        """ Return empty dummy to emulate the result """
+        return self._pd_cache
+
+    @classmethod
+    def _build_pd(cls, metadata):
+        """ build pandas instance from passed metadata """
+        if isinstance(metadata, cls):
+            # copy metadata
+            _pd = metadata._pd
+            know_dtype = metadata._know_dtype
+        elif isinstance(metadata, cls._partition_type):
+            if isinstance(metadata, pd.Index):
+                _pd = metadata[0:0]
+            else:
+                _pd = metadata.iloc[0:0]
+            know_dtype = True
+        else:
+            if np.isscalar(metadata) or metadata is None:
+                _pd = cls._partition_type([], name=metadata)
+            else:
+                _pd = cls._partition_type(columns=metadata)
+            know_dtype = False
+        return _pd, know_dtype
+
+    @property
     def _args(self):
         return NotImplementedError
 
@@ -199,7 +225,7 @@ class _Frame(Base):
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
 
-        idx_name = self._empty_partition.index.name
+        idx_name = self._pd.index.name
         return Index(merge(dsk, self.dask), name, idx_name, self.divisions)
 
     @property
@@ -214,7 +240,7 @@ class _Frame(Base):
             dsk = {(name, 0): (self._name, n)}
             divisions = self.divisions[n:n+2]
             return self._constructor(merge(self.dask, dsk), name,
-                                     self.column_info, divisions)
+                                     self._pd, divisions)
         else:
             msg = "n must be 0 <= n < {0}".format(self.npartitions)
             raise ValueError(msg)
@@ -237,17 +263,17 @@ class _Frame(Base):
         name = 'from-cache-' + self._name
         dsk2 = dict(((name, i), (getitem, cache, (tuple, list(key))))
                     for i, key in enumerate(self._keys()))
-        return self._constructor(dsk2, name, self.column_info, self.divisions)
+        return self._constructor(dsk2, name, self._pd, self.divisions)
 
     @derived_from(pd.DataFrame)
     def drop_duplicates(self, **kwargs):
         assert all(k in ('keep', 'subset', 'take_last') for k in kwargs)
         chunk = lambda s: s.drop_duplicates(**kwargs)
-        return aca(self, chunk=chunk, aggregate=chunk, columns=self.column_info,
+        return aca(self, chunk=chunk, aggregate=chunk, columns=self._pd,
                    token='drop-duplicates')
 
     def __len__(self):
-        return reduction(self.index, len, np.sum, token='len').compute()
+        return reduction(self, len, np.sum, token='len').compute()
 
     def map_partitions(self, func, columns=no_default, *args, **kwargs):
         """ Apply Python function on each DataFrame block
@@ -279,7 +305,7 @@ class _Frame(Base):
         >>> df.map_partitions(lambda df: df.head(), columns=df.columns)  # doctest: +SKIP
         """
         if columns is no_default:
-            columns = self.column_info
+            columns = self._pd
         return map_partitions(func, columns, self, *args, **kwargs)
 
     def random_split(self, p, random_state=None):
@@ -320,8 +346,7 @@ class _Frame(Base):
                       for i in range(len(p))]
         return [type(self)(merge(self.dask, dsk_full, dsk),
                            self._name + '-split-%d' % i,
-                           self.column_info,
-                           self.divisions)
+                           self._pd, self.divisions)
                 for i, dsk in enumerate(dsks)]
 
     def head(self, n=5, compute=True):
@@ -333,7 +358,7 @@ class _Frame(Base):
         dsk = {(name, 0): (lambda x, n: x.head(n=n), (self._name, 0), n)}
 
         result = self._constructor(merge(self.dask, dsk), name,
-                                   self.column_info, self.divisions[:2])
+                                   self._pd, self.divisions[:2])
 
         if compute:
             result = result.compute()
@@ -349,7 +374,7 @@ class _Frame(Base):
                 (self._name, self.npartitions - 1), n)}
 
         result = self._constructor(merge(self.dask, dsk), name,
-                                   self.column_info, self.divisions[-2:])
+                                   self._pd, self.divisions[-2:])
 
         if compute:
             result = result.compute()
@@ -378,7 +403,7 @@ class _Frame(Base):
         dsk = {(name, 0): (lambda df: df.loc[ind], (self._name, part))}
 
         if self.ndim == 1:
-            columns = self.column_info
+            columns = self.name
         else:
             columns = ind
         return self._constructor_sliced(merge(self.dask, dsk), name,
@@ -417,7 +442,7 @@ class _Frame(Base):
 
         assert len(divisions) == len(dsk) + 1
         return self._constructor(merge(self.dask, dsk), name,
-                                 self.column_info, divisions)
+                                 self._pd, divisions)
 
     @property
     def loc(self):
@@ -464,7 +489,7 @@ class _Frame(Base):
     @derived_from(pd.Series)
     def fillna(self, value):
         func = getattr(self._partition_type, 'fillna')
-        return map_partitions(func, self.column_info, self, value)
+        return map_partitions(func, self._pd, self, value)
 
     def sample(self, frac, replace=False, random_state=None):
         """ Random sample of items
@@ -499,7 +524,7 @@ class _Frame(Base):
                    for i, seed in zip(range(self.npartitions), seeds))
 
         return self._constructor(merge(self.dask, dsk), name,
-                                       self.column_info, self.divisions)
+                                       self._pd, self.divisions)
 
     @derived_from(pd.DataFrame)
     def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
@@ -664,7 +689,7 @@ class _Frame(Base):
             if isinstance(quantiles[0], Scalar):
                 dask[(name, 0)] = (pd.Series, (list, qnames), num.columns)
                 divisions = (min(num.columns), max(num.columns))
-                return Series(dask, name, num.columns, divisions)
+                return Series(dask, name, None, divisions)
             else:
                 from .multi import _pdconcat
                 dask[(name, 0)] = (_pdconcat, (list, qnames), 1)
@@ -695,7 +720,7 @@ class _Frame(Base):
         dsk[(name, 0)] = (build_partition, (list, stats_names))
         dsk = merge(dsk, num.dask, *[s.dask for s in stats])
 
-        return self._constructor(dsk, name, num.column_info,
+        return self._constructor(dsk, name, num._pd,
                                  divisions=[None, None])
 
     def _cum_agg(self, token, chunk, aggregate, axis, skipna=True,
@@ -706,16 +731,16 @@ class _Frame(Base):
 
         if axis == 1:
             name = '{0}{1}(axis=1)'.format(self._token_prefix, token)
-            return map_partitions(chunk, self.column_info, self, token=name,
+            return map_partitions(chunk, self._pd, self, token=name,
                     **chunk_kwargs)
         else:
             # cumulate each partitions
             name1 = '{0}{1}-map'.format(self._token_prefix, token)
-            cumpart = map_partitions(chunk, self.column_info, self,
+            cumpart = map_partitions(chunk, self._pd, self,
                     token=name1, **chunk_kwargs)
 
             name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
-            # cumlast must be a Series or Scalar, thus do not pass column_info
+            # cumlast must be a Series or Scalar
             cumlast = map_partitions(_take_last, None, cumpart,
                                      skipna, token=name2)
 
@@ -736,7 +761,7 @@ class _Frame(Base):
                                         (cumlast._name, i - 1))
                 dask[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
             return self._constructor(merge(dask, cumpart.dask, cumlast.dask),
-                                     name, self.column_info, self.divisions)
+                                     name, self._pd, self.divisions)
 
     @derived_from(pd.DataFrame)
     def cumsum(self, axis=None, skipna=True):
@@ -787,12 +812,12 @@ class _Frame(Base):
     @derived_from(pd.DataFrame)
     def where(self, cond, other=np.nan):
         return map_partitions(self._partition_type.where,
-                              self.column_info, self, cond, other)
+                              self._pd, self, cond, other)
 
     @derived_from(pd.DataFrame)
     def mask(self, cond, other=np.nan):
         return map_partitions(self._partition_type.mask,
-                              self.column_info, self, cond, other)
+                              self._pd, self, cond, other)
 
     @derived_from(pd.Series)
     def append(self, other):
@@ -863,18 +888,7 @@ class Series(_Frame):
         result.dask = dsk
         result._name = _name
 
-        if isinstance(metadata, cls):
-            result.name = metadata.name
-            result._dtype = metadata._dtype
-            result._metadata = metadata._metadata
-        elif isinstance(metadata, cls._partition_type):
-            result.name = metadata.name
-            result._dtype = metadata.dtype
-            result._metadata = metadata.iloc[0:0]
-        else:
-            result.name = metadata
-            result._dtype = None
-            result._metadata = None
+        result._pd_cache, result._know_dtype = cls._build_pd(metadata)
 
         result.divisions = tuple(divisions)
         return result
@@ -892,13 +906,12 @@ class Series(_Frame):
         return Series
 
     @property
-    def _empty_partition(self):
-        """ Return empty dummy to emulate the result """
-        if self._metadata is None:
-            # do not use dtype, as it may trigger calculation
-            self._metadata = self._partition_type(name=self.name,
-                                                  dtype=self._dtype)
-        return self._metadata
+    def name(self):
+        return self._pd.name
+
+    @name.setter
+    def name(self, columns):
+        raise NotImplementedError('todo')
 
     @property
     def ndim(self):
@@ -908,9 +921,12 @@ class Series(_Frame):
     @property
     def dtype(self):
         """ Return data type """
-        if self._dtype is None:
-            self._dtype = self.head().dtype
-        return self._dtype
+        if self._know_dtype:
+            return self.dtype
+        else:
+            s = self.head()
+            self._pd_cache, self._know_dtype = self._build_pd(s)
+            return s.dtype
 
     def __getattr__(self, key):
         if key == 'cat':
@@ -922,7 +938,8 @@ class Series(_Frame):
     @property
     def column_info(self):
         """ Return Series.name """
-        return self.name
+        msg = 'temp for dev purpose, will be changed to deprecation warning'
+        raise ValueError(msg)
 
     @property
     def nbytes(self):
@@ -1161,7 +1178,7 @@ class Series(_Frame):
         def meth(self, other, level=None, fill_value=None, axis=0):
             if not level is None:
                 raise NotImplementedError('level must be None')
-            return map_partitions(op, self.column_info, self, other,
+            return map_partitions(op, self._pd, self, other,
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
         bind_method(cls, name, meth)
@@ -1176,6 +1193,7 @@ class Series(_Frame):
 
 class Index(Series):
 
+    _partition_type = pd.Index
     _token_prefix = 'index-'
 
     @property
@@ -1230,18 +1248,7 @@ class DataFrame(_Frame):
         result.dask = dask
         result._name = name
 
-        if isinstance(metadata, cls):
-            result.columns = metadata.columns
-            result._dtypes = metadata._dtypes
-            result._metadata = metadata._metadata
-        elif isinstance(metadata, cls._partition_type):
-            result.columns = metadata.columns
-            result._dtypes = metadata.dtypes
-            result._metadata = metadata.iloc[0:0]
-        else:
-            result.columns = pd.Index(metadata)
-            result._dtypes = None
-            result._metadata = None
+        result._pd_cache, result._know_dtype = cls._build_pd(metadata)
 
         result.divisions = tuple(divisions)
         return result
@@ -1259,18 +1266,20 @@ class DataFrame(_Frame):
         return DataFrame
 
     @property
-    def _empty_partition(self):
-        """ Return empty dummy to emulate the result """
-        if self._metadata is None:
-            if self._dtypes is None:
-                self._metadata = self._partition_type(columns=self.columns)
-            else:
-                # do not use dtype, as it may trigger calculation
-                empty = dict(zip(self.columns,
-                                 [np.array([], dtype=dt) for dt in self._dtypes]))
-                self._metadata = self._partition_type(empty,
-                                                      columns=self.columns)
-        return self._metadata
+    def columns(self):
+        return self._pd.columns
+
+    @columns.setter
+    def columns(self, columns):
+        # if length is mismatched, error is raised from pandas
+        self._pd.columns = columns
+        self._columns = self._pd.columns
+
+        renamed = self.rename(columns=dict(zip(self.columns, columns)))
+
+        # update myself
+        self.dask.update(renamed.dask)
+        self._name = renamed._name
 
     def __getitem__(self, key):
         if np.isscalar(key):
@@ -1328,10 +1337,12 @@ class DataFrame(_Frame):
     @property
     def dtypes(self):
         """ Return data types """
-        if self._dtypes is None:
-            # cache
-            self._dtypes = self._get(self.dask, self._keys()[0]).dtypes
-        return self._dtypes
+        if self._know_dtype:
+            return self._pd.dtypes
+        else:
+            df = self._get(self.dask, self._keys()[0])
+            self._pd_cache, self._know_dtype = self._build_pd(df)
+            return df.dtypes
 
     @derived_from(pd.DataFrame)
     def set_index(self, other, **kwargs):
@@ -1353,7 +1364,9 @@ class DataFrame(_Frame):
     @property
     def column_info(self):
         """ Return DataFrame.columns """
-        return self.columns
+
+        msg = 'temp for dev purpose, will be changed to deprecation warning'
+        raise ValueError(msg)
 
     @derived_from(pd.DataFrame)
     def nlargest(self, n=5, columns=None):
@@ -1381,14 +1394,14 @@ class DataFrame(_Frame):
         pairs = list(sum(kwargs.items(), ()))
 
         # Figure out columns of the output
-        df2 = self._empty_partition.assign(**dict((k, []) for k in kwargs))
+        df2 = self._pd.assign(**dict((k, []) for k in kwargs))
         return elemwise(_assign, self, *pairs, columns=df2.columns)
 
     @derived_from(pd.DataFrame)
     def rename(self, index=None, columns=None):
         if index is not None:
             raise ValueError("Cannot rename index.")
-        column_info = self._empty_partition.rename(columns=columns).columns
+        column_info = self._pd.rename(columns=columns).columns
         func = pd.DataFrame.rename
         # *args here is index, columns but columns arg is already used
         return map_partitions(func, column_info, self, None, columns)
@@ -1492,7 +1505,7 @@ class DataFrame(_Frame):
         if axis != 1:
             raise NotImplementedError("Drop currently only works for axis=1")
 
-        columns = self._empty_partition.drop(labels, axis=axis).columns
+        columns = self._pd.drop(labels, axis=axis).columns
         return elemwise(pd.DataFrame.drop, self, labels, axis, columns=columns)
 
     @derived_from(pd.DataFrame)
@@ -1572,7 +1585,7 @@ class DataFrame(_Frame):
                 right = other.columns
 
             if right is not None:
-                left = self._empty_partition
+                left = self._pd
                 right = pd.DataFrame(columns=right)
                 columns = op(left, right, axis=axis).columns
             else:
@@ -1756,7 +1769,7 @@ def elemwise(op, *args, **kwargs):
         if len(dfs) == 1:
             columns = dfs[0]
         else:
-            columns = op2(*[df._empty_partition for df in dfs])
+            columns = op2(*[df._pd for df in dfs])
     return _Frame(dsk, _name, columns, divisions)
 
 
@@ -1848,8 +1861,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
         args = [args]
 
     assert all(arg.npartitions == args[0].npartitions
-                for arg in args
-                if isinstance(arg, _Frame))
+               for arg in args if isinstance(arg, _Frame))
 
     token_key = tokenize(token or (chunk, aggregate), columns, *args)
     token = token or 'apply-concat-apply'
@@ -1888,6 +1900,19 @@ def _get_return_type(arg, columns):
     - Otherwise, result is DataFrame.
     """
 
+    if isinstance(columns, _Frame):
+        columns = columns._pd
+
+    if isinstance(columns, pd.Series):
+        return Series
+    elif isinstance(columns, pd.DataFrame):
+        return DataFrame
+    elif isinstance(columns, pd.Index) and isinstance(arg, Index):
+        # DataFrame may pass df.columns (Index)
+        # thus needs to check arg
+        return Index
+
+    # legacy logic, being removed
     if (isinstance(columns, (str, unicode)) or not
           isinstance(columns, Iterable)):
 
@@ -1913,6 +1938,7 @@ def map_partitions(func, columns, *args, **kwargs):
     targets : list
         List of target DataFrame / Series.
     """
+
     assert callable(func)
     token = kwargs.pop('token', 'map-partitions')
     token_key = tokenize(token or func, columns, kwargs, *args)
@@ -1934,11 +1960,20 @@ def map_partitions(func, columns, *args, **kwargs):
 
     return_type = _get_return_type(dfs[0], columns)
     dsk = {}
+
+    # temp
+    if isinstance(columns, pd.DataFrame):
+        new_names = columns.columns
+    elif isinstance(columns, pd.Series):
+        new_names = columns.name
+    else:
+        new_names = columns
+
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (_rename, columns, (apply, func, (tuple, values),
-                                                          kwargs))
+        dsk[(name, i)] = (_rename, new_names, (apply, func, (tuple, values),
+                                                             kwargs))
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
 
@@ -1946,16 +1981,25 @@ def map_partitions(func, columns, *args, **kwargs):
 
 
 def _rename(columns, df):
-    """ Rename columns in dataframe or series """
+    """
+    Rename columns of pd.DataFrame or name of pd.Series.
+    Not for dd.DataFrame or dd.Series.
+    """
     if isinstance(columns, Iterator):
         columns = list(columns)
+
     if columns is no_default:
         return df
+
+    if isinstance(df, _Frame):
+        raise NotImplementedError(df)
+
     if isinstance(df, pd.DataFrame) and len(columns) == len(df.columns):
         return df.rename(columns=dict(zip(df.columns, columns)))
     elif isinstance(df, pd.Series):
         return pd.Series(df, name=columns)
     else:
+        # df may be list, scalar, etc
         return df
 
 
@@ -1973,8 +2017,8 @@ def quantile(df, q):
 
     # currently, only Series has quantile method
     if isinstance(q, (list, tuple, np.ndarray)):
-        # make Series
-        merge_type = lambda v: df._partition_type(v, index=q, name=df.name)
+        # Index.quantile(list-like) must be pd.Series, not pd.Index
+        merge_type = lambda v: pd.Series(v, index=q, name=df.name)
         return_type = df._constructor
         if issubclass(return_type, Index):
             return_type = Series
@@ -2246,7 +2290,7 @@ def repartition(df, divisions, force=False):
         dsk = repartition_divisions(df.divisions, divisions,
                                     df._name, tmp, out, force=force)
         return df._constructor(merge(df.dask, dsk), out,
-                               df.column_info, divisions)
+                               df._pd, divisions)
     elif isinstance(df, (pd.Series, pd.DataFrame)):
         name = 'repartition-dataframe-' + token
         from .utils import shard_df_on_index

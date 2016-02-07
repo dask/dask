@@ -6,7 +6,6 @@ import pandas as pd
 import pandas.util.testing as tm
 import numpy as np
 import pytest
-from numpy.testing import assert_array_almost_equal
 
 import dask
 from dask.async import get_sync
@@ -147,6 +146,21 @@ def test_set_index_raises_error_on_bad_input():
     ddf = dd.from_pandas(df, 2)
 
     assert raises(NotImplementedError, lambda: ddf.set_index(['a', 'b']))
+
+def test_rename_columns():
+    # GH 819,
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                        'b': [7, 6, 5, 4, 3, 2, 1]})
+    ddf = dd.from_pandas(df, 2)
+
+    ddf.columns = ['x', 'y']
+    df.columns = ['x', 'y']
+    assert eq(ddf, df)
+
+    def len_mismatch():
+        ddf.columns = [1, 2, 3, 4]
+
+    assert raises(ValueError, lambda: len_mismatch())
 
 
 
@@ -1371,7 +1385,7 @@ def test_reset_index():
 
     assert len(res.index.compute()) == len(exp.index)
     tm.assert_index_equal(res.columns, exp.columns)
-    assert_array_almost_equal(res.compute().values, exp.values)
+    eq(res, exp)
 
 
 def test_dataframe_compute_forward_kwargs():

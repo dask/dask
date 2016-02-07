@@ -200,8 +200,8 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
-    left_empty = lhs._empty_partition
-    right_empty = rhs._empty_partition
+    left_empty = lhs._pd
+    right_empty = rhs._pd
 
     name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
 
@@ -267,8 +267,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
         right_index = False
 
     # fake column names
-    left_empty = lhs._empty_partition
-    right_empty = rhs._empty_partition
+    left_empty = lhs._pd
+    right_empty = rhs._pd
     j = pd.merge(left_empty, right_empty, how, None,
                  left_on=left_on, right_on=right_on,
                  left_index=left_index, right_index=right_index,
@@ -344,7 +344,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
     dfs2, divisions, parts = align_partitions(*dfs)
 
-    empties = [df._empty_partition for df in dfs]
+    empties = [df._pd for df in dfs]
     result = pd.concat(empties, axis=axis, join=join)
     if isinstance(result, pd.Series):
         columns = result.name
@@ -578,5 +578,5 @@ def _append(df, other, divisions):
     for j in range(other.npartitions):
         dsk[(name, npart + j)] = (other._name, j)
     dsk = toolz.merge(dsk, df.dask, other.dask)
-    dummy = df._empty_partition.append(other._empty_partition)
+    dummy = df._pd.append(other._pd)
     return _Frame(dsk, name, dummy, divisions)
