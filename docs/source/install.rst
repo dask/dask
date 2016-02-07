@@ -1,34 +1,36 @@
 Install Dask
 ============
 
-Dask can be installed from source, or can be installed with a single command
-with pip or with `conda <https://www.continuum.io/downloads>`_.
+You can install dask with ``conda``, with ``pip``, or by installing from source.
 
-To install Dask with ``conda``::
+Conda
+-----
+
+To install Dask with `conda <https://www.continuum.io/downloads>`_::
 
     conda install dask
 
-And to install Dask with ``pip``::
+This installs dask and all common dependencies, including Pandas and NumPy.
 
-    pip install dask
+Pip
+---
 
+To install Dask with ``pip`` there are a few options, depending on which
+dependencies you would like to keep up to date:
 
-Install parts of dask
----------------------
+*   ``pip install dask[complete]``: Install everything
+*   ``pip install dask[array]``: Install dask and numpy
+*   ``pip install dask[bag]``: Install dask and cloudpickle
+*   ``pip install dask[dataframe]``: Install dask, numpy, and pandas
+*   ``pip install dask``: Install only dask, which depends only on the standard
+    library.  This is appropriate if you only want the task schedulers.
 
-Different components of dask have different dependencies that are only relevant for that component.
+Source
+------
 
-* ``dask.array``: numpy
-* ``dask.bag``: cloudpickle
-* ``dask.dataframe``: pandas, bcolz (in development)
+To install dask from source, clone the repository from `github
+<https://github.com/blaze/dask>`_::
 
-The base ``pip`` install of dask is fairly minimal.  This is to protect
-lightweight ``dask.bag`` users from having to install heavyweight dependencies
-like ``bcolz`` or ``pandas``.  You can either install these dependencies
-separately or, when installing with ``pip``  you can specify which set of
-dependencies you would like as a parameter::
-
-   pip install dask[array]
-   pip install dask[bag]
-   pip install dask[dataframe]
-   pip install dask[complete]
+    git clone https://github.com/blaze/dask.git
+    cd dask
+    python setup.py install
