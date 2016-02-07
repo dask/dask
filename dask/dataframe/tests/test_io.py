@@ -139,14 +139,76 @@ def test_usecols():
 ####################
 
 
+def test_dummy_from_array():
+    x = np.array([[1, 2], [3, 4]], dtype=np.int64)
+    res = dd.io._dummy_from_array(x)
+    assert isinstance(res, pd.DataFrame)
+    assert res[0].dtype == np.int64
+    assert res[1].dtype == np.int64
+    tm.assert_index_equal(res.columns, pd.Index([0, 1]))
+
+    x = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
+    res = dd.io._dummy_from_array(x, columns=['a', 'b'])
+    assert isinstance(res, pd.DataFrame)
+    assert res['a'].dtype == np.float64
+    assert res['b'].dtype == np.float64
+    tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
+
+    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+
+def test_dummy_from_1darray():
+    x = np.array([1., 2., 3.], dtype=np.float64)
+    res = dd.io._dummy_from_array(x)
+    assert isinstance(res, pd.Series)
+    assert res.dtype == np.float64
+
+    x = np.array([1, 2, 3], dtype=np.object_)
+    res = dd.io._dummy_from_array(x, columns='x')
+    assert isinstance(res, pd.Series)
+    assert res.name == 'x'
+    assert res.dtype == np.object_
+
+    x = np.array([1, 2, 3], dtype=np.object_)
+    res = dd.io._dummy_from_array(x, columns=['x'])
+    assert isinstance(res, pd.DataFrame)
+    assert res['x'].dtype == np.object_
+    tm.assert_index_equal(res.columns, pd.Index(['x']))
+
+    msg = r"""Length mismatch: Expected axis has 1 elements, new values have 2 elements"""
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.io._dummy_from_array(x, columns=['a', 'b'])
+
+def test_dummy_from_recarray():
+    x = np.array([(i, i*10) for i in range(10)],
+                 dtype=[('a', np.float64), ('b', np.int64)])
+    res = dd.io._dummy_from_array(x)
+    assert isinstance(res, pd.DataFrame)
+    assert res['a'].dtype == np.float64
+    assert res['b'].dtype == np.int64
+    tm.assert_index_equal(res.columns, pd.Index(['a', 'b']))
+
+    res = dd.io._dummy_from_array(x, columns=['x', 'y'])
+    assert isinstance(res, pd.DataFrame)
+    assert res['x'].dtype == np.float64
+    assert res['y'].dtype == np.int64
+    tm.assert_index_equal(res.columns, pd.Index(['x', 'y']))
+
+    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+
 def test_from_array():
     x = np.arange(10 * 3).reshape(10, 3)
     d = dd.from_array(x, chunksize=4)
-    assert list(d.columns) == ['0', '1', '2']
+    assert isinstance(d, dd.DataFrame)
+    assert list(d.columns) == [0, 1, 2]
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
     d = dd.from_array(x, chunksize=4, columns=list('abc'))
+    assert isinstance(d, dd.DataFrame)
     assert list(d.columns) == ['a', 'b', 'c']
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
@@ -158,7 +220,7 @@ def test_from_array_with_record_dtype():
     x = np.array([(i, i*10) for i in range(10)],
                  dtype=[('a', 'i4'), ('b', 'i4')])
     d = dd.from_array(x, chunksize=4)
-
+    assert isinstance(d, dd.DataFrame)
     assert list(d.columns) == ['a', 'b']
     assert d.divisions == (0, 4, 8, 9)
 
@@ -363,12 +425,14 @@ def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
 
     df = from_dask_array(x, ['a', 'b', 'c'])
-    assert list(df.columns) == ['a', 'b', 'c']
+    assert isinstance(df, dd.DataFrame)
+    assert df.columns == ('a', 'b', 'c')
     assert list(df.divisions) == [0, 4, 8, 9]
     assert (df.compute(get=get_sync).values == x.compute(get=get_sync)).all()
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=['a', 'b', 'c'])
+    assert isinstance(df, dd.DataFrame)
     assert df2.columns == df.columns
     assert df2.divisions == df.divisions
 
@@ -377,34 +441,93 @@ def test_Series_from_dask_array():
     x = da.ones(10, chunks=4)
 
     ser = from_dask_array(x, 'a')
+    assert isinstance(ser, dd.Series)
     assert ser.name == 'a'
     assert list(ser.divisions) == [0, 4, 8, 9]
     assert (ser.compute(get=get_sync).values == x.compute(get=get_sync)).all()
 
     ser = from_dask_array(x)
+    assert isinstance(ser, dd.Series)
     assert ser.name is None
 
     # dd.from_array should re-route to from_dask_array
     ser2 = dd.from_array(x)
+    assert isinstance(ser2, dd.Series)
     assert eq(ser, ser2)
 
 
-def test_from_dask_array_raises():
+def test_from_dask_array_compat_numpy_array():
     x = da.ones((3, 3, 3), chunks=2)
-    pytest.raises(ValueError, lambda: from_dask_array(x))
+
+    msg = r"from_array does not input more than 2D array, got array with shape \(3, 3, 3\)"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        from_dask_array(x)       # dask
+
+    with tm.assertRaisesRegexp(ValueError, msg):
+        from_array(x.compute())  # numpy
 
     x = da.ones((10, 3), chunks=(3, 3))
-    pytest.raises(ValueError, lambda: from_dask_array(x))  # no columns
+    d1 = from_dask_array(x)       # dask
+    assert isinstance(d1, dd.DataFrame)
+    assert (d1.compute().values == x.compute()).all()
+    assert d1.columns == (0, 1, 2)
 
-    # Not enough columns
-    pytest.raises(ValueError, lambda: from_dask_array(x, columns=['a']))
+    d2 = from_array(x.compute())  # numpy
+    assert isinstance(d1, dd.DataFrame)
+    assert (d2.compute().values == x.compute()).all()
+    assert d2.columns == (0, 1, 2)
 
-    try:
-        from_dask_array(x, columns=['hello'])
-    except Exception as e:
-        assert 'hello' in str(e)
-        assert '3' in str(e)
+    msg = r"""Length mismatch: Expected axis has 3 elements, new values have 1 elements"""
+    with tm.assertRaisesRegexp(ValueError, msg):
+        from_dask_array(x, columns=['a'])       # dask
 
+    with tm.assertRaisesRegexp(ValueError, msg):
+        from_array(x.compute(), columns=['a'])  # numpy
+
+    d1 = from_dask_array(x, columns=['a', 'b', 'c'])       # dask
+    assert isinstance(d1, dd.DataFrame)
+    assert (d1.compute().values == x.compute()).all()
+    assert d1.columns == ('a', 'b', 'c')
+
+    d2 = from_array(x.compute(), columns=['a', 'b', 'c'])  # numpy
+    assert isinstance(d1, dd.DataFrame)
+    assert (d2.compute().values == x.compute()).all()
+    assert d2.columns == ('a', 'b', 'c')
+
+
+def test_from_dask_array_compat_numpy_array_1d():
+
+    x = da.ones(10, chunks=3)
+    d1 = from_dask_array(x)       # dask
+    assert isinstance(d1, dd.Series)
+    assert (d1.compute().values == x.compute()).all()
+    assert d1.name is None
+
+    d2 = from_array(x.compute())  # numpy
+    assert isinstance(d1, dd.Series)
+    assert (d2.compute().values == x.compute()).all()
+    assert d2.name is None
+
+    d1 = from_dask_array(x, columns='name')       # dask
+    assert isinstance(d1, dd.Series)
+    assert (d1.compute().values == x.compute()).all()
+    assert d1.name == 'name'
+
+    d2 = from_array(x.compute(), columns='name')  # numpy
+    assert isinstance(d1, dd.Series)
+    assert (d2.compute().values == x.compute()).all()
+    assert d2.name == 'name'
+
+    # passing list via columns results in DataFrame
+    d1 = from_dask_array(x, columns=['name'])       # dask
+    assert isinstance(d1, dd.DataFrame)
+    assert (d1.compute().values == x.compute()).all()
+    assert d1.columns == ('name', )
+
+    d2 = from_array(x.compute(), columns=['name'])  # numpy
+    assert isinstance(d1, dd.DataFrame)
+    assert (d2.compute().values == x.compute()).all()
+    assert d2.columns == ('name', )
 
 def test_from_dask_array_struct_dtype():
     x = np.array([(1, 'a'), (2, 'b')], dtype=[('a', 'i4'), ('b', 'object')])
