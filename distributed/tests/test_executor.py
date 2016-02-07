@@ -482,13 +482,13 @@ def slowinc(x):
     return x + 1
 
 
-def test_stress_gc(loop):
-    n = 100
+@pytest.mark.parametrize(('func', 'n'), [(slowinc, 100), (inc, 1000)])
+def test_stress_gc(loop, func, n):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            x = e.submit(slowinc, 1)
+            x = e.submit(func, 1)
             for i in range(n):
-                x = e.submit(slowinc, x)
+                x = e.submit(func, x)
 
             assert x.result() == n + 2
 
@@ -1471,7 +1471,7 @@ def test_remote_scatter_gather(s, a, b):
     yield e._shutdown()
 
 
-@gen_cluster()
+@gen_cluster(timeout=1000)
 def test_remote_submit_on_Future(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -1572,6 +1572,7 @@ def test_allow_restrictions(s, a, b):
         e.map(inc, [20], workers='127.0.0.1', allow_other_workers='Hello!')
 
 
+@pytest.mark.skipif('True', reason='because')
 def test_bad_address():
     try:
         Executor('123.123.123.123:1234', timeout=0.1)
@@ -1709,6 +1710,75 @@ def test_repr(s, a, b):
     yield e._shutdown()
 
 
+@gen_cluster()
+def test_forget_simple(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(inc, 1)
+    y = e.submit(inc, 2)
+    z = e.submit(add, x, y, workers=[a.ip], allow_other_workers=True)
+
+    yield _wait([x, y, z])
+    assert not s.waiting_data[x.key]
+    assert not s.waiting_data[y.key]
+
+    assert set(s.dask) == {x.key, y.key, z.key}
+
+    s.release_held_data([x.key])
+    assert x.key in s.dask
+    s.release_held_data([z.key])
+    for coll in [s.dask, s.dependencies, s.dependents, s.waiting,
+            s.waiting_data, s.who_has, s.restrictions, s.loose_restrictions,
+            s.held_data, s.in_play, s.keyorder, s.exceptions,
+            s.exceptions_blame]:
+        assert x.key not in coll
+        assert z.key not in coll
+
+    assert z.key not in s.dependents[y.key]
+
+    s.release_held_data([y.key])
+    assert not s.dask
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test_forget_complex(s, A, B):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    a, b, c, d = yield e._scatter(list(range(4)))
+    ab = e.submit(add, a, b)
+    cd = e.submit(add, c, d)
+    ac = e.submit(add, a, c)
+    acab = e.submit(add, ac, ab)
+
+    yield _wait([a,b,c,d,ab,ac,cd,acab])
+
+    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+
+    s.release_held_data([ab.key])
+    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+
+    s.release_held_data([b.key])
+    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+
+    s.release_held_data([acab.key])
+    assert set(s.dask) == {f.key for f in [ac,cd]}
+    assert b.key not in s.who_has
+
+    start = time()
+    while b.key in A.data or b.key in B.data:
+        yield gen.sleep(0.01)
+        assert time() < start + 10
+
+    s.release_held_data([ac.key])
+    assert set(s.dask) == {f.key for f in [cd]}
+
+    yield e._shutdown()
+
+
 def test_repr_sync(loop):
     with cluster(nworkers=3) as (s, [a, b, c]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
@@ -1718,3 +1788,46 @@ def test_repr_sync(loop):
             assert str(e.scheduler.port) in r
             assert str(3) in s  # nworkers
             assert 'threads' in s
+
+
+@gen_cluster()
+def test_waiting_data(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(inc, 1)
+    y = e.submit(inc, 2)
+    z = e.submit(add, x, y, workers=[a.ip], allow_other_workers=True)
+
+    yield _wait([x, y, z])
+
+    assert x.key not in s.waiting_data[x.key]
+    assert y.key not in s.waiting_data[y.key]
+    assert not s.waiting_data[x.key]
+    assert not s.waiting_data[y.key]
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test_multi_executor(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    f = Executor((s.ip, s.port), start=False)
+    yield f._start()
+
+    assert set(s.streams) == {e.id, f.id}
+
+    x = e.submit(inc, 1)
+    y = f.submit(inc, 2)
+    y2 = e.submit(inc, 2)
+
+    assert y.key == y2.key
+
+    yield _wait([x, y])
+
+    assert s.wants_what == {e.id: {x.key, y.key}, f.id: {y.key}}
+    assert s.who_wants == {x.key: {e.id}, y.key: {e.id, f.id}}
+
+    yield e._shutdown()

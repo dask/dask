@@ -74,6 +74,8 @@ def dont_test_dataframes(s, a):  # slow
         dfs2 = yield e._gather(dfs)
         assert sum(map(len, dfs2)) == n * 2 - 1
 
+        yield e._shutdown()
+
 
 def test_get_block_locations_nested():
     with make_hdfs() as hdfs:

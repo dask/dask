@@ -68,7 +68,7 @@ class Scheduler(Server):
     * **dependencies:** ``{key: {key}}``:
         Dictionary showing which keys depend on which others
     * **dependents:** ``{key: {key}}``:
-        Dictionary showing which keys are dependent on  which others
+        Dictionary showing which keys are dependent on which others
     * **waiting:** ``{key: {key}}``:
         Dictionary like dependencies but excludes keys already computed
     * **waiting_data:** ``{key: {key}}``:
@@ -131,7 +131,7 @@ class Scheduler(Server):
             ip=None, services=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
-        self.streams = []
+        self.streams = dict()
         self.status = None
         self.coroutines = []
         self.ip = ip or get_ip()
@@ -161,6 +161,8 @@ class Scheduler(Server):
         self.waiting_data = dict()
         self.who_has = defaultdict(set)
         self.deleted_keys = defaultdict(set)
+        self.who_wants = defaultdict(set)
+        self.wants_what = defaultdict(set)
 
         self.exceptions = dict()
         self.tracebacks = dict()
@@ -182,7 +184,7 @@ class Scheduler(Server):
                                  'release-held-data': self.release_held_data,
                                  'restart': self.restart}
 
-        self.handlers = {'start-control': self.control_stream,
+        self.handlers = {'register-client': self.control_stream,
                          'scatter': self.scatter,
                          'register': self.add_worker,
                          'unregister': self.remove_worker,
@@ -576,7 +578,7 @@ class Scheduler(Server):
     def remove_client(self):
         logger.info("Lost connection to client")
 
-    def update_graph(self, dsk=None, keys=None, restrictions=None,
+    def update_graph(self, client=None, dsk=None, keys=None, restrictions=None,
                      loose_restrictions=None):
         """ Add new computations to the internal dask graph
 
@@ -585,6 +587,10 @@ class Scheduler(Server):
         for k in list(dsk):
             if dsk[k] is k:
                 del dsk[k]
+
+        for k in keys:
+            self.who_wants[k].add(client)
+            self.wants_what[client].add(k)
 
         update_state(self.dask, self.dependencies, self.dependents,
                 self.held_data, self.who_has, self.in_play,
@@ -634,6 +640,42 @@ class Scheduler(Server):
             if keys2:
                 self.delete_data(keys=keys2)  # async
 
+        changed = True
+        while changed:
+            changed = False
+            for key in keys:
+                if key in self.dask and not self.dependents.get(key):
+                    self.forget(key)
+                    changed = True
+
+    def forget(self, key):
+        """ Forget a key if no one cares about it
+
+        This removes all knowledge of how to produce a key from the scheduler.
+        This is almost exclusively called by release_held_data
+        """
+        assert not self.dependents[key] and key not in self.held_data
+        if key in self.dask:
+            del self.dask[key]
+            del self.dependents[key]
+            for dep in self.dependencies[key]:
+                s = self.dependents[dep]
+                s.remove(key)
+                if not s and dep not in self.held_data:
+                    self.forget(dep)
+            del self.dependencies[key]
+            if key in self.restrictions:
+                del self.restrictions[key]
+            if key in self.loose_restrictions:
+                self.loose_restrictions.remove(key)
+            del self.keyorder[key]
+            if key in self.exceptions:
+                del self.exceptions[key]
+            if key in self.exceptions_blame:
+                del self.exceptions_blame[key]
+        if key in self.who_has:
+            self.delete_keys([key])
+
     def heal_state(self):
         """ Recover from catastrophic change """
         logger.debug("Heal state")
@@ -664,7 +706,11 @@ class Scheduler(Server):
         """ Publish updates to all listening Queues and Streams """
         for q in self.report_queues:
             q.put_nowait(msg)
-        for s in self.streams:
+        if 'key' in msg:
+            streams = {self.streams.get(c, ()) for c in self.who_wants[msg['key']]}
+        else:
+            streams = self.streams.values()
+        for s in streams:
             try:
                 write(s, msg)  # asynchrnous
             except StreamClosedError:
@@ -687,20 +733,19 @@ class Scheduler(Server):
         return future
 
     @gen.coroutine
-    def control_stream(self, stream, address=None):
+    def control_stream(self, stream, address=None, client=None):
         """ Listen to messages from an IOStream """
-        ident = str(uuid.uuid1())
-        logger.info("Connection to %s, %s", type(self).__name__, ident)
-        self.streams.append(stream)
+        logger.info("Connection to %s, %s", type(self).__name__, client)
+        self.streams[client] = stream
         try:
             yield self.handle_messages(stream, stream)
         finally:
             if not stream.closed():
                 yield write(stream, {'op': 'stream-closed'})
                 stream.close()
-            self.streams.remove(stream)
+            del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
-                    ident)
+                        client)
 
     @gen.coroutine
     def handle_messages(self, in_queue, report):

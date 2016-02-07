@@ -33,7 +33,8 @@ def get_block_locations(hdfs, filename):
             for block in hdfs.get_block_locations(fn)]
 
 
-def read_block_from_hdfs(host, port, filename, offset, length, delimiter):
+def read_block_from_hdfs(filename, offset, length, host=None, port=None,
+        delimiter=None):
     from hdfs3 import HDFileSystem
     if sys.version_info[0] == 2:
         from locket import lock_file
@@ -85,13 +86,15 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
                                      'dsk': {},
                                      'keys': [],
                                      'restrictions': restrictions,
-                                     'loose_restrictions': set(names)})
-        values = [Value(name, [{name: (read_block_from_hdfs, hdfs.host, hdfs.port, fn, offset, length, delimiter)}])
+                                     'loose_restrictions': set(names),
+                                     'client': executor.id})
+        values = [Value(name, [{name: (read_block_from_hdfs, fn, offset, length, hdfs.host, hdfs.port, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]
         return values
     else:
-        return executor.map(hdfs.read_block, filenames, offsets, lengths,
-                            delimiter=delimiter, workers=workers, allow_other_workers=True)
+        return executor.map(read_block_from_hdfs, filenames, offsets, lengths,
+                host=hdfs.host, port=hdfs.port, delimiter=delimiter,
+                workers=workers, allow_other_workers=True)
 
 
 def buffer_to_csv(b, **kwargs):
