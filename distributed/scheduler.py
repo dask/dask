@@ -181,7 +181,7 @@ class Scheduler(Server):
         self.compute_handlers = {'update-graph': self.update_graph,
                                  'update-data': self.update_data,
                                  'missing-data': self.mark_missing_data,
-                                 'release-held-data': self.release_held_data,
+                                 'client-releases-keys': self.client_releases_keys,
                                  'restart': self.restart}
 
         self.handlers = {'register-client': self.control_stream,
@@ -628,6 +628,14 @@ class Scheduler(Server):
                 plugin.update_graph(self, dsk, keys, restrictions or {})
             except Exception as e:
                 logger.exception(e)
+
+    def client_releases_keys(self, keys=None, client=None):
+        for k in keys:
+            self.wants_what[client].remove(k)
+            self.who_wants[k].remove(client)
+            if not self.who_wants[k]:
+                del self.who_wants[k]
+                self.release_held_data([k])
 
     def release_held_data(self, keys=None):
         """ Mark that a key is no longer externally required to be in memory """

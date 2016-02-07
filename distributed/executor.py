@@ -324,7 +324,8 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self._send_to_scheduler({'op': 'release-held-data', 'keys': [key]})
+        self._send_to_scheduler({'op': 'client-releases-keys', 'keys': [key],
+                                 'client': self.id})
 
     @gen.coroutine
     def _handle_report(self, start_event):

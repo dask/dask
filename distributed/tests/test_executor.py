@@ -1831,3 +1831,51 @@ def test_multi_executor(s, a, b):
     assert s.who_wants == {x.key: {e.id}, y.key: {e.id, f.id}}
 
     yield e._shutdown()
+
+
+@gen_cluster()
+def test_multi_garbage_collection(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    f = Executor((s.ip, s.port), start=False)
+    yield f._start()
+
+    x = e.submit(inc, 1)
+    y = f.submit(inc, 2)
+    y2 = e.submit(inc, 2)
+
+    assert y.key == y2.key
+
+    yield _wait([x, y])
+
+    x.__del__()
+    start = time()
+    while x.key in a.data or x.key in b.data:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    assert s.wants_what == {e.id: {y.key}, f.id: {y.key}}
+    assert s.who_wants == {y.key: {e.id, f.id}}
+
+    y.__del__()
+    start = time()
+    while x.key in s.wants_what[f.id]:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    yield gen.sleep(0.1)
+    assert y.key in a.data or y.key in b.data
+    assert s.wants_what == {e.id: {y.key}, f.id: set()}
+    assert s.who_wants == {y.key: {e.id}}
+
+    y2.__del__()
+    start = time()
+    while y.key in a.data or y.key in b.data:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    assert not any(v for v in s.wants_what.values())
+    assert not s.who_wants
+
+    yield e._shutdown()
