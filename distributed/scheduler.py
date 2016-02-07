@@ -687,7 +687,7 @@ class Scheduler(Server):
             if key in self.exceptions_blame:
                 del self.exceptions_blame[key]
         if key in self.who_has:
-            self.delete_keys([key])
+            self.delete_data([key])
 
     def heal_state(self):
         """ Recover from catastrophic change """

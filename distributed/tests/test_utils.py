@@ -7,7 +7,7 @@ import threading
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
-from time import time
+from time import time, sleep
 
 def test_All(loop):
     @gen.coroutine
@@ -72,6 +72,8 @@ def test_sync_error(loop):
     thread = Thread(target=loop.run_sync, args=(wait_until_event,))
     thread.daemon = True
     thread.start()
+    while not loop._running:
+        sleep(0.01)
 
     with pytest.raises(Exception):
         result = sync(loop, throws, 1)
