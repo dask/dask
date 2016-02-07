@@ -312,7 +312,7 @@ def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     filenames = sorted(hdfs.glob(fn))
     blocks = [block for fn in filenames
                     for block in read_bytes(fn, executor, hdfs, lazy=True,
-                                            delimiter=lineterminator)]
+                                            delimiter=lineterminator.encode())]
     strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
     lines = [do(unicode.split)(s, lineterminator) for s in strings]
 
