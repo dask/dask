@@ -910,8 +910,17 @@ class Series(_Frame):
         return self._pd.name
 
     @name.setter
-    def name(self, columns):
-        raise NotImplementedError('todo')
+    def name(self, name):
+        self._pd.name = name
+
+        def rename_name(series):
+            # ToDo: merge the logic to map_partitions
+            return _rename(self._pd.name, series)
+
+        renamed = map_partitions(rename_name, self._pd, self)
+        # update myself
+        self.dask.update(renamed.dask)
+        self._name = renamed._name
 
     @property
     def ndim(self):
@@ -1272,10 +1281,12 @@ class DataFrame(_Frame):
     def columns(self, columns):
         # if length is mismatched, error is raised from pandas
         self._pd.columns = columns
-        self._columns = self._pd.columns
 
-        renamed = self.rename(columns=dict(zip(self.columns, columns)))
+        def rename_columns(df):
+            # ToDo: merge the logic to map_partitions
+            return _rename(self._pd.columns, df)
 
+        renamed = map_partitions(rename_columns, self._pd, self)
         # update myself
         self.dask.update(renamed.dask)
         self._name = renamed._name
@@ -1960,19 +1971,11 @@ def map_partitions(func, columns, *args, **kwargs):
     return_type = _get_return_type(dfs[0], columns)
     dsk = {}
 
-    # temp
-    if isinstance(columns, pd.DataFrame):
-        new_names = columns.columns
-    elif isinstance(columns, pd.Series):
-        new_names = columns.name
-    else:
-        new_names = columns
-
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (_rename, new_names, (apply, func, (tuple, values),
-                                                             kwargs))
+        dsk[(name, i)] = (_rename, columns, (apply, func, (tuple, values),
+                                                           kwargs))
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
 
@@ -1981,8 +1984,17 @@ def map_partitions(func, columns, *args, **kwargs):
 
 def _rename(columns, df):
     """
-    Rename columns of pd.DataFrame or name of pd.Series.
+    Destructively rename columns of pd.DataFrame or name of pd.Series.
     Not for dd.DataFrame or dd.Series.
+
+    Parameters
+    ----------
+
+    columns : tuple, string, pd.DataFrame or pd.Series
+        Column names, Series name or pandas instance which has the
+        target column names / name.
+    df : pd.DataFrame or pd.Series
+        target DataFrame / Series to be renamed
     """
     if isinstance(columns, Iterator):
         columns = list(columns)
@@ -1993,13 +2005,18 @@ def _rename(columns, df):
     if isinstance(df, _Frame):
         raise NotImplementedError(df)
 
-    if isinstance(df, pd.DataFrame) and len(columns) == len(df.columns):
-        return df.rename(columns=dict(zip(df.columns, columns)))
+    if isinstance(df, pd.DataFrame):
+        if isinstance(columns, pd.DataFrame):
+            columns = df.columns
+        if len(columns) == len(df.columns):
+            # do not use rename to avoid  copy
+            df.columns = columns
     elif isinstance(df, pd.Series):
-        return pd.Series(df, name=columns)
-    else:
-        # df may be list, scalar, etc
-        return df
+        if isinstance(columns, pd.Series):
+            columns = columns.name
+        df.name = columns
+
+    return df
 
 
 def quantile(df, q):

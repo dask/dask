@@ -148,19 +148,29 @@ def test_set_index_raises_error_on_bad_input():
     assert raises(NotImplementedError, lambda: ddf.set_index(['a', 'b']))
 
 def test_rename_columns():
-    # GH 819,
+    # GH 819
     df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                         'b': [7, 6, 5, 4, 3, 2, 1]})
     ddf = dd.from_pandas(df, 2)
 
     ddf.columns = ['x', 'y']
     df.columns = ['x', 'y']
+    tm.assert_index_equal(ddf.columns, pd.Index(['x', 'y']))
     assert eq(ddf, df)
 
-    def len_mismatch():
+    with tm.assertRaises(ValueError):
         ddf.columns = [1, 2, 3, 4]
 
-    assert raises(ValueError, lambda: len_mismatch())
+
+def test_rename_series():
+    # GH 819,
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7], name='x')
+    ds = dd.from_pandas(s, 2)
+
+    s.name = 'renamed'
+    ds.name = 'renamed'
+    assert s.name == 'renamed'
+    assert eq(ds, s)
 
 
 
@@ -1385,7 +1395,7 @@ def test_reset_index():
 
     assert len(res.index.compute()) == len(exp.index)
     tm.assert_index_equal(res.columns, exp.columns)
-    eq(res, exp)
+    tm.assert_numpy_array_equal(res.compute().values, exp.values)
 
 
 def test_dataframe_compute_forward_kwargs():

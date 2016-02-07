@@ -119,7 +119,7 @@ def _check_dask(dsk, check_names=True):
             assert isinstance(result, pd.DataFrame), type(result)
             assert isinstance(dsk._pd, pd.DataFrame), type(dsk._pd)
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
-            # tm.assert_index_equal(dsk.columns, result.columns)
+            tm.assert_index_equal(dsk.columns, result.columns)
             if check_names:
                 columns = dsk.columns
                 tm.assert_index_equal(columns, result.columns)
