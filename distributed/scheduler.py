@@ -181,7 +181,7 @@ class Scheduler(Server):
         self.compute_handlers = {'update-graph': self.update_graph,
                                  'update-data': self.update_data,
                                  'missing-data': self.mark_missing_data,
-                                 'release-held-data': self.release_held_data,
+                                 'client-releases-keys': self.client_releases_keys,
                                  'restart': self.restart}
 
         self.handlers = {'register-client': self.control_stream,
@@ -629,6 +629,19 @@ class Scheduler(Server):
             except Exception as e:
                 logger.exception(e)
 
+    def client_releases_keys(self, keys=None, client=None):
+        for k in keys:
+            self.wants_what[client].remove(k)
+            self.who_wants[k].remove(client)
+            if not self.who_wants[k]:
+                del self.who_wants[k]
+                self.release_held_data([k])
+
+    def client_wants_keys(self, keys=None, client=None):
+        for k in keys:
+            self.who_wants[k].add(client)
+            self.wants_what[client].add(k)
+
     def release_held_data(self, keys=None):
         """ Mark that a key is no longer externally required to be in memory """
         keys = set(keys)
@@ -674,7 +687,7 @@ class Scheduler(Server):
             if key in self.exceptions_blame:
                 del self.exceptions_blame[key]
         if key in self.who_has:
-            self.delete_keys([key])
+            self.delete_data(keys=[key])
 
     def heal_state(self):
         """ Recover from catastrophic change """
@@ -919,20 +932,20 @@ class Scheduler(Server):
                 self.in_play.remove(key)
 
     @gen.coroutine
-    def scatter(self, stream=None, data=None, workers=None):
+    def scatter(self, stream=None, data=None, workers=None, client=None):
         """ Send data out to workers """
         if not self.ncores:
             raise ValueError("No workers yet found.  "
                              "Try syncing with center.\n"
                              "  e.sync_center()")
         ncores = workers if workers is not None else self.ncores
-        remotes, who_has, nbytes = yield scatter_to_workers(
+        keys, who_has, nbytes = yield scatter_to_workers(
                                             self.center or self.address,
                                             ncores, data,
                                             report=not not self.center)
         self.update_data(who_has=who_has, nbytes=nbytes)
-
-        raise gen.Return(remotes)
+        self.client_wants_keys(keys=keys, client=client)
+        raise gen.Return(keys)
 
     @gen.coroutine
     def gather(self, stream=None, keys=None):

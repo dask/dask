@@ -21,7 +21,8 @@ from .client import _gather, pack_data, gather_from_workers
 from .compatibility import reload
 from .core import rpc, Server, pingpong
 from .sizeof import sizeof
-from .utils import funcname, get_ip, get_traceback, truncate_exception
+from .utils import (funcname, get_ip, get_traceback, truncate_exception,
+    ignoring)
 
 _ncores = ThreadPool()._processes
 
@@ -267,7 +268,8 @@ class Worker(Server):
             out = (b'error', (e2, tb))
 
         logger.debug("Send compute response to client: %s, %s", key, out)
-        self.active.remove(key)
+        with ignoring(KeyError):
+            self.active.remove(key)
         raise Return(out)
 
     @gen.coroutine

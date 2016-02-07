@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict
+from collections import defaultdict, Iterator
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
 from functools import wraps, partial
@@ -9,6 +9,7 @@ import logging
 import os
 from time import sleep
 import uuid
+from threading import Thread
 
 import dask
 from dask.base import tokenize, normalize_token, Base
@@ -26,9 +27,9 @@ from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
 from .utils import All, sync, funcname, ignoring
+from .compatibility import Queue as pyQueue, Empty, isqueue
 
 logger = logging.getLogger(__name__)
-
 
 _global_executor = [None]
 
@@ -55,7 +56,6 @@ class Future(WrappedKey):
     We can get the result or the exception and traceback from the future
 
     >>> my_future.result()  # doctest: +SKIP
-    3
 
     See Also
     --------
@@ -324,7 +324,8 @@ class Executor(object):
         if key in self.futures:
             self.futures[key]['event'].clear()
             del self.futures[key]
-        self._send_to_scheduler({'op': 'release-held-data', 'keys': [key]})
+        self._send_to_scheduler({'op': 'client-releases-keys', 'keys': [key],
+                                 'client': self.id})
 
     @gen.coroutine
     def _handle_report(self, start_event):
@@ -580,10 +581,22 @@ class Executor(object):
         result = pack_data(futures2, data)
         raise gen.Return(result)
 
+    def _threaded_gather(self, qin, qout):
+        """ Internal function for gathering Queue """
+        while True:
+            d = qin.get()
+            f = self.gather(d)
+            qout.put(f)
+
     def gather(self, futures):
         """ Gather futures from distributed memory
 
-        Accepts a future or any nested core container of futures
+        Accepts a future, nested container of futures, iterator, or queue.
+        The return type will match the input type.
+
+        Returns
+        -------
+        Future results
 
         Examples
         --------
@@ -595,15 +608,29 @@ class Executor(object):
         >>> e.gather([x, [x], x])  # support lists and dicts # doctest: +SKIP
         [3, [3], 3]
 
+        >>> seq = e.gather(iter([x, x]))  # support iterators # doctest: +SKIP
+        >>> next(seq)  # doctest: +SKIP
+        3
+
         See Also
         --------
         Executor.scatter: Send data out to cluster
         """
-        return sync(self.loop, self._gather, futures)
+        if isqueue(futures):
+            qout = pyQueue()
+            t = Thread(target=self._threaded_gather, args=(futures, qout))
+            t.daemon = True
+            t.start()
+            return qout
+        elif isinstance(futures, Iterator):
+            return (self.gather(f) for f in futures)
+        else:
+            return sync(self.loop, self._gather, futures)
 
     @gen.coroutine
     def _scatter(self, data, workers=None):
-        keys = yield self.scheduler.scatter(data=data, workers=workers)
+        keys = yield self.scheduler.scatter(data=data, workers=workers,
+                                            client=self.id)
         if isinstance(data, (tuple, list, set, frozenset)):
             out = type(data)([Future(k, self) for k in keys])
         elif isinstance(data, dict):
@@ -617,13 +644,37 @@ class Executor(object):
 
         raise gen.Return(out)
 
+    def _threaded_scatter(self, q_or_i, qout):
+        """ Internal function for scattering Iterable/Queue data """
+        if isqueue(q_or_i):  # py2 Queue doesn't support mro
+            get = pyQueue.get
+        elif isinstance(q_or_i, Iterator):
+            get = next
+
+        while True:
+            try:
+                d = get(q_or_i)
+            except StopIteration:
+                qout.put(StopIteration)
+                break
+
+            [f] = self.scatter([d])
+            qout.put(f)
+
     def scatter(self, data, workers=None):
         """ Scatter data into distributed memory
 
-        Accepts a list of data elements or dict of key-value pairs
+        Parameters
+        ----------
+        data: list, iterator, dict, or Queue
+            Data to scatter out to workers.  Output type matches input type.
+        workers: list of tuples (optional)
+            Optionally constrain locations of data.
+            Specify workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
 
-        Optionally provide a set of workers to constrain the scatter.  Specify
-        workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
+        Returns
+        -------
+        List, dict, iterator, or queue of futures matching the type of input.
 
         Examples
         --------
@@ -637,13 +688,39 @@ class Executor(object):
         {'x': <Future: status: finished, key: x>,
          'y': <Future: status: finished, key: y>,
          'z': <Future: status: finished, key: z>}
-        >>> e.scatter([1, 2, 3], workers=[('hostname', 8788)])  # doctest: +SKIP
+
+        Constrain location of data to subset of workers
+        >>> e.scatter([1, 2, 3], workers=[('hostname', 8788)])   # doctest: +SKIP
+
+        Handle streaming sequences of data with iterators or queues
+        >>> seq = e.scatter(iter([1, 2, 3]))  # doctest: +SKIP
+        >>> next(seq)  # doctest: +SKIP
+        <Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
 
         See Also
         --------
         Executor.gather: Gather data back to local process
         """
-        return sync(self.loop, self._scatter, data, workers=workers)
+        if isqueue(data) or isinstance(data, Iterator):
+            logger.debug("Starting thread for streaming data")
+            qout = pyQueue()
+
+            t = Thread(target=self._threaded_scatter, args=(data, qout))
+            t.daemon = True
+            t.start()
+
+            if not isqueue(data) and isinstance(data, Iterator):
+                def _():
+                    while True:
+                        result = qout.get()
+                        if result == StopIteration:
+                            break
+                        yield result
+                return _()
+            else:
+                return qout
+        else:
+            return sync(self.loop, self._scatter, data, workers=workers)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
@@ -923,8 +1000,7 @@ def as_completed(fs):
         raise NotImplementedError(
         "as_completed on many event loops not yet supported")
 
-    from .compatibility import Queue
-    queue = Queue()
+    queue = pyQueue()
 
     coroutine = lambda: _as_completed(fs, queue)
     loop.add_callback(coroutine)

@@ -437,6 +437,7 @@ def test_garbage_collection_with_scatter(s, a, b):
     assert a.key in e.futures
     assert a.status == 'finished'
     assert a.event.is_set()
+    assert s.who_wants[a.key] == {e.id}
 
     assert e.refcount[a.key] == 1
     a.__del__()
@@ -1070,6 +1071,82 @@ def test_directed_scatter_sync(loop):
             assert len(has_what[('127.0.0.1', b['port'])]) == 3
             assert len(has_what[('127.0.0.1', a['port'])]) == 0
 
+
+def test_iterator_scatter(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
+
+            aa = ee.scatter([1,2,3])
+            assert [1,2,3] == ee.gather(aa)
+
+            g = (i for i in range(10))
+            futures = ee.scatter(g)
+            assert isinstance(futures, Iterator)
+
+            a = next(futures)
+            assert ee.gather(a) == 0
+
+
+def test_queue_scatter(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
+            from distributed.compatibility import Queue
+            q = Queue()
+            for d in range(10):
+                q.put(d)
+
+            futures = ee.scatter(q)
+            assert isinstance(futures, Queue)
+            a = futures.get()
+            assert ee.gather(a) == 0
+
+
+def test_queue_gather(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
+            from distributed.compatibility import Queue
+            q = Queue()
+
+            qin = list(range(10))
+            for d in qin:
+                q.put(d)
+
+            futures = ee.scatter(q)
+            assert isinstance(futures, Queue)
+
+            ff = ee.gather(futures)
+            assert isinstance(ff, Queue)
+
+            qout = []
+            for f in range(10):
+                qout.append(ff.get())
+            assert qout == qin
+
+
+def test_iterator_gather(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
+
+            i_in = list(range(10))
+
+            g = (d for d in i_in)
+            futures = ee.scatter(g)
+            assert isinstance(futures, Iterator)
+
+            ff = ee.gather(futures)
+            assert isinstance(ff, Iterator)
+
+            i_out = list(ff)
+            assert i_out == i_in
+
+            i_in = ['a', 'b', 'c', StopIteration, 'd', 'e']
+
+            g = (d for d in i_in)
+            futures = ee.scatter(g)
+
+            ff = ee.gather(futures)
+            i_out = list(ff)
+            assert i_out == i_in
 
 @gen_cluster()
 def test_many_submits_spread_evenly(s, a, b):
@@ -1831,3 +1908,53 @@ def test_multi_executor(s, a, b):
     assert s.who_wants == {x.key: {e.id}, y.key: {e.id, f.id}}
 
     yield e._shutdown()
+    yield f._shutdown()
+
+
+@gen_cluster()
+def test_multi_garbage_collection(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    f = Executor((s.ip, s.port), start=False)
+    yield f._start()
+
+    x = e.submit(inc, 1)
+    y = f.submit(inc, 2)
+    y2 = e.submit(inc, 2)
+
+    assert y.key == y2.key
+
+    yield _wait([x, y])
+
+    x.__del__()
+    start = time()
+    while x.key in a.data or x.key in b.data:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    assert s.wants_what == {e.id: {y.key}, f.id: {y.key}}
+    assert s.who_wants == {y.key: {e.id, f.id}}
+
+    y.__del__()
+    start = time()
+    while x.key in s.wants_what[f.id]:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    yield gen.sleep(0.1)
+    assert y.key in a.data or y.key in b.data
+    assert s.wants_what == {e.id: {y.key}, f.id: set()}
+    assert s.who_wants == {y.key: {e.id}}
+
+    y2.__del__()
+    start = time()
+    while y.key in a.data or y.key in b.data:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    assert not any(v for v in s.wants_what.values())
+    assert not s.who_wants
+
+    yield e._shutdown()
+    yield f._shutdown()

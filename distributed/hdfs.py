@@ -37,12 +37,8 @@ def get_block_locations(hdfs, filename):
 def read_block_from_hdfs(filename, offset, length, host=None, port=None,
         delimiter=None):
     from hdfs3 import HDFileSystem
-    if sys.version_info[0] == 2:
-        from locket import lock_file
-        with lock_file('.lock'):
-            hdfs = HDFileSystem(host=host, port=port)
-            bytes = hdfs.read_block(filename, offset, length, delimiter)
-    else:
+    from locket import lock_file
+    with lock_file('.lock'):
         hdfs = HDFileSystem(host=host, port=port)
         bytes = hdfs.read_block(filename, offset, length, delimiter)
     return bytes
