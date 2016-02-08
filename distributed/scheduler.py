@@ -21,7 +21,8 @@ from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
         Server, send_recv)
-from .client import unpack_remotedata, scatter_to_workers, gather_from_workers
+from .client import (unpack_remotedata, scatter_to_workers,
+        gather_from_workers, broadcast_to_workers)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
         ignore_exceptions, ensure_ip, get_traceback, truncate_exception)
 
@@ -932,17 +933,23 @@ class Scheduler(Server):
                 self.in_play.remove(key)
 
     @gen.coroutine
-    def scatter(self, stream=None, data=None, workers=None, client=None):
+    def scatter(self, stream=None, data=None, workers=None, client=None,
+            broadcast=False):
         """ Send data out to workers """
         if not self.ncores:
             raise ValueError("No workers yet found.  "
                              "Try syncing with center.\n"
                              "  e.sync_center()")
-        ncores = workers if workers is not None else self.ncores
-        keys, who_has, nbytes = yield scatter_to_workers(
-                                            self.center or self.address,
-                                            ncores, data,
-                                            report=not not self.center)
+        if not broadcast:
+            ncores = workers if workers is not None else self.ncores
+            keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
+                                                report=not not self.center)
+        else:
+            workers2 = workers if workers is not None else list(self.ncores)
+            keys, nbytes = yield broadcast_to_workers(workers2, data,
+                                                      report=False)
+            who_has = {k: set(workers2) for k in keys}
+
         self.update_data(who_has=who_has, nbytes=nbytes)
         self.client_wants_keys(keys=keys, client=client)
         raise gen.Return(keys)

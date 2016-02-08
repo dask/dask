@@ -628,9 +628,9 @@ class Executor(object):
             return sync(self.loop, self._gather, futures)
 
     @gen.coroutine
-    def _scatter(self, data, workers=None):
+    def _scatter(self, data, workers=None, broadcast=False):
         keys = yield self.scheduler.scatter(data=data, workers=workers,
-                                            client=self.id)
+                                            client=self.id, broadcast=broadcast)
         if isinstance(data, (tuple, list, set, frozenset)):
             out = type(data)([Future(k, self) for k in keys])
         elif isinstance(data, dict):
@@ -644,7 +644,7 @@ class Executor(object):
 
         raise gen.Return(out)
 
-    def _threaded_scatter(self, q_or_i, qout):
+    def _threaded_scatter(self, q_or_i, qout, **kwargs):
         """ Internal function for scattering Iterable/Queue data """
         if isqueue(q_or_i):  # py2 Queue doesn't support mro
             get = pyQueue.get
@@ -658,10 +658,10 @@ class Executor(object):
                 qout.put(StopIteration)
                 break
 
-            [f] = self.scatter([d])
+            [f] = self.scatter([d], **kwargs)
             qout.put(f)
 
-    def scatter(self, data, workers=None):
+    def scatter(self, data, workers=None, broadcast=False):
         """ Scatter data into distributed memory
 
         Parameters
@@ -671,6 +671,9 @@ class Executor(object):
         workers: list of tuples (optional)
             Optionally constrain locations of data.
             Specify workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
+        broadcast: bool (defaults to False)
+            Whether to send each data element to all workers.
+            By default we round-robin based on number of cores.
 
         Returns
         -------
@@ -697,6 +700,9 @@ class Executor(object):
         >>> next(seq)  # doctest: +SKIP
         <Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
 
+        Broadcast data to all workers
+        >>> [future] = e.scatter([element], broadcast=True)  # doctest: +SKIP
+
         See Also
         --------
         Executor.gather: Gather data back to local process
@@ -705,7 +711,9 @@ class Executor(object):
             logger.debug("Starting thread for streaming data")
             qout = pyQueue()
 
-            t = Thread(target=self._threaded_scatter, args=(data, qout))
+            t = Thread(target=self._threaded_scatter,
+                       args=(data, qout),
+                       kwargs={'workers': workers, 'broadcast': broadcast})
             t.daemon = True
             t.start()
 
@@ -720,7 +728,8 @@ class Executor(object):
             else:
                 return qout
         else:
-            return sync(self.loop, self._scatter, data, workers=workers)
+            return sync(self.loop, self._scatter, data, workers=workers,
+                        broadcast=broadcast)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
