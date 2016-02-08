@@ -939,9 +939,7 @@ class Scheduler(Server):
                              "Try syncing with center.\n"
                              "  e.sync_center()")
         ncores = workers if workers is not None else self.ncores
-        keys, who_has, nbytes = yield scatter_to_workers(
-                                            self.center or self.address,
-                                            ncores, data,
+        keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
                                             report=not not self.center)
         self.update_data(who_has=who_has, nbytes=nbytes)
         self.client_wants_keys(keys=keys, client=client)

@@ -26,8 +26,7 @@ def test_scatter_delete(loop):
         assert set(c.who_has) == set(keys)
         assert all(len(v) == 1 for v in c.who_has.values())
 
-        keys2, who_has, nbytes = yield scatter_to_workers((c.ip, c.port),
-                                                          [a.address, b.address],
+        keys2, who_has, nbytes = yield scatter_to_workers([a.address, b.address],
                                                           [4, 5, 6])
 
         m = merge(a.data, b.data)

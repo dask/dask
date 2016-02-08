@@ -169,7 +169,7 @@ def _scatter(center, data):
     center = coerce_to_rpc(center)
     ncores = yield center.ncores()
 
-    result, who_has, nbytes = yield scatter_to_workers(center, ncores, data)
+    result, who_has, nbytes = yield scatter_to_workers(ncores, data)
     raise Return(result)
 
 
@@ -180,7 +180,7 @@ _round_robin_counter = [0]
 
 
 @gen.coroutine
-def scatter_to_workers(center, ncores, data, report=True):
+def scatter_to_workers(ncores, data, report=True):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
@@ -189,15 +189,6 @@ def scatter_to_workers(center, ncores, data, report=True):
 
     See scatter for parameter docstring
     """
-    if isinstance(center, str):
-        ip, port = center.split(':')
-    elif isinstance(center, rpc):
-        ip, port = center.ip, center.port
-    elif isinstance(center, tuple):
-        ip, port = center
-    else:
-        raise TypeError("Bad type for center")
-
     if isinstance(ncores, Iterable) and not isinstance(ncores, dict):
         k = len(data) // len(ncores)
         ncores = {worker: k for worker in ncores}
