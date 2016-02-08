@@ -14,7 +14,6 @@ requirements:
     - dask
     - click
     - boto3
-    - locket
 
   run:
     - python
@@ -24,7 +23,6 @@ requirements:
     - dask
     - click
     - boto3
-    - locket
 
 test:
   imports:
