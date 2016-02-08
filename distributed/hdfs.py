@@ -54,14 +54,19 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
         location in HDFS
     executor: Executor (optional)
         defaults to most recently created executor
-    hdfs: HDFileSystem
+    hdfs: HDFileSystem (optional)
+    lazy: boolean (optional)
+        If True then return lazily evaluated dask Values
+    delimiter: bytes
+        An optional delimiter, like ``b'\n'`` on which to split blocks of bytes
     not_zero: force seek of start-of-file delimiter, discarding header
     **hdfs_auth: keyword arguments
         Extra keywords to send to ``hdfs3.HDFileSystem``
 
     Returns
     -------
-    List of ``distributed.Future`` objects
+    List of ``distributed.Future`` objects if ``lazy=False``
+    or ``dask.Value`` objects if ``lazy=True``
     """
     from hdfs3 import HDFileSystem
     hdfs = hdfs or HDFileSystem(**hdfs_auth)
