@@ -10,9 +10,11 @@ from tornado.ioloop import IOLoop
 
 from distributed import Center, Worker
 from distributed.utils import ignoring
-from distributed.utils_test import cluster, loop, _test_cluster, cluster_center
+from distributed.utils_test import (cluster, loop, _test_cluster,
+        cluster_center, gen_cluster)
 from distributed.client import (_gather, _scatter, _delete, _clear,
-        scatter_to_workers, pack_data, gather, scatter, delete, clear)
+        scatter_to_workers, pack_data, gather, scatter, delete, clear,
+        broadcast_to_workers)
 
 
 def test_scatter_delete(loop):
@@ -137,3 +139,11 @@ def test_scatter_round_robins_between_calls(loop):
         assert b.data
 
     _test_cluster(f)
+
+
+@gen_cluster()
+def test_broadcast_to_workers(s, a, b):
+    keys, nbytes = yield broadcast_to_workers([a.address, b.address], [1, 2, 3])
+
+    assert len(keys) == 3
+    assert a.data == b.data == dict(zip(keys, [1, 2, 3]))

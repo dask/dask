@@ -224,6 +224,44 @@ def scatter_to_workers(ncores, data, report=True):
 
 
 @gen.coroutine
+def broadcast_to_workers(workers, data, report=False, rpc=rpc):
+    """ Broadcast data directly to all workers
+
+    This sends all data to every worker.
+
+    Currently this works inefficiently by sending all data out directly from
+    the scheduler.  In the future we should have the workers communicate
+    amongst themselves.
+
+    Parameters
+    ----------
+    workers: sequence of (host, port) pairs
+    data: sequence of data
+
+    See Also
+    --------
+    scatter_to_workers
+    """
+    if isinstance(data, dict):
+        names, data = list(zip(*data.items()))
+    else:
+        names = []
+        for x in data:
+            try:
+                names.append(tokenize(x))
+            except:
+                names.append(str(uuid.uuid1()))
+        data = dict(zip(names, data))
+
+    out = yield All([rpc(ip=w_ip, port=w_port).update_data(data=data,
+                                                           report=report)
+                     for (w_ip, w_port) in workers])
+    nbytes = merge([o[1]['nbytes'] for o in out])
+
+    raise Return((names, nbytes))
+
+
+@gen.coroutine
 def _delete(center, keys):
     keys = [k.key if isinstance(k, WrappedKey) else k for k in keys]
     center = coerce_to_rpc(center)
