@@ -23,7 +23,7 @@ from .. import array as da
 from ..async import get_sync
 
 from . import core
-from .core import DataFrame, Series
+from .core import _Frame, DataFrame, Series
 from .shuffle import set_partition
 
 
@@ -259,6 +259,35 @@ def csv_names(fn, encoding='utf-8', compression=None, names=None,
     return list(df.columns)
 
 
+def _dummy_from_array(x, columns=None):
+    """ Create empty pd.DataFrame or pd.Series which has correct dtype """
+
+    if x.ndim > 2:
+        raise ValueError('from_array does not input more than 2D array, got'
+                         ' array with shape %r' % (x.shape,))
+
+    if getattr(x.dtype, 'names', None) is not None:
+        # record array has named columns
+        cols = tuple(x.dtype.names)
+        dtypes = [x.dtype.fields[n][0] for n in x.dtype.names]
+    elif x.ndim == 1 and (np.isscalar(columns) or columns is None):
+        # Series
+        return pd.Series([], name=columns, dtype=x.dtype)
+    else:
+        cols = list(range(x.shape[1])) if x.ndim == 2 else [0]
+        dtypes = [x.dtype] * len(cols)
+
+    data = {}
+    for c, dt in zip(cols, dtypes):
+        data[c] = np.array([], dtype=dt)
+    data = pd.DataFrame(data, columns=cols)
+
+    if columns is not None:
+        # if invalid, raise error from pandas
+        data.columns = columns
+    return data
+
+
 def from_array(x, chunksize=50000, columns=None):
     """ Read dask Dataframe from any slicable array
 
@@ -276,28 +305,25 @@ def from_array(x, chunksize=50000, columns=None):
         x.dtype == [('name', 'O'), ('balance', 'i8')]
 
     """
-    has_record_dtype = getattr(x.dtype, 'names', None) is not None
-    if x.ndim > 2:
-        raise ValueError('from_array does not input more than 2D array, got'
-                         ' array with shape %r' % (x.shape,))
-    if columns is None:
-        if has_record_dtype:
-            columns = tuple(x.dtype.names)  # record array has named columns
-        elif x.ndim == 2:
-            columns = [str(i) for i in range(x.shape[1])]
     if isinstance(x, da.Array):
         return from_dask_array(x, columns=columns)
+
+    dummy = _dummy_from_array(x, columns)
+
     divisions = tuple(range(0, len(x), chunksize))
     if divisions[-1] != len(x) - 1:
         divisions = divisions + (len(x) - 1,)
     token = tokenize(x, chunksize, columns)
     name = 'from_array-' + token
-    dsk = dict(((name, i), (pd.DataFrame,
-                             (getitem, x,
-                              slice(i * chunksize, (i + 1) * chunksize))))
-            for i in range(0, int(ceil(len(x) / chunksize))))
 
-    return DataFrame(dsk, name, columns, divisions)
+    dsk = {}
+    for i in range(0, int(ceil(len(x) / chunksize))):
+        data = (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
+        if isinstance(dummy, pd.Series):
+            dsk[name, i] = (pd.Series, data, None, dummy.dtype, dummy.name)
+        else:
+            dsk[name, i] = (pd.DataFrame, data, None, dummy.columns)
+    return _Frame(dsk, name, dummy, divisions)
 
 
 def from_pandas(data, npartitions, sort=True):
@@ -527,6 +553,9 @@ def from_dask_array(x, columns=None):
     2  1  1
     3  1  1
     """
+
+    dummy = _dummy_from_array(x, columns)
+
     name = 'from-dask-array' + tokenize(x, columns)
     divisions = [0]
     for c in x.chunks[0]:
@@ -538,32 +567,20 @@ def from_dask_array(x, columns=None):
     divisions[-1] -= 1
 
     if x.ndim == 1:
-        if x.dtype.names is None:
-            dsk = dict(((name, i), (pd.Series, chunk, ind, x.dtype, columns))
+        if isinstance(dummy, pd.Series):
+            dsk = dict(((name, i), (pd.Series, chunk, ind, x.dtype, dummy.name))
                     for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
-            return Series(merge(x.dask, dsk), name, columns, divisions)
         else:
-            if columns is None:
-                columns = x.dtype.names
-            dsk = dict(((name, i), (pd.DataFrame, chunk, ind, columns))
+            dsk = dict(((name, i), (pd.DataFrame, chunk, ind, dummy.columns))
                     for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
-            return DataFrame(merge(x.dask, dsk), name, columns, divisions)
 
     elif x.ndim == 2:
-        if columns is None:
-            raise ValueError("Must provide columns for DataFrame")
-        if len(columns) != x.shape[1]:
-            raise ValueError("Columns must be the same length as array width\n"
-                    "  columns: %s\n  width: %d" % (str(columns), x.shape[1]))
         if len(x.chunks[1]) > 1:
             x = x.rechunk({1: x.shape[1]})
-        dsk = dict(((name, i), (pd.DataFrame, chunk[0], ind, columns))
+        dsk = dict(((name, i), (pd.DataFrame, chunk[0], ind, dummy.columns))
                 for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
-        return DataFrame(merge(x.dask, dsk), name, columns, divisions)
 
-    else:
-        raise ValueError("Array must have one or two dimensions.  Had %d" %
-                         x.ndim)
+    return _Frame(merge(x.dask, dsk), name, dummy, divisions)
 
 
 def from_castra(x, columns=None):
