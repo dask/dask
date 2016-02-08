@@ -7,6 +7,7 @@ import os
 import re
 import socket
 import sys
+import tblib.pickling_support
 import tempfile
 import traceback
 
@@ -226,11 +227,17 @@ def ensure_ip(hostname):
         return socket.gethostbyname(hostname)
 
 
+tblib.pickling_support.install()
+
+
 def get_traceback():
     exc_type, exc_value, exc_traceback = sys.exc_info()
-    tb = traceback.format_tb(exc_traceback)
-    tb = [line[:10000] for line in tb]
-    return tb
+    bad = [os.path.join('distributed', 'worker'),
+           os.path.join('distributed', 'scheduler'),
+           os.path.join('concurrent', 'futures')]
+    while any(b in exc_traceback.tb_frame.f_code.co_filename for b in bad):
+        exc_traceback = exc_traceback.tb_next
+    return exc_traceback
 
 
 def truncate_exception(e, n=10000):

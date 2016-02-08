@@ -1,6 +1,6 @@
 from distributed.utils import (All, sync, is_kernel, ensure_ip,
-        truncate_exception)
-from distributed.utils_test import loop, inc, throws
+        truncate_exception, get_traceback)
+from distributed.utils_test import loop, inc, throws, div
 import pytest
 from threading import Thread
 import threading
@@ -111,3 +111,18 @@ def test_truncate_exception():
 
     e = ValueError('a')
     assert truncate_exception(e) is e
+
+
+def test_get_traceback():
+    def a(x):
+        return div(x, 0)
+    def b(x):
+        return a(x)
+    def c(x):
+        return b(x)
+
+    try:
+        c(x)
+    except Exception as e:
+        tb = get_traceback()
+        assert type(tb).__name__ == 'traceback'
