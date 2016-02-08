@@ -65,6 +65,10 @@ def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None, lazy=Fa
         Name of S3 bucket like ``'my-bucket'``
     prefix: string
         Prefix of key name to match like ``'/data/2016/``
+    path_delimiter: string (optional)
+        Delimiter like ``'/'`` to define implicit S3 directory structure
+    executor: Executor (optional)
+        defaults to most recently created executor
     lazy: boolean (optional)
         If True then return lazily evaluated dask Values
     anon: boolean (optional)
