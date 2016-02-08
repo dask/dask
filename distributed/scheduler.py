@@ -85,6 +85,10 @@ class Scheduler(Server):
         Where each key lives.  The current state of distributed memory.
     * **has_what:** ``{worker: {key}}``:
         What worker has what keys.  The transpose of who_has.
+    * **who_wants:** ``{key: {client}}``:
+        Which clients want each key.  The active targets of computation.
+    * **wants_what:** ``{client: {key}}``:
+        What keys are wanted by each client..  The transpose of who_wants.
     * **nbytes:** ``{key: int}``:
         Number of bytes for a key as reported by workers holding that key.
     * **processing:** ``{worker: {keys}}``:
@@ -99,8 +103,6 @@ class Scheduler(Server):
     * **loose_retrictions:** ``{key}``:
         Set of keys for which we are allow to violate restrictions (see above)
         if not valid workers are present.
-    * **held_data:** ``{key}``:
-        A set of keys that we are not allowed to garbage collect
     * **in_play:** ``{key}``:
         All keys in one of who_has, waiting, stacks, processing.  This is any
         key that will eventually be in memory.
@@ -148,7 +150,6 @@ class Scheduler(Server):
         self.dependents = dict()
         self.generation = 0
         self.has_what = defaultdict(set)
-        self.held_data = set()
         self.in_play = set()
         self.keyorder = dict()
         self.nbytes = dict()
@@ -371,7 +372,7 @@ class Scheduler(Server):
                 s = self.waiting_data[dep]
                 with ignoring(KeyError):
                     s.remove(key)
-                if not s and dep and dep not in self.held_data:
+                if not s and dep and dep not in self.who_wants:
                     self.delete_data(keys=[dep])
 
         self.report({'op': 'key-in-memory',
@@ -429,7 +430,8 @@ class Scheduler(Server):
 
         self.nbytes.update(nbytes)
 
-        self.held_data.update(who_has)
+        for k in who_has:
+            self.who_wants[k] = set()
         self.in_play.update(who_has)
 
     def mark_task_erred(self, key, worker, exception, traceback):
@@ -589,13 +591,9 @@ class Scheduler(Server):
             if dsk[k] is k:
                 del dsk[k]
 
-        for k in keys:
-            self.who_wants[k].add(client)
-            self.wants_what[client].add(k)
-
         update_state(self.dask, self.dependencies, self.dependents,
-                self.held_data, self.who_has, self.in_play,
-                self.waiting, self.waiting_data, dsk, keys)
+                self.who_wants, self.wants_what, self.who_has, self.in_play,
+                self.waiting, self.waiting_data, dsk, keys, client)
 
         cover_aliases(self.dask, dsk)
 
@@ -646,10 +644,8 @@ class Scheduler(Server):
     def release_held_data(self, keys=None):
         """ Mark that a key is no longer externally required to be in memory """
         keys = set(keys)
-        keys &= self.held_data
         if keys:
             logger.debug("Release keys: %s", keys)
-            self.held_data -= keys
             keys2 = {k for k in keys if not self.waiting_data.get(k)}
             if keys2:
                 self.delete_data(keys=keys2)  # async
@@ -668,14 +664,14 @@ class Scheduler(Server):
         This removes all knowledge of how to produce a key from the scheduler.
         This is almost exclusively called by release_held_data
         """
-        assert not self.dependents[key] and key not in self.held_data
+        assert not self.dependents[key] and key not in self.who_wants
         if key in self.dask:
             del self.dask[key]
             del self.dependents[key]
             for dep in self.dependencies[key]:
                 s = self.dependents[dep]
                 s.remove(key)
-                if not s and dep not in self.held_data:
+                if not s and dep not in self.who_wants:
                     self.forget(dep)
             del self.dependencies[key]
             if key in self.restrictions:
@@ -699,13 +695,13 @@ class Scheduler(Server):
         released = state['released']
         self.in_play.clear(); self.in_play.update(state['in_play'])
         add_keys = {k for k, v in self.waiting.items() if not v}
-        for key in self.held_data & released:
+        for key in set(self.who_wants) & released:
             self.report({'op': 'lost-key', 'key': key})
         if self.stacks:
             for key in add_keys:
                 self.mark_ready_to_run(key)
 
-        self.delete_data(keys=set(self.who_has) & released - self.held_data)
+        self.delete_data(keys=set(self.who_has) & released - set(self.who_wants))
         self.in_play.update(self.who_has)
         self.log_state("After Heal")
 
@@ -713,7 +709,7 @@ class Scheduler(Server):
         """ Recover from lost data """
         logger.debug("Heal from missing data")
         return heal_missing_data(self.dask, self.dependencies, self.dependents,
-                self.held_data, self.who_has, self.in_play, self.waiting,
+                self.who_has, self.in_play, self.waiting,
                 self.waiting_data, missing)
 
     def report(self, msg):
@@ -1140,9 +1136,9 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     return worker
 
 
-def update_state(dsk, dependencies, dependents, held_data,
+def update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys):
+                 waiting, waiting_data, new_dsk, new_keys, client):
     """ Update state given new dask graph and output keys
 
     This should operate in linear time relative to the size of edges of the
@@ -1157,7 +1153,7 @@ def update_state(dsk, dependencies, dependents, held_data,
             continue
 
         task = new_dsk[key]
-        deps = _deps(dsk, task) + _deps(held_data, task)
+        deps = _deps(dsk, task) + _deps(who_wants, task)
         dependencies[key] = set(deps)
 
         for dep in deps:
@@ -1181,12 +1177,15 @@ def update_state(dsk, dependencies, dependents, held_data,
         if key not in waiting_data:
             waiting_data[key] = set()
 
-    held_data |= new_keys
+    for k in new_keys:
+        who_wants[k].add(client)
+        wants_what[client].add(k)
 
     return {'dsk': dsk,
             'dependencies': dependencies,
             'dependents': dependents,
-            'held_data': held_data,
+            'who_wants': who_wants,
+            'wants_what': wants_what,
             'waiting': waiting,
             'waiting_data': waiting_data}
 
@@ -1437,7 +1436,7 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
     return new_stacks
 
 
-def heal_missing_data(dsk, dependencies, dependents, held_data,
+def heal_missing_data(dsk, dependencies, dependents,
                       who_has, in_play, waiting, waiting_data, missing):
     """ Return to healthy state after discovering missing data
 

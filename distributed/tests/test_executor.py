@@ -1592,6 +1592,8 @@ def test_executor_with_scheduler(loop):
         result = yield e._get({'x': (inc, 1), 'y': (add, 'x', 10)}, 'y')
         assert result == 12
 
+        yield e._shutdown()
+
     _test_scheduler(f)
 
 
@@ -1648,6 +1650,8 @@ def test_allow_restrictions(s, a, b):
     with pytest.raises(TypeError):
         e.map(inc, [20], workers='127.0.0.1', allow_other_workers='Hello!')
 
+    yield e._shutdown()
+
 
 @pytest.mark.skipif('True', reason='because')
 def test_bad_address():
@@ -1698,6 +1702,7 @@ def test_map_on_futures_with_kwargs(s, a, b):
     future2 = e.submit(f, future, y=200)
     result = yield future2._result()
     assert result == 100 + 1 + 200
+    yield e._shutdown()
 
 
 @gen_cluster(Worker=Nanny, timeout=60)
@@ -1759,6 +1764,8 @@ def test_badly_serialized_input(s, a, b):
     L = yield e._gather(futures)
     assert list(L) == list(map(inc, range(10)))
 
+    yield e._shutdown()
+
 
 @pytest.mark.xfail
 def test_badly_serialized_input_stderr(capsys):
@@ -1802,19 +1809,19 @@ def test_forget_simple(s, a, b):
 
     assert set(s.dask) == {x.key, y.key, z.key}
 
-    s.release_held_data([x.key])
+    s.client_releases_keys(keys=[x.key], client=e.id)
     assert x.key in s.dask
-    s.release_held_data([z.key])
+    s.client_releases_keys(keys=[z.key], client=e.id)
     for coll in [s.dask, s.dependencies, s.dependents, s.waiting,
             s.waiting_data, s.who_has, s.restrictions, s.loose_restrictions,
-            s.held_data, s.in_play, s.keyorder, s.exceptions,
+            s.in_play, s.keyorder, s.exceptions, s.who_wants,
             s.exceptions_blame]:
         assert x.key not in coll
         assert z.key not in coll
 
     assert z.key not in s.dependents[y.key]
 
-    s.release_held_data([y.key])
+    s.client_releases_keys(keys=[y.key], client=e.id)
     assert not s.dask
 
     yield e._shutdown()
@@ -1835,13 +1842,13 @@ def test_forget_complex(s, A, B):
 
     assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
 
-    s.release_held_data([ab.key])
+    s.client_releases_keys(keys=[ab.key], client=e.id)
     assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
 
-    s.release_held_data([b.key])
+    s.client_releases_keys(keys=[b.key], client=e.id)
     assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
 
-    s.release_held_data([acab.key])
+    s.client_releases_keys(keys=[acab.key], client=e.id)
     assert set(s.dask) == {f.key for f in [ac,cd]}
     assert b.key not in s.who_has
 
@@ -1850,7 +1857,7 @@ def test_forget_complex(s, A, B):
         yield gen.sleep(0.01)
         assert time() < start + 10
 
-    s.release_held_data([ac.key])
+    s.client_releases_keys(keys=[ac.key], client=e.id)
     assert set(s.dask) == {f.key for f in [cd]}
 
     yield e._shutdown()

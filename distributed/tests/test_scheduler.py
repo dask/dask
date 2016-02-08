@@ -1,3 +1,4 @@
+from collections import defaultdict
 from copy import deepcopy
 from operator import add
 from time import time
@@ -126,7 +127,8 @@ def test_update_state():
     waiting = {'y': set()}
     waiting_data = {'x': {'y'}, 'y': set()}
 
-    held_data = {'y'}
+    who_wants = defaultdict(set, y={'client'})
+    wants_what = defaultdict(set, client={'y'})
     who_has = {'x': {'alice'}}
     processing = set()
     released = set()
@@ -142,18 +144,20 @@ def test_update_state():
     e_waiting = {'y': set(), 'a': set(), 'z': {'a', 'y'}}
     e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'a': {'z'}, 'z': set()}
 
-    e_held_data = {'y', 'z'}
+    e_who_wants = {'z': {'client'}, 'y': {'client'}}
+    e_wants_what = {'client': {'y', 'z'}}
 
-    update_state(dsk, dependencies, dependents, held_data,
+    update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys)
+                 waiting, waiting_data, new_dsk, new_keys, 'client')
 
     assert dsk == e_dsk
     assert dependencies == e_dependencies
     assert dependents == e_dependents
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
-    assert held_data == e_held_data
+    assert who_wants == e_who_wants
+    assert wants_what == e_wants_what
     assert in_play == {'x', 'y', 'a', 'z'}
 
 
@@ -164,7 +168,8 @@ def test_update_state_with_processing():
     waiting = {'z': {'y'}}
     waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
 
-    held_data = {'z'}
+    who_wants = defaultdict(set, z={'client'})
+    wants_what = defaultdict(set, client={'z'})
     who_has = {'x': {'alice'}}
     processing = {'y'}
     released = set()
@@ -177,15 +182,17 @@ def test_update_state_with_processing():
     e_waiting_data = {'x': {'y', 'a'}, 'y': {'z', 'b'}, 'z': {'c'},
                       'a': {'b'}, 'b': set(), 'c': set()}
 
-    e_held_data = {'b', 'c', 'z'}
+    e_who_wants = {'b': {'client'}, 'c': {'client'}, 'z': {'client'}}
+    e_wants_what = {'client': {'b', 'c', 'z'}}
 
-    update_state(dsk, dependencies, dependents, held_data,
+    update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys)
+                 waiting, waiting_data, new_dsk, new_keys, 'client')
 
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
-    assert held_data == e_held_data
+    assert who_wants == e_who_wants
+    assert wants_what == e_wants_what
     assert in_play == {'x', 'y', 'z', 'a', 'b', 'c'}
 
 
@@ -196,7 +203,8 @@ def test_update_state_respects_data_in_memory():
     waiting = dict()
     waiting_data = {'y': set()}
 
-    held_data = {'y'}
+    who_wants = defaultdict(set, y={'client'})
+    wants_what = defaultdict(set, client={'y'})
     who_has = {'y': {'alice'}}
     processing = set()
     released = {'x'}
@@ -208,16 +216,18 @@ def test_update_state_respects_data_in_memory():
     e_dsk = new_dsk.copy()
     e_waiting = {'z': {'x'}, 'x': set()}
     e_waiting_data = {'x': {'z'}, 'y': {'z'}, 'z': set()}
-    e_held_data = {'y', 'z'}
+    e_who_wants = {'y': {'client'}, 'z': {'client'}}
+    e_wants_what = {'client': {'y', 'z'}}
 
-    update_state(dsk, dependencies, dependents, held_data,
+    update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys)
+                 waiting, waiting_data, new_dsk, new_keys, 'client')
 
     assert dsk == e_dsk
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
-    assert held_data == e_held_data
+    assert who_wants == e_who_wants
+    assert wants_what == e_wants_what
     assert in_play == {'x', 'y', 'z'}
 
 
@@ -228,7 +238,8 @@ def test_update_state_supports_recomputing_released_results():
     waiting = dict()
     waiting_data = {'z': set()}
 
-    held_data = {'z'}
+    who_wants = defaultdict(set, z={'client'})
+    wants_what = defaultdict(set, client={'z'})
     who_has = {'z': {'alice'}}
     processing = set()
     released = {'x', 'y'}
@@ -240,16 +251,18 @@ def test_update_state_supports_recomputing_released_results():
     e_dsk = dsk.copy()
     e_waiting = {'x': set(), 'y': {'x'}}
     e_waiting_data = {'x': {'y'}, 'y': set(), 'z': set()}
-    e_held_data = {'y', 'z'}
+    e_who_wants = {'z': {'client'}, 'y': {'client'}}
+    e_wants_what = {'client': {'y', 'z'}}
 
-    update_state(dsk, dependencies, dependents, held_data,
+    update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys)
+                 waiting, waiting_data, new_dsk, new_keys, 'client')
 
     assert dsk == e_dsk
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
-    assert held_data == e_held_data
+    assert who_wants == e_who_wants
+    assert wants_what == e_wants_what
     assert in_play == {'x', 'y', 'z'}
 
 
@@ -430,7 +443,8 @@ def test_fill_missing_data():
     waiting = {}
     waiting_data = {'z': set()}
 
-    held_data = {'z'}
+    who_wants = defaultdict(set, z={'client'})
+    wants_what = defaultdict(set, client={'z'})
     who_has = {'z': {alice}}
     processing = set()
     released = set()
@@ -444,9 +458,8 @@ def test_fill_missing_data():
     del who_has['z']
     in_play.remove('z')
 
-    heal_missing_data(dsk, dependencies, dependents, held_data,
-                      who_has, in_play,
-                      waiting, waiting_data, lost)
+    heal_missing_data(dsk, dependencies, dependents, who_has, in_play, waiting,
+            waiting_data, lost)
 
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
