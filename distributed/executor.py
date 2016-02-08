@@ -671,6 +671,9 @@ class Executor(object):
         workers: list of tuples (optional)
             Optionally constrain locations of data.
             Specify workers as hostname/port pairs, e.g. ``('127.0.0.1', 8787)``.
+        broadcast: bool (defaults to False)
+            Whether to send each data element to all workers.
+            By default we round-robin based on number of cores.
 
         Returns
         -------
@@ -696,6 +699,9 @@ class Executor(object):
         >>> seq = e.scatter(iter([1, 2, 3]))  # doctest: +SKIP
         >>> next(seq)  # doctest: +SKIP
         <Future: status: finished, key: c0a8a20f903a4915b94db8de3ea63195>,
+
+        Broadcast data to all workers
+        >>> [future] = e.scatter([element], broadcast=True)  # doctest: +SKIP
 
         See Also
         --------
