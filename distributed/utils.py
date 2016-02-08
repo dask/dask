@@ -234,6 +234,7 @@ def get_traceback():
     exc_type, exc_value, exc_traceback = sys.exc_info()
     bad = [os.path.join('distributed', 'worker'),
            os.path.join('distributed', 'scheduler'),
+           os.path.join('tornado', 'gen.py'),
            os.path.join('concurrent', 'futures')]
     while any(b in exc_traceback.tb_frame.f_code.co_filename for b in bad):
         exc_traceback = exc_traceback.tb_next
