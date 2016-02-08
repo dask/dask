@@ -145,6 +145,8 @@ def _deps(dsk, arg):
 
     Helper function for get_dependencies.
 
+    Examples
+    --------
     >>> inc = lambda x: x + 1
     >>> add = lambda x, y: x + y
 
