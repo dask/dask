@@ -628,9 +628,9 @@ class Executor(object):
             return sync(self.loop, self._gather, futures)
 
     @gen.coroutine
-    def _scatter(self, data, workers=None):
+    def _scatter(self, data, workers=None, broadcast=False):
         keys = yield self.scheduler.scatter(data=data, workers=workers,
-                                            client=self.id)
+                                            client=self.id, broadcast=broadcast)
         if isinstance(data, (tuple, list, set, frozenset)):
             out = type(data)([Future(k, self) for k in keys])
         elif isinstance(data, dict):
@@ -644,7 +644,7 @@ class Executor(object):
 
         raise gen.Return(out)
 
-    def _threaded_scatter(self, q_or_i, qout):
+    def _threaded_scatter(self, q_or_i, qout, **kwargs):
         """ Internal function for scattering Iterable/Queue data """
         if isqueue(q_or_i):  # py2 Queue doesn't support mro
             get = pyQueue.get
@@ -658,10 +658,10 @@ class Executor(object):
                 qout.put(StopIteration)
                 break
 
-            [f] = self.scatter([d])
+            [f] = self.scatter([d], **kwargs)
             qout.put(f)
 
-    def scatter(self, data, workers=None):
+    def scatter(self, data, workers=None, broadcast=False):
         """ Scatter data into distributed memory
 
         Parameters
@@ -705,7 +705,9 @@ class Executor(object):
             logger.debug("Starting thread for streaming data")
             qout = pyQueue()
 
-            t = Thread(target=self._threaded_scatter, args=(data, qout))
+            t = Thread(target=self._threaded_scatter,
+                       args=(data, qout),
+                       kwargs={'workers': workers, 'broadcast': broadcast})
             t.daemon = True
             t.start()
 
@@ -720,7 +722,8 @@ class Executor(object):
             else:
                 return qout
         else:
-            return sync(self.loop, self._scatter, data, workers=workers)
+            return sync(self.loop, self._scatter, data, workers=workers,
+                        broadcast=broadcast)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):

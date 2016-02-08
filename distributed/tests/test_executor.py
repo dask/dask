@@ -1958,3 +1958,33 @@ def test_multi_garbage_collection(s, a, b):
 
     yield e._shutdown()
     yield f._shutdown()
+
+
+@gen_cluster()
+def test__broadcast(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x, y = yield e._scatter([1, 2], broadcast=True)
+
+    assert a.data == b.data == {x.key: 1, y.key: 2}
+
+    yield e._shutdown()
+
+
+def test_broadcast(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            x, y = e.scatter([1, 2], broadcast=True)
+
+            has_what = sync(e.loop, e.scheduler.has_what)
+
+            assert has_what == {('127.0.0.1', a['port']): {x.key, y.key},
+                                ('127.0.0.1', b['port']): {x.key, y.key}}
+
+            [z] = e.scatter([3], broadcast=True,
+                            workers=[('127.0.0.1', a['port'])])
+
+            has_what = sync(e.loop, e.scheduler.has_what)
+            assert has_what == {('127.0.0.1', a['port']): {x.key, y.key, z.key},
+                                ('127.0.0.1', b['port']): {x.key, y.key}}
