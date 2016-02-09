@@ -191,6 +191,7 @@ class Scheduler(Server):
                          'register': self.add_worker,
                          'unregister': self.remove_worker,
                          'gather': self.gather,
+                         'cancel': self.cancel,
                          'feed': self.feed,
                          'terminate': self.close,
                          'broadcast': self.broadcast,
@@ -385,6 +386,8 @@ class Scheduler(Server):
         while (self.stacks[worker] and
                self.ncores[worker] > len(self.processing[worker])):
             key = self.stacks[worker].pop()
+            if key not in self.dask:
+                continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s, %s", worker, key, self.dask[key])
             self.worker_queues[worker].put_nowait(
@@ -416,7 +419,7 @@ class Scheduler(Server):
             if stack:
                 self.ensure_occupied(worker)
 
-    def update_data(self, who_has=None, nbytes=None):
+    def update_data(self, who_has=None, nbytes=None, client=None):
         """
         Learn that new data has entered the network from an external source
 
@@ -430,8 +433,9 @@ class Scheduler(Server):
 
         self.nbytes.update(nbytes)
 
-        for k in who_has:
-            self.who_wants[k] = set()
+        if client:
+            self.client_wants_keys(keys=list(who_has), client=client)
+
         self.in_play.update(who_has)
 
     def mark_task_erred(self, key, worker, exception, traceback):
@@ -635,6 +639,7 @@ class Scheduler(Server):
             if not self.who_wants[k]:
                 del self.who_wants[k]
                 self.release_held_data([k])
+                logger.debug("Delete who_wants[%s]", k)
 
     def client_wants_keys(self, keys=None, client=None):
         for k in keys:
@@ -686,6 +691,25 @@ class Scheduler(Server):
         if key in self.who_has:
             self.delete_data(keys=[key])
 
+    def cancel_key(self, key, client, retries=5):
+        if key not in self.who_wants:  # no key yet, lets try again in 500ms
+            if retries:
+                self.loop.add_future(gen.sleep(0.2),
+                        lambda _: self.cancel_key(key, client, retries - 1))
+            return
+        if self.who_wants[key] == {client}:  # no one else wants this key
+            for dep in list(self.dependents[key]):
+                self.cancel_key(dep, client)
+        logger.debug("Scheduler cancels key %s", key)
+        self.report({'op': 'cancelled-key', 'key': key})
+        self.client_releases_keys(keys=[key], client=client)
+
+    def cancel(self, stream, keys=None, client=None):
+        """ Stop execution on a list of keys """
+        logger.info("Client %s requests to cancel keys %s", client, keys)
+        for key in keys:
+            self.cancel_key(key, client)
+
     def heal_state(self):
         """ Recover from catastrophic change """
         logger.debug("Heal state")
@@ -717,7 +741,8 @@ class Scheduler(Server):
         for q in self.report_queues:
             q.put_nowait(msg)
         if 'key' in msg:
-            streams = {self.streams.get(c, ()) for c in self.who_wants[msg['key']]}
+            streams = {self.streams.get(c, ())
+                       for c in self.who_wants.get(msg['key'], ())}
         else:
             streams = self.streams.values()
         for s in streams:
@@ -1009,7 +1034,8 @@ class Scheduler(Server):
         released = set(self.dask) - self.in_play
         validate_state(self.dependencies, self.dependents, self.waiting,
                 self.waiting_data, self.who_has, self.stacks,
-                self.processing, None, released, self.in_play,
+                self.processing, None, released, self.in_play, self.who_wants,
+                self.wants_what,
                 allow_overlap=allow_overlap, allow_bad_stacks=allow_bad_stacks)
         if not (set(self.ncores) == \
                 set(self.has_what) == \
@@ -1164,6 +1190,10 @@ def update_state(dsk, dependencies, dependents, who_wants, wants_what,
         if key not in dependents:
             dependents[key] = set()
 
+    for k in new_keys:
+        who_wants[k].add(client)
+        wants_what[client].add(k)
+
     exterior = keys_outside_frontier(dsk, dependencies, new_keys, in_play)
     in_play |= exterior
     for key in exterior:
@@ -1177,10 +1207,6 @@ def update_state(dsk, dependencies, dependents, who_wants, wants_what,
         if key not in waiting_data:
             waiting_data[key] = set()
 
-    for k in new_keys:
-        who_wants[k].add(client)
-        wants_what[client].add(k)
-
     return {'dsk': dsk,
             'dependencies': dependencies,
             'dependents': dependents,
@@ -1192,7 +1218,8 @@ def update_state(dsk, dependencies, dependents, who_wants, wants_what,
 
 def validate_state(dependencies, dependents, waiting, waiting_data,
         who_has, stacks, processing, finished_results, released, in_play,
-        allow_overlap=False, allow_bad_stacks=False, **kwargs):
+        who_wants, wants_what, allow_overlap=False, allow_bad_stacks=False,
+        **kwargs):
     """
     Validate a current runtime state
 
@@ -1242,6 +1269,11 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
 
             if key in keys and who_has.get(key):
                 assert key in finished_results
+
+        for key, s in who_wants.items():
+            assert s, "empty who_wants"
+            for client in s:
+                assert key in wants_what[client]
 
         return True
 
@@ -1376,7 +1408,7 @@ def heal(dependencies, dependents, who_has, stacks, processing, waiting,
              'waiting': waiting, 'waiting_data': waiting_data,
              'who_has': who_has, 'processing': processing, 'stacks': stacks,
              'finished_results': finished_results, 'released': new_released,
-             'in_play': in_play}
+             'in_play': in_play, 'who_wants': {}, 'wants_what': {}}
     validate_state(**output)
     return output
 

@@ -1995,3 +1995,79 @@ def test_broadcast(loop):
             has_what = sync(e.loop, e.scheduler.has_what)
             assert has_what == {('127.0.0.1', a['port']): {x.key, y.key, z.key},
                                 ('127.0.0.1', b['port']): {x.key, y.key}}
+
+
+@gen_cluster()
+def test__cancel(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(slowinc, 1)
+    y = e.submit(slowinc, x)
+
+    while y.key not in s.dask:
+        yield gen.sleep(0.01)
+
+    yield e._cancel([x])
+
+    assert x.cancelled()
+    s.validate()
+
+    start = time()
+    while not y.cancelled():
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    assert not s.dask
+    s.validate()
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test__cancel_multi_client(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+    f = Executor((s.ip, s.port), start=False)
+    yield f._start()
+
+    x = e.submit(slowinc, 1)
+    y = f.submit(slowinc, 1)
+
+    assert x.key == y.key
+
+    yield e._cancel([x])
+
+    assert x.cancelled()
+    assert not y.cancelled()
+
+    assert y.key in s.dask
+
+    out = yield y._result()
+    assert out == 2
+
+    with pytest.raises(CancelledError):
+        yield x._result()
+
+    yield e._shutdown()
+    yield f._shutdown()
+
+
+def test_cancel(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            x = e.submit(slowinc, 1)
+            y = e.submit(slowinc, x)
+            z = e.submit(slowinc, y)
+
+            e.cancel([y])
+
+            start = time()
+            while not z.cancelled():
+                sleep(0.01)
+                assert time() < start + 5
+
+            assert x.result() == 2
+
+            z.cancel()
+            assert z.cancelled()

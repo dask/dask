@@ -352,6 +352,8 @@ def test_validate_state():
     finished_results = set()
     released = set()
     in_play = {'x', 'y'}
+    who_wants = {'y': {'client'}}
+    wants_what = {'client': {'y'}}
 
     validate_state(**locals())
 
@@ -619,7 +621,7 @@ def test_add_worker(s, a, b):
     yield w._start(0)
 
     dsk = {('x', i): (inc, i) for i in range(10)}
-    s.update_graph(dsk=dsk, keys=list(dsk))
+    s.update_graph(dsk=dsk, keys=list(dsk), client='client')
 
     s.add_worker(address=w.address, keys=list(w.data),
                  ncores=w.ncores, services=s.services)
@@ -747,9 +749,9 @@ def test_delete_callback(s, a, b):
 @gen_cluster()
 def test_self_aliases(s, a, b):
     a.data['a'] = 1
-    s.update_data(who_has={'a': {a.address}}, nbytes={'a': 10})
+    s.update_data(who_has={'a': {a.address}}, nbytes={'a': 10}, client='client')
     s.update_graph(dsk={'a': 'a', 'b': (inc, 'a')},
-                   keys=['b'])
+                   keys=['b'], client='client')
 
     assert 'a' not in s.dask
 
