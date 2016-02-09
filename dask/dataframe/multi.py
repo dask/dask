@@ -215,10 +215,11 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
         dsk[(name, i)] = (pd.DataFrame.join, a, b, None, how,
                           lsuffix, rsuffix)
 
-    # fake result
-    result = left_empty.join(right_empty, None, how, lsuffix, rsuffix)
+    # dummy result
+    dummy = left_empty.join(right_empty, on=None, how=how,
+                            lsuffix=lsuffix, rsuffix=rsuffix)
     return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk),
-                     name, result, divisions)
+                     name, dummy, divisions)
 
 
 def _pdmerge(left, right, how, left_on, right_on,
@@ -335,13 +336,12 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     if join not in ('inner', 'outer'):
         raise ValueError("'join' must be 'inner' or 'outer'")
 
-    if not all(isinstance(df, _Frame) for df in dfs):
-        raise ValueError("All inputs must be dd.DataFrame or dd.Series")
+    from dask.dataframe.core import _emulate
+    dummy = _emulate(pd.concat, dfs, axis=axis, join=join)
 
+    dfs = _maybe_from_pandas(dfs)
     dfs2, divisions, parts = align_partitions(*dfs)
-
     empties = [df._pd for df in dfs]
-    dummy = pd.concat(empties, axis=axis, join=join)
 
     parts2 = [[df if df is not None else empty
                for df, empty in zip(part, empties)]
@@ -513,13 +513,14 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     dasks = [df for df in dfs if isinstance(df, _Frame)]
 
     if all(df.known_divisions for df in dasks):
-        # must be converted here to check whether divisions can be
-        # concatenated
+
         dfs = _maybe_from_pandas(dfs)
         if axis == 1:
-            from .multi import concat_indexed_dataframes
             return concat_indexed_dataframes(dfs, axis=axis, join=join)
         else:
+            # must be converted here to check whether divisions can be
+            # concatenated
+            dfs = _maybe_from_pandas(dfs)
             # each DataFrame's division must be greater than previous one
             if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
                    for i in range(len(dfs) - 1)):
@@ -535,7 +536,6 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                               name, dummy, divisions)
             else:
                 if interleave_partitions:
-                    from .multi import concat_indexed_dataframes
                     return concat_indexed_dataframes(dfs, join=join)
 
                 raise ValueError('All inputs have known divisions which cannnot '
@@ -550,6 +550,7 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             # concat will not regard Series as row
             dfs = _maybe_from_pandas(dfs)
             name = 'concat-{0}'.format(tokenize(*dfs))
+<<<<<<< 108b45bb4f9ee53674a12704b8ae4cc7fd2d033c
 <<<<<<< 67169c91bb885da8c073313194763838ad7b4e2b
             dsk, dummy = _concat_dfs(dfs, name, join=join)
 
@@ -563,6 +564,13 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
                           name, empty, divisions)
 >>>>>>> Fix io and merge to preserve metadata
+=======
+            dsk, dummy = _concat_dfs(dfs, name, join=join)
+
+            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+            return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
+                          name, dummy, divisions)
+>>>>>>> Infer result using internal cache
 
 def _append(df, other, divisions):
     """ Internal function to append 2 dd.DataFrame/Series instances """

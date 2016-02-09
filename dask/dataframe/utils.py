@@ -109,20 +109,29 @@ def _check_dask(dsk, check_names=True):
         result = dsk.compute(get=get_sync)
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index), type(result)
+            if check_names:
+                assert dsk.name == result.name
+            # cache
             assert isinstance(dsk._pd, pd.Index), type(dsk._pd)
+            if check_names:
+                assert dsk._pd.name == result.name
         elif isinstance(dsk, dd.Series):
             assert isinstance(result, pd.Series), type(result)
-            assert isinstance(dsk._pd, pd.Series), type(dsk._pd)
             if check_names:
                 assert dsk.name == result.name, (dsk.name, result.name)
+            # cache
+            assert isinstance(dsk._pd, pd.Series), type(dsk._pd)
+            if check_names:
+                assert dsk._pd.name == result.name
         elif isinstance(dsk, dd.DataFrame):
             assert isinstance(result, pd.DataFrame), type(result)
-            assert isinstance(dsk._pd, pd.DataFrame), type(dsk._pd)
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
-            tm.assert_index_equal(dsk.columns, result.columns)
             if check_names:
-                columns = dsk.columns
-                tm.assert_index_equal(columns, result.columns)
+                tm.assert_index_equal(dsk.columns, result.columns)
+            # cache
+            assert isinstance(dsk._pd, pd.DataFrame), type(dsk._pd)
+            if check_names:
+                tm.assert_index_equal(dsk._pd.columns, result.columns)
         elif isinstance(dsk, dd.core.Scalar):
             assert (np.isscalar(result) or
                     isinstance(result, (pd.Timestamp, pd.Timedelta)))
@@ -173,6 +182,7 @@ def eq(a, b, check_names=True, **kwargs):
             else:
                 assert np.allclose(a, b)
     return True
+
 
 def assert_dask_graph(dask, label):
     if hasattr(dask, 'dask'):

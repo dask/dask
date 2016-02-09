@@ -53,7 +53,7 @@ def test_read_csv(open_comp_pair, infer):
                 lineterminator='\n')
         assert list(f.columns) == ['name', 'amount']
         assert f.npartitions > 1
-        assert f._know_dtype
+        assert f._known_dtype
         result = f.compute(get=dask.get)
         # index may be different
         assert eq(result.reset_index(drop=True),
@@ -75,7 +75,7 @@ def test_read_multiple_csv():
         with open('_foo.2.csv', 'w') as f:
             f.write(text)
         df = dd.read_csv('_foo.*.csv')
-        assert df._know_dtype
+        assert df._known_dtype
 
         assert (len(read_csv('_foo.*.csv').compute()) ==
                 len(read_csv('_foo.1.csv').compute()) * 2)
@@ -102,7 +102,7 @@ def test_consistent_dtypes():
     with filetext(text) as fn:
         df = dd.read_csv(fn, chunkbytes=30)
         assert isinstance(df.amount.sum().compute(), float)
-        assert df._know_dtype
+        assert df._known_dtype
 
 datetime_csv_file = """
 name,amount,when
@@ -116,7 +116,7 @@ Dan,400,2014-01-01
 def test_read_csv_index():
     with filetext(text) as fn:
         f = dd.read_csv(fn, chunkbytes=20, index='amount')
-        assert f._know_dtype
+        assert f._known_dtype
         result = f.compute(get=get_sync)
         assert result.index.name == 'amount'
 
@@ -207,14 +207,14 @@ def test_from_array():
     x = np.arange(10 * 3).reshape(10, 3)
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert d._know_dtype
+    assert d._known_dtype
     tm.assert_index_equal(d.columns, pd.Index([0, 1, 2]))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
     d = dd.from_array(x, chunksize=4, columns=list('abc'))
     assert isinstance(d, dd.DataFrame)
-    assert d._know_dtype
+    assert d._known_dtype
     tm.assert_index_equal(d.columns, pd.Index(['a', 'b', 'c']))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
@@ -227,7 +227,7 @@ def test_from_array_with_record_dtype():
                  dtype=[('a', 'i4'), ('b', 'i4')])
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
-    assert d._know_dtype
+    assert d._known_dtype
     assert list(d.columns) == ['a', 'b']
     assert d.divisions == (0, 4, 8, 9)
 
