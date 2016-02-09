@@ -5,7 +5,8 @@ import dask
 from dask.compatibility import skip
 import dask.array as da
 from dask.array import Array
-from dask.array.slicing import slice_array, _slice_1d, take, new_blockdim
+from dask.array.slicing import (slice_array, _slice_1d, take, new_blockdim,
+        sanitize_index)
 from operator import getitem
 import numpy as np
 from toolz import merge
@@ -467,3 +468,11 @@ def test_slicing_consistent_names():
     assert same_keys(a[0], a[0])
     assert same_keys(a[:, [1, 2, 3]], a[:, [1, 2, 3]])
     assert same_keys(a[:, 5:2:-1], a[:, 5:2:-1])
+
+
+def test_sanitize_index():
+    pd = pytest.importorskip('pandas')
+    with pytest.raises(TypeError):
+        sanitize_index('Hello!')
+
+    assert sanitize_index(pd.Series([1, 2, 3])) == [1, 2, 3]
