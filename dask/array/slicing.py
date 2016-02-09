@@ -38,7 +38,7 @@ def sanitize_index(ind):
             raise IndexError("Bad index.  Must be integer-like: %s" % ind)
         else:
             return ind2
-    if isinstance(ind, np.ndarray):
+    if hasattr(ind, 'tolist'):
         ind = ind.tolist()
     if isinstance(ind, list) and ind and isinstance(ind[0], bool):
         ind = [a for a, b in enumerate(ind) if b]
@@ -52,7 +52,7 @@ def sanitize_index(ind):
     if ind is None:
         return ind
 
-    raise IndexError("Invalid index", i)
+    raise TypeError("Invalid index type", type(ind), ind)
 
 
 def slice_array(out_name, in_name, blockdims, index):
