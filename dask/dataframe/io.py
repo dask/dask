@@ -165,7 +165,7 @@ def _fill_kwargs(fn, **kwargs):
         kwargs['compression'] = infer_compression(fn)
 
     if 'names' not in kwargs:
-        kwargs['names'] = csv_names(fn, **kwargs)
+        kwargs['names'] = _csv_names(fn, **kwargs)
         if 'header' not in kwargs:
             kwargs['header'] = 0
     else:
@@ -233,12 +233,11 @@ def read_csv(fn, **kwargs):
 
     # Create dask graph
     dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
-                                       kwargs['compression'], rest_kwargs,
-                                       bom))
+                            kwargs['compression'], rest_kwargs, bom))
                for i in range(1, nchunks))
 
     dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
-                                 first_kwargs, b'')
+                      first_kwargs, b'')
 
     result = DataFrame(dsk, name, head, divisions)
 
@@ -248,16 +247,16 @@ def read_csv(fn, **kwargs):
     return result
 
 
-def csv_names(fn, encoding='utf-8', compression=None, names=None,
-                parse_dates=None, usecols=None, dtype=None, **kwargs):
+def _csv_names(fn, encoding='utf-8', compression=None, names=None,
+               parse_dates=None, usecols=None, dtype=None, **kwargs):
     try:
         kwargs['nrows'] = 5
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, **kwargs)
+                         names=names, **kwargs)
     except StopIteration:
         kwargs['nrows'] = None
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, **kwargs)
+                         names=names, **kwargs)
     return list(df.columns)
 
 

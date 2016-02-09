@@ -142,7 +142,6 @@ class DataFrameGroupBy(_GroupBy):
         """
         if (isinstance(self.index, Series) and
             self.index._name == self.df.index._name):
-            df = self.df
             return map_partitions(_groupby_apply_level0,
                                   columns or self.df.columns,
                                   self.df, func)
@@ -207,7 +206,6 @@ class SeriesGroupBy(_GroupBy):
         """
         # df = set_index(self.df, self.index, **self.kwargs)
         if self.index._name == self.df.index._name:
-            df = self.df
             return map_partitions(_groupby_level0_getitem_apply,
                                   self.df, self.key, func,
                                   columns=columns)

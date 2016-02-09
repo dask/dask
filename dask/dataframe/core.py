@@ -198,6 +198,8 @@ class _Frame(Base):
                 _pd = metadata[0:0]
             else:
                 _pd = metadata.iloc[0:0]
+            # ToDo: passed pandas instance may not have correct dtype,
+            # it may be instanciated from column name
             know_dtype = True
         else:
             if np.isscalar(metadata) or metadata is None:
@@ -225,8 +227,8 @@ class _Frame(Base):
         dsk = dict(((name, i), (getattr, key, 'index'))
                    for i, key in enumerate(self._keys()))
 
-        idx_name = self._pd.index.name
-        return Index(merge(dsk, self.dask), name, idx_name, self.divisions)
+        return Index(merge(dsk, self.dask), name,
+                     self._pd.index.name, self.divisions)
 
     @property
     def known_divisions(self):
@@ -912,12 +914,7 @@ class Series(_Frame):
     @name.setter
     def name(self, name):
         self._pd.name = name
-
-        def rename_name(series):
-            # ToDo: merge the logic to map_partitions
-            return _rename(self._pd.name, series)
-
-        renamed = map_partitions(rename_name, self._pd, self)
+        renamed = _rename_dask(self, name)
         # update myself
         self.dask.update(renamed.dask)
         self._name = renamed._name
@@ -1279,14 +1276,9 @@ class DataFrame(_Frame):
 
     @columns.setter
     def columns(self, columns):
-        # if length is mismatched, error is raised from pandas
+        # if length mismatches, error is raised from pandas
         self._pd.columns = columns
-
-        def rename_columns(df):
-            # ToDo: merge the logic to map_partitions
-            return _rename(self._pd.columns, df)
-
-        renamed = map_partitions(rename_columns, self._pd, self)
+        renamed = _rename_dask(self, columns)
         # update myself
         self.dask.update(renamed.dask)
         self._name = renamed._name
@@ -1597,10 +1589,13 @@ class DataFrame(_Frame):
             if right is not None:
                 left = self._pd
                 right = pd.DataFrame(columns=right)
-                columns = op(left, right, axis=axis).columns
+                if isinstance(other, (Series, DataFrame)):
+                    columns = op(self._pd, other._pd, axis=axis)
+                else:
+                    columns = op(self._pd, other, axis=axis)
+                # columns = op(left, right, axis=axis).columns
             else:
                 columns = self.columns
-
             return map_partitions(op, columns, self, other,
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
@@ -1923,12 +1918,9 @@ def _get_return_type(arg, columns):
         return Index
 
     # legacy logic, being removed
-    if (isinstance(columns, (str, unicode)) or not
-          isinstance(columns, Iterable)):
-
+    if np.isscalar(columns) or columns is None:
         if columns == return_scalar:
             return Scalar
-
         elif isinstance(arg, Index):
             return Index
         else:
@@ -1967,18 +1959,16 @@ def map_partitions(func, columns, *args, **kwargs):
     from .multi import _maybe_align_partitions
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
-
     return_type = _get_return_type(dfs[0], columns)
-    dsk = {}
 
+    dsk = {}
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (_rename, columns, (apply, func, (tuple, values),
-                                                           kwargs))
+        values = (apply, func, (tuple, values), kwargs)
+        dsk[(name, i)] = (_rename, columns, values)
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
-
     return return_type(merge(dsk, *dasks), name, columns, args[0].divisions)
 
 
@@ -1996,27 +1986,54 @@ def _rename(columns, df):
     df : pd.DataFrame or pd.Series
         target DataFrame / Series to be renamed
     """
+    assert not isinstance(df, _Frame)
+
     if isinstance(columns, Iterator):
         columns = list(columns)
 
     if columns is no_default:
         return df
 
-    if isinstance(df, _Frame):
-        raise NotImplementedError(df)
-
     if isinstance(df, pd.DataFrame):
         if isinstance(columns, pd.DataFrame):
-            columns = df.columns
+            columns = columns.columns
         if len(columns) == len(df.columns):
-            # do not use rename to avoid  copy
+            # do not use rename to avoid copy values
             df.columns = columns
-    elif isinstance(df, pd.Series):
-        if isinstance(columns, pd.Series):
+    elif isinstance(df, (pd.Series, pd.Index)):
+        if isinstance(columns, (pd.Series, pd.Index)):
             columns = columns.name
         df.name = columns
-
+    # map_partition may pass other types
     return df
+
+
+def _rename_dask(df, metadata):
+    """
+    Destructively rename columns of dd.DataFrame or name of dd.Series.
+    Not for pd.DataFrame or pd.Series.
+
+    Internaly used to overwrite dd.DataFrame.columns and dd.Series.name
+    We can't use map_partition because it is because it applies function then rename
+
+    Parameters
+    ----------
+
+    df : dd.DataFrame or dd.Series
+        target DataFrame / Series to be renamed
+    metadata : tuple, string, pd.DataFrame or pd.Series
+        Column names, Series name or pandas instance which has the
+        target column names / name.
+    """
+
+    assert isinstance(df, _Frame)
+    metadata, _ = df._build_pd(metadata)
+    name = 'rename-{0}'.format(tokenize(df, metadata))
+
+    dsk = {}
+    for i in range(df.npartitions):
+        dsk[name, i] = (_rename, metadata, (df._name, i))
+    return _Frame(merge(dsk, df.dask), name, metadata, df.divisions)
 
 
 def quantile(df, q):
@@ -2052,7 +2069,7 @@ def quantile(df, q):
         name = 'quantiles-' + token
         empty_index = pd.Index([], dtype=float)
         return Series({(name, 0): pd.Series([], name=df.name, index=empty_index)},
-                      name, df.name, [None, None])
+                       name, df.name, [None, None])
     else:
         new_divisions = [np.min(q), np.max(q)]
 

@@ -265,10 +265,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     else:
         right_index = False
 
-    # fake column names
-    left_empty = lhs._pd
-    right_empty = rhs._pd
-    dummy = pd.merge(left_empty, right_empty, how, None,
+    # dummy result
+    dummy = pd.merge(lhs._pd, rhs._pd, how, None,
                      left_on=left_on, right_on=right_on,
                      left_index=left_index, right_index=right_index,
                      suffixes=suffixes)

@@ -238,8 +238,8 @@ def test_dummy_from_array():
     x = np.array([[1, 2], [3, 4]], dtype=np.int64)
     res = dd.io._dummy_from_array(x)
     assert isinstance(res, pd.DataFrame)
-    assert res['0'].dtype == np.int64
-    assert res['1'].dtype == np.int64
+    assert res[0].dtype == np.int64
+    assert res[1].dtype == np.int64
 
     x = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
     res = dd.io._dummy_from_array(x, columns=['a', 'b'])

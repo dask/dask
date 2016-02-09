@@ -150,20 +150,22 @@ def test_set_index_raises_error_on_bad_input():
 def test_rename_columns():
     # GH 819
     df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
-                        'b': [7, 6, 5, 4, 3, 2, 1]})
+                       'b': [7, 6, 5, 4, 3, 2, 1]})
     ddf = dd.from_pandas(df, 2)
 
     ddf.columns = ['x', 'y']
     df.columns = ['x', 'y']
     tm.assert_index_equal(ddf.columns, pd.Index(['x', 'y']))
+    tm.assert_index_equal(ddf._pd.columns, pd.Index(['x', 'y']))
     assert eq(ddf, df)
 
-    with tm.assertRaises(ValueError):
+    msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
+    with tm.assertRaisesRegexp(ValueError, msg):
         ddf.columns = [1, 2, 3, 4]
 
 
 def test_rename_series():
-    # GH 819,
+    # GH 819
     s = pd.Series([1, 2, 3, 4, 5, 6, 7], name='x')
     ds = dd.from_pandas(s, 2)
 
@@ -171,7 +173,6 @@ def test_rename_series():
     ds.name = 'renamed'
     assert s.name == 'renamed'
     assert eq(ds, s)
-
 
 
 def test_describe():
