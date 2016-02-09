@@ -133,6 +133,10 @@ class Future(WrappedKey):
         """
         return sync(self.executor.loop, self._exception)
 
+    def cancel(self):
+        """ Returns True if the future has been cancelled """
+        return self.executor.cancel([self])
+
     def cancelled(self):
         """ Returns True if the future has been cancelled """
         return self.key not in self.executor.futures
@@ -343,6 +347,8 @@ class Executor(object):
             except StreamClosedError:
                 break
 
+            logger.debug("Executor receives message %s", msg)
+
             if msg['op'] == 'stream-start':
                 start_event.set()
             if msg['op'] == 'close':
@@ -355,6 +361,10 @@ class Executor(object):
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]['status'] = 'lost'
                     self.futures[msg['key']]['event'].clear()
+            if msg['op'] == 'cancelled-key':
+                if msg['key'] in self.futures:
+                    self.futures[msg['key']]['event'].set()
+                    del self.futures[msg['key']]
             if msg['op'] == 'task-erred':
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]['status'] = 'error'
@@ -730,6 +740,27 @@ class Executor(object):
         else:
             return sync(self.loop, self._scatter, data, workers=workers,
                         broadcast=broadcast)
+    @gen.coroutine
+    def _cancel(self, futures):
+        keys = {f.key for f in flatten(futures)}
+        yield self.scheduler.cancel(keys=keys, client=self.id)
+        for k in keys:
+            with ignoring(KeyError):
+                del self.futures[k]
+
+    def cancel(self, futures):
+        """
+        Cancel running futures
+
+        This stops future tasks from being scheduled if they have not yet run
+        and deletes them if they have already run.  After calling, this result
+        and all dependent results will no longer be accessible
+
+        Parameters
+        ----------
+        futures: list of Futures
+        """
+        return sync(self.loop, self._cancel, futures)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
