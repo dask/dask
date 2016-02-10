@@ -348,7 +348,7 @@ class Scheduler(Server):
         self.stacks[new_worker].append(key)
         self.ensure_occupied(new_worker)
 
-    def mark_key_in_memory(self, key, workers=None):
+    def mark_key_in_memory(self, key, workers=None, type=None):
         """ Mark that a key now lives in distributed memory """
         logger.debug("Mark %s in memory", key)
         if workers is None:
@@ -376,9 +376,12 @@ class Scheduler(Server):
                 if not s and dep and dep not in self.who_wants:
                     self.delete_data(keys=[dep])
 
-        self.report({'op': 'key-in-memory',
-                     'key': key,
-                     'workers': workers})
+        msg = {'op': 'key-in-memory',
+               'key': key,
+               'workers': workers}
+        if type:
+            msg['type'] = type
+        self.report(msg)
 
     def ensure_occupied(self, worker):
         """ Send tasks to worker while it has tasks and free cores """
@@ -475,12 +478,12 @@ class Scheduler(Server):
         for dep in self.dependents[key]:
             self.mark_failed(dep, failing_key)
 
-    def mark_task_finished(self, key, worker, nbytes):
+    def mark_task_finished(self, key, worker, nbytes, type=None):
         """ Mark that a task has finished execution on a particular worker """
         logger.debug("Mark task as finished %s, %s", key, worker)
         if key in self.processing[worker]:
             self.nbytes[key] = nbytes
-            self.mark_key_in_memory(key, [worker])
+            self.mark_key_in_memory(key, [worker], type=type)
             self.ensure_occupied(worker)
             for plugin in self.plugins[:]:
                 try:
@@ -905,13 +908,15 @@ class Scheduler(Server):
                              ident, key, response, content)
                 if response == b'error':
                     error, traceback = content
-                    self.mark_task_erred(key, ident, error, traceback)
+                    self.mark_task_erred(key, ident, content['exception'],
+                                                     content['traceback'])
 
                 elif response == b'missing-data':
                     self.mark_missing_data(content.args, key=key, worker=ident)
 
                 else:
-                    self.mark_task_finished(key, ident, nbytes)
+                    self.mark_task_finished(key, ident, nbytes,
+                                            type=content.get('type'))
 
         yield worker.close(close=True)
         worker.close_streams()

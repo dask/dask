@@ -158,11 +158,23 @@ class Future(WrappedKey):
         """
         return sync(self.executor.loop, self._traceback)
 
+    @property
+    def type(self):
+        return self.executor.futures[self.key].get('type', None)
+
     def __del__(self):
         self.executor._dec_ref(self.key)
 
     def __str__(self):
-        return '<Future: status: %s, key: %s>' % (self.status, self.key)
+        if self.type:
+            try:
+                typ = self.type.__name__
+            except AttributeError:
+                typ = str(self.type)
+            return '<Future: status: %s, type: %s, key: %s>' % (self.status,
+                    typ, self.key)
+        else:
+            return '<Future: status: %s, key: %s>' % (self.status, self.key)
 
     __repr__ = __str__
 
@@ -357,6 +369,9 @@ class Executor(object):
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]['status'] = 'finished'
                     self.futures[msg['key']]['event'].set()
+                    if (msg.get('type') and
+                        not self.futures[msg['key']].get('type')):
+                        self.futures[msg['key']]['type'] = msg['type']
             if msg['op'] == 'lost-data':
                 if msg['key'] in self.futures:
                     self.futures[msg['key']]['status'] = 'lost'

@@ -54,13 +54,13 @@ def test_worker(loop):
         def bad_func():
             1 / 0
 
-        response, (error, traceback) = yield bb.compute(key='z',
+        response, content = yield bb.compute(key='z',
                 function=bad_func, args=(), needed=(), close=True)
         assert not b.active
         assert response == b'error'
-        assert isinstance(error, ZeroDivisionError)
+        assert isinstance(content['exception'], ZeroDivisionError)
         if sys.version_info[0] >= 3:
-            assert any('1 / 0' in line for line in traceback)
+            assert any('1 / 0' in line for line in content['traceback'])
 
         aa.close_streams()
         yield a._close()
