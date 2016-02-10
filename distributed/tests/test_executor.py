@@ -2120,7 +2120,9 @@ def test_map_queue(s, a, b):
     q_2 = e.map(inc, q_1)
     assert isqueue(q_2)
     q_3 = e.map(double, q_2)
+    assert isqueue(q_3)
     q_4 = yield e._gather(q_3)
+    assert isqueue(q_4)
 
     q_1.put(1)
 
@@ -2128,5 +2130,30 @@ def test_map_queue(s, a, b):
     assert isinstance(f, Future)
     result = yield f._result()
     assert result == (1 + 1) * 2
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test_map_iterator(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = iter([1, 2, 3])
+    y = iter([10, 20, 30])
+    f1 = e.map(add, x, y)
+    assert isinstance(f1, Iterator)
+
+    start = time()  # ensure that we compute eagerly
+    while not s.dask:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    f2 = e.map(double, f1)
+    assert isinstance(f2, Iterator)
+
+    future = next(f2)
+    result = yield future._result()
+    assert result == (1 + 10) * 2
 
     yield e._shutdown()

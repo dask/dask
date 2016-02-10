@@ -255,6 +255,14 @@ def truncate_exception(e, n=10000):
         return e
 
 
+def queue_to_iterator(q):
+    while True:
+        result = q.get()
+        if result == StopIteration:
+            break
+        yield result
+
+
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
