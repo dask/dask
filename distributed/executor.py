@@ -10,6 +10,7 @@ import os
 from time import sleep
 import uuid
 from threading import Thread
+import six
 
 import dask
 from dask.base import tokenize, normalize_token, Base
@@ -87,7 +88,9 @@ class Future(WrappedKey):
     def result(self):
         """ Wait until computation completes. Gather result to local process """
         result = sync(self.executor.loop, self._result, raiseit=False)
-        if self.status in ('error', 'cancelled'):
+        if self.status == 'error':
+            six.reraise(*result)
+        if self.status == 'cancelled':
             raise result
         else:
             return result
@@ -106,11 +109,11 @@ class Future(WrappedKey):
         yield d['event'].wait()
         if self.status == 'error':
             exception = d['exception']
-            traceback = d['traceback']  # TODO: use me
+            traceback = d['traceback']
             if raiseit:
-                raise exception
+                six.reraise(type(exception), exception, traceback)
             else:
-                raise Return(exception)
+                raise Return([type(exception), exception, traceback])
         else:
             result = yield self.executor._gather([self])
             raise gen.Return(result[0])
@@ -150,7 +153,18 @@ class Future(WrappedKey):
             raise Return(None)
 
     def traceback(self):
-        """ Return the exception of a failed task
+        """ Return the traceback of a failed task
+
+        This returns a traceback object.  You can inspect this object using the
+        ``traceback`` module.  Alternatively if you call ``future.result()``
+        this traceback will accompany the raised exception.
+
+        Examples
+        --------
+        >>> import traceback  # doctest: +SKIP
+        >>> tb = future.traceback()  # doctest: +SKIP
+        >>> traceback.export_tb(tb)  # doctest: +SKIP
+        [...]
 
         See Also
         --------

@@ -2,16 +2,19 @@ from operator import add
 import os
 import shutil
 import sys
+import traceback
+
+import pytest
+from toolz import pluck
+from tornado import gen
+from tornado.ioloop import TimeoutError
 
 from distributed.center import Center
 from distributed.core import rpc
 from distributed.sizeof import sizeof
 from distributed.worker import Worker
 from distributed.utils_test import loop, _test_cluster, inc
-import pytest
 
-from tornado import gen
-from tornado.ioloop import TimeoutError
 
 
 def test_worker_ncores():
@@ -60,7 +63,9 @@ def test_worker(loop):
         assert response == b'error'
         assert isinstance(content['exception'], ZeroDivisionError)
         if sys.version_info[0] >= 3:
-            assert any('1 / 0' in line for line in content['traceback'])
+            assert any('1 / 0' in line
+                      for line in pluck(3, traceback.extract_tb(content['traceback']))
+                      if line)
 
         aa.close_streams()
         yield a._close()

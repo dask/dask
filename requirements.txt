@@ -5,3 +5,5 @@ dask
 click
 boto3
 locket
+six
+tblib

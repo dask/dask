@@ -9,9 +9,10 @@ import shutil
 import sys
 from threading import Thread
 from time import sleep, time
+import traceback
 
 import pytest
-from toolz import identity, isdistinct, first
+from toolz import identity, isdistinct, first, concat, pluck
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
@@ -1170,7 +1171,8 @@ def test_traceback(s, a, b):
     tb = yield x._traceback()
 
     if sys.version_info[0] >= 3:
-        assert any('x / y' in line for line in tb)
+        assert any('x / y' in line
+                   for line in pluck(3, traceback.extract_tb(tb)))
 
     yield e._shutdown()
 
@@ -1181,12 +1183,15 @@ def test_traceback_sync(loop):
             x = e.submit(div, 1, 0)
             tb = x.traceback()
             if sys.version_info[0] >= 3:
-                assert any('x / y' in line for line in tb)
+                assert any('x / y' in line
+                           for line in concat(traceback.extract_tb(tb))
+                           if isinstance(line, str))
 
             y = e.submit(inc, x)
             tb2 = y.traceback()
 
-            assert set(tb2).issuperset(set(tb))
+            assert set(pluck(3, traceback.extract_tb(tb2))).issuperset(
+                   set(pluck(3, traceback.extract_tb(tb))))
 
             z = e.submit(div, 1, 2)
             tb = z.traceback()
@@ -1682,7 +1687,9 @@ def test_long_error(s, a, b):
         assert len(str(e)) < 100000
 
     tb = yield x._traceback()
-    assert all(len(line) < 100000 for line in tb)
+    assert all(len(line) < 100000
+               for line in concat(traceback.extract_tb(tb))
+               if isinstance(line, str))
 
 
 @gen_cluster()
@@ -2084,3 +2091,20 @@ def test_future_type(s, a, b):
     assert 'int' in str(x)
 
     yield e._shutdown()
+
+
+@gen_cluster()
+def test_traceback_clean(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(div, 1, 0)
+    try:
+        yield x._result()
+    except Exception as e:
+        f = e
+        exc_type, exc_value, tb = sys.exc_info()
+        while tb:
+            assert 'scheduler' not in tb.tb_frame.f_code.co_filename
+            assert 'worker' not in tb.tb_frame.f_code.co_filename
+            tb = tb.tb_next
