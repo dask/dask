@@ -13,14 +13,14 @@ ENV LIBHDFS3_CONF /etc/hadoop/conf/hdfs-site.xml
 RUN /opt/conda/bin/conda install -y -q libxml2 krb5 boost ipython pytest pip pandas cython
 RUN /opt/conda/bin/conda install -y -q libhdfs3 libgsasl libntlm -c dask
 RUN /opt/conda/bin/pip install git+https://github.com/dask/hdfs3
-RUN /opt/conda/bin/pip install git+https://github.com/dask/dask --upgrade
+RUN /opt/conda/bin/pip install git+https://github.com/blaze/dask --upgrade
 RUN /opt/conda/bin/pip install fastavro
 # hdfs3 - python 3
 RUN conda create -n py3 -y python=3
 RUN conda install -n py3 -y -q libxml2 krb5 boost ipython pytest pip pandas cython
 RUN conda install -n py3 libhdfs3 libgsasl libntlm -c dask
 RUN /opt/conda/envs/py3/bin/pip install git+https://github.com/dask/hdfs3
-RUN /opt/conda/envs/py3/bin/pip install git+https://github.com/dask/dask --upgrade
+RUN /opt/conda/envs/py3/bin/pip install git+https://github.com/blaze/dask --upgrade
 RUN /opt/conda/envs/py3/bin/pip install fastavro
 
 # Cloudera repositories
