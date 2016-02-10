@@ -64,7 +64,7 @@ def test_avro(s, a, b):
 
     with make_hdfs() as hdfs:
         for k, v in avro_files.items():
-            with hdfs.open(k, 'w') as f:
+            with hdfs.open(k, 'wb') as f:
                 f.write(v)
 
             assert hdfs.info(k)['size'] > 0
@@ -90,7 +90,7 @@ def test_avro_sync(loop):
                   '/tmp/test/2.avro': avro_bytes}
     with make_hdfs() as hdfs:
         for k, v in avro_files.items():
-            with hdfs.open(k, 'w') as f:
+            with hdfs.open(k, 'wb') as f:
                 f.write(v)
 
         with cluster(nworkers=1) as (s, [a]):

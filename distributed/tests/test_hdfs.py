@@ -36,9 +36,9 @@ def test_get_block_locations():
         fn_1 = '/tmp/test/file1'
         fn_2 = '/tmp/test/file2'
 
-        with hdfs.open(fn_1, 'wb', repl=1) as f:
+        with hdfs.open(fn_1, 'wb', replication=1) as f:
             f.write(data)
-        with hdfs.open(fn_2, 'wb', repl=1) as f:
+        with hdfs.open(fn_2, 'wb', replication=1) as f:
             f.write(data)
 
         L =  get_block_locations(hdfs, '/tmp/test/')
@@ -88,7 +88,7 @@ def test_get_block_locations_nested():
             hdfs.mkdir('/tmp/test/data-%d' % i)
             for j in range(2):
                 fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
-                with hdfs.open(fn, 'wb', repl=1) as f:
+                with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
         L =  get_block_locations(hdfs, '/tmp/test/')
@@ -101,7 +101,7 @@ def test_read_bytes(s, a, b):
         data = b'a' * int(1e8)
         fn = '/tmp/test/file'
 
-        with hdfs.open(fn, 'wb', repl=1) as f:
+        with hdfs.open(fn, 'wb', replication=1) as f:
             f.write(data)
 
         blocks = hdfs.get_block_locations(fn)
@@ -127,7 +127,7 @@ def test_read_bytes_sync(loop):
             data = b'a' * int(1e3)
 
             for fn in ['/tmp/test/file.%d' % i for i in range(100)]:
-                with hdfs.open(fn, 'wb', repl=1) as f:
+                with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
@@ -145,7 +145,7 @@ def test_get_block_locations_nested(s, a, b):
             hdfs.mkdir('/tmp/test/data-%d' % i)
             for j in range(2):
                 fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
-                with hdfs.open(fn, 'wb', repl=1) as f:
+                with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
         L =  get_block_locations(hdfs, '/tmp/test/')
@@ -171,7 +171,7 @@ def test_lazy_values(s, a, b):
             hdfs.mkdir('/tmp/test/data-%d' % i)
             for j in range(2):
                 fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
-                with hdfs.open(fn, 'wb', repl=1) as f:
+                with hdfs.open(fn, 'wb', replication=1) as f:
                     f.write(data)
 
         e = Executor((s.ip, s.port), start=False)
