@@ -101,7 +101,8 @@ def sync(loop, func, *args, **kwargs):
             e.set()
 
     a = loop.add_callback(f)
-    e.wait()
+    while not e.is_set():
+        e.wait(1000000)
     if error[0]:
         raise result[0]
     else:
