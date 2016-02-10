@@ -50,6 +50,7 @@ Contents
    executor
    setup
    efficiency
+   locality
    api
 
 **Developer Documentation**
