@@ -2071,3 +2071,16 @@ def test_cancel(loop):
 
             z.cancel()
             assert z.cancelled()
+
+
+@gen_cluster()
+def test_future_type(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(inc, 1)
+    yield _wait([x])
+    assert x.type == int
+    assert 'int' in str(x)
+
+    yield e._shutdown()

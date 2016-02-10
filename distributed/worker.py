@@ -254,6 +254,8 @@ class Worker(Server):
                     logger.warn('Could not report results to center: %s',
                                 response.decode())
             out = (b'OK', {'nbytes': sizeof(result)})
+            if result is not None:
+                out[1]['type'] = type(result)
         except Exception as e:
             tb = get_traceback()
             e2 = truncate_exception(e, 1000)
