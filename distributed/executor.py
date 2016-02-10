@@ -505,6 +505,13 @@ class Executor(object):
 
         return Future(key, self)
 
+    def _threaded_map(self, q_out, func, qs_in, **kwargs):
+        """ Internal function for mapping Queue """
+        while True:
+            args = [q.get() for q in qs_in]
+            f = self.submit(func, *args, **kwargs)
+            q_out.put(f)
+
     def map(self, func, *iterables, **kwargs):
         """ Map a function on a sequence of arguments
 
@@ -533,6 +540,17 @@ class Executor(object):
         --------
         Executor.submit: Submit a single function
         """
+        if not callable(func):
+            raise TypeError("First input to map must be a callable function")
+
+        if all(map(isqueue, iterables)):
+            q_out = pyQueue()
+            t = Thread(target=self._threaded_map, args=(q_out, func, iterables),
+                                                  kwargs=kwargs)
+            t.daemon = True
+            t.start()
+            return q_out
+
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
         allow_other_workers = kwargs.pop('allow_other_workers', False)
@@ -540,8 +558,6 @@ class Executor(object):
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
 
-        if not callable(func):
-            raise TypeError("First input to map must be a callable function")
         iterables = [list(it) for it in iterables]
         if pure:
             keys = [funcname(func) + '-' + tokenize(func, kwargs, *args)

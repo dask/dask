@@ -48,6 +48,10 @@ def throws(x):
     raise Exception()
 
 
+def double(x):
+    return x * 2
+
+
 def run_center(q):
     from distributed import Center
     from tornado.ioloop import IOLoop, PeriodicCallback
