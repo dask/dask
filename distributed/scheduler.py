@@ -905,7 +905,8 @@ class Scheduler(Server):
                              ident, key, response, content)
                 if response == b'error':
                     error, traceback = content
-                    self.mark_task_erred(key, ident, error, traceback)
+                    self.mark_task_erred(key, ident, content['exception'],
+                                                     content['traceback'])
 
                 elif response == b'missing-data':
                     self.mark_missing_data(content.args, key=key, worker=ident)

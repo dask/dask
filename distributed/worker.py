@@ -265,7 +265,7 @@ class Worker(Server):
                 str(funcname(function))[:1000], str(args2)[:1000],
                 str(kwargs2)[:1000])
 
-            out = (b'error', (e2, tb))
+            out = (b'error', {'exception': e2, 'traceback': tb})
 
         logger.debug("Send compute response to client: %s, %s", key, out)
         with ignoring(KeyError):
