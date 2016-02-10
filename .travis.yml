@@ -49,7 +49,7 @@ install:
   - conda create -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
   - conda install pytest coverage tornado toolz dill futures dask ipywidgets psutil bokeh
-  - pip install git+https://github.com/dask/dask.git --upgrade
+  - pip install git+https://github.com/blaze/dask.git --upgrade
 
   # Install distributed
   - python setup.py install
