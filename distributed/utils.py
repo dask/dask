@@ -9,12 +9,14 @@ import socket
 import sys
 import tblib.pickling_support
 import tempfile
+from threading import Thread
 import traceback
 
 from dask import istask
 from toolz import memoize
 from tornado import gen
 
+from .compatibility import Queue
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +263,19 @@ def queue_to_iterator(q):
         if result == StopIteration:
             break
         yield result
+
+def _dump_to_queue(seq, q):
+    for item in seq:
+        q.put(item)
+
+def iterator_to_queue(seq, maxsize=0):
+    q = Queue(maxsize=maxsize)
+
+    t = Thread(target=_dump_to_queue, args=(seq, q))
+    t.daemon = True
+    t.start()
+
+    return q
 
 
 import logging

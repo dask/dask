@@ -1,6 +1,4 @@
-from distributed.utils import (All, sync, is_kernel, ensure_ip,
-        truncate_exception, get_traceback)
-from distributed.utils_test import loop, inc, throws, div
+from collections import Iterator
 import pytest
 from threading import Thread
 import threading
@@ -8,6 +6,11 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
 from time import time, sleep
+
+from distributed.utils import (All, sync, is_kernel, ensure_ip,
+        truncate_exception, get_traceback, queue_to_iterator, iterator_to_queue)
+from distributed.utils_test import loop, inc, throws, div
+from distributed.compatibility import Queue, isqueue
 
 def test_All(loop):
     @gen.coroutine
@@ -126,3 +129,22 @@ def test_get_traceback():
     except Exception as e:
         tb = get_traceback()
         assert type(tb).__name__ == 'traceback'
+
+
+def test_queue_to_iterator():
+    q = Queue()
+    q.put(1)
+    q.put(2)
+
+    seq = queue_to_iterator(q)
+    assert isinstance(seq, Iterator)
+    assert next(seq) == 1
+    assert next(seq) == 2
+
+
+def test_iterator_to_queue():
+    seq = iter([1, 2, 3])
+
+    q = iterator_to_queue(seq)
+    assert isqueue(q)
+    assert q.get() == 1
