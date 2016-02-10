@@ -51,8 +51,10 @@ def sanitize_index(ind):
                      sanitize_index(ind.step))
     if ind is None:
         return ind
-
-    raise TypeError("Invalid index type", type(ind), ind)
+    try:
+        return sanitize_index(np.array(ind).tolist())
+    except:
+        raise TypeError("Invalid index type", type(ind), ind)
 
 
 def slice_array(out_name, in_name, blockdims, index):
