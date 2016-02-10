@@ -211,7 +211,7 @@ def _read_avro(path, executor=None, hdfs=None, lazy=False, **kwargs):
 
     blockss = []
     for fn in filenames:
-        with hdfs.open(fn, 'r') as f:
+        with hdfs.open(fn, 'rb') as f:
             av = fastavro.reader(f)
             header = av._header
         schema = json.loads(header['meta']['avro.schema'].decode())
@@ -253,7 +253,7 @@ def write_block_to_hdfs(fn, data, hdfs=None):
     if not isinstance(data, bytes):
         raise TypeError("Data to write to HDFS must be of type bytes, got %s" %
                         type(data).__name__)
-    with hdfs.open(fn, 'w') as f:
+    with hdfs.open(fn, 'wb') as f:
         f.write(data)
     return len(data)
 

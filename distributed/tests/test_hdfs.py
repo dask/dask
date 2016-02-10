@@ -36,9 +36,9 @@ def test_get_block_locations():
         fn_1 = '/tmp/test/file1'
         fn_2 = '/tmp/test/file2'
 
-        with hdfs.open(fn_1, 'w', repl=1) as f:
+        with hdfs.open(fn_1, 'wb', repl=1) as f:
             f.write(data)
-        with hdfs.open(fn_2, 'w', repl=1) as f:
+        with hdfs.open(fn_2, 'wb', repl=1) as f:
             f.write(data)
 
         L =  get_block_locations(hdfs, '/tmp/test/')
@@ -57,7 +57,7 @@ def dont_test_dataframes(s, a):  # slow
     with make_hdfs() as hdfs:
         data = (b'name,amount,id\r\n' +
                 b'Alice,100,1\r\nBob,200,2\r\n' * n)
-        with hdfs.open(fn, 'w') as f:
+        with hdfs.open(fn, 'wb') as f:
             f.write(data)
 
         e = Executor((s.ip, s.port), start=False)
@@ -88,7 +88,7 @@ def test_get_block_locations_nested():
             hdfs.mkdir('/tmp/test/data-%d' % i)
             for j in range(2):
                 fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
-                with hdfs.open(fn, 'w', repl=1) as f:
+                with hdfs.open(fn, 'wb', repl=1) as f:
                     f.write(data)
 
         L =  get_block_locations(hdfs, '/tmp/test/')
@@ -101,7 +101,7 @@ def test_read_bytes(s, a, b):
         data = b'a' * int(1e8)
         fn = '/tmp/test/file'
 
-        with hdfs.open(fn, 'w', repl=1) as f:
+        with hdfs.open(fn, 'wb', repl=1) as f:
             f.write(data)
 
         blocks = hdfs.get_block_locations(fn)
@@ -127,7 +127,7 @@ def test_read_bytes_sync(loop):
             data = b'a' * int(1e3)
 
             for fn in ['/tmp/test/file.%d' % i for i in range(100)]:
-                with hdfs.open(fn, 'w', repl=1) as f:
+                with hdfs.open(fn, 'wb', repl=1) as f:
                     f.write(data)
 
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
@@ -145,7 +145,7 @@ def test_get_block_locations_nested(s, a, b):
             hdfs.mkdir('/tmp/test/data-%d' % i)
             for j in range(2):
                 fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
-                with hdfs.open(fn, 'w', repl=1) as f:
+                with hdfs.open(fn, 'wb', repl=1) as f:
                     f.write(data)
 
         L =  get_block_locations(hdfs, '/tmp/test/')
@@ -171,7 +171,7 @@ def test_lazy_values(s, a, b):
             hdfs.mkdir('/tmp/test/data-%d' % i)
             for j in range(2):
                 fn = '/tmp/test/data-%d/file-%d.csv' % (i, j)
-                with hdfs.open(fn, 'w', repl=1) as f:
+                with hdfs.open(fn, 'wb', repl=1) as f:
                     f.write(data)
 
         e = Executor((s.ip, s.port), start=False)
@@ -221,10 +221,10 @@ def test_read_csv_sync(loop):
     import pandas as pd
     with cluster(nworkers=3) as (s, [a, b, c]):
         with make_hdfs() as hdfs:
-            with hdfs.open('/tmp/test/1.csv', 'w') as f:
+            with hdfs.open('/tmp/test/1.csv', 'wb') as f:
                 f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-            with hdfs.open('/tmp/test/2.csv', 'w') as f:
+            with hdfs.open('/tmp/test/2.csv', 'wb') as f:
                 f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
@@ -247,10 +247,10 @@ def test_read_csv(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        with hdfs.open('/tmp/test/1.csv', 'w') as f:
+        with hdfs.open('/tmp/test/1.csv', 'wb') as f:
             f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-        with hdfs.open('/tmp/test/2.csv', 'w') as f:
+        with hdfs.open('/tmp/test/2.csv', 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
         df = yield _read_csv('/tmp/test/*.csv', header=True, lineterminator='\n')
@@ -266,10 +266,10 @@ def test_read_csv_lazy(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        with hdfs.open('/tmp/test/1.csv', 'w') as f:
+        with hdfs.open('/tmp/test/1.csv', 'wb') as f:
             f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-        with hdfs.open('/tmp/test/2.csv', 'w') as f:
+        with hdfs.open('/tmp/test/2.csv', 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
         df = yield _read_csv('/tmp/test/*.csv', header=True, lazy=True, lineterminator='\n')
@@ -288,13 +288,13 @@ def test__read_text(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        with hdfs.open('/tmp/test/text.1.txt', 'w') as f:
+        with hdfs.open('/tmp/test/text.1.txt', 'wb') as f:
             f.write('Alice 100\nBob 200\nCharlie 300'.encode())
 
-        with hdfs.open('/tmp/test/text.2.txt', 'w') as f:
+        with hdfs.open('/tmp/test/text.2.txt', 'wb') as f:
             f.write('Dan 400\nEdith 500\nFrank 600'.encode())
 
-        with hdfs.open('/tmp/test/other.txt', 'w') as f:
+        with hdfs.open('/tmp/test/other.txt', 'wb') as f:
             f.write('a b\nc d'.encode())
 
         b = yield _read_text('/tmp/test/text.*.txt',
@@ -331,7 +331,7 @@ def test__read_text_unicode(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        with hdfs.open(fn, 'w') as f:
+        with hdfs.open(fn, 'wb') as f:
             f.write(b'\n'.join([data, data]))
 
         [f] = yield _read_text(fn, collection=False, lazy=False)
@@ -345,7 +345,7 @@ def test__read_text_unicode(s, a, b):
 
 def test_read_text_sync(loop):
     with make_hdfs() as hdfs:
-        with hdfs.open('/tmp/test/data.txt', 'w') as f:
+        with hdfs.open('/tmp/test/data.txt', 'wb') as f:
             f.write(b'hello\nworld')
 
         with cluster(nworkers=3) as (s, [a, b, c]):
