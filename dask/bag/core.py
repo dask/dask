@@ -455,7 +455,8 @@ class Bag(Base):
 
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
-    def reduction(self, perpartition, aggregate, split_every=None, out=Item):
+    def reduction(self, perpartition, aggregate, split_every=None,
+                  out_type=Item):
         """ Reduce collection with reduction operators
 
         Parameters
@@ -468,7 +469,9 @@ class Bag(Base):
         split_every: int (optional)
             Group partitions into groups of this size while performing reduction
             Defaults to 8
-
+        out_type: {Bag, Item}
+            The out type of the result, Item if a single element, Bag if a list
+            of elements.  Defaults to Item.
 
         Examples
         --------
