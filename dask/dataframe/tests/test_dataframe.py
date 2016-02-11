@@ -449,6 +449,14 @@ def test_value_counts():
     # https://github.com/pydata/pandas/pull/10419
     assert eq(result, expected, check_names=False)
 
+def test_unique():
+    pdf = pd.DataFrame({'x': [1, 2, 1, 3, 3, 1, 4, 2, 3, 1],
+                        'y': ['a', 'c', 'b', np.nan, 'c',
+                              'b', 'a', 'd', np.nan, 'a']})
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    assert eq(ddf.x.unique(), pd.Series(pdf.x.unique(), name='x'))
+    assert eq(ddf.y.unique(), pd.Series(pdf.y.unique(), name='y'))
+
 
 def test_isin():
     assert eq(d.a.isin([0, 1, 2]), full.a.isin([0, 1, 2]))
