@@ -31,6 +31,6 @@ test:
     - pytest
 
 about:
-  home: https://github.com/blaze/dask
+  home: https://github.com/dask/dask
   summary: Task scheduling and blocked algorithms for parallel processing.
   license: BSD

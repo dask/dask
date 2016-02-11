@@ -65,7 +65,7 @@ reading through the dataset only once:
    >>> dd.compute(df.amount.max(), df.amount.min())
    (1000, -1000)
 
-If we know that this column fits in memory then we can also explicitly 
+If we know that this column fits in memory then we can also explicitly
 compute the column and then continue forward with straight Pandas:
 
 .. code-block:: python
@@ -103,12 +103,12 @@ We can activate a fixed sized cache as a callback_.
 
 Now the cache will watch every small part of the computation and judge the
 value of that part based on the three characteristics listed above (expensive
-to compute, cheap to store, and frequently used).  
+to compute, cheap to store, and frequently used).
 
 Dask will hold on to 2GB of the
 best intermediate results it can find, evicting older results as better results
 come in.  If the ``df.amount`` column fits in 2GB then probably all of it will
-be stored while we keep working on it.  
+be stored while we keep working on it.
 
 If we start work on something else,
 then the ``df.amount`` column will likely be evicted to make space for other
@@ -163,7 +163,7 @@ This feature is still experimental, and can cause your computation to fill up RA
 Restricting your cache to a fixed size like 2GB requires dask to accurately count
 the size of each of our objects in memory.  This can be tricky, particularly
 for Pythonic objects like lists and tuples, and for DataFrames that contain
-object dtypes.  
+object dtypes.
 
 It is entirely possible that the caching mechanism will
 *undercount* the size of objects, causing it to use up more memory than

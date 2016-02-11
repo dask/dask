@@ -155,7 +155,7 @@ a light weight dependency.
 Examples
 --------
 
-Dask examples are available in the following repository: https://github.com/blaze/dask-examples.
+Dask examples are available in the following repository: https://github.com/dask/dask-examples.
 
 You can also find them in Anaconda.org: https://notebooks.anaconda.org/dask/.
 
@@ -163,7 +163,7 @@ You can also find them in Anaconda.org: https://notebooks.anaconda.org/dask/.
 LICENSE
 -------
 
-New BSD. See `License File <https://github.com/blaze/dask/blob/master/LICENSE.txt>`__.
+New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt>`__.
 
 
 Related Work
@@ -231,9 +231,9 @@ includes the following projects:
 .. _Swiftlang: http://swift-lang.org/main/
 .. _PaRSEC: http://icl.eecs.utk.edu/parsec/index.html
 .. _blogposts: http://matthewrocklin.com/blog/tags.html#dask-ref
-.. _Binder: http://mybinder.org/repo/blaze/dask-examples
-.. |Build Status| image:: https://travis-ci.org/blaze/dask.svg
-   :target: https://travis-ci.org/blaze/dask
+.. _Binder: http://mybinder.org/repo/dask/dask-examples
+.. |Build Status| image:: https://travis-ci.org/dask/dask.svg
+   :target: https://travis-ci.org/dask/dask
 .. |Version Status| image:: https://img.shields.io/pypi/v/dask.svg
    :target: https://pypi.python.org/pypi/dask/
 .. |Doc Status| image:: https://readthedocs.org/projects/dask/badge/?version=latest
@@ -243,10 +243,10 @@ includes the following projects:
    :target: https://coveralls.io/r/mrocklin/dask
    :alt: Coverage status
 .. |Gitter| image:: https://badges.gitter.im/Join%20Chat.svg
-   :alt: Join the chat at https://gitter.im/blaze/dask
-   :target: https://gitter.im/blaze/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
+   :alt: Join the chat at https://gitter.im/dask/dask
+   :target: https://gitter.im/dask/dask?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 .. |Downloads| image:: https://img.shields.io/pypi/dm/dask.svg
    :target: https://pypi.python.org/pypi/dask/
 .. |Dask Examples| image:: http://mybinder.org/badge.svg
    :alt: Dask Example Notebooks
-   :target: http://mybinder.org/repo/blaze/dask-examples
+   :target: http://mybinder.org/repo/dask/dask-examples

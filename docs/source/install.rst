@@ -29,8 +29,8 @@ Source
 ------
 
 To install dask from source, clone the repository from `github
-<https://github.com/blaze/dask>`_::
+<https://github.com/dask/dask>`_::
 
-    git clone https://github.com/blaze/dask.git
+    git clone https://github.com/dask/dask.git
     cd dask
     python setup.py install

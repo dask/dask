@@ -11,7 +11,7 @@ directly with a light annotation of normal python code.
 Examples
 --------
 
-`Example notebook <http://nbviewer.ipython.org/github/blaze/dask-examples/blob/master/do-and-profiler.ipynb>`_.
+`Example notebook <http://nbviewer.ipython.org/github/dask/dask-examples/blob/master/do-and-profiler.ipynb>`_.
 
 Now, rebuilding the example from :ref:`custom graphs <custom-graph-example>`:
 

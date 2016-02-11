@@ -31,7 +31,7 @@ scalable to very many tasks on a single machine.
 To keep the memory footprint small, we choose to keep ready-to-run tasks in a
 LIFO stack such that the most recently made available tasks get priority.  This
 encourages the completion of chains of related tasks before new chains are started.
-This can also be queried in constant time.  
+This can also be queried in constant time.
 
 More info: :doc:`scheduling policy <scheduling-policy>`.
 
@@ -99,8 +99,8 @@ Linear scaling with number of tasks
 ```````````````````````````````````
 
 As we increase the number of tasks in a graph, we see that the scheduling
-overhead grows linearly.  The asymptotic cost per task depends on the scheduler.  
-The schedulers that depend on some sort of asynchronous pool have costs of a few 
+overhead grows linearly.  The asymptotic cost per task depends on the scheduler.
+The schedulers that depend on some sort of asynchronous pool have costs of a few
 milliseconds and the single threaded schedulers have costs of a few microseconds.
 
 .. image:: images/scaling-nodes.png
@@ -114,9 +114,9 @@ Linear scaling with number of edges
 ```````````````````````````````````
 
 As we increase the number of edges per task, the scheduling overhead
-again increases linearly.  
+again increases linearly.
 
-Note: Neither the naive core scheduler nor the multiprocessing scheduler 
+Note: Neither the naive core scheduler nor the multiprocessing scheduler
 are good at workflows with non-trivial cross-task
 communication; they have been removed from the plot.
 
@@ -143,4 +143,4 @@ The shared memory scheduler has some notable limitations:
 
 
 
-.. _`Download scheduling script`: https://github.com/blaze/dask/tree/master/docs/source/scripts/scheduling.py
+.. _`Download scheduling script`: https://github.com/dask/dask/tree/master/docs/source/scripts/scheduling.py
