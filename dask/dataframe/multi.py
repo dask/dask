@@ -63,7 +63,7 @@ import numpy as np
 import pandas as pd
 
 from ..base import tokenize
-from .core import (_get_return_type, _Frame, Scalar, DataFrame,
+from .core import (_get_return_type, _Frame, Scalar, DataFrame, Series,
                    Index, _maybe_from_pandas)
 from .io import from_pandas
 from .shuffle import shuffle
@@ -416,22 +416,29 @@ def _concat_dfs(dfs, name, join='outer'):
     i = 0
 
     empties = [df._empty_partition for df in dfs]
-    result = pd.concat(empties, axis=0, join=join)
-    if isinstance(result, pd.Series):
-        columns = result.name
+    dummy = pd.concat(empties, axis=0, join=join)
+
+    if isinstance(dummy, pd.Series):
+        # in this case, input must be all Series. No need to care DataFrame.
+        columns = []
     else:
-        columns = result.columns.tolist()
+        columns = dummy.columns.tolist()
+        if len(columns) == 0:
+            raise ValueError('Failed to concat, no columns remain')
 
     for df in dfs:
-        if columns != df.columns:
-            df = df[[c for c in columns if c in df.columns]]
-            dsk = toolz.merge(dsk, df.dask)
+        if isinstance(df, DataFrame):
+            # filter DataFrame columns
+            if columns != df.columns:
+                df = df[[c for c in columns if c in df.columns]]
+        # Series must remain if output columns exist
 
+        dsk = toolz.merge(dsk, df.dask)
         for key in df._keys():
             dsk[(name, i)] = key
             i += 1
 
-    return dsk, columns
+    return dsk, dummy
 
 
 def concat(dfs, axis=0, join='outer', interleave_partitions=False):
@@ -526,17 +533,15 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
                    for i in range(len(dfs) - 1)):
                 name = 'concat-{0}'.format(tokenize(*dfs))
-                dsk, columns = _concat_dfs(dfs, name, join=join)
+                dsk, dummy = _concat_dfs(dfs, name, join=join)
 
                 divisions = []
                 for df in dfs[:-1]:
                     # remove last to concatenate with next
                     divisions += df.divisions[:-1]
                 divisions += dfs[-1].divisions
-
-                return_type = _get_return_type(dfs[0], columns)
-                return return_type(toolz.merge(dsk, *[df.dask for df in dfs]),
-                                   name, columns, divisions)
+                return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
+                              name, dummy, divisions)
             else:
                 if interleave_partitions:
                     from .multi import concat_indexed_dataframes
@@ -554,13 +559,11 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             # concat will not regard Series as row
             dfs = _maybe_from_pandas(dfs)
             name = 'concat-{0}'.format(tokenize(*dfs))
-            dsk, columns = _concat_dfs(dfs, name, join=join)
+            dsk, dummy = _concat_dfs(dfs, name, join=join)
 
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-
-            return_type = _get_return_type(dfs[0], columns)
-            return return_type(toolz.merge(dsk, *[df.dask for df in dfs]),
-                               name, columns, divisions)
+            return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
+                          name, dummy, divisions)
 
 def _append(df, other, divisions):
     """ Internal function to append 2 dd.DataFrame/Series instances """
