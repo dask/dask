@@ -15,7 +15,7 @@ from ..utils import ignoring
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   remove, pluck, groupby, topk)
+                   remove, pluck, groupby, topk, compose)
 import toolz
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
@@ -403,19 +403,16 @@ class Bag(Base):
         dsk2 = {b: (reduce, combine or binop, list(dsk.keys()))}
         return Item(merge(self.dask, dsk, dsk2), b)
 
-    def frequencies(self):
+    def frequencies(self, split_every=None):
         """ Count number of occurrences of each distinct element
 
         >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
         >>> dict(b.frequencies())  # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
-        a = next(names)
-        b = next(names)
-        dsk = dict(((a, i), (frequencies, (self.name, i)))
-                   for i in range(self.npartitions))
-        dsk2 = {(b, 0): (dictitems, (merge_with, sum, sorted(dsk.keys())))}
-        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
+        from toolz.curried import merge_with
+        return self.reduction(frequencies, compose(dictitems, merge_with(sum)),
+                              out=Bag, split_every=None)
 
     def topk(self, k, key=None):
         """ K largest elements in collection
@@ -458,7 +455,7 @@ class Bag(Base):
 
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
-    def reduction(self, perpartition, aggregate, split_every=8):
+    def reduction(self, perpartition, aggregate, split_every=None, out=Item):
         """ Reduce collection with reduction operators
 
         Parameters
@@ -470,6 +467,7 @@ class Bag(Base):
             reduction to apply to the results of all partitions
         split_every: int (optional)
             Group partitions into groups of this size while performing reduction
+            Defaults to 8
 
 
         Examples
@@ -479,6 +477,8 @@ class Bag(Base):
         >>> b.reduction(sum, sum).compute()
         45
         """
+        if split_every is None:
+            split_every = 8
         a = next(names)
         b = next(names)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
