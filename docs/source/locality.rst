@@ -51,11 +51,15 @@ For example the existence of specialized hardware such as GPUs or database
 connections may restrict the set of valid workers for a particular task.
 
 In these cases use the ``workers=`` keyword argument to the ``submit``,
-``map``, or ``scatter`` functions as follows:
+``map``, or ``scatter`` functions, providing a hostname or IP address as
+follows:
 
 .. code-block:: python
 
-   future = e.submit(func, *args, workers=['hostname1', 'hostname2'])
+   future = e.submit(func, *args, workers=['Alice'])
+
+*  Alice: ``[0, 1, 4, 5, 8, 9, new_result]``
+*  Bob: ``[2, 3, 6, 7]``
 
 Required data will always be moved to these workers, even if the volume of that
 data is significant.  If this restriction is only a preference and not a strict
@@ -65,7 +69,7 @@ used.
 
 .. code-block:: python
 
-   future = e.submit(func, *args, workers=['hostname1', 'hostname2'],
+   future = e.submit(func, *args, workers=['Alice'],
                      allow_other_workers=True)
 
 Additionally the ``scatter`` function supports a ``broadcast=`` keyword
@@ -75,6 +79,9 @@ data.
 
 .. code-block:: python
 
-    futures = e.scatter(data, broadcast=True)  # send data to all workers
+    futures = e.scatter([1, 2, 3], broadcast=True)  # send data to all workers
+
+*  Alice: ``[1, 2, 3]``
+*  Bob: ``[1, 2, 3]``
 
 See the :doc:`efficiency <efficiency>` page to learn about best practices.
