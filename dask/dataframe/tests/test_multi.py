@@ -179,21 +179,50 @@ def test_indexed_concat():
                      index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
-    for how in ['inner', 'outer']:
-        c = concat_indexed_dataframes([a, b], join=how)
-
-        result = c.compute()
-        expected = pd.concat([A, B], 0, how)
-
-        assert list(result.columns) == list(expected.columns)
-
-        assert sorted(zip(result.values.tolist(), result.index.values.tolist())) == \
-               sorted(zip(expected.values.tolist(), expected.index.values.tolist()))
+    for join in ['inner', 'outer']:
+        result = concat_indexed_dataframes([a, b], join=join)
+        expected = pd.concat([A, B], axis=0, join=join)
+        assert eq(result, expected)
 
     assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) == \
            sorted(concat_indexed_dataframes([a, b], join='inner').dask)
     assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) != \
            sorted(concat_indexed_dataframes([a, b], join='outer').dask)
+
+
+def test_concat():
+    pdf1 = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7],
+                         'y': list('abcdef')},
+                        index=[1, 2, 3, 4, 6, 7])
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7],
+                         'y': list('abcdef')},
+                        index=[8, 9, 10, 11, 12, 13])
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    # different columns
+    pdf3 = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7],
+                         'z': list('abcdef')},
+                        index=[8, 9, 10, 11, 12, 13])
+    ddf3 = dd.from_pandas(pdf3, 2)
+
+    for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
+                                 (ddf1, ddf3, pdf1, pdf3)]:
+        for join in ['inner', 'outer']:
+            result = dd.concat([dd1, dd2], join=join)
+            expected = pd.concat([pd1, pd2], join=join)
+            assert eq(result, expected)
+
+    # test outer only, inner has a problem on pandas side
+    for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
+                                 (ddf1, ddf3, pdf1, pdf3),
+                                 (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
+                                 (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
+                                 (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
+                                 (ddf1.x, ddf3.z, pdf1.x, pdf3.z)]:
+        result = dd.concat([dd1, dd2])
+        expected = pd.concat([pd1, pd2])
+        assert eq(result, expected)
 
 
 def test_merge():
