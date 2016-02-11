@@ -201,6 +201,12 @@ def test_tree_reductions():
 
     assert len(c.dask) > len(d.dask)
 
+    c = b.sum(split_every=2)
+    d = b.sum(split_every=5)
+
+    assert c.compute() == d.compute()
+    assert len(c.dask) > len(d.dask)
+
 
 def test_mean():
     assert b.mean().compute(get=dask.get) == 2.0

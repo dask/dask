@@ -493,34 +493,38 @@ class Bag(Base):
             k = len(dsk2)
             b = c
 
-        dsk[c] = dsk.pop((c, 0))
-        return Item(merge(self.dask, dsk), c)
+        if out is Item:
+            dsk[c] = dsk.pop((c, 0))
+            return Item(merge(self.dask, dsk), c)
+        else:
+            return Bag(merge(self.dask, dsk), c, 1)
+
 
     @wraps(sum)
-    def sum(self):
-        return self.reduction(sum, sum)
+    def sum(self, split_every=None):
+        return self.reduction(sum, sum, split_every=split_every)
 
     @wraps(max)
-    def max(self):
-        return self.reduction(max, max)
+    def max(self, split_every=None):
+        return self.reduction(max, max, split_every=split_every)
 
     @wraps(min)
-    def min(self):
-        return self.reduction(min, min)
+    def min(self, split_every=None):
+        return self.reduction(min, min, split_every=split_every)
 
     @wraps(any)
-    def any(self):
-        return self.reduction(any, any)
+    def any(self, split_every=None):
+        return self.reduction(any, any, split_every=split_every)
 
     @wraps(all)
-    def all(self):
-        return self.reduction(all, all)
+    def all(self, split_every=None):
+        return self.reduction(all, all, split_every=split_every)
 
-    def count(self):
+    def count(self, split_every=None):
         """ Count the number of elements """
-        return self.reduction(count, sum)
+        return self.reduction(count, sum, split_every=split_every)
 
-    def mean(self):
+    def mean(self, split_every=None):
         """ Arithmetic mean """
         def chunk(seq):
             total, n = 0.0, 0
@@ -533,9 +537,9 @@ class Bag(Base):
             totals, counts = list(zip(*x))
             return 1.0 * sum(totals) / sum(counts)
 
-        return self.reduction(chunk, agg)
+        return self.reduction(chunk, agg, split_every=split_every)
 
-    def var(self, ddof=0):
+    def var(self, ddof=0, split_every=None):
         """ Variance """
         def chunk(seq):
             squares, total, n = 0.0, 0.0, 0
@@ -551,11 +555,11 @@ class Bag(Base):
             result = (x2 / n) - (x / n)**2
             return result * n / (n - ddof)
 
-        return self.reduction(chunk, agg)
+        return self.reduction(chunk, agg, split_every=split_every)
 
-    def std(self, ddof=0):
+    def std(self, ddof=0, split_every=None):
         """ Standard deviation """
-        return self.var(ddof=ddof).apply(math.sqrt)
+        return self.var(ddof=ddof, split_every=split_every).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
         """ Join collection with another collection
