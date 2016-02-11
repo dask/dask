@@ -410,7 +410,7 @@ class Bag(Base):
         >>> dict(b.frequencies())  # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
-        return self.reduction(compose(dictitems, frequencies),
+        return self.reduction(compose(list, dictitems, frequencies),
                               merge_frequencies,
                               out_type=Bag, split_every=split_every)
 
@@ -1317,4 +1317,4 @@ def from_imperative(values):
 
 
 def merge_frequencies(seqs):
-    return merge_with(sum, map(dict, seqs)).items()
+    return list(merge_with(sum, map(dict, seqs)).items())
