@@ -4,6 +4,7 @@ from operator import add, sub
 from collections import Iterator
 from concurrent.futures import CancelledError
 from datetime import timedelta
+import itertools
 import os
 import shutil
 import sys
@@ -2157,3 +2158,20 @@ def test_map_iterator(s, a, b):
     assert result == (1 + 10) * 2
 
     yield e._shutdown()
+
+
+@gen_cluster()
+def test_map_infinite_iterators(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    futures = e.map(add, [1, 2], itertools.repeat(10))
+    assert len(futures) == 2
+
+
+@gen_cluster()
+def test_map_differnet_lengths(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    assert len(e.map(add, [1, 2], [1, 2, 3])) == 2

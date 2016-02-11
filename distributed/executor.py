@@ -570,7 +570,7 @@ class Executor(object):
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
 
-        iterables = [list(it) for it in iterables]
+        iterables = list(zip(*zip(*iterables)))
         if pure:
             keys = [funcname(func) + '-' + tokenize(func, kwargs, *args)
                     for args in zip(*iterables)]
