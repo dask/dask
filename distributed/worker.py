@@ -265,7 +265,7 @@ class Worker(Server):
                 "args:     %s\n"
                 "kwargs:   %s\n",
                 str(funcname(function))[:1000], str(args2)[:1000],
-                str(kwargs2)[:1000])
+                str(kwargs2)[:1000], exc_info=True)
 
             out = (b'error', {'exception': e2, 'traceback': tb})
 
