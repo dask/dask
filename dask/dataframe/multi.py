@@ -192,6 +192,9 @@ def require(divisions, parts, required=None):
     return divisions, parts
 
 
+###############################################################
+# Join / Merge
+###############################################################
 
 required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
 
@@ -401,6 +404,10 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                          how, npartitions, suffixes)
 
 
+###############################################################
+# Concat
+###############################################################
+
 def _concat_dfs(dfs, name, join='outer'):
     """ Internal function to concat dask dict and DataFrame.columns """
     dsk = dict()
@@ -557,6 +564,11 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                           name, dummy, divisions)
 
 
+
+###############################################################
+# Append
+###############################################################
+
 def _append(df, other, divisions):
     """ Internal function to append 2 dd.DataFrame/Series instances """
     # ToDo: might be possible to merge the logic to concat,
@@ -572,3 +584,19 @@ def _append(df, other, divisions):
     dsk = toolz.merge(dsk, df.dask, other.dask)
     dummy = df._pd.append(other._pd)
     return _Frame(dsk, name, dummy, divisions)
+
+
+###############################################################
+# Melt
+###############################################################
+
+def melt(frame, id_vars=None, value_vars=None, var_name=None,
+         value_name='value', col_level=None):
+
+    from dask.dataframe.core import no_default
+
+    return frame.map_partitions(pd.melt, no_default, id_vars=id_vars,
+                                value_vars=value_vars,
+                                var_name=var_name, value_name=value_name,
+                                col_level=col_level, token='melt')
+

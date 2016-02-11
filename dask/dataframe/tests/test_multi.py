@@ -512,3 +512,21 @@ def test_merge_by_multiple_columns():
                         pd.merge(pdl, pdr, how=how, left_on=['a', 'b'], right_on=['d', 'e']))
 
 
+def test_melt():
+    pdf = pd.DataFrame({'A': list('abcd') * 5,
+                        'B': list('XY') * 10,
+                        'C': np.random.randn(20)})
+    ddf = dd.from_pandas(pdf, 4)
+
+    list_eq(dd.melt(ddf),
+            pd.melt(pdf))
+
+    list_eq(dd.melt(ddf, id_vars='C'),
+            pd.melt(pdf, id_vars='C'))
+    list_eq(dd.melt(ddf, value_vars='C'),
+            pd.melt(pdf, value_vars='C'))
+    list_eq(dd.melt(ddf, value_vars=['A', 'C'], var_name='myvar'),
+            pd.melt(pdf, value_vars=['A', 'C'], var_name='myvar'))
+    list_eq(dd.melt(ddf, id_vars='B', value_vars=['A', 'C'], value_name='myval'),
+            pd.melt(pdf, id_vars='B', value_vars=['A', 'C'], value_name='myval'))
+
