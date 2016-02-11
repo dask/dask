@@ -1059,6 +1059,19 @@ class Series(_Frame):
     def cummin(self, axis=None, skipna=True):
         return super(Series, self).cummin(axis=axis, skipna=skipna)
 
+    def unique(self):
+        """
+        Return Series of unique values in the object. Includes NA values.
+
+        Returns
+        -------
+        uniques : Series
+        """
+        # unique returns np.ndarray, it must be wrapped
+        chunk = lambda x: pd.Series(pd.Series.unique(x), name=self.name)
+        return aca(self, chunk=chunk, aggregate=chunk,
+                   columns=self.name, token='unique')
+
     @derived_from(pd.Series)
     def nunique(self):
         return self.drop_duplicates().count()
