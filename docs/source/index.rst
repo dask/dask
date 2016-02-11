@@ -47,6 +47,7 @@ Contents
    :maxdepth: 2
 
    quickstart
+   examples-overview
    executor
    setup
    efficiency
