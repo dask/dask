@@ -458,7 +458,7 @@ class Bag(Base):
 
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
-    def reduction(self, perpartition, aggregate):
+    def reduction(self, perpartition, aggregate, split_every=8):
         """ Reduce collection with reduction operators
 
         Parameters
@@ -468,6 +468,9 @@ class Bag(Base):
             reduction to apply to each partition
         aggregate: function
             reduction to apply to the results of all partitions
+        split_every: int (optional)
+            Group partitions into groups of this size while performing reduction
+
 
         Examples
         --------
@@ -480,8 +483,18 @@ class Bag(Base):
         b = next(names)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
-        dsk2 = {b: (aggregate, list(dsk.keys()))}
-        return Item(merge(self.dask, dsk, dsk2), b)
+        k = self.npartitions
+        b = a
+        while k > 1:
+            c = next(names)
+            dsk2 = dict(((c, i), (aggregate, [(b, j) for j in inds]))
+                 for i, inds in enumerate(partition_all(split_every, range(k))))
+            dsk.update(dsk2)
+            k = len(dsk2)
+            b = c
+
+        dsk[c] = dsk.pop((c, 0))
+        return Item(merge(self.dask, dsk), c)
 
     @wraps(sum)
     def sum(self):

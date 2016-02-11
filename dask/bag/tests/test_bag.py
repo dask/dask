@@ -190,6 +190,18 @@ def test_reductions():
     assert int(b.any()) == True
     assert int(b.all()) == False  # some zeros exist
 
+
+def test_tree_reductions():
+    b = db.from_sequence(range(12))
+    c = b.reduction(sum, sum, split_every=2)
+    d = b.reduction(sum, sum, split_every=6)
+    e = b.reduction(sum, sum, split_every=5)
+
+    assert c.compute() == d.compute() == e.compute()
+
+    assert len(c.dask) > len(d.dask)
+
+
 def test_mean():
     assert b.mean().compute(get=dask.get) == 2.0
     assert float(b.mean()) == 2.0
