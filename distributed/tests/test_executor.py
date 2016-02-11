@@ -28,7 +28,7 @@ from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
 from distributed.utils_test import (cluster, cluster_center, slow,
         _test_cluster, _test_scheduler, loop, inc, dec, div, throws,
-        gen_cluster, gen_test)
+        gen_cluster, gen_test, double)
 
 
 @gen_cluster()
@@ -2108,3 +2108,52 @@ def test_traceback_clean(s, a, b):
             assert 'scheduler' not in tb.tb_frame.f_code.co_filename
             assert 'worker' not in tb.tb_frame.f_code.co_filename
             tb = tb.tb_next
+
+
+@gen_cluster()
+def test_map_queue(s, a, b):
+    from distributed.compatibility import Queue, isqueue
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    q_1 = Queue(maxsize=2)
+    q_2 = e.map(inc, q_1)
+    assert isqueue(q_2)
+    q_3 = e.map(double, q_2)
+    assert isqueue(q_3)
+    q_4 = yield e._gather(q_3)
+    assert isqueue(q_4)
+
+    q_1.put(1)
+
+    f = q_4.get()
+    assert isinstance(f, Future)
+    result = yield f._result()
+    assert result == (1 + 1) * 2
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test_map_iterator(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = iter([1, 2, 3])
+    y = iter([10, 20, 30])
+    f1 = e.map(add, x, y)
+    assert isinstance(f1, Iterator)
+
+    start = time()  # ensure that we compute eagerly
+    while not s.dask:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    f2 = e.map(double, f1)
+    assert isinstance(f2, Iterator)
+
+    future = next(f2)
+    result = yield future._result()
+    assert result == (1 + 10) * 2
+
+    yield e._shutdown()

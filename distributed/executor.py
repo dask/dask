@@ -27,7 +27,7 @@ from tornado.queues import Queue
 from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
-from .utils import All, sync, funcname, ignoring
+from .utils import All, sync, funcname, ignoring, queue_to_iterator
 from .compatibility import Queue as pyQueue, Empty, isqueue
 
 logger = logging.getLogger(__name__)
@@ -505,6 +505,20 @@ class Executor(object):
 
         return Future(key, self)
 
+    def _threaded_map(self, q_out, func, qs_in, **kwargs):
+        """ Internal function for mapping Queue """
+        if isqueue(qs_in[0]):
+            get = pyQueue.get
+        elif isinstance(qs_in[0], Iterator):
+            get = next
+        else:
+            raise NotImplementedError()
+
+        while True:
+            args = [get(q) for q in qs_in]
+            f = self.submit(func, *args, **kwargs)
+            q_out.put(f)
+
     def map(self, func, *iterables, **kwargs):
         """ Map a function on a sequence of arguments
 
@@ -513,7 +527,7 @@ class Executor(object):
         Parameters
         ----------
         func: callable
-        iterables: Iterables
+        iterables: Iterables, Iterators, or Queues
         pure: bool (defaults to True)
             Whether or not the function is pure.  Set ``pure=False`` for
             impure functions like ``np.random.random``.
@@ -527,12 +541,28 @@ class Executor(object):
 
         Returns
         -------
-        list of futures
+        List, iterator, or Queue of futures, depending on the type of the
+        inputs.
 
         See also
         --------
         Executor.submit: Submit a single function
         """
+        if not callable(func):
+            raise TypeError("First input to map must be a callable function")
+
+        if (all(map(isqueue, iterables)) or
+            all(isinstance(i, Iterator) for i in iterables)):
+            q_out = pyQueue()
+            t = Thread(target=self._threaded_map, args=(q_out, func, iterables),
+                                                  kwargs=kwargs)
+            t.daemon = True
+            t.start()
+            if isqueue(iterables[0]):
+                return q_out
+            else:
+                return queue_to_iterator(q_out)
+
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
         allow_other_workers = kwargs.pop('allow_other_workers', False)
@@ -540,8 +570,6 @@ class Executor(object):
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
 
-        if not callable(func):
-            raise TypeError("First input to map must be a callable function")
         iterables = [list(it) for it in iterables]
         if pure:
             keys = [funcname(func) + '-' + tokenize(func, kwargs, *args)
@@ -756,16 +784,10 @@ class Executor(object):
             t.daemon = True
             t.start()
 
-            if not isqueue(data) and isinstance(data, Iterator):
-                def _():
-                    while True:
-                        result = qout.get()
-                        if result == StopIteration:
-                            break
-                        yield result
-                return _()
-            else:
+            if isqueue(data):
                 return qout
+            else:
+                return queue_to_iterator(qout)
         else:
             return sync(self.loop, self._scatter, data, workers=workers,
                         broadcast=broadcast)
