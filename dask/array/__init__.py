@@ -13,7 +13,7 @@ from .core import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
         fmax, fmin, isreal, iscomplex, isfinite, isinf, isnan, signbit,
         copysign, nextafter, ldexp, fmod, floor, ceil, trunc, degrees, radians,
         rint, fix, angle, real, imag, clip, fabs, sign, frexp, modf, around,
-        isnull, notnull, isclose, eye, triu, tril)
+        isnull, notnull, isclose, eye, triu, tril, diag, corrcoef)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          moment,
                          argmin, argmax,
@@ -29,4 +29,4 @@ from .rechunk import rechunk
 from ..context import set_options
 from ..base import compute
 from .optimization import optimize
-from .creation import arange, linspace, diag
+from .creation import arange, linspace

@@ -102,22 +102,3 @@ def test_arange_float_step():
     darr = da.arange(7.7, 1.5, -.8, chunks=3)
     nparr = np.arange(7.7, 1.5, -.8)
     eq(darr, nparr)
-
-
-def test_diag():
-    v = da.arange(11, chunks=3)
-    darr = da.diag(v)
-    nparr = np.diag(v)
-    eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
-
-    v = v + v + 3
-    darr = da.diag(v)
-    nparr = np.diag(v)
-    eq(darr, nparr)
-
-    v = da.arange(11, chunks=11)
-    darr = da.diag(v)
-    nparr = np.diag(v)
-    eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
