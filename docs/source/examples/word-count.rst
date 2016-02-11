@@ -91,7 +91,9 @@ Create a function to count words in each file:
    ...                 word_counts[word] += 1
    ...     return word_counts
 
-Count the number of words in the first text file locally:
+Before we process all of the text files using the distributed workers, let's
+test our function locally by counting the number of words in the first text
+file:
 
 .. code-block:: python
 
@@ -109,7 +111,9 @@ Count the number of words in the first text file locally:
     (b'by', 31515),
     (b'is', 30055)]
 
-Count the number of words in the first text file on a ``distributed`` worker:
+We can perform the same operation of counting the words in the first text file,
+except we will use ``e.submit`` to execute the computation on a ``distributed``
+worker:
 
 .. code-block:: python
 
@@ -128,16 +132,17 @@ Count the number of words in the first text file on a ``distributed`` worker:
     (b'by', 31515),
     (b'is', 30055)]
 
-Count the number of words in all of the text files using ``distributed``
-workers. Note that the ``map`` operation is non-blocking, and you can continue
-to work in the Python shell/notebook.
+We are ready to count the number of words in all of the text files using
+``distributed`` workers. Note that the ``map`` operation is non-blocking, and
+you can continue to work in the Python shell/notebook while the computations
+are running.
 
 .. code-block:: python
 
    >>> futures = e.map(count_words, filenames)
 
-Check the status of some ``futures`` while all of the text files are being
-processed:
+We can check the status of some ``futures`` while all of the text files are
+being processed:
 
 .. code-block:: python
 
@@ -162,21 +167,48 @@ words, the results will exist on each worker. This operation required about
 3 minutes to run on a cluster with three worker machines, each with 4 cores
 and 16 GB RAM.
 
-To sum the word counts for all of the text files, we can iterate over the
-``futures`` and update a local dictionary that contains all of the word counts.
-This operation requires a few minutes as it pulls the data from each worker
-to the local process.
+Note that because the previous computation is bound by the GIL in Python, we
+can speed it up by starting the ``distributed`` workers with the ``--nprocs 4``
+option.
+
+To sum the word counts for all of the text files, we need to gather some
+information from the ``distributed`` workers. To reduce the amount of data
+that we gather from the workers, we can define a function that only returns the
+top 10,000 words from each text file.
 
 .. code-block:: python
 
-   >>> results = e.gather(iter(futures))
+   >>> def top_items(d):
+   ...     items = sorted(d.items(), key=lambda kv: kv[1], reverse=True)[:10000]
+   ...     return dict(items)
+
+We can then ``map`` the futures from the previous step to this culling
+function. This is a convenient way to construct a pipeline of computations
+using futures:
+
+.. code-block:: python
+
+   >>> futures2 = e.map(top_items, futures)
+
+We can ``gather`` the resulting culled word count data for each text file to
+the local process:
+
+.. code-block:: python
+
+   >>> results = e.gather(iter(futures2))
+
+To sum the word counts for all of the text files, we can iterate over the
+results in ``futures2`` and update a local dictionary that contains all of the
+word counts.
+
+.. code-block:: python
 
    >>> all_counts = Counter()
    >>> for result in results:
    ...     all_counts.update(result)
 
-Print the total number of words and the words with the highest frequency from
-all of the text files:
+Finally, we print the total number of words in the results and the words with
+the highest frequency from all of the text files:
 
 .. code-block:: python
 
@@ -202,18 +234,18 @@ The complete Python script for this example is shown below:
 .. code-block:: python
 
    # word-count.py   
-   
+
    import hdfs3
    from collections import defaultdict, Counter
    from distributed import Executor, progress
-   
+
    hdfs = hdfs3.HDFileSystem('NAMENODE_HOSTNAME', port=NAMENODE_PORT)
    e = Executor('EXECUTOR_IP:EXECUTOR_PORT')
-   
+
    filenames = hdfs.glob('/tmp/enron/*/*')
    print(filenames[:5])
    print(hdfs.head(filenames[0]))
-   
+
 
    def count_words(fn):
        word_counts = defaultdict(int)
@@ -222,26 +254,31 @@ The complete Python script for this example is shown below:
                for word in line.split():
                    word_counts[word] += 1
        return word_counts
-   
+
    counts = count_words(filenames[0])
    print(sorted(counts.items(), key=lambda k_v: k_v[1], reverse=True)[:10])
-   
+
    future = e.submit(count_words, filenames[0])
    counts = future.result()
    print(sorted(counts.items(), key=lambda k_v: k_v[1], reverse=True)[:10])
-   
+
    futures = e.map(count_words, filenames)
    len(futures)
    futures[:5]
-   
    progress(futures)
-   
-   results = e.gather(iter(futures))
-   
+
+
+   def top_items(d):
+       items = sorted(d.items(), key=lambda kv: kv[1], reverse=True)[:10000]
+       return dict(items)
+
+   futures2 = e.map(top_items, futures)
+   results = e.gather(iter(futures2))
+
    all_counts = Counter()
    for result in results:
        all_counts.update(result)
-   
+
    print(len(all_counts))
-   
+
    print(sorted(all_counts.items(), key=lambda k_v: k_v[1], reverse=True)[:10])
