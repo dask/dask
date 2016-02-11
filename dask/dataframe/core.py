@@ -1443,7 +1443,10 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def dropna(self, how='any', subset=None):
-        return self.map_partitions(pd.DataFrame.dropna, how=how, subset=subset)
+        # for cloudpickle
+        def f(df, how=how, subset=subset):
+            return df.dropna(how=how, subset=subset)
+        return self.map_partitions(f, how=how, subset=subset)
 
     def to_castra(self, fn=None, categories=None, sorted_index_column=None,
                   compute=True):
@@ -1880,31 +1883,31 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
 aca = apply_concat_apply
 
 
-def _get_return_type(arg, columns):
+def _get_return_type(arg, metadata):
     """ Get the class of the result
 
-    - When columns is str/unicode, the result is:
+    - When metadata is str/unicode, the result is:
        - Scalar when columns is ``return_scalar``
        - Index if arg is Index
        - Series otherwise
     - Otherwise, result is DataFrame.
     """
 
-    if isinstance(columns, _Frame):
-        columns = columns._pd
+    if isinstance(metadata, _Frame):
+        metadata = metadata._pd
 
-    if isinstance(columns, pd.Series):
+    if isinstance(metadata, pd.Series):
         return Series
-    elif isinstance(columns, pd.DataFrame):
+    elif isinstance(metadata, pd.DataFrame):
         return DataFrame
-    elif isinstance(columns, pd.Index) and isinstance(arg, Index):
+    elif isinstance(metadata, pd.Index) and isinstance(arg, Index):
         # DataFrame may pass df.columns (Index)
         # thus needs to check arg
         return Index
 
     # legacy logic, required to handle user input
-    if np.isscalar(columns) or columns is None:
-        if columns == return_scalar:
+    if np.isscalar(metadata) or metadata is None:
+        if metadata == return_scalar:
             return Scalar
         elif isinstance(arg, Index):
             return Index
@@ -1992,7 +1995,7 @@ def map_partitions(func, columns, *args, **kwargs):
 
 def _rename(columns, df):
     """
-    Destructively rename columns of pd.DataFrame or name of pd.Series.
+    Rename columns of pd.DataFrame or name of pd.Series.
     Not for dd.DataFrame or dd.Series.
 
     Parameters
@@ -2015,13 +2018,19 @@ def _rename(columns, df):
     if isinstance(df, pd.DataFrame):
         if isinstance(columns, pd.DataFrame):
             columns = columns.columns
+        columns = pd.Index(columns)
         if len(columns) == len(df.columns):
-            # do not use rename to avoid copy values
-            df.columns = columns
+            if columns.equals(df.columns):
+                # if target is identical, rename is not necessary
+                return df
+            # each functions must be pure op, do not use df.columns = columns
+            return df.rename(columns=dict(zip(df.columns, columns)))
     elif isinstance(df, (pd.Series, pd.Index)):
         if isinstance(columns, (pd.Series, pd.Index)):
             columns = columns.name
-        df.name = columns
+        if name == columns:
+            return df
+        return pd.Series(df, name=columns)
     # map_partition may pass other types
     return df
 
@@ -2032,7 +2041,7 @@ def _rename_dask(df, metadata):
     Not for pd.DataFrame or pd.Series.
 
     Internaly used to overwrite dd.DataFrame.columns and dd.Series.name
-    We can't use map_partition because it is because it applies function then rename
+    We can't use map_partition because it applies function then rename
 
     Parameters
     ----------

@@ -234,31 +234,6 @@ def test_from_array_with_record_dtype():
     assert (d.compute().to_records(index=False) == x).all()
 
 
-def test_dummy_from_array():
-    x = np.array([[1, 2], [3, 4]], dtype=np.int64)
-    res = dd.io._dummy_from_array(x)
-    assert isinstance(res, pd.DataFrame)
-    assert res[0].dtype == np.int64
-    assert res[1].dtype == np.int64
-
-    x = np.array([[1., 2.], [3., 4.]], dtype=np.float64)
-    res = dd.io._dummy_from_array(x, columns=['a', 'b'])
-    assert isinstance(res, pd.DataFrame)
-    assert res['a'].dtype == np.float64
-    assert res['b'].dtype == np.float64
-
-    x = np.array([1., 2., 3.], dtype=np.float64)
-    res = dd.io._dummy_from_array(x)
-    assert isinstance(res, pd.Series)
-    assert res.dtype == np.float64
-
-    x = np.array([1, 2, 3], dtype=np.object_)
-    res = dd.io._dummy_from_array(x, columns='x')
-    assert isinstance(res, pd.Series)
-    assert res.name == 'x'
-    assert res.dtype == np.object_
-
-
 def test_from_bcolz_multiple_threads():
     bcolz = pytest.importorskip('bcolz')
 

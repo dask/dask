@@ -411,16 +411,16 @@ def _concat_dfs(dfs, name, join='outer'):
 
     if isinstance(dummy, pd.Series):
         # in this case, input must be all Series. No need to care DataFrame.
-        columns = []
+        columns = pd.Index([])
     else:
-        columns = dummy.columns.tolist()
+        columns = dummy.columns
         if len(columns) == 0:
             raise ValueError('Failed to concat, no columns remain')
 
     for df in dfs:
         if isinstance(df, DataFrame):
             # filter DataFrame columns
-            if columns != df.columns:
+            if not columns.equals(df.columns):
                 df = df[[c for c in columns if c in df.columns]]
         # Series must remain if output columns exist
 
@@ -550,27 +550,12 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             # concat will not regard Series as row
             dfs = _maybe_from_pandas(dfs)
             name = 'concat-{0}'.format(tokenize(*dfs))
-<<<<<<< 108b45bb4f9ee53674a12704b8ae4cc7fd2d033c
-<<<<<<< 67169c91bb885da8c073313194763838ad7b4e2b
             dsk, dummy = _concat_dfs(dfs, name, join=join)
 
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
             return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
                           name, dummy, divisions)
-=======
-            dsk, empty = _concat_dfs(dfs, name, join=join)
 
-            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-            return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
-                          name, empty, divisions)
->>>>>>> Fix io and merge to preserve metadata
-=======
-            dsk, dummy = _concat_dfs(dfs, name, join=join)
-
-            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-            return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
-                          name, dummy, divisions)
->>>>>>> Infer result using internal cache
 
 def _append(df, other, divisions):
     """ Internal function to append 2 dd.DataFrame/Series instances """
