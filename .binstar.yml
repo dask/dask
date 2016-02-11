@@ -1,5 +1,5 @@
 package: dask
-user: blaze
+user: dask
 
 platform:
   - linux-64
@@ -26,4 +26,4 @@ build_targets: conda
 
 notifications:
   email:
-    recipients: ['mrocklin@continuum.io', 'bgriffith@continuum.io']
+    recipients: ['mrocklin@continuum.io', 'koverholt@continuum.io']

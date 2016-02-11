@@ -16,12 +16,12 @@ Tutorials
 ---------
 
 You can try a live tutorial of dask dataframe's basics `here
-<http://mybinder.org/repo/blaze/dask-examples/dask-dataframe-basics.ipynb>`_.
+<http://mybinder.org/repo/dask/dask-examples/dask-dataframe-basics.ipynb>`_.
 
 Dask dataframe's timeseries functionality is demonstrated on `Binder
-<http://mybinder.org/repo/blaze/dask-examples/time-series-binder.ipynb>`_. And
+<http://mybinder.org/repo/dask/dask-examples/time-series-binder.ipynb>`_. And
 static notebook with more data and profiling is on `nbviewer
-<http://nbviewer.ipython.org/github/blaze/dask-examples/blob/master/time-series.ipynb>`_.
+<http://nbviewer.ipython.org/github/dask/dask-examples/blob/master/time-series.ipynb>`_.
 
 Dask.dataframe copies the pandas API
 ------------------------------------
@@ -61,9 +61,9 @@ Threaded Scheduling
 
 By default ``dask.dataframe`` uses the multi-threaded scheduler.
 This exposes some parallelism when pandas or the underlying numpy operations
-release the global interpreter lock (GIL).  Generally pandas is more GIL 
-bound than NumPy, so multi-core speed-ups are not as pronounced for 
-``dask.dataframe`` as they are for ``dask.array``.  This is changing, and 
+release the global interpreter lock (GIL).  Generally pandas is more GIL
+bound than NumPy, so multi-core speed-ups are not as pronounced for
+``dask.dataframe`` as they are for ``dask.array``.  This is changing, and
 the pandas development team is actively working on releasing the GIL.
 
 

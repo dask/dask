@@ -165,12 +165,12 @@ license`_.
 
 .. _Blaze: http://continuum.io/open-source/blaze
 .. _`Continuum Analytics`: http://continuum.io
-.. _`3-clause BSD license`: https://github.com/blaze/dask/blob/master/LICENSE.txt
+.. _`3-clause BSD license`: https://github.com/dask/dask/blob/master/LICENSE.txt
 
 .. _`#dask tag`: http://stackoverflow.com/questions/tagged/dask
-.. _`GitHub issue tracker`: https://github.com/blaze/dask/issues
+.. _`GitHub issue tracker`: https://github.com/dask/dask/issues
 .. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
-.. _`gitter chat room`: https://gitter.im/blaze/dask
+.. _`gitter chat room`: https://gitter.im/dask/dask
 .. _`xarray`: http://xray.readthedocs.org/en/stable/
 .. _`scikit-image`: http://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel

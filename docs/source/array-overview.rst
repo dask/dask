@@ -1,15 +1,15 @@
 Overview
 ========
 
-Dask Array implements a subset of the NumPy ndarray interface using blocked 
-algorithms, cutting up the large array into many small arrays. This lets us 
-compute on arrays larger than memory using all of our cores. We coordinate these 
+Dask Array implements a subset of the NumPy ndarray interface using blocked
+algorithms, cutting up the large array into many small arrays. This lets us
+compute on arrays larger than memory using all of our cores. We coordinate these
 blocked algorithms using dask graphs.
 
 For a live tutorial in your browser,
 visit our Binder_.
 
-.. _Binder: http://mybinder.org/repo/blaze/dask-examples/dask-array-basics.ipynb
+.. _Binder: http://mybinder.org/repo/dask/dask-examples/dask-array-basics.ipynb
 
 Scope
 -----
@@ -151,6 +151,6 @@ will be disappointed.  Notably, dask.array has the following limitations:
     difficult to do in parallel, and are of somewhat diminished value on very
     large data (you rarely actually need a full sort).
     Often we include parallel-friendly alternatives like ``topk``.
-4.  Dask development is driven by immediate need, and so many lesser used 
+4.  Dask development is driven by immediate need, and so many lesser used
     functions have not been implemented. Community contributions are encouraged.
 

@@ -13,7 +13,7 @@ Release per project:
 
 *   and push to github
 
-        git push blaze master --tags
+        git push dask master --tags
 
 *  Upload to PyPI
 

@@ -100,4 +100,4 @@ Frequently Asked Questions
         work with the dask development team to improve our scheduling policies.
 
 .. _`Chest`: https://github.com/blaze/chest
-.. _`issue tracker`: https://github.com/blaze/dask/issues/new
+.. _`issue tracker`: https://github.com/dask/dask/issues/new
