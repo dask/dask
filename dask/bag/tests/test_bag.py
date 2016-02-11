@@ -159,7 +159,11 @@ def test_distinct():
 
 
 def test_frequencies():
-    assert dict(list(b.frequencies())) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
+    c = b.frequencies()
+    assert dict(c.compute(get=get_sync)) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
+
+    c = b.frequencies(split_every=2)
+    assert dict(c.compute(get=get_sync)) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
 
 
 def test_topk():

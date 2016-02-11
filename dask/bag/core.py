@@ -410,9 +410,9 @@ class Bag(Base):
         >>> dict(b.frequencies())  # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
-        from toolz.curried import merge_with
-        return self.reduction(frequencies, compose(dictitems, merge_with(sum)),
-                              out=Bag, split_every=None)
+        return self.reduction(compose(dictitems, frequencies),
+                              merge_frequencies,
+                              out_type=Bag, split_every=split_every)
 
     def topk(self, k, key=None):
         """ K largest elements in collection
@@ -496,7 +496,7 @@ class Bag(Base):
             k = len(dsk2)
             b = c
 
-        if out is Item:
+        if out_type is Item:
             dsk[c] = dsk.pop((c, 0))
             return Item(merge(self.dask, dsk), c)
         else:
@@ -1314,3 +1314,7 @@ def from_imperative(values):
     dsk2 = dict(zip(names, values))
 
     return Bag(merge(dsk, dsk2), name, len(values))
+
+
+def merge_frequencies(seqs):
+    return merge_with(sum, map(dict, seqs)).items()
