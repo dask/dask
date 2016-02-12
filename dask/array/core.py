@@ -3231,7 +3231,8 @@ def corrcoef(x, y=None, rowvar=1):
         return c/c
     d = diag(c)
     d = d.reshape((d.shape[0], 1))
-    return c / sqrt(d * d.T)
+    sqr_d = sqrt(d)
+    return (c / sqr_d) / sqr_d.T
 
 
 def to_npy_stack(dirname, x, axis=0):
