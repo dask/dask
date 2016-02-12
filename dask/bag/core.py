@@ -1022,38 +1022,6 @@ def normalize_s3_names(bucket_name, paths, conn_args):
         return bucket_name, paths
 
 
-def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
-    """ Create dask by loading in files from HDFS
-
-    Provide an hdfs directory and credentials
-
-    >>> b = from_hdfs('home/username/data/', host='localhost', user_name='ubuntu')  # doctest: +SKIP
-
-    Alternatively provide an instance of ``pywebhdfs.webhdfs.PyWebHdfsClient``
-
-    >>> from pywebhdfs.webhdfs import PyWebHdfsClient  # doctest: +SKIP
-    >>> hdfs = PyWebHdfsClient(host='hostname', user_name='username')  # doctest: +SKIP
-
-    >>> b = from_hdfs('home/username/data/', hdfs=hdfs)  # doctest: +SKIP
-    """
-    from .. import hdfs_utils
-    filenames = hdfs_utils.filenames(hdfs, path)
-
-    if not filenames:
-        raise ValueError("No files found for path %s" % path)
-
-    name = 'from_hdfs-' + uuid.uuid4().hex
-    dsk = dict()
-    for i, fn in enumerate(filenames):
-        ext = fn.split('.')[-1]
-        if ext in ('gz', 'bz2'):
-            dsk[(name, i)] = (stream_decompress, ext, (hdfs.read_file, fn))
-        else:
-            dsk[(name, i)] = (hdfs.read_file, fn)
-
-    return Bag(dsk, name, len(dsk))
-
-
 def stream_decompress(fmt, data):
     """ Decompress a block of compressed bytes into a stream of strings """
     if fmt == 'gz':

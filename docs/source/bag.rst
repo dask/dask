@@ -111,32 +111,6 @@ attached directly to bags with ``.str.methodname``:
    >>> b = db.from_filenames('myfile.*.csv.gz').str.strip().str.split(',')
 
 
-``db.from_hdfs``
-~~~~~~~~~~~~~~~~
-
-Dask.bag can use WebHDFS to load text data from HDFS:
-
-.. code-block:: python
-
-   >>> from pywebhdfs.webhdfs import PyWebHdfsClient
-   >>> hdfs = PyWebHdfsClient(host='hostname', user_name='hdfs')
-
-   >>> b = db.from_hdfs('/user/username/data/2015/06/', hdfs=hdfs)
-
-If the input is a directory, then we return all data underneath that directory
-and all subdirectories.
-
-This uses WebHDFS to pull data from HDFS, and so only works if that is enabled.
-It does not require your computer to actually be on HDFS, merely that you have
-network access.  Data will be downloaded to memory, decompressed, used, and
-cleaned up as necessary.
-
-Notably, this function does not tightly integrate dask.bag with a Hadoop
-cluster.  Computation is not guaranteed (or likely) to be local to the node
-that has the data.  This functionality is not the same as what you would get
-with Hadoop or Spark.  *No dask scheduler currently integrates nicely with
-data-local file systems like HDFS*.
-
 Execution
 ---------
 
@@ -263,7 +237,6 @@ Create Bags
 .. autosummary::
    from_sequence
    from_filenames
-   from_hdfs
    concat
 
 Turn Bags into other things
@@ -284,5 +257,4 @@ Other functions
 
 .. autofunction:: from_sequence
 .. autofunction:: from_filenames
-.. autofunction:: from_hdfs
 .. autofunction:: concat
