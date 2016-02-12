@@ -8,6 +8,8 @@ Install
 
     $ pip install distributed --upgrade
 
+See :doc:`installation <install>` document for more information.
+
 Setup Cluster
 -------------
 

@@ -47,6 +47,7 @@ Contents
    :maxdepth: 2
 
    quickstart
+   install
    examples-overview
    executor
    setup
