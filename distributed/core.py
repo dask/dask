@@ -143,6 +143,13 @@ class Server(TCPServer):
                 except StreamClosedError:
                     logger.info("Lost connection: %s", str(address))
                     break
+                except Exception as e:
+                    logger.exception(e)
+                    msg = {'op': 'server-error',
+                           'exception': truncate_exception(e),
+                           'traceback': get_traceback()}
+                    yield write(stream, (b'error', msg))
+                    continue
                 if not isinstance(msg, dict):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
                                     + str(msg))
