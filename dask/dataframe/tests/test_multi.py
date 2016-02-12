@@ -208,7 +208,9 @@ def test_concat():
 
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
                                  (ddf1, ddf3, pdf1, pdf3)]:
+        print(1)
         for join in ['inner', 'outer']:
+            print(join)
             result = dd.concat([dd1, dd2], join=join)
             expected = pd.concat([pd1, pd2], join=join)
             assert eq(result, expected)

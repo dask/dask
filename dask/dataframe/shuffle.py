@@ -9,6 +9,7 @@ from toolz import merge
 
 from ..optimize import cull
 from ..base import tokenize
+from ..compatibility import unicode
 from .core import DataFrame, Series, _Frame
 from dask.dataframe.categorical import (strip_categories, _categorize,
                                         get_categories)
@@ -71,11 +72,17 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     shuffle
     partd
     """
-    if isinstance(index, _Frame):
+
+    if isinstance(index, Series):
         assert df.divisions == index.divisions
-        columns = df.columns
+        metadata = df._pd
+        metadata.index.name = index.name
+    elif isinstance(index, (str, unicode)):
+        columns = [c for c in df.columns if c != index]
+        metadata = df._pd[columns]
+        metadata.index.name = index
     else:
-        columns = tuple([c for c in df.columns if c != index])
+        raise ValueError('index must be Series or str, {0} given'.format(type(index)))
 
     token = tokenize(df, index, divisions)
     always_new_token = uuid.uuid1().hex
@@ -90,7 +97,7 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     dsk1 = {catname: (get_categories, df._keys()[0]),
             p: (partd.PandasBlocks, (partd.Buffer, (partd.Dict,), (partd.File,))),
             catname2: (new_categories, catname,
-                            index.name if isinstance(index, Series) else index)}
+                       index.name if isinstance(index, Series) else index)}
 
     # Partition data on disk
     name = 'set-partition--partition-' + always_new_token
@@ -131,13 +138,14 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
                     for i in range(len(divisions) - 1)))
 
     dsk = merge(df.dask, dsk1, dsk2, dsk3, dsk4)
-    if isinstance(index, _Frame):
+
+    if isinstance(index, Series):
         dsk.update(index.dask)
 
     if compute:
         dsk = cull(dsk, list(dsk4.keys()))
 
-    return DataFrame(dsk, name, columns, divisions)
+    return DataFrame(dsk, name, metadata, divisions)
 
 
 def barrier(args):

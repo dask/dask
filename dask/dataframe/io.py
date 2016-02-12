@@ -88,13 +88,13 @@ def _read_csv(fn, i, chunkbytes, compression, kwargs, bom):
         block.close()
 
 
-def clean_kwargs(kwargs):
+def _clean_kwargs(kwargs):
     """ Do some sanity checks on kwargs
 
-    >>> clean_kwargs({'parse_dates': ['a', 'b'], 'usecols': ['b', 'c']})
+    >>> _clean_kwargs({'parse_dates': ['a', 'b'], 'usecols': ['b', 'c']})
     {'parse_dates': ['b'], 'usecols': ['b', 'c']}
 
-    >>> clean_kwargs({'names': ['a', 'b'], 'usecols': [1]})
+    >>> _clean_kwargs({'names': ['a', 'b'], 'usecols': [1]})
     {'parse_dates': [], 'names': ['a', 'b'], 'usecols': ['b']}
     """
     kwargs = kwargs.copy()
@@ -114,7 +114,7 @@ def clean_kwargs(kwargs):
     return kwargs
 
 
-def fill_kwargs(fn, **kwargs):
+def _fill_kwargs(fn, **kwargs):
     """ Read a csv file and fill up kwargs
 
     This normalizes kwargs against a sample file.  It does the following:
@@ -135,6 +135,8 @@ def fill_kwargs(fn, **kwargs):
     Returns
     -------
 
+    head: pd.DataFrame
+        data read by pd.read_csv
     kwargs: dict
         keyword arguments to give to pd.read_csv
     """
@@ -163,14 +165,14 @@ def fill_kwargs(fn, **kwargs):
         kwargs['compression'] = infer_compression(fn)
 
     if 'names' not in kwargs:
-        kwargs['names'] = csv_names(fn, **kwargs)
+        kwargs['names'] = _csv_names(fn, **kwargs)
         if 'header' not in kwargs:
             kwargs['header'] = 0
     else:
         if 'header' not in kwargs:
             kwargs['header'] = None
 
-    kwargs = clean_kwargs(kwargs)
+    kwargs = _clean_kwargs(kwargs)
     try:
         head = pd.read_csv(fn, **assoc(kwargs, 'nrows', sample_nrows))
     except StopIteration:
@@ -196,8 +198,8 @@ def fill_kwargs(fn, **kwargs):
 
         kwargs['dtype'] = dtype
 
-    return (head.columns.map(lambda s: s.strip() if isinstance(s, str) else s),
-            kwargs)
+    head.columns = head.columns.map(lambda s: s.strip() if isinstance(s, str) else s)
+    return head, kwargs
 
 
 @wraps(pd.read_csv)
@@ -210,7 +212,7 @@ def read_csv(fn, **kwargs):
     index = kwargs.pop('index', None)
     kwargs = kwargs.copy()
 
-    columns, kwargs = fill_kwargs(fn, **kwargs)
+    head, kwargs = _fill_kwargs(fn, **kwargs)
 
     # Handle glob strings
     if '*' in fn:
@@ -231,14 +233,13 @@ def read_csv(fn, **kwargs):
 
     # Create dask graph
     dsk = dict(((name, i), (_read_csv, fn, i, chunkbytes,
-                                       kwargs['compression'], rest_kwargs,
-                                       bom))
+                            kwargs['compression'], rest_kwargs, bom))
                for i in range(1, nchunks))
 
     dsk[(name, 0)] = (_read_csv, fn, 0, chunkbytes, kwargs['compression'],
-                                 first_kwargs, b'')
+                      first_kwargs, b'')
 
-    result = DataFrame(dsk, name, columns, divisions)
+    result = DataFrame(dsk, name, head, divisions)
 
     if index:
         result = result.set_index(index)
@@ -246,16 +247,16 @@ def read_csv(fn, **kwargs):
     return result
 
 
-def csv_names(fn, encoding='utf-8', compression=None, names=None,
-                parse_dates=None, usecols=None, dtype=None, **kwargs):
+def _csv_names(fn, encoding='utf-8', compression=None, names=None,
+               parse_dates=None, usecols=None, dtype=None, **kwargs):
     try:
         kwargs['nrows'] = 5
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, **kwargs)
+                         names=names, **kwargs)
     except StopIteration:
         kwargs['nrows'] = None
         df = pd.read_csv(fn, encoding=encoding, compression=compression,
-                names=names, **kwargs)
+                         names=names, **kwargs)
     return list(df.columns)
 
 
@@ -376,9 +377,10 @@ def from_pandas(data, npartitions, sort=True):
     """
     if isinstance(getattr(data, 'index', None), pd.MultiIndex):
         raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
-    columns = getattr(data, 'columns', getattr(data, 'name', None))
-    if columns is None and not isinstance(data, pd.Series):
+
+    if not isinstance(data, (pd.Series, pd.DataFrame)):
         raise TypeError("Input must be a pandas DataFrame or Series")
+
     nrows = len(data)
     chunksize = int(ceil(nrows / npartitions))
     if sort and not data.index.is_monotonic_increasing:
@@ -394,7 +396,7 @@ def from_pandas(data, npartitions, sort=True):
     dsk = dict(((name, i), data.iloc[i * chunksize:(i + 1) * chunksize])
                for i in range(npartitions - 1))
     dsk[(name, npartitions - 1)] = data.iloc[chunksize*(npartitions - 1):]
-    return getattr(core, type(data).__name__)(dsk, name, columns, divisions)
+    return _Frame(dsk, name, data, divisions)
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
@@ -563,22 +565,21 @@ def from_dask_array(x, columns=None):
 
     index = [(np.arange, a, b, 1, 'i8') for a, b in
              zip(divisions[:-1], divisions[1:])]
-
     divisions[-1] -= 1
 
-    if x.ndim == 1:
-        if isinstance(dummy, pd.Series):
-            dsk = dict(((name, i), (pd.Series, chunk, ind, x.dtype, dummy.name))
-                    for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
-        else:
-            dsk = dict(((name, i), (pd.DataFrame, chunk, ind, dummy.columns))
-                    for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
-
-    elif x.ndim == 2:
+    if x.ndim == 2:
         if len(x.chunks[1]) > 1:
-            x = x.rechunk({1: x.shape[1]})
-        dsk = dict(((name, i), (pd.DataFrame, chunk[0], ind, dummy.columns))
-                for i, (chunk, ind) in enumerate(zip(x._keys(), index)))
+           x = x.rechunk({1: x.shape[1]})
+
+    dsk = {}
+    for i, (chunk, ind) in enumerate(zip(x._keys(), index)):
+        if x.ndim == 2:
+            chunk = chunk[0]
+
+        if isinstance(dummy, pd.Series):
+            dsk[name, i] = (pd.Series, chunk, ind, x.dtype, dummy.name)
+        else:
+            dsk[name, i] = (pd.DataFrame, chunk, ind, dummy.columns)
 
     return _Frame(merge(x.dask, dsk), name, dummy, divisions)
 

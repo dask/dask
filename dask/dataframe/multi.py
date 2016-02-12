@@ -200,8 +200,8 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
-    left_empty = lhs._empty_partition
-    right_empty = rhs._empty_partition
+    left_empty = lhs._pd
+    right_empty = rhs._pd
 
     name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix)
 
@@ -215,16 +215,16 @@ def join_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix=''):
         dsk[(name, i)] = (pd.DataFrame.join, a, b, None, how,
                           lsuffix, rsuffix)
 
-    # fake column names
-    j = left_empty.join(right_empty, None, how, lsuffix, rsuffix)
+    # dummy result
+    dummy = left_empty.join(right_empty, on=None, how=how,
+                            lsuffix=lsuffix, rsuffix=rsuffix)
+    return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk),
+                     name, dummy, divisions)
 
-    return DataFrame(toolz.merge(lhs.dask, rhs.dask, dsk), name,
-                     j.columns, divisions)
 
-
-def pdmerge(left, right, how, left_on, right_on,
-            left_index, right_index, suffixes,
-            default_left_columns, default_right_columns):
+def _pdmerge(left, right, how, left_on, right_on,
+             left_index, right_index, suffixes,
+             default_left_columns, default_right_columns):
 
     if not len(left):
         left = pd.DataFrame(columns=default_left_columns)
@@ -266,15 +266,13 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     else:
         right_index = False
 
-    # fake column names
-    left_empty = lhs._empty_partition
-    right_empty = rhs._empty_partition
-    j = pd.merge(left_empty, right_empty, how, None,
-                 left_on=left_on, right_on=right_on,
-                 left_index=left_index, right_index=right_index,
-                 suffixes=suffixes)
+    # dummy result
+    dummy = pd.merge(lhs._pd, rhs._pd, how, None,
+                     left_on=left_on, right_on=right_on,
+                     left_index=left_index, right_index=right_index,
+                     suffixes=suffixes)
 
-    merger = partial(pdmerge, suffixes=suffixes,
+    merger = partial(_pdmerge, suffixes=suffixes,
                      default_left_columns=list(lhs.columns),
                      default_right_columns=list(rhs.columns))
 
@@ -293,9 +291,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
                 for i in range(npartitions))
 
     divisions = [None] * (npartitions + 1)
-
     return DataFrame(toolz.merge(lhs2.dask, rhs2.dask, dsk),
-                     name, j.columns, divisions)
+                     name, dummy, divisions)
 
 
 def _pdconcat(dfs, axis=0, join='outer'):
@@ -339,17 +336,12 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     if join not in ('inner', 'outer'):
         raise ValueError("'join' must be 'inner' or 'outer'")
 
-    if not all(isinstance(df, _Frame) for df in dfs):
-        raise ValueError("All inputs must be dd.DataFrame or dd.Series")
+    from dask.dataframe.core import _emulate
+    dummy = _emulate(pd.concat, dfs, axis=axis, join=join)
 
+    dfs = _maybe_from_pandas(dfs)
     dfs2, divisions, parts = align_partitions(*dfs)
-
-    empties = [df._empty_partition for df in dfs]
-    result = pd.concat(empties, axis=axis, join=join)
-    if isinstance(result, pd.Series):
-        columns = result.name
-    else:
-        columns = result.columns.tolist()
+    empties = [df._pd for df in dfs]
 
     parts2 = [[df if df is not None else empty
                for df, empty in zip(part, empties)]
@@ -359,9 +351,8 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     dsk = dict(((name, i), (_pdconcat, part, axis, join))
                 for i, part in enumerate(parts2))
 
-    return_type = _get_return_type(dfs[0], columns)
-    return return_type(toolz.merge(dsk, *[df.dask for df in dfs2]),
-                       name, columns, divisions)
+    return _Frame(toolz.merge(dsk, *[df.dask for df in dfs2]),
+                  name, dummy, divisions)
 
 
 def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
@@ -415,21 +406,21 @@ def _concat_dfs(dfs, name, join='outer'):
     dsk = dict()
     i = 0
 
-    empties = [df._empty_partition for df in dfs]
+    empties = [df._pd for df in dfs]
     dummy = pd.concat(empties, axis=0, join=join)
 
     if isinstance(dummy, pd.Series):
         # in this case, input must be all Series. No need to care DataFrame.
-        columns = []
+        columns = pd.Index([])
     else:
-        columns = dummy.columns.tolist()
+        columns = dummy.columns
         if len(columns) == 0:
             raise ValueError('Failed to concat, no columns remain')
 
     for df in dfs:
         if isinstance(df, DataFrame):
             # filter DataFrame columns
-            if columns != df.columns:
+            if not columns.equals(df.columns):
                 df = df[[c for c in columns if c in df.columns]]
         # Series must remain if output columns exist
 
@@ -522,13 +513,14 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     dasks = [df for df in dfs if isinstance(df, _Frame)]
 
     if all(df.known_divisions for df in dasks):
-        # must be converted here to check whether divisions can be
-        # concatenated
+
         dfs = _maybe_from_pandas(dfs)
         if axis == 1:
-            from .multi import concat_indexed_dataframes
             return concat_indexed_dataframes(dfs, axis=axis, join=join)
         else:
+            # must be converted here to check whether divisions can be
+            # concatenated
+            dfs = _maybe_from_pandas(dfs)
             # each DataFrame's division must be greater than previous one
             if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
                    for i in range(len(dfs) - 1)):
@@ -544,7 +536,6 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                               name, dummy, divisions)
             else:
                 if interleave_partitions:
-                    from .multi import concat_indexed_dataframes
                     return concat_indexed_dataframes(dfs, join=join)
 
                 raise ValueError('All inputs have known divisions which cannnot '
@@ -565,6 +556,7 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             return _Frame(toolz.merge(dsk, *[df.dask for df in dfs]),
                           name, dummy, divisions)
 
+
 def _append(df, other, divisions):
     """ Internal function to append 2 dd.DataFrame/Series instances """
     # ToDo: might be possible to merge the logic to concat,
@@ -578,5 +570,5 @@ def _append(df, other, divisions):
     for j in range(other.npartitions):
         dsk[(name, npart + j)] = (other._name, j)
     dsk = toolz.merge(dsk, df.dask, other.dask)
-    dummy = df._empty_partition.append(other._empty_partition)
+    dummy = df._pd.append(other._pd)
     return _Frame(dsk, name, dummy, divisions)

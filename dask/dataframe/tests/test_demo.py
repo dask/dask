@@ -9,7 +9,7 @@ def test_make_timeseries():
 
     assert df.divisions[0] == pd.Timestamp('2000-01-31', offset='6M')
     assert df.divisions[-1] == pd.Timestamp('2014-07-31', offset='6M')
-    assert df.columns == ('A', 'B', 'C')
+    tm.assert_index_equal(df.columns, pd.Index(['A', 'B', 'C']))
     assert df['A'].head().dtype == float
     assert df['B'].head().dtype == int
     assert df['C'].head().dtype == object

@@ -6,7 +6,6 @@ import pandas as pd
 import pandas.util.testing as tm
 import numpy as np
 import pytest
-from numpy.testing import assert_array_almost_equal
 
 import dask
 from dask.async import get_sync
@@ -29,17 +28,14 @@ full = d.compute()
 
 
 def test_Dataframe():
-    result = (d['a'] + 1).compute()
     expected = pd.Series([2, 3, 4, 5, 6, 7, 8, 9, 10],
                         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
                         name='a')
 
-    assert eq(result, expected)
+    assert eq(d['a'] + 1, expected)
 
-    assert list(d.columns) == list(['a', 'b'])
+    tm.assert_index_equal(d.columns, pd.Index(['a', 'b']))
 
-
-    full = d.compute()
     assert eq(d[d['b'] > 2], full[full['b'] > 2])
     assert eq(d[['a', 'b']], full[['a', 'b']])
     assert eq(d.a, full.a)
@@ -100,11 +96,21 @@ def test_attributes():
 
 
 def test_column_names():
-    assert d.columns == ('a', 'b')
-    assert d[['b', 'a']].columns == ('b', 'a')
+    tm.assert_index_equal(d.columns, pd.Index(['a', 'b']))
+    tm.assert_index_equal(d[['b', 'a']].columns, pd.Index(['b', 'a']))
     assert d['a'].name == 'a'
     assert (d['a'] + 1).name == 'a'
     assert (d['a'] + d['b']).name == None
+
+
+def test_index_names():
+    assert d.index.name is None
+
+    idx = pd.Index([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], name='x')
+    df = pd.DataFrame(np.random.randn(10, 5), idx)
+    ddf = dd.from_pandas(df, 3)
+    assert ddf.index.name == 'x'
+    assert ddf.index.compute().name == 'x'
 
 
 def test_set_index():
@@ -119,13 +125,16 @@ def test_set_index():
 
     d2 = d.set_index('b', npartitions=3)
     assert d2.npartitions == 3
+    assert d2.index.name == 'b'
     assert eq(d2, full.set_index('b'))
 
     d3 = d.set_index(d.b, npartitions=3)
     assert d3.npartitions == 3
+    assert d3.index.name == 'b'
     assert eq(d3, full.set_index(full.b))
 
     d4 = d.set_index('b')
+    assert d4.index.name == 'b'
     assert eq(d4, full.set_index('b'))
 
 
@@ -136,6 +145,32 @@ def test_set_index_raises_error_on_bad_input():
 
     assert raises(NotImplementedError, lambda: ddf.set_index(['a', 'b']))
 
+def test_rename_columns():
+    # GH 819
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
+                       'b': [7, 6, 5, 4, 3, 2, 1]})
+    ddf = dd.from_pandas(df, 2)
+
+    ddf.columns = ['x', 'y']
+    df.columns = ['x', 'y']
+    tm.assert_index_equal(ddf.columns, pd.Index(['x', 'y']))
+    tm.assert_index_equal(ddf._pd.columns, pd.Index(['x', 'y']))
+    assert eq(ddf, df)
+
+    msg = r"Length mismatch: Expected axis has 2 elements, new values have 4 elements"
+    with tm.assertRaisesRegexp(ValueError, msg):
+        ddf.columns = [1, 2, 3, 4]
+
+
+def test_rename_series():
+    # GH 819
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7], name='x')
+    ds = dd.from_pandas(s, 2)
+
+    s.name = 'renamed'
+    ds.name = 'renamed'
+    assert s.name == 'renamed'
+    assert eq(ds, s)
 
 
 def test_describe():
@@ -290,7 +325,7 @@ def test_map_partitions_column_info():
     a = dd.from_pandas(df, npartitions=2)
 
     b = dd.map_partitions(lambda x: x, a.columns, a)
-    assert b.columns == a.columns
+    tm.assert_index_equal(b.columns, a.columns)
     assert eq(df, b)
 
     b = dd.map_partitions(lambda x: x, a.x.name, a.x)
@@ -316,7 +351,7 @@ def test_map_partitions_method_names():
 
     b = a.map_partitions(lambda x: x)
     assert isinstance(b, dd.DataFrame)
-    assert b.columns == a.columns
+    tm.assert_index_equal(b.columns, a.columns)
 
     b = a.map_partitions(lambda df: df.x + 1, columns=None)
     assert isinstance(b, dd.Series)
@@ -344,6 +379,7 @@ def test_map_partitions_keeps_kwargs_in_dict():
 
 
 def test_drop_duplicates():
+    # can't detect duplicates only from cached data
     assert eq(d.a.drop_duplicates(), full.a.drop_duplicates())
     assert eq(d.drop_duplicates(), full.drop_duplicates())
     assert eq(d.index.drop_duplicates(), full.index.drop_duplicates())
@@ -402,25 +438,28 @@ def test_get_division():
     # DataFrame
     div1 = ddf.get_division(0)
     assert isinstance(div1, dd.DataFrame)
-    eq(div1, pdf.loc[0:3])
+    assert eq(div1, pdf.loc[0:3])
     div2 = ddf.get_division(1)
-    eq(div2, pdf.loc[4:7])
+    assert eq(div2, pdf.loc[4:7])
     div3 = ddf.get_division(2)
-    eq(div3, pdf.loc[8:9])
+    assert eq(div3, pdf.loc[8:9])
     assert len(div1) + len(div2) + len(div3) == len(pdf)
 
     # Series
     div1 = ddf.a.get_division(0)
     assert isinstance(div1, dd.Series)
-    eq(div1, pdf.a.loc[0:3])
+    assert eq(div1, pdf.a.loc[0:3])
     div2 = ddf.a.get_division(1)
-    eq(div2, pdf.a.loc[4:7])
+    assert eq(div2, pdf.a.loc[4:7])
     div3 = ddf.a.get_division(2)
-    eq(div3, pdf.a.loc[8:9])
+    assert eq(div3, pdf.a.loc[8:9])
     assert len(div1) + len(div2) + len(div3) == len(pdf.a)
 
-    assert raises(ValueError, lambda: ddf.get_division(-1))
-    assert raises(ValueError, lambda: ddf.get_division(3))
+    with tm.assertRaises(ValueError):
+        ddf.get_division(-1)
+
+    with tm.assertRaises(ValueError):
+        ddf.get_division(3)
 
 
 def test_ndim():
@@ -609,8 +648,14 @@ def test_getitem():
                       columns=list('ABC'))
     ddf = dd.from_pandas(df, 2)
     assert eq(ddf['A'], df['A'])
+    tm.assert_series_equal(ddf['A']._pd, ddf._pd['A']) # check cache consistency
+
     assert eq(ddf[['A', 'B']], df[['A', 'B']])
+    tm.assert_frame_equal(ddf[['A', 'B']]._pd, ddf._pd[['A', 'B']])
+
     assert eq(ddf[ddf.C], df[df.C])
+    tm.assert_series_equal(ddf.C._pd, ddf._pd.C)
+
     assert eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C])
 
     assert raises(KeyError, lambda: df['X'])
@@ -1114,7 +1159,6 @@ def test_sample():
 
     c = a.sample(0.5, random_state=1234)
     d = a.sample(0.5, random_state=1234)
-
     assert eq(c, d)
 
     assert a.sample(0.5)._name != a.sample(0.5)._name
@@ -1300,19 +1344,67 @@ def test_to_frame():
 
 def test_apply():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
-    a = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_pandas(df, npartitions=2)
 
     func = lambda row: row['x'] + row['y']
-    eq(a.x.apply(lambda x: x + 1), df.x.apply(lambda x: x + 1))
+    assert eq(ddf.x.apply(lambda x: x + 1),
+              df.x.apply(lambda x: x + 1))
 
-    eq(a.apply(lambda xy: xy[0] + xy[1], axis=1, columns=None),
-       df.apply(lambda xy: xy[0] + xy[1], axis=1))
+    # specify columns
+    assert eq(ddf.apply(lambda xy: xy[0] + xy[1], axis=1, columns=None),
+              df.apply(lambda xy: xy[0] + xy[1], axis=1))
 
-    assert raises(NotImplementedError, lambda: a.apply(lambda xy: xy, axis=0))
-    assert raises(ValueError, lambda: a.apply(lambda xy: xy, axis=1))
+    # inferrence
+    assert eq(ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
+              df.apply(lambda xy: xy[0] + xy[1], axis=1))
+    assert eq(ddf.apply(lambda xy: xy, axis=1),
+              df.apply(lambda xy: xy, axis=1))
 
+    # dataframe
     func = lambda x: pd.Series([x, x])
-    eq(a.x.apply(func, name=[0, 1]), df.x.apply(func))
+    assert eq(ddf.x.apply(func, name=[0, 1]), df.x.apply(func))
+    # inference
+    assert eq(ddf.x.apply(func), df.x.apply(func))
+
+    # axis=0
+    with tm.assertRaises(NotImplementedError):
+        ddf.apply(lambda xy: xy, axis=0)
+
+
+def test_apply_infer_columns():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def return_df(x):
+        # will create new DataFrame which columns is ['sum', 'mean']
+        return pd.Series([x.sum(), x.mean()], index=['sum', 'mean'])
+
+    # DataFrame to completely different DataFrame
+    result = ddf.apply(return_df, axis=1)
+    assert isinstance(result, dd.DataFrame)
+    tm.assert_index_equal(result.columns, pd.Index(['sum', 'mean']))
+    assert eq(result, df.apply(return_df, axis=1))
+
+    # DataFrame to Series
+    result = ddf.apply(lambda x: 1, axis=1)
+    assert isinstance(result, dd.Series)
+    assert result.name is None
+    assert eq(result, df.apply(lambda x: 1, axis=1))
+
+    def return_df2(x):
+        return pd.Series([x * 2, x * 3], index=['x2', 'x3'])
+
+    # Series to completely different DataFrame
+    result = ddf.x.apply(return_df2)
+    assert isinstance(result, dd.DataFrame)
+    tm.assert_index_equal(result.columns, pd.Index(['x2', 'x3']))
+    assert eq(result, df.x.apply(return_df2))
+
+    # Series to Series
+    result = ddf.x.apply(lambda x: 1)
+    assert isinstance(result, dd.Series)
+    assert result.name == 'x'
+    assert eq(result, df.x.apply(lambda x: 1))
 
 
 def test_index_time_properties():
@@ -1358,8 +1450,8 @@ def test_reset_index():
     exp = df.reset_index()
 
     assert len(res.index.compute()) == len(exp.index)
-    assert res.columns == tuple(exp.columns)
-    assert_array_almost_equal(res.compute().values, exp.values)
+    tm.assert_index_equal(res.columns, exp.columns)
+    tm.assert_numpy_array_equal(res.compute().values, exp.values)
 
 
 def test_dataframe_compute_forward_kwargs():

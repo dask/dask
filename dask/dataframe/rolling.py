@@ -39,8 +39,8 @@ def wrap_rolling(func):
         for i in range(1, arg.npartitions + 1):
             dsk[(new_name, i)] = (rolling_chunk, f, (old_name, i - 1),
                                   (old_name, i), window) + args
-        return type(arg)(merge(arg.dask, dsk), new_name,
-                         arg.column_info, arg.divisions)
+        return arg._constructor(merge(arg.dask, dsk), new_name,
+                                arg, arg.divisions)
     return rolling
 
 
