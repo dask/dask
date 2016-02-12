@@ -15,7 +15,8 @@ import numpy as np
 from tornado import gen
 from toolz import compose
 
-from .executor import default_executor, Future, _first_completed
+from .executor import (default_executor, Future, _first_completed,
+        ensure_default_get)
 from .utils import sync, ignoring
 
 
@@ -48,9 +49,7 @@ def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
     name = 'distributed-pandas-to-dask-' + tokenize(*futures)
     dsk = {(name, i): f for i, f in enumerate(futures)}
 
-    if _globals['get'] != executor.get:
-        print("Setting global dask scheduler to use distributed")
-        dask.set_options(get=executor.get)
+    ensure_default_get(executor)
 
     raise gen.Return(dd.DataFrame(dsk, name, columns2, divisions2))
 
@@ -96,9 +95,7 @@ def _futures_to_dask_array(futures, executor=None):
     values = list(futures.flat)
     dsk = dict(zip(keys, values))
 
-    if _globals['get'] != executor.get:
-        print("Setting global dask scheduler to use distributed")
-        dask.set_options(get=executor.get)
+    ensure_default_get(executor)
 
     raise gen.Return(da.Array(dsk, name, chunks, dtype))
 
@@ -170,9 +167,7 @@ def _futures_to_dask_bag(futures, executor=None):
     name = 'bag-from-futures-' + tokenize(*futures)
     dsk = {(name, i): future for i, future in enumerate(futures)}
 
-    if _globals['get'] != executor.get:
-        print("Setting global dask scheduler to use distributed")
-        dask.set_options(get=executor.get)
+    ensure_default_get(executor)
 
     raise gen.Return(db.Bag(dsk, name, len(futures)))
 

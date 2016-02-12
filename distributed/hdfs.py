@@ -13,7 +13,7 @@ from tornado import gen
 from toolz import merge
 
 from .compatibility import unicode
-from .executor import default_executor
+from .executor import default_executor, ensure_default_get
 from .utils import ignoring, sync
 
 
@@ -133,6 +133,7 @@ def _read_csv(path, executor=None, hdfs=None, lazy=False, lineterminator='\n',
     if lazy:
         from dask.dataframe import from_imperative
         if collection:
+            ensure_default_get(executor)
             raise gen.Return(from_imperative(dfs2, columns=names))
         else:
             raise gen.Return(dfs2)
@@ -141,6 +142,7 @@ def _read_csv(path, executor=None, hdfs=None, lazy=False, lineterminator='\n',
         futures = executor.compute(*dfs2)
         from distributed.collections import _futures_to_dask_dataframe
         if collection:
+            ensure_default_get(executor)
             df = yield _futures_to_dask_dataframe(futures)
             raise gen.Return(df)
         else:
@@ -320,6 +322,7 @@ def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     if lazy:
         from dask.bag import from_imperative
         if collection:
+            ensure_default_get(executor)
             raise gen.Return(from_imperative(lines))
         else:
             raise gen.Return(lines)
@@ -328,6 +331,7 @@ def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
         futures = executor.compute(*lines)
         from distributed.collections import _futures_to_dask_bag
         if collection:
+            ensure_default_get(executor)
             b = yield _futures_to_dask_bag(futures)
             raise gen.Return(b)
         else:

@@ -16,6 +16,7 @@ import dask
 from dask.base import tokenize, normalize_token, Base
 from dask.core import flatten
 from dask.compatibility import apply
+from dask.context import _globals
 from toolz import first, groupby, merge
 from tornado import gen
 from tornado.gen import Return, TimeoutError
@@ -1111,3 +1112,9 @@ def default_executor(e=None):
                 "Start an executor and point it to the center address\n"
                 "  from distributed import Executor\n"
                 "  executor = Executor('ip-addr-of-center:8787')\n")
+
+
+def ensure_default_get(executor):
+    if _globals['get'] != executor.get:
+        print("Setting global dask scheduler to use distributed")
+        dask.set_options(get=executor.get)

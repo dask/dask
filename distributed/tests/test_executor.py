@@ -18,12 +18,13 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
 
+from dask.context import _globals
 from distributed import Center, Worker, Nanny
 from distributed.core import rpc
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_executor,
-        default_executor, _first_completed)
+        default_executor, _first_completed, ensure_default_get)
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
@@ -2175,3 +2176,17 @@ def test_map_differnet_lengths(s, a, b):
     yield e._start()
 
     assert len(e.map(add, [1, 2], [1, 2, 3])) == 2
+
+
+def test_Future_exception_sync(loop, capsys):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            ensure_default_get(e)
+            ensure_default_get(e)
+            ensure_default_get(e)
+            ensure_default_get(e)
+
+    out, err = capsys.readouterr()
+    assert len(out.strip().split('\n')) == 1
+
+    assert _globals['get'] == e.get
