@@ -175,7 +175,10 @@ class Future(WrappedKey):
 
     @property
     def type(self):
-        return self.executor.futures[self.key].get('type', None)
+        try:
+            return self.executor.futures[self.key]['type']
+        except KeyError:
+            return None
 
     def __del__(self):
         self.executor._dec_ref(self.key)

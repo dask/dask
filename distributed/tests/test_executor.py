@@ -2020,6 +2020,7 @@ def test__cancel(s, a, b):
     yield e._cancel([x])
 
     assert x.cancelled()
+    assert 'cancel' in str(x)
     s.validate()
 
     start = time()
