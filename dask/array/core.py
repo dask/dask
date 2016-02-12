@@ -2722,6 +2722,44 @@ def eye(N, chunks, M=None, k=0, dtype=float):
                  chunks=(chunks, chunks), dtype=dtype)
 
 
+@wraps(np.diag)
+def diag(v):
+    name = 'diag-' + tokenize(v)
+    if isinstance(v, np.ndarray):
+        if v.ndim == 1:
+            chunks = ((v.shape[0],), (v.shape[0],))
+            dsk = {(name, 0, 0): (np.diag, v)}
+        elif v.ndim == 2:
+            chunks = ((min(v.shape),),)
+            dsk = {(name, 0): (np.diag, v)}
+        else:
+            raise ValueError("Array must be 1d or 2d only")
+        return Array(dsk, name, chunks, dtype=v.dtype)
+    if not isinstance(v, Array):
+        raise TypeError("v must be a dask array or numpy array, "
+                        "got {0}".format(type(v)))
+    if v.ndim != 1:
+        if v.chunks[0] == v.chunks[1]:
+            dsk = dict(((name, i), (np.diag, row[i])) for (i, row)
+                       in enumerate(v._keys()))
+            dsk.update(v.dask)
+            return Array(dsk, name, (v.chunks[0],), dtype=v.dtype)
+        else:
+            raise NotImplementedError("Extracting diagonals from non-square "
+                                      "chunked arrays")
+    chunks_1d = v.chunks[0]
+    blocks = v._keys()
+    dsk = v.dask.copy()
+    for i, m in enumerate(chunks_1d):
+        for j, n in enumerate(chunks_1d):
+            key = (name, i, j)
+            if i == j:
+                dsk[key] = (np.diag, blocks[i])
+            else:
+                dsk[key] = (np.zeros, (m, n))
+    return Array(dsk, name, (chunks_1d, chunks_1d), dtype=v._dtype)
+
+
 def triu(m, k=0):
     """
     Upper triangle of an array with elements above the `k`-th diagonal zeroed.
@@ -3185,6 +3223,17 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
         return (dot(X.T, X.conj()) / fact).squeeze()
     else:
         return (dot(X, X.T.conj()) / fact).squeeze()
+
+
+@wraps(np.corrcoef)
+def corrcoef(x, y=None, rowvar=1):
+    c = cov(x, y, rowvar)
+    if c.shape == ():
+        return c/c
+    d = diag(c)
+    d = d.reshape((d.shape[0], 1))
+    sqr_d = sqrt(d)
+    return (c / sqr_d) / sqr_d.T
 
 
 def to_npy_stack(dirname, x, axis=0):

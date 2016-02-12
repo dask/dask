@@ -1593,6 +1593,21 @@ def test_cov():
     assert raises(ValueError, lambda: da.cov(d, ddof=1.5))
 
 
+def test_corrcoef():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(4, 4))
+
+    assert_eq(da.corrcoef(d), np.corrcoef(x))
+    assert_eq(da.corrcoef(d, rowvar=0), np.corrcoef(x, rowvar=0))
+    assert_eq(da.corrcoef(d, d), np.corrcoef(x, x))
+
+    y = np.arange(8)
+    e = da.from_array(y, chunks=(4,))
+
+    assert_eq(da.corrcoef(d, e), np.corrcoef(x, y))
+    assert_eq(da.corrcoef(e, d), np.corrcoef(y, x))
+
+
 def test_memmap():
     with tmpfile('npy') as fn_1:
         with tmpfile('npy') as fn_2:
@@ -1792,6 +1807,34 @@ def test_eye():
 
     assert_eq(da.eye(9, chunks=3, dtype=int), np.eye(9, dtype=int))
     assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
+
+
+def test_diag():
+    v = np.arange(11)
+    assert_eq(da.diag(v), np.diag(v))
+
+    v = da.arange(11, chunks=3)
+    darr = da.diag(v)
+    nparr = np.diag(v)
+    assert_eq(darr, nparr)
+    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+
+    v = v + v + 3
+    darr = da.diag(v)
+    nparr = np.diag(v)
+    assert_eq(darr, nparr)
+
+    v = da.arange(11, chunks=11)
+    darr = da.diag(v)
+    nparr = np.diag(v)
+    assert_eq(darr, nparr)
+    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+
+    x = np.arange(64).reshape((8, 8))
+    assert_eq(da.diag(x), np.diag(x))
+
+    d = da.from_array(x, chunks=(4, 4))
+    assert_eq(da.diag(d), np.diag(x))
 
 
 def test_tril_triu():
