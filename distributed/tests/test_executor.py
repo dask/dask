@@ -304,6 +304,31 @@ def test_gather_sync(loop):
             x = e.submit(inc, 1)
             assert e.gather(x) == 2
 
+            y = e.submit(div, 1, 0)
+
+            with pytest.raises(ZeroDivisionError):
+                e.gather([x, y])
+
+            [xx] = e.gather([x, y], errors='skip')
+            assert xx == 2
+
+
+@gen_cluster()
+def test_gather_strict(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(div, 2, 1)
+    y = e.submit(div, 1, 0)
+
+    with pytest.raises(ZeroDivisionError):
+        result = yield e._gather([x, y])
+
+    [xx] = yield e._gather([x, y], errors='skip')
+    assert xx == 2
+
+    yield e._shutdown()
+
 
 @gen_cluster()
 def test_get(s, a, b):

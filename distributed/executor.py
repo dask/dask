@@ -625,18 +625,25 @@ class Executor(object):
         return [Future(key, self) for key in keys]
 
     @gen.coroutine
-    def _gather(self, futures):
+    def _gather(self, futures, errors='raise'):
         futures2, keys = unpack_remotedata(futures)
         keys = list(keys)
+        bad_data = dict()
 
         while True:
             logger.debug("Waiting on futures to clear before gather")
             yield All([self.futures[key]['event'].wait() for key in keys
                                                     if key in self.futures])
-            exceptions = [self.futures[key]['exception'] for key in keys
-                          if self.futures[key]['status'] == 'error']
+            exceptions = {key: self.futures[key]['exception'] for key in keys
+                          if self.futures[key]['status'] == 'error'}
             if exceptions:
-                raise exceptions[0]
+                if errors == 'raise':
+                    raise first(exceptions.values())
+                if errors == 'skip':
+                    keys = [key for key in keys if key not in exceptions]
+                    bad_data.update({key: None for key in exceptions})
+                else:
+                    raise ValueError("Bad value, `errors=%s`" % errors)
 
             response, data = yield self.scheduler.gather(keys=keys)
 
@@ -649,17 +656,20 @@ class Executor(object):
             else:
                 break
 
-        result = pack_data(futures2, data)
+        if bad_data and errors == 'skip' and isinstance(futures2, list):
+            futures2 = [f for f in futures2 if f not in exceptions]
+
+        result = pack_data(futures2, merge(data, bad_data))
         raise gen.Return(result)
 
-    def _threaded_gather(self, qin, qout):
+    def _threaded_gather(self, qin, qout, **kwargs):
         """ Internal function for gathering Queue """
         while True:
             d = qin.get()
-            f = self.gather(d)
+            f = self.gather(d, **kwargs)
             qout.put(f)
 
-    def gather(self, futures):
+    def gather(self, futures, errors='raise'):
         """ Gather futures from distributed memory
 
         Accepts a future, nested container of futures, iterator, or queue.
@@ -689,14 +699,15 @@ class Executor(object):
         """
         if isqueue(futures):
             qout = pyQueue()
-            t = Thread(target=self._threaded_gather, args=(futures, qout))
+            t = Thread(target=self._threaded_gather, args=(futures, qout),
+                        kwargs={'errors': errors})
             t.daemon = True
             t.start()
             return qout
         elif isinstance(futures, Iterator):
-            return (self.gather(f) for f in futures)
+            return (self.gather(f, errors=errors) for f in futures)
         else:
-            return sync(self.loop, self._gather, futures)
+            return sync(self.loop, self._gather, futures, errors=errors)
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):
