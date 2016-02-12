@@ -5,6 +5,7 @@ from tornado.ioloop import IOLoop
 
 from distributed.utils import get_ip
 from distributed import Center
+from distributed.cli.utils import check_python_3
 
 # Set up signal handling
 import signal
@@ -20,7 +21,7 @@ logger = logging.getLogger('distributed.dcenter')
 @click.command()
 @click.option('--port', type=int, default=8787, help="Port on which to serve")
 @click.option('--host', type=str, default=None, help="Name of this computer")
-def go(host, port):
+def main(host, port):
     if host is None:
         host = get_ip()
 
@@ -31,6 +32,10 @@ def go(host, port):
     IOLoop.current().close()
     logger.info("\nEnd center at %s:%d", host, port)
 
+
+def go():
+    check_python_3()
+    main()
 
 if __name__ == '__main__':
     go()
