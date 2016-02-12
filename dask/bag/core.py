@@ -28,7 +28,7 @@ from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (file_size, infer_compression, open, system_encoding,
-                     takes_multiple_arguments, textblock)
+                     takes_multiple_arguments, textblock, funcname)
 
 no_default = '__no__default__'
 
@@ -195,7 +195,7 @@ class Item(Base):
         return [self.key]
 
     def apply(self, func):
-        name = 'apply-' + tokenize(self, func)
+        name = 'apply-{0}-{1}'.format(funcname(func), tokenize(self, func))
         dsk = {name: (func, self.key)}
         return Item(merge(self.dask, dsk), name)
 
@@ -250,7 +250,7 @@ class Bag(Base):
         >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
         [0, 10, 20, 30, 40]
         """
-        name = 'map-' + tokenize(self, func)
+        name = 'map-{0}-{1}'.format(funcname(func), tokenize(self, func))
         if takes_multiple_arguments(func):
             func = partial(apply, func)
         dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
@@ -272,7 +272,8 @@ class Bag(Base):
         >>> list(b.filter(iseven))  # doctest: +SKIP
         [0, 2, 4]
         """
-        name = 'filter-' + tokenize(self, predicate)
+        name = 'filter-{0}-{1}'.format(funcname(predicate),
+                                       tokenize(self, predicate))
         dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
@@ -288,7 +289,8 @@ class Bag(Base):
         >>> list(b.remove(iseven))  # doctest: +SKIP
         [1, 3]
         """
-        name = 'remove-' + tokenize(self, predicate)
+        name = 'remove-{0}-{1}'.format(funcname(predicate),
+                                       tokenize(self, predicate))
         dsk = dict(((name, i), (reify, (remove, predicate, (self.name, i))))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
@@ -301,7 +303,8 @@ class Bag(Base):
 
         >>> b.map_partitions(myfunc)  # doctest: +SKIP
         """
-        name = 'map-partitions-' + tokenize(self, func)
+        name = 'map-partitions-{0}-{1}'.format(funcname(func),
+                                               tokenize(self, func))
         dsk = dict(((name, i), (func, (self.name, i)))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
@@ -388,8 +391,9 @@ class Bag(Base):
         Bag.foldby
         """
         token = tokenize(self, binop, combine, initial)
-        a = 'fold-a-' + token
-        b = 'fold-b-' + token
+        combine = combine or binop
+        a = 'foldbinop-{0}-{1}'.format(funcname(binop), token)
+        b = 'foldcombine-{0}-{1}'.format(funcname(combine), token)
         initial = quote(initial)
         if initial is not no_default:
             dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
@@ -397,7 +401,7 @@ class Bag(Base):
         else:
             dsk = dict(((a, i), (reduce, binop, (self.name, i)))
                        for i in range(self.npartitions))
-        dsk2 = {b: (reduce, combine or binop, list(dsk.keys()))}
+        dsk2 = {b: (reduce, combine, list(dsk.keys()))}
         return Item(merge(self.dask, dsk, dsk2), b)
 
     def frequencies(self, split_every=None):
@@ -482,12 +486,12 @@ class Bag(Base):
         if split_every is None:
             split_every = 8
         token = tokenize(self, perpartition, aggregate, split_every)
-        a = 'reduction-part-' + token
+        a = 'reduction-part-{0}-{1}'.format(funcname(perpartition), token)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
-        fmt = 'reduction-agg{0}-' + token
+        fmt = 'reduction-agg-{0}-'.format(funcname(aggregate)) + '-{0}-' + token
         depth = 0
         while k > 1:
             c = fmt.format(depth)
@@ -763,7 +767,7 @@ class Bag(Base):
             dsk1 = {p: (partd.Python, partd.File())}
 
         # Partition data on disk
-        name = 'groupby-partition-' + token
+        name = 'groupby-part-{0}-{1}'.format(funcname(grouper), token)
         dsk2 = dict(((name, i), (partition, grouper, (self.name, i),
                                  npartitions, p, blocksize))
                     for i in range(self.npartitions))
