@@ -59,6 +59,7 @@ def test_map():
     expected = merge(dsk, dict(((c.name, i), (reify, (map, inc, (b.name, i))))
                                for i in range(b.npartitions)))
     assert c.dask == expected
+    assert c.name == b.map(inc).name
 
 
 def test_map_function_with_multiple_arguments():
@@ -108,10 +109,14 @@ def test_filter():
                                 (reify, (filter, iseven, (b.name, i))))
                                for i in range(b.npartitions)))
     assert c.dask == expected
+    assert c.name == b.filter(iseven).name
 
 
 def test_remove():
-    assert list(b.remove(lambda x: x % 2 == 0)) == [1, 3] * 3
+    f = lambda x: x % 2 == 0
+    c = b.remove(f)
+    assert list(c) == [1, 3] * 3
+    assert c.name == b.remove(f).name
 
 
 def test_iter():
@@ -126,17 +131,26 @@ def test_pluck():
     assert set(b.pluck(0)) == set([1, 2, 3, 4])
     assert set(b.pluck(1)) == set([10, 20, 30, 40])
     assert set(b.pluck([1, 0])) == set([(10, 1), (20, 2), (30, 3), (40, 4)])
+    assert b.pluck([1, 0]).name == b.pluck([1, 0]).name
 
 
 def test_pluck_with_default():
     b = db.from_sequence(['Hello', '', 'World'])
     assert raises(IndexError, lambda: list(b.pluck(0)))
     assert list(b.pluck(0, None)) == ['H', None, 'W']
+    assert b.pluck(0, None).name == b.pluck(0, None).name
+    assert b.pluck(0).name != b.pluck(0, None).name
 
 
 def test_fold():
-    assert b.fold(add).compute() == sum(L)
-    assert b.fold(add, initial=10).compute() == sum(L) + 10 * b.npartitions
+    c = b.fold(add)
+    assert c.compute() == sum(L)
+    assert c.key == b.fold(add).key
+
+    c2 = b.fold(add, initial=10)
+    assert c2.key != c.key
+    assert c2.compute() == sum(L) + 10 * b.npartitions
+    assert c2.key == b.fold(add, initial=10).key
 
     c = db.from_sequence(range(5), npartitions=3)
     def binop(acc, x):
@@ -144,7 +158,9 @@ def test_fold():
         acc.add(x)
         return acc
 
-    assert c.fold(binop, set.union, initial=set()).compute() == set(c)
+    d = c.fold(binop, set.union, initial=set())
+    assert d.compute() == set(c)
+    assert d.key == c.fold(binop, set.union, initial=set()).key
 
     d = db.from_sequence('hello')
     assert set(d.fold(lambda a, b: ''.join([a, b]), initial='').compute()) == set('hello')
@@ -156,23 +172,31 @@ def test_fold():
 
 def test_distinct():
     assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
+    assert b.distinct().name == b.distinct().name
 
 
 def test_frequencies():
-    assert dict(b.frequencies()) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
-    assert dict(b.frequencies(split_every=2)) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
+    c = b.frequencies()
+    assert dict(c) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
+    c2 = b.frequencies(split_every=2)
+    assert dict(c2) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
+    assert c.name == b.frequencies().name
+    assert c.name != c2.name
+    assert c2.name == b.frequencies(split_every=2).name
 
 
 def test_topk():
     assert list(b.topk(4)) == [4, 4, 4, 3]
     assert list(b.topk(4, key=lambda x: -x).compute(get=dask.get)) == \
             [0, 0, 0, 1]
+    assert b.topk(4).name == b.topk(4).name
 
 
 def test_topk_with_non_callable_key():
     b = db.from_sequence([(1, 10), (2, 9), (3, 8)], npartitions=2)
     assert list(b.topk(2, key=1)) == [(1, 10), (2, 9)]
     assert list(b.topk(2, key=0)) == [(3, 8), (2, 9)]
+    assert b.topk(2, key=1).name == b.topk(2, key=1).name
 
 
 def test_topk_with_multiarg_lambda():
@@ -183,6 +207,7 @@ def test_topk_with_multiarg_lambda():
 def test_lambdas():
     assert list(b.map(lambda x: x + 1)) == list(b.map(inc))
 
+
 def test_reductions():
     assert int(b.count()) == 15
     assert int(b.sum()) == 30
@@ -190,6 +215,8 @@ def test_reductions():
     assert int(b.min()) == 0
     assert int(b.any()) == True
     assert int(b.all()) == False  # some zeros exist
+    assert b.all().key == b.all().key
+    assert b.all().key != b.any().key
 
 
 def test_tree_reductions():
@@ -208,14 +235,20 @@ def test_tree_reductions():
     assert c.compute() == d.compute()
     assert len(c.dask) > len(d.dask)
 
+    assert c.key != d.key
+    assert c.key == b.sum(split_every=2).key
+    assert c.key != b.sum().key
+
 
 def test_mean():
     assert b.mean().compute(get=dask.get) == 2.0
     assert float(b.mean()) == 2.0
 
+
 def test_std():
     assert b.std().compute(get=dask.get) == math.sqrt(2.0)
     assert float(b.std()) == math.sqrt(2.0)
+
 
 def test_var():
     assert b.var().compute(get=dask.get) == 2.0
@@ -223,15 +256,18 @@ def test_var():
 
 
 def test_join():
-    assert list(b.join([1, 2, 3], on_self=isodd, on_other=iseven)) == \
-            list(join(iseven, [1, 2, 3], isodd, list(b)))
+    c = b.join([1, 2, 3], on_self=isodd, on_other=iseven)
+    assert list(c) == list(join(iseven, [1, 2, 3], isodd, list(b)))
     assert list(b.join([1, 2, 3], isodd)) == \
             list(join(isodd, [1, 2, 3], isodd, list(b)))
+    assert c.name == b.join([1, 2, 3], on_self=isodd, on_other=iseven).name
+
 
 def test_foldby():
     c = b.foldby(iseven, add, 0, add, 0)
     assert (reduceby, iseven, add, (b.name, 0), 0) in list(c.dask.values())
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
+    assert c.name == b.foldby(iseven, add, 0, add, 0).name
 
     c = b.foldby(iseven, lambda acc, x: acc + x)
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
@@ -239,6 +275,8 @@ def test_foldby():
 
 def test_map_partitions():
     assert list(b.map_partitions(len)) == [5, 5, 5]
+    assert b.map_partitions(len).name == b.map_partitions(len).name
+    assert b.map_partitions(lambda a: len(a) + 1).name != b.map_partitions(len).name
 
 
 def test_lazify_task():
@@ -296,6 +334,7 @@ def test_map_is_lazy():
     from dask.bag.core import map
     assert isinstance(map(lambda x: x, [1, 2, 3]), Iterator)
 
+
 def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
 
@@ -318,6 +357,8 @@ def test_from_castra():
                 list(default) == [(i, str(i)) for i in range(100)])
         assert list(with_columns) == list(range(100))
         assert list(with_index) == list(zip(range(100), range(100)))
+        assert default.name != with_columns.name != with_index.name
+        assert with_index.name == db.from_castra(c, 'x', index=True).name
 
 
 @pytest.mark.slow
@@ -477,6 +518,8 @@ def test_product():
     z = x.product(y)
     assert set(z) == set([(i, j) for i in [1, 2, 3, 4] for j in [10, 20, 30]])
 
+    assert z.name != b2.name
+    assert z.name == x.product(y).name
 
 
 def test_partition_collect():
@@ -491,14 +534,16 @@ def test_partition_collect():
 
 
 def test_groupby():
-    c = b.groupby(lambda x: x)
+    c = b.groupby(identity)
     result = dict(c)
     assert result == {0: [0, 0 ,0],
                       1: [1, 1, 1],
                       2: [2, 2, 2],
                       3: [3, 3, 3],
                       4: [4, 4, 4]}
-    assert b.groupby(lambda x: x).npartitions == b.npartitions
+    assert c.npartitions == b.npartitions
+    assert c.name == b.groupby(identity).name
+    assert c.name != b.groupby(lambda x: x + 1).name
 
 
 def test_groupby_with_indexer():
@@ -506,6 +551,7 @@ def test_groupby_with_indexer():
     result = dict(b.groupby(0))
     assert valmap(sorted, result) == {1: [[1, 2, 3], [1, 4, 9]],
                                       2: [[2, 3, 4]]}
+
 
 def test_groupby_with_npartitions_changed():
     result = b.groupby(lambda x: x, npartitions=1)
@@ -524,6 +570,10 @@ def test_concat():
     b = db.from_sequence([4, 5, 6])
     c = db.concat([a, b])
     assert list(c) == [1, 2, 3, 4, 5, 6]
+
+    assert c.name == db.concat([a, b]).name
+    assert b.concat().name != a.concat().name
+    assert b.concat().name == b.concat().name
 
     b = db.from_sequence([1, 2, 3]).map(lambda x: x * [1, 2, 3])
     assert list(b.concat()) == [1, 2, 3] * sum([1, 2, 3])
@@ -569,6 +619,10 @@ def test_to_dataframe():
     df2 = b.to_dataframe()
 
     assert (df2.compute().values == df.compute().values).all()
+
+    assert df2._name == b.to_dataframe()._name
+    assert df2._name != df._name
+
 
 def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
@@ -648,6 +702,8 @@ def test_string_namespace():
     assert list(b.str.match('*Smith')) == ['Alice Smith', 'Charlie Smith']
 
     assert raises(AttributeError, lambda: b.str.sfohsofhf)
+    assert b.str.match('*Smith').name == b.str.match('*Smith').name
+    assert b.str.match('*Smith').name != b.str.match('*John').name
 
 
 def test_string_namespace_with_unicode():
@@ -743,6 +799,7 @@ def test_from_imperative():
     from dask.imperative import value
     a, b, c = value([1, 2, 3]), value([4, 5, 6]), value([7, 8, 9])
     bb = from_imperative([a, b, c])
+    assert bb.name == from_imperative([a, b, c]).name
 
     assert isinstance(bb, Bag)
     assert list(bb) == [1, 2, 3, 4, 5, 6, 7, 8, 9]

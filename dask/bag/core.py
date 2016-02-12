@@ -5,11 +5,11 @@ import itertools
 import math
 import bz2
 import os
+import uuid
 from fnmatch import fnmatchcase
 from glob import glob
 from collections import Iterable, Iterator, defaultdict
 from functools import wraps, partial
-from itertools import repeat
 
 from ..utils import ignoring
 
@@ -23,16 +23,12 @@ with ignoring(ImportError):
 
 from ..base import Base, normalize_token, tokenize
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
-        StringIO, GzipFile, BZ2File)
+        GzipFile)
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (file_size, infer_compression, open, system_encoding,
                      takes_multiple_arguments, textblock)
-
-names = ('bag-%d' % i for i in itertools.count(1))
-tokens = ('-%d' % i for i in itertools.count(1))
-load_names = ('load-%d' % i for i in itertools.count(1))
 
 no_default = '__no__default__'
 
@@ -164,7 +160,7 @@ def to_textfiles(b, path, name_function=str, compression='infer',
             compression = infer_compression(path)
         return compression
 
-    name = next(names)
+    name = 'to-textfiles-' + uuid.uuid4().hex
     dsk = dict(((name, i), (write, (b.name, i), path, get_compression(path),
                             encoding))
                for i, path in enumerate(paths))
@@ -199,7 +195,7 @@ class Item(Base):
         return [self.key]
 
     def apply(self, func):
-        name = next(names)
+        name = 'apply-' + tokenize(self, func)
         dsk = {name: (func, self.key)}
         return Item(merge(self.dask, dsk), name)
 
@@ -254,7 +250,7 @@ class Bag(Base):
         >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
         [0, 10, 20, 30, 40]
         """
-        name = next(names)
+        name = 'map-' + tokenize(self, func)
         if takes_multiple_arguments(func):
             func = partial(apply, func)
         dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
@@ -276,7 +272,7 @@ class Bag(Base):
         >>> list(b.filter(iseven))  # doctest: +SKIP
         [0, 2, 4]
         """
-        name = next(names)
+        name = 'filter-' + tokenize(self, predicate)
         dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
@@ -292,7 +288,7 @@ class Bag(Base):
         >>> list(b.remove(iseven))  # doctest: +SKIP
         [1, 3]
         """
-        name = next(names)
+        name = 'remove-' + tokenize(self, predicate)
         dsk = dict(((name, i), (reify, (remove, predicate, (self.name, i))))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
@@ -305,7 +301,7 @@ class Bag(Base):
 
         >>> b.map_partitions(myfunc)  # doctest: +SKIP
         """
-        name = next(names)
+        name = 'map-partitions-' + tokenize(self, func)
         dsk = dict(((name, i), (func, (self.name, i)))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
@@ -320,7 +316,7 @@ class Bag(Base):
         >>> list(b.pluck('credits').pluck(0))  # doctest: +SKIP
         [1, 10]
         """
-        name = next(names)
+        name = 'pluck-' + tokenize(self, key, default)
         key = quote(key)
         if default == no_default:
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i))))
@@ -391,8 +387,9 @@ class Bag(Base):
 
         Bag.foldby
         """
-        a = next(names)
-        b = next(names)
+        token = tokenize(self, binop, combine, initial)
+        a = 'fold-a-' + token
+        b = 'fold-b-' + token
         initial = quote(initial)
         if initial is not no_default:
             dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
@@ -426,8 +423,9 @@ class Bag(Base):
         >>> list(b.topk(2, lambda x: -x))  # doctest: +SKIP
         [3, 4]
         """
-        a = next(names)
-        b = next(names)
+        token = tokenize(self, k, key)
+        a = 'topk-a-' + token
+        b = 'topk-b-' + token
         if key:
             if callable(key) and takes_multiple_arguments(key):
                 key = partial(apply, key)
@@ -448,9 +446,10 @@ class Bag(Base):
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
         """
-        a = next(names)
+        token = tokenize(self)
+        a = 'distinct-a-' + token
+        b = 'distinct-b-' + token
         dsk = dict(((a, i), (set, key)) for i, key in enumerate(self._keys()))
-        b = next(names)
         dsk2 = {(b, 0): (apply, set.union, quote(list(dsk.keys())))}
 
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
@@ -482,26 +481,28 @@ class Bag(Base):
         """
         if split_every is None:
             split_every = 8
-        a = next(names)
-        b = next(names)
+        token = tokenize(self, perpartition, aggregate, split_every)
+        a = 'reduction-part-' + token
         dsk = dict(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
+        fmt = 'reduction-agg{0}-' + token
+        depth = 0
         while k > 1:
-            c = next(names)
+            c = fmt.format(depth)
             dsk2 = dict(((c, i), (aggregate, [(b, j) for j in inds]))
                  for i, inds in enumerate(partition_all(split_every, range(k))))
             dsk.update(dsk2)
             k = len(dsk2)
             b = c
+            depth += 1
 
         if out_type is Item:
             dsk[c] = dsk.pop((c, 0))
             return Item(merge(self.dask, dsk), c)
         else:
             return Bag(merge(self.dask, dsk), c, 1)
-
 
     @wraps(sum)
     def sum(self, split_every=None):
@@ -578,7 +579,7 @@ class Bag(Base):
         assert not isinstance(other, Bag)
         if on_other is None:
             on_other = on_self
-        name = next(names)
+        name = 'join-' + tokenize(self, other, on_self, on_other)
         dsk = dict(((name, i), (list, (join, on_other, other,
                                        on_self, (self.name, i))))
                    for i in range(self.npartitions))
@@ -587,7 +588,7 @@ class Bag(Base):
     def product(self, other):
         """ Cartesian product between two bags """
         assert isinstance(other, Bag)
-        name = next(names)
+        name = 'product-' + tokenize(self, other)
         n, m = self.npartitions, other.npartitions
         dsk = dict(((name, i*m + j),
                    (list, (itertools.product, (self.name, i),
@@ -667,8 +668,9 @@ class Bag(Base):
         toolz.reduceby
         pyspark.combineByKey
         """
-        a = next(names)
-        b = next(names)
+        token = tokenize(self, key, binop, initial, combine, combine_initial)
+        a = 'foldby-a-' + token
+        b = 'foldby-b-' + token
         if combine is None:
             combine = binop
         if initial is not no_default:
@@ -705,7 +707,7 @@ class Bag(Base):
         >>> b.take(3)  # doctest: +SKIP
         (0, 1, 2)
         """
-        name = next(names)
+        name = 'take-' + tokenize(self, k)
         dsk = {(name, 0): (list, (take, k, (self.name, 0)))}
         b = Bag(merge(self.dask, dsk), name, 1)
         if compute:
@@ -726,7 +728,7 @@ class Bag(Base):
         >>> list(b.concat())
         [1, 2, 3]
         """
-        name = next(names)
+        name = 'concat-' + tokenize(self)
         dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
@@ -751,22 +753,23 @@ class Bag(Base):
         """
         if npartitions is None:
             npartitions = self.npartitions
+        token = tokenize(self, grouper, npartitions, blocksize)
 
         import partd
-        p = ('partd' + next(tokens),)
+        p = ('partd-' + token,)
         try:
             dsk1 = {p: (partd.Python, (partd.Snappy, partd.File()))}
         except AttributeError:
             dsk1 = {p: (partd.Python, partd.File())}
 
         # Partition data on disk
-        name = next(names)
+        name = 'groupby-partition-' + token
         dsk2 = dict(((name, i), (partition, grouper, (self.name, i),
                                  npartitions, p, blocksize))
                     for i in range(self.npartitions))
 
         # Barrier
-        barrier_token = 'barrier' + next(tokens)
+        barrier_token = 'groupby-barrier-' + token
 
         def barrier(args):
             return 0
@@ -774,7 +777,7 @@ class Bag(Base):
         dsk3 = {barrier_token: (barrier, list(dsk2))}
 
         # Collect groups
-        name = next(names)
+        name = 'groupby-collect-' + token
         dsk4 = dict(((name, i),
                      (collect, grouper, i, p, barrier_token))
                     for i in range(npartitions))
@@ -816,7 +819,7 @@ class Bag(Base):
                 columns = sorted(head)
             elif isinstance(head, (tuple, list)):
                 columns = list(range(len(head)))
-        name = next(names)
+        name = 'to_dataframe-' + tokenize(self, columns)
         DataFrame = partial(pd.DataFrame, columns=columns)
         dsk = dict(((name, i), (DataFrame, (list2, (self.name, i))))
                    for i in range(self.npartitions))
@@ -885,7 +888,7 @@ def from_filenames(filenames, chunkbytes=None, compression='infer',
 
     full_filenames = [os.path.abspath(f) for f in filenames]
 
-    name = 'from-filename' + next(tokens)
+    name = 'from-filenames-' + uuid.uuid4().hex
 
     # Make sure `linesep` is not a byte string because `io.TextIOWrapper` in
     # python versions other than 2.7 dislike byte strings for the `newline`
@@ -992,7 +995,7 @@ def from_s3(bucket_name, paths='*', aws_access_key=None, aws_secret_key=None,
 
     get_key = partial(_get_key, bucket_name, conn_args)
 
-    name = next(load_names)
+    name = 'from_s3-' + uuid.uuid4().hex
     dsk = dict(((name, i), (list, (get_key, k))) for i, k in enumerate(paths))
     return Bag(dsk, name, len(paths))
 
@@ -1035,7 +1038,7 @@ def from_hdfs(path, hdfs=None, host='localhost', port='50070', user_name=None):
     if not filenames:
         raise ValueError("No files found for path %s" % path)
 
-    name = next(names)
+    name = 'from_hdfs-' + uuid.uuid4().hex
     dsk = dict()
     for i, fn in enumerate(filenames):
         ext = fn.split('.')[-1]
@@ -1106,7 +1109,7 @@ def from_sequence(seq, partition_size=None, npartitions=None):
             partition_size = int(len(seq) / 100)
 
     parts = list(partition_all(partition_size, seq))
-    name = next(load_names)
+    name = 'from_sequence-' + tokenize(seq, partition_size)
     d = dict(((name, i), part) for i, part in enumerate(parts))
     return Bag(d, name, len(d))
 
@@ -1131,7 +1134,8 @@ def from_castra(x, columns=None, index=False):
     if columns is None:
         columns = x.columns
 
-    name = 'from-castra-' + next(tokens)
+    name = 'from-castra-' + tokenize(os.path.getmtime(x.path), x.path,
+                                     columns, index)
     dsk = dict(((name, i), (load_castra_partition, x, part, columns, index))
                 for i, part in enumerate(x.partitions))
     return Bag(dsk, name, len(x.partitions))
@@ -1181,7 +1185,7 @@ def from_url(urls):
     """
     if isinstance(urls, str):
         urls = [urls]
-    name = next(load_names)
+    name = 'from_url-' + uuid.uuid4().hex
     dsk = {}
     for i, u in enumerate(urls):
         dsk[(name, i)] = (list, (urlopen, u))
@@ -1208,7 +1212,7 @@ def concat(bags):
     >>> list(c)
     [1, 2, 3, 4, 5, 6]
     """
-    name = next(names)
+    name = 'concat-' + tokenize(*bags)
     counter = itertools.count(0)
     dsk = dict(((name, next(counter)), key)
                for bag in bags for key in sorted(bag._keys()))
