@@ -2736,7 +2736,8 @@ def diag(v):
             raise ValueError("Array must be 1d or 2d only")
         return Array(dsk, name, chunks, dtype=v.dtype)
     if not isinstance(v, Array):
-        raise TypeError("v must be a dask array or numpy array")
+        raise TypeError("v must be a dask array or numpy array, "
+                        "got {0}".format(type(v)))
     if v.ndim != 1:
         if v.chunks[0] == v.chunks[1]:
             dsk = dict(((name, i), (np.diag, row[i])) for (i, row)
