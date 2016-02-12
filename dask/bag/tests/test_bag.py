@@ -159,7 +159,8 @@ def test_distinct():
 
 
 def test_frequencies():
-    assert dict(list(b.frequencies())) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
+    assert dict(b.frequencies()) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
+    assert dict(b.frequencies(split_every=2)) == {0: 3, 1: 3, 2: 3, 3: 3, 4: 3}
 
 
 def test_topk():
@@ -189,6 +190,24 @@ def test_reductions():
     assert int(b.min()) == 0
     assert int(b.any()) == True
     assert int(b.all()) == False  # some zeros exist
+
+
+def test_tree_reductions():
+    b = db.from_sequence(range(12))
+    c = b.reduction(sum, sum, split_every=2)
+    d = b.reduction(sum, sum, split_every=6)
+    e = b.reduction(sum, sum, split_every=5)
+
+    assert c.compute() == d.compute() == e.compute()
+
+    assert len(c.dask) > len(d.dask)
+
+    c = b.sum(split_every=2)
+    d = b.sum(split_every=5)
+
+    assert c.compute() == d.compute()
+    assert len(c.dask) > len(d.dask)
+
 
 def test_mean():
     assert b.mean().compute(get=dask.get) == 2.0

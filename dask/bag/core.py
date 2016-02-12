@@ -15,7 +15,7 @@ from ..utils import ignoring
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   remove, pluck, groupby, topk)
+                   remove, pluck, groupby, topk, compose)
 import toolz
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
@@ -403,19 +403,16 @@ class Bag(Base):
         dsk2 = {b: (reduce, combine or binop, list(dsk.keys()))}
         return Item(merge(self.dask, dsk, dsk2), b)
 
-    def frequencies(self):
+    def frequencies(self, split_every=None):
         """ Count number of occurrences of each distinct element
 
         >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
         >>> dict(b.frequencies())  # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
-        a = next(names)
-        b = next(names)
-        dsk = dict(((a, i), (frequencies, (self.name, i)))
-                   for i in range(self.npartitions))
-        dsk2 = {(b, 0): (dictitems, (merge_with, sum, sorted(dsk.keys())))}
-        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
+        return self.reduction(compose(list, dictitems, frequencies),
+                              merge_frequencies,
+                              out_type=Bag, split_every=split_every)
 
     def topk(self, k, key=None):
         """ K largest elements in collection
@@ -458,7 +455,8 @@ class Bag(Base):
 
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
-    def reduction(self, perpartition, aggregate):
+    def reduction(self, perpartition, aggregate, split_every=None,
+                  out_type=Item):
         """ Reduce collection with reduction operators
 
         Parameters
@@ -468,6 +466,12 @@ class Bag(Base):
             reduction to apply to each partition
         aggregate: function
             reduction to apply to the results of all partitions
+        split_every: int (optional)
+            Group partitions into groups of this size while performing reduction
+            Defaults to 8
+        out_type: {Bag, Item}
+            The out type of the result, Item if a single element, Bag if a list
+            of elements.  Defaults to Item.
 
         Examples
         --------
@@ -476,38 +480,54 @@ class Bag(Base):
         >>> b.reduction(sum, sum).compute()
         45
         """
+        if split_every is None:
+            split_every = 8
         a = next(names)
         b = next(names)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
-        dsk2 = {b: (aggregate, list(dsk.keys()))}
-        return Item(merge(self.dask, dsk, dsk2), b)
+        k = self.npartitions
+        b = a
+        while k > 1:
+            c = next(names)
+            dsk2 = dict(((c, i), (aggregate, [(b, j) for j in inds]))
+                 for i, inds in enumerate(partition_all(split_every, range(k))))
+            dsk.update(dsk2)
+            k = len(dsk2)
+            b = c
+
+        if out_type is Item:
+            dsk[c] = dsk.pop((c, 0))
+            return Item(merge(self.dask, dsk), c)
+        else:
+            return Bag(merge(self.dask, dsk), c, 1)
+
 
     @wraps(sum)
-    def sum(self):
-        return self.reduction(sum, sum)
+    def sum(self, split_every=None):
+        return self.reduction(sum, sum, split_every=split_every)
 
     @wraps(max)
-    def max(self):
-        return self.reduction(max, max)
+    def max(self, split_every=None):
+        return self.reduction(max, max, split_every=split_every)
 
     @wraps(min)
-    def min(self):
-        return self.reduction(min, min)
+    def min(self, split_every=None):
+        return self.reduction(min, min, split_every=split_every)
 
     @wraps(any)
-    def any(self):
-        return self.reduction(any, any)
+    def any(self, split_every=None):
+        return self.reduction(any, any, split_every=split_every)
 
     @wraps(all)
-    def all(self):
-        return self.reduction(all, all)
+    def all(self, split_every=None):
+        return self.reduction(all, all, split_every=split_every)
 
-    def count(self):
+    def count(self, split_every=None):
         """ Count the number of elements """
-        return self.reduction(count, sum)
+        return self.reduction(count, sum, split_every=split_every)
 
-    def mean(self):
+    def mean(self, split_every=None):
         """ Arithmetic mean """
         def chunk(seq):
             total, n = 0.0, 0
@@ -520,9 +540,9 @@ class Bag(Base):
             totals, counts = list(zip(*x))
             return 1.0 * sum(totals) / sum(counts)
 
-        return self.reduction(chunk, agg)
+        return self.reduction(chunk, agg, split_every=split_every)
 
-    def var(self, ddof=0):
+    def var(self, ddof=0, split_every=None):
         """ Variance """
         def chunk(seq):
             squares, total, n = 0.0, 0.0, 0
@@ -538,11 +558,11 @@ class Bag(Base):
             result = (x2 / n) - (x / n)**2
             return result * n / (n - ddof)
 
-        return self.reduction(chunk, agg)
+        return self.reduction(chunk, agg, split_every=split_every)
 
-    def std(self, ddof=0):
+    def std(self, ddof=0, split_every=None):
         """ Standard deviation """
-        return self.var(ddof=ddof).apply(math.sqrt)
+        return self.var(ddof=ddof, split_every=split_every).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
         """ Join collection with another collection
@@ -1294,3 +1314,7 @@ def from_imperative(values):
     dsk2 = dict(zip(names, values))
 
     return Bag(merge(dsk, dsk2), name, len(values))
+
+
+def merge_frequencies(seqs):
+    return list(merge_with(sum, map(dict, seqs)).items())
