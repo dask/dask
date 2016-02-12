@@ -2,6 +2,9 @@ from distributed.cluster import Cluster
 import click
 import os
 
+from distributed.cli.utils import check_python_3
+
+
 @click.command(help = """Launch a distributed cluster over SSH. A 'dscheduler' process will run on the
                          first host specified in [HOSTNAMES] or in the hostfile (unless --scheduler is specified
                          explicitly). One or more 'dworker' processes will be run each host in [HOSTNAMES] or
@@ -28,7 +31,7 @@ import os
 @click.option('--log-directory', default=None, type=click.Path(exists=True),
               help="Directory to use on all cluster nodes for the output of dscheduler and dworker commands.")
 @click.pass_context
-def start(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
+def main(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
           ssh_username, ssh_port, ssh_private_key, log_directory):
     try:
         hostnames = list(hostnames)
@@ -63,6 +66,11 @@ def start(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
     print("\n[ dcluster ]: Shutting down remote processes (this may take a moment).")
     c.shutdown()
     print("[ dcluster ]: Remote processes have been terminated. Exiting.")
+
+
+def start():
+    check_python_3()
+    main()
 
 if __name__ == '__main__':
     start()

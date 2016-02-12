@@ -4,9 +4,11 @@ import socket
 from time import sleep
 
 import click
+
 from distributed import  Scheduler, sync
 from distributed.utils import get_ip
 from distributed.http import HTTPScheduler
+from distributed.cli.utils import check_python_3
 from tornado.ioloop import IOLoop
 
 logger = logging.getLogger('distributed.scheduler')
@@ -24,7 +26,7 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.command()
 @click.argument('center', type=str, default='')
 @click.option('--port', type=int, default=8786, help="Serving port")
-def go(center, port):
+def main(center, port):
     loop = IOLoop.current()
     scheduler = Scheduler(center, services={'http': HTTPScheduler})
     if center:
@@ -36,6 +38,12 @@ def go(center, port):
     scheduler.stop()
 
     logging.info("End scheduler at %s:%d", ip, port)
+
+
+def go():
+    check_python_3()
+    main()
+
 
 if __name__ == '__main__':
     go()

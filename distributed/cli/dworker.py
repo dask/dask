@@ -7,6 +7,7 @@ from distributed import Nanny, Worker, sync
 from distributed.utils import get_ip
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
+from distributed.cli.utils import check_python_3
 from tornado.ioloop import IOLoop
 from tornado import gen
 
@@ -26,7 +27,7 @@ ip = get_ip()
 @click.option('--nprocs', type=int, default=1,
               help="Number of worker processes.  Defaults to one.")
 @click.option('--no-nanny', is_flag=True)
-def go(center, host, port, nthreads, nprocs, no_nanny):
+def main(center, host, port, nthreads, nprocs, no_nanny):
     try:
         center_ip, center_port = center.split(':')
         center_port = int(center_port)
@@ -70,6 +71,11 @@ def go(center, host, port, nthreads, nprocs, no_nanny):
             else:
                 logger.error("Failed to cleanly kill worker %s:%d",
                              nanny.ip, nanny.port)
+
+
+def go():
+    check_python_3()
+    main()
 
 if __name__ == '__main__':
     go()
