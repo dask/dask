@@ -1,11 +1,16 @@
+import pytest
+import json
+
 import boto3
+from tornado import gen
+
 from dask.imperative import Value
 from distributed import Executor
-from distributed.executor import _wait
+from distributed.executor import _wait, Future
 from distributed.s3 import (read_bytes, get_list_of_summary_objects,
-        read_content_from_keys, get_s3)
+        read_content_from_keys, get_s3, read_text)
 from distributed.utils import get_ip
-from distributed.utils_test import gen_cluster
+from distributed.utils_test import gen_cluster, loop, cluster
 
 
 ip = get_ip()
@@ -64,7 +69,7 @@ def test_list_summary_object_with_prefix_and_delimiter():
                                      u'nested/nested2/file2']
 
 
-@gen_cluster()
+@gen_cluster(timeout=60)
 def test_read_bytes(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -77,7 +82,7 @@ def test_read_bytes(s, a, b):
     yield e._shutdown()
 
 
-@gen_cluster()
+@gen_cluster(timeout=60)
 def test_read_bytes_lazy(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -98,3 +103,47 @@ def test_get_s3():
     assert get_s3(False) is get_s3(False)
     assert get_s3(True) is not get_s3(False)
     assert 'boto3' in type(get_s3(True)).__module__
+
+
+@gen_cluster(timeout=60)
+def test_read_text(s, a, b):
+    pytest.importorskip('dask.bag')
+    import dask.bag as db
+    from dask.imperative import Value
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    b = read_text(test_bucket_name, 'test/accounts', lazy=True,
+                  collection=True)
+    assert isinstance(b, db.Bag)
+    yield gen.sleep(0.2)
+    assert not s.dask
+
+    future, = e.compute(b.filter(None).map(json.loads).pluck('amount').sum())
+    result = yield future._result()
+
+    assert result == (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) * 100
+
+    text = read_text(test_bucket_name, 'test/accounts', lazy=True,
+                     collection=False)
+    assert all(isinstance(v, Value) for v in text)
+
+    text = read_text(test_bucket_name, 'test/accounts', lazy=False,
+                     collection=False)
+    assert all(isinstance(v, Future) for v in text)
+
+    yield e._shutdown()
+
+
+def test_read_text_sync(loop):
+    pytest.importorskip('dask.bag')
+    import dask.bag as db
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            b = read_text(test_bucket_name, 'test/accounts', lazy=True,
+                          collection=True)
+            assert isinstance(b, db.Bag)
+            c = b.filter(None).map(json.loads).pluck('amount').sum()
+            result = c.compute(get=e.get)
+
+            assert result == (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) * 100

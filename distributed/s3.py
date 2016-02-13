@@ -4,9 +4,10 @@ import logging
 
 import boto3
 from botocore.handlers import disable_signing
+from tornado import gen
 
 from dask.imperative import Value
-from .executor import default_executor
+from .executor import default_executor, ensure_default_get
 
 
 logger = logging.getLogger(__name__)
@@ -103,3 +104,54 @@ def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None, lazy=Fa
     else:
         return executor.map(read_content_from_keys, [bucket_name] * len(keys),
                 keys, anon=anon)
+
+
+def read_text(bucket_name, prefix='', path_delimiter='', encoding='utf-8',
+        errors='strict', lineterminator='\n', executor=None, anon=False,
+        collection=True, lazy=False, compression=None):
+    """
+    Read lines of text from S3
+
+    Parameters
+    ----------
+    bucket_name: string
+        Name of S3 bucket like ``'my-bucket'``
+    prefix: string
+        Prefix of key name to match like ``'/data/2016/``
+    path_delimiter: string (optional)
+        Delimiter like ``'/'`` to define implicit S3 directory structure
+    compression: {None, 'gzip'}
+
+    Returns
+    -------
+    Dask bag
+    """
+    from dask import do
+    import dask.bag as db
+    executor = default_executor(executor)
+
+    blocks = read_bytes(bucket_name, prefix, path_delimiter, executor=executor,
+            lazy=True, anon=anon)
+
+    if compression:
+        blocks = map(do(decompress[compression]), blocks)
+
+    lists = [b.decode(encoding, errors).split(lineterminator) for b in blocks]
+
+    if collection:
+        ensure_default_get(executor)
+        b = db.from_imperative(lists).filter(None)
+        if lazy:
+            return b
+        else:
+            return executor.persist(b)[0]
+    else:
+        if lazy:
+            ensure_default_get(executor)
+            return lists
+        else:
+            return executor.compute(*lists)
+
+
+import gzip
+decompress = {'gzip': gzip.decompress}
