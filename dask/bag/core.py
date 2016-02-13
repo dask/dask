@@ -15,7 +15,7 @@ from ..utils import ignoring
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   remove, pluck, groupby, topk, compose, drop)
+                   remove, pluck, groupby, topk, compose, drop, curry)
 import toolz
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
@@ -344,7 +344,7 @@ class Bag(Base):
                      encoding=system_encoding):
         return to_textfiles(self, path, name_function, compression, encoding)
 
-    def fold(self, binop, combine=None, initial=no_default):
+    def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
 
         Fold is like the builtin function ``reduce`` except that it works in
@@ -396,13 +396,13 @@ class Bag(Base):
         b = 'foldcombine-{0}-{1}'.format(funcname(combine), token)
         initial = quote(initial)
         if initial is not no_default:
-            dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
-                       for i in range(self.npartitions))
+            return self.reduction(curry(_reduce, binop, initial=initial),
+                                  curry(_reduce, combine),
+                                  split_every=split_every)
         else:
-            dsk = dict(((a, i), (reduce, binop, (self.name, i)))
-                       for i in range(self.npartitions))
-        dsk2 = {b: (reduce, combine, list(dsk.keys()))}
-        return Item(merge(self.dask, dsk, dsk2), b)
+            from toolz.curried import reduce
+            return self.reduction(reduce(binop), reduce(combine),
+                                  split_every=split_every)
 
     def frequencies(self, split_every=None):
         """ Count number of occurrences of each distinct element
@@ -1318,3 +1318,10 @@ def bag_range(n, npartitions):
         dsk[(name, i)] = (reify, (range, j, n))
 
     return Bag(dsk, name, npartitions)
+
+
+def _reduce(binop, sequence, initial=no_default):
+    if initial is not no_default:
+        return reduce(binop, sequence, initial)
+    else:
+        return reduce(binop, sequence)
