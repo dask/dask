@@ -254,6 +254,14 @@ def test_mean():
     assert float(b.mean()) == 2.0
 
 
+def test_non_splittable_reductions():
+    np = pytest.importorskip('numpy')
+    data = list(range(100))
+    c = db.from_sequence(data, npartitions=10)
+    assert c.mean().compute() == np.mean(data)
+    assert c.std().compute(get=dask.get) == np.std(data)
+
+
 def test_std():
     assert b.std().compute(get=dask.get) == math.sqrt(2.0)
     assert float(b.std()) == math.sqrt(2.0)

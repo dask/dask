@@ -414,7 +414,8 @@ class Bag(Base):
         """
         return self.reduction(compose(list, dictitems, frequencies),
                               merge_frequencies,
-                              out_type=Bag, split_every=split_every)
+                              out_type=Bag, split_every=split_every,
+                              name='frequencies')
 
     def topk(self, k, key=None):
         """ K largest elements in collection
@@ -479,6 +480,8 @@ class Bag(Base):
         """
         if split_every is None:
             split_every = 8
+        if split_every is False:
+            split_every = self.npartitions
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
@@ -526,24 +529,24 @@ class Bag(Base):
         """ Count the number of elements """
         return self.reduction(count, sum, split_every=split_every)
 
-    def mean(self, split_every=None):
+    def mean(self):
         """ Arithmetic mean """
-        def chunk(seq):
+        def mean_chunk(seq):
             total, n = 0.0, 0
             for x in seq:
                 total += x
                 n += 1
             return total, n
 
-        def agg(x):
+        def mean_aggregate(x):
             totals, counts = list(zip(*x))
             return 1.0 * sum(totals) / sum(counts)
 
-        return self.reduction(chunk, agg, split_every=split_every)
+        return self.reduction(mean_chunk, mean_aggregate, split_every=False)
 
-    def var(self, ddof=0, split_every=None):
+    def var(self, ddof=0):
         """ Variance """
-        def chunk(seq):
+        def var_chunk(seq):
             squares, total, n = 0.0, 0.0, 0
             for x in seq:
                 squares += x**2
@@ -551,17 +554,17 @@ class Bag(Base):
                 n += 1
             return squares, total, n
 
-        def agg(x):
+        def var_aggregate(x):
             squares, totals, counts = list(zip(*x))
             x2, x, n = float(sum(squares)), float(sum(totals)), sum(counts)
             result = (x2 / n) - (x / n)**2
             return result * n / (n - ddof)
 
-        return self.reduction(chunk, agg, split_every=split_every)
+        return self.reduction(var_chunk, var_aggregate, split_every=False)
 
-    def std(self, ddof=0, split_every=None):
+    def std(self, ddof=0):
         """ Standard deviation """
-        return self.var(ddof=ddof, split_every=split_every).apply(math.sqrt)
+        return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
         """ Join collection with another collection
