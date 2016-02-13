@@ -105,6 +105,14 @@ def test_get_s3():
     assert 'boto3' in type(get_s3(True)).__module__
 
 
+def test_get_s3_threadsafe():
+    from multiprocessing.pool import ThreadPool
+    tp = ThreadPool(2)
+
+    s3s = tp.map(get_s3, [True] * 8 + [False * 8])
+    assert len(set(map(id, s3s))) <= 4
+
+
 @gen_cluster(timeout=60)
 def test_read_text(s, a, b):
     pytest.importorskip('dask.bag')

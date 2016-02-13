@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+import threading
 
 import boto3
 from botocore.handlers import disable_signing
@@ -18,21 +19,28 @@ logging.getLogger('botocore').setLevel(logging.WARNING)
 
 DEFAULT_PAGE_LENGTH = 1000
 
-_conn = {True: None, False: None}
+_conn = dict()
+
+
+get_s3_lock = threading.Lock()
+
 
 def get_s3(anon):
     """ Get S3 connection
 
     Caches connection for future use
     """
-    if not _conn[anon]:
-        logger.debug("Open S3 connection.  Anonymous: %s", anon)
-        s3 = boto3.resource('s3')
-        if anon:
-            s3.meta.client.meta.events.register('choose-signer.s3.*',
-                    disable_signing)
-        _conn[anon] = s3
-    return _conn[anon]
+    with get_s3_lock:
+        key = anon, threading.get_ident()
+        if not _conn.get(key):
+            logger.debug("Open S3 connection.  Anonymous: %s.  Thread ID: %d",
+                         anon, threading.get_ident())
+            s3 = boto3.resource('s3')
+            if anon:
+                s3.meta.client.meta.events.register('choose-signer.s3.*',
+                        disable_signing)
+            _conn[key] = s3
+        return _conn[key]
 
 
 def get_list_of_summary_objects(bucket_name, prefix='', delimiter='',
