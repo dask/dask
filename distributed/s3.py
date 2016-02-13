@@ -8,6 +8,8 @@ from botocore.handlers import disable_signing
 from tornado import gen
 
 from dask.imperative import Value
+
+from .compatibility import get_thread_identity
 from .executor import default_executor, ensure_default_get
 
 
@@ -31,10 +33,10 @@ def get_s3(anon):
     Caches connection for future use
     """
     with get_s3_lock:
-        key = anon, threading.get_ident()
+        key = anon, get_thread_identity()
         if not _conn.get(key):
             logger.debug("Open S3 connection.  Anonymous: %s.  Thread ID: %d",
-                         anon, threading.get_ident())
+                         *key)
             s3 = boto3.resource('s3')
             if anon:
                 s3.meta.client.meta.events.register('choose-signer.s3.*',
@@ -161,5 +163,5 @@ def read_text(bucket_name, prefix='', path_delimiter='', encoding='utf-8',
             return executor.compute(*lists)
 
 
-import gzip
-decompress = {'gzip': gzip.decompress}
+from .compatibility import gzip_decompress
+decompress = {'gzip': gzip_decompress}
