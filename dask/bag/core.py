@@ -190,6 +190,7 @@ class Item(Base):
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
+        self.name = key
 
     def _keys(self):
         return [self.key]
@@ -459,7 +460,6 @@ class Bag(Base):
 
         Parameters
         ----------
-
         perpartition: function
             reduction to apply to each partition
         aggregate: function
@@ -473,7 +473,6 @@ class Bag(Base):
 
         Examples
         --------
-
         >>> b = from_sequence(range(10))
         >>> b.reduction(sum, sum).compute()
         45
@@ -481,15 +480,15 @@ class Bag(Base):
         if split_every is None:
             split_every = 8
         token = tokenize(self, perpartition, aggregate, split_every)
-        a = 'reduction-part-{0}-{1}'.format(name or funcname(perpartition), token)
+        a = '%s-part-%s' % (name or funcname(perpartition), token)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
-        fmt = 'reduction-agg-{0}-'.format(name or funcname(aggregate)) + '-{0}-' + token
+        fmt = '%s-aggregate-%s' % (name or funcname(aggregate), token)
         depth = 0
         while k > 1:
-            c = fmt.format(depth)
+            c = fmt + str(depth)
             dsk2 = dict(((c, i), (aggregate, [(b, j) for j in inds]))
                  for i, inds in enumerate(partition_all(split_every, range(k))))
             dsk.update(dsk2)

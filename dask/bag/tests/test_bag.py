@@ -220,6 +220,14 @@ def test_reductions():
     assert b.all().key != b.any().key
 
 
+def test_reduction_names():
+    assert b.sum().name.startswith('sum')
+    assert b.reduction(sum, sum).name.startswith('sum')
+    assert any(isinstance(k, str) and k.startswith('max')
+               for k in b.reduction(sum, max).dask)
+    assert b.reduction(sum, sum, name='foo').name.startswith('foo')
+
+
 def test_tree_reductions():
     b = db.from_sequence(range(12))
     c = b.reduction(sum, sum, split_every=2)
