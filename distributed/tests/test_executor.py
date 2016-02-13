@@ -304,6 +304,31 @@ def test_gather_sync(loop):
             x = e.submit(inc, 1)
             assert e.gather(x) == 2
 
+            y = e.submit(div, 1, 0)
+
+            with pytest.raises(ZeroDivisionError):
+                e.gather([x, y])
+
+            [xx] = e.gather([x, y], errors='skip')
+            assert xx == 2
+
+
+@gen_cluster()
+def test_gather_strict(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(div, 2, 1)
+    y = e.submit(div, 1, 0)
+
+    with pytest.raises(ZeroDivisionError):
+        result = yield e._gather([x, y])
+
+    [xx] = yield e._gather([x, y], errors='skip')
+    assert xx == 2
+
+    yield e._shutdown()
+
 
 @gen_cluster()
 def test_get(s, a, b):
@@ -2017,9 +2042,10 @@ def test__cancel(s, a, b):
     while y.key not in s.dask:
         yield gen.sleep(0.01)
 
-    yield e._cancel([x])
+    yield e._cancel([x], block=True)
 
     assert x.cancelled()
+    assert 'cancel' in str(x)
     s.validate()
 
     start = time()
@@ -2045,7 +2071,7 @@ def test__cancel_multi_client(s, a, b):
 
     assert x.key == y.key
 
-    yield e._cancel([x])
+    yield e._cancel([x], block=True)
 
     assert x.cancelled()
     assert not y.cancelled()
@@ -2069,7 +2095,7 @@ def test_cancel(loop):
             y = e.submit(slowinc, x)
             z = e.submit(slowinc, y)
 
-            e.cancel([y])
+            e.cancel([y], block=True)
 
             start = time()
             while not z.cancelled():
@@ -2078,7 +2104,7 @@ def test_cancel(loop):
 
             assert x.result() == 2
 
-            z.cancel()
+            z.cancel(block=True)
             assert z.cancelled()
 
 
@@ -2190,3 +2216,52 @@ def test_Future_exception_sync(loop, capsys):
     assert len(out.strip().split('\n')) == 1
 
     assert _globals['get'] == e.get
+
+
+@gen_cluster()
+def test_async_persist(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    from dask.imperative import do, value
+    x = value(1)
+    y = do(inc)(x)
+    z = do(dec)(x)
+    w = do(add)(y, z)
+
+    yy, ww = e.persist(y, w)
+    assert type(yy) == type(y)
+    assert type(ww) == type(w)
+    assert len(yy.dask) == 1
+    assert len(ww.dask) == 1
+    assert len(w.dask) > 1
+    assert y._keys() == yy._keys()
+    assert w._keys() == ww._keys()
+
+    while y.key not in s.dask and w.key not in s.dask:
+        yield gen.sleep(0.01)
+
+    assert s.who_wants[y.key] == {e.id}
+    assert s.who_wants[w.key] == {e.id}
+
+    yyy, www = yield e._gather(e.compute(yy, ww))
+    assert yyy == inc(1)
+    assert www == add(inc(1), dec(1))
+
+    yield e._shutdown()
+
+
+def test_persist(loop):
+    pytest.importorskip('dask.array')
+    import dask.array as da
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            x = da.ones((10, 10), chunks=(5, 10))
+            y = 2 * (x + 1)
+            assert len(y.dask) == 6
+            yy, = e.persist(y)
+            assert len(y.dask) == 6
+            assert len(yy.dask) == 2
+            assert all(isinstance(v, Future) for v in yy.dask.values())
+
+            assert (yy.compute(get=e.get) == y.compute(get=e.get)).all()

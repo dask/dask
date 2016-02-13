@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict, Iterator
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
+import copy
 from functools import wraps, partial
 import itertools
 import logging
@@ -137,9 +138,9 @@ class Future(WrappedKey):
         """
         return sync(self.executor.loop, self._exception)
 
-    def cancel(self):
+    def cancel(self, block=False):
         """ Returns True if the future has been cancelled """
-        return self.executor.cancel([self])
+        return self.executor.cancel([self], block=False)
 
     def cancelled(self):
         """ Returns True if the future has been cancelled """
@@ -175,7 +176,10 @@ class Future(WrappedKey):
 
     @property
     def type(self):
-        return self.executor.futures[self.key].get('type', None)
+        try:
+            return self.executor.futures[self.key]['type']
+        except KeyError:
+            return None
 
     def __del__(self):
         self.executor._dec_ref(self.key)
@@ -622,18 +626,25 @@ class Executor(object):
         return [Future(key, self) for key in keys]
 
     @gen.coroutine
-    def _gather(self, futures):
+    def _gather(self, futures, errors='raise'):
         futures2, keys = unpack_remotedata(futures)
         keys = list(keys)
+        bad_data = dict()
 
         while True:
             logger.debug("Waiting on futures to clear before gather")
             yield All([self.futures[key]['event'].wait() for key in keys
                                                     if key in self.futures])
-            exceptions = [self.futures[key]['exception'] for key in keys
-                          if self.futures[key]['status'] == 'error']
+            exceptions = {key: self.futures[key]['exception'] for key in keys
+                          if self.futures[key]['status'] == 'error'}
             if exceptions:
-                raise exceptions[0]
+                if errors == 'raise':
+                    raise first(exceptions.values())
+                if errors == 'skip':
+                    keys = [key for key in keys if key not in exceptions]
+                    bad_data.update({key: None for key in exceptions})
+                else:
+                    raise ValueError("Bad value, `errors=%s`" % errors)
 
             response, data = yield self.scheduler.gather(keys=keys)
 
@@ -646,17 +657,20 @@ class Executor(object):
             else:
                 break
 
-        result = pack_data(futures2, data)
+        if bad_data and errors == 'skip' and isinstance(futures2, list):
+            futures2 = [f for f in futures2 if f not in exceptions]
+
+        result = pack_data(futures2, merge(data, bad_data))
         raise gen.Return(result)
 
-    def _threaded_gather(self, qin, qout):
+    def _threaded_gather(self, qin, qout, **kwargs):
         """ Internal function for gathering Queue """
         while True:
             d = qin.get()
-            f = self.gather(d)
+            f = self.gather(d, **kwargs)
             qout.put(f)
 
-    def gather(self, futures):
+    def gather(self, futures, errors='raise'):
         """ Gather futures from distributed memory
 
         Accepts a future, nested container of futures, iterator, or queue.
@@ -686,14 +700,15 @@ class Executor(object):
         """
         if isqueue(futures):
             qout = pyQueue()
-            t = Thread(target=self._threaded_gather, args=(futures, qout))
+            t = Thread(target=self._threaded_gather, args=(futures, qout),
+                        kwargs={'errors': errors})
             t.daemon = True
             t.start()
             return qout
         elif isinstance(futures, Iterator):
-            return (self.gather(f) for f in futures)
+            return (self.gather(f, errors=errors) for f in futures)
         else:
-            return sync(self.loop, self._gather, futures)
+            return sync(self.loop, self._gather, futures, errors=errors)
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):
@@ -793,14 +808,16 @@ class Executor(object):
             return sync(self.loop, self._scatter, data, workers=workers,
                         broadcast=broadcast)
     @gen.coroutine
-    def _cancel(self, futures):
+    def _cancel(self, futures, block=False):
         keys = {f.key for f in flatten(futures)}
-        yield self.scheduler.cancel(keys=keys, client=self.id)
+        f = self.scheduler.cancel(keys=keys, client=self.id)
+        if block:
+            yield f
         for k in keys:
             with ignoring(KeyError):
                 del self.futures[k]
 
-    def cancel(self, futures):
+    def cancel(self, futures, block=False):
         """
         Cancel running futures
 
@@ -812,7 +829,7 @@ class Executor(object):
         ----------
         futures: list of Futures
         """
-        return sync(self.loop, self._cancel, futures)
+        return sync(self.loop, self._cancel, futures, block=False)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
@@ -933,6 +950,50 @@ class Executor(object):
             return self.gather(futures)
         else:
             return futures
+
+    def persist(self, *collections):
+        """ Persist dask collections on cluster
+
+        Starts computation of the collection on the cluster in the background.
+        Provides a new dask collection that is semantically identical to the
+        previous one, but now based off of futures currently in execution.
+
+        Parameters
+        ----------
+        collections: iterable of dask objects
+            Collections like dask.array or dataframe or dask.value objects
+
+        Returns
+        -------
+        List of collections, with computation happening in the background.
+
+        Examples
+        --------
+        >>> xx, yy = executor.persist(x, y)  # doctest: +SKIP
+        >>> xx, = executor.persist(x)  # doctest: +SKIP
+
+        See Also
+        --------
+        Executor.compute
+        """
+        assert all(isinstance(c, Base) for c in collections)
+
+        groups = groupby(lambda x: x._optimize, collections)
+        dsk = merge([opt(merge([v.dask for v in val]),
+                         [v._keys() for v in val])
+                    for opt, val in groups.items()])
+
+        dsk2 = {k: unpack_remotedata(v)[0] for k, v in dsk.items()}
+
+        names = list({k for c in collections for k in flatten(c._keys())})
+
+        self._send_to_scheduler({'op': 'update-graph',
+                                 'dsk': dsk2,
+                                 'keys': names,
+                                 'client': self.id})
+        return [redict_collection(c, {k: Future(k, self)
+                                        for k in flatten(c._keys())})
+                for c in collections]
 
     @gen.coroutine
     def _restart(self):
@@ -1118,3 +1179,14 @@ def ensure_default_get(executor):
     if _globals['get'] != executor.get:
         print("Setting global dask scheduler to use distributed")
         dask.set_options(get=executor.get)
+
+
+def redict_collection(c, dsk):
+    from dask.imperative import Value
+    if isinstance(c, Value):
+        assert len(dsk) == 1
+        return Value(first(dsk), [dsk])
+    else:
+        cc = copy.copy(c)
+        cc.dask = dsk
+        return cc
