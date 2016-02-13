@@ -44,6 +44,13 @@ def div(x, y):
     return x / y
 
 
+def deep(n):
+    if n > 0:
+        return deep(n - 1)
+    else:
+        return True
+
+
 def throws(x):
     raise Exception()
 

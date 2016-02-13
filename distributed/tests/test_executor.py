@@ -30,7 +30,7 @@ from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
 from distributed.utils_test import (cluster, cluster_center, slow,
         _test_cluster, _test_scheduler, loop, inc, dec, div, throws,
-        gen_cluster, gen_test, double)
+        gen_cluster, gen_test, double, deep)
 
 
 @gen_cluster()
@@ -2265,3 +2265,23 @@ def test_persist(loop):
             assert all(isinstance(v, Future) for v in yy.dask.values())
 
             assert (yy.compute(get=e.get) == y.compute(get=e.get)).all()
+
+
+@gen_cluster(timeout=60)
+def test_long_traceback(s, a, b):
+    from distributed.core import dumps
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    n = sys.getrecursionlimit()
+    sys.setrecursionlimit(500)
+
+    try:
+        x = e.submit(deep, 1000)
+        yield _wait([x])
+        assert len(dumps(e.futures[x.key]['traceback'])) < 10000
+        assert isinstance(e.futures[x.key]['exception'], RuntimeError)
+    finally:
+        sys.setrecursionlimit(n)
+
+    yield e._shutdown()

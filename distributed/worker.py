@@ -19,7 +19,7 @@ from tornado.iostream import StreamClosedError
 
 from .client import _gather, pack_data, gather_from_workers
 from .compatibility import reload
-from .core import rpc, Server, pingpong
+from .core import rpc, Server, pingpong, dumps
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
     ignoring)
@@ -266,6 +266,11 @@ class Worker(Server):
                 "kwargs:   %s\n",
                 str(funcname(function))[:1000], str(args2)[:1000],
                 str(kwargs2)[:1000], exc_info=True)
+
+            try:
+                assert len(dumps(tb)) < 1e6
+            except:
+                tb = None
 
             out = (b'error', {'exception': e2, 'traceback': tb})
 
