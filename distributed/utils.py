@@ -186,19 +186,30 @@ def _deps(dsk, arg):
 
 def key_split(s):
     """
+    >>> key_split('x')
+    'x'
     >>> key_split('x-1')
     'x'
     >>> key_split('x-1-2-3')
     'x'
     >>> key_split(('x-2', 1))
     'x'
+    >>> key_split('hello-world-1')
+    'hello-world'
     >>> key_split(None)
     'Other'
     """
     if isinstance(s, tuple):
         return key_split(s[0])
     try:
-        return s.split('-', 1)[0]
+        words = s.split('-')
+        result = words[0]
+        for word in words[1:]:
+            if word.isalpha():
+                result += '-' + word
+            else:
+                break
+        return result
     except:
         return 'Other'
 

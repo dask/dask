@@ -61,6 +61,7 @@ def record_display(*args):
 #####################
 
 from operator import add
+import re
 
 from distributed.executor import Executor, wait
 from distributed.utils_test import (cluster, loop, inc,
@@ -113,6 +114,11 @@ def test_multi_progressbar_widget(s, a, b):
     # assert p.bars['e'].bar_style == 'danger'
 
     assert p.status == 'error'
+
+    capacities = [int(re.search(r'\d+ / \d+', row.children[0].value)
+                    .group().split(' / ')[1])
+                  for row in p.bar_widgets.children]
+    assert sorted(capacities, reverse=True) == capacities
 
 
 @gen_cluster()
