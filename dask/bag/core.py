@@ -15,7 +15,7 @@ from ..utils import ignoring
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   remove, pluck, groupby, topk, compose)
+                   remove, pluck, groupby, topk, compose, drop)
 import toolz
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
@@ -1294,3 +1294,27 @@ def from_imperative(values):
 
 def merge_frequencies(seqs):
     return list(merge_with(sum, map(dict, seqs)).items())
+
+
+def bag_range(n, npartitions):
+    """ Numbers from zero to n
+
+    Examples
+    --------
+
+    >>> import dask.bag as db
+    >>> b = db.range(5, npartitions=2)
+    >>> list(b)
+    [0, 1, 2, 3, 4]
+    """
+    size = n // npartitions
+    name = 'range-%d-npartitions-%d' % (n, npartitions)
+    ijs = list(enumerate(take(npartitions, range(0, n, size))))
+    dsk = dict(((name, i), (reify, (range, j, min(j + size, n))))
+                for i, j in ijs)
+
+    if n % npartitions != 0:
+        i, j = ijs[-1]
+        dsk[(name, i)] = (reify, (range, j, n))
+
+    return Bag(dsk, name, npartitions)

@@ -803,3 +803,11 @@ def test_from_imperative():
 
     assert isinstance(bb, Bag)
     assert list(bb) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+
+def test_range():
+    for npartitions in [1, 7, 10, 28]:
+        b = db.range(100, npartitions=npartitions)
+        assert len(b.dask) == npartitions
+        assert b.npartitions == npartitions
+        assert list(b) == list(range(100))
