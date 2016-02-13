@@ -173,6 +173,7 @@ def test_fold():
 def test_distinct():
     assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
     assert b.distinct().name == b.distinct().name
+    assert 'distinct' in b.distinct().name
 
 
 def test_frequencies():
@@ -219,6 +220,14 @@ def test_reductions():
     assert b.all().key != b.any().key
 
 
+def test_reduction_names():
+    assert b.sum().name.startswith('sum')
+    assert b.reduction(sum, sum).name.startswith('sum')
+    assert any(isinstance(k, str) and k.startswith('max')
+               for k in b.reduction(sum, max).dask)
+    assert b.reduction(sum, sum, name='foo').name.startswith('foo')
+
+
 def test_tree_reductions():
     b = db.from_sequence(range(12))
     c = b.reduction(sum, sum, split_every=2)
@@ -243,6 +252,14 @@ def test_tree_reductions():
 def test_mean():
     assert b.mean().compute(get=dask.get) == 2.0
     assert float(b.mean()) == 2.0
+
+
+def test_non_splittable_reductions():
+    np = pytest.importorskip('numpy')
+    data = list(range(100))
+    c = db.from_sequence(data, npartitions=10)
+    assert c.mean().compute() == np.mean(data)
+    assert c.std().compute(get=dask.get) == np.std(data)
 
 
 def test_std():

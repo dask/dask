@@ -15,7 +15,7 @@ from ..utils import ignoring
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   remove, pluck, groupby, topk, compose, drop)
+                   remove, pluck, groupby, topk, compose, drop, curry)
 import toolz
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
@@ -190,6 +190,7 @@ class Item(Base):
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
+        self.name = key
 
     def _keys(self):
         return [self.key]
@@ -344,7 +345,7 @@ class Bag(Base):
                      encoding=system_encoding):
         return to_textfiles(self, path, name_function, compression, encoding)
 
-    def fold(self, binop, combine=None, initial=no_default):
+    def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
 
         Fold is like the builtin function ``reduce`` except that it works in
@@ -396,13 +397,13 @@ class Bag(Base):
         b = 'foldcombine-{0}-{1}'.format(funcname(combine), token)
         initial = quote(initial)
         if initial is not no_default:
-            dsk = dict(((a, i), (reduce, binop, (self.name, i), initial))
-                       for i in range(self.npartitions))
+            return self.reduction(curry(_reduce, binop, initial=initial),
+                                  curry(_reduce, combine),
+                                  split_every=split_every)
         else:
-            dsk = dict(((a, i), (reduce, binop, (self.name, i)))
-                       for i in range(self.npartitions))
-        dsk2 = {b: (reduce, combine, list(dsk.keys()))}
-        return Item(merge(self.dask, dsk, dsk2), b)
+            from toolz.curried import reduce
+            return self.reduction(reduce(binop), reduce(combine),
+                                  split_every=split_every)
 
     def frequencies(self, split_every=None):
         """ Count number of occurrences of each distinct element
@@ -413,7 +414,8 @@ class Bag(Base):
         """
         return self.reduction(compose(list, dictitems, frequencies),
                               merge_frequencies,
-                              out_type=Bag, split_every=split_every)
+                              out_type=Bag, split_every=split_every,
+                              name='frequencies')
 
     def topk(self, k, key=None):
         """ K largest elements in collection
@@ -450,21 +452,15 @@ class Bag(Base):
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
         """
-        token = tokenize(self)
-        a = 'distinct-a-' + token
-        b = 'distinct-b-' + token
-        dsk = dict(((a, i), (set, key)) for i, key in enumerate(self._keys()))
-        dsk2 = {(b, 0): (apply, set.union, quote(list(dsk.keys())))}
-
-        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
+        return self.reduction(set, curry(apply, set.union), out_type=Bag,
+                name='distinct')
 
     def reduction(self, perpartition, aggregate, split_every=None,
-                  out_type=Item):
+                  out_type=Item, name=None):
         """ Reduce collection with reduction operators
 
         Parameters
         ----------
-
         perpartition: function
             reduction to apply to each partition
         aggregate: function
@@ -478,23 +474,24 @@ class Bag(Base):
 
         Examples
         --------
-
         >>> b = from_sequence(range(10))
         >>> b.reduction(sum, sum).compute()
         45
         """
         if split_every is None:
             split_every = 8
+        if split_every is False:
+            split_every = self.npartitions
         token = tokenize(self, perpartition, aggregate, split_every)
-        a = 'reduction-part-{0}-{1}'.format(funcname(perpartition), token)
+        a = '%s-part-%s' % (name or funcname(perpartition), token)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
-        fmt = 'reduction-agg-{0}-'.format(funcname(aggregate)) + '-{0}-' + token
+        fmt = '%s-aggregate-%s' % (name or funcname(aggregate), token)
         depth = 0
         while k > 1:
-            c = fmt.format(depth)
+            c = fmt + str(depth)
             dsk2 = dict(((c, i), (aggregate, [(b, j) for j in inds]))
                  for i, inds in enumerate(partition_all(split_every, range(k))))
             dsk.update(dsk2)
@@ -532,24 +529,24 @@ class Bag(Base):
         """ Count the number of elements """
         return self.reduction(count, sum, split_every=split_every)
 
-    def mean(self, split_every=None):
+    def mean(self):
         """ Arithmetic mean """
-        def chunk(seq):
+        def mean_chunk(seq):
             total, n = 0.0, 0
             for x in seq:
                 total += x
                 n += 1
             return total, n
 
-        def agg(x):
+        def mean_aggregate(x):
             totals, counts = list(zip(*x))
             return 1.0 * sum(totals) / sum(counts)
 
-        return self.reduction(chunk, agg, split_every=split_every)
+        return self.reduction(mean_chunk, mean_aggregate, split_every=False)
 
-    def var(self, ddof=0, split_every=None):
+    def var(self, ddof=0):
         """ Variance """
-        def chunk(seq):
+        def var_chunk(seq):
             squares, total, n = 0.0, 0.0, 0
             for x in seq:
                 squares += x**2
@@ -557,17 +554,17 @@ class Bag(Base):
                 n += 1
             return squares, total, n
 
-        def agg(x):
+        def var_aggregate(x):
             squares, totals, counts = list(zip(*x))
             x2, x, n = float(sum(squares)), float(sum(totals)), sum(counts)
             result = (x2 / n) - (x / n)**2
             return result * n / (n - ddof)
 
-        return self.reduction(chunk, agg, split_every=split_every)
+        return self.reduction(var_chunk, var_aggregate, split_every=False)
 
-    def std(self, ddof=0, split_every=None):
+    def std(self, ddof=0):
         """ Standard deviation """
-        return self.var(ddof=ddof, split_every=split_every).apply(math.sqrt)
+        return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
         """ Join collection with another collection
@@ -1318,3 +1315,10 @@ def bag_range(n, npartitions):
         dsk[(name, i)] = (reify, (range, j, n))
 
     return Bag(dsk, name, npartitions)
+
+
+def _reduce(binop, sequence, initial=no_default):
+    if initial is not no_default:
+        return reduce(binop, sequence, initial)
+    else:
+        return reduce(binop, sequence)
