@@ -5,7 +5,7 @@ from timeit import default_timer
 import sys
 
 from dask.core import flatten
-from toolz import valmap
+from toolz import valmap, second
 from tornado import gen
 from tornado.ioloop import IOLoop
 
@@ -228,14 +228,11 @@ class MultiProgressWidget(MultiProgressBar):
         self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">'
                                      + cgi.escape(key) + '</div>') for key in all}
 
-        # Check to see if 'finalize' is one of the keys. If it is, move it to
-        # the end so that it is rendered last in the list (for aesthetics...)
-        key_order = set(all.keys())
-        if 'finalize' in key_order:
-            key_order.remove('finalize')
-            key_order = sorted(list(key_order)) + ['finalize']
-        else:
-            key_order = list(key_order)
+        def key(kv):
+            """ Order keys by most numerous, then by string name """
+            return kv[::-1]
+
+        key_order = [k for k, v in sorted(all.items(), key=key, reverse=True)]
 
         self.bar_widgets = VBox([ HBox([ self.bar_texts[key], self.bars[key], self.bar_labels[key] ]) for key in key_order ])
         self.widget.children = (self.elapsed_time, self.bar_widgets)
