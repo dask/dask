@@ -1132,7 +1132,14 @@ class Series(_Frame):
 
     @derived_from(pd.Series)
     def map(self, arg, na_action=None):
-        return elemwise(pd.Series.map, self, arg, na_action)
+        if not (isinstance(arg, (pd.Series, dict)) or callable(arg)):
+            raise TypeError("arg must be pandas.Series, dict or callable."
+                            " Got {0}".format(type(arg)))
+        name = 'map-' + tokenize(self, arg, na_action)
+        dsk = dict(((name, i), (pd.Series.map, k, arg, na_action)) for i, k in
+                   enumerate(self._keys()))
+        dsk.update(self.dask)
+        return Series(dsk, name, self.name, self.divisions)
 
     @derived_from(pd.Series)
     def astype(self, dtype):

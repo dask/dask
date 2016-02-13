@@ -679,6 +679,13 @@ def test_assign():
 
 def test_map():
     assert eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
+    lk = dict((v, v + 1) for v in full.a.values)
+    assert eq(d.a.map(lk), full.a.map(lk))
+    assert eq(d.b.map(lk), full.b.map(lk))
+    lk = pd.Series(lk)
+    assert eq(d.a.map(lk), full.a.map(lk))
+    assert eq(d.b.map(lk), full.b.map(lk))
+    assert raises(TypeError, lambda: d.a.map(d.b))
 
 
 def test_concat():
