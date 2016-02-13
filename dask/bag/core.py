@@ -450,16 +450,11 @@ class Bag(Base):
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
         """
-        token = tokenize(self)
-        a = 'distinct-a-' + token
-        b = 'distinct-b-' + token
-        dsk = dict(((a, i), (set, key)) for i, key in enumerate(self._keys()))
-        dsk2 = {(b, 0): (apply, set.union, quote(list(dsk.keys())))}
-
-        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
+        return self.reduction(set, curry(apply, set.union), out_type=Bag,
+                name='distinct')
 
     def reduction(self, perpartition, aggregate, split_every=None,
-                  out_type=Item):
+                  out_type=Item, name=None):
         """ Reduce collection with reduction operators
 
         Parameters
@@ -486,12 +481,12 @@ class Bag(Base):
         if split_every is None:
             split_every = 8
         token = tokenize(self, perpartition, aggregate, split_every)
-        a = 'reduction-part-{0}-{1}'.format(funcname(perpartition), token)
+        a = 'reduction-part-{0}-{1}'.format(name or funcname(perpartition), token)
         dsk = dict(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
-        fmt = 'reduction-agg-{0}-'.format(funcname(aggregate)) + '-{0}-' + token
+        fmt = 'reduction-agg-{0}-'.format(name or funcname(aggregate)) + '-{0}-' + token
         depth = 0
         while k > 1:
             c = fmt.format(depth)

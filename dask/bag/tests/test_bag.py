@@ -173,6 +173,7 @@ def test_fold():
 def test_distinct():
     assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
     assert b.distinct().name == b.distinct().name
+    assert 'distinct' in b.distinct().name
 
 
 def test_frequencies():
