@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict, Iterator
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
+import copy
 from functools import wraps, partial
 import itertools
 import logging
@@ -950,6 +951,50 @@ class Executor(object):
         else:
             return futures
 
+    def persist(self, *collections):
+        """ Persist dask collections on cluster
+
+        Starts computation of the collection on the cluster in the background.
+        Provides a new dask collection that is semantically identical to the
+        previous one, but now based off of futures currently in execution.
+
+        Parameters
+        ----------
+        collections: iterable of dask objects
+            Collections like dask.array or dataframe or dask.value objects
+
+        Returns
+        -------
+        List of collections, with computation happening in the background.
+
+        Examples
+        --------
+        >>> xx, yy = executor.persist(x, y)  # doctest: +SKIP
+        >>> xx, = executor.persist(x)  # doctest: +SKIP
+
+        See Also
+        --------
+        Executor.compute
+        """
+        assert all(isinstance(c, Base) for c in collections)
+
+        groups = groupby(lambda x: x._optimize, collections)
+        dsk = merge([opt(merge([v.dask for v in val]),
+                         [v._keys() for v in val])
+                    for opt, val in groups.items()])
+
+        dsk2 = {k: unpack_remotedata(v)[0] for k, v in dsk.items()}
+
+        names = list({k for c in collections for k in flatten(c._keys())})
+
+        self._send_to_scheduler({'op': 'update-graph',
+                                 'dsk': dsk2,
+                                 'keys': names,
+                                 'client': self.id})
+        return [redict_collection(c, {k: Future(k, self)
+                                        for k in flatten(c._keys())})
+                for c in collections]
+
     @gen.coroutine
     def _restart(self):
         self._send_to_scheduler({'op': 'restart'})
@@ -1134,3 +1179,14 @@ def ensure_default_get(executor):
     if _globals['get'] != executor.get:
         print("Setting global dask scheduler to use distributed")
         dask.set_options(get=executor.get)
+
+
+def redict_collection(c, dsk):
+    from dask.imperative import Value
+    if isinstance(c, Value):
+        assert len(dsk) == 1
+        return Value(first(dsk), [dsk])
+    else:
+        cc = copy.copy(c)
+        cc.dask = dsk
+        return cc
