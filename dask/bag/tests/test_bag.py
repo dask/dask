@@ -174,6 +174,7 @@ def test_distinct():
     assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
     assert b.distinct().name == b.distinct().name
     assert 'distinct' in b.distinct().name
+    assert b.distinct().count().compute() == 5
 
 
 def test_frequencies():

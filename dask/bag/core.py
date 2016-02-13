@@ -500,10 +500,10 @@ class Bag(Base):
             depth += 1
 
         if out_type is Item:
-            dsk[c] = dsk.pop((c, 0))
-            return Item(merge(self.dask, dsk), c)
+            dsk[b] = dsk.pop((b, 0))
+            return Item(merge(self.dask, dsk), b)
         else:
-            return Bag(merge(self.dask, dsk), c, 1)
+            return Bag(merge(self.dask, dsk), b, 1)
 
     @wraps(sum)
     def sum(self, split_every=None):
