@@ -44,7 +44,7 @@ def read_block_from_hdfs(filename, offset, length, host=None, port=None,
     return bytes
 
 
-def read_bytes(fn, executor=None, hdfs=None, lazy=False, delimiter=None,
+def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
                not_zero=False, **hdfs_auth):
     """ Convert location in HDFS to a list of distributed futures
 
@@ -107,7 +107,7 @@ def buffer_to_csv(b, **kwargs):
 
 
 @gen.coroutine
-def _read_csv(path, executor=None, hdfs=None, lazy=False, lineterminator='\n',
+def _read_csv(path, executor=None, hdfs=None, lazy=True, lineterminator='\n',
         header=True, names=None, collection=True, **kwargs):
     from hdfs3 import HDFileSystem
     from hdfs3.core import ensure_bytes
@@ -149,7 +149,7 @@ def _read_csv(path, executor=None, hdfs=None, lazy=False, lineterminator='\n',
             raise gen.Return(futures)
 
 
-def read_csv(fn, executor=None, hdfs=None, lazy=False, **kwargs):
+def read_csv(fn, executor=None, hdfs=None, lazy=True, **kwargs):
     """ Read CSV encoded data from bytes on HDFS
 
     Parameters
@@ -201,7 +201,7 @@ def avro_to_df(b, av):
 
 
 @gen.coroutine
-def _read_avro(path, executor=None, hdfs=None, lazy=False, **kwargs):
+def _read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
     """ See distributed.hdfs.read_avro for docstring """
     from hdfs3 import HDFileSystem
     from dask import do
@@ -232,7 +232,7 @@ def _read_avro(path, executor=None, hdfs=None, lazy=False, **kwargs):
         raise gen.Return(futures)
 
 
-def read_avro(fn, executor=None, hdfs=None, lazy=False, **kwargs):
+def read_avro(fn, executor=None, hdfs=None, lazy=True, **kwargs):
     """ Read avro encoded data from bytes on HDFS
 
     Parameters
@@ -305,7 +305,7 @@ def write_bytes(path, futures, executor=None, hdfs=None, **hdfs_auth):
 
 @gen.coroutine
 def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
-               executor=None, hdfs=None, lazy=False, collection=True):
+               executor=None, hdfs=None, lazy=True, collection=True):
     from hdfs3 import HDFileSystem
     from dask import do
     import pandas as pd

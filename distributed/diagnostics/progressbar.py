@@ -169,7 +169,6 @@ class MultiProgressBar(object):
         @gen.coroutine
         def setup(scheduler):
             p = MultiProgress(keys, scheduler, complete=complete, func=func)
-            scheduler.add_plugin(p)
             yield p.setup()
             raise gen.Return(p)
 
