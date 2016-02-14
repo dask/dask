@@ -894,6 +894,9 @@ class Executor(object):
             Collections like dask.array or dataframe or dask.value objects
         sync: bool (optional)
             Returns Futures if False (default) or concrete values if True
+        singleton: bool (optional, defaults to True)
+            If given only one input, return one output, not a tuple
+            True is better for interactive use but False is more consistent
 
         Returns
         -------
@@ -919,6 +922,7 @@ class Executor(object):
         Executor.get: Normal synchronous dask.get function
         """
         sync = kwargs.pop('sync', False)
+        singleton = kwargs.pop('singleton', True)
         assert not kwargs
 
         variables = [a for a in args if isinstance(a, Base)]
@@ -947,11 +951,16 @@ class Executor(object):
                 futures.append(arg)
 
         if sync:
-            return self.gather(futures)
+            result = self.gather(futures)
         else:
-            return futures
+            result = futures
 
-    def persist(self, *collections):
+        if singleton and isinstance(result, (list, tuple)) and len(result) == 1:
+            return first(result)
+        else:
+            return result
+
+    def persist(self, *collections, **kwargs):
         """ Persist dask collections on cluster
 
         Starts computation of the collection on the cluster in the background.
@@ -962,6 +971,9 @@ class Executor(object):
         ----------
         collections: iterable of dask objects
             Collections like dask.array or dataframe or dask.value objects
+        singleton: bool (optional, defaults to True)
+            If given only one input, return one output, not a tuple
+            True is better for interactive use but False is more consistent
 
         Returns
         -------
@@ -976,6 +988,8 @@ class Executor(object):
         --------
         Executor.compute
         """
+        singleton = kwargs.pop('singleton', True)
+        assert not kwargs
         assert all(isinstance(c, Base) for c in collections)
 
         groups = groupby(lambda x: x._optimize, collections)
@@ -991,9 +1005,13 @@ class Executor(object):
                                  'dsk': dsk2,
                                  'keys': names,
                                  'client': self.id})
-        return [redict_collection(c, {k: Future(k, self)
+        result = [redict_collection(c, {k: Future(k, self)
                                         for k in flatten(c._keys())})
                 for c in collections]
+        if singleton and len(result) == 1:
+            return first(result)
+        else:
+            return result
 
     @gen.coroutine
     def _restart(self):

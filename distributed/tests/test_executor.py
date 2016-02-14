@@ -1499,6 +1499,9 @@ def test_async_compute(s, a, b):
     result = yield e._gather([yy, zz])
     assert result == [2, 0]
 
+    assert isinstance(e.compute(y), Future)
+    assert isinstance(e.compute(y, singleton=False), (tuple, list))
+
     yield e._shutdown()
 
 
@@ -2223,7 +2226,7 @@ def test_async_persist(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    from dask.imperative import do, value
+    from dask.imperative import do, value, Value
     x = value(1)
     y = do(inc)(x)
     z = do(dec)(x)
@@ -2248,6 +2251,9 @@ def test_async_persist(s, a, b):
     assert yyy == inc(1)
     assert www == add(inc(1), dec(1))
 
+    assert isinstance(e.persist(y), Value)
+    assert isinstance(e.persist(y, singleton=False), (list, tuple))
+
     yield e._shutdown()
 
 
@@ -2259,7 +2265,7 @@ def test_persist(loop):
             x = da.ones((10, 10), chunks=(5, 10))
             y = 2 * (x + 1)
             assert len(y.dask) == 6
-            yy, = e.persist(y)
+            yy = e.persist(y)
             assert len(y.dask) == 6
             assert len(yy.dask) == 2
             assert all(isinstance(v, Future) for v in yy.dask.values())

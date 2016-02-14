@@ -128,7 +128,7 @@ def test_read_text(s, a, b):
     yield gen.sleep(0.2)
     assert not s.dask
 
-    future, = e.compute(b.filter(None).map(json.loads).pluck('amount').sum())
+    future = e.compute(b.filter(None).map(json.loads).pluck('amount').sum())
     result = yield future._result()
 
     assert result == (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) * 100

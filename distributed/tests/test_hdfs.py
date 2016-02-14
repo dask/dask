@@ -255,7 +255,7 @@ def test_read_csv(s, a, b):
 
         df = yield _read_csv('/tmp/test/*.csv', header=True,
                 lineterminator='\n', lazy=False)
-        result, = e.compute(df.id.sum(), sync=False)
+        result = e.compute(df.id.sum(), sync=False)
         result = yield result._result()
         assert result == 1 + 2 + 3 + 4
         yield e._shutdown()
@@ -304,13 +304,13 @@ def test__read_text(s, a, b):
         yield gen.sleep(0.5)
         assert not s.dask
 
-        future, = e.compute(b.str.strip().str.split().map(len))
+        future = e.compute(b.str.strip().str.split().map(len))
         result = yield future._result()
         assert result == [2, 2, 2, 2, 2, 2]
 
         b = yield _read_text('/tmp/test/other.txt',
                              collection=True, lazy=False)
-        future, = e.compute(b.str.split().concat())
+        future = e.compute(b.str.split().concat())
         result = yield future._result()
         assert result == ['a', 'b', 'c', 'd']
 
@@ -336,7 +336,7 @@ def test__read_text_unicode(s, a, b):
         with hdfs.open(fn, 'wb') as f:
             f.write(b'\n'.join([data, data]))
 
-        [f] = yield _read_text(fn, collection=False, lazy=False)
+        f = yield _read_text(fn, collection=False, lazy=False)
         result = yield f._result()
         assert len(result) == 2
         assert list(map(unicode.strip, result)) == [data.decode('utf-8')] * 2

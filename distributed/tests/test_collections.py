@@ -101,7 +101,7 @@ def test_dataframes(s, a, b):
 
     assert rdf.divisions == ldf.divisions
 
-    remote, = e.compute(rdf)
+    remote = e.compute(rdf)
     result = yield remote._result()
 
     tm.assert_frame_equal(result,
@@ -116,7 +116,7 @@ def test_dataframes(s, a, b):
              lambda df: df.loc[50:75]]
     for f in exprs:
         local = f(ldf).compute(get=dask.get)
-        remote, = e.compute(f(rdf))
+        remote = e.compute(f(rdf))
         remote = yield gen.with_timeout(timedelta(seconds=5), remote._result())
         assert_equal(local, remote)
 
@@ -157,7 +157,7 @@ def test__stack(s, a, b):
     assert y.shape == (6, 5, 5)
     assert y.chunks == ((1, 1, 1, 1, 1, 1), (5,), (5,))
 
-    y_result, = e.compute(y)
+    y_result = e.compute(y)
     yy = yield y_result._result()
 
     assert isinstance(yy, np.ndarray)
@@ -210,7 +210,7 @@ def test__dask_array_collections(s, a, b):
     for expr in exprs:
         local = expr(x_local, y_local).compute(get=dask.get)
 
-        remote, = e.compute(expr(x_remote, y_remote))
+        remote = e.compute(expr(x_remote, y_remote))
         remote = yield remote._result()
 
         assert np.all(local == remote)
@@ -238,7 +238,7 @@ def test__futures_to_dask_bag(s, a, b):
 
     for expr in exprs:
         local = expr(lb).compute(get=dask.get)
-        remote, = e.compute(expr(rb))
+        remote = e.compute(expr(rb))
         remote = yield remote._result()
 
         assert local == remote
