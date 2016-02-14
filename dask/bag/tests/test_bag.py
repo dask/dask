@@ -829,3 +829,18 @@ def test_range():
         assert len(b.dask) == npartitions
         assert b.npartitions == npartitions
         assert list(b) == list(range(100))
+
+
+def test_repartition():
+    for x, y in [(10, 5), (7, 3), (5, 1), (5, 4)]:
+        b = db.from_sequence(range(20), npartitions=x)
+        c = b.repartition(y)
+
+        assert b.npartitions == x
+        assert c.npartitions == y
+        assert list(b) == c.compute(get=dask.get)
+
+    try:
+        b.repartition(100)
+    except NotImplementedError as e:
+        assert '100' in str(e)
