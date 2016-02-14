@@ -132,7 +132,8 @@ class WrappedKey(object):
     only be accessed in a certain way.  Schedulers may have particular needs
     that can only be addressed by additional metadata.
     """
-    pass
+    def __init__(self, key):
+        self.key = key
 
 
 def scatter(center, data):

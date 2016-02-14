@@ -32,6 +32,12 @@ def get_s3(anon):
 
     Caches connection for future use
     """
+    if anon is None:
+        try:
+            return get_s3(True)
+        except:
+            return get_s3(False)
+
     with get_s3_lock:
         key = anon, get_thread_identity()
         if not _conn.get(key):
@@ -46,7 +52,7 @@ def get_s3(anon):
 
 
 def get_list_of_summary_objects(bucket_name, prefix='', delimiter='',
-        page_size=DEFAULT_PAGE_LENGTH, anon=False):
+        page_size=DEFAULT_PAGE_LENGTH, anon=None):
     s3 = get_s3(anon)
     if bucket_name.startswith('s3://'):
         bucket_name = bucket_name[len('s3://'):]
@@ -59,7 +65,7 @@ def get_list_of_summary_objects(bucket_name, prefix='', delimiter='',
     return [s for s in L if s.key[-1] != '/']
 
 
-def read_content_from_keys(bucket, key, anon=False):
+def read_content_from_keys(bucket, key, anon=None):
     if bucket.startswith('s3://'):
         bucket = bucket[len('s3://'):]
     s3 = get_s3(anon)
@@ -67,7 +73,7 @@ def read_content_from_keys(bucket, key, anon=False):
 
 
 def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None,
-               lazy=True, anon=False):
+               lazy=True, anon=None):
     """ Read data on S3 into bytes in distributed memory
 
     Parameters
@@ -91,7 +97,7 @@ def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None,
 
     Examples
     --------
-    >>> futures = read_bytes('distributed-test', 'test', anon=True)  # doctest: +SKIP
+    >>> futures = read_bytes('distributed-test', 'test')  # doctest: +SKIP
     >>> futures  # doctest: +SKIP
     [<Future: status: finished, key: read_content_from_keys-00092e8a75141837c1e9b717b289f9d2>,
      <Future: status: finished, key: read_content_from_keys-4f0f2cbcf4573a373cc62467ffbfd30d>]
@@ -117,7 +123,7 @@ def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None,
 
 
 def read_text(bucket_name, prefix='', path_delimiter='', encoding='utf-8',
-        errors='strict', lineterminator='\n', executor=None, anon=False,
+        errors='strict', lineterminator='\n', executor=None, anon=None,
         collection=True, lazy=True, compression=None):
     """
     Read lines of text from S3
@@ -160,7 +166,7 @@ def read_text(bucket_name, prefix='', path_delimiter='', encoding='utf-8',
             ensure_default_get(executor)
             return lists
         else:
-            return executor.compute(*lists)
+            return executor.compute(*lists, singleton=False)
 
 
 from .compatibility import gzip_decompress

@@ -24,7 +24,7 @@ from distributed.core import rpc
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_executor,
-        default_executor, _first_completed, ensure_default_get)
+        default_executor, _first_completed, ensure_default_get, futures_of)
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
@@ -1499,6 +1499,9 @@ def test_async_compute(s, a, b):
     result = yield e._gather([yy, zz])
     assert result == [2, 0]
 
+    assert isinstance(e.compute(y), Future)
+    assert isinstance(e.compute(y, singleton=False), (tuple, list))
+
     yield e._shutdown()
 
 
@@ -2223,7 +2226,7 @@ def test_async_persist(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    from dask.imperative import do, value
+    from dask.imperative import do, value, Value
     x = value(1)
     y = do(inc)(x)
     z = do(dec)(x)
@@ -2248,6 +2251,9 @@ def test_async_persist(s, a, b):
     assert yyy == inc(1)
     assert www == add(inc(1), dec(1))
 
+    assert isinstance(e.persist(y), Value)
+    assert isinstance(e.persist(y, singleton=False), (list, tuple))
+
     yield e._shutdown()
 
 
@@ -2259,7 +2265,7 @@ def test_persist(loop):
             x = da.ones((10, 10), chunks=(5, 10))
             y = 2 * (x + 1)
             assert len(y.dask) == 6
-            yy, = e.persist(y)
+            yy = e.persist(y)
             assert len(y.dask) == 6
             assert len(yy.dask) == 2
             assert all(isinstance(v, Future) for v in yy.dask.values())
@@ -2285,3 +2291,32 @@ def test_long_traceback(s, a, b):
         sys.setrecursionlimit(n)
 
     yield e._shutdown()
+
+
+@gen_cluster()
+def test_wait_on_collections(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    import dask.bag as db
+
+    L = e.map(double, [[1], [2], [3]])
+    x = db.Bag({('b', i): f for i, f in enumerate(L)}, 'b', 3)
+
+    yield _wait(x)
+    assert all(f.key in a.data or f.key in b.data for f in L)
+
+    yield e._shutdown()
+
+
+def test_futures_of():
+    x, y, z = map(WrappedKey, 'xyz')
+
+    assert futures_of(0) == []
+    assert futures_of(x) == [x]
+    assert futures_of([x, y, z]) == [x, y, z]
+    assert futures_of([x, [y], [[z]]]) == [x, y, z]
+
+    import dask.bag as db
+    b = db.Bag({('b', i): f for i, f in enumerate([x, y, z])}, 'b', 3)
+    assert set(futures_of(b)) == {x, y, z}

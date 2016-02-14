@@ -128,7 +128,7 @@ def test_read_text(s, a, b):
     yield gen.sleep(0.2)
     assert not s.dask
 
-    future, = e.compute(b.filter(None).map(json.loads).pluck('amount').sum())
+    future = e.compute(b.filter(None).map(json.loads).pluck('amount').sum())
     result = yield future._result()
 
     assert result == (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) * 100
@@ -150,7 +150,7 @@ def test_read_text_sync(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             b = read_text(test_bucket_name, 'test/accounts', lazy=True,
-                          collection=True, anon=True)
+                          collection=True)
             assert isinstance(b, db.Bag)
             c = b.filter(None).map(json.loads).pluck('amount').sum()
             result = c.compute(get=e.get)
