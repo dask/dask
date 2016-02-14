@@ -150,7 +150,7 @@ def test_read_text_sync(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             b = read_text(test_bucket_name, 'test/accounts', lazy=True,
-                          collection=True, anon=True)
+                          collection=True)
             assert isinstance(b, db.Bag)
             c = b.filter(None).map(json.loads).pluck('amount').sum()
             result = c.compute(get=e.get)
