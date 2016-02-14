@@ -63,7 +63,7 @@ def dont_test_dataframes(s, a):  # slow
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        futures = read_bytes(fn, hdfs=hdfs, delimiter=b'\r\n')
+        futures = read_bytes(fn, hdfs=hdfs, delimiter=b'\r\n', lazy=False)
         assert len(futures) > 1
 
         def load(b, **kwargs):
@@ -110,7 +110,7 @@ def test_read_bytes(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        futures = read_bytes(fn, hdfs=hdfs)
+        futures = read_bytes(fn, hdfs=hdfs, lazy=False)
         assert len(futures) == len(blocks)
         assert futures[0].executor is e
         results = yield e._gather(futures)
@@ -131,7 +131,7 @@ def test_read_bytes_sync(loop):
                     f.write(data)
 
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-                futures = read_bytes('/tmp/test/file.*')
+                futures = read_bytes('/tmp/test/file.*', lazy=False)
                 results = e.gather(futures)
                 assert b''.join(results) == 100 * data
 
@@ -154,7 +154,7 @@ def test_get_block_locations_nested(s, a, b):
         e = Executor((s.ip, s.port), start=False)
         yield e._start()
 
-        futures = read_bytes('/tmp/test/', hdfs=hdfs)
+        futures = read_bytes('/tmp/test/', hdfs=hdfs, lazy=False)
         results = yield e._gather(futures)
         assert len(results) == 6
         assert all(x == b'a' for x in results)
@@ -229,14 +229,14 @@ def test_read_csv_sync(loop):
 
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 futures = read_csv('/tmp/test/*.csv', lineterminator='\n',
-                                   header=True, collection=False)
+                                   header=True, collection=False, lazy=False)
                 assert all(isinstance(f, Future) for f in futures)
                 L = e.gather(futures)
                 assert isinstance(L[0], pd.DataFrame)
                 assert list(L[0].columns) == ['name', 'amount', 'id']
 
                 df = read_csv('/tmp/test/*.csv', lineterminator='\n',
-                              header=True, collection=True)
+                              header=True, collection=True, lazy=False)
                 assert isinstance(df, dd.DataFrame)
                 assert list(df.head().iloc[0]) == ['Alice', 100, 1]
 
@@ -253,7 +253,8 @@ def test_read_csv(s, a, b):
         with hdfs.open('/tmp/test/2.csv', 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        df = yield _read_csv('/tmp/test/*.csv', header=True, lineterminator='\n')
+        df = yield _read_csv('/tmp/test/*.csv', header=True,
+                lineterminator='\n', lazy=False)
         result, = e.compute(df.id.sum(), sync=False)
         result = yield result._result()
         assert result == 1 + 2 + 3 + 4
@@ -272,7 +273,8 @@ def test_read_csv_lazy(s, a, b):
         with hdfs.open('/tmp/test/2.csv', 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        df = yield _read_csv('/tmp/test/*.csv', header=True, lazy=True, lineterminator='\n')
+        df = yield _read_csv('/tmp/test/*.csv', header=True, lazy=True,
+                             lineterminator='\n')
         yield gen.sleep(0.5)
         assert not s.dask
 
@@ -350,5 +352,5 @@ def test_read_text_sync(loop):
 
         with cluster(nworkers=3) as (s, [a, b, c]):
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-                b = read_text('/tmp/test/*.txt')
+                b = read_text('/tmp/test/*.txt', lazy=False)
                 assert list(b.str.upper()) == ['HELLO', 'WORLD']

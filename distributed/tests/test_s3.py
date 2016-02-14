@@ -74,7 +74,8 @@ def test_read_bytes(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    futures = read_bytes(test_bucket_name, prefix='test/', anon=True)
+    futures = read_bytes(test_bucket_name, prefix='test/', anon=True,
+                         lazy=False)
     assert len(futures) >= len(files)
     results = yield e._gather(futures)
     assert set(results).issuperset(set(files.values()))

@@ -66,8 +66,8 @@ def read_content_from_keys(bucket, key, anon=False):
     return s3.Object(bucket, key).get()['Body'].read()
 
 
-def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None, lazy=False,
-               anon=False):
+def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None,
+               lazy=True, anon=False):
     """ Read data on S3 into bytes in distributed memory
 
     Parameters
@@ -118,7 +118,7 @@ def read_bytes(bucket_name, prefix='', path_delimiter='', executor=None, lazy=Fa
 
 def read_text(bucket_name, prefix='', path_delimiter='', encoding='utf-8',
         errors='strict', lineterminator='\n', executor=None, anon=False,
-        collection=True, lazy=False, compression=None):
+        collection=True, lazy=True, compression=None):
     """
     Read lines of text from S3
 
@@ -141,7 +141,7 @@ def read_text(bucket_name, prefix='', path_delimiter='', encoding='utf-8',
     executor = default_executor(executor)
 
     blocks = read_bytes(bucket_name, prefix, path_delimiter, executor=executor,
-            lazy=True, anon=anon)
+                        lazy=True, anon=anon)
 
     if compression:
         blocks = map(do(decompress[compression]), blocks)
