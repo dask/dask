@@ -838,6 +838,27 @@ class Bag(Base):
         from dask.imperative import Value
         return [Value(k, [self.dask]) for k in self._keys()]
 
+    def repartition(self, npartitions):
+        """ Coalesce bag into fewer partitions
+
+        Examples
+        --------
+        >>> b.repartition(5)  # set to have 5 partitions  # doctest: +SKIP
+        """
+        if npartitions > self.npartitions:
+            raise NotImplementedError(
+              "Repartition only supports going to fewer partitions\n"
+              " old: %d  new: %d" % (self.npartitions, npartitions))
+        size = self.npartitions / npartitions
+        L = [int(i * self.npartitions / npartitions)
+                for i in range(npartitions + 1)]
+        name = 'repartition-%d-%s' % (npartitions, self.name)
+        dsk = dict(((name, i), (list,
+                                (toolz.concat, [(self.name, j)
+                                            for j in range(L[i], L[i + 1])])))
+                    for i in range(npartitions))
+        return Bag(merge(self.dask, dsk), name, npartitions)
+
 
 normalize_token.register(Item, lambda a: a.key)
 normalize_token.register(Bag, lambda a: a.name)
