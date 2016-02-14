@@ -1080,6 +1080,7 @@ class CompatibleExecutor(Executor):
 
 @gen.coroutine
 def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
+    fs = futures_of(fs)
     if timeout is not None:
         raise NotImplementedError("Timeouts not yet supported")
     if return_when == 'ALL_COMPLETED':
@@ -1112,6 +1113,7 @@ def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
 
 @gen.coroutine
 def _as_completed(fs, queue):
+    fs = futures_of(fs)
     groups = groupby(lambda f: f.key, fs)
     firsts = [v[0] for v in groups.values()]
     wait_iterator = gen.WaitIterator(*[f.event.wait() for f in firsts])
@@ -1190,3 +1192,15 @@ def redict_collection(c, dsk):
         cc = copy.copy(c)
         cc.dask = dsk
         return cc
+
+
+def futures_of(o):
+    if isinstance(o, WrappedKey):
+        return [o]
+    if isinstance(o, (tuple, set, list)):
+        return [f for item in o for f in futures_of(item)]
+    if isinstance(o, dict):
+        return [f for v in o.values() for f in futures_of(v)]
+    if hasattr(o, 'dask'):
+        return futures_of(o.dask)
+    return []

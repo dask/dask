@@ -12,7 +12,7 @@ from tornado.ioloop import IOLoop
 from .progress import format_time, Progress, MultiProgress
 
 from ..core import connect, read, write
-from ..executor import default_executor
+from ..executor import default_executor, futures_of
 from ..utils import sync, ignoring, key_split, is_kernel
 
 
@@ -291,7 +291,7 @@ def progress(*futures, **kwargs):
     complete = kwargs.pop('complete', True)
     assert not kwargs
 
-    futures = list(flatten(list(futures)))
+    futures = futures_of(futures)
     if not isinstance(futures, (set, list)):
         futures = [futures]
     if notebook is None:
