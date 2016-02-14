@@ -278,7 +278,7 @@ def test_read_csv_lazy(s, a, b):
         yield gen.sleep(0.5)
         assert not s.dask
 
-        result = yield e.compute(df.id.sum(), sync=False)[0]._result()
+        result = yield e.compute(df.id.sum(), sync=False)._result()
         assert result == 1 + 2 + 3 + 4
 
         yield e._shutdown()
@@ -337,7 +337,7 @@ def test__read_text_unicode(s, a, b):
             f.write(b'\n'.join([data, data]))
 
         f = yield _read_text(fn, collection=False, lazy=False)
-        result = yield f._result()
+        result = yield f[0]._result()
         assert len(result) == 2
         assert list(map(unicode.strip, result)) == [data.decode('utf-8')] * 2
         assert len(result[0]) == 5

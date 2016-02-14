@@ -166,7 +166,7 @@ def read_text(bucket_name, prefix='', path_delimiter='', encoding='utf-8',
             ensure_default_get(executor)
             return lists
         else:
-            return executor.compute(*lists)
+            return executor.compute(*lists, singleton=False)
 
 
 from .compatibility import gzip_decompress
