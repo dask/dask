@@ -6,6 +6,13 @@ from ..core import DataFrame, Series
 from ...base import tokenize
 
 
+def getnanos(rule):
+    try:
+        return getattr(rule, 'nanos', None)
+    except ValueError:
+        return None
+
+
 def _resample(series, rule, how='mean', axis=0, fill_method=None, closed=None,
               label=None, convention='start', kind=None, loffset=None,
               limit=None, base=0):
@@ -14,7 +21,7 @@ def _resample(series, rule, how='mean', axis=0, fill_method=None, closed=None,
     rule = pd.datetools.to_offset(rule)
     day_nanos = pd.datetools.Day().nanos
 
-    if getattr(rule, 'nanos', None) and day_nanos % rule.nanos:
+    if getnanos(rule) and day_nanos % rule.nanos:
         raise NotImplementedError('Resampling frequency %s that does'
                                   ' not evenly divide a day is not '
                                   'implemented' % rule)
@@ -94,4 +101,3 @@ def _resample_bin_and_out_divs(divisions, rule, closed, label):
             setter(outdivs, temp.index[-1])
 
     return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
-
