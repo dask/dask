@@ -294,7 +294,7 @@ class Worker(Server):
         for key in keys:
             if key in self.data:
                 del self.data[key]
-        logger.debug("Deleted %d keys", len(keys))
+        logger.info("Deleted %d keys", len(keys))
         if report:
             logger.debug("Reporting loss of keys to center")
             yield self.center.remove_keys(address=(self.ip, self.port),
