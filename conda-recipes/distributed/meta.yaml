@@ -8,27 +8,32 @@ source:
 requirements:
   build:
     - python
-    - tornado
+    - tornado >=4.2
     - toolz
     - cloudpickle
     - dask
     - click
     - boto3
     - locket
+    - six
+    - tblib
 
   run:
     - python
-    - tornado
+    - tornado >=4.2
     - toolz
     - cloudpickle
     - dask
     - click
     - boto3
     - locket
+    - six
+    - tblib
 
 test:
   imports:
     - distributed
+    - distributed.cli
     - distributed.diagnostics
     - distributed.http
 
