@@ -2091,6 +2091,24 @@ def test__cancel_multi_client(s, a, b):
     yield f._shutdown()
 
 
+@gen_cluster()
+def test__cancel_collection(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    import dask.bag as db
+
+    L = e.map(double, [[1], [2], [3]])
+    x = db.Bag({('b', i): f for i, f in enumerate(L)}, 'b', 3)
+
+    yield e._cancel(x)
+    yield e._cancel([x])
+    assert all(f.cancelled() for f in L)
+    assert not s.dask
+
+    yield e._shutdown()
+
+
 def test_cancel(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:

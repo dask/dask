@@ -809,7 +809,7 @@ class Executor(object):
                         broadcast=broadcast)
     @gen.coroutine
     def _cancel(self, futures, block=False):
-        keys = {f.key for f in flatten(futures)}
+        keys = {f.key for f in futures_of(futures)}
         f = self.scheduler.cancel(keys=keys, client=self.id)
         if block:
             yield f
