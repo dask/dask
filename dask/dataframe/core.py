@@ -976,38 +976,10 @@ class Series(_Frame):
         """
         return quantile(self, q)
 
-    def resample(self, rule, how='mean', axis=0, fill_method=None, closed=None,
-                 label=None, convention='start', kind=None, loffset=None,
-                 limit=None, base=0):
-        """Group by a DatetimeIndex values in time periods of size `rule`.
-
-        Parameters
-        ----------
-        rule : str or pandas.datetools.Tick
-            The frequency to resample by. For example, 'H' is one hour
-            intervals.
-        how : str or callable
-            Method to use to summarize your data. For example, 'mean' takes the
-            average value of the Series in the time interval `rule`.
-
-        Notes
-        -----
-        For additional argument descriptions please consult the pandas
-        documentation.
-
-        Returns
-        -------
-        dask.dataframe.Series
-
-        See Also
-        --------
-        pandas.Series.resample
-        """
-
+    @derived_from(pd.Series)
+    def resample(self, rule, how=None, closed=None, label=None):
         from .tseries.resample import _resample
-        return _resample(self, rule, how=how, axis=axis, fill_method=fill_method,
-                         closed=closed, label=label, convention=convention,
-                         kind=kind, loffset=loffset, limit=limit, base=base)
+        return _resample(self, rule, how=how, closed=closed, label=label)
 
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
