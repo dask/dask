@@ -37,7 +37,7 @@ namenode.
    >>> hdfs = hdfs3.HDFileSystem('NAMENODE_HOSTNAME', port=NAMENODE_PORT)
 
 Initalize a connection to the ``distributed`` executor, replacing
-``EXECUTOR_IP`` and ``EXECUTOR_PORT`` with the hostname and port of the
+``EXECUTOR_IP`` and ``EXECUTOR_PORT`` with the IP address and port of the
 ``distributed`` scheduler.
 
 .. code-block:: python
