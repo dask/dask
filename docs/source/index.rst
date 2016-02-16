@@ -134,6 +134,7 @@ help make debugging and profiling graph execution easier.
 **Help & reference**
 
 * :doc:`install`
+* :doc:`examples-overview`
 * :doc:`glossary`
 * :doc:`faq`
 * :doc:`spark`
@@ -146,6 +147,7 @@ help make debugging and profiling graph execution easier.
    :caption: Help & reference
 
    install.rst
+   examples-overview.rst
    glossary.rst
    faq.rst
    spark.rst
