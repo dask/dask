@@ -61,7 +61,41 @@ node that hosts ``dscheduler``::
 ---------------------------------
 
 Alternatively you can start up the ``distributed.scheduler.Scheduler`` and
-``distributed.worker.Worker`` objects within a Python session manually.
+``distributed.worker.Worker`` objects within a Python session manually.  Both
+are ``torando.tcpserver.TCPServer`` objects.
+
+Start the Scheduler, provide the listening port (defaults to 8786) and Tornado
+IOLoop (defaults to ``IOLoop.current()``)
+
+.. code-block:: python
+
+   from distributed import Scheduler
+   s = Scheduler(loop=loop)
+   s.start(port)
+
+On other nodes start worker processes that point to the IP address and port of
+the scheduler.
+
+.. code-block:: python
+
+   from distributed import Worker
+   w = Worker('192.168.0.1', 8786, loop=loop)
+   w.start(0)  # choose randomly assigned port
+
+Alternatively, replace ``Worker`` with ``Nanny`` if you want your workers to be
+managed in a separate process by a local nanny process.
+
+If you do not already have a Tornado event loop running you will need to create
+and start one, possibly in a separate thread.
+
+.. code-block:: python
+
+   from tornado.ioloop import IOLoop
+   loop = IOLoop()
+
+   from threading import Thread
+   t = Thread(target=loop.start)
+   t.start()
 
 
 Cleanup
