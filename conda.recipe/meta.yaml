@@ -25,6 +25,8 @@ requirements:
     - cloudpickle
     - partd
     - chest
+    - bokeh # [not py26]
+    - psutil
 
 test:
   requires:

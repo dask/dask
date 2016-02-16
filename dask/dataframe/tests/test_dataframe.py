@@ -974,21 +974,10 @@ def test_append2():
     assert eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
     assert eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
 
-def test_dataframe_series_are_dillable():
-    try:
-        import dill
-    except ImportError:
-        return
-    e = d.groupby(d.a).b.sum()
-    f = dill.loads(dill.dumps(e))
-    assert eq(e, f)
 
 def test_dataframe_series_are_pickleable():
-    try:
-        import cloudpickle
-        import pickle
-    except ImportError:
-        return
+    import pickle
+    cloudpickle = pytest.importorskip('cloudpickle')
 
     dumps = cloudpickle.dumps
     loads = pickle.loads
@@ -996,6 +985,7 @@ def test_dataframe_series_are_pickleable():
     e = d.groupby(d.a).b.sum()
     f = loads(dumps(e))
     assert eq(e, f)
+
 
 def test_random_partitions():
     a, b = d.random_split([0.5, 0.5])
