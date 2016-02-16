@@ -184,7 +184,7 @@ def test_lazy_values(s, a, b):
             yield gen.sleep(0.01)
         assert not s.dask
 
-        results = e.compute(*values, sync=False)
+        results = e.compute(values, sync=False)
         results = yield e._gather(results)
         assert len(results) == 6
         assert all(x == b'a' for x in results)
