@@ -2,13 +2,13 @@ Word count
 ==========
 
 In this example, we'll use ``dask`` to count the number of words in text files
-(Enron email dataset, 6.4 GB) both locally and on a cluster with HDFS (along
-with the `distributed`_ and `hdfs3`_ libraries).
+(Enron email dataset, 6.4 GB) both locally and on a cluster (along with the
+`distributed`_ and `hdfs3`_ libraries).
 
 Local computation
 -----------------
 
-Download the first text file (76 MB) in the data set to your local machine:
+Download the first text file (76 MB) in the dataset to your local machine:
 
 .. code-block:: bash
 
@@ -21,7 +21,7 @@ Import ``dask.bag`` and create a ``bag`` from the single text file:
    >>> import dask.bag as db
    >>> b = db.from_filenames('merged.txt')
 
-View the first ten lines of the text file with ``take``:
+View the first ten lines of the text file with ``.take()``:
 
 .. code-block:: python
 
@@ -38,9 +38,9 @@ View the first ten lines of the text file with ``take``:
     '04:26 PM ---------------------------\r\n',
     '\r\n')
 
-Generate a word count expression using the ``bag`` methods to split the lines
-into words, concatenate the nested lists of words into a single list, count the
-frequencies of each word, then list the top 10 words by their count:
+We can write a word count expression using the ``bag`` methods to split the
+lines into words, concatenate the nested lists of words into a single list,
+count the frequencies of each word, then list the top 10 words by their count:
 
 .. code-block:: python
 
@@ -64,31 +64,37 @@ trigger the word count computation using ``.compute()``:
     ('O', 223927),
     ('3', 221407)]
 
+This computation required about 7 seconds to run on a laptop with 8 cores and 16
+GB RAM.
+
 Cluster computation with HDFS
 -----------------------------
 
-Next, we'll use ``dask`` along with the `distributed`_ with the `hdfs3`_
-libraries to count the number of words in all of the text files stored in HDFS.
+Next, we'll use ``dask`` along with the `distributed`_ and `hdfs3`_ libraries
+to count the number of words in all of the text files stored in a Hadoop
+Distributed File System (HDFS).
 
-Copy the text data from S3 into HDFS on the cluster:
+Copy the text data from Amazon S3 into HDFS on the cluster:
 
 .. code-block:: bash
 
-   $ hadoop distcp s3n://{AWS_SECRET_ID}:{AWS_SECRET_KEY}@blaze-data/enron-email hdfs:///tmp/enron
+   $ hadoop distcp s3n://AWS_SECRET_ID:AWS_SECRET_KEY@blaze-data/enron-email hdfs:///tmp/enron
 
 where ``AWS_SECRET_ID`` and ``AWS_SECRET_KEY`` are valid AWS credentials.
 
-Start the ``distributed`` scheduler and workers on the cluster. Because of the
-parallelizable nature of ``bag`` operations, we can start the ``distributed``
-workers with multiple processes equal to the number of cores on the machine:
+We can now start a ``distributed`` scheduler and workers on the cluster,
+replacing ``EXECUTOR_IP`` and ``EXECUTOR_PORT`` with the IP address and port of
+the ``distributed`` scheduler:
 
 .. code-block:: bash
 
    $ dscheduler  # On the head node
    $ dworker EXECUTOR_IP:EXECUTOR_PORT --nprocs 4 --nthreads 1  # On the compute nodes
 
-In the above ``dworker`` command, replace ``EXECUTOR_IP`` and ``EXECUTOR_PORT``
-with the IP address and port of the ``distributed`` scheduler.
+Because our computations use pure Python rather than numeric libraries (e.g.,
+NumPy, pandas), we started the workers with multiple processes rather than
+with multiple threads. This helps us avoid issues with the Python Global
+Interpreter Lock (GIL) and increases efficiency.
 
 In Python, import the ``hdfs3`` and the ``distributed`` methods used in this
 example:
@@ -122,8 +128,8 @@ read data from HDFS until the computation is triggered:
 
    Setting global dask scheduler to use distributed
 
-Generate a word count expression using the same ``bag`` methods as the local
-``dask`` example:
+We can write a word count expression using the same ``bag`` methods as the
+local ``dask`` example:
 
 .. code-block:: python
 
@@ -153,8 +159,10 @@ processed:
 
    [########################################] | 100% Completed |  8min  15.2s
 
-This operation required about 8 minutes to run on a cluster with three worker
-machines, each with 4 cores and 16 GB RAM.
+This computation required about 8 minutes to run on a cluster with three worker
+machines, each with 4 cores and 16 GB RAM. For comparison, running the same
+computation locally with ``dask`` required about 20 minutes on a single machine
+with the same specs.
 
 When the ``future`` finishes reading in all of the text files and counting
 words, the results will exist on each worker. To sum the word counts for all of
