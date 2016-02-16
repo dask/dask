@@ -5,6 +5,7 @@ from collections import Iterator
 from concurrent.futures import CancelledError
 from datetime import timedelta
 import itertools
+from multiprocessing import Process
 import os
 import shutil
 import sys
@@ -52,7 +53,6 @@ def test_submit(s, a, b):
     result = yield z._result()
     assert result == 11 + 21
     yield e._shutdown()
-    assert s.who_has[z.key]
 
 
 @gen_cluster()
@@ -1952,7 +1952,45 @@ def test_multi_executor(s, a, b):
     assert s.who_wants == {x.key: {e.id}, y.key: {e.id, f.id}}
 
     yield e._shutdown()
+
+    start = time()
+    while e.id in s.wants_what:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    assert e.id not in s.wants_what
+    assert e.id not in s.who_wants[y.key]
+    assert x.key not in s.who_wants
+
     yield f._shutdown()
+
+    assert not s.dask
+
+
+@gen_cluster()
+def test_cleanup_after_broken_executor_connection(s, a, b):
+    def f(ip, port):
+        e = Executor((ip, port))
+        x = e.submit(lambda x: x + 1, 10)
+        x.result()
+        sleep(100)
+
+    proc = Process(target=f, args=(s.ip, s.port))
+    proc.daemon = True
+    proc.start()
+
+    start = time()
+    while not s.dask:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    proc.terminate()
+
+    start = time()
+    while s.dask:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
 
 
 @gen_cluster()

@@ -585,8 +585,11 @@ class Scheduler(Server):
         logger.info("Register %s", str(address))
         return b'OK'
 
-    def remove_client(self):
-        logger.info("Lost connection to client")
+    def remove_client(self, client=None):
+        logger.info("Remove client %s", client)
+        self.client_releases_keys(self.wants_what.get(client, ()), client)
+        with ignoring(KeyError):
+            del self.wants_what[client]
 
     def update_graph(self, client=None, dsk=None, keys=None, restrictions=None,
                      loose_restrictions=None):
@@ -636,9 +639,11 @@ class Scheduler(Server):
                 logger.exception(e)
 
     def client_releases_keys(self, keys=None, client=None):
-        for k in keys:
-            self.wants_what[client].remove(k)
-            self.who_wants[k].remove(client)
+        for k in list(keys):
+            with ignoring(KeyError):
+                self.wants_what[client].remove(k)
+            with ignoring(KeyError):
+                self.who_wants[k].remove(client)
             if not self.who_wants[k]:
                 del self.who_wants[k]
                 self.release_held_data([k])
@@ -776,7 +781,7 @@ class Scheduler(Server):
         logger.info("Connection to %s, %s", type(self).__name__, client)
         self.streams[client] = stream
         try:
-            yield self.handle_messages(stream, stream)
+            yield self.handle_messages(stream, stream, client=client)
         finally:
             if not stream.closed():
                 yield write(stream, {'op': 'stream-closed'})
@@ -786,7 +791,7 @@ class Scheduler(Server):
                         client)
 
     @gen.coroutine
-    def handle_messages(self, in_queue, report):
+    def handle_messages(self, in_queue, report, client=None):
         """ Master coroutine.  Handles inbound messages.
 
         This runs once per Queue or Stream.
@@ -810,7 +815,6 @@ class Scheduler(Server):
             try:
                 msg = yield next_message()  # in_queue.get()
             except (StreamClosedError, AssertionError):
-                self.remove_client()
                 break
             except Exception as e:
                 put({'op': 'scheduler-error',
@@ -824,8 +828,8 @@ class Scheduler(Server):
             if op == 'close-stream':
                 break
             elif op == 'close':
-               self.close()
-               break
+                self.close()
+                break
             elif op in self.compute_handlers:
                 try:
                     result = self.compute_handlers[op](**msg)
@@ -840,6 +844,7 @@ class Scheduler(Server):
             if op == 'close':
                 break
 
+        self.remove_client(client=client)
         logger.debug('Finished scheduling coroutine')
 
     @gen.coroutine

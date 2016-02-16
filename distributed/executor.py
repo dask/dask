@@ -4,6 +4,7 @@ from collections import defaultdict, Iterator
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
 import copy
+from datetime import timedelta
 from functools import wraps, partial
 import itertools
 import logging
@@ -420,11 +421,13 @@ class Executor(object):
     @gen.coroutine
     def _shutdown(self, fast=False):
         """ Send shutdown signal and wait until scheduler completes """
-        self._send_to_scheduler({'op': 'close'})
+        self._send_to_scheduler({'op': 'close-stream'})
         if _global_executor[0] is self:
             _global_executor[0] = None
         if not fast:
-            yield self.coroutines
+            with ignoring(TimeoutError):
+                yield [gen.with_timeout(timedelta(seconds=2), f)
+                        for f in self.coroutines]
 
     def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates """
