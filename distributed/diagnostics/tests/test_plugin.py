@@ -11,7 +11,7 @@ def test_diagnostic(loop):
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s.sync_center()
-        done = s.start()
+        done = s.start(0)
         sched, report = Queue(), Queue(); s.handle_queues(sched, report)
         msg = yield report.get(); assert msg['op'] == 'stream-start'
 

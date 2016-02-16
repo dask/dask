@@ -1542,7 +1542,7 @@ def test_input_types(loop):
 
         s = Scheduler((c.ip, c.port))
         yield s.sync_center()
-        done = s.start()
+        done = s.start(0)
 
         e2 = Executor(s, start=False, loop=loop)
         yield e2._start()

@@ -150,7 +150,7 @@ class Worker(Server):
         self.status = 'running'
 
     def start(self, port=0):
-        self.loop.add_callback(lambda: self._start(port))
+        self.loop.add_callback(self._start, port)
 
     def identity(self, stream):
         return {'type': type(self).__name__, 'id': self.id,

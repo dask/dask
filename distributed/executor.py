@@ -323,7 +323,7 @@ class Executor(object):
         if isinstance(self.scheduler, Scheduler):
             if self.scheduler.status != 'running':
                 yield self.scheduler.sync_center()
-                self.scheduler.start()
+                self.scheduler.start(0)
             self.scheduler_queue = Queue()
             self.report_queue = Queue()
             self.coroutines.append(self.scheduler.handle_queues(
