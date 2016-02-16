@@ -7,11 +7,11 @@ Setup
 In this example, we'll use ``distributed`` with the ``hdfs3`` library to count
 the number of words in text files (Enron email dataset, 6.4 GB) stored in HDFS.
 
-Copy data from S3 into HDFS:
+Copy the text data from Amazon S3 into HDFS on the cluster:
 
 .. code-block:: bash
 
-   $ hadoop distcp s3n://{AWS_SECRET_ID}:{AWS_SECRET_KEY}@blaze-data/enron-email hdfs:///tmp/enron
+   $ hadoop distcp s3n://AWS_SECRET_ID:AWS_SECRET_KEY@blaze-data/enron-email hdfs:///tmp/enron
 
 where ``AWS_SECRET_ID`` and ``AWS_SECRET_KEY`` are valid AWS credentials.
 
