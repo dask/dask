@@ -49,11 +49,11 @@ def main(center, host, port, nthreads, nprocs, no_nanny):
     loop = IOLoop.current()
     t = Worker if no_nanny else Nanny
     nannies = [t(center_ip, center_port, ncores=nthreads, ip=host,
-                 services=services)
+                 services=services, loop=loop)
                 for i in range(nprocs)]
 
     for nanny in nannies:
-        loop.add_callback(nanny._start, port)
+        nanny.start(port)
     try:
         loop.start()
     except KeyboardInterrupt:

@@ -91,7 +91,7 @@ def test_read_bytes_lazy(s, a, b):
     values = read_bytes(test_bucket_name, 'test/', lazy=True, anon=True)
     assert all(isinstance(v, Value) for v in values)
 
-    results = e.compute(*values, sync=False)
+    results = e.compute(values, sync=False)
     results = yield e._gather(results)
 
     assert set(results).issuperset(set(files.values()))

@@ -1491,7 +1491,7 @@ def test_async_compute(s, a, b):
     y = do(inc)(x)
     z = do(dec)(x)
 
-    yy, zz, aa = e.compute(y, z, 3, sync=False)
+    [yy, zz, aa] = e.compute([y, z, 3], sync=False)
     assert isinstance(yy, Future)
     assert isinstance(zz, Future)
     assert aa == 3
@@ -1500,7 +1500,7 @@ def test_async_compute(s, a, b):
     assert result == [2, 0]
 
     assert isinstance(e.compute(y), Future)
-    assert isinstance(e.compute(y, singleton=False), (tuple, list))
+    assert isinstance(e.compute([y]), (tuple, list))
 
     yield e._shutdown()
 
@@ -1513,7 +1513,7 @@ def test_sync_compute(loop):
             y = do(inc)(x)
             z = do(dec)(x)
 
-            yy, zz = e.compute(y, z, sync=True)
+            yy, zz = e.compute([y, z], sync=True)
             assert (yy, zz) == (2, 0)
 
 
@@ -1542,7 +1542,7 @@ def test_input_types(loop):
 
         s = Scheduler((c.ip, c.port))
         yield s.sync_center()
-        done = s.start()
+        done = s.start(0)
 
         e2 = Executor(s, start=False, loop=loop)
         yield e2._start()
@@ -2091,6 +2091,24 @@ def test__cancel_multi_client(s, a, b):
     yield f._shutdown()
 
 
+@gen_cluster()
+def test__cancel_collection(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    import dask.bag as db
+
+    L = e.map(double, [[1], [2], [3]])
+    x = db.Bag({('b', i): f for i, f in enumerate(L)}, 'b', 3)
+
+    yield e._cancel(x)
+    yield e._cancel([x])
+    assert all(f.cancelled() for f in L)
+    assert not s.dask
+
+    yield e._shutdown()
+
+
 def test_cancel(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
@@ -2232,7 +2250,7 @@ def test_async_persist(s, a, b):
     z = do(dec)(x)
     w = do(add)(y, z)
 
-    yy, ww = e.persist(y, w)
+    yy, ww = e.persist([y, w])
     assert type(yy) == type(y)
     assert type(ww) == type(w)
     assert len(yy.dask) == 1
@@ -2247,12 +2265,12 @@ def test_async_persist(s, a, b):
     assert s.who_wants[y.key] == {e.id}
     assert s.who_wants[w.key] == {e.id}
 
-    yyy, www = yield e._gather(e.compute(yy, ww))
+    yyy, www = yield e._gather(e.compute([yy, ww]))
     assert yyy == inc(1)
     assert www == add(inc(1), dec(1))
 
     assert isinstance(e.persist(y), Value)
-    assert isinstance(e.persist(y, singleton=False), (list, tuple))
+    assert isinstance(e.persist([y]), (list, tuple))
 
     yield e._shutdown()
 

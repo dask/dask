@@ -238,7 +238,7 @@ class Scheduler(Server):
                 self.center.who_has(),
                 self.center.worker_services()]
 
-    def start(self, port=0, start_queues=True):
+    def start(self, port=8786, start_queues=True):
         """ Clear out old state and restart all running coroutines """
         collections = [self.dask, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.in_play, self.keyorder,

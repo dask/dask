@@ -323,7 +323,7 @@ class Executor(object):
         if isinstance(self.scheduler, Scheduler):
             if self.scheduler.status != 'running':
                 yield self.scheduler.sync_center()
-                self.scheduler.start()
+                self.scheduler.start(0)
             self.scheduler_queue = Queue()
             self.report_queue = Queue()
             self.coroutines.append(self.scheduler.handle_queues(
@@ -809,7 +809,7 @@ class Executor(object):
                         broadcast=broadcast)
     @gen.coroutine
     def _cancel(self, futures, block=False):
-        keys = {f.key for f in flatten(futures)}
+        keys = {f.key for f in futures_of(futures)}
         f = self.scheduler.cancel(keys=keys, client=self.id)
         if block:
             yield f
@@ -885,22 +885,19 @@ class Executor(object):
         else:
             return result
 
-    def compute(self, *args, **kwargs):
+    def compute(self, args, sync=False):
         """ Compute dask collections on cluster
 
         Parameters
         ----------
-        args: iterable of dask objects
+        args: iterable of dask objects or single dask object
             Collections like dask.array or dataframe or dask.value objects
         sync: bool (optional)
             Returns Futures if False (default) or concrete values if True
-        singleton: bool (optional, defaults to True)
-            If given only one input, return one output, not a tuple
-            True is better for interactive use but False is more consistent
 
         Returns
         -------
-        List of Futures
+        List of Futures if input is a sequence, or a single future otherwise
 
         Examples
         --------
@@ -909,7 +906,7 @@ class Executor(object):
         >>> from operator import add
         >>> x = dask.do(add)(1, 2)
         >>> y = dask.do(add)(x, x)
-        >>> xx, yy = executor.compute(x, y)  # doctest: +SKIP
+        >>> xx, yy = executor.compute([x, y])  # doctest: +SKIP
         >>> xx  # doctest: +SKIP
         <Future: status: finished, key: add-8f6e709446674bad78ea8aeecfee188e>
         >>> xx.result()  # doctest: +SKIP
@@ -917,13 +914,19 @@ class Executor(object):
         >>> yy.result()  # doctest: +SKIP
         6
 
+        Also support single arguments
+
+        >>> xx = executor.compute(x)  # doctest: +SKIP
+
         See Also
         --------
         Executor.get: Normal synchronous dask.get function
         """
-        sync = kwargs.pop('sync', False)
-        singleton = kwargs.pop('singleton', True)
-        assert not kwargs
+        if isinstance(args, (list, tuple, set, frozenset)):
+            singleton = False
+        else:
+            args = [args]
+            singleton = True
 
         variables = [a for a in args if isinstance(a, Base)]
 
@@ -955,12 +958,12 @@ class Executor(object):
         else:
             result = futures
 
-        if singleton and isinstance(result, (list, tuple)) and len(result) == 1:
+        if singleton:
             return first(result)
         else:
             return result
 
-    def persist(self, *collections, **kwargs):
+    def persist(self, collections):
         """ Persist dask collections on cluster
 
         Starts computation of the collection on the cluster in the background.
@@ -969,27 +972,28 @@ class Executor(object):
 
         Parameters
         ----------
-        collections: iterable of dask objects
+        collections: sequence or single dask object
             Collections like dask.array or dataframe or dask.value objects
-        singleton: bool (optional, defaults to True)
-            If given only one input, return one output, not a tuple
-            True is better for interactive use but False is more consistent
 
         Returns
         -------
-        List of collections, with computation happening in the background.
+        List of collections, or single collection, depending on type of input.
 
         Examples
         --------
-        >>> xx, yy = executor.persist(x, y)  # doctest: +SKIP
-        >>> xx, = executor.persist(x)  # doctest: +SKIP
+        >>> xx = executor.persist(x)  # doctest: +SKIP
+        >>> xx, yy = executor.persist([x, y])  # doctest: +SKIP
 
         See Also
         --------
         Executor.compute
         """
-        singleton = kwargs.pop('singleton', True)
-        assert not kwargs
+        if isinstance(collections, (tuple, list, set, frozenset)):
+            singleton = False
+        else:
+            singleton = True
+            collections = [collections]
+
         assert all(isinstance(c, Base) for c in collections)
 
         groups = groupby(lambda x: x._optimize, collections)
@@ -1008,7 +1012,7 @@ class Executor(object):
         result = [redict_collection(c, {k: Future(k, self)
                                         for k in flatten(c._keys())})
                 for c in collections]
-        if singleton and len(result) == 1:
+        if singleton:
             return first(result)
         else:
             return result

@@ -139,7 +139,7 @@ def _read_csv(path, executor=None, hdfs=None, lazy=True, lineterminator='\n',
             raise gen.Return(dfs2)
 
     else:
-        futures = executor.compute(*dfs2, singleton=False)
+        futures = executor.compute(dfs2)
         from distributed.collections import _futures_to_dask_dataframe
         if collection:
             ensure_default_get(executor)
@@ -228,7 +228,7 @@ def _read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
     if lazy:
         raise gen.Return(lazy_values)
     else:
-        futures = executor.compute(*lazy_values, singleton=False)
+        futures = executor.compute(lazy_values)
         raise gen.Return(futures)
 
 
@@ -328,7 +328,7 @@ def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
             raise gen.Return(lines)
 
     else:
-        futures = executor.compute(*lines, singleton=False)
+        futures = executor.compute(lines)
         from distributed.collections import _futures_to_dask_bag
         if collection:
             ensure_default_get(executor)

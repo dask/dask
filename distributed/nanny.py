@@ -52,6 +52,9 @@ class Nanny(Server):
         assert self.worker_port
         self.status = 'running'
 
+    def start(self, port=0):
+        self.loop.add_callback(self._start, port)
+
     @gen.coroutine
     def _kill(self, stream=None, timeout=5):
         """ Kill the local worker process

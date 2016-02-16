@@ -682,7 +682,7 @@ def test_feed_setup_teardown(s, a, b):
 @gen_test()
 def test_scheduler_as_center():
     s = Scheduler()
-    done = s.start()
+    done = s.start(0)
     a = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=1)
     a.data.update({'x': 1, 'y': 2})
     b = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=2)

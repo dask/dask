@@ -96,7 +96,7 @@ def run_scheduler(q, center_port=None, **kwargs):
 
     if center_port:
         loop.run_sync(scheduler.sync_center)
-    done = scheduler.start()
+    done = scheduler.start(0)
 
     q.put(scheduler.port)
     loop.start()
@@ -323,7 +323,7 @@ def _test_scheduler(f, loop=None, b_ip='127.0.0.1'):
     @gen.coroutine
     def g():
         s = Scheduler(ip='127.0.0.1')
-        done = s.start()
+        done = s.start(0)
         a = Worker('127.0.0.1', s.port, ncores=2, ip='127.0.0.1')
         yield a._start()
         b = Worker('127.0.0.1', s.port, ncores=1, ip=b_ip)
@@ -382,7 +382,7 @@ from .executor import Executor
 @gen.coroutine
 def start_cluster(ncores, Worker=Worker):
     s = Scheduler(ip='127.0.0.1')
-    done = s.start()
+    done = s.start(0)
     workers = [Worker(s.ip, s.port, ncores=v, ip=k) for k, v in ncores]
 
     yield [w._start() for w in workers]

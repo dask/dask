@@ -33,7 +33,7 @@ def test_TextProgressBar_error(loop, capsys):
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s.sync_center()
-        done = s.start()
+        done = s.start(0)
 
         s.update_graph(dsk={'x': (div, 1, 0)},
                        keys=['x'])
@@ -62,7 +62,7 @@ def test_TextProgressBar_empty(loop, capsys):
     def f(c, a, b):
         s = Scheduler((c.ip, c.port), loop=loop)
         yield s.sync_center()
-        done = s.start()
+        done = s.start(0)
 
         progress = TextProgressBar([], scheduler=(s.ip, s.port), start=False,
                                    interval=0.01)
