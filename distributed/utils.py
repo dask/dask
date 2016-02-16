@@ -196,6 +196,8 @@ def key_split(s):
     'x'
     >>> key_split('hello-world-1')
     'hello-world'
+    >>> key_split('ae05086432ca935f6eba409a8ecd4896')
+    'data'
     >>> key_split(None)
     'Other'
     """
@@ -209,7 +211,10 @@ def key_split(s):
                 result += '-' + word
             else:
                 break
-        return result
+        if len(result) == 32 and re.match(r'[a-f0-9]{32}', result):
+            return 'data'
+        else:
+            return result
     except:
         return 'Other'
 

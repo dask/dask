@@ -23,6 +23,15 @@ class RequestHandler(web.RequestHandler):
 
 
 def resource_collect(pid=None):
+    """Gather system usage stats.
+
+    Returns empty dict `{}` if psutil is not installed.
+
+    Parameters
+    ----------
+    pid : None (default) or int
+        process to check - this one if None
+    """
     try:
         import psutil
     except ImportError:
@@ -38,11 +47,13 @@ def resource_collect(pid=None):
 
 
 class Resources(RequestHandler):
+    """Served details about this process and machine"""
     def get(self):
         self.write(resource_collect())
 
 
 class Proxy(RequestHandler):
+    """Send REST call to specific worker return its response"""
     @gen.coroutine
     def get(self, ip, port, rest):
         client = AsyncHTTPClient()

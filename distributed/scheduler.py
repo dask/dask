@@ -220,7 +220,8 @@ class Scheduler(Server):
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """
         d = {'type': type(self).__name__, 'id': self.id,
-             'workers': list(self.ncores)}
+             'workers': list(self.ncores),
+             'services': {key: v.port for (key, v) in self.services.items()}}
         if self.center:
             d['center'] = (self.center.ip, self.center.port)
         return d

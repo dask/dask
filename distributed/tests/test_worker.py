@@ -74,6 +74,10 @@ def test_worker(loop):
 
         assert list(c.ncores.keys()) == [(b.ip, b.port)]
 
+        assert isinstance(b.address_string, str)
+        assert b.ip in b.address_string
+        assert str(b.port) in b.address_string
+
         bb.close_streams()
         yield b._close()
 
