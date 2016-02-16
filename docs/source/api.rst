@@ -8,24 +8,28 @@ API
 
 .. autosummary::
    Executor
-   Executor.submit
-   Executor.map
-   Executor.scatter
+   Executor.cancel
+   Executor.compute
    Executor.gather
    Executor.get
-   Executor.compute
-   Executor.upload_file
+   Executor.map
+   Executor.persist
    Executor.restart
+   Executor.scatter
+   Executor.shutdown
+   Executor.submit
+   Executor.upload_file
 
 **Future**
 
 .. autosummary::
    Future
-   Future.result
-   Future.exception
-   Future.traceback
-   Future.done
+   Future.cancel
    Future.cancelled
+   Future.done
+   Future.exception
+   Future.result
+   Future.traceback
 
 **Other**
 
