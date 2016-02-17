@@ -19,18 +19,20 @@ requirements:
 
   run:
     - python
-    - toolz
+    - bokeh # [not py26]
+    - chest
+    - cloudpickle
     - numpy
     - pandas
-    - cloudpickle
     - partd
-    - chest
-    - bokeh # [not py26]
     - psutil
+    - toolz
 
 test:
   requires:
     - pytest
+    - numexpr
+    - scipy
 
 about:
   home: https://github.com/dask/dask
