@@ -2376,3 +2376,25 @@ def test_futures_of():
     import dask.bag as db
     b = db.Bag({('b', i): f for i, f in enumerate([x, y, z])}, 'b', 3)
     assert set(futures_of(b)) == {x, y, z}
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1)])
+def test_dont_delete_recomputed_results(s, w):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(inc, 1)                        # compute first time
+    yield _wait([x])
+    x.__del__()                                 # trigger garbage collection
+    xx = e.submit(inc, 1)                       # compute second time
+
+    start = time()
+    while xx.key not in w.data:                               # data shows up
+        yield gen.sleep(0.01)
+        assert time() < start + 1
+
+    while time() < start + (s.delete_interval + 100) / 1000:  # and stays
+        assert xx.key in w.data
+        yield gen.sleep(0.01)
+
+    yield e._shutdown()
