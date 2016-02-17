@@ -11,7 +11,7 @@ $CONDA_DIR/bin/conda install conda-build anaconda-client -y
 
 git clone https://github.com/dask/distributed.git ~/distributed
 cd ~/distributed
-$CONDA_DIR/bin/conda build conda.recipe --python 2.6 --python 2.7 --python 3.4 --python 3.5
+$CONDA_DIR/bin/conda build conda.recipe --python 2.7 --python 3.4 --python 3.5
 
 cd $CONDA_DIR/conda-bld/linux-64
 $CONDA_DIR/bin/conda convert --platform osx-64 *.tar.bz2 -o ../
