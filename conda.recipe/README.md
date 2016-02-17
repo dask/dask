@@ -1,9 +1,13 @@
 ## Building conda packages
 
-Conda packages for distributed can be built on linux-64 using the following commands:
+Conda packages for distributed can be built on linux-64 (tested on Ubuntu
+14.04) using the following commands:
 
 ```
 export CONDA_DIR=~/miniconda2
+
+sudo apt-get update
+sudo apt-get install git -y
 
 curl http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -o ~/miniconda.sh
 bash ~/miniconda.sh -b -p $CONDA_DIR
