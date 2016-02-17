@@ -610,7 +610,7 @@ def _link(token, result):
 
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
-           complib=None, fletcher32=False, get=get_sync, **kwargs):
+           complib=None, fletcher32=False, get=get_sync, dask_kwargs=None, **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -619,19 +619,23 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
     dsk[(name, 0)] = (_link, None,
                       (apply, pd_to_hdf,
                           (tuple, [(df._name, 0), path_or_buf, key]),
-                          {'mode':  mode, 'format': 'table', 'append': append,
-                           'complevel': complevel, 'complib': complib,
-                           'fletcher32': fletcher32}))
+                          merge(kwargs,
+                            {'mode':  mode, 'format': 'table', 'append': append,
+                             'complevel': complevel, 'complib': complib,
+                             'fletcher32': fletcher32})))
     for i in range(1, df.npartitions):
         dsk[(name, i)] = (_link, (name, i - 1),
                           (apply, pd_to_hdf,
                            (tuple, [(df._name, i), path_or_buf, key]),
-                           {'mode': 'a', 'format': 'table', 'append': True,
-                            'complevel': complevel, 'complib': complib,
-                            'fletcher32': fletcher32}))
+                           merge(kwargs,
+                             {'mode': 'a', 'format': 'table', 'append': True,
+                              'complevel': complevel, 'complib': complib,
+                              'fletcher32': fletcher32})))
+
+    dask_kwargs = dask_kwargs or {}
 
     DataFrame._get(merge(df.dask, dsk), (name, df.npartitions - 1),
-                   get=get_sync, **kwargs)
+                   get=get_sync, **dask_kwargs)
 
 
 dont_use_fixed_error_message = """
