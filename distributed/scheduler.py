@@ -943,7 +943,8 @@ class Scheduler(Server):
             self.deleted_keys.clear()
 
             coroutines = [self.rpc(ip=worker[0], port=worker[1]).delete_data(
-                                    keys=keys, report=False)
+                                   keys=keys - self.has_what[worker],
+                                   report=False)
                           for worker, keys in d.items()]
             for worker, keys in d.items():
                 logger.debug("Remove %d keys from worker %s", len(keys), worker)
