@@ -3,12 +3,12 @@ package:
   version: "1.8.1"
 
 source:
-  path: ../..
+  path: ../
 
 requirements:
   build:
     - python
-    - tornado >=4.2
+    - tornado
     - toolz
     - cloudpickle
     - dask
@@ -20,7 +20,7 @@ requirements:
 
   run:
     - python
-    - tornado >=4.2
+    - tornado
     - toolz
     - cloudpickle
     - dask
