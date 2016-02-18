@@ -26,14 +26,14 @@ def index_min(df):
 def index_max(df):
     return df.index.max()
 
-def get_columns(df):
-    return df.columns
+def get_empty(df):
+    return df.iloc[0:0]
 
 @gen.coroutine
 def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
     executor = default_executor(executor)
     f = yield _first_completed(futures)
-    columns = executor.submit(get_columns, f)
+    empty = executor.submit(get_empty, f)
     if divisions is True:
         divisions = executor.map(index_min, futures)
         divisions.append(executor.submit(index_max, futures[-1]))
@@ -44,14 +44,14 @@ def _futures_to_dask_dataframe(futures, divisions=None, executor=None):
         divisions2 = [None] * (len(futures) + 1)
     else:
         raise NotImplementedError()
-    columns2 = yield columns._result()
+    empty = yield empty._result()
 
     name = 'distributed-pandas-to-dask-' + tokenize(*futures)
     dsk = {(name, i): f for i, f in enumerate(futures)}
 
     ensure_default_get(executor)
 
-    raise gen.Return(dd.DataFrame(dsk, name, columns2, divisions2))
+    raise gen.Return(dd.DataFrame(dsk, name, empty, divisions2))
 
 
 def futures_to_dask_dataframe(futures, divisions=None, executor=None):
