@@ -182,7 +182,7 @@ def test_lazy_values(s, a, b):
 
         while not s.restrictions:
             yield gen.sleep(0.01)
-        assert not s.dask
+        assert not s.tasks
 
         results = e.compute(values, sync=False)
         results = yield e._gather(results)
@@ -276,7 +276,7 @@ def test_read_csv_lazy(s, a, b):
         df = yield _read_csv('/tmp/test/*.csv', header=True, lazy=True,
                              lineterminator='\n')
         yield gen.sleep(0.5)
-        assert not s.dask
+        assert not s.tasks
 
         result = yield e.compute(df.id.sum(), sync=False)._result()
         assert result == 1 + 2 + 3 + 4
@@ -302,7 +302,7 @@ def test__read_text(s, a, b):
         b = yield _read_text('/tmp/test/text.*.txt',
                              collection=True, lazy=True)
         yield gen.sleep(0.5)
-        assert not s.dask
+        assert not s.tasks
 
         future = e.compute(b.str.strip().str.split().map(len))
         result = yield future._result()

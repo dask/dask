@@ -508,7 +508,7 @@ class Executor(object):
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': {key: task},
+                                 'tasks': {key: task},
                                  'keys': [key],
                                  'dependencies': {key: dependencies},
                                  'restrictions': restrictions,
@@ -626,7 +626,7 @@ class Executor(object):
 
         logger.debug("map(%s, ...)", funcname(func))
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': valmap(dumps_task, dsk),
+                                 'tasks': valmap(dumps_task, dsk),
                                  'dependencies': dependencies,
                                  'keys': keys,
                                  'restrictions': restrictions,
@@ -856,7 +856,7 @@ class Executor(object):
             dependencies[k] |= set(_deps(dsk, v))
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': valmap(dumps_task, dsk3),
+                                 'tasks': valmap(dumps_task, dsk3),
                                  'dependencies': dependencies,
                                  'keys': flatkeys,
                                  'restrictions': restrictions or {},
@@ -962,7 +962,7 @@ class Executor(object):
             dependencies[k] |= set(_deps(dsk, v))
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': valmap(dumps_task, dsk3),
+                                 'tasks': valmap(dumps_task, dsk3),
                                  'dependencies': dependencies,
                                  'keys': names,
                                  'client': self.id})
@@ -1034,7 +1034,7 @@ class Executor(object):
         names = list({k for c in collections for k in flatten(c._keys())})
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': valmap(dumps_task, dsk2),
+                                 'tasks': valmap(dumps_task, dsk2),
                                  'dependencies': dependencies,
                                  'keys': names,
                                  'client': self.id})

@@ -493,9 +493,9 @@ def test_scheduler(s, a, b):
 
     # Test update graph
     yield write(stream, {'op': 'update-graph',
-                         'dsk': {'x': (inc, 1),
-                                 'y': (inc, 'x'),
-                                 'z': (inc, 'y')},
+                         'tasks': {'x': (inc, 1),
+                                   'y': (inc, 'x'),
+                                   'z': (inc, 'y')},
                          'dependencies': {'x': set(),
                                           'y': {'x'},
                                           'z': {'y'}},
@@ -510,7 +510,7 @@ def test_scheduler(s, a, b):
 
     # Test erring tasks
     yield write(stream, {'op': 'update-graph',
-                         'dsk': {'a': (div, 1, 0),
+                         'tasks': {'a': (div, 1, 0),
                                  'b': (inc, 'a')},
                          'dependencies': {'a': set(),
                                           'b': {'a'}},
@@ -535,7 +535,7 @@ def test_scheduler(s, a, b):
         if 'z' in w.data:
             del w.data['z']
     yield write(stream, {'op': 'update-graph',
-                         'dsk': {'zz': (inc, 'z')},
+                         'tasks': {'zz': (inc, 'z')},
                          'dependencies': {'zz': {'z'}},
                          'keys': ['zz'],
                          'client': 'ident'})
@@ -558,7 +558,7 @@ def test_multi_queues(s, a, b):
 
     # Test update graph
     sched.put_nowait({'op': 'update-graph',
-                      'dsk': {'x': (inc, 1),
+                      'tasks': {'x': (inc, 1),
                               'y': (inc, 'x'),
                               'z': (inc, 'y')},
                       'dependencies': {'x': set(),
@@ -578,7 +578,7 @@ def test_multi_queues(s, a, b):
     assert rlen + 1 == len(s.report_queues)
 
     sched2.put_nowait({'op': 'update-graph',
-                       'dsk': {'a': (inc, 10)},
+                       'tasks': {'a': (inc, 10)},
                        'dependencies': {'a': set()},
                        'keys': ['a']})
 
@@ -594,7 +594,7 @@ def test_server(s, a, b):
     stream = yield connect('127.0.0.1', s.port)
     yield write(stream, {'op': 'register-client', 'client': 'ident'})
     yield write(stream, {'op': 'update-graph',
-                         'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
+                         'tasks': {'x': (inc, 1), 'y': (inc, 'x')},
                          'dependencies': {'x': set(), 'y': {'x'}},
                          'keys': ['y'],
                          'client': 'ident'})
@@ -621,7 +621,7 @@ def test_server_listens_to_other_ops(s, a, b):
 @gen_cluster()
 def test_remove_worker_from_scheduler(s, a, b):
     dsk = {('x', i): (inc, i) for i in range(10)}
-    s.update_graph(dsk=valmap(dumps_task, dsk), keys=list(dsk),
+    s.update_graph(tasks=valmap(dumps_task, dsk), keys=list(dsk),
                    dependencies={k: set() for k in dsk})
     assert s.stacks[a.address]
 
@@ -642,7 +642,7 @@ def test_add_worker(s, a, b):
     yield w._start(0)
 
     dsk = {('x', i): (inc, i) for i in range(10)}
-    s.update_graph(dsk=valmap(dumps_task, dsk), keys=list(dsk), client='client',
+    s.update_graph(tasks=valmap(dumps_task, dsk), keys=list(dsk), client='client',
                    dependencies={k: set() for k in dsk})
 
     s.add_worker(address=w.address, keys=list(w.data),
@@ -717,7 +717,7 @@ def test_scheduler_as_center():
                          'y': {a.address, b.address},
                          'z': {b.address}}
 
-    s.update_graph(dsk={'a': dumps_task((inc, 1))},
+    s.update_graph(tasks={'a': dumps_task((inc, 1))},
                    keys=['a'],
                    dependencies={'a': set()})
     while not s.who_has['a']:
@@ -773,7 +773,7 @@ def test_delete_callback(s, a, b):
 def test_self_aliases(s, a, b):
     a.data['a'] = 1
     s.update_data(who_has={'a': {a.address}}, nbytes={'a': 10}, client='client')
-    s.update_graph(dsk=valmap(dumps_task, {'a': 'a', 'b': (inc, 'a')}),
+    s.update_graph(tasks=valmap(dumps_task, {'a': 'a', 'b': (inc, 'a')}),
                    keys=['b'], client='client',
                    dependencies={'b': {'a'}})
 
@@ -800,13 +800,13 @@ def test_filtered_communication(s, a, b):
     assert set(s.streams) == {'e', 'f'}
 
     yield write(e, {'op': 'update-graph',
-                    'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
+                    'tasks': {'x': (inc, 1), 'y': (inc, 'x')},
                     'dependencies': {'x': set(), 'y': {'x'}},
                     'client': 'e',
                     'keys': ['y']})
 
     yield write(f, {'op': 'update-graph',
-                    'dsk': {'x': (inc, 1), 'z': (add, 'x', 10)},
+                    'tasks': {'x': (inc, 1), 'z': (add, 'x', 10)},
                     'dependencies': {'x': set(), 'z': {'x'}},
                     'client': 'f',
                     'keys': ['z']})

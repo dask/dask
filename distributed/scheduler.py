@@ -65,8 +65,9 @@ class Scheduler(Server):
 
     **State**
 
-    * **dask:** ``{key: task}``:
-        Dask graph of all computations to perform
+    * **tasks:** ``{key: task}``:
+        Dictionary mapping key to task, either dask task, or serialized dict
+        like: ``{'function': b'xxx', 'args': b'xxx'}`` or ``{'task': b'xxx'}``
     * **dependencies:** ``{key: {key}}``:
         Dictionary showing which keys depend on which others
     * **dependents:** ``{key: {key}}``:
@@ -146,7 +147,7 @@ class Scheduler(Server):
         else:
             self.center = None
 
-        self.dask = dict()
+        self.tasks = dict()
         self.dependencies = dict()
         self.dependents = dict()
         self.generation = 0
@@ -242,7 +243,7 @@ class Scheduler(Server):
 
     def start(self, port=8786, start_queues=True):
         """ Clear out old state and restart all running coroutines """
-        collections = [self.dask, self.dependencies, self.dependents,
+        collections = [self.tasks, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.in_play, self.keyorder,
                 self.nbytes, self.processing, self.restrictions,
                 self.loose_restrictions]
@@ -391,14 +392,14 @@ class Scheduler(Server):
         while (self.stacks[worker] and
                self.ncores[worker] > len(self.processing[worker])):
             key = self.stacks[worker].pop()
-            if key not in self.dask:
+            if key not in self.tasks:
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s, %s", worker, key)
             self.worker_queues[worker].put_nowait(
                     {'op': 'compute-task',
                      'key': key,
-                     'task': self.dask[key],
+                     'task': self.tasks[key],
                      'who_has': {dep: self.who_has[dep] for dep in
                                  self.dependencies[key]}})
 
@@ -413,7 +414,7 @@ class Scheduler(Server):
         Scheduler.ensure_occupied
         """
         if keys is None:
-            keys = self.dask
+            keys = self.tasks
         new_stacks = assign_many_tasks(
                 self.dependencies, self.waiting, self.keyorder, self.who_has,
                 self.stacks, self.restrictions, self.loose_restrictions,
@@ -593,20 +594,20 @@ class Scheduler(Server):
         with ignoring(KeyError):
             del self.wants_what[client]
 
-    def update_graph(self, client=None, dsk=None, keys=None,
+    def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None,
                      loose_restrictions=None):
         """ Add new computations to the internal dask graph
 
         This happens whenever the Executor calls submit, map, get, or compute.
         """
-        for k in list(dsk):
-            if dsk[k] is k:
-                del dsk[k]
+        for k in list(tasks):
+            if tasks[k] is k:
+                del tasks[k]
 
-        update_state(self.dask, self.dependencies, self.dependents,
+        update_state(self.tasks, self.dependencies, self.dependents,
                 self.who_wants, self.wants_what, self.who_has, self.in_play,
-                self.waiting, self.waiting_data, dsk, keys, dependencies,
+                self.waiting, self.waiting_data, tasks, keys, dependencies,
                 client)
 
         if restrictions:
@@ -616,27 +617,27 @@ class Scheduler(Server):
         if loose_restrictions:
             self.loose_restrictions |= loose_restrictions
 
-        new_keyorder = order(dsk)  # TODO: define order wrt old graph
+        new_keyorder = order(tasks)  # TODO: define order wrt old graph
         for key in new_keyorder:
             if key not in self.keyorder:
                 # TODO: add test for this
                 self.keyorder[key] = (self.generation, new_keyorder[key]) # prefer old
-        if len(dsk) > 1:
+        if len(tasks) > 1:
             self.generation += 1  # older graph generations take precedence
 
-        for key in dsk:
+        for key in tasks:
             for dep in self.dependencies[key]:
                 if dep in self.exceptions_blame:
                     self.mark_failed(key, self.exceptions_blame[dep])
 
-        self.seed_ready_tasks(dsk)
+        self.seed_ready_tasks(tasks)
         for key in keys:
             if self.who_has[key]:
                 self.mark_key_in_memory(key)
 
         for plugin in self.plugins[:]:
             try:
-                plugin.update_graph(self, dsk, keys, restrictions or {})
+                plugin.update_graph(self, tasks, keys, restrictions or {})
             except Exception as e:
                 logger.exception(e)
 
@@ -669,7 +670,7 @@ class Scheduler(Server):
         while changed:
             changed = False
             for key in keys:
-                if key in self.dask and not self.dependents.get(key):
+                if key in self.tasks and not self.dependents.get(key):
                     self.forget(key)
                     changed = True
 
@@ -680,8 +681,8 @@ class Scheduler(Server):
         This is almost exclusively called by release_held_data
         """
         assert not self.dependents[key] and key not in self.who_wants
-        if key in self.dask:
-            del self.dask[key]
+        if key in self.tasks:
+            del self.tasks[key]
             del self.dependents[key]
             for dep in self.dependencies[key]:
                 s = self.dependents[dep]
@@ -742,7 +743,7 @@ class Scheduler(Server):
     def my_heal_missing_data(self, missing):
         """ Recover from lost data """
         logger.debug("Heal from missing data")
-        return heal_missing_data(self.dask, self.dependencies, self.dependents,
+        return heal_missing_data(self.tasks, self.dependencies, self.dependents,
                 self.who_has, self.in_play, self.waiting,
                 self.waiting_data, missing)
 
@@ -1040,7 +1041,7 @@ class Scheduler(Server):
                 logger.exception(e)
 
     def validate(self, allow_overlap=False, allow_bad_stacks=False):
-        released = set(self.dask) - self.in_play
+        released = set(self.tasks) - self.in_play
         validate_state(self.dependencies, self.dependents, self.waiting,
                 self.waiting_data, self.who_has, self.stacks,
                 self.processing, None, released, self.in_play, self.who_wants,
@@ -1171,24 +1172,24 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     return worker
 
 
-def update_state(dsk, dependencies, dependents, who_wants, wants_what,
+def update_state(tasks, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
+                 waiting, waiting_data, new_tasks, new_keys, new_dependencies,
                  client):
     """ Update state given new dask graph and output keys
 
     This should operate in linear time relative to the size of edges of the
     added graph.  It assumes that the current runtime state is valid.
     """
-    dsk.update(new_dsk)
+    tasks.update(new_tasks)
     if not isinstance(new_keys, set):
         new_keys = set(new_keys)
 
-    for key in new_dsk:  # add dependencies/dependents
+    for key in new_tasks:  # add dependencies/dependents
         if key in dependencies:
             continue
 
-        task = new_dsk[key]
+        task = new_tasks[key]
         deps = new_dependencies.get(key, ())
         dependencies[key] = set(deps)
 
@@ -1204,7 +1205,7 @@ def update_state(dsk, dependencies, dependents, who_wants, wants_what,
         who_wants[k].add(client)
         wants_what[client].add(k)
 
-    exterior = keys_outside_frontier(dsk, dependencies, new_keys, in_play)
+    exterior = keys_outside_frontier(dependencies, new_keys, in_play)
     in_play |= exterior
     for key in exterior:
         deps = dependencies[key]
@@ -1217,7 +1218,7 @@ def update_state(dsk, dependencies, dependents, who_wants, wants_what,
         if key not in waiting_data:
             waiting_data[key] = set()
 
-    return {'dsk': dsk,
+    return {'tasks': tasks,
             'dependencies': dependencies,
             'dependents': dependents,
             'who_wants': who_wants,
@@ -1290,7 +1291,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
     assert all(map(check_key, keys))
 
 
-def keys_outside_frontier(dsk, dependencies, keys, frontier):
+def keys_outside_frontier(dependencies, keys, frontier):
     """ All keys required by terminal keys within graph up to frontier
 
     Given:
@@ -1304,7 +1305,7 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
 
     Parameters
     ----------
-    dsk: dict
+    tasks: dict
     keys: iterable of keys
     frontier: set of keys
 
@@ -1315,7 +1316,7 @@ def keys_outside_frontier(dsk, dependencies, keys, frontier):
     >>> dependencies, dependents = get_deps(dsk)
     >>> keys = {'z', 'b'}
     >>> frontier = {'y', 'a'}
-    >>> list(sorted(keys_outside_frontier(dsk, dependencies, keys, frontier)))
+    >>> list(sorted(keys_outside_frontier(dependencies, keys, frontier)))
     ['b', 'z']
     """
     assert isinstance(keys, set)
@@ -1478,7 +1479,7 @@ def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
     return new_stacks
 
 
-def heal_missing_data(dsk, dependencies, dependents,
+def heal_missing_data(tasks, dependencies, dependents,
                       who_has, in_play, waiting, waiting_data, missing):
     """ Return to healthy state after discovering missing data
 

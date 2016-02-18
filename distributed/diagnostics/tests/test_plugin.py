@@ -28,7 +28,7 @@ def test_diagnostic(loop):
 
         assert counter.count == 0
         sched.put_nowait({'op': 'update-graph',
-                          'dsk': {'x': (inc, 1),
+                          'tasks': {'x': (inc, 1),
                                   'y': (inc, 'x'),
                                   'z': (inc, 'y')},
                           'dependencies': {'y': {'x'}, 'z': {'y'}},
