@@ -32,14 +32,12 @@ def _groupby_get_group(df, by_key, get_key, columns):
 
 
 class _GroupBy(object):
-
     def _aca_agg(self, token, func, aggfunc=None):
         if aggfunc is None:
             aggfunc = func
 
         if isinstance(self.index, Series):
-
-            def chunk(df, index, func=func, key=self.key):
+            def chunk(df, index, func, key):
                 if isinstance(df, pd.Series):
                     return func(df.groupby(index))
                 else:
@@ -48,10 +46,11 @@ class _GroupBy(object):
             agg = lambda df: aggfunc(df.groupby(level=0))
             token = self._token_prefix + token
 
-            return aca([self.df, self.index], chunk=chunk, aggregate=agg,
+            return aca([self.df, self.index, func, self.key],
+                       chunk=chunk, aggregate=agg,
                        columns=self.key, token=token)
         else:
-            def chunk(df, index=self.index, func=func, key=self.key):
+            def chunk(df, index, func, key):
                 return func(df.groupby(index)[key])
 
             if isinstance(self.index, list):
@@ -61,25 +60,25 @@ class _GroupBy(object):
             agg = lambda df: aggfunc(df.groupby(level=levels))
             token = self._token_prefix + token
 
-            return aca(self.df, chunk=chunk, aggregate=agg,
+            return aca([self.df, self.index, func, self.key],
+                       chunk=chunk, aggregate=agg,
                        columns=self.key, token=token)
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self):
-        return self._aca_agg(token='sum', func=lambda x: x.sum())
+        return self._aca_agg(token='sum', func=_sum)
 
     @derived_from(pd.core.groupby.GroupBy)
     def min(self):
-        return self._aca_agg(token='min', func=lambda x: x.min())
+        return self._aca_agg(token='min', func=_min)
 
     @derived_from(pd.core.groupby.GroupBy)
     def max(self):
-        return self._aca_agg(token='max', func=lambda x: x.max())
+        return self._aca_agg(token='max', func=_max)
 
     @derived_from(pd.core.groupby.GroupBy)
     def count(self):
-        return self._aca_agg(token='count', func=lambda x: x.count(),
-                             aggfunc=lambda x: x.sum())
+        return self._aca_agg(token='count', func=_count, aggfunc=_sum)
 
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self):
@@ -217,12 +216,12 @@ class SeriesGroupBy(_GroupBy):
                                   self.df, self.index, func)
 
     def nunique(self):
-        def chunk(df, index):
+        def chunk(df, index, key):
             # we call set_index here to force a possibly duplicate index
             # for our reduce step
             if isinstance(df, pd.DataFrame):
                 grouped = (df.groupby(index)
-                        .apply(pd.DataFrame.drop_duplicates, subset=self.key))
+                        .apply(pd.DataFrame.drop_duplicates, subset=key))
                 grouped.index = grouped.index.get_level_values(level=0)
             else:
                 if isinstance(index, np.ndarray):
@@ -231,12 +230,28 @@ class SeriesGroupBy(_GroupBy):
                 grouped = pd.concat([df, index], axis=1).drop_duplicates()
             return grouped
 
+        key = self.key
+        is_series = isinstance(self.df, Series)
+
         def agg(df):
-            if isinstance(self.df, Series):
+            if is_series:
                 return df.groupby(df.columns[1])[df.columns[0]].nunique()
             else:
-                return df.groupby(level=0)[self.key].nunique()
+                return df.groupby(level=0)[key].nunique()
 
-        return aca([self.df, self.index],
+        return aca([self.df, self.index, self.key],
                    chunk=chunk, aggregate=agg, columns=self.key,
                    token='series-groupby-nunique')
+
+
+def _sum(x):
+    return x.sum()
+
+def _min(x):
+    return x.min()
+
+def _max(x):
+    return x.max()
+
+def _count(x):
+    return x.count()
