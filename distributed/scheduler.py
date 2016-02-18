@@ -16,11 +16,12 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
+from dask.compatibility import apply
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv)
+        Server, send_recv, dumps)
 from .client import (unpack_remotedata, scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
@@ -1505,3 +1506,52 @@ def heal_missing_data(dsk, dependencies, dependents,
         ensure_key(key)
 
     assert set(missing).issubset(in_play)
+
+
+def _maybe_complex(task):
+    """ Possibly contains a nested task """
+    return (istask(task) or
+            isinstance(task, list) and any(map(_maybe_complex, task)) or
+            isinstance(task, dict) and any(map(_maybe_complex, task.values())))
+
+
+cache = dict()
+
+
+def dumps_function(func):
+    """ Dump a function to bytes, cache functions """
+    if func not in cache:
+        b = dumps(func)
+        cache[func] = b
+    return cache[func]
+
+
+def dumps_task(task):
+    """ Serialize a dask task
+
+    Returns a dict of bytestrings that can each be loaded with ``loads``
+
+    Examples
+    --------
+    Either returns a task as a function, args, kwargs dict
+
+    >>> from operator import add
+    >>> dumps_task((add, 1))
+    {'function': b'\x80\x04\x95\x15\x00\x00\x00\x00\x00\x00\x00\x8c\t_operator\x94\x8c\x03add\x94\x93\x94.'
+     'args': b'\x80\x04\x95\x07\x00\x00\x00\x00\x00\x00\x00K\x01K\x02\x86\x94.'}
+
+    Or as a single task blob if it can't easily decompose the result.  This
+    happens either if the task is highly nested, or if it isn't a task at all
+
+    >>> dumps_task(1)
+    {'task': b'\x80\x04\x95\x03\x00\x00\x00\x00\x00\x00\x00K\x01.'}
+    """
+    if istask(task):
+        if task[0] is apply and not any(map(_maybe_complex, task[2:])):
+            return {'function': dumps_function(task[1]),
+                        'args': dumps(task[2]),
+                      'kwargs': dumps(task[3])}
+        elif not any(map(_maybe_complex, task[1:])):
+            return {'function': dumps_function(task[0]),
+                        'args': dumps(task[1:])}
+    return {'task': dumps(task)}

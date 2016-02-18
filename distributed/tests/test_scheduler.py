@@ -14,7 +14,8 @@ from distributed import Center, Nanny, Worker
 from distributed.core import connect, read, write, rpc
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
-        decide_worker, assign_many_tasks, heal_missing_data, Scheduler)
+        decide_worker, assign_many_tasks, heal_missing_data, Scheduler,
+        _maybe_complex, dumps_function, dumps_task)
 from distributed.utils_test import inc, ignoring
 
 
@@ -818,3 +819,34 @@ def test_filtered_communication(s, a, b):
     msg = yield read(f)
     assert msg['op'] == 'key-in-memory'
     assert msg['key'] == 'z'
+
+
+def test_maybe_complex():
+    assert not _maybe_complex(1)
+    assert not _maybe_complex('x')
+    assert _maybe_complex((inc, 1))
+    assert _maybe_complex([(inc, 1)])
+    assert _maybe_complex([(inc, 1)])
+    assert _maybe_complex({'x': (inc, 1)})
+
+
+def test_dumps_function():
+    a = dumps_function(inc)
+    assert loads(a)(10) == 11
+
+    b = dumps_function(inc)
+    assert a is b
+
+    c = dumps_function(dec)
+    assert a != c
+
+
+def test_dumps_task():
+    d = dumps_task((inc, 1))
+    assert set(d) == {'function', 'args'}
+
+    f = lambda x, y=2: x + y
+    d = dumps_task((apply, f, (1,), {'y': 10}))
+    assert loads(d['function'])(1, 2) == 3
+    assert loads(d['args']) == (1,)
+    assert loads(d['kwargs']) == {'y': 10}

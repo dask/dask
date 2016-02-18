@@ -29,7 +29,7 @@ from tornado.queues import Queue
 
 from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc, dumps
-from .scheduler import Scheduler
+from .scheduler import Scheduler, dumps_function, dumps_task
 from .utils import All, sync, funcname, ignoring, queue_to_iterator, _deps
 from .compatibility import Queue as pyQueue, Empty, isqueue
 
@@ -1255,32 +1255,3 @@ def futures_of(o):
     if hasattr(o, 'dask'):
         return futures_of(o.dask)
     return []
-
-
-def _maybe_complex(task):
-    """ Possibly contains a nested task """
-    return (istask(task) or
-            isinstance(task, list) and any(map(_maybe_complex, task)) or
-            isinstance(task, dict) and any(map(_maybe_complex, task.values())))
-
-
-cache = dict()
-
-
-def dumps_function(func):
-    if func not in cache:
-        b = dumps(func)
-        cache[func] = b
-    return cache[func]
-
-
-def dumps_task(task):
-    if istask(task):
-        if task[0] is apply and not any(map(_maybe_complex, task[2:])):
-            return {'function': dumps_function(task[1]),
-                        'args': dumps(task[2]),
-                      'kwargs': dumps(task[3])}
-        elif not any(map(_maybe_complex, task[1:])):
-            return {'function': dumps_function(task[0]),
-                        'args': dumps(task[1:])}
-    return {'task': dumps(task)}
