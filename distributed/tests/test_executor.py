@@ -1789,6 +1789,15 @@ class BadlySerializedObject(object):
         raise TypeError("hello!")
 
 
+class FatallySerializedObject(object):
+    def __getstate__(self):
+        return 1
+    def __setstate__(self, state):
+        print("This should never have been deserialized, closing")
+        import sys
+        sys.exit(0)
+
+
 @gen_cluster()
 def test_badly_serialized_input(s, a, b):
     e = Executor((s.ip, s.port), start=False)
@@ -2397,6 +2406,21 @@ def test_dont_delete_recomputed_results(s, w):
 
     while time() < start + (s.delete_interval + 100) / 1000:  # and stays
         assert xx.key in w.data
+        yield gen.sleep(0.01)
+
+    yield e._shutdown()
+
+
+@gen_cluster(ncores=[])
+def test_fatally_serialized_input(s):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    o = FatallySerializedObject()
+
+    future = e.submit(inc, o)
+
+    while not s.dask:
         yield gen.sleep(0.01)
 
     yield e._shutdown()
