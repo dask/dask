@@ -1536,14 +1536,14 @@ def dumps_task(task):
     Either returns a task as a function, args, kwargs dict
 
     >>> from operator import add
-    >>> dumps_task((add, 1))
-    {'function': b'\x80\x04\x95\x15\x00\x00\x00\x00\x00\x00\x00\x8c\t_operator\x94\x8c\x03add\x94\x93\x94.'
-     'args': b'\x80\x04\x95\x07\x00\x00\x00\x00\x00\x00\x00K\x01K\x02\x86\x94.'}
+    >>> dumps_task((add, 1))  # doctest: +SKIP
+    {'function': b'\x80\x04\x95\x00\x8c\t_operator\x94\x8c\x03add\x94\x93\x94.'
+     'args': b'\x80\x04\x95\x07\x00\x00\x00K\x01K\x02\x86\x94.'}
 
     Or as a single task blob if it can't easily decompose the result.  This
     happens either if the task is highly nested, or if it isn't a task at all
 
-    >>> dumps_task(1)
+    >>> dumps_task(1)  # doctest: +SKIP
     {'task': b'\x80\x04\x95\x03\x00\x00\x00\x00\x00\x00\x00K\x01.'}
     """
     if istask(task):
