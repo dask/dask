@@ -33,7 +33,8 @@ def test_many_Progresss(s, a, b):
     s.update_graph(dsk={'x': (inc, 1),
                         'y': (inc, 'x'),
                         'z': (inc, 'y')},
-                   keys=['z'])
+                   keys=['z'],
+                   dependencies={'y': {'x'}, 'z': {'y'}})
 
     bars = [Progress(keys=['z'], scheduler=s) for i in range(10)]
     yield [b.setup() for b in bars]
@@ -54,7 +55,9 @@ def test_multiprogress(s, a, b):
                         'x-3': (inc, 'x-2'),
                         'y-1': (dec, 'x-3'),
                         'y-2': (dec, 'y-1')},
-                   keys=['y-2'])
+                   keys=['y-2'],
+                   dependencies={'x-2': {'x-1'}, 'x-3': {'x-2'}, 'y-1':
+                       {'x-3'}, 'y-2': {'y-1'}})
 
     p = MultiProgress(['y-2'], scheduler=s, func=lambda s: s.split('-')[0])
     yield p.setup()
@@ -96,6 +99,7 @@ def test_robust_to_bad_plugin(s, a, b):
                       'dsk': {'x': (inc, 1),
                               'y': (inc, 'x'),
                               'z': (inc, 'y')},
+                      'dependencies': {'y': {'x'}, 'z': {'y'}},
                       'keys': ['z']})
 
     while True:  # normal execution

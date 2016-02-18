@@ -135,6 +135,7 @@ def test_update_state():
     in_play = {'x', 'y'}
 
     new_dsk = {'a': 1, 'z': (add, 'y', 'a')}
+    new_dependencies = {'z': {'y', 'a'}}
     new_keys = {'z'}
 
     e_dsk = {'x': 1, 'y': (inc, 'x'), 'a': 1, 'z': (add, 'y', 'a')}
@@ -149,7 +150,8 @@ def test_update_state():
 
     update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, 'client')
+                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
+                 'client')
 
     assert dsk == e_dsk
     assert dependencies == e_dependencies
@@ -176,6 +178,7 @@ def test_update_state_with_processing():
     in_play = {'z', 'x', 'y'}
 
     new_dsk = {'a': (inc, 'x'), 'b': (add, 'a', 'y'), 'c': (inc, 'z')}
+    new_dependencies = {'a': {'x'}, 'b': {'a', 'y'}, 'c': {'z'}}
     new_keys = {'b', 'c'}
 
     e_waiting = {'z': {'y'}, 'a': set(), 'b': {'a', 'y'}, 'c': {'z'}}
@@ -187,7 +190,8 @@ def test_update_state_with_processing():
 
     update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, 'client')
+                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
+                 'client')
 
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
@@ -211,6 +215,7 @@ def test_update_state_respects_data_in_memory():
     in_play = {'y'}
 
     new_dsk = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
+    new_dependencies = {'y': {'x'}, 'z': {'y', 'x'}}
     new_keys = {'z'}
 
     e_dsk = new_dsk.copy()
@@ -221,7 +226,8 @@ def test_update_state_respects_data_in_memory():
 
     update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, 'client')
+                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
+                 'client')
 
     assert dsk == e_dsk
     assert waiting == e_waiting
@@ -246,6 +252,7 @@ def test_update_state_supports_recomputing_released_results():
     in_play = {'z'}
 
     new_dsk = {'x': 1, 'y': (inc, 'x')}
+    new_dependencies = {'y': {'x'}}
     new_keys = {'y'}
 
     e_dsk = dsk.copy()
@@ -256,7 +263,8 @@ def test_update_state_supports_recomputing_released_results():
 
     update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, 'client')
+                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
+                 'client')
 
     assert dsk == e_dsk
     assert waiting == e_waiting
@@ -487,6 +495,9 @@ def test_scheduler(s, a, b):
                          'dsk': {'x': (inc, 1),
                                  'y': (inc, 'x'),
                                  'z': (inc, 'y')},
+                         'dependencies': {'x': set(),
+                                          'y': {'x'},
+                                          'z': {'y'}},
                          'keys': ['x', 'z'],
                          'client': 'ident'})
     while True:
@@ -500,6 +511,8 @@ def test_scheduler(s, a, b):
     yield write(stream, {'op': 'update-graph',
                          'dsk': {'a': (div, 1, 0),
                                  'b': (inc, 'a')},
+                         'dependencies': {'a': set(),
+                                          'b': {'a'}},
                          'keys': ['a', 'b'],
                          'client': 'ident'})
 
@@ -522,6 +535,7 @@ def test_scheduler(s, a, b):
             del w.data['z']
     yield write(stream, {'op': 'update-graph',
                          'dsk': {'zz': (inc, 'z')},
+                         'dependencies': {'zz': {'z'}},
                          'keys': ['zz'],
                          'client': 'ident'})
     while True:
@@ -546,6 +560,9 @@ def test_multi_queues(s, a, b):
                       'dsk': {'x': (inc, 1),
                               'y': (inc, 'x'),
                               'z': (inc, 'y')},
+                      'dependencies': {'x': set(),
+                                       'y': {'x'},
+                                       'z': {'y'}},
                       'keys': ['z']})
 
     while True:
@@ -561,6 +578,7 @@ def test_multi_queues(s, a, b):
 
     sched2.put_nowait({'op': 'update-graph',
                        'dsk': {'a': (inc, 10)},
+                       'dependencies': {'a': set()},
                        'keys': ['a']})
 
     for q in [report, report2]:
@@ -576,6 +594,7 @@ def test_server(s, a, b):
     yield write(stream, {'op': 'register-client', 'client': 'ident'})
     yield write(stream, {'op': 'update-graph',
                          'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
+                         'dependencies': {'x': set(), 'y': {'x'}},
                          'keys': ['y'],
                          'client': 'ident'})
 
@@ -601,7 +620,8 @@ def test_server_listens_to_other_ops(s, a, b):
 @gen_cluster()
 def test_remove_worker_from_scheduler(s, a, b):
     dsk = {('x', i): (inc, i) for i in range(10)}
-    s.update_graph(dsk=dsk, keys=list(dsk))
+    s.update_graph(dsk=dsk, keys=list(dsk),
+                   dependencies={k: set() for k in dsk})
     assert s.stacks[a.address]
 
     assert a.address in s.worker_queues
@@ -621,7 +641,8 @@ def test_add_worker(s, a, b):
     yield w._start(0)
 
     dsk = {('x', i): (inc, i) for i in range(10)}
-    s.update_graph(dsk=dsk, keys=list(dsk), client='client')
+    s.update_graph(dsk=dsk, keys=list(dsk), client='client',
+                   dependencies={k: set() for k in dsk})
 
     s.add_worker(address=w.address, keys=list(w.data),
                  ncores=w.ncores, services=s.services)
@@ -696,7 +717,8 @@ def test_scheduler_as_center():
                          'z': {b.address}}
 
     s.update_graph(dsk={'a': (inc, 1)},
-                   keys=['a'])
+                   keys=['a'],
+                   dependencies={'a': set()})
     while not s.who_has['a']:
         yield gen.sleep(0.01)
     assert 'a' in a.data or 'a' in b.data or 'a' in c.data
@@ -751,7 +773,8 @@ def test_self_aliases(s, a, b):
     a.data['a'] = 1
     s.update_data(who_has={'a': {a.address}}, nbytes={'a': 10}, client='client')
     s.update_graph(dsk={'a': 'a', 'b': (inc, 'a')},
-                   keys=['b'], client='client')
+                   keys=['b'], client='client',
+                   dependencies={'b': {'a'}})
 
     assert 'a' not in s.dask
 
@@ -779,11 +802,13 @@ def test_filtered_communication(s, a, b):
 
     yield write(e, {'op': 'update-graph',
                     'dsk': {'x': (inc, 1), 'y': (inc, 'x')},
+                    'dependencies': {'x': set(), 'y': {'x'}},
                     'client': 'e',
                     'keys': ['y']})
 
     yield write(f, {'op': 'update-graph',
                     'dsk': {'x': (inc, 1), 'z': (add, 'x', 10)},
+                    'dependencies': {'x': set(), 'z': {'x'}},
                     'client': 'f',
                     'keys': ['z']})
 

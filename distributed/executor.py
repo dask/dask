@@ -30,7 +30,7 @@ from tornado.queues import Queue
 from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc
 from .scheduler import Scheduler
-from .utils import All, sync, funcname, ignoring, queue_to_iterator
+from .utils import All, sync, funcname, ignoring, queue_to_iterator, _deps
 from .compatibility import Queue as pyQueue, Empty, isqueue
 
 logger = logging.getLogger(__name__)
@@ -501,12 +501,13 @@ class Executor(object):
             restrictions = {}
             loose_restrictions = set()
 
-        task2, _ = unpack_remotedata(task)
+        task2, dependencies = unpack_remotedata(task)
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self._send_to_scheduler({'op': 'update-graph',
                                  'dsk': {key: task2},
                                  'keys': [key],
+                                 'dependencies': {key: dependencies},
                                  'restrictions': restrictions,
                                  'loose_restrictions': loose_restrictions,
                                  'client': self.id})
@@ -594,7 +595,9 @@ class Executor(object):
             dsk = {key: (apply, func, (tuple, list(args)), kwargs)
                    for key, args in zip(keys, zip(*iterables))}
 
-        dsk = {key: unpack_remotedata(task)[0] for key, task in dsk.items()}
+        d = {key: unpack_remotedata(task) for key, task in dsk.items()}
+        dsk = {k: v[0] for k, v in d.items()}
+        dependencies = {k: v[1] for k, v in d.items()}
 
         if isinstance(workers, str):
             workers = [workers]
@@ -621,6 +624,7 @@ class Executor(object):
         logger.debug("map(%s, ...)", funcname(func))
         self._send_to_scheduler({'op': 'update-graph',
                                  'dsk': dsk,
+                                 'dependencies': dependencies,
                                  'keys': keys,
                                  'restrictions': restrictions,
                                  'loose_restrictions': loose_restrictions,
@@ -838,11 +842,19 @@ class Executor(object):
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
         flatkeys = list(flatten([keys]))
         futures = {key: Future(key, self) for key in flatkeys}
-        dsk2 = {k: unpack_remotedata(v)[0] for k, v in dsk.items()}
+
+        d = {k: unpack_remotedata(v) for k, v in dsk.items()}
+        dsk2 = {k: v[0] for k, v in d.items()}
         dsk3 = {k: v for k, v in dsk2.items() if (k == v) is not True}
+
+        dependencies = {k: v[1] for k, v in d.items()}
+
+        for k, v in dsk3.items():
+            dependencies[k] |= set(_deps(dsk, v))
 
         self._send_to_scheduler({'op': 'update-graph',
                                  'dsk': dsk3,
+                                 'dependencies': dependencies,
                                  'keys': flatkeys,
                                  'restrictions': restrictions or {},
                                  'client': self.id})
@@ -904,7 +916,6 @@ class Executor(object):
 
         Examples
         --------
-
         >>> from dask import do, value
         >>> from operator import add
         >>> x = dask.do(add)(1, 2)
@@ -940,10 +951,16 @@ class Executor(object):
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
 
-        dsk3 = {k: unpack_remotedata(v)[0] for k, v in merge(dsk, dsk2).items()}
+        d = {k: unpack_remotedata(v) for k, v in merge(dsk, dsk2).items()}
+        dsk3 = {k: v[0] for k, v in d.items()}
+        dependencies = {k: v[1] for k, v in d.items()}
+
+        for k, v in dsk3.items():
+            dependencies[k] |= set(_deps(dsk, v))
 
         self._send_to_scheduler({'op': 'update-graph',
                                  'dsk': dsk3,
+                                 'dependencies': dependencies,
                                  'keys': names,
                                  'client': self.id})
 
@@ -1004,12 +1021,18 @@ class Executor(object):
                          [v._keys() for v in val])
                     for opt, val in groups.items()])
 
-        dsk2 = {k: unpack_remotedata(v)[0] for k, v in dsk.items()}
+        d = {k: unpack_remotedata(v) for k, v in dsk.items()}
+        dsk2 = {k: v[0] for k, v in d.items()}
+        dependencies = {k: v[1] for k, v in d.items()}
+
+        for k, v in dsk2.items():
+            dependencies[k] |= set(_deps(dsk, v))
 
         names = list({k for c in collections for k in flatten(c._keys())})
 
         self._send_to_scheduler({'op': 'update-graph',
                                  'dsk': dsk2,
+                                 'dependencies': dependencies,
                                  'keys': names,
                                  'client': self.id})
         result = [redict_collection(c, {k: Future(k, self)

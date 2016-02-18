@@ -592,7 +592,8 @@ class Scheduler(Server):
         with ignoring(KeyError):
             del self.wants_what[client]
 
-    def update_graph(self, client=None, dsk=None, keys=None, restrictions=None,
+    def update_graph(self, client=None, dsk=None, keys=None,
+                     dependencies=None, restrictions=None,
                      loose_restrictions=None):
         """ Add new computations to the internal dask graph
 
@@ -604,7 +605,8 @@ class Scheduler(Server):
 
         update_state(self.dask, self.dependencies, self.dependents,
                 self.who_wants, self.wants_what, self.who_has, self.in_play,
-                self.waiting, self.waiting_data, dsk, keys, client)
+                self.waiting, self.waiting_data, dsk, keys, dependencies,
+                client)
 
         cover_aliases(self.dask, dsk)
 
@@ -1168,7 +1170,8 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
 
 def update_state(dsk, dependencies, dependents, who_wants, wants_what,
                  who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, client):
+                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
+                 client):
     """ Update state given new dask graph and output keys
 
     This should operate in linear time relative to the size of edges of the
@@ -1183,7 +1186,7 @@ def update_state(dsk, dependencies, dependents, who_wants, wants_what,
             continue
 
         task = new_dsk[key]
-        deps = _deps(dsk, task) + _deps(who_wants, task)
+        deps = new_dependencies.get(key, ())
         dependencies[key] = set(deps)
 
         for dep in deps:
