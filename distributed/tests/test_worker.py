@@ -10,10 +10,10 @@ from tornado import gen
 from tornado.ioloop import TimeoutError
 
 from distributed.center import Center
-from distributed.core import rpc
+from distributed.core import rpc, dumps, loads
 from distributed.sizeof import sizeof
 from distributed.worker import Worker
-from distributed.utils_test import loop, _test_cluster, inc
+from distributed.utils_test import loop, _test_cluster, inc, gen_cluster
 
 
 
@@ -262,24 +262,28 @@ def test_worker_waits_for_center_to_come_up(loop):
         pass
 
 
-"""
+@gen_cluster()
+def test_worker_task(s, a, b):
+    aa = rpc(ip=a.ip, port=a.port)
+    yield aa.compute(task=(inc, 1), key='x')
 
-def test_close():
-    c = Center('127.0.0.1', 8007, loop=loop)
-    a = Worker('127.0.0.1', 8008, c.ip, c.port, loop=loop)
+    assert a.data['x'] == 2
 
-    @asyncio.coroutine
-    def f():
-        while len(c.ncores) < 1:
-            yield from asyncio.sleep(0.01, loop=loop)
 
-        assert a.status == 'running'
-        yield from rpc(a.ip, a.port, loop=loop).terminate()
-        assert a.status == 'closed'
+@gen_cluster()
+def test_worker_task_data(s, a, b):
+    aa = rpc(ip=a.ip, port=a.port)
+    yield aa.compute(task=2, key='x')
 
-        assert c.status == 'running'
-        yield from rpc(c.ip, c.port, loop=loop).terminate()
-        assert c.status == 'closed'
+    assert a.data['x'] == 2
 
-    loop.run_until_complete(asyncio.gather(c.go(), a.go(), f(), loop=loop))
-"""
+
+@gen_cluster()
+def test_worker_task_bytes(s, a, b):
+    aa = rpc(ip=a.ip, port=a.port)
+
+    yield aa.compute(task=dumps((inc, 1)), key='x', serialized=True)
+    assert a.data['x'] == 2
+
+    yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y', serialized=True)
+    assert a.data['y'] == 11

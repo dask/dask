@@ -20,8 +20,9 @@ from tornado.iostream import IOStream
 from tornado import gen
 
 from dask.context import _globals
+from dask.compatibility import apply
 from distributed import Center, Worker, Nanny
-from distributed.core import rpc
+from distributed.core import rpc, dumps, loads
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_executor,
@@ -67,14 +68,14 @@ def test_map(s, a, b):
 
     result = yield L1[0]._result()
     assert result == inc(0)
-    assert len(s.dask) == 5
+    assert len(s.tasks) == 5
 
     L2 = e.map(inc, L1)
 
     result = yield L2[1]._result()
     assert result == inc(inc(1))
-    assert len(s.dask) == 10
-    assert L1[0].key in s.dask[L2[0].key]
+    assert len(s.tasks) == 10
+    # assert L1[0].key in s.tasks[L2[0].key]
 
     total = e.submit(sum, L2)
     result = yield total._result()
@@ -1311,7 +1312,7 @@ def test_restart_fast(loop):
 
             start = time()
             e.restart()
-            assert not e.scheduler.dask
+            assert not e.scheduler.tasks
             assert time() - start < 5
 
             assert all(x.status == 'cancelled' for x in L)
@@ -1788,6 +1789,15 @@ class BadlySerializedObject(object):
         raise TypeError("hello!")
 
 
+class FatallySerializedObject(object):
+    def __getstate__(self):
+        return 1
+    def __setstate__(self, state):
+        print("This should never have been deserialized, closing")
+        import sys
+        sys.exit(0)
+
+
 @gen_cluster()
 def test_badly_serialized_input(s, a, b):
     e = Executor((s.ip, s.port), start=False)
@@ -1844,12 +1854,12 @@ def test_forget_simple(s, a, b):
     assert not s.waiting_data[x.key]
     assert not s.waiting_data[y.key]
 
-    assert set(s.dask) == {x.key, y.key, z.key}
+    assert set(s.tasks) == {x.key, y.key, z.key}
 
     s.client_releases_keys(keys=[x.key], client=e.id)
-    assert x.key in s.dask
+    assert x.key in s.tasks
     s.client_releases_keys(keys=[z.key], client=e.id)
-    for coll in [s.dask, s.dependencies, s.dependents, s.waiting,
+    for coll in [s.tasks, s.dependencies, s.dependents, s.waiting,
             s.waiting_data, s.who_has, s.restrictions, s.loose_restrictions,
             s.in_play, s.keyorder, s.exceptions, s.who_wants,
             s.exceptions_blame]:
@@ -1859,7 +1869,7 @@ def test_forget_simple(s, a, b):
     assert z.key not in s.dependents[y.key]
 
     s.client_releases_keys(keys=[y.key], client=e.id)
-    assert not s.dask
+    assert not s.tasks
 
     yield e._shutdown()
 
@@ -1877,16 +1887,16 @@ def test_forget_complex(s, A, B):
 
     yield _wait([a,b,c,d,ab,ac,cd,acab])
 
-    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+    assert set(s.tasks) == {f.key for f in [ab,ac,cd,acab]}
 
     s.client_releases_keys(keys=[ab.key], client=e.id)
-    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+    assert set(s.tasks) == {f.key for f in [ab,ac,cd,acab]}
 
     s.client_releases_keys(keys=[b.key], client=e.id)
-    assert set(s.dask) == {f.key for f in [ab,ac,cd,acab]}
+    assert set(s.tasks) == {f.key for f in [ab,ac,cd,acab]}
 
     s.client_releases_keys(keys=[acab.key], client=e.id)
-    assert set(s.dask) == {f.key for f in [ac,cd]}
+    assert set(s.tasks) == {f.key for f in [ac,cd]}
     assert b.key not in s.who_has
 
     start = time()
@@ -1895,7 +1905,7 @@ def test_forget_complex(s, A, B):
         assert time() < start + 10
 
     s.client_releases_keys(keys=[ac.key], client=e.id)
-    assert set(s.dask) == {f.key for f in [cd]}
+    assert set(s.tasks) == {f.key for f in [cd]}
 
     yield e._shutdown()
 
@@ -1964,7 +1974,7 @@ def test_multi_executor(s, a, b):
 
     yield f._shutdown()
 
-    assert not s.dask
+    assert not s.tasks
 
 
 @gen_cluster()
@@ -1980,14 +1990,14 @@ def test_cleanup_after_broken_executor_connection(s, a, b):
     proc.start()
 
     start = time()
-    while not s.dask:
+    while not s.tasks:
         yield gen.sleep(0.01)
         assert time() < start + 5
 
     proc.terminate()
 
     start = time()
-    while s.dask:
+    while s.tasks:
         yield gen.sleep(0.01)
         assert time() < start + 5
 
@@ -2080,7 +2090,7 @@ def test__cancel(s, a, b):
     x = e.submit(slowinc, 1)
     y = e.submit(slowinc, x)
 
-    while y.key not in s.dask:
+    while y.key not in s.tasks:
         yield gen.sleep(0.01)
 
     yield e._cancel([x], block=True)
@@ -2094,7 +2104,7 @@ def test__cancel(s, a, b):
         yield gen.sleep(0.01)
         assert time() < start + 5
 
-    assert not s.dask
+    assert not s.tasks
     s.validate()
 
     yield e._shutdown()
@@ -2117,7 +2127,7 @@ def test__cancel_multi_client(s, a, b):
     assert x.cancelled()
     assert not y.cancelled()
 
-    assert y.key in s.dask
+    assert y.key in s.tasks
 
     out = yield y._result()
     assert out == 2
@@ -2142,7 +2152,7 @@ def test__cancel_collection(s, a, b):
     yield e._cancel(x)
     yield e._cancel([x])
     assert all(f.cancelled() for f in L)
-    assert not s.dask
+    assert not s.tasks
 
     yield e._shutdown()
 
@@ -2232,7 +2242,7 @@ def test_map_iterator(s, a, b):
     assert isinstance(f1, Iterator)
 
     start = time()  # ensure that we compute eagerly
-    while not s.dask:
+    while not s.tasks:
         yield gen.sleep(0.01)
         assert time() < start + 5
 
@@ -2277,7 +2287,7 @@ def test_Future_exception_sync(loop, capsys):
     assert _globals['get'] == e.get
 
 
-@gen_cluster()
+@gen_cluster(timeout=1000)
 def test_async_persist(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -2297,13 +2307,14 @@ def test_async_persist(s, a, b):
     assert y._keys() == yy._keys()
     assert w._keys() == ww._keys()
 
-    while y.key not in s.dask and w.key not in s.dask:
+    while y.key not in s.tasks and w.key not in s.tasks:
         yield gen.sleep(0.01)
 
     assert s.who_wants[y.key] == {e.id}
     assert s.who_wants[w.key] == {e.id}
 
-    yyy, www = yield e._gather(e.compute([yy, ww]))
+    yyf, wwf = e.compute([yy, ww])
+    yyy, www = yield e._gather([yyf, wwf])
     assert yyy == inc(1)
     assert www == add(inc(1), dec(1))
 
@@ -2395,6 +2406,21 @@ def test_dont_delete_recomputed_results(s, w):
 
     while time() < start + (s.delete_interval + 100) / 1000:  # and stays
         assert xx.key in w.data
+        yield gen.sleep(0.01)
+
+    yield e._shutdown()
+
+
+@gen_cluster(ncores=[])
+def test_fatally_serialized_input(s):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    o = FatallySerializedObject()
+
+    future = e.submit(inc, o)
+
+    while not s.tasks:
         yield gen.sleep(0.01)
 
     yield e._shutdown()

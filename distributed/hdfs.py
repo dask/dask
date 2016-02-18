@@ -85,7 +85,8 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
     if lazy:
         restrictions = dict(zip(names, workers))
         executor._send_to_scheduler({'op': 'update-graph',
-                                     'dsk': {},
+                                     'tasks': {},
+                                     'dependencies': set(),
                                      'keys': [],
                                      'restrictions': restrictions,
                                      'loose_restrictions': set(names),

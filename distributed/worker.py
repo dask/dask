@@ -11,6 +11,7 @@ import tempfile
 import shutil
 import sys
 
+from dask.core import istask
 from toolz import merge
 from tornado.gen import Return
 from tornado import gen
@@ -19,7 +20,7 @@ from tornado.iostream import StreamClosedError
 
 from .client import _gather, pack_data, gather_from_workers
 from .compatibility import reload
-from .core import rpc, Server, pingpong, dumps
+from .core import rpc, Server, pingpong, dumps, loads
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
     ignoring)
@@ -186,7 +187,7 @@ class Worker(Server):
 
     @gen.coroutine
     def compute(self, stream, function=None, key=None, args=(), kwargs={},
-            needed=[], who_has=None, report=True):
+            task=None, needed=[], who_has=None, report=True, serialized=False):
         """ Execute function """
         self.active.add(key)
         if needed:
@@ -220,6 +221,28 @@ class Worker(Server):
             data2 = merge(local_data, other)
         else:
             data2 = local_data
+
+        if serialized:
+            try:
+                if task is not None:
+                    task = loads(task)
+                if function is not None:
+                    function = loads(function)
+                if args:
+                    args = loads(args)
+                if kwargs:
+                    kwargs = loads(kwargs)
+            except Exception as e:
+                logger.warn("Could not deserialize task", exc_info=True)
+                tb = get_traceback()
+                e2 = truncate_exception(e, 1000)
+                self.active.remove(key)
+                raise Return((b'error', {'exception': e2, 'traceback': tb}))
+
+        if task is not None:
+            assert not function and not args and not kwargs
+            function = execute_task
+            args = (task,)
 
         # Fill args with data
         args2 = pack_data(args, data2)
@@ -336,3 +359,21 @@ class Worker(Server):
 
 
 job_counter = [0]
+
+
+def execute_task(task):
+    """ Evaluate a nested task
+
+    >>> inc = lambda x: x + 1
+    >>> execute_task((inc, 1))
+    2
+    >>> execute_task((sum, [1, 2, (inc, 3)]))
+    7
+    """
+    if istask(task):
+        func, args = task[0], task[1:]
+        return func(*map(execute_task, args))
+    elif isinstance(task, list):
+        return list(map(execute_task, task))
+    else:
+        return task

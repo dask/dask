@@ -27,7 +27,7 @@ Step 1: Executor
 message to the ``Scheduler``::
 
     {'op': 'update-graph',
-     'dsk': {'z': (add, x, y)},
+     'tasks': {'z': (add, x, y)},
      'keys': ['z']}
 
 The executor then creates a ``Future`` object with the key ``'z'`` and returns
@@ -43,7 +43,7 @@ A few milliseconds later, the scheduler receives this message on an open socket.
 The scheduler updates its state with this little graph that shows how to compute
 ``z``.::
 
-    scheduler.dask.update[msg['dsk']]
+    scheduler.tasks.update[msg['tasks']]
 
 The scheduler also updates *a lot* of other state.  Notably, it has to identify
 that ``x`` and ``y`` are themselves variables, and connect all of those

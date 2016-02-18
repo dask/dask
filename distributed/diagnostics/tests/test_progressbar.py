@@ -35,8 +35,9 @@ def test_TextProgressBar_error(loop, capsys):
         yield s.sync_center()
         done = s.start(0)
 
-        s.update_graph(dsk={'x': (div, 1, 0)},
-                       keys=['x'])
+        s.update_graph(tasks={'x': (div, 1, 0)},
+                       keys=['x'],
+                       dependencies={})
 
         progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),
                                    start=False, interval=0.01)

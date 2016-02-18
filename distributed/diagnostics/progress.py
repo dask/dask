@@ -76,7 +76,7 @@ class Progress(SchedulerPlugin):
     def setup(self):
         keys = self.keys
 
-        while not keys.issubset(self.scheduler.dask):
+        while not keys.issubset(self.scheduler.tasks):
             yield gen.sleep(0.05)
 
         self.keys = None
@@ -177,7 +177,7 @@ class MultiProgress(Progress):
     def setup(self):
         keys = self.keys
 
-        while not keys.issubset(self.scheduler.dask):
+        while not keys.issubset(self.scheduler.tasks):
             yield gen.sleep(0.05)
 
         self.keys = None

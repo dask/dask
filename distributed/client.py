@@ -294,7 +294,7 @@ def unpack_remotedata(o):
 
     Returns original collection and set of all found keys
 
-    >>> rd = RemoteData('mykey', '127.0.0.1', 8787)
+    >>> rd = WrappedKey('mykey')
     >>> unpack_remotedata(1)
     (1, set())
     >>> unpack_remotedata(())

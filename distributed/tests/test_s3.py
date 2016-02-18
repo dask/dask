@@ -126,7 +126,7 @@ def test_read_text(s, a, b):
                   collection=True, anon=True)
     assert isinstance(b, db.Bag)
     yield gen.sleep(0.2)
-    assert not s.dask
+    assert not s.tasks
 
     future = e.compute(b.filter(None).map(json.loads).pluck('amount').sum())
     result = yield future._result()
