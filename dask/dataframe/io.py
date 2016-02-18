@@ -844,7 +844,7 @@ def to_bag(df, index=False):
     return Bag(dsk, name, df.npartitions)
 
 
-def from_imperative(dfs, columns, divisions=None):
+def from_imperative(dfs, metadata=None, divisions=None, columns=None):
     """ Create DataFrame from many imperative objects
 
     Parameters
@@ -852,11 +852,12 @@ def from_imperative(dfs, columns, divisions=None):
     dfs: list of Values
         An iterable of dask.imperative.Value objects, such as come from dask.do
         These comprise the individual partitions of the resulting dataframe
-    columns: list or string
-        The list of column names if the result is a DataFrame
-        Or the single column name if the result is a Series
+    metadata: list or string of column names or empty dataframe
     divisions: list or None
     """
+    if columns is not None:
+        print("Deprecation warning: Use metadata argument, not columns")
+        metadata = columns
     from dask.imperative import Value
     if isinstance(dfs, Value):
         dfs = [dfs]
@@ -870,7 +871,7 @@ def from_imperative(dfs, columns, divisions=None):
     if divisions is None:
         divisions = [None] * (len(dfs) + 1)
 
-    if isinstance(columns, str):
-        return Series(merge(dsk, dsk2), name, columns, divisions)
+    if isinstance(metadata, str):
+        return Series(merge(dsk, dsk2), name, metadata, divisions)
     else:
-        return DataFrame(merge(dsk, dsk2), name, columns, divisions)
+        return DataFrame(merge(dsk, dsk2), name, metadata, divisions)
