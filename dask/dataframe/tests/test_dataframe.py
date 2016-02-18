@@ -1490,6 +1490,10 @@ def test_from_imperative():
     assert s.compute().name == s.name
     assert list(s.map_partitions(len).compute()) == [1, 2, 3, 4]
 
+    df = dd.from_imperative(dfs, tm.makeTimeDataFrame(1))
+    assert df._known_dtype
+    assert list(df.columns) == ['A', 'B', 'C', 'D']
+
 
 def test_to_imperative():
     from dask.imperative import Value
