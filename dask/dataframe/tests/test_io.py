@@ -991,3 +991,13 @@ def test_read_csv_sep():
 
         assert (df.columns == ddf.columns).all()
         assert len(df) == len(ddf)
+
+
+def test_to_hdf_kwargs():
+    df = pd.DataFrame({'A': ['a', 'aaaa']})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_hdf('tst.h5', 'foo4', format='table', min_itemsize=4)
+
+    df2 = pd.read_hdf('tst.h5', 'foo4')
+
+    tm.assert_frame_equal(df, df2)
