@@ -100,7 +100,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
                 workers=workers, allow_other_workers=True)
 
 
-def buffer_to_csv(b, **kwargs):
+def bytes_read_csv(b, **kwargs):
     from io import BytesIO
     import pandas as pd
     bio = BytesIO(b)
@@ -127,15 +127,15 @@ def _read_csv(path, executor=None, hdfs=None, lazy=True, lineterminator='\n',
             head = pd.read_csv(f, nrows=5, **kwargs)
             names = head.columns
 
-    dfs1 = [[do(buffer_to_csv)(blocks[0], names=names, skiprows=1, **kwargs)] +
-            [do(buffer_to_csv)(b, names=names, **kwargs) for b in blocks[1:]]
+    dfs1 = [[do(bytes_read_csv)(blocks[0], names=names, skiprows=1, **kwargs)] +
+            [do(bytes_read_csv)(b, names=names, **kwargs) for b in blocks[1:]]
             for blocks in blockss]
     dfs2 = sum(dfs1, [])
     if lazy:
         from dask.dataframe import from_imperative
         if collection:
             ensure_default_get(executor)
-            raise gen.Return(from_imperative(dfs2, columns=names))
+            raise gen.Return(from_imperative(dfs2, head))
         else:
             raise gen.Return(dfs2)
 
