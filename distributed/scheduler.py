@@ -951,8 +951,6 @@ class Scheduler(Server):
         raise Return(b'OK')
 
     def delete_data(self, stream=None, keys=None):
-        who_has2 = {k: v for k, v in self.who_has.items() if k in keys}
-
         for key in keys:
             for worker in self.who_has[key]:
                 self.has_what[worker].remove(key)
