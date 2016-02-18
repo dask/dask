@@ -608,8 +608,6 @@ class Scheduler(Server):
                 self.waiting, self.waiting_data, dsk, keys, dependencies,
                 client)
 
-        cover_aliases(self.dask, dsk)
-
         if restrictions:
             restrictions = {k: set(map(ensure_ip, v))
                             for k, v in restrictions.items()}
@@ -1503,22 +1501,3 @@ def heal_missing_data(dsk, dependencies, dependents,
         ensure_key(key)
 
     assert set(missing).issubset(in_play)
-
-
-def cover_aliases(dsk, new_keys):
-    """ Replace aliases with calls to identity
-
-    Warning: operates in place
-
-    >>> dsk = {'x': 1, 'y': 'x'}
-    >>> cover_aliases(dsk, ['y'])  # doctest: +SKIP
-    {'x': 1, 'y': (<function identity ...>, 'x')}
-    """
-    for key in new_keys:
-        try:
-            if dsk[key] in dsk:
-                dsk[key] = (identity, dsk[key])
-        except TypeError:
-            pass
-
-    return dsk
