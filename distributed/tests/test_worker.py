@@ -268,3 +268,11 @@ def test_worker_task(s, a, b):
     yield aa.compute(task=(inc, 1), key='x')
 
     assert a.data['x'] == 2
+
+
+@gen_cluster()
+def test_worker_task_data(s, a, b):
+    aa = rpc(ip=a.ip, port=a.port)
+    yield aa.compute(task=2, key='x')
+
+    assert a.data['x'] == 2
