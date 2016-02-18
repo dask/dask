@@ -11,6 +11,7 @@ import tempfile
 import shutil
 import sys
 
+from dask.core import istask
 from toolz import merge
 from tornado.gen import Return
 from tornado import gen
@@ -186,7 +187,7 @@ class Worker(Server):
 
     @gen.coroutine
     def compute(self, stream, function=None, key=None, args=(), kwargs={},
-            needed=[], who_has=None, report=True):
+            task=None, needed=[], who_has=None, report=True):
         """ Execute function """
         self.active.add(key)
         if needed:
@@ -220,6 +221,11 @@ class Worker(Server):
             data2 = merge(local_data, other)
         else:
             data2 = local_data
+
+        if task is not None:
+            assert not function and not args and not kwargs
+            function = execute_task
+            args = (task,)
 
         # Fill args with data
         args2 = pack_data(args, data2)
@@ -336,3 +342,21 @@ class Worker(Server):
 
 
 job_counter = [0]
+
+
+def execute_task(task):
+    """ Evaluate a nested task
+
+    >>> inc = lambda x: x + 1
+    >>> execute_task((inc, 1))
+    2
+    >>> execute_task((sum, [1, 2, (inc, 3)]))
+    7
+    """
+    if istask(task):
+        func, args = task[0], task[1:]
+        return func(*map(execute_task, args))
+    elif isinstance(task, list):
+        return list(map(execute_task, task))
+    else:
+        return task

@@ -901,11 +901,9 @@ class Scheduler(Server):
                     assert response == b'OK', response
                     nbytes = content['nbytes'][key]
                 else:
-                    response, content = yield worker.compute(function=execute_task,
-                                                             args=(task,),
+                    response, content = yield worker.compute(task=task,
                                                              who_has=who_has,
                                                              key=key,
-                                                             kwargs={},
                                                              report=self.center
                                                                      is not None)
                     if response == b'OK':
@@ -1527,21 +1525,3 @@ def cover_aliases(dsk, new_keys):
             pass
 
     return dsk
-
-
-def execute_task(task):
-    """ Evaluate a nested task
-
-    >>> inc = lambda x: x + 1
-    >>> execute_task((inc, 1))
-    2
-    >>> execute_task((sum, [1, 2, (inc, 3)]))
-    7
-    """
-    if istask(task):
-        func, args = task[0], task[1:]
-        return func(*map(execute_task, args))
-    elif isinstance(task, list):
-        return list(map(execute_task, task))
-    else:
-        return task
