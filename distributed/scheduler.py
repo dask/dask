@@ -393,7 +393,7 @@ class Scheduler(Server):
             if key not in self.dask:
                 continue
             self.processing[worker].add(key)
-            logger.debug("Send job to worker: %s, %s, %s", worker, key, self.dask[key])
+            logger.debug("Send job to worker: %s, %s, %s", worker, key)
             self.worker_queues[worker].put_nowait(
                     {'op': 'compute-task',
                      'key': key,
@@ -899,7 +899,8 @@ class Scheduler(Server):
                                                          who_has=who_has,
                                                          key=key,
                                                          report=self.center
-                                                                 is not None)
+                                                                 is not None,
+                                            serialized=isinstance(task, bytes))
                 if response == b'OK':
                     nbytes = content['nbytes']
                 logger.debug("Compute response from worker %s, %s, %s, %s",

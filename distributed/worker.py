@@ -223,14 +223,21 @@ class Worker(Server):
             data2 = local_data
 
         if serialized:
-            if task is not None:
-                task = loads(task)
-            if function is not None:
-                function = loads(function)
-            if args:
-                args = loads(args)
-            if kwargs:
-                kwargs = loads(kwargs)
+            try:
+                if task is not None:
+                    task = loads(task)
+                if function is not None:
+                    function = loads(function)
+                if args:
+                    args = loads(args)
+                if kwargs:
+                    kwargs = loads(kwargs)
+            except Exception as e:
+                logger.warn("Could not deserialize task", exc_info=True)
+                tb = get_traceback()
+                e2 = truncate_exception(e, 1000)
+                self.active.remove(key)
+                raise Return((b'error', {'exception': e2, 'traceback': tb}))
 
         if task is not None:
             assert not function and not args and not kwargs

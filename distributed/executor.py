@@ -19,7 +19,7 @@ from dask.base import tokenize, normalize_token, Base
 from dask.core import flatten
 from dask.compatibility import apply
 from dask.context import _globals
-from toolz import first, groupby, merge
+from toolz import first, groupby, merge, valmap
 from tornado import gen
 from tornado.gen import Return, TimeoutError
 from tornado.locks import Event
@@ -28,7 +28,7 @@ from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
 from .client import (WrappedKey, unpack_remotedata, pack_data)
-from .core import read, write, connect, rpc, coerce_to_rpc
+from .core import read, write, connect, rpc, coerce_to_rpc, dumps
 from .scheduler import Scheduler
 from .utils import All, sync, funcname, ignoring, queue_to_iterator, _deps
 from .compatibility import Queue as pyQueue, Empty, isqueue
@@ -505,7 +505,7 @@ class Executor(object):
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': {key: task2},
+                                 'dsk': {key: dumps(task2)},
                                  'keys': [key],
                                  'dependencies': {key: dependencies},
                                  'restrictions': restrictions,
@@ -623,7 +623,7 @@ class Executor(object):
 
         logger.debug("map(%s, ...)", funcname(func))
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': dsk,
+                                 'dsk': valmap(dumps, dsk),
                                  'dependencies': dependencies,
                                  'keys': keys,
                                  'restrictions': restrictions,
@@ -853,7 +853,7 @@ class Executor(object):
             dependencies[k] |= set(_deps(dsk, v))
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': dsk3,
+                                 'dsk': valmap(dumps, dsk3),
                                  'dependencies': dependencies,
                                  'keys': flatkeys,
                                  'restrictions': restrictions or {},
@@ -959,7 +959,7 @@ class Executor(object):
             dependencies[k] |= set(_deps(dsk, v))
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': dsk3,
+                                 'dsk': valmap(dumps, dsk3),
                                  'dependencies': dependencies,
                                  'keys': names,
                                  'client': self.id})
@@ -1031,7 +1031,7 @@ class Executor(object):
         names = list({k for c in collections for k in flatten(c._keys())})
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': dsk2,
+                                 'dsk': valmap(dumps, dsk2),
                                  'dependencies': dependencies,
                                  'keys': names,
                                  'client': self.id})
