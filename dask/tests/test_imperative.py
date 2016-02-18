@@ -178,11 +178,10 @@ def test_kwargs():
     assert ten.compute() == 10
 
 
-da = pytest.importorskip('dask.array')
-import numpy as np
-
-
 def test_array_imperative():
+    np = pytest.importorskip('numpy')
+    da = pytest.importorskip('dask.array')
+
     arr = np.arange(100).reshape((10, 10))
     darr = da.from_array(arr, chunks=(5, 5))
     val = do(sum)([arr, darr, 1])
@@ -200,10 +199,11 @@ def test_array_imperative():
     assert len(diff) == 1
 
 
-db = pytest.importorskip('dask.bag')
-
-
 def test_array_bag_imperative():
+    db = pytest.importorskip('dask.bag')
+    da = pytest.importorskip('dask.array')
+    np = pytest.importorskip('numpy')
+
     arr1 = np.arange(100).reshape((10, 10))
     arr2 = arr1.dot(arr1.T)
     darr1 = da.from_array(arr1, chunks=(5, 5))
