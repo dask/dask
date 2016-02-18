@@ -12,20 +12,20 @@ def sizeof(o):
 @sizeof.register(tuple)
 @sizeof.register(set)
 @sizeof.register(frozenset)
-def _(seq):
+def sizeof_python_collection(seq):
     return sys.getsizeof(seq) + sum(map(sizeof, seq))
 
 with ignoring(ImportError):
     import numpy as np
     @sizeof.register(np.ndarray)
-    def _(x):
+    def sizeof_numpy_ndarray(x):
         return x.nbytes
 
 
 with ignoring(ImportError):
     import pandas as pd
     @sizeof.register(pd.DataFrame)
-    def _(df):
+    def sizeof_pandas_dataframe(df):
         o = sys.getsizeof(df)
         try:
             return o + df.memory_usage(index=True, deep=True).sum()
@@ -33,14 +33,14 @@ with ignoring(ImportError):
             return o + df.memory_usage(index=True).sum()
 
     @sizeof.register(pd.Series)
-    def _(s):
+    def sizeof_pandas_series(s):
         try:
             return s.memory_usage(index=True, deep=True) # new in 0.17.1
         except:
             return sizeof(s.values) + sizeof(s.index)
 
     @sizeof.register(pd.Index)
-    def _(i):
+    def sizeof_pandas_index(i):
         try:
             return i.memory_usage(deep=True)
         except:
