@@ -11,12 +11,12 @@ from tornado.gen import TimeoutError
 import pytest
 
 from distributed import Center, Nanny, Worker
-from distributed.core import connect, read, write, rpc
+from distributed.core import connect, read, write, rpc, loads
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal, update_state,
         decide_worker, assign_many_tasks, heal_missing_data, Scheduler,
-        _maybe_complex, dumps_function, dumps_task)
-from distributed.utils_test import inc, ignoring
+        _maybe_complex, dumps_function, dumps_task, apply)
+from distributed.utils_test import inc, ignoring, dec
 
 
 alice = 'alice'
@@ -621,7 +621,7 @@ def test_server_listens_to_other_ops(s, a, b):
 @gen_cluster()
 def test_remove_worker_from_scheduler(s, a, b):
     dsk = {('x', i): (inc, i) for i in range(10)}
-    s.update_graph(dsk=dsk, keys=list(dsk),
+    s.update_graph(dsk=valmap(dumps_task, dsk), keys=list(dsk),
                    dependencies={k: set() for k in dsk})
     assert s.stacks[a.address]
 
@@ -642,7 +642,7 @@ def test_add_worker(s, a, b):
     yield w._start(0)
 
     dsk = {('x', i): (inc, i) for i in range(10)}
-    s.update_graph(dsk=dsk, keys=list(dsk), client='client',
+    s.update_graph(dsk=valmap(dumps_task, dsk), keys=list(dsk), client='client',
                    dependencies={k: set() for k in dsk})
 
     s.add_worker(address=w.address, keys=list(w.data),
@@ -717,7 +717,7 @@ def test_scheduler_as_center():
                          'y': {a.address, b.address},
                          'z': {b.address}}
 
-    s.update_graph(dsk={'a': (inc, 1)},
+    s.update_graph(dsk={'a': dumps_task((inc, 1))},
                    keys=['a'],
                    dependencies={'a': set()})
     while not s.who_has['a']:
@@ -773,11 +773,9 @@ def test_delete_callback(s, a, b):
 def test_self_aliases(s, a, b):
     a.data['a'] = 1
     s.update_data(who_has={'a': {a.address}}, nbytes={'a': 10}, client='client')
-    s.update_graph(dsk={'a': 'a', 'b': (inc, 'a')},
+    s.update_graph(dsk=valmap(dumps_task, {'a': 'a', 'b': (inc, 'a')}),
                    keys=['b'], client='client',
                    dependencies={'b': {'a'}})
-
-    assert 'a' not in s.dask
 
     sched, report = Queue(), Queue()
     s.handle_queues(sched, report)
