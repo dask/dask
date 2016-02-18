@@ -276,3 +276,14 @@ def test_worker_task_data(s, a, b):
     yield aa.compute(task=2, key='x')
 
     assert a.data['x'] == 2
+
+
+@gen_cluster()
+def test_worker_task_bytes(s, a, b):
+    aa = rpc(ip=a.ip, port=a.port)
+
+    yield aa.compute(task=dumps((inc, 1)), key='x', serialized=True)
+    assert a.data['x'] == 2
+
+    yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y', serialized=True)
+    assert a.data['y'] == 11

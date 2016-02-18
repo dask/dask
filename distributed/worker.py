@@ -20,7 +20,7 @@ from tornado.iostream import StreamClosedError
 
 from .client import _gather, pack_data, gather_from_workers
 from .compatibility import reload
-from .core import rpc, Server, pingpong, dumps
+from .core import rpc, Server, pingpong, dumps, loads
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
     ignoring)
@@ -187,7 +187,7 @@ class Worker(Server):
 
     @gen.coroutine
     def compute(self, stream, function=None, key=None, args=(), kwargs={},
-            task=None, needed=[], who_has=None, report=True):
+            task=None, needed=[], who_has=None, report=True, serialized=False):
         """ Execute function """
         self.active.add(key)
         if needed:
@@ -221,6 +221,16 @@ class Worker(Server):
             data2 = merge(local_data, other)
         else:
             data2 = local_data
+
+        if serialized:
+            if task is not None:
+                task = loads(task)
+            if function is not None:
+                function = loads(function)
+            if args:
+                args = loads(args)
+            if kwargs:
+                kwargs = loads(kwargs)
 
         if task is not None:
             assert not function and not args and not kwargs
