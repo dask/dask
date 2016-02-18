@@ -20,12 +20,14 @@ from tornado.iostream import IOStream
 from tornado import gen
 
 from dask.context import _globals
+from dask.compatibility import apply
 from distributed import Center, Worker, Nanny
-from distributed.core import rpc
+from distributed.core import rpc, dumps, loads
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
         wait, _as_completed, as_completed, tokenize, _global_executor,
-        default_executor, _first_completed, ensure_default_get, futures_of)
+        default_executor, _first_completed, ensure_default_get, futures_of,
+        _maybe_complex, dumps_function, dumps_task)
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
@@ -2277,7 +2279,7 @@ def test_Future_exception_sync(loop, capsys):
     assert _globals['get'] == e.get
 
 
-@gen_cluster()
+@gen_cluster(timeout=1000)
 def test_async_persist(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -2303,7 +2305,8 @@ def test_async_persist(s, a, b):
     assert s.who_wants[y.key] == {e.id}
     assert s.who_wants[w.key] == {e.id}
 
-    yyy, www = yield e._gather(e.compute([yy, ww]))
+    yyf, wwf = e.compute([yy, ww])
+    yyy, www = yield e._gather([yyf, wwf])
     assert yyy == inc(1)
     assert www == add(inc(1), dec(1))
 
@@ -2398,3 +2401,34 @@ def test_dont_delete_recomputed_results(s, w):
         yield gen.sleep(0.01)
 
     yield e._shutdown()
+
+
+def test_maybe_complex():
+    assert not _maybe_complex(1)
+    assert not _maybe_complex('x')
+    assert _maybe_complex((inc, 1))
+    assert _maybe_complex([(inc, 1)])
+    assert _maybe_complex([(inc, 1)])
+    assert _maybe_complex({'x': (inc, 1)})
+
+
+def test_dumps_function():
+    a = dumps_function(inc)
+    assert loads(a)(10) == 11
+
+    b = dumps_function(inc)
+    assert a is b
+
+    c = dumps_function(dec)
+    assert a != c
+
+
+def test_dumps_task():
+    d = dumps_task((inc, 1))
+    assert set(d) == {'function', 'args'}
+
+    f = lambda x, y=2: x + y
+    d = dumps_task((apply, f, (1,), {'y': 10}))
+    assert loads(d['function'])(1, 2) == 3
+    assert loads(d['args']) == (1,)
+    assert loads(d['kwargs']) == {'y': 10}

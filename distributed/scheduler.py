@@ -16,7 +16,7 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
-from dask.core import get_deps, reverse_dict
+from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
@@ -895,12 +895,17 @@ class Scheduler(Server):
                 key = msg['key']
                 who_has = msg['who_has']
                 task = msg['task']
-                response, content = yield worker.compute(task=task,
-                                                         who_has=who_has,
+                if istask(task):
+                    task = {'task': task}
+                    serialized = False
+                else:
+                    serialized = True
+                response, content = yield worker.compute(who_has=who_has,
                                                          key=key,
                                                          report=self.center
                                                                  is not None,
-                                            serialized=isinstance(task, bytes))
+                                            serialized=serialized,
+                                            **task)
                 if response == b'OK':
                     nbytes = content['nbytes']
                 logger.debug("Compute response from worker %s, %s, %s, %s",

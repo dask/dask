@@ -16,7 +16,7 @@ import six
 
 import dask
 from dask.base import tokenize, normalize_token, Base
-from dask.core import flatten
+from dask.core import flatten, istask
 from dask.compatibility import apply
 from dask.context import _globals
 from toolz import first, groupby, merge, valmap
@@ -484,11 +484,6 @@ class Executor(object):
         if key in self.futures:
             return Future(key, self)
 
-        if kwargs:
-            task = (apply, func, (tuple, list(args)), kwargs)
-        else:
-            task = (func,) + args
-
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
 
@@ -501,11 +496,19 @@ class Executor(object):
             restrictions = {}
             loose_restrictions = set()
 
-        task2, dependencies = unpack_remotedata(task)
+        args2, arg_dependencies = unpack_remotedata(args)
+        kwargs2, kwarg_dependencies = unpack_remotedata(kwargs)
+        dependencies = arg_dependencies | kwarg_dependencies
+
+        task = {'function': dumps_function(func)}
+        if args2:
+            task['args'] = dumps(args2)
+        if kwargs2:
+            task['kwargs'] = dumps(kwargs2)
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': {key: dumps(task2)},
+                                 'dsk': {key: task},
                                  'keys': [key],
                                  'dependencies': {key: dependencies},
                                  'restrictions': restrictions,
@@ -623,7 +626,7 @@ class Executor(object):
 
         logger.debug("map(%s, ...)", funcname(func))
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': valmap(dumps, dsk),
+                                 'dsk': valmap(dumps_task, dsk),
                                  'dependencies': dependencies,
                                  'keys': keys,
                                  'restrictions': restrictions,
@@ -853,7 +856,7 @@ class Executor(object):
             dependencies[k] |= set(_deps(dsk, v))
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': valmap(dumps, dsk3),
+                                 'dsk': valmap(dumps_task, dsk3),
                                  'dependencies': dependencies,
                                  'keys': flatkeys,
                                  'restrictions': restrictions or {},
@@ -959,7 +962,7 @@ class Executor(object):
             dependencies[k] |= set(_deps(dsk, v))
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': valmap(dumps, dsk3),
+                                 'dsk': valmap(dumps_task, dsk3),
                                  'dependencies': dependencies,
                                  'keys': names,
                                  'client': self.id})
@@ -1031,7 +1034,7 @@ class Executor(object):
         names = list({k for c in collections for k in flatten(c._keys())})
 
         self._send_to_scheduler({'op': 'update-graph',
-                                 'dsk': valmap(dumps, dsk2),
+                                 'dsk': valmap(dumps_task, dsk2),
                                  'dependencies': dependencies,
                                  'keys': names,
                                  'client': self.id})
@@ -1252,3 +1255,32 @@ def futures_of(o):
     if hasattr(o, 'dask'):
         return futures_of(o.dask)
     return []
+
+
+def _maybe_complex(task):
+    """ Possibly contains a nested task """
+    return (istask(task) or
+            isinstance(task, list) and any(map(_maybe_complex, task)) or
+            isinstance(task, dict) and any(map(_maybe_complex, task.values())))
+
+
+cache = dict()
+
+
+def dumps_function(func):
+    if func not in cache:
+        b = dumps(func)
+        cache[func] = b
+    return cache[func]
+
+
+def dumps_task(task):
+    if istask(task):
+        if task[0] is apply and not any(map(_maybe_complex, task[2:])):
+            return {'function': dumps_function(task[1]),
+                        'args': dumps(task[2]),
+                      'kwargs': dumps(task[3])}
+        elif not any(map(_maybe_complex, task[1:])):
+            return {'function': dumps_function(task[0]),
+                        'args': dumps(task[1:])}
+    return {'task': dumps(task)}
