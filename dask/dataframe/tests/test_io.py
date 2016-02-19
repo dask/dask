@@ -655,6 +655,7 @@ def test_read_hdf():
         df.to_hdf(fn, '/data', format='table')
         a = dd.read_hdf(fn, '/data', chunksize=2)
         assert a.npartitions == 2
+        assert a._known_dtype
 
         tm.assert_frame_equal(a.compute(), df)
 
