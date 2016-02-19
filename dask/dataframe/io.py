@@ -772,7 +772,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
 
 
 def to_castra(df, fn=None, categories=None, sorted_index_column=None,
-              compute=True):
+              compute=True, get=get_sync):
     """ Write DataFrame to Castra on-disk store
 
     See https://github.com/blosc/castra for details
@@ -802,7 +802,7 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
     dsk = merge(dsk, df.dask)
     keys = [(name, -1), (name, df.npartitions - 1)]
     if compute:
-        c, _ = DataFrame._get(dsk, keys, get=get_sync)
+        c, _ = DataFrame._get(dsk, keys, get=get)
         return c
     else:
         return dsk, keys
