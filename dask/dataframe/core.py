@@ -1813,7 +1813,6 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
 
     Parameters
     ----------
-
     args: dask.DataFrames
         All Dataframes should be partitioned and indexed equivalently
     chunk: function [block-per-arg] -> block
@@ -1821,6 +1820,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
     aggregate: function concatenated-block -> block
         Function to operate on the concatenated result of chunk
 
+    Examples
+    --------
     >>> def chunk(a_block, b_block):
     ...     pass
 
@@ -1839,9 +1840,13 @@ def apply_concat_apply(args, chunk=None, aggregate=None,
     token = token or 'apply-concat-apply'
 
     a = '{0}--first-{1}'.format(token, token_key)
-    dsk = dict(((a, i), (apply, chunk, (list, [(x._name, i)
-                                               if isinstance(x, _Frame)
-                                               else x for x in args])))
+    if len(args) == 1 and isinstance(args[0], _Frame):
+        dsk = dict(((a, i), (chunk, key))
+                   for i, key in enumerate(args[0]._keys()))
+    else:
+        dsk = dict(((a, i), (apply, chunk, [(x._name, i)
+                                            if isinstance(x, _Frame)
+                                            else x for x in args]))
                for i in range(args[0].npartitions))
 
     b = '{0}--second-{1}'.format(token, token_key)
