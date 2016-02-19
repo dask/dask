@@ -683,21 +683,22 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         Get the data frame corresponding to one path and one key (which should
         not contain any wildcards).
         """
-        if columns is None:
-            columns = list(pd.read_hdf(path, key, stop=0).columns)
+        empty = pd.read_hdf(path, key, stop=0)
+        if columns is not None:
+            empty = empty[columns]
 
         token = tokenize((path, os.path.getmtime(path), key, start,
-                          stop, columns, chunksize))
+                          stop, empty, chunksize))
         name = 'read-hdf-' + token
 
         dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
                                  {'start': s,
                                   'stop': s + chunksize,
-                                  'columns': columns}))
+                                  'columns': empty.columns}))
                     for i, s in enumerate(range(start, stop, chunksize)))
 
         divisions = [None] * (len(dsk) + 1)
-        return DataFrame(dsk, name, columns, divisions)
+        return DataFrame(dsk, name, empty, divisions)
 
     if lock is True:
         lock = Lock()
