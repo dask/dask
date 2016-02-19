@@ -1149,7 +1149,7 @@ class Series(_Frame):
     @derived_from(pd.Series)
     def to_frame(self, name=None):
         _name = name if name is not None else self.name
-        return map_partitions(pd.Series.to_frame, [_name], self, name)
+        return map_partitions(pd.Series.to_frame, self._pd.to_frame(name), self, name)
 
     @classmethod
     def _bind_operator_method(cls, name, op):

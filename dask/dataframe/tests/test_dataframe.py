@@ -1336,6 +1336,7 @@ def test_to_frame():
     s = pd.Series([1, 2, 3], name='foo')
     a = dd.from_pandas(s, npartitions=2)
 
+    assert a.to_frame()._known_dtype
     assert eq(s.to_frame(), a.to_frame())
     assert eq(s.to_frame('bar'), a.to_frame('bar'))
 
