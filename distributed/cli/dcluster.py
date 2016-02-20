@@ -9,7 +9,7 @@ from distributed.cli.utils import check_python_3
                          first host specified in [HOSTNAMES] or in the hostfile (unless --scheduler is specified
                          explicitly). One or more 'dworker' processes will be run each host in [HOSTNAMES] or
                          in the hostfile. Use command line flags to adjust how many dworker process are run on
-                         each host (--nworkers) and how many cpus are used by each dworker process (--ncores).""")
+                         each host (--nprocs) and how many cpus are used by each dworker process (--nthreads).""")
 @click.option('--scheduler', default=None, type=str,
               help="Specify scheduler node.  Defaults to first address.")
 @click.option('--scheduler-port', default=8786, type=int,
