@@ -6,7 +6,7 @@ from dask.dataframe.multi import (align_partitions, join_indexed_dataframes,
 import pandas.util.testing as tm
 from dask.async import get_sync
 
-
+import pytest
 from test_dataframe import eq
 
 
@@ -92,22 +92,22 @@ def test_join_indexed_dataframe_to_indexed_dataframe():
     c = join_indexed_dataframes(a, b, how='left')
     assert c.divisions[0] == a.divisions[0]
     assert c.divisions[-1] == max(a.divisions + b.divisions)
-    tm.assert_frame_equal(c.compute(), A.join(B))
+    assert eq(c, A.join(B))
 
     c = join_indexed_dataframes(a, b, how='right')
     assert c.divisions[0] == b.divisions[0]
     assert c.divisions[-1] == b.divisions[-1]
-    tm.assert_frame_equal(c.compute(), A.join(B, how='right'))
+    assert eq(c, A.join(B, how='right'))
 
     c = join_indexed_dataframes(a, b, how='inner')
     assert c.divisions[0] == 1
     assert c.divisions[-1] == max(a.divisions + b.divisions)
-    tm.assert_frame_equal(c.compute(), A.join(B, how='inner'))
+    assert eq(c.compute(), A.join(B, how='inner'))
 
     c = join_indexed_dataframes(a, b, how='outer')
     assert c.divisions[0] == 1
     assert c.divisions[-1] == 8
-    tm.assert_frame_equal(c.compute(), A.join(B, how='outer'))
+    assert eq(c.compute(), A.join(B, how='outer'))
 
     assert sorted(join_indexed_dataframes(a, b, how='inner').dask) == \
            sorted(join_indexed_dataframes(a, b, how='inner').dask)
@@ -120,7 +120,7 @@ def list_eq(a, b):
         a = a.compute(get=get_sync)
     if isinstance(b, dd.DataFrame):
         b = b.compute(get=get_sync)
-    assert list(a.columns) == list(b.columns)
+    tm.assert_index_equal(a.columns, b.columns)
 
     # ToDo: As of pandas 0,17, tm.assert_numpy_array_equal can
     # compare arrays include NaN. This logic can be replaced
@@ -136,23 +136,19 @@ def list_eq(a, b):
     assert av == bv, (av, bv)
 
 
-def test_hash_join():
+@pytest.mark.parametrize('how', ['inner', 'left', 'right', 'outer'])
+def test_hash_join(how):
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
 
     B = pd.DataFrame({'y': [1, 3, 4, 4, 5, 6], 'z': [6, 5, 4, 3, 2, 1]})
     b = dd.repartition(B, [0, 2, 5])
 
-    for how in ['inner', 'left', 'right', 'outer']:
-        c = hash_join(a, 'y', b, 'y', how)
+    c = hash_join(a, 'y', b, 'y', how)
 
-        result = c.compute()
-        expected = pd.merge(A, B, how, 'y')
-
-        assert list(result.columns) == list(expected.columns)
-        assert sorted(result.fillna(100).values.tolist()) == \
-               sorted(expected.fillna(100).values.tolist())
-
+    result = c.compute()
+    expected = pd.merge(A, B, how, 'y')
+    list_eq(result, expected)
 
     # Different columns and npartitions
     c = hash_join(a, 'x', b, 'z', 'outer', npartitions=3)
@@ -160,9 +156,8 @@ def test_hash_join():
 
     result = c.compute()
     expected = pd.merge(A, B, 'outer', None, 'x', 'z')
-    assert list(result.columns) == list(expected.columns)
-    assert sorted(result.fillna(100).values.tolist()) == \
-           sorted(expected.fillna(100).values.tolist())
+
+    list_eq(result, expected)
 
     assert hash_join(a, 'y', b, 'y', 'inner')._name == \
            hash_join(a, 'y', b, 'y', 'inner')._name
@@ -170,7 +165,8 @@ def test_hash_join():
            hash_join(a, 'y', b, 'y', 'outer')._name
 
 
-def test_indexed_concat():
+@pytest.mark.parametrize('join', ['inner', 'outer'])
+def test_indexed_concat(join):
     A = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7], 'y': list('abcdef')},
                      index=[1, 2, 3, 4, 6, 7])
     a = dd.repartition(A, [1, 4, 7])
@@ -179,18 +175,18 @@ def test_indexed_concat():
                      index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
-    for join in ['inner', 'outer']:
-        result = concat_indexed_dataframes([a, b], join=join)
-        expected = pd.concat([A, B], axis=0, join=join)
-        assert eq(result, expected)
+    result = concat_indexed_dataframes([a, b], join=join)
+    expected = pd.concat([A, B], axis=0, join=join)
+    assert eq(result, expected)
 
-    assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) == \
-           sorted(concat_indexed_dataframes([a, b], join='inner').dask)
+    assert sorted(concat_indexed_dataframes([a, b], join=join).dask) == \
+           sorted(concat_indexed_dataframes([a, b], join=join).dask)
     assert sorted(concat_indexed_dataframes([a, b], join='inner').dask) != \
            sorted(concat_indexed_dataframes([a, b], join='outer').dask)
 
 
-def test_concat():
+@pytest.mark.parametrize('join', ['inner', 'outer'])
+def test_concat(join):
     pdf1 = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7],
                          'y': list('abcdef')},
                         index=[1, 2, 3, 4, 6, 7])
@@ -208,12 +204,9 @@ def test_concat():
 
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
                                  (ddf1, ddf3, pdf1, pdf3)]:
-        print(1)
-        for join in ['inner', 'outer']:
-            print(join)
-            result = dd.concat([dd1, dd2], join=join)
-            expected = pd.concat([pd1, pd2], join=join)
-            assert eq(result, expected)
+        result = dd.concat([dd1, dd2], join=join)
+        expected = pd.concat([pd1, pd2], join=join)
+        assert eq(result, expected)
 
     # test outer only, inner has a problem on pandas side
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
@@ -227,7 +220,8 @@ def test_concat():
         assert eq(result, expected)
 
 
-def test_merge():
+@pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
+def test_merge(how):
     A = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
 
@@ -237,44 +231,44 @@ def test_merge():
     eq(dd.merge(a, b, left_index=True, right_index=True),
        pd.merge(A, B, left_index=True, right_index=True))
 
-    for how in ['inner', 'outer', 'left', 'right']:
+    result = dd.merge(a, b, on='y', how=how)
+    list_eq(result, pd.merge(A, B, on='y', how=how))
+    assert all(d is None for d in result.divisions)
 
-        result = dd.merge(a, b, on='y', how=how)
-        list_eq(result, pd.merge(A, B, on='y', how=how))
-        assert all(d is None for d in result.divisions)
+    list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how),
+            pd.merge(A, B, left_on='x', right_on='z', how=how))
+    list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how,
+                     suffixes=('1', '2')),
+            pd.merge(A, B, left_on='x', right_on='z', how=how,
+                     suffixes=('1', '2')))
 
-        list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how),
-                pd.merge(A, B, left_on='x', right_on='z', how=how))
-        list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how,
-                         suffixes=('1', '2')),
-                pd.merge(A, B, left_on='x', right_on='z', how=how,
-                         suffixes=('1', '2')))
+    list_eq(dd.merge(a, b, how=how), pd.merge(A, B, how=how))
+    list_eq(dd.merge(a, B, how=how), pd.merge(A, B, how=how))
+    list_eq(dd.merge(A, b, how=how), pd.merge(A, B, how=how))
+    list_eq(dd.merge(A, B, how=how), pd.merge(A, B, how=how))
 
-        list_eq(dd.merge(a, b, how=how), pd.merge(A, B, how=how))
-        list_eq(dd.merge(a, B, how=how), pd.merge(A, B, how=how))
-        list_eq(dd.merge(A, b, how=how), pd.merge(A, B, how=how))
-        list_eq(dd.merge(A, B, how=how), pd.merge(A, B, how=how))
+    list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how),
+            pd.merge(A, B, left_index=True, right_index=True, how=how))
+    list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how,
+                     suffixes=('1', '2')),
+            pd.merge(A, B, left_index=True, right_index=True, how=how,
+                     suffixes=('1', '2')))
 
-        list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how),
-                pd.merge(A, B, left_index=True, right_index=True, how=how))
-        list_eq(dd.merge(a, b, left_index=True, right_index=True, how=how,
-                         suffixes=('1', '2')),
-                pd.merge(A, B, left_index=True, right_index=True, how=how,
-                         suffixes=('1', '2')))
-
-        list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how),
-                pd.merge(A, B, left_on='x', right_index=True, how=how))
-        list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how,
-                         suffixes=('1', '2')),
-                pd.merge(A, B, left_on='x', right_index=True, how=how,
-                         suffixes=('1', '2')))
+    list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how),
+            pd.merge(A, B, left_on='x', right_index=True, how=how))
+    list_eq(dd.merge(a, b, left_on='x', right_index=True, how=how,
+                     suffixes=('1', '2')),
+            pd.merge(A, B, left_on='x', right_index=True, how=how,
+                     suffixes=('1', '2')))
 
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
-def test_merge_by_index_patterns():
+
+@pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
+def test_merge_by_index_patterns(how):
 
     pdf1l = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                           'b': [7, 6, 5, 4, 3, 2, 1]})
@@ -331,39 +325,40 @@ def test_merge_by_index_patterns():
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
-            for how in ['inner', 'outer', 'left', 'right']:
-                eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
-                   pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
-                eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True),
-                   pd.merge(pdr, pdl, how=how, left_index=True, right_index=True))
+            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
+               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
+            eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True),
+               pd.merge(pdr, pdl, how=how, left_index=True, right_index=True))
 
-                eq(ddr.merge(ddl, how=how, left_index=True, right_index=True),
-                   pdr.merge(pdl, how=how, left_index=True, right_index=True))
-                eq(ddl.merge(ddr, how=how, left_index=True, right_index=True),
-                   pdl.merge(pdr, how=how, left_index=True, right_index=True))
+            eq(ddr.merge(ddl, how=how, left_index=True, right_index=True),
+               pdr.merge(pdl, how=how, left_index=True, right_index=True))
+            eq(ddl.merge(ddr, how=how, left_index=True, right_index=True),
+               pdl.merge(pdr, how=how, left_index=True, right_index=True))
 
-                # hash join
-                list_eq(dd.merge(ddl, ddr, how=how, left_on='a', right_on='c'),
-                        pd.merge(pdl, pdr, how=how, left_on='a', right_on='c'))
-                list_eq(dd.merge(ddl, ddr, how=how, left_on='b', right_on='d'),
-                        pd.merge(pdl, pdr, how=how, left_on='b', right_on='d'))
+            # hash join
+            list_eq(dd.merge(ddl, ddr, how=how, left_on='a', right_on='c'),
+                    pd.merge(pdl, pdr, how=how, left_on='a', right_on='c'))
+            list_eq(dd.merge(ddl, ddr, how=how, left_on='b', right_on='d'),
+                    pd.merge(pdl, pdr, how=how, left_on='b', right_on='d'))
 
-                list_eq(dd.merge(ddr, ddl, how=how, left_on='c', right_on='a'),
-                        pd.merge(pdr, pdl, how=how, left_on='c', right_on='a'))
-                list_eq(dd.merge(ddr, ddl, how=how, left_on='d', right_on='b'),
-                        pd.merge(pdr, pdl, how=how, left_on='d', right_on='b'))
+            list_eq(dd.merge(ddr, ddl, how=how, left_on='c', right_on='a'),
+                    pd.merge(pdr, pdl, how=how, left_on='c', right_on='a'))
+            list_eq(dd.merge(ddr, ddl, how=how, left_on='d', right_on='b'),
+                    pd.merge(pdr, pdl, how=how, left_on='d', right_on='b'))
 
-                list_eq(ddl.merge(ddr, how=how, left_on='a', right_on='c'),
-                        pdl.merge(pdr, how=how, left_on='a', right_on='c'))
-                list_eq(ddl.merge(ddr, how=how, left_on='b', right_on='d'),
-                        pdl.merge(pdr, how=how, left_on='b', right_on='d'))
+            list_eq(ddl.merge(ddr, how=how, left_on='a', right_on='c'),
+                    pdl.merge(pdr, how=how, left_on='a', right_on='c'))
+            list_eq(ddl.merge(ddr, how=how, left_on='b', right_on='d'),
+                    pdl.merge(pdr, how=how, left_on='b', right_on='d'))
 
-                list_eq(ddr.merge(ddl, how=how, left_on='c', right_on='a'),
-                        pdr.merge(pdl, how=how, left_on='c', right_on='a'))
-                list_eq(ddr.merge(ddl, how=how, left_on='d', right_on='b'),
-                        pdr.merge(pdl, how=how, left_on='d', right_on='b'))
+            list_eq(ddr.merge(ddl, how=how, left_on='c', right_on='a'),
+                    pdr.merge(pdl, how=how, left_on='c', right_on='a'))
+            list_eq(ddr.merge(ddl, how=how, left_on='d', right_on='b'),
+                    pdr.merge(pdl, how=how, left_on='d', right_on='b'))
 
-def test_join_by_index_patterns():
+
+@pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
+def test_join_by_index_patterns(how):
 
     # Similar test cases as test_merge_by_index_patterns,
     # but columns / index for join have same dtype
@@ -417,42 +412,45 @@ def test_join_by_index_patterns():
     for pdl, pdr in [(pdf1l, pdf1r), (pdf2l, pdf2r), (pdf3l, pdf3r),
                      (pdf4l, pdf4r), (pdf5l, pdf5r), (pdf6l, pdf6r),
                      (pdf7l, pdf7r)]:
+
         for lpart, rpart in [(2, 2), (3, 2), (2, 3)]:
 
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
-            for how in ['inner', 'outer', 'left', 'right']:
-                eq(ddl.join(ddr, how=how), pdl.join(pdr, how=how))
-                eq(ddr.join(ddl, how=how), pdr.join(pdl, how=how))
+            eq(ddl.join(ddr, how=how), pdl.join(pdr, how=how))
+            eq(ddr.join(ddl, how=how), pdr.join(pdl, how=how))
 
-                eq(ddl.join(ddr, how=how, lsuffix='l', rsuffix='r'),
-                   pdl.join(pdr, how=how, lsuffix='l', rsuffix='r'))
-                eq(ddr.join(ddl, how=how, lsuffix='l', rsuffix='r'),
-                   pdr.join(pdl, how=how, lsuffix='l', rsuffix='r'))
+            eq(ddl.join(ddr, how=how, lsuffix='l', rsuffix='r'),
+               pdl.join(pdr, how=how, lsuffix='l', rsuffix='r'))
+            eq(ddr.join(ddl, how=how, lsuffix='l', rsuffix='r'),
+               pdr.join(pdl, how=how, lsuffix='l', rsuffix='r'))
 
-                """
-                # temporary disabled bacause pandas may incorrectly raise
-                # IndexError for empty DataFrame
-                # https://github.com/pydata/pandas/pull/10826
-                list_eq(ddl.join(ddr, how=how, on='a', lsuffix='l', rsuffix='r'),
-                        pdl.join(pdr, how=how, on='a', lsuffix='l', rsuffix='r'))
+            """
+            # temporary disabled bacause pandas may incorrectly raise
+            # IndexError for empty DataFrame
+            # https://github.com/pydata/pandas/pull/10826
 
-                list_eq(ddr.join(ddl, how=how, on='c', lsuffix='l', rsuffix='r'),
-                        pdr.join(pdl, how=how, on='c', lsuffix='l', rsuffix='r'))
+            list_eq(ddl.join(ddr, how=how, on='a', lsuffix='l', rsuffix='r'),
+                    pdl.join(pdr, how=how, on='a', lsuffix='l', rsuffix='r'))
 
-                # merge with index and columns
-                list_eq(ddl.merge(ddr, how=how, left_on='a', right_index=True),
-                        pdl.merge(pdr, how=how, left_on='a', right_index=True))
-                list_eq(ddr.merge(ddl, how=how, left_on='c', right_index=True),
-                        pdr.merge(pdl, how=how, left_on='c', right_index=True))
-                list_eq(ddl.merge(ddr, how=how, left_index=True, right_on='c'),
-                        pdl.merge(pdr, how=how, left_index=True, right_on='c'))
-                list_eq(ddr.merge(ddl, how=how, left_index=True, right_on='a'),
-                        pdr.merge(pdl, how=how, left_index=True, right_on='a'))
-                """
+            list_eq(ddr.join(ddl, how=how, on='c', lsuffix='l', rsuffix='r'),
+                    pdr.join(pdl, how=how, on='c', lsuffix='l', rsuffix='r'))
 
-def test_merge_by_multiple_columns():
+            # merge with index and columns
+            list_eq(ddl.merge(ddr, how=how, left_on='a', right_index=True),
+                    pdl.merge(pdr, how=how, left_on='a', right_index=True))
+            list_eq(ddr.merge(ddl, how=how, left_on='c', right_index=True),
+                    pdr.merge(pdl, how=how, left_on='c', right_index=True))
+            list_eq(ddl.merge(ddr, how=how, left_index=True, right_on='c'),
+                    pdl.merge(pdr, how=how, left_index=True, right_on='c'))
+            list_eq(ddr.merge(ddl, how=how, left_index=True, right_on='a'),
+                    pdr.merge(pdl, how=how, left_index=True, right_on='a'))
+            """
+
+
+@pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
+def test_merge_by_multiple_columns(how):
 
     pdf1l = pd.DataFrame({'a': list('abcdefghij'),
                           'b': list('abcdefghij'),
@@ -488,27 +486,26 @@ def test_merge_by_multiple_columns():
             ddl = dd.from_pandas(pdl, lpart)
             ddr = dd.from_pandas(pdr, rpart)
 
-            for how in ['inner', 'outer', 'left', 'right']:
-                eq(ddl.join(ddr, how=how), pdl.join(pdr, how=how))
-                eq(ddr.join(ddl, how=how), pdr.join(pdl, how=how))
+            eq(ddl.join(ddr, how=how), pdl.join(pdr, how=how))
+            eq(ddr.join(ddl, how=how), pdr.join(pdl, how=how))
 
-                eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
-                   pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
-                eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True),
-                   pd.merge(pdr, pdl, how=how, left_index=True, right_index=True))
+            eq(dd.merge(ddl, ddr, how=how, left_index=True, right_index=True),
+               pd.merge(pdl, pdr, how=how, left_index=True, right_index=True))
+            eq(dd.merge(ddr, ddl, how=how, left_index=True, right_index=True),
+               pd.merge(pdr, pdl, how=how, left_index=True, right_index=True))
 
-                # hash join
-                list_eq(dd.merge(ddl, ddr, how=how, left_on='a', right_on='d'),
-                        pd.merge(pdl, pdr, how=how, left_on='a', right_on='d'))
-                list_eq(dd.merge(ddl, ddr, how=how, left_on='b', right_on='e'),
-                        pd.merge(pdl, pdr, how=how, left_on='b', right_on='e'))
+            # hash join
+            list_eq(dd.merge(ddl, ddr, how=how, left_on='a', right_on='d'),
+                    pd.merge(pdl, pdr, how=how, left_on='a', right_on='d'))
+            list_eq(dd.merge(ddl, ddr, how=how, left_on='b', right_on='e'),
+                    pd.merge(pdl, pdr, how=how, left_on='b', right_on='e'))
 
-                list_eq(dd.merge(ddr, ddl, how=how, left_on='d', right_on='a'),
-                        pd.merge(pdr, pdl, how=how, left_on='d', right_on='a'))
-                list_eq(dd.merge(ddr, ddl, how=how, left_on='e', right_on='b'),
-                        pd.merge(pdr, pdl, how=how, left_on='e', right_on='b'))
+            list_eq(dd.merge(ddr, ddl, how=how, left_on='d', right_on='a'),
+                    pd.merge(pdr, pdl, how=how, left_on='d', right_on='a'))
+            list_eq(dd.merge(ddr, ddl, how=how, left_on='e', right_on='b'),
+                    pd.merge(pdr, pdl, how=how, left_on='e', right_on='b'))
 
-                list_eq(dd.merge(ddl, ddr, how=how, left_on=['a', 'b'], right_on=['d', 'e']),
-                        pd.merge(pdl, pdr, how=how, left_on=['a', 'b'], right_on=['d', 'e']))
+            list_eq(dd.merge(ddl, ddr, how=how, left_on=['a', 'b'], right_on=['d', 'e']),
+                    pd.merge(pdl, pdr, how=how, left_on=['a', 'b'], right_on=['d', 'e']))
 
 
