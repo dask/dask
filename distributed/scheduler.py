@@ -1552,3 +1552,21 @@ def dumps_task(task):
             return {'function': dumps_function(task[0]),
                         'args': dumps(task[1:])}
     return {'task': dumps(task)}
+
+
+def str_graph(dsk):
+    def convert(task):
+        if isinstance(task, list):
+            return [convert(v) for v in task]
+        if isinstance(task, dict):
+            return valmap(convert, task)
+        if istask(task):
+            return (task[0],) + tuple(map(convert, task[1:]))
+        try:
+            if task in dsk:
+                return str(task)
+        except TypeError:
+            pass
+        return task
+
+    return {str(k): convert(v) for k, v in dsk.items()}

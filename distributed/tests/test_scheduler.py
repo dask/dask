@@ -4,6 +4,7 @@ from copy import deepcopy
 from operator import add
 from time import time
 
+import dask
 from dask.core import get_deps
 from toolz import merge, concat, valmap
 from tornado.queues import Queue
@@ -18,7 +19,7 @@ from distributed.core import connect, read, write, rpc, loads
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal,
         decide_worker, heal_missing_data, Scheduler,
-        _maybe_complex, dumps_function, dumps_task, apply)
+        _maybe_complex, dumps_function, dumps_task, apply, str_graph)
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
         loop)
 from distributed.utils import All
@@ -885,3 +886,26 @@ def test_ready_add_worker(s, a, b):
     assert all(len(s.processing[w]) == s.ncores[w]
                 for w in s.ncores)
     assert len(s.ready) + sum(map(len, s.processing.values())) == 20
+
+
+def test_str_graph():
+    dsk = {'x': 1}
+    assert str_graph(dsk) == dsk
+
+    dsk = {('x', 1): (inc, 1)}
+    assert str_graph(dsk) == {str(('x', 1)): (inc, 1)}
+
+    dsk = {('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))}
+    assert str_graph(dsk) == {str(('x', 1)): (inc, 1),
+                              str(('x', 2)): (inc, str(('x', 1)))}
+
+    dsks = [{'x': 1},
+            {('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
+            {('x', 1): (sum, [1, 2, 3]),
+             ('x', 2): (sum, [('x', 1), ('x', 1)])}]
+    for dsk in dsks:
+        sdsk = str_graph(dsk)
+        keys = list(dsk)
+        skeys = list(map(str, keys))
+        assert all(isinstance(k, str) for k in sdsk)
+        assert dask.get(dsk, keys) == dask.get(sdsk, skeys)
