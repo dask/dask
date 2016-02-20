@@ -12,7 +12,7 @@ from .scheduler import Scheduler
 
 try:
     from .collections import futures_to_collection
-except ImportError:
+except:
     pass
 
 
