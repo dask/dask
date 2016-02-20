@@ -155,19 +155,23 @@ class Nanny(Server):
     def worker_address(self):
         return (self.ip, self.worker_port)
 
+    @property
+    def worker_address_string(self):
+        return '%s:%d' % self.worker_address
+
     def resource_collect(self):
         try:
             import psutil
         except ImportError:
             return {}
         p = psutil.Process(self.process.pid)
-        return {'timestamp': datetime.now(),
+        return {'timestamp': datetime.now().isoformat(),
                 'cpu_percent': psutil.cpu_percent(),
                 'status': p.status(),
                 'memory_percent': p.memory_percent(),
-                'memory_info_ex': p.memory_info_ex(),
-                'disk_io_counters': psutil.disk_io_counters(),
-                'net_io_counters': psutil.net_io_counters()}
+                'memory_info_ex': p.memory_info_ex()._asdict(),
+                'disk_io_counters': psutil.disk_io_counters()._asdict(),
+                'net_io_counters': psutil.net_io_counters()._asdict()}
 
     @gen.coroutine
     def monitor_resources(self, stream, interval=1):

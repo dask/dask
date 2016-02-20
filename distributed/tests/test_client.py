@@ -28,7 +28,8 @@ def test_scatter_delete(loop):
         assert set(c.who_has) == set(keys)
         assert all(len(v) == 1 for v in c.who_has.values())
 
-        keys2, who_has, nbytes = yield scatter_to_workers([a.address, b.address],
+        keys2, who_has, nbytes = yield scatter_to_workers([a.address_string,
+                                                           b.address_string],
                                                           [4, 5, 6])
 
         m = merge(a.data, b.data)
@@ -37,7 +38,7 @@ def test_scatter_delete(loop):
             assert m[k] == v
 
         assert isinstance(who_has, dict)
-        assert set(concat(who_has.values())) == {a.address, b.address}
+        assert set(concat(who_has.values())) == {a.address_string, b.address_string}
         assert len(who_has) == len(keys2)
 
         assert isinstance(nbytes, dict)
@@ -61,8 +62,8 @@ def test_gather_with_missing_worker(loop):
         c.has_what[bad].add('z')
         c.ncores['z'] = 4
 
-        c.who_has['z'].add(a.address)
-        c.has_what[a.address].add('z')
+        c.who_has['z'].add(a.address_string)
+        c.has_what[a.address_string].add('z')
 
         a.data['z'] = 5
 
@@ -79,10 +80,15 @@ def test_gather_with_missing_worker(loop):
 
 
 def test_pack_data():
-    data = {'x': 1}
-    assert pack_data(('x', 'y'), data) == (1, 'y')
-    assert pack_data({'a': 'x', 'b': 'y'}, data) == {'a': 1, 'b': 'y'}
-    assert pack_data({'a': ['x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
+    data = {b'x': 1}
+    assert pack_data((b'x', 'y'), data) == (1, 'y')
+    assert pack_data({'a': b'x', 'b': 'y'}, data) == {'a': 1, 'b': 'y'}
+    assert pack_data({'a': [b'x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
+
+
+def test_pack_data_with_key_mapping():
+    data = {str(('x', 1)).encode(): 1}
+    assert pack_data((('x', 1), 'y'), data) == (1, 'y')
 
 
 def test_gather_errors_voluminously(loop):
@@ -90,7 +96,7 @@ def test_gather_errors_voluminously(loop):
         try:
             gather(('127.0.0.1', c['port']), ['x', 'y', 'z'])
         except KeyError as e:
-            assert set(e.args) == {'x', 'y', 'z'}
+            assert set(e.args) == {b'x', b'y', b'z'}
 
 
 @pytest.mark.skipif(sys.platform!='linux',
@@ -98,7 +104,7 @@ def test_gather_errors_voluminously(loop):
 def test_gather_scatter(loop):
     with cluster_center() as (c, [a, b]):
         data = {'x': 1, 'y': 2, 'z': 3}
-        addr = '127.0.0.1', c['port']
+        addr = '127.0.0.1:%d' % c['port']
         rds = scatter(addr, data)
         assert set(rds) == {'x', 'y', 'z'}
 
@@ -143,7 +149,9 @@ def test_scatter_round_robins_between_calls(loop):
 
 @gen_cluster()
 def test_broadcast_to_workers(s, a, b):
-    keys, nbytes = yield broadcast_to_workers([a.address, b.address], [1, 2, 3])
+    keys, nbytes = yield broadcast_to_workers([a.address_string,
+                                               b.address_string],
+                                               [1, 2, 3])
 
     assert len(keys) == 3
     assert a.data == b.data == dict(zip(keys, [1, 2, 3]))

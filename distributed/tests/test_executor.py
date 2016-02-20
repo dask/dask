@@ -14,7 +14,7 @@ from time import sleep, time
 import traceback
 
 import pytest
-from toolz import identity, isdistinct, first, concat, pluck
+from toolz import identity, isdistinct, first, concat, pluck, keymap
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
@@ -45,18 +45,20 @@ def test_submit(s, a, b):
 
     assert isinstance(x, Future)
     assert x.executor is e
+
     result = yield x._result()
     assert result == 11
     assert x.done()
 
     y = e.submit(inc, 20)
     z = e.submit(add, x, y)
+
     result = yield z._result()
     assert result == 11 + 21
     yield e._shutdown()
 
 
-@gen_cluster()
+@gen_cluster(timeout=10000)
 def test_map(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -344,6 +346,10 @@ def test_get(s, a, b):
 
     result = yield e._get({}, [])
     assert result == []
+
+    result = yield e._get({('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
+                          ('x', 2))
+    assert result == 3
 
     yield e._shutdown()
 
@@ -704,8 +710,8 @@ def test_restrictions_get(s, a, b):
 
     result = yield e._get(dsk, ['y', 'z'], restrictions)
     assert result == [2, 3]
-    assert 'y' in a.data
-    assert 'z' in b.data
+    assert b'y' in a.data
+    assert b'z' in b.data
 
     yield e._shutdown()
 
@@ -890,11 +896,11 @@ def test__scatter(s, a, b):
 
     d = yield e._scatter({'y': 20})
     assert isinstance(d['y'], Future)
-    assert a.data.get('y') == 20 or b.data.get('y') == 20
-    assert (a.address in s.who_has['y'] or
-            b.address in s.who_has['y'])
-    assert s.who_has['y']
-    assert s.nbytes == {'y': sizeof(20)}
+    assert a.data.get(b'y') == 20 or b.data.get(b'y') == 20
+    assert (a.address_string in s.who_has[b'y'] or
+            b.address_string in s.who_has[b'y'])
+    assert s.who_has[b'y']
+    assert s.nbytes == {b'y': sizeof(20)}
     yy = yield e._gather([d['y']])
     assert yy == [20]
 
@@ -903,9 +909,9 @@ def test__scatter(s, a, b):
     assert a.data.get(x.key) == 10 or b.data.get(x.key) == 10
     xx = yield e._gather([x])
     assert s.who_has[x.key]
-    assert (a.address in s.who_has[x.key] or
-            b.address in s.who_has[x.key])
-    assert s.nbytes == {'y': sizeof(20), x.key: sizeof(10)}
+    assert (a.address_string in s.who_has[x.key] or
+            b.address_string in s.who_has[x.key])
+    assert s.nbytes == {b'y': sizeof(20), x.key: sizeof(10)}
     assert xx == [10]
 
     z = e.submit(add, x, d['y'])  # submit works on Future
@@ -1008,7 +1014,7 @@ def test_nbytes_determines_worker(s, a, b):
 
     z = e.submit(lambda x, y: None, x, y)
     yield z._result()
-    assert s.who_has[z.key] == {b.address}
+    assert s.who_has[z.key] == {b.address_string}
 
     yield e._shutdown()
 
@@ -1088,14 +1094,13 @@ def test_directed_scatter_sync(loop):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             futures = e.scatter([1, 2, 3], workers=[('127.0.0.1', b['port'])])
             has_what = sync(loop, e.scheduler.has_what)
-            assert len(has_what[('127.0.0.1', b['port'])]) == 3
-            assert len(has_what[('127.0.0.1', a['port'])]) == 0
+            assert len(has_what['127.0.0.1:%d' % b['port']]) == 3
+            assert len(has_what['127.0.0.1:%d' % a['port']]) == 0
 
 
 def test_iterator_scatter(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-
             aa = e.scatter([1,2,3])
             assert [1,2,3] == e.gather(aa)
 
@@ -1227,7 +1232,7 @@ def test_restart(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    assert s.ncores == {a.worker_address: 1, b.worker_address: 2}
+    assert s.ncores == {a.worker_address_string: 1, b.worker_address_string: 2}
 
     x = e.submit(inc, 1)
     y = e.submit(inc, x)
@@ -1442,6 +1447,24 @@ def test_async_compute(s, a, b):
     yield e._shutdown()
 
 
+@gen_cluster()
+def test_async_compute_with_scatter(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    d = yield e._scatter({('x', 1): 1, ('y', 1): 2})
+    x, y = d[('x', 1)], d[('y', 1)]
+
+    from dask.imperative import do, value
+    z = do(add)(do(inc)(x), do(inc)(y))
+    zz = e.compute(z)
+
+    [result] = yield e._gather([zz])
+    assert result == 2 + 3
+
+    yield e._shutdown()
+
+
 def test_sync_compute(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port'])) as e:
@@ -1523,7 +1546,7 @@ def test_start_is_idempotent(loop):
 def test_executor_with_scheduler(loop):
     @gen.coroutine
     def f(s, a, b):
-        assert s.ncores == {a.address: a.ncores, b.address: b.ncores}
+        assert s.ncores == {a.address_string: a.ncores, b.address_string: b.ncores}
         e = Executor(('127.0.0.1', s.port), start=False, loop=loop)
         yield e._start()
 
@@ -1554,17 +1577,17 @@ def test_allow_restrictions(s, a, b):
 
     x = e.submit(inc, 1, workers=a.ip)
     yield x._result()
-    assert s.who_has[x.key] == {a.address}
+    assert s.who_has[x.key] == {a.address_string}
     assert not s.loose_restrictions
 
     x = e.submit(inc, 2, workers=a.ip, allow_other_workers=True)
     yield x._result()
-    assert s.who_has[x.key] == {a.address}
+    assert s.who_has[x.key] == {a.address_string}
     assert x.key in s.loose_restrictions
 
     L = e.map(inc, range(3, 13), workers=a.ip, allow_other_workers=True)
     yield _wait(L)
-    assert all(s.who_has[f.key] == {a.address} for f in L)
+    assert all(s.who_has[f.key] == {a.address_string} for f in L)
     assert {f.key for f in L}.issubset(s.loose_restrictions)
 
     """
@@ -1983,15 +2006,16 @@ def test_broadcast(loop):
 
             has_what = sync(e.loop, e.scheduler.has_what)
 
-            assert has_what == {('127.0.0.1', a['port']): {x.key, y.key},
-                                ('127.0.0.1', b['port']): {x.key, y.key}}
+            assert {k: set(v) for k, v in has_what.items()} == {
+                                '127.0.0.1:%d' % a['port']: {x.key, y.key},
+                                '127.0.0.1:%d' % b['port']: {x.key, y.key}}
 
-            [z] = e.scatter([3], broadcast=True,
-                            workers=[('127.0.0.1', a['port'])])
+            [z] = e.scatter([3], broadcast=True, workers=['127.0.0.1:%d' % a['port']])
 
             has_what = sync(e.loop, e.scheduler.has_what)
-            assert has_what == {('127.0.0.1', a['port']): {x.key, y.key, z.key},
-                                ('127.0.0.1', b['port']): {x.key, y.key}}
+            assert {k: set(v) for k, v in has_what.items()} == {
+                                '127.0.0.1:%d' % a['port']: {x.key, y.key, z.key},
+                                '127.0.0.1:%d' % b['port']: {x.key, y.key}}
 
 
 @gen_cluster()
@@ -2199,7 +2223,7 @@ def test_Future_exception_sync(loop, capsys):
     assert _globals['get'] == e.get
 
 
-@gen_cluster(timeout=1000)
+@gen_cluster(timeout=60)
 def test_async_persist(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -2219,11 +2243,11 @@ def test_async_persist(s, a, b):
     assert y._keys() == yy._keys()
     assert w._keys() == ww._keys()
 
-    while y.key not in s.tasks and w.key not in s.tasks:
+    while y.key.encode() not in s.tasks and w.key.encode() not in s.tasks:
         yield gen.sleep(0.01)
 
-    assert s.who_wants[y.key] == {e.id}
-    assert s.who_wants[w.key] == {e.id}
+    assert s.who_wants[y.key.encode()] == {e.id}
+    assert s.who_wants[w.key.encode()] == {e.id}
 
     yyf, wwf = e.compute([yy, ww])
     yyy, www = yield e._gather([yyf, wwf])
@@ -2234,6 +2258,29 @@ def test_async_persist(s, a, b):
     assert isinstance(e.persist([y]), (list, tuple))
 
     yield e._shutdown()
+
+
+@gen_cluster()
+def test__persist(s, a, b):
+    pytest.importorskip('dask.array')
+    import dask.array as da
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = da.ones((10, 10), chunks=(5, 10))
+    y = 2 * (x + 1)
+    assert len(y.dask) == 6
+    yy = e.persist(y)
+
+    assert len(y.dask) == 6
+    assert len(yy.dask) == 2
+    assert all(isinstance(v, Future) for v in yy.dask.values())
+    assert yy._keys() == y._keys()
+
+    g, h = e.compute([y, yy])
+    yield gen.sleep(1)
+    gg, hh = yield e._gather([g, h])
+    assert (gg == hh).all()
 
 
 def test_persist(loop):
@@ -2248,6 +2295,7 @@ def test_persist(loop):
             assert len(y.dask) == 6
             assert len(yy.dask) == 2
             assert all(isinstance(v, Future) for v in yy.dask.values())
+            assert yy._keys() == y._keys()
 
             assert (yy.compute(get=e.get) == y.compute(get=e.get)).all()
 

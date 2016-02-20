@@ -6,6 +6,7 @@ from distributed import Executor, Scheduler, Worker
 from distributed.diagnostics.progressbar import TextProgressBar, progress
 from distributed.utils_test import (cluster, loop, inc,
         div, dec, gen_cluster)
+from distributed.scheduler import dumps_task
 from time import time, sleep
 
 
@@ -30,8 +31,8 @@ def test_text_progressbar(capsys, loop):
 
 @gen_cluster()
 def test_TextProgressBar_error(s, a, b):
-    s.update_graph(tasks={'x': (div, 1, 0)},
-                   keys=['x'],
+    s.update_graph(tasks={b'x': dumps_task((div, 1, 0))},
+                   keys=[b'x'],
                    dependencies={})
 
     progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),

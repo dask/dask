@@ -21,8 +21,8 @@ def test_simple(s, a, b):
 
     response = yield client.fetch('http://localhost:%d/info.json' % server.port)
     response = json.loads(response.body.decode())
-    assert response['ncores'] == {'%s:%d' % k: v for k, v in s.ncores.items()}
-    assert response['status'] == a.status
+    assert response == {'ncores': s.ncores,
+                        'status': s.status}
 
     server.stop()
 
@@ -33,7 +33,7 @@ def test_processing(s, a, b):
     server.listen(0)
     client = AsyncHTTPClient()
 
-    s.processing[a.address].add(('foo-1', 1))
+    s.processing[a.address_string].add(('foo-1', 1))
 
     response = yield client.fetch('http://localhost:%d/processing.json' % server.port)
     response = json.loads(response.body.decode())
@@ -68,13 +68,13 @@ def test_broadcast(s, a, b):
     aa.listen(0)
     a.services['http'] = aa
     a.service_ports['http'] = aa.port
-    s.worker_services[a.address]['http'] = aa.port
+    s.worker_services[a.address_string]['http'] = aa.port
 
     bb = HTTPWorker(b)
     bb.listen(0)
     b.services['http'] = bb
     b.service_ports['http'] = bb.port
-    s.worker_services[b.address]['http'] = bb.port
+    s.worker_services[b.address_string]['http'] = bb.port
 
     client = AsyncHTTPClient()
 
@@ -111,7 +111,7 @@ def test_with_data(s, a, b):
     yield _wait(L)
 
     client = AsyncHTTPClient()
-    response = yield client.fetch('http://localhost:%s/memory-load.json' %
+    response = yield client.fetch('http://localhost:%d/memory-load.json' %
                                   ss.port)
     out = json.loads(response.body.decode())
 

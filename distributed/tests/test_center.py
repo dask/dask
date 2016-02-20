@@ -1,5 +1,6 @@
 from time import sleep
 
+from toolz import valmap
 from tornado.tcpclient import TCPClient
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -9,43 +10,50 @@ from distributed.center import Center
 from distributed.utils_test import loop, gen_test
 
 
+alice = 'alice:8888'
+bob = 'bob:8888'
+charlie = 'charlie:8888'
+
+
 @gen_test()
 def test_metadata():
     c = Center('127.0.0.1')
     c.listen(8006)
 
-    stream = yield TCPClient().connect('127.0.0.1', 8006)
+    cc = rpc(ip='127.0.0.1', port=8006)
+    response = yield cc.register(address=alice, ncores=4)
+    assert alice in c.has_what
+    assert c.ncores[alice] == 4
 
-    cc = rpc(stream)
-    response = yield cc.register(address='alice', ncores=4)
-    assert 'alice' in c.has_what
-    assert c.ncores['alice'] == 4
-
-    response = yield cc.add_keys(address='alice', keys=['x', 'y'])
+    response = yield cc.add_keys(address=alice, keys=[b'x', b'y'])
     assert response == b'OK'
 
-    response = yield cc.register(address='bob', ncores=4)
-    response = yield cc.add_keys(address='bob', keys=['y', 'z'])
+    response = yield cc.register(address=bob, ncores=4)
+    response = yield cc.add_keys(address=bob, keys=[b'y', b'z'])
     assert response == b'OK'
 
-    response = yield cc.who_has(keys=['x', 'y'])
-    assert response == {'x': set(['alice']), 'y': set(['alice', 'bob'])}
+    response = yield cc.who_has(keys=[b'x', b'y'])
+    assert valmap(set, response) == {
+                        b'x': {alice.encode()},
+                        b'y': {alice.encode(), bob.encode()}}
 
-    response = yield cc.remove_keys(address='bob', keys=['y'])
+    response = yield cc.remove_keys(address=bob, keys=[b'y'])
     assert response == b'OK'
 
-    response = yield cc.has_what(keys=['alice', 'bob'])
-    assert response == {'alice': set(['x', 'y']), 'bob': set(['z'])}
+    response = yield cc.has_what(keys=[alice, bob])
+    assert valmap(set, response) == {
+                        alice: {b'x', b'y'},
+                        bob: {b'z'}}
 
     response = yield cc.ncores()
-    assert response == {'alice': 4, 'bob': 4}
-    response = yield cc.ncores(addresses=['alice', 'charlie'])
-    assert response == {'alice': 4, 'charlie': None}
+    assert response == {alice: 4, bob: 4}
+    response = yield cc.ncores(addresses=[alice, charlie])
+    assert response == {alice: 4, charlie: None}
 
-    response = yield cc.unregister(address='alice', close=True)
+    response = yield cc.unregister(address=alice, close=True)
     assert response == b'OK'
-    assert 'alice' not in c.has_what
-    assert 'alice' not in c.ncores
+    assert alice not in c.has_what
+    assert alice not in c.ncores
 
     yield c.terminate()
 

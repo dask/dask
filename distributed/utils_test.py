@@ -272,6 +272,8 @@ def _test_cluster(f, loop=None, b_ip='127.0.0.1'):
                     raise Exception("Cluster creation timeout")
 
             yield f(c, a, b)
+        except Exception as e:
+            logger.exception(e)
         finally:
             logger.debug("Closing out test cluster")
             for w in [a, b]:

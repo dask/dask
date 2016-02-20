@@ -8,7 +8,7 @@ def test_cluster(loop):
     with cluster() as (s, [a, b]):
         s = rpc(ip='127.0.0.1', port=s['port'])
         ident = loop.run_sync(s.identity)
-        assert ident['type'] == 'Scheduler'
+        assert ident['type'] == b'Scheduler'
         assert len(ident['workers']) == 2
 
 
@@ -17,7 +17,7 @@ def test_gen_cluster(s, a, b):
     assert isinstance(s, Scheduler)
     for w in [a, b]:
         assert isinstance(w, Worker)
-    assert s.ncores == {w.address: w.ncores for w in [a, b]}
+    assert s.ncores == {w.address_string: w.ncores for w in [a, b]}
 
 
 @gen_test()

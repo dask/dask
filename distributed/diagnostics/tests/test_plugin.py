@@ -1,7 +1,7 @@
 from tornado import gen
 from tornado.queues import Queue
 
-from distributed.scheduler import Scheduler
+from distributed.scheduler import dumps_task
 from distributed.utils_test import inc, gen_cluster
 from distributed.diagnostics.plugin import SchedulerPlugin
 
@@ -24,15 +24,15 @@ def test_diagnostic(s, a, b):
 
     assert counter.count == 0
     sched.put_nowait({'op': 'update-graph',
-                      'tasks': {'x': (inc, 1),
-                              'y': (inc, 'x'),
-                              'z': (inc, 'y')},
-                      'dependencies': {'y': {'x'}, 'z': {'y'}},
-                      'keys': ['z']})
+                      'tasks': {b'x': dumps_task((inc, 1)),
+                                b'y': dumps_task((inc, b'x')),
+                                b'z': dumps_task((inc, b'y'))},
+                      'dependencies': {b'y': [b'x'], b'z': [b'y']},
+                      'keys': [b'z']})
 
     while True:
         msg = yield report.get()
-        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
+        if msg['op'] == 'key-in-memory' and msg['key'] == b'z':
             break
 
     assert counter.count == 3

@@ -12,15 +12,15 @@ import shutil
 import sys
 
 from dask.core import istask
-from toolz import merge
+from toolz import merge, valmap
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
 
-from .client import _gather, pack_data, gather_from_workers
+from .client import pack_data, gather_from_workers
 from .compatibility import reload
-from .core import rpc, Server, pingpong, dumps, loads
+from .core import rpc, Server, pingpong, dumps, loads, coerce_to_address
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
     ignoring)
@@ -175,7 +175,7 @@ class Worker(Server):
     @gen.coroutine
     def terminate(self, stream, report=True):
         yield self._close(report=report)
-        raise Return(b'OK')
+        raise Return('OK')
 
     @property
     def address(self):
@@ -187,12 +187,14 @@ class Worker(Server):
 
     @gen.coroutine
     def compute(self, stream, function=None, key=None, args=(), kwargs={},
-            task=None, who_has=None, report=True, serialized=False):
+            task=None, who_has=None, report=True):
         """ Execute function """
         self.active.add(key)
         if who_has:
             local_data = {k: self.data[k] for k in who_has if k in self.data}
-            who_has = {k: v for k, v in who_has.items() if k not in self.data}
+            who_has = {k: set(map(coerce_to_address, v))
+                       for k, v in who_has.items()
+                       if k not in self.data}
             try:
                 logger.info("gather %d keys from peers: %s",
                             len(who_has), str(who_has))
@@ -201,27 +203,29 @@ class Worker(Server):
                 logger.warn("Could not find data during gather in compute",
                             exc_info=True)
                 self.active.remove(key)
-                raise Return((b'missing-data', e))
+                raise Return({'status': 'missing-data',
+                              'keys': e.args})
             data = merge(local_data, other)
         else:
             data = {}
 
-        if serialized:
-            try:
-                if task is not None:
-                    task = loads(task)
-                if function is not None:
-                    function = loads(function)
-                if args:
-                    args = loads(args)
-                if kwargs:
-                    kwargs = loads(kwargs)
-            except Exception as e:
-                logger.warn("Could not deserialize task", exc_info=True)
-                tb = get_traceback()
-                e2 = truncate_exception(e, 1000)
-                self.active.remove(key)
-                raise Return((b'error', {'exception': e2, 'traceback': tb}))
+        try:
+            if task is not None:
+                task = loads(task)
+            if function is not None:
+                function = loads(function)
+            if args:
+                args = loads(args)
+            if kwargs:
+                kwargs = loads(kwargs)
+        except Exception as e:
+            logger.warn("Could not deserialize task", exc_info=True)
+            tb = get_traceback()
+            e2 = truncate_exception(e, 1000)
+            self.active.remove(key)
+            raise Return({'error': 'error',
+                          'exception': dumps(e2),
+                          'traceback': dumps(tb)})
 
         if task is not None:
             assert not function and not args and not kwargs
@@ -264,9 +268,10 @@ class Worker(Server):
                 if not response == b'OK':
                     logger.warn('Could not report results to center: %s',
                                 response.decode())
-            out = (b'OK', {'nbytes': sizeof(result)})
+            out = {'status': 'OK',
+                   'nbytes': sizeof(result)}
             if result is not None:
-                out[1]['type'] = type(result)
+                out['type'] = dumps(type(result))
         except Exception as e:
             tb = get_traceback()
             e2 = truncate_exception(e, 1000)
@@ -283,22 +288,26 @@ class Worker(Server):
             except:
                 tb = None
 
-            out = (b'error', {'exception': e2, 'traceback': tb})
+            out = {'status': b'error',
+                   'exception': dumps(e2),
+                   'traceback': dumps(tb)}
 
-        logger.debug("Send compute response to client: %s, %s", key, out)
+        logger.debug("Send compute response to scheduler: %s, %s", key, out)
         with ignoring(KeyError):
             self.active.remove(key)
         raise Return(out)
 
     @gen.coroutine
     def update_data(self, stream, data=None, report=True):
+        data = valmap(loads, data)
         self.data.update(data)
         if report:
             response = yield self.center.add_keys(address=(self.ip, self.port),
                                                   keys=list(data))
             assert response == b'OK'
-        info = {'nbytes': {k: sizeof(v) for k, v in data.items()}}
-        raise Return((b'OK', info))
+        info = {'nbytes': {k: sizeof(v) for k, v in data.items()},
+                'status': b'OK'}
+        raise Return(info)
 
     @gen.coroutine
     def delete_data(self, stream, keys=None, report=True):
@@ -308,14 +317,16 @@ class Worker(Server):
         logger.info("Deleted %d keys", len(keys))
         if report:
             logger.debug("Reporting loss of keys to center")
-            yield self.center.remove_keys(address=(self.ip, self.port),
-                                          keys=keys)
+            yield self.center.remove_keys(address=self.address,
+                                          keys=list(keys))
         raise Return(b'OK')
 
     def get_data(self, stream, keys=None):
-        return {k: self.data[k] for k in keys if k in self.data}
+        return {k: dumps(self.data[k]) for k in keys if k in self.data}
 
     def upload_file(self, stream, filename=None, data=None, load=True):
+        if isinstance(filename, bytes):
+            filename = filename.decode()
         out_filename = os.path.join(self.local_dir, filename)
         with open(out_filename, 'wb') as f:
             f.write(data)
@@ -338,8 +349,8 @@ class Worker(Server):
                         logger.warning("Found no packages in egg file")
             except Exception as e:
                 logger.exception(e)
-                return e
-        return len(data)
+                return {'status': 'error', 'exception': dumps(e)}
+        return {'status': 'OK', 'nbytes': len(data)}
 
 
 job_counter = [0]

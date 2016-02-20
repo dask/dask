@@ -199,7 +199,7 @@ def futures_to_collection(futures, executor=None, **kwargs):
 def _future_to_dask_array(future, executor=None):
     e = default_executor(executor)
 
-    name = 'array-' + future.key
+    name = 'array-' + str(future.key)
 
     shape, dtype = yield e._gather([e.submit(get_shape, future),
                                     e.submit(get_dtype, future)])
@@ -230,7 +230,7 @@ def future_to_dask_array(future, executor=None):
 def _futures_to_dask_arrays(futures, executor=None):
     e = default_executor(executor)
 
-    names = ['array-' + future.key for future in futures]
+    names = ['array-' + str(future.key) for future in futures]
 
     shapes, dtypes = yield e._gather([e.map(get_shape, futures),
                                       e.map(get_dtype, futures)])

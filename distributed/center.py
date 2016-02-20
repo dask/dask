@@ -4,13 +4,14 @@ from collections import defaultdict
 import logging
 from functools import partial
 import socket
-from toolz import first
+from toolz import first, valmap
 
 from tornado import gen
 from tornado.gen import Return
 from tornado.iostream import StreamClosedError
 
-from .core import Server, read, write, rpc, pingpong, send_recv
+from .core import (Server, read, write, rpc, pingpong, send_recv,
+        coerce_to_address)
 from .utils import ignoring, ignore_exceptions, All, get_ip
 
 
@@ -112,6 +113,7 @@ class Center(Server):
 
     def register(self, stream, address=None, keys=(), ncores=None,
                  services=None):
+        address = coerce_to_address(address, out=str)
         self.has_what[address] = set(keys)
         for key in keys:
             self.who_has[key].add(address)
@@ -121,6 +123,7 @@ class Center(Server):
         return b'OK'
 
     def unregister(self, stream, address=None):
+        address = coerce_to_address(address, out=str)
         if address not in self.has_what:
             return b'Address not found: ' + str(address).encode()
         keys = self.has_what.pop(address)
@@ -137,12 +140,14 @@ class Center(Server):
         return b'OK'
 
     def add_keys(self, stream, address=None, keys=()):
+        address = coerce_to_address(address, out=str)
         self.has_what[address].update(keys)
         for key in keys:
             self.who_has[key].add(address)
         return b'OK'
 
     def remove_keys(self, stream, keys=(), address=None):
+        address = coerce_to_address(address, out=str)
         for key in keys:
             if key in self.has_what[address]:
                 self.has_what[address].remove(key)
@@ -152,23 +157,29 @@ class Center(Server):
 
     def get_who_has(self, stream, keys=None):
         if keys is not None:
-            return {k: self.who_has[k] for k in keys}
+            return {k: list(self.who_has[k]) for k in keys}
         else:
-            return self.who_has
+            return valmap(list, self.who_has)
 
     def get_has_what(self, stream, keys=None):
+        if keys:
+            keys = [coerce_to_address(key, out=str) for key in keys]
         if keys is not None:
-            return {k: self.has_what[k] for k in keys}
+            return {k: list(self.has_what[k]) for k in keys}
         else:
-            return self.has_what
+            return valmap(list, self.has_what)
 
     def get_ncores(self, stream, addresses=None):
+        if addresses:
+            addresses = [coerce_to_address(a, out=str) for a in addresses]
         if addresses is not None:
             return {k: self.ncores.get(k, None) for k in addresses}
         else:
             return self.ncores
 
     def get_worker_services(self, stream, addresses=None):
+        if addresses:
+            addresses = [coerce_to_address(a, out=str) for a in address]
         if addresses is not None:
             return {k: self.worker_services.get(k, None) for k in addresses}
         else:
@@ -176,6 +187,7 @@ class Center(Server):
 
     @gen.coroutine
     def delete_data(self, stream, keys=None):
+        keys = set(keys)
         who_has2 = {k: v for k, v in self.who_has.items() if k in keys}
         d = defaultdict(list)
 
@@ -187,7 +199,7 @@ class Center(Server):
 
         # TODO: ignore missing workers
         coroutines = [rpc(ip=worker[0], port=worker[1]).delete_data(
-                                keys=keys, report=False, close=True)
+                                keys=list(keys), report=False, close=True)
                       for worker, keys in d.items()]
         for worker, keys in d.items():
             logger.debug("Remove %d keys from worker %s", len(keys), worker)

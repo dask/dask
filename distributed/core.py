@@ -9,7 +9,11 @@ import struct
 from time import sleep, time
 import uuid
 
-from toolz import assoc, first
+try:
+    from cytoolz import assoc, first, keymap
+except ImportError:
+    from toolz import assoc, first, keymap
+
 import tornado
 import pickle
 import cloudpickle
@@ -20,6 +24,7 @@ from tornado.tcpclient import TCPClient
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
+from . import protocol
 
 def dumps(x):
     try:
@@ -91,7 +96,7 @@ class Server(TCPServer):
     """
     def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
         self.handlers = assoc(handlers, 'identity', self.identity)
-        self.id = uuid.uuid1()
+        self.id = str(uuid.uuid1())
         self._port = None
         super(Server, self).__init__(max_buffer_size=max_buffer_size, **kwargs)
 
@@ -157,7 +162,7 @@ class Server(TCPServer):
                 reply = msg.pop('reply', True)
                 if op == 'close':
                     if reply:
-                        yield write(stream, b'OK')
+                        yield write(stream, 'OK')
                     break
                 try:
                     handler = self.handlers[op]
@@ -190,20 +195,34 @@ class Server(TCPServer):
 
 sentinel = md5(b'7f57da0f9202f6b4df78e251058be6f0').hexdigest().encode()
 
+
 @gen.coroutine
 def read(stream):
     """ Read a message from a stream """
     msg = yield stream.read_until(sentinel)
     msg = msg[:-len(sentinel)]
-    msg = loads(msg)
+    try:
+        msg = protocol.loads(msg)
+        if 'op' in msg:
+            msg['op'] = msg['op'].decode()
+    except Exception as e:
+        f = e
     raise Return(msg)
 
 
 @gen.coroutine
 def write(stream, msg):
     """ Write a message to a stream """
-    msg = dumps(msg)
+    orig = msg
+    try:
+        msg = protocol.dumps(msg)
+        protocol.loads(msg)  # just for debugging
+    except Exception as e:
+        f = 3
+        logger.exception(e)
+        import pdb; pdb.set_trace()
     yield stream.write(msg + sentinel)
+    logger.debug("Written %s", orig)
 
 
 def pingpong(stream):
@@ -230,13 +249,26 @@ def connect(ip, port, timeout=3):
 
 
 @gen.coroutine
-def send_recv(stream=None, ip=None, port=None, reply=True, **kwargs):
+def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True, **kwargs):
     """ Send and recv with a stream
 
     Keyword arguments turn into the message
 
     response = yield send_recv(stream, op='ping', reply=True)
     """
+    if arg:
+        if isinstance(arg, (str, bytes)):
+            addr = arg
+        if isinstance(arg, tuple):
+            ip, port = arg
+    if addr:
+        assert not ip and not port
+        if isinstance(addr, bytes):
+            addr = addr.decode()
+        ip, port = addr.split(':')
+        port = int(port)
+    if isinstance(ip, bytes):
+        ip = ip.decode()
     if stream is None:
         stream = yield connect(ip, port)
 
@@ -283,7 +315,20 @@ class rpc(object):
 
     >>> remote.close_streams()  # doctest: +SKIP
     """
-    def __init__(self, stream=None, ip=None, port=None, timeout=3):
+    def __init__(self, arg=None, stream=None, ip=None, port=None, addr=None, timeout=3):
+        if arg:
+            if isinstance(arg, (str, bytes)):
+                addr = arg
+            if isinstance(arg, tuple):
+                ip, port = arg
+        if addr:
+            if isinstance(addr, bytes):
+                addr = addr.decode()
+            assert not ip and not port
+            ip, port = addr.split(':')
+            port = int(port)
+        if isinstance(ip, bytes):
+            ip = ip.decode()
         self.streams = dict()
         if stream:
             self.streams[stream] = True
@@ -332,19 +377,35 @@ class rpc(object):
 
     def __getattr__(self, key):
         @gen.coroutine
-        def _(**kwargs):
+        def send_recv_from_rpc(**kwargs):
             stream = yield self.live_stream()
             result = yield send_recv(stream=stream, op=key, **kwargs)
             self.streams[stream] = True  # mark as open
             raise Return(result)
-        return _
+        return send_recv_from_rpc
+
+
+def coerce_to_address(o, out=tuple):
+    if isinstance(o, bytes):
+        o = o.decode()
+    if isinstance(o, str):
+        ip, port = o.split(':')
+        port = int(port)
+        o = (ip, port)
+    if isinstance(o, list):
+        o = tuple(o)
+    if isinstance(o, tuple) and isinstance(o[0], bytes):
+        o = (o[0].decode(), o[1])
+
+    if out == str:
+        o = '%s:%d' % o
+
+    return o
 
 
 def coerce_to_rpc(o, **kwargs):
-    if isinstance(o, tuple):
-        return rpc(ip=o[0], port=o[1], **kwargs)
-    if isinstance(o, str):
-        ip, port = o.split(':')
+    if isinstance(o, (bytes, str, tuple, list)):
+        ip, port = coerce_to_address(o)
         return rpc(ip=ip, port=int(port), **kwargs)
     elif isinstance(o, IOStream):
         return rpc(stream=o, **kwargs)
