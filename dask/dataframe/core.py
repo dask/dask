@@ -28,6 +28,7 @@ from ..compatibility import unicode, apply, operator_div, bind_method
 from ..utils import (repr_long_list, IndexCallable,
                      pseudorandom, derived_from, different_seeds)
 from ..base import Base, compute, tokenize, normalize_token
+from ..async import get_sync
 
 no_default = '__no_default__'
 return_scalar = '__return_scalar__'
@@ -525,15 +526,15 @@ class _Frame(Base):
 
     @derived_from(pd.DataFrame)
     def to_hdf(self, path_or_buf, key, mode='a', append=False, complevel=0,
-               complib=None, fletcher32=False, **kwargs):
+               complib=None, fletcher32=False, get=get_sync, **kwargs):
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, complevel, complib,
-                fletcher32, **kwargs)
+                fletcher32, get=get, **kwargs)
 
     @derived_from(pd.DataFrame)
-    def to_csv(self, filename, **kwargs):
+    def to_csv(self, filename, get=get_sync, **kwargs):
         from .io import to_csv
-        return to_csv(self, filename, **kwargs)
+        return to_csv(self, filename, get=get, **kwargs)
 
     def to_imperative(self):
         """ Convert dataframe into dask Values
@@ -1428,7 +1429,7 @@ class DataFrame(_Frame):
         return self.map_partitions(f, how=how, subset=subset)
 
     def to_castra(self, fn=None, categories=None, sorted_index_column=None,
-                  compute=True):
+                  compute=True, get=get_sync):
         """ Write DataFrame to Castra on-disk store
 
         See https://github.com/blosc/castra for details
@@ -1439,7 +1440,7 @@ class DataFrame(_Frame):
         """
         from .io import to_castra
         return to_castra(self, fn, categories, sorted_index_column,
-                         compute=compute)
+                         compute=compute, get=get)
 
     def to_bag(self, index=False):
         """Convert to a dask Bag of tuples of each row.

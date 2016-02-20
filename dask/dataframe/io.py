@@ -610,7 +610,8 @@ def _link(token, result):
 
 @wraps(pd.DataFrame.to_hdf)
 def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
-           complib=None, fletcher32=False, get=get_sync, dask_kwargs=None, **kwargs):
+           complib=None, fletcher32=False, get=get_sync, dask_kwargs=None,
+           **kwargs):
     name = 'to-hdf-' + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, 'to_hdf')
@@ -635,7 +636,7 @@ def to_hdf(df, path_or_buf, key, mode='a', append=False, complevel=0,
     dask_kwargs = dask_kwargs or {}
 
     DataFrame._get(merge(df.dask, dsk), (name, df.npartitions - 1),
-                   get=get_sync, **dask_kwargs)
+                   get=get, **dask_kwargs)
 
 
 dont_use_fixed_error_message = """
@@ -808,11 +809,9 @@ def to_castra(df, fn=None, categories=None, sorted_index_column=None,
         return dsk, keys
 
 
-def to_csv(df, filename, compression=None, **kwargs):
+def to_csv(df, filename, compression=None, get=None, **kwargs):
     if compression:
         raise NotImplementedError("Writing compressed csv files not supported")
-
-    myget = kwargs.pop('get', None)
     name = 'to-csv-' + uuid.uuid1().hex
 
     dsk = dict()
@@ -828,7 +827,7 @@ def to_csv(df, filename, compression=None, **kwargs):
                            (lambda df, fn, kwargs: df.to_csv(fn, **kwargs),
                              (df._name, i), filename, kwargs2))
 
-    DataFrame._get(merge(dsk, df.dask), (name, df.npartitions - 1), get=myget)
+    DataFrame._get(merge(dsk, df.dask), (name, df.npartitions - 1), get=get)
 
 
 def to_bag(df, index=False):
