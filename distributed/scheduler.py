@@ -76,8 +76,12 @@ class Scheduler(Server):
         Dictionary like dependencies but excludes keys already computed
     * **waiting_data:** ``{key: {key}}``:
         Dictionary like dependents but excludes keys already computed
+    * **ready:** ``deque(key)``
+        Keys that are ready to run, but not yet assigned to a worker
     * **ncores:** ``{worker: int}``:
         Number of cores owned by each worker
+    * **idle:** ``{worker}``:
+        Set of workers that are not fully utilized
     * **services:** ``{str: port}``:
         Other services running on this scheduler, like HTTP
     * **worker_services:** ``{worker: {str: port}}``:
@@ -163,6 +167,8 @@ class Scheduler(Server):
         self.stacks = dict()
         self.waiting = dict()
         self.waiting_data = dict()
+        self.ready = deque()
+        self.idle = set()
         self.who_has = defaultdict(set)
         self.deleted_keys = defaultdict(set)
         self.who_wants = defaultdict(set)
@@ -188,7 +194,7 @@ class Scheduler(Server):
                                  'client-releases-keys': self.client_releases_keys,
                                  'restart': self.restart}
 
-        self.handlers = {'register-client': self.control_stream,
+        self.handlers = {'register-client': self.add_client,
                          'scatter': self.scatter,
                          'register': self.add_worker,
                          'unregister': self.remove_worker,
@@ -246,7 +252,8 @@ class Scheduler(Server):
         collections = [self.tasks, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.in_play, self.keyorder,
                 self.nbytes, self.processing, self.restrictions,
-                self.loose_restrictions]
+                self.loose_restrictions, self.ready, self.who_wants,
+                self.wants_what]
         for collection in collections:
             collection.clear()
 
@@ -267,7 +274,6 @@ class Scheduler(Server):
         self._delete_periodic_callback.start()
 
         self.heal_state()
-
 
         if start_queues:
             self.handle_queues(self.scheduler_queues[0], None)
@@ -332,7 +338,13 @@ class Scheduler(Server):
             q.put_nowait({'op': 'close'})
 
     def mark_ready_to_run(self, key):
-        """ Send task to an appropriate worker.  Trigger that worker.
+        """
+        Mark a task as ready to run.
+
+        If the task should be assigned to a worker then make that determination
+        and assign appropriately.  Otherwise place task in the ready queue.
+
+        Trigger appropriate workers if idle.
 
         See Also
         --------
@@ -340,16 +352,32 @@ class Scheduler(Server):
         Scheduler.ensure_occupied
         """
         logger.debug("Mark %s ready to run", key)
+        if key in self.exceptions_blame:
+            logger.debug("Don't mark ready, task has already failed")
+            return
+
         if key in self.waiting:
             assert not self.waiting[key]
             del self.waiting[key]
 
-        new_worker = decide_worker(self.dependencies, self.stacks,
-                self.who_has, self.restrictions, self.loose_restrictions,
-                self.nbytes, key)
+        if self.dependencies.get(key, None) or key in self.restrictions:
+            new_worker = decide_worker(self.dependencies, self.stacks,
+                    self.who_has, self.restrictions, self.loose_restrictions,
+                    self.nbytes, key)
+            if not new_worker:
+                raise ValueError("No valid workers found")
+            else:
+                self.stacks[new_worker].append(key)
+                self.ensure_occupied(new_worker)
+        else:
+            self.ready.appendleft(key)
+            self.ensure_idle_ready()
 
-        self.stacks[new_worker].append(key)
-        self.ensure_occupied(new_worker)
+    def ensure_idle_ready(self):
+        """ Run ready tasks on idle workers """
+        while self.idle and self.ready and self.ncores:
+            worker = min(self.idle, key=lambda w: len(self.processing[w]))
+            self.ensure_occupied(worker)
 
     def mark_key_in_memory(self, key, workers=None, type=None):
         """ Mark that a key now lives in distributed memory """
@@ -387,12 +415,20 @@ class Scheduler(Server):
         self.report(msg)
 
     def ensure_occupied(self, worker):
-        """ Send tasks to worker while it has tasks and free cores """
+        """ Send tasks to worker while it has tasks and free cores
+
+        These tasks may come from the worker's own stacks or from the global
+        ready deque.
+
+        We update the idle workers set appropriately.
+        """
         logger.debug('Ensure worker is occupied: %s', worker)
         while (self.stacks[worker] and
                self.ncores[worker] > len(self.processing[worker])):
             key = self.stacks[worker].pop()
             if key not in self.tasks:
+                continue
+            if self.who_has[key]:
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s, %s", worker, key)
@@ -403,27 +439,26 @@ class Scheduler(Server):
                      'who_has': {dep: self.who_has[dep] for dep in
                                  self.dependencies[key]}})
 
-    def seed_ready_tasks(self, keys=None):
-        """ Distribute many leaf tasks among workers
+        while (self.ready and
+               self.ncores[worker] > len(self.processing[worker])):
+            key = self.ready.pop()
+            if key not in self.tasks:
+                continue
+            if self.who_has[key]:
+                continue
+            self.processing[worker].add(key)
+            logger.debug("Send job to worker: %s, %s, %s", worker, key)
+            self.worker_queues[worker].put_nowait(
+                    {'op': 'compute-task',
+                     'key': key,
+                     'task': self.tasks[key],
+                     'who_has': {dep: self.who_has[dep] for dep in
+                                 self.dependencies[key]}})
 
-        Takes an iterable of keys to consider for execution
-
-        See Also
-        --------
-        assign_many_tasks
-        Scheduler.ensure_occupied
-        """
-        if keys is None:
-            keys = self.tasks
-        new_stacks = assign_many_tasks(
-                self.dependencies, self.waiting, self.keyorder, self.who_has,
-                self.stacks, self.restrictions, self.loose_restrictions,
-                self.nbytes,
-                [k for k in keys if k in self.waiting and not self.waiting[k]])
-        logger.debug("Seed ready tasks: %s", new_stacks)
-        for worker, stack in new_stacks.items():
-            if stack:
-                self.ensure_occupied(worker)
+        if self.ncores[worker] > len(self.processing[worker]):
+            self.idle.add(worker)
+        elif worker in self.idle:
+            self.idle.remove(worker)
 
     def update_data(self, who_has=None, nbytes=None, client=None):
         """
@@ -525,8 +560,6 @@ class Scheduler(Server):
             logger.debug('task missing data, %s, %s', key, self.waiting)
             self.ensure_occupied(worker)
 
-        self.seed_ready_tasks()
-
         # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def log_state(self, msg=''):
@@ -554,6 +587,8 @@ class Scheduler(Server):
         del self.stacks[address]
         del self.processing[address]
         del self.worker_services[address]
+        if address in self.idle:
+            self.idle.remove(address)
         if not self.stacks:
             logger.critical("Lost all workers")
         missing_keys = set()
@@ -580,19 +615,19 @@ class Scheduler(Server):
             self.processing[address] = set()
             self.stacks[address] = []
             self.worker_queues[address] = Queue()
+
         for key in keys:
             self.mark_key_in_memory(key, [address])
 
         self._worker_coroutines.append(self.worker(address))
 
+        if self.ncores[address] > len(self.processing[address]):
+            self.idle.add(address)
+
+        self.ensure_occupied(address)
+
         logger.info("Register %s", str(address))
         return b'OK'
-
-    def remove_client(self, client=None):
-        logger.info("Remove client %s", client)
-        self.client_releases_keys(self.wants_what.get(client, ()), client)
-        with ignoring(KeyError):
-            del self.wants_what[client]
 
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None,
@@ -605,10 +640,10 @@ class Scheduler(Server):
             if tasks[k] is k:
                 del tasks[k]
 
-        update_state(self.tasks, self.dependencies, self.dependents,
+        out = update_state(self.tasks, self.dependencies, self.dependents,
                 self.who_wants, self.wants_what, self.who_has, self.in_play,
-                self.waiting, self.waiting_data, tasks, keys, dependencies,
-                client)
+                self.waiting, self.waiting_data, tasks, keys,
+                dependencies, client)
 
         if restrictions:
             restrictions = {k: set(map(ensure_ip, v))
@@ -630,7 +665,6 @@ class Scheduler(Server):
                 if dep in self.exceptions_blame:
                     self.mark_failed(key, self.exceptions_blame[dep])
 
-        self.seed_ready_tasks(tasks)
         for key in keys:
             if self.who_has[key]:
                 self.mark_key_in_memory(key)
@@ -640,6 +674,11 @@ class Scheduler(Server):
                 plugin.update_graph(self, tasks, keys, restrictions or {})
             except Exception as e:
                 logger.exception(e)
+
+        for key in out['ready_to_run']:
+            self.mark_ready_to_run(key)
+
+        self.ensure_idle_ready()
 
     def client_releases_keys(self, keys=None, client=None):
         for k in list(keys):
@@ -726,26 +765,33 @@ class Scheduler(Server):
         logger.debug("Heal state")
         self.log_state("Before Heal")
         state = heal(self.dependencies, self.dependents, self.who_has,
-                self.stacks, self.processing, self.waiting, self.waiting_data)
+                self.stacks, self.processing, self.waiting, self.waiting_data,
+                self.ready)
         released = state['released']
         self.in_play.clear(); self.in_play.update(state['in_play'])
-        add_keys = {k for k, v in self.waiting.items() if not v}
+
         for key in set(self.who_wants) & released:
             self.report({'op': 'lost-key', 'key': key})
-        if self.stacks:
-            for key in add_keys:
-                self.mark_ready_to_run(key)
+
+        for key in state['ready']:
+            self.mark_ready_to_run(key)
 
         self.delete_data(keys=set(self.who_has) & released - set(self.who_wants))
         self.in_play.update(self.who_has)
+
+        for worker in self.ncores:
+            self.ensure_occupied(worker)
+
         self.log_state("After Heal")
 
     def my_heal_missing_data(self, missing):
         """ Recover from lost data """
         logger.debug("Heal from missing data")
-        return heal_missing_data(self.tasks, self.dependencies, self.dependents,
-                self.who_has, self.in_play, self.waiting,
+        ready_to_run = heal_missing_data(self.tasks, self.dependencies,
+                self.dependents, self.who_has, self.in_play, self.waiting,
                 self.waiting_data, missing)
+        for key in ready_to_run:
+            self.mark_ready_to_run(key)
 
     def report(self, msg):
         """ Publish updates to all listening Queues and Streams """
@@ -779,7 +825,7 @@ class Scheduler(Server):
         return future
 
     @gen.coroutine
-    def control_stream(self, stream, address=None, client=None):
+    def add_client(self, stream, address=None, client=None):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
         self.streams[client] = stream
@@ -792,6 +838,12 @@ class Scheduler(Server):
             del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
                         client)
+
+    def remove_client(self, client=None):
+        logger.info("Remove client %s", client)
+        self.client_releases_keys(self.wants_what.get(client, ()), client)
+        with ignoring(KeyError):
+            del self.wants_what[client]
 
     @gen.coroutine
     def handle_messages(self, in_queue, report, client=None):
@@ -1029,6 +1081,7 @@ class Scheduler(Server):
         assert all(resp == b'OK' for resp in resps)
         if self.center:
             yield self.sync_center()
+
         self.start()
 
         logger.debug("All workers reporting in")
@@ -1043,7 +1096,7 @@ class Scheduler(Server):
     def validate(self, allow_overlap=False, allow_bad_stacks=False):
         released = set(self.tasks) - self.in_play
         validate_state(self.dependencies, self.dependents, self.waiting,
-                self.waiting_data, self.who_has, self.stacks,
+                self.waiting_data, self.ready, self.who_has, self.stacks,
                 self.processing, None, released, self.in_play, self.who_wants,
                 self.wants_what,
                 allow_overlap=allow_overlap, allow_bad_stacks=allow_bad_stacks)
@@ -1159,7 +1212,7 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
                 else:
                     raise ValueError("Task has no valid workers", key, r)
     if not workers or not stacks:
-        raise ValueError("No workers found")
+        return None
 
     commbytes = {w: sum(nbytes[k] for k in dependencies[key]
                                    if w not in who_has[k])
@@ -1173,14 +1226,15 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
 
 
 def update_state(tasks, dependencies, dependents, who_wants, wants_what,
-                 who_has, in_play,
-                 waiting, waiting_data, new_tasks, new_keys, new_dependencies,
-                 client):
-    """ Update state given new dask graph and output keys
+        who_has, in_play, waiting, waiting_data, new_tasks,
+        new_keys, new_dependencies, client):
+    """
+    Update state given new dask graph and output keys
 
     This should operate in linear time relative to the size of edges of the
     added graph.  It assumes that the current runtime state is valid.
     """
+    ready_to_run = set()
     tasks.update(new_tasks)
     if not isinstance(new_keys, set):
         new_keys = set(new_keys)
@@ -1209,7 +1263,11 @@ def update_state(tasks, dependencies, dependents, who_wants, wants_what,
     in_play |= exterior
     for key in exterior:
         deps = dependencies[key]
-        waiting[key] = {d for d in deps if not (d in who_has and who_has[d])}
+        wait_keys = {d for d in deps if not (d in who_has and who_has[d])}
+        if wait_keys:
+            waiting[key] = wait_keys
+        else:
+            ready_to_run.add(key)
         for dep in deps:
             if dep not in waiting_data:
                 waiting_data[dep] = set()
@@ -1224,10 +1282,11 @@ def update_state(tasks, dependencies, dependents, who_wants, wants_what,
             'who_wants': who_wants,
             'wants_what': wants_what,
             'waiting': waiting,
-            'waiting_data': waiting_data}
+            'waiting_data': waiting_data,
+            'ready_to_run': ready_to_run}
 
 
-def validate_state(dependencies, dependents, waiting, waiting_data,
+def validate_state(dependencies, dependents, waiting, waiting_data, ready,
         who_has, stacks, processing, finished_results, released, in_play,
         who_wants, wants_what, allow_overlap=False, allow_bad_stacks=False,
         **kwargs):
@@ -1249,6 +1308,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
     def check_key(key):
         """ Validate a single key, recurse downards """
         val = sum([key in waiting,
+                   key in ready,
                    key in in_stacks,
                    key in in_processing,
                    who_has.get(key) is not None,
@@ -1272,6 +1332,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
                 raise ValueError("Key in stacks/processing without all deps",
                                  key)
             assert not waiting.get(key)
+            assert key not in ready
 
         if finished_results is not None:
             if key in finished_results:
@@ -1285,6 +1346,13 @@ def validate_state(dependencies, dependents, waiting, waiting_data,
             assert s, "empty who_wants"
             for client in s:
                 assert key in wants_what[client]
+
+        if key in waiting:
+            assert waiting[key], 'waiting empty'
+
+
+        if key in ready:
+            assert key not in waiting
 
         return True
 
@@ -1334,7 +1402,7 @@ def keys_outside_frontier(dependencies, keys, frontier):
 
 
 def heal(dependencies, dependents, who_has, stacks, processing, waiting,
-        waiting_data, **kwargs):
+        waiting_data, ready, **kwargs):
     """ Make a possibly broken runtime state consistent
 
     Sometimes we lose intermediate values.  In these cases it can be tricky to
@@ -1352,6 +1420,8 @@ def heal(dependencies, dependents, who_has, stacks, processing, waiting,
 
     waiting_data.clear()
     waiting.clear()
+    ready.clear()
+    ready = set()
     finished_results = set()
 
     def remove_from_stacks(key):
@@ -1378,8 +1448,11 @@ def heal(dependencies, dependents, who_has, stacks, processing, waiting,
         for dep in dependencies[key]:
             make_accessible(dep)  # recurse
 
-        waiting[key] = {dep for dep in dependencies[key]
-                            if not who_has.get(dep)}
+        s = {dep for dep in dependencies[key] if not who_has.get(dep)}
+        if s:
+            waiting[key] = s
+        else:
+            ready.add(key)
 
     for key in outputs:
         make_accessible(key)
@@ -1406,11 +1479,14 @@ def heal(dependencies, dependents, who_has, stacks, processing, waiting,
         if key in waiting:
             assert not waiting[key]
             del waiting[key]
+        if key in ready:
+            ready.remove(key)
 
     finished_results = {key for key in outputs if who_has.get(key)}
 
     in_play = ({k for k, v in who_has.items() if v}
             | set(waiting)
+            | ready
             | (set.union(*processing.values()) if processing else set())
             | set(concat(stacks.values())))
 
@@ -1419,64 +1495,14 @@ def heal(dependencies, dependents, who_has, stacks, processing, waiting,
              'waiting': waiting, 'waiting_data': waiting_data,
              'who_has': who_has, 'processing': processing, 'stacks': stacks,
              'finished_results': finished_results, 'released': new_released,
-             'in_play': in_play, 'who_wants': {}, 'wants_what': {}}
+             'in_play': in_play, 'who_wants': {}, 'wants_what': {},
+             'ready': ready}
+
     validate_state(**output)
     return output
 
 
 _round_robin = [0]
-
-
-def assign_many_tasks(dependencies, waiting, keyorder, who_has, stacks,
-        restrictions, loose_restrictions, nbytes, keys):
-    """ Assign many new ready tasks to workers
-
-    Often at the beginning of computation we have to assign many new leaves to
-    several workers.  This initial seeding of work can have dramatic effects on
-    total runtime.
-
-    This takes some typical state variables (dependencies, waiting, keyorder,
-    who_has, stacks) as well as a list of keys to assign to stacks.
-
-    This mutates waiting and stacks in place and returns a dictionary,
-    new_stacks, that serves as a diff between the old and new stacks.  These
-    new tasks have yet to be put on worker queues.
-    """
-    leaves = list()  # ready tasks without data dependencies
-    ready = list()   # ready tasks with data dependencies
-    new_stacks = defaultdict(list)
-
-    for k in keys:
-        assert not waiting.pop(k)
-        if not dependencies[k] and k not in restrictions:
-            leaves.append(k)
-        else:
-            ready.append(k)
-
-    if not stacks:
-        raise ValueError("No workers found")
-
-    leaves = sorted(leaves, key=keyorder.get)
-
-    workers = list(stacks)
-
-    k = _round_robin[0] % len(workers)
-    workers = workers[k:] + workers[:k]
-    _round_robin[0] += 1
-
-    k = int(ceil(len(leaves) / len(workers)))
-    for i, worker in enumerate(workers):
-        keys = leaves[i*k: (i + 1)*k][::-1]
-        new_stacks[worker].extend(keys)
-        stacks[worker].extend(keys)
-
-    for key in ready:
-        worker = decide_worker(dependencies, stacks, who_has, restrictions,
-                loose_restrictions, nbytes, key)
-        new_stacks[worker].append(key)
-        stacks[worker].append(key)
-
-    return new_stacks
 
 
 def heal_missing_data(tasks, dependencies, dependents,
@@ -1487,6 +1513,9 @@ def heal_missing_data(tasks, dependencies, dependents,
     evaluate those keys.
     """
     logger.debug("Healing missing: %s", missing)
+
+    ready_to_run = set()
+
     for key in missing:
         if key in in_play:
             in_play.remove(key)
@@ -1497,8 +1526,13 @@ def heal_missing_data(tasks, dependencies, dependents,
         for dep in dependencies[key]:
             ensure_key(dep)
             waiting_data[dep].add(key)
-        waiting[key] = {dep for dep in dependencies[key] if not who_has.get(dep)}
-        logger.debug("Added key to waiting: %s", key)
+        s = {dep for dep in dependencies[key] if not who_has.get(dep)}
+        if s:
+            waiting[key] = s
+            logger.debug("Added key to waiting: %s", key)
+        else:
+            ready_to_run.add(key)
+            logger.debug("Added key to ready-to-run: %s", key)
         waiting_data[key] = {dep for dep in dependents[key] if dep in in_play
                                                     and not who_has.get(dep)}
         in_play.add(key)
@@ -1507,6 +1541,8 @@ def heal_missing_data(tasks, dependencies, dependents,
         ensure_key(key)
 
     assert set(missing).issubset(in_play)
+
+    return ready_to_run
 
 
 def _maybe_complex(task):
