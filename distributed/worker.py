@@ -193,11 +193,6 @@ class Worker(Server):
         if who_has:
             local_data = {k: self.data[k] for k in who_has if k in self.data}
             who_has = {k: v for k, v in who_has.items() if k not in self.data}
-        else:
-            local_data = {}
-
-        # gather data from peers
-        if who_has:
             try:
                 logger.info("gather %d keys from peers: %s",
                             len(who_has), str(who_has))
@@ -207,9 +202,9 @@ class Worker(Server):
                             exc_info=True)
                 self.active.remove(key)
                 raise Return((b'missing-data', e))
-            data2 = merge(local_data, other)
+            data = merge(local_data, other)
         else:
-            data2 = local_data
+            data = {}
 
         if serialized:
             try:
@@ -234,8 +229,8 @@ class Worker(Server):
             args = (task,)
 
         # Fill args with data
-        args2 = pack_data(args, data2)
-        kwargs2 = pack_data(kwargs, data2)
+        args2 = pack_data(args, data)
+        kwargs2 = pack_data(kwargs, data)
 
         # Log and compute in separate thread
         try:
