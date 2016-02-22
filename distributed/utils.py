@@ -10,7 +10,6 @@ import sys
 import tblib.pickling_support
 import tempfile
 from threading import Thread
-import traceback
 
 from dask import istask
 from toolz import memoize
@@ -31,10 +30,9 @@ def funcname(func):
         return str(func)
 
 
-def get_ip():
-    return [(s.connect(('8.8.8.8', 80)), s.getsockname()[0], s.close())
-        for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
-
+def get_ip(host='8.8.8.8', port=80):
+    return [(s.connect((host, port)), s.getsockname()[0], s.close())
+            for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
 
 
 @contextmanager

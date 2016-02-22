@@ -12,6 +12,7 @@ import os
 from time import sleep
 import uuid
 from threading import Thread
+import socket
 import six
 
 import dask
@@ -294,17 +295,19 @@ class Executor(object):
         if isinstance(self._start_arg, Scheduler):
             self.scheduler = self._start_arg
         if isinstance(self._start_arg, str):
-            ip, port = tuple(self._start_arg.split(':'))
-            self._start_arg = (ip, int(port))
+            host, port = tuple(self._start_arg.split(':'))
+            self._start_arg = (host, int(port))
         if isinstance(self._start_arg, tuple):
-            r = coerce_to_rpc(self._start_arg, timeout=timeout)
+            host, port = self._start_arg
+            ip = socket.gethostbyname(host)
+            r = coerce_to_rpc((ip, port), timeout=timeout)
             try:
                 ident = yield r.identity()
             except (StreamClosedError, OSError):
-                raise IOError("Could not connect to %s:%d" % self._start_arg)
+                raise IOError("Could not connect to %s:%d" % (ip, port))
             if ident['type'] == 'Scheduler':
                 self.scheduler = r
-                self.scheduler_stream = yield connect(*self._start_arg)
+                self.scheduler_stream = yield connect(ip, port)
                 yield write(self.scheduler_stream, {'op': 'register-client',
                                                     'client': self.id})
             else:

@@ -13,15 +13,14 @@ from tornado import gen
 
 logger = logging.getLogger('distributed.dworker')
 
-ip = get_ip()
-
 
 @click.command()
 @click.argument('center', type=str)
 @click.option('--port', type=int, default=0,
               help="Serving port, defaults to randomly assigned")
 @click.option('--host', type=str, default=None,
-              help="Serving host defaults to %s" % ip)
+              help="Serving host. Defaults to an ip address that can hopefully"
+                   " be visible from the center network.")
 @click.option('--nthreads', type=int, default=0,
               help="Number of threads per process. Defaults to number of cores")
 @click.option('--nprocs', type=int, default=1,
@@ -29,7 +28,8 @@ ip = get_ip()
 @click.option('--no-nanny', is_flag=True)
 def main(center, host, port, nthreads, nprocs, no_nanny):
     try:
-        center_ip, center_port = center.split(':')
+        center_host, center_port = center.split(':')
+        center_ip = socket.gethostbyname(center_host)
         center_port = int(center_port)
     except IndexError:
         logger.info("Usage:  dworker center_host:center_port")
@@ -41,16 +41,19 @@ def main(center, host, port, nthreads, nprocs, no_nanny):
     if not nthreads:
         nthreads = _ncores // nprocs
 
-    if nprocs > 1 and port != 0:
-        raise ValueError("Can not specify a port when using multiple processes")
-
     services = {'http': HTTPWorker}
 
     loop = IOLoop.current()
     t = Worker if no_nanny else Nanny
-    nannies = [t(center_ip, center_port, ncores=nthreads, ip=host,
+    if host is not None:
+        ip = socket.gethostbyname(host)
+    else:
+        # lookup the ip address of a local interface on a network that
+        # reach the center
+        ip = get_ip(center_ip, center_port)
+    nannies = [t(center_ip, center_port, ncores=nthreads, ip=ip,
                  services=services, loop=loop)
-                for i in range(nprocs)]
+               for i in range(nprocs)]
 
     for nanny in nannies:
         nanny.start(port)

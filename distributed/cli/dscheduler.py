@@ -5,7 +5,7 @@ from time import sleep
 
 import click
 
-from distributed import  Scheduler, sync
+from distributed import Scheduler
 from distributed.utils import get_ip
 from distributed.http import HTTPScheduler
 from distributed.cli.utils import check_python_3
@@ -17,21 +17,26 @@ ip = get_ip()
 
 import signal
 
+
 def handle_signal(sig, frame):
     IOLoop.instance().add_callback(IOLoop.instance().stop)
 
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
 
+
 @click.command()
 @click.argument('center', type=str, default='')
 @click.option('--port', type=int, default=8786, help="Serving port")
-def main(center, port):
+@click.option('--host', type=str, default=ip,
+              help="Serving host defaults to %s" % ip)
+def main(center, host, port):
+    ip = socket.gethostbyname(host)
     loop = IOLoop.current()
-    scheduler = Scheduler(center, services={'http': HTTPScheduler})
+    scheduler = Scheduler(center, services={'http': HTTPScheduler}, ip=ip)
     if center:
         loop.run_sync(scheduler.sync_center)
-    done = scheduler.start(port)
+    scheduler.start(port)
 
     loop.start()
     loop.close()
