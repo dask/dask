@@ -190,12 +190,12 @@ class Worker(Server):
             task=None, needed=[], who_has=None, report=True, serialized=False):
         """ Execute function """
         self.active.add(key)
-        if needed:
-            local_data = {k: self.data[k] for k in needed if k in self.data}
-            needed = [n for n in needed if n not in self.data]
-        elif who_has:
+        if who_has:
             local_data = {k: self.data[k] for k in who_has if k in self.data}
-            who_has = {k: v for k, v in who_has.items() if k not in self.data}
+            who_has2 = {k: v for k, v in who_has.items() if k not in self.data}
+        elif needed:
+            local_data = {k: self.data[k] for k in needed if k in self.data}
+            needed2 = [n for n in needed if n not in self.data]
         else:
             local_data = {}
 
@@ -204,13 +204,13 @@ class Worker(Server):
             try:
                 if who_has:
                     logger.info("gather %d keys from peers: %s",
-                                len(who_has), str(who_has))
-                    other = yield gather_from_workers(who_has)
+                                len(who_has2), str(who_has2))
+                    other = yield gather_from_workers(who_has2)
                 elif needed:
                     logger.info("gather %d keys from peers: %s",
-                                len(needed), str(needed))
-                    other = yield _gather(self.center, needed=needed)
-                    other = dict(zip(needed, other))
+                                len(needed2), str(needed2))
+                    other = yield _gather(self.center, needed=needed2)
+                    other = dict(zip(needed2, other))
                 else:
                     raise ValueError()
             except KeyError as e:

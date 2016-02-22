@@ -640,10 +640,50 @@ class Scheduler(Server):
             if tasks[k] is k:
                 del tasks[k]
 
-        out = update_state(self.tasks, self.dependencies, self.dependents,
-                self.who_wants, self.wants_what, self.who_has, self.in_play,
-                self.waiting, self.waiting_data, tasks, keys,
-                dependencies, client)
+        if not isinstance(keys, set):
+            keys = set(keys)
+
+        for key, task in tasks.items():
+            if key not in self.tasks:
+                self.tasks[key] = task
+
+        for key in tasks:  # add dependencies/dependents
+            if key in self.dependencies:
+                continue
+
+            task = self.tasks[key]
+            self.dependencies[key] = set(dependencies.get(key, ()))
+
+            for dep in self.dependencies[key]:
+                if dep not in self.dependents:
+                    self.dependents[dep] = set()
+                self.dependents[dep].add(key)
+
+            if key not in self.dependents:
+                self.dependents[key] = set()
+
+        for k in keys:
+            self.who_wants[k].add(client)
+            self.wants_what[client].add(k)
+
+        ready_to_run = set()
+
+        exterior = keys_outside_frontier(self.dependencies, keys, self.in_play)
+        self.in_play |= exterior
+        for key in exterior:
+            deps = self.dependencies[key]
+            wait_keys = {d for d in deps if not self.who_has.get(d)}
+            if wait_keys:
+                self.waiting[key] = wait_keys
+            else:
+                ready_to_run.add(key)
+            for dep in deps:
+                if dep not in self.waiting_data:
+                    self.waiting_data[dep] = set()
+                self.waiting_data[dep].add(key)
+
+            if key not in self.waiting_data:
+                self.waiting_data[key] = set()
 
         if restrictions:
             restrictions = {k: set(map(ensure_ip, v))
@@ -675,7 +715,7 @@ class Scheduler(Server):
             except Exception as e:
                 logger.exception(e)
 
-        for key in out['ready_to_run']:
+        for key in ready_to_run:
             self.mark_ready_to_run(key)
 
         self.ensure_idle_ready()
@@ -954,6 +994,7 @@ class Scheduler(Server):
                     serialized = False
                 else:
                     serialized = True
+
                 response, content = yield worker.compute(who_has=who_has,
                                                          key=key,
                                                          report=self.center
@@ -1223,67 +1264,6 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     workers = {w for w, nb in commbytes.items() if nb == minbytes}
     worker = min(workers, key=lambda w: len(stacks[w]))
     return worker
-
-
-def update_state(tasks, dependencies, dependents, who_wants, wants_what,
-        who_has, in_play, waiting, waiting_data, new_tasks,
-        new_keys, new_dependencies, client):
-    """
-    Update state given new dask graph and output keys
-
-    This should operate in linear time relative to the size of edges of the
-    added graph.  It assumes that the current runtime state is valid.
-    """
-    ready_to_run = set()
-    tasks.update(new_tasks)
-    if not isinstance(new_keys, set):
-        new_keys = set(new_keys)
-
-    for key in new_tasks:  # add dependencies/dependents
-        if key in dependencies:
-            continue
-
-        task = new_tasks[key]
-        deps = new_dependencies.get(key, ())
-        dependencies[key] = set(deps)
-
-        for dep in deps:
-            if dep not in dependents:
-                dependents[dep] = set()
-            dependents[dep].add(key)
-
-        if key not in dependents:
-            dependents[key] = set()
-
-    for k in new_keys:
-        who_wants[k].add(client)
-        wants_what[client].add(k)
-
-    exterior = keys_outside_frontier(dependencies, new_keys, in_play)
-    in_play |= exterior
-    for key in exterior:
-        deps = dependencies[key]
-        wait_keys = {d for d in deps if not who_has.get(d)}
-        if wait_keys:
-            waiting[key] = wait_keys
-        else:
-            ready_to_run.add(key)
-        for dep in deps:
-            if dep not in waiting_data:
-                waiting_data[dep] = set()
-            waiting_data[dep].add(key)
-
-        if key not in waiting_data:
-            waiting_data[key] = set()
-
-    return {'tasks': tasks,
-            'dependencies': dependencies,
-            'dependents': dependents,
-            'who_wants': who_wants,
-            'wants_what': wants_what,
-            'waiting': waiting,
-            'waiting_data': waiting_data,
-            'ready_to_run': ready_to_run}
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data, ready,

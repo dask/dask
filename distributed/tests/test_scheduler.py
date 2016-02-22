@@ -18,12 +18,14 @@ from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal,
         decide_worker, heal_missing_data, Scheduler,
         _maybe_complex, dumps_function, dumps_task, apply)
-from distributed.utils_test import inc, ignoring, dec, gen_cluster, gen_test
+from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
+        loop)
 from distributed.utils import All
 
 
 alice = 'alice'
 bob = 'bob'
+
 
 def test_heal():
     dsk = {'x': 1, 'y': (inc, 'x')}
@@ -134,7 +136,7 @@ def test_ready_add_worker(s, a, b):
                    client='client',
                    dependencies={'x-%d' % i: set() for i in range(20)})
 
-def test_update_state():
+def test_update_state(loop):
     s = Scheduler()
     s.start()
     s.add_worker(address='alice', ncores=1)
@@ -143,7 +145,7 @@ def test_update_state():
                    dependencies={'y': 'x', 'x': set()},
                    client='client')
 
-    s.mark_task_finished('x', 'alice', 10, type=int)
+    s.mark_task_finished('x', 'alice', nbytes=10, type=int)
 
     assert s.processing['alice'] == {'y'}
     assert not s.ready
@@ -172,7 +174,7 @@ def test_update_state():
     s.stop()
 
 
-def test_update_state_with_processing():
+def test_update_state_with_processing(loop):
     s = Scheduler()
     s.start()
     s.add_worker(address='alice', ncores=1)
@@ -181,7 +183,7 @@ def test_update_state_with_processing():
                    dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
                    client='client')
 
-    s.mark_task_finished('x', 'alice', 10, type=int)
+    s.mark_task_finished('x', 'alice', nbytes=10, type=int)
 
     assert s.waiting == {'z': {'y'}}
     assert s.waiting_data == {'x': {'y'}, 'y': {'z'}, 'z': set()}
@@ -211,7 +213,7 @@ def test_update_state_with_processing():
     s.stop()
 
 
-def test_update_state_respects_data_in_memory():
+def test_update_state_respects_data_in_memory(loop):
     s = Scheduler()
     s.start()
     s.add_worker(address='alice', ncores=1)
@@ -220,8 +222,8 @@ def test_update_state_respects_data_in_memory():
                    dependencies={'y': {'x'}, 'x': set()},
                    client='client')
 
-    s.mark_task_finished('x', 'alice', 10, type=int)
-    s.mark_task_finished('y', 'alice', 10, type=int)
+    s.mark_task_finished('x', 'alice', nbytes=10, type=int)
+    s.mark_task_finished('y', 'alice', nbytes=10, type=int)
 
     assert s.who_has == {'y': {'alice'}}
 
@@ -240,7 +242,7 @@ def test_update_state_respects_data_in_memory():
     s.stop()
 
 
-def test_update_state_supports_recomputing_released_results():
+def test_update_state_supports_recomputing_released_results(loop):
     s = Scheduler()
     s.start()
     s.add_worker(address='alice', ncores=1)
@@ -249,9 +251,9 @@ def test_update_state_supports_recomputing_released_results():
                    dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
                    client='client')
 
-    s.mark_task_finished('x', 'alice', 10, type=int)
-    s.mark_task_finished('y', 'alice', 10, type=int)
-    s.mark_task_finished('z', 'alice', 10, type=int)
+    s.mark_task_finished('x', 'alice', nbytes=10, type=int)
+    s.mark_task_finished('y', 'alice', nbytes=10, type=int)
+    s.mark_task_finished('z', 'alice', nbytes=10, type=int)
 
     assert not s.waiting
     assert not s.ready
