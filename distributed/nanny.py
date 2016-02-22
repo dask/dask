@@ -11,7 +11,7 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 
 from .core import Server, rpc, write
-from .utils import get_ip
+from .utils import get_ip, ignoring
 
 
 logger = logging.getLogger(__name__)
@@ -201,4 +201,5 @@ def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
             q.put({'port': worker.port, 'dir': worker.local_dir})  # pragma: no cover
 
     loop.add_callback(start)  # pragma: no cover
-    loop.start()  # pragma: no cover
+    with ignoring(KeyboardInterrupt):
+        loop.start()  # pragma: no cover
