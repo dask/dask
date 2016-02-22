@@ -2,10 +2,10 @@ import pytest
 
 from tornado import gen
 
-from distributed import Executor, Scheduler
+from distributed import Executor, Scheduler, Worker
 from distributed.diagnostics.progressbar import TextProgressBar, progress
-from distributed.utils_test import (cluster, _test_cluster, loop, inc,
-        div, dec, cluster_center)
+from distributed.utils_test import (cluster, loop, inc,
+        div, dec, gen_cluster)
 from time import time, sleep
 
 
@@ -28,42 +28,34 @@ def test_text_progressbar(capsys, loop):
             assert p.stream.closed()
 
 
-def test_TextProgressBar_error(loop, capsys):
-    @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port), loop=loop)
-        yield s.sync_center()
-        done = s.start(0)
+@gen_cluster()
+def test_TextProgressBar_error(s, a, b):
+    s.update_graph(tasks={'x': (div, 1, 0)},
+                   keys=['x'],
+                   dependencies={})
 
-        s.update_graph(tasks={'x': (div, 1, 0)},
-                       keys=['x'],
-                       dependencies={})
+    progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),
+                               start=False, interval=0.01)
+    yield progress.listen()
 
-        progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),
-                                   start=False, interval=0.01)
-        yield progress.listen()
+    assert progress.status == 'error'
+    assert progress.stream.closed()
 
-        assert progress.status == 'error'
-        assert progress.stream.closed()
-
-        progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),
-                                   start=False, interval=0.01)
-        yield progress.listen()
-        assert progress.status == 'error'
-        assert progress.stream.closed()
-
-        s.close()
-        yield done
-
-    _test_cluster(f, loop)
+    progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),
+                               start=False, interval=0.01)
+    yield progress.listen()
+    assert progress.status == 'error'
+    assert progress.stream.closed()
 
 
 def test_TextProgressBar_empty(loop, capsys):
     @gen.coroutine
-    def f(c, a, b):
-        s = Scheduler((c.ip, c.port), loop=loop)
-        yield s.sync_center()
+    def f():
+        s = Scheduler(loop=loop)
         done = s.start(0)
+        a = Worker(s.ip, s.port, loop=loop, ncores=1)
+        b = Worker(s.ip, s.port, loop=loop, ncores=1)
+        yield [a._start(0), b._start(0)]
 
         progress = TextProgressBar([], scheduler=(s.ip, s.port), start=False,
                                    interval=0.01)
@@ -72,10 +64,11 @@ def test_TextProgressBar_empty(loop, capsys):
         assert progress.status == 'finished'
         check_bar_completed(capsys)
 
+        yield [a._close(), b._close()]
         s.close()
         yield done
 
-    _test_cluster(f, loop)
+    loop.run_sync(f)
 
 
 def check_bar_completed(capsys, width=40):

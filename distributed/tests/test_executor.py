@@ -1224,10 +1224,10 @@ def test_traceback_sync(loop):
 @gen_cluster(Worker=Nanny)
 def test_restart(s, a, b):
     from distributed import Nanny, rpc
-    e = Executor((s.ip, s.port), start=False, loop=IOLoop.current())
+    e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    assert s.ncores == {a.worker_address: 2, b.worker_address: 2}
+    assert s.ncores == {a.worker_address: 1, b.worker_address: 2}
 
     x = e.submit(inc, 1)
     y = e.submit(inc, x)
@@ -1468,39 +1468,15 @@ def test_remote_scheduler(s, a, b):
     yield e._shutdown()
 
 
-def test_input_types(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        e1 = Executor((c.ip, c.port), start=False, loop=loop)
-        yield e1._start()
+@gen_cluster()
+def test_start_with_scheduler(s, a, b):
+    e2 = Executor(s, start=False, loop=loop)
+    yield e2._start()
+    assert isinstance(e2.scheduler, Scheduler)
 
-        assert isinstance(e1.center, rpc)
-        assert isinstance(e1.scheduler, Scheduler)
-
-        s = Scheduler((c.ip, c.port))
-        yield s.sync_center()
-        done = s.start(0)
-
-        e2 = Executor(s, start=False, loop=loop)
-        yield e2._start()
-
-        assert isinstance(e2.center, rpc)
-        assert isinstance(e2.scheduler, Scheduler)
-
-        s.listen(8042)
-
-        e3 = Executor(('127.0.0.1', s.port), start=False, loop=loop)
-        yield e3._start()
-
-        assert isinstance(e3.center, rpc)
-        assert isinstance(e3.scheduler, rpc)
-
-        s.stop()
-
-        yield e1._shutdown()
-        yield e2._shutdown()
-        yield e3._shutdown()
-    _test_cluster(f, loop)
+    future = e2.submit(inc, 1)
+    result = yield future._result()
+    assert result == inc(1)
 
 
 @gen_cluster()
