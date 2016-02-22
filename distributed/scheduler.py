@@ -428,7 +428,7 @@ class Scheduler(Server):
             key = self.stacks[worker].pop()
             if key not in self.tasks:
                 continue
-            if self.who_has[key]:
+            if self.who_has.get(key):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s, %s", worker, key)
@@ -444,7 +444,7 @@ class Scheduler(Server):
             key = self.ready.pop()
             if key not in self.tasks:
                 continue
-            if self.who_has[key]:
+            if self.who_has.get(key):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s, %s", worker, key)
@@ -666,7 +666,7 @@ class Scheduler(Server):
                     self.mark_failed(key, self.exceptions_blame[dep])
 
         for key in keys:
-            if self.who_has[key]:
+            if self.who_has.get(key):
                 self.mark_key_in_memory(key)
 
         for plugin in self.plugins[:]:
@@ -1263,7 +1263,7 @@ def update_state(tasks, dependencies, dependents, who_wants, wants_what,
     in_play |= exterior
     for key in exterior:
         deps = dependencies[key]
-        wait_keys = {d for d in deps if not (d in who_has and who_has[d])}
+        wait_keys = {d for d in deps if not who_has.get(d)}
         if wait_keys:
             waiting[key] = wait_keys
         else:
