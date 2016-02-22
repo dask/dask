@@ -187,32 +187,21 @@ class Worker(Server):
 
     @gen.coroutine
     def compute(self, stream, function=None, key=None, args=(), kwargs={},
-            task=None, needed=[], who_has=None, report=True, serialized=False):
+            task=None, who_has=None, report=True, serialized=False):
         """ Execute function """
         self.active.add(key)
         if who_has:
             local_data = {k: self.data[k] for k in who_has if k in self.data}
-            who_has2 = {k: v for k, v in who_has.items() if k not in self.data}
-        elif needed:
-            local_data = {k: self.data[k] for k in needed if k in self.data}
-            needed2 = [n for n in needed if n not in self.data]
+            who_has = {k: v for k, v in who_has.items() if k not in self.data}
         else:
             local_data = {}
 
         # gather data from peers
-        if needed or who_has:
+        if who_has:
             try:
-                if who_has:
-                    logger.info("gather %d keys from peers: %s",
-                                len(who_has2), str(who_has2))
-                    other = yield gather_from_workers(who_has2)
-                elif needed:
-                    logger.info("gather %d keys from peers: %s",
-                                len(needed2), str(needed2))
-                    other = yield _gather(self.center, needed=needed2)
-                    other = dict(zip(needed2, other))
-                else:
-                    raise ValueError()
+                logger.info("gather %d keys from peers: %s",
+                            len(who_has), str(who_has))
+                other = yield gather_from_workers(who_has)
             except KeyError as e:
                 logger.warn("Could not find data during gather in compute",
                             exc_info=True)
