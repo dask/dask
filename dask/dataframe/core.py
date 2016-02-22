@@ -1100,7 +1100,7 @@ class Series(_Frame):
 
     @derived_from(pd.Series)
     def isin(self, other):
-        return elemwise(pd.Series.isin, self, other)
+        return elemwise(pd.Series.isin, self, list(other))
 
     @derived_from(pd.Series)
     def map(self, arg, na_action=None):
