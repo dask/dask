@@ -21,7 +21,7 @@ from tornado import gen
 
 from dask.context import _globals
 from dask.compatibility import apply
-from distributed import Center, Worker, Nanny
+from distributed import Worker, Nanny
 from distributed.core import rpc, dumps, loads
 from distributed.client import WrappedKey
 from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
@@ -30,7 +30,7 @@ from distributed.executor import (Executor, Future, CompatibleExecutor, _wait,
 from distributed.scheduler import Scheduler
 from distributed.sizeof import sizeof
 from distributed.utils import ignoring, sync, tmp_text
-from distributed.utils_test import (cluster, cluster_center, slow,
+from distributed.utils_test import (cluster, slow,
         _test_cluster, _test_scheduler, loop, inc, dec, div, throws,
         gen_cluster, gen_test, double, deep)
 
@@ -524,19 +524,16 @@ def test_stress_gc(loop, func, n):
 
 
 @slow
-def test_long_tasks_dont_trigger_timeout(loop):
-    @gen.coroutine
-    def f(c, a, b):
-        e = Executor((c.ip, c.port), start=False,
-                loop=loop)
-        yield e._start()
+@gen_cluster()
+def test_long_tasks_dont_trigger_timeout(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
 
-        from time import sleep
-        x = e.submit(sleep, 3)
-        yield x._result()
+    from time import sleep
+    x = e.submit(sleep, 3)
+    yield x._result()
 
-        yield e._shutdown()
-    _test_cluster(f, loop)
+    yield e._shutdown()
 
 
 @gen_cluster()
@@ -768,14 +765,9 @@ def test_gather_then_submit_after_failed_workers(loop):
             assert result == [sum(map(inc, range(20)))]
 
 
-@gen_test()
-def test_errors_dont_block():
-    c = Center('127.0.0.1')
-    c.listen(0)
-    w = Worker(c.ip, c.port, ncores=1, ip='127.0.0.1')
-    e = Executor((c.ip, c.port), start=False, loop=IOLoop.current())
-
-    yield w._start()
+@gen_cluster(ncores=[('127.0.0.1', 1)])
+def test_errors_dont_block(s, w):
+    e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
     L = [e.submit(inc, 1),
@@ -791,8 +783,7 @@ def test_errors_dont_block():
     result = yield e._gather([L[0], L[2]])
     assert result == [2, 3]
 
-    yield w._close()
-    c.stop()
+    yield e._shutdown()
 
 
 @gen_cluster()
@@ -1230,49 +1221,32 @@ def test_traceback_sync(loop):
             assert tb is None
 
 
-@gen_test()
-def test_restart():
+@gen_cluster(Worker=Nanny)
+def test_restart(s, a, b):
     from distributed import Nanny, rpc
-    c = Center('127.0.0.1')
-    c.listen(0)
-    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
-    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
-
-    yield [a._start(), b._start()]
-
-    e = Executor((c.ip, c.port), start=False, loop=IOLoop.current())
+    e = Executor((s.ip, s.port), start=False, loop=IOLoop.current())
     yield e._start()
 
-    assert e.scheduler.ncores == {a.worker_address: 2, b.worker_address: 2}
+    assert s.ncores == {a.worker_address: 2, b.worker_address: 2}
 
     x = e.submit(inc, 1)
     y = e.submit(inc, x)
     yield y._result()
 
-    cc = rpc(ip=c.ip, port=c.port)
-    who_has = yield cc.who_has()
-    try:
-        assert e.scheduler.who_has == who_has
-        assert set(e.scheduler.who_has) == {x.key, y.key}
+    assert set(s.who_has) == {x.key, y.key}
 
-        f = yield e._restart()
-        assert f is e
+    f = yield e._restart()
+    assert f is e
 
-        assert len(e.scheduler.stacks) == 2
-        assert len(e.scheduler.processing) == 2
+    assert len(s.stacks) == 2
+    assert len(s.processing) == 2
 
-        who_has = yield cc.who_has()
-        assert not who_has
-        assert not e.scheduler.who_has
+    assert not s.who_has
 
-        assert x.cancelled()
-        assert y.cancelled()
+    assert x.cancelled()
+    assert y.cancelled()
 
-    finally:
-        yield a._close()
-        yield b._close()
-        yield e._shutdown(fast=True)
-        c.stop()
+    yield e._shutdown(fast=True)
 
 
 def test_restart_sync_no_center(loop):
@@ -1286,37 +1260,30 @@ def test_restart_sync_no_center(loop):
 
 
 def test_restart_sync(loop):
-    with cluster_center(nanny=True) as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            assert len(e.scheduler.has_what) == 2
+    with cluster(nanny=True) as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             x = e.submit(div, 1, 2)
             x.result()
 
-            assert e.scheduler.who_has
+            assert sync(loop, e.scheduler.who_has)
             e.restart()
-            assert not e.scheduler.who_has
+            assert not sync(loop, e.scheduler.who_has)
             assert x.cancelled()
 
             with pytest.raises(CancelledError):
                 x.result()
-
-            assert (set(e.scheduler.stacks) ==
-                    set(e.scheduler.processing) ==
-                    set(e.scheduler.ncores))
-            assert len(e.scheduler.stacks) == 2
 
             y = e.submit(div, 1, 3)
             assert y.result() == 1 / 3
 
 
 def test_restart_fast(loop):
-    with cluster_center(nanny=True) as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port'])) as e:
+    with cluster(nanny=True) as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port'])) as e:
             L = e.map(sleep, range(10))
 
             start = time()
             e.restart()
-            assert not e.scheduler.tasks
             assert time() - start < 5
 
             assert all(x.status == 'cancelled' for x in L)
@@ -1325,41 +1292,23 @@ def test_restart_fast(loop):
             assert x.result() == 2
 
 
-def test_fast_kill(loop):
-    from distributed import Nanny, rpc
-    c = Center('127.0.0.1')
-    c.listen(0)
-    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
-    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
-    e = Executor((c.ip, c.port), start=False, loop=loop)
-    @gen.coroutine
-    def f():
-        yield a._start()
-        yield b._start()
+@gen_cluster(Worker=Nanny)
+def test_fast_kill(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
 
-        while len(c.ncores) < 2:
-            yield gen.sleep(0.01)
-        yield e._start()
+    L = e.map(sleep, range(10))
 
-        L = e.map(sleep, range(10))
+    start = time()
+    yield e._restart()
+    assert time() - start < 5
 
-        try:
-            start = time()
-            yield e._restart()
-            assert time() - start < 5
+    assert all(x.status == 'cancelled' for x in L)
 
-            assert all(x.status == 'cancelled' for x in L)
-
-            x = e.submit(inc, 1)
-            result = yield x._result()
-            assert result == 2
-        finally:
-            yield a._close()
-            yield b._close()
-            yield e._shutdown(fast=True)
-            c.stop()
-
-    loop.run_sync(f)
+    x = e.submit(inc, 1)
+    result = yield x._result()
+    assert result == 2
+    yield e._shutdown(fast=True)
 
 
 @gen_cluster()
@@ -1446,44 +1395,27 @@ def test_multiple_executors(s, a, b):
         yield b._shutdown()
 
 
-def test_multiple_executors_restart(loop):
-    from distributed import Nanny, rpc
-    c = Center('127.0.0.1')
-    c.listen(0)
-    a = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
-    b = Nanny(c.ip, c.port, ncores=2, ip='127.0.0.1')
-    @gen.coroutine
-    def f():
-        yield a._start()
-        yield b._start()
-        while len(c.ncores) < 2:
-            yield gen.sleep(0.01)
+@gen_cluster(Worker=Nanny)
+def test_multiple_executors_restart(s, a, b):
+    e1 = Executor((s.ip, s.port), start=False)
+    yield e1._start()
+    e2 = Executor((s.ip, s.port), start=False)
+    yield e2._start()
 
-        try:
-            e1 = Executor((c.ip, c.port), start=False, loop=loop)
-            yield e1._start()
-            e2 = Executor(e1.scheduler, start=False, loop=loop)
-            yield e2._start()
+    x = e1.submit(inc, 1)
+    y = e2.submit(inc, 2)
+    xx = yield x._result()
+    yy = yield y._result()
+    assert xx == 2
+    assert yy == 3
 
-            x = e1.submit(inc, 1)
-            y = e2.submit(inc, 2)
-            xx = yield x._result()
-            yy = yield y._result()
-            assert xx == 2
-            assert yy == 3
+    yield e1._restart()
 
-            yield e1._restart()
+    assert x.cancelled()
+    assert y.cancelled()
 
-            assert x.cancelled()
-            assert y.cancelled()
-        finally:
-            yield a._close()
-            yield b._close()
-            yield e1._shutdown(fast=True)
-            yield e2._shutdown(fast=True)
-            c.stop()
-
-    loop.run_sync(f)
+    yield e1._shutdown(fast=True)
+    yield e2._shutdown(fast=True)
 
 
 @gen_cluster()
