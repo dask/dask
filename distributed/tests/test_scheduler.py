@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 from copy import deepcopy
 from operator import add
 from time import time
@@ -8,19 +8,24 @@ from toolz import merge, concat, valmap
 from tornado.queues import Queue
 from tornado.iostream import StreamClosedError
 from tornado.gen import TimeoutError
+from tornado import gen
+
 import pytest
 
 from distributed import Center, Nanny, Worker
 from distributed.core import connect, read, write, rpc, loads
 from distributed.client import WrappedKey
-from distributed.scheduler import (validate_state, heal, update_state,
-        decide_worker, assign_many_tasks, heal_missing_data, Scheduler,
+from distributed.scheduler import (validate_state, heal,
+        decide_worker, heal_missing_data, Scheduler,
         _maybe_complex, dumps_function, dumps_task, apply)
-from distributed.utils_test import inc, ignoring, dec
+from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
+        loop)
+from distributed.utils import All
 
 
 alice = 'alice'
 bob = 'bob'
+
 
 def test_heal():
     dsk = {'x': 1, 'y': (inc, 'x')}
@@ -31,14 +36,14 @@ def test_heal():
     stacks = {'alice': [], 'bob': []}
     processing = {'alice': set(), 'bob': set()}
 
-    waiting = {'x': set(), 'y': {'x'}}
+    waiting = {'y': {'x'}}
+    ready = {'x'}
     waiting_data = {'x': {'y'}, 'y': set()}
     finished_results = set()
 
     local = {k: v for k, v in locals().items() if '@' not in k}
 
-    output = heal(dependencies, dependents, who_has, stacks, processing,
-            {}, {})
+    output = heal(**local)
 
     assert output['dependencies'] == dependencies
     assert output['dependents'] == dependents
@@ -52,7 +57,7 @@ def test_heal():
     state = {'who_has': dict(),
              'stacks': {'alice': ['x'], 'bob': []},
              'processing': {'alice': set(), 'bob': set()},
-             'waiting': {}, 'waiting_data': {}}
+             'waiting': {}, 'waiting_data': {}, 'ready': set()}
 
     heal(dependencies, dependents, **state)
 
@@ -71,10 +76,11 @@ def test_heal_2():
     state = {'who_has': {'y': {alice}, 'a': {alice}},  # missing 'b'
              'stacks': {'alice': ['z'], 'bob': []},
              'processing': {'alice': set(), 'bob': set(['c'])},
-             'waiting': {}, 'waiting_data': {}}
+             'waiting': {}, 'waiting_data': {}, 'ready': set()}
 
     output = heal(dependencies, dependents, **state)
-    assert output['waiting'] == {'b': set(), 'c': {'b'}, 'result': {'c', 'z'}}
+    assert output['waiting'] == {'c': {'b'}, 'result': {'c', 'z'}}
+    assert output['ready'] == {'b'}
     assert output['waiting_data'] == {'a': {'b'}, 'b': {'c'}, 'c': {'result'},
                                       'y': {'z'}, 'z': {'result'},
                                       'result': set()}
@@ -92,7 +98,7 @@ def test_heal_restarts_leaf_tasks():
     state = {'who_has': dict(),  # missing 'b'
              'stacks': {'alice': ['a'], 'bob': ['x']},
              'processing': {'alice': set(), 'bob': set()},
-             'waiting': {}, 'waiting_data': {}}
+             'waiting': {}, 'waiting_data': {}, 'ready': set()}
 
     del state['stacks']['bob']
     del state['processing']['bob']
@@ -109,7 +115,7 @@ def test_heal_culls():
     state = {'who_has': {'c': {alice}, 'y': {alice}},
              'stacks': {'alice': ['a'], 'bob': []},
              'processing': {'alice': set(), 'bob': set('y')},
-             'waiting': {}, 'waiting_data': {}}
+             'waiting': {}, 'waiting_data': {}, 'ready': set()}
 
     output = heal(dependencies, dependents, **state)
     assert 'a' not in output['stacks']['alice']
@@ -117,162 +123,156 @@ def test_heal_culls():
     assert output['finished_results'] == {'c'}
     assert 'y' not in output['processing']['bob']
 
-    assert output['waiting']['z'] == set()
+    assert output['ready'] == {'z'}
 
 
-def test_update_state():
-    dsk = {'x': 1, 'y': (inc, 'x')}
-    dependencies = {'x': set(), 'y': {'x'}}
-    dependents = {'x': {'y'}, 'y': set()}
+@gen_cluster()
+def test_ready_add_worker(s, a, b):
+    s.add_client(client='client')
+    s.add_worker(address='alice')
 
-    waiting = {'y': set()}
-    waiting_data = {'x': {'y'}, 'y': set()}
+    s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
+                   keys=['x-%d' % i for i in range(20)],
+                   client='client',
+                   dependencies={'x-%d' % i: set() for i in range(20)})
 
-    who_wants = defaultdict(set, y={'client'})
-    wants_what = defaultdict(set, client={'y'})
-    who_has = {'x': {'alice'}}
-    processing = set()
-    released = set()
-    in_play = {'x', 'y'}
+def test_update_state(loop):
+    s = Scheduler()
+    s.start()
+    s.add_worker(address='alice', ncores=1)
+    s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
+                   keys=['y'],
+                   dependencies={'y': 'x', 'x': set()},
+                   client='client')
 
-    new_dsk = {'a': 1, 'z': (add, 'y', 'a')}
-    new_dependencies = {'z': {'y', 'a'}}
-    new_keys = {'z'}
+    s.mark_task_finished('x', 'alice', nbytes=10, type=int)
 
-    e_dsk = {'x': 1, 'y': (inc, 'x'), 'a': 1, 'z': (add, 'y', 'a')}
-    e_dependencies = {'x': set(), 'a': set(), 'y': {'x'}, 'z': {'a', 'y'}}
-    e_dependents = {'z': set(), 'y': {'z'}, 'a': {'z'}, 'x': {'y'}}
+    assert s.processing['alice'] == {'y'}
+    assert not s.ready
+    assert s.who_wants == {'y': {'client'}}
+    assert s.wants_what == {'client': {'y'}}
 
-    e_waiting = {'y': set(), 'a': set(), 'z': {'a', 'y'}}
-    e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'a': {'z'}, 'z': set()}
-
-    e_who_wants = {'z': {'client'}, 'y': {'client'}}
-    e_wants_what = {'client': {'y', 'z'}}
-
-    update_state(dsk, dependencies, dependents, who_wants, wants_what,
-                 who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
-                 'client')
-
-    assert dsk == e_dsk
-    assert dependencies == e_dependencies
-    assert dependents == e_dependents
-    assert waiting == e_waiting
-    assert waiting_data == e_waiting_data
-    assert who_wants == e_who_wants
-    assert wants_what == e_wants_what
-    assert in_play == {'x', 'y', 'a', 'z'}
+    s.update_graph(tasks={'a': 1, 'z': (add, 'y', 'a')},
+                   keys=['z'],
+                   dependencies={'z': {'y', 'a'}},
+                   client='client')
 
 
-def test_update_state_with_processing():
-    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
-    dependencies, dependents = get_deps(dsk)
+    assert s.tasks == {'x': 1, 'y': (inc, 'x'), 'a': 1, 'z': (add, 'y', 'a')}
+    assert s.dependencies == {'x': set(), 'a': set(), 'y': {'x'}, 'z': {'a', 'y'}}
+    assert s.dependents == {'z': set(), 'y': {'z'}, 'a': {'z'}, 'x': {'y'}}
 
-    waiting = {'z': {'y'}}
-    waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
+    assert s.waiting == {'z': {'a', 'y'}}
+    assert s.waiting_data == {'x': {'y'}, 'y': {'z'}, 'a': {'z'}, 'z': set()}
 
-    who_wants = defaultdict(set, z={'client'})
-    wants_what = defaultdict(set, client={'z'})
-    who_has = {'x': {'alice'}}
-    processing = {'y'}
-    released = set()
-    in_play = {'z', 'x', 'y'}
+    assert s.who_wants == {'z': {'client'}, 'y': {'client'}}
+    assert s.wants_what == {'client': {'y', 'z'}}
 
-    new_dsk = {'a': (inc, 'x'), 'b': (add, 'a', 'y'), 'c': (inc, 'z')}
-    new_dependencies = {'a': {'x'}, 'b': {'a', 'y'}, 'c': {'z'}}
-    new_keys = {'b', 'c'}
+    assert list(s.ready) == ['a']
+    assert s.in_play == {'a', 'x', 'y', 'z'}
 
-    e_waiting = {'z': {'y'}, 'a': set(), 'b': {'a', 'y'}, 'c': {'z'}}
-    e_waiting_data = {'x': {'y', 'a'}, 'y': {'z', 'b'}, 'z': {'c'},
-                      'a': {'b'}, 'b': set(), 'c': set()}
-
-    e_who_wants = {'b': {'client'}, 'c': {'client'}, 'z': {'client'}}
-    e_wants_what = {'client': {'b', 'c', 'z'}}
-
-    update_state(dsk, dependencies, dependents, who_wants, wants_what,
-                 who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
-                 'client')
-
-    assert waiting == e_waiting
-    assert waiting_data == e_waiting_data
-    assert who_wants == e_who_wants
-    assert wants_what == e_wants_what
-    assert in_play == {'x', 'y', 'z', 'a', 'b', 'c'}
+    s.stop()
 
 
-def test_update_state_respects_data_in_memory():
-    dsk = {'x': 1, 'y': (inc, 'x')}
-    dependencies, dependents = get_deps(dsk)
+def test_update_state_with_processing(loop):
+    s = Scheduler()
+    s.start()
+    s.add_worker(address='alice', ncores=1)
+    s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')},
+                   keys=['z'],
+                   dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
+                   client='client')
 
-    waiting = dict()
-    waiting_data = {'y': set()}
+    s.mark_task_finished('x', 'alice', nbytes=10, type=int)
 
-    who_wants = defaultdict(set, y={'client'})
-    wants_what = defaultdict(set, client={'y'})
-    who_has = {'y': {'alice'}}
-    processing = set()
-    released = {'x'}
-    in_play = {'y'}
+    assert s.waiting == {'z': {'y'}}
+    assert s.waiting_data == {'x': {'y'}, 'y': {'z'}, 'z': set()}
+    assert list(s.ready) == []
 
-    new_dsk = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'y', 'x')}
-    new_dependencies = {'y': {'x'}, 'z': {'y', 'x'}}
-    new_keys = {'z'}
+    assert s.who_wants == {'z': {'client'}}
+    assert s.wants_what == {'client': {'z'}}
 
-    e_dsk = new_dsk.copy()
-    e_waiting = {'z': {'x'}, 'x': set()}
-    e_waiting_data = {'x': {'z'}, 'y': {'z'}, 'z': set()}
-    e_who_wants = {'y': {'client'}, 'z': {'client'}}
-    e_wants_what = {'client': {'y', 'z'}}
+    assert s.who_has == {'x': {'alice'}}
+    assert s.in_play == {'z', 'x', 'y'}
 
-    update_state(dsk, dependencies, dependents, who_wants, wants_what,
-                 who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
-                 'client')
+    s.update_graph(tasks={'a': (inc, 'x'), 'b': (add,'a','y'), 'c': (inc, 'z')},
+                   keys=['b', 'c'],
+                   dependencies={'a': {'x'}, 'b': {'a', 'y'}, 'c': {'z'}},
+                   client='client')
 
-    assert dsk == e_dsk
-    assert waiting == e_waiting
-    assert waiting_data == e_waiting_data
-    assert who_wants == e_who_wants
-    assert wants_what == e_wants_what
-    assert in_play == {'x', 'y', 'z'}
+    assert s.waiting == {'z': {'y'}, 'b': {'a', 'y'}, 'c': {'z'}}
+    assert s.stacks['alice'] == ['a']
+    assert not s.ready
+    assert s.waiting_data == {'x': {'y', 'a'}, 'y': {'z', 'b'}, 'z': {'c'},
+                              'a': {'b'}, 'b': set(), 'c': set()}
+
+    assert s.who_wants == {'b': {'client'}, 'c': {'client'}, 'z': {'client'}}
+    assert s.wants_what == {'client': {'b', 'c', 'z'}}
+    assert s.in_play == {'x', 'y', 'z', 'a', 'b', 'c'}
+
+    s.stop()
 
 
-def test_update_state_supports_recomputing_released_results():
-    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x')}
-    dependencies, dependents = get_deps(dsk)
+def test_update_state_respects_data_in_memory(loop):
+    s = Scheduler()
+    s.start()
+    s.add_worker(address='alice', ncores=1)
+    s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
+                   keys=['y'],
+                   dependencies={'y': {'x'}, 'x': set()},
+                   client='client')
 
-    waiting = dict()
-    waiting_data = {'z': set()}
+    s.mark_task_finished('x', 'alice', nbytes=10, type=int)
+    s.mark_task_finished('y', 'alice', nbytes=10, type=int)
 
-    who_wants = defaultdict(set, z={'client'})
-    wants_what = defaultdict(set, client={'z'})
-    who_has = {'z': {'alice'}}
-    processing = set()
-    released = {'x', 'y'}
-    in_play = {'z'}
+    assert s.who_has == {'y': {'alice'}}
 
-    new_dsk = {'x': 1, 'y': (inc, 'x')}
-    new_dependencies = {'y': {'x'}}
-    new_keys = {'y'}
+    s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (add, 'y', 'x')},
+                   keys=['z'],
+                   dependencies={'y': {'x'}, 'z': {'y', 'x'}},
+                   client='client')
 
-    e_dsk = dsk.copy()
-    e_waiting = {'x': set(), 'y': {'x'}}
-    e_waiting_data = {'x': {'y'}, 'y': set(), 'z': set()}
-    e_who_wants = {'z': {'client'}, 'y': {'client'}}
-    e_wants_what = {'client': {'y', 'z'}}
+    assert s.waiting == {'z': {'x'}}
+    assert s.processing['alice'] == {'x'}  # x was released, need to recompute
+    assert s.waiting_data == {'x': {'z'}, 'y': {'z'}, 'z': set()}
+    assert s.who_wants == {'y': {'client'}, 'z': {'client'}}
+    assert s.wants_what == {'client': {'y', 'z'}}
+    assert s.in_play == {'x', 'y', 'z'}
 
-    update_state(dsk, dependencies, dependents, who_wants, wants_what,
-                 who_has, in_play,
-                 waiting, waiting_data, new_dsk, new_keys, new_dependencies,
-                 'client')
+    s.stop()
 
-    assert dsk == e_dsk
-    assert waiting == e_waiting
-    assert waiting_data == e_waiting_data
-    assert who_wants == e_who_wants
-    assert wants_what == e_wants_what
-    assert in_play == {'x', 'y', 'z'}
+
+def test_update_state_supports_recomputing_released_results(loop):
+    s = Scheduler()
+    s.start()
+    s.add_worker(address='alice', ncores=1)
+    s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x')},
+                   keys=['z'],
+                   dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
+                   client='client')
+
+    s.mark_task_finished('x', 'alice', nbytes=10, type=int)
+    s.mark_task_finished('y', 'alice', nbytes=10, type=int)
+    s.mark_task_finished('z', 'alice', nbytes=10, type=int)
+
+    assert not s.waiting
+    assert not s.ready
+    assert s.waiting_data == {'z': set()}
+
+    assert s.who_has == {'z': {'alice'}}
+
+    s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
+                   keys=['y'],
+                   dependencies={'y': {'x'}},
+                   client='client')
+
+    assert s.waiting == {'y': {'x'}}
+    assert s.waiting_data == {'x': {'y'}, 'y': set(), 'z': set()}
+    assert s.who_wants == {'z': {'client'}, 'y': {'client'}}
+    assert s.wants_what == {'client': {'y', 'z'}}
+    assert s.processing['alice'] == {'x'}
+
+    s.stop()
 
 
 def test_decide_worker_with_many_independent_leaves():
@@ -345,14 +345,14 @@ def test_decide_worker_with_loose_restrictions():
 
 
 def test_decide_worker_without_stacks():
-    with pytest.raises(ValueError):
-        result = decide_worker({'x': []}, [], {}, {}, set(), {}, 'x')
+    assert not decide_worker({'x': []}, [], {}, {}, set(), {}, 'x')
 
 
 def test_validate_state():
     dsk = {'x': 1, 'y': (inc, 'x')}
     dependencies = {'x': set(), 'y': {'x'}}
-    waiting = {'y': {'x'}, 'x': set()}
+    waiting = {'y': {'x'}}
+    ready = deque(['x'])
     dependents = {'x': {'y'}, 'y': set()}
     waiting_data = {'x': {'y'}}
     who_has = dict()
@@ -370,18 +370,23 @@ def test_validate_state():
     with pytest.raises(Exception):
         validate_state(**locals())
 
-    del waiting['x']
+    ready.remove('x')
     with pytest.raises(Exception):
         validate_state(**locals())
 
     waiting['y'].remove('x')
+    with pytest.raises(Exception):
+        validate_state(**locals())
+
+    del waiting['y']
+    ready.appendleft('y')
     validate_state(**locals())
 
     stacks['alice'].append('y')
     with pytest.raises(Exception):
         validate_state(**locals())
 
-    waiting.pop('y')
+    ready.remove('y')
     validate_state(**locals())
 
     stacks['alice'].pop()
@@ -403,50 +408,6 @@ def test_validate_state():
     validate_state(**locals())
 
 
-def test_assign_many_tasks():
-    alice, bob, charlie = ('alice', 8000), ('bob', 8000), ('charlie', 8000)
-    dependencies = {'y': {'x'}, 'b': {'a'}, 'x': set(), 'a': set()}
-    waiting = {'y': set(), 'b': {'a'}, 'a': set()}
-    keyorder = {c: 1 for c in 'abxy'}
-    who_has = {'x': {alice}}
-    stacks = {alice: [], bob: []}
-    nbytes = {}
-    restrictions = {}
-    keys = ['y', 'a']
-
-    new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
-                                   stacks, restrictions, set(), nbytes, ['y', 'a'])
-
-    assert 'y' in stacks[alice]
-    assert 'a' in stacks[alice] + stacks[bob]
-    assert 'a' not in waiting
-    assert 'y' not in waiting
-
-    assert set(concat(new_stacks.values())) == set(concat(stacks.values()))
-
-
-def test_assign_many_tasks_with_restrictions():
-    alice, bob, charlie = ('alice', 8000), ('bob', 8000), ('charlie', 8000)
-    dependencies = {'y': {'x'}, 'b': {'a'}, 'x': set(), 'a': set()}
-    waiting = {'y': set(), 'b': {'a'}, 'a': set()}
-    keyorder = {c: 1 for c in 'abxy'}
-    who_has = {'x': {alice}}
-    stacks = {alice: [], bob: []}
-    nbytes = {'x': 0}
-    restrictions = {'y': {'bob'}, 'a': {'alice'}}
-    keys = ['y', 'a']
-
-    new_stacks = assign_many_tasks(dependencies, waiting, keyorder, who_has,
-                                   stacks, restrictions, set(), nbytes, ['y', 'a'])
-
-    assert 'y' in stacks[bob]
-    assert 'a' in stacks[alice]
-    assert 'a' not in waiting
-    assert 'y' not in waiting
-
-    assert set(concat(new_stacks.values())) == set(concat(stacks.values()))
-
-
 def test_fill_missing_data():
     dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
     dependencies, dependents = get_deps(dsk)
@@ -461,7 +422,8 @@ def test_fill_missing_data():
     released = set()
     in_play = {'z'}
 
-    e_waiting = {'x': set(), 'y': {'x'}, 'z': {'y'}}
+    e_waiting = {'y': {'x'}, 'z': {'y'}}
+    e_ready = {'x'}
     e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
     e_in_play = {'x', 'y', 'z'}
 
@@ -469,17 +431,14 @@ def test_fill_missing_data():
     del who_has['z']
     in_play.remove('z')
 
-    heal_missing_data(dsk, dependencies, dependents, who_has, in_play, waiting,
+    ready = heal_missing_data(dsk, dependencies, dependents, who_has, in_play, waiting,
             waiting_data, lost)
 
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
+    assert ready == e_ready
     assert in_play == e_in_play
 
-
-from distributed.utils_test import gen_cluster, gen_test
-from distributed.utils import All
-from tornado import gen
 
 def div(x, y):
     return x / y
@@ -623,12 +582,13 @@ def test_remove_worker_from_scheduler(s, a, b):
     dsk = {('x', i): (inc, i) for i in range(10)}
     s.update_graph(tasks=valmap(dumps_task, dsk), keys=list(dsk),
                    dependencies={k: set() for k in dsk})
-    assert s.stacks[a.address]
+    assert s.ready
+    assert not any(stack for stack in s.stacks.values())
 
     assert a.address in s.worker_queues
     s.remove_worker(address=a.address)
     assert a.address not in s.ncores
-    assert len(s.stacks[b.address]) + len(s.processing[b.address]) == \
+    assert len(s.ready) + len(s.processing[b.address]) == \
             len(dsk)  # b owns everything
     assert all(k in s.in_play for k in dsk)
     s.validate()
@@ -724,7 +684,8 @@ def test_scheduler_as_center():
         yield gen.sleep(0.01)
     assert 'a' in a.data or 'a' in b.data or 'a' in c.data
 
-    yield [w._close() for w in [a, b, c]]
+    with ignoring(StreamClosedError):
+        yield [w._close() for w in [a, b, c]]
 
     assert s.ncores == {}
     assert s.who_has == {}
@@ -848,3 +809,73 @@ def test_dumps_task():
     assert loads(d['function'])(1, 2) == 3
     assert loads(d['args']) == (1,)
     assert loads(d['kwargs']) == {'y': 10}
+
+
+@gen_cluster()
+def test_ready_remove_worker(s, a, b):
+    s.add_client(client='client')
+    s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
+                   keys=['x-%d' % i for i in range(20)],
+                   client='client',
+                   dependencies={'x-%d' % i: set() for i in range(20)})
+
+    assert all(len(s.processing[w]) == s.ncores[w]
+                for w in s.ncores)
+    assert not any(stack for stack in s.stacks.values())
+    assert len(s.ready) + sum(map(len, s.processing.values())) == 20
+
+    s.remove_worker(address=a.address)
+
+    for collection in [s.ncores, s.stacks, s.processing]:
+        assert set(collection) == {b.address}
+    assert all(len(s.processing[w]) == s.ncores[w]
+                for w in s.ncores)
+    assert set(s.processing) == {b.address}
+    assert not any(stack for stack in s.stacks.values())
+    assert len(s.ready) + sum(map(len, s.processing.values())) == 20
+
+
+@gen_cluster(Worker=Nanny)
+def test_restart(s, a, b):
+    s.add_client(client='client')
+    s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
+                   keys=['x-%d' % i for i in range(20)],
+                   client='client',
+                   dependencies={'x-%d' % i: set() for i in range(20)})
+
+    assert len(s.ready) + sum(map(len, s.processing.values())) == 20
+    assert s.ready
+
+    yield s.restart()
+
+    for c in [s.stacks, s.processing, s.ncores]:
+        assert len(c) == 2
+
+    for c in [s.stacks, s.processing]:
+        assert not any(v for v in c.values())
+
+    assert not s.ready
+    assert not s.tasks
+    assert not s.dependencies
+
+
+@gen_cluster()
+def test_ready_add_worker(s, a, b):
+    s.add_client(client='client')
+    s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
+                   keys=['x-%d' % i for i in range(20)],
+                   client='client',
+                   dependencies={'x-%d' % i: set() for i in range(20)})
+
+    assert all(len(s.processing[w]) == s.ncores[w]
+                for w in s.ncores)
+    assert len(s.ready) + sum(map(len, s.processing.values())) == 20
+
+    w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1')
+    w.listen(0)
+    s.add_worker(address=w.address, ncores=w.ncores)
+
+    assert w.address in s.ncores
+    assert all(len(s.processing[w]) == s.ncores[w]
+                for w in s.ncores)
+    assert len(s.ready) + sum(map(len, s.processing.values())) == 20
