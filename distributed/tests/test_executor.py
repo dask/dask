@@ -1103,17 +1103,21 @@ def test_directed_scatter_sync(loop):
 
 def test_iterator_scatter(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port']), loop=loop) as ee:
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
 
-            aa = ee.scatter([1,2,3])
-            assert [1,2,3] == ee.gather(aa)
+            aa = e.scatter([1,2,3])
+            assert [1,2,3] == e.gather(aa)
 
             g = (i for i in range(10))
-            futures = ee.scatter(g)
+            futures = e.scatter(g)
             assert isinstance(futures, Iterator)
 
             a = next(futures)
-            assert ee.gather(a) == 0
+            assert e.gather(a) == 0
+
+            futures = list(futures)
+            assert len(futures) == 9
+            assert e.gather(futures) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 def test_queue_scatter(loop):
