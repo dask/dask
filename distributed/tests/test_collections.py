@@ -7,7 +7,7 @@ from distributed import Executor
 from distributed.utils_test import cluster, loop, gen_cluster
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
-        futures_to_dask_array, _stack, stack, _futures_to_collection,
+        futures_to_dask_array, _futures_to_collection,
         _futures_to_dask_bag, futures_to_dask_bag, _future_to_dask_array,
          _futures_to_dask_arrays, futures_to_collection, future_to_dask_array,
          futures_to_dask_arrays)
@@ -146,42 +146,6 @@ def test__futures_to_dask_array(s, a, b):
     assert isinstance(result[0], np.number)
 
     yield e._shutdown()
-
-
-@gen_cluster()
-def test__stack(s, a, b):
-    import dask.array as da
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
-    arrays = e.map(np.ones, [(5, 5)] * 6)
-    y = yield _stack(arrays, axis=0)
-    assert y.shape == (6, 5, 5)
-    assert y.chunks == ((1, 1, 1, 1, 1, 1), (5,), (5,))
-
-    y_result = e.compute(y)
-    yy = yield y_result._result()
-
-    assert isinstance(yy, np.ndarray)
-    assert yy.shape == y.shape
-    assert (yy == 1).all()
-
-    yield e._shutdown()
-
-
-def test_stack(loop):
-    import dask.array as da
-    with cluster() as (c, [a, b]):
-        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
-            arrays = [np.random.random((3, 3)) for i in range(4)]
-            remotes = e.scatter(arrays)
-            local = np.concatenate([a[None, ...] for a in arrays], axis=0) # np.stack(arrays, axis=0)
-            remote = stack(remotes, axis=0)
-
-            assert isinstance(remote, da.Array)
-            assert (remote.compute(get=e.get) == local).all()
-
-            assert isinstance(remote[2, :, 1].compute(get=e.get), np.ndarray)
 
 
 @gen_cluster()
