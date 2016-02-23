@@ -12,7 +12,7 @@ from tornado import gen
 
 import pytest
 
-from distributed import Center, Nanny, Worker
+from distributed import Nanny, Worker
 from distributed.core import connect, read, write, rpc, loads
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, heal,

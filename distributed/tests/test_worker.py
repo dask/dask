@@ -40,7 +40,7 @@ def test_worker(loop):
 
         assert not a.active
         response, _ = yield aa.compute(key='x', function=add,
-                                       args=[1, 2], needed=[],
+                                       args=[1, 2], who_has={},
                                        close=True)
         assert not a.active
         assert response == b'OK'
@@ -48,7 +48,7 @@ def test_worker(loop):
         assert c.who_has['x'] == set([(a.ip, a.port)])
 
         response, info = yield bb.compute(key='y', function=add,
-                                          args=['x', 10], needed=['x'])
+                args=['x', 10], who_has={'x': {a.address}})
         assert response == b'OK'
         assert b.data['y'] == 13
         assert c.who_has['y'] == set([(b.ip, b.port)])
@@ -58,7 +58,7 @@ def test_worker(loop):
             1 / 0
 
         response, content = yield bb.compute(key='z',
-                function=bad_func, args=(), needed=(), close=True)
+                function=bad_func, args=(), close=True)
         assert not b.active
         assert response == b'error'
         assert isinstance(content['exception'], ZeroDivisionError)
@@ -97,11 +97,11 @@ def test_compute_who_has(loop):
         yield [x._start(), y._start(), z._start()]
 
         zz = rpc(ip=z.ip, port=z.port)
-        yield zz.compute(function=inc, args=('a',), needed=['a'],
+        yield zz.compute(function=inc, args=('a',),
                          who_has={'a': {x.address}}, key='b')
         assert z.data['b'] == 2
 
-        yield zz.compute(function=inc, args=('a',), needed=['a'],
+        yield zz.compute(function=inc, args=('a',),
                          who_has={'a': {y.address}}, key='c')
         assert z.data['c'] == 3
 

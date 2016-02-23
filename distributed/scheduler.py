@@ -146,11 +146,6 @@ class Scheduler(Server):
         self.ip = ip or get_ip()
         self.delete_interval = delete_interval
 
-        if center:
-            self.center = coerce_to_rpc(center)
-        else:
-            self.center = None
-
         self.tasks = dict()
         self.dependencies = dict()
         self.dependents = dict()
@@ -230,22 +225,11 @@ class Scheduler(Server):
         d = {'type': type(self).__name__, 'id': self.id,
              'workers': list(self.ncores),
              'services': {key: v.port for (key, v) in self.services.items()}}
-        if self.center:
-            d['center'] = (self.center.ip, self.center.port)
         return d
 
     def put(self, msg):
         """ Place a message into the scheduler's queue """
         return self.scheduler_queues[0].put_nowait(msg)
-
-    @gen.coroutine
-    def sync_center(self):
-        """ Connect to center, determine available workers """
-        self.ncores, self.has_what, self.who_has, self.worker_services = yield [
-                self.center.ncores(),
-                self.center.has_what(),
-                self.center.who_has(),
-                self.center.worker_services()]
 
     def start(self, port=8786, start_queues=True):
         """ Clear out old state and restart all running coroutines """
@@ -310,9 +294,6 @@ class Scheduler(Server):
         """
         yield self.cleanup()
         yield self.finished()
-        if self.center:
-            yield self.center.close(close=True)
-            self.center.close_streams()
         self.status = 'closed'
 
     @gen.coroutine
@@ -997,8 +978,7 @@ class Scheduler(Server):
 
                 response, content = yield worker.compute(who_has=who_has,
                                                          key=key,
-                                                         report=self.center
-                                                                 is not None,
+                                                         report=False,
                                             serialized=serialized,
                                             **task)
                 if response == b'OK':
@@ -1067,7 +1047,7 @@ class Scheduler(Server):
         if not broadcast:
             ncores = workers if workers is not None else self.ncores
             keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
-                                                report=not not self.center)
+                                                             report=False)
         else:
             workers2 = workers if workers is not None else list(self.ncores)
             keys, nbytes = yield broadcast_to_workers(workers2, data,
@@ -1120,8 +1100,6 @@ class Scheduler(Server):
         # All quiet
         resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
         assert all(resp == b'OK' for resp in resps)
-        if self.center:
-            yield self.sync_center()
 
         self.start()
 

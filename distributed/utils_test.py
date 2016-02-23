@@ -133,36 +133,6 @@ def run_nanny(q, center_port, **kwargs):
 
 
 @contextmanager
-def scheduler(cport, **kwargs):
-    q = Queue()
-
-    proc = Process(target=run_scheduler, args=(q, cport), kwargs=kwargs)
-    proc.daemon = True
-    proc.start()
-
-    sport = q.get()
-
-    s = rpc(ip='127.0.0.1', port=sport)
-    loop = IOLoop()
-    start = time()
-    while True:
-        ncores = loop.run_sync(s.ncores)
-        if ncores:
-            break
-        if time() - start > 5:
-            raise Exception("Timeout on cluster creation")
-        sleep(0.01)
-
-    try:
-        yield sport
-    finally:
-        loop = IOLoop()
-        with ignoring(socket.error, TimeoutError, StreamClosedError):
-            loop.run_sync(lambda: disconnect('127.0.0.1', sport), timeout=0.5)
-        proc.terminate()
-
-
-@contextmanager
 def cluster(nworkers=2, nanny=False):
     if nanny:
         _run_worker = run_nanny

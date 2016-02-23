@@ -215,7 +215,7 @@ class Executor(object):
     Parameters
     ----------
     address: string, tuple, or ``Scheduler``
-        This can be the address of a ``Center`` or ``Scheduler`` servers, either
+        This can be the address of a ``Scheduler`` server, either
         as a string ``'127.0.0.1:8787'`` or tuple ``('127.0.0.1', 8787)``
         or it can be a local ``Scheduler`` object.
 
@@ -293,7 +293,6 @@ class Executor(object):
     def _start(self, timeout=3, **kwargs):
         if isinstance(self._start_arg, Scheduler):
             self.scheduler = self._start_arg
-            self.center = self._start_arg.center
         if isinstance(self._start_arg, str):
             ip, port = tuple(self._start_arg.split(':'))
             self._start_arg = (ip, int(port))
@@ -303,27 +302,16 @@ class Executor(object):
                 ident = yield r.identity()
             except (StreamClosedError, OSError):
                 raise IOError("Could not connect to %s:%d" % self._start_arg)
-            if ident['type'] == 'Center':
-                self.center = r
-                self.scheduler = Scheduler(self.center, loop=self.loop,
-                                           **kwargs)
-                self.scheduler.listen(0)
-            elif ident['type'] == 'Scheduler':
+            if ident['type'] == 'Scheduler':
                 self.scheduler = r
                 self.scheduler_stream = yield connect(*self._start_arg)
                 yield write(self.scheduler_stream, {'op': 'register-client',
                                                     'client': self.id})
-                if 'center' in ident:
-                    cip, cport = ident['center']
-                    self.center = rpc(ip=cip, port=cport)
-                else:
-                    self.center = self.scheduler
             else:
                 raise ValueError("Unknown Type")
 
         if isinstance(self.scheduler, Scheduler):
             if self.scheduler.status != 'running':
-                yield self.scheduler.sync_center()
                 self.scheduler.start(0)
             self.scheduler_queue = Queue()
             self.report_queue = Queue()
@@ -1067,9 +1055,9 @@ class Executor(object):
         with open(filename, 'rb') as f:
             data = f.read()
         _, fn = os.path.split(filename)
-        d = yield self.center.broadcast(msg={'op': 'upload_file',
-                                             'filename': fn,
-                                             'data': data})
+        d = yield self.scheduler.broadcast(msg={'op': 'upload_file',
+                                                'filename': fn,
+                                                'data': data})
 
         if any(isinstance(v, Exception) for v in d.values()):
             exception = next(v for v in d.values() if isinstance(v, Exception))
@@ -1223,9 +1211,9 @@ def default_executor(e=None):
         return _global_executor[0]
     else:
         raise ValueError("No executors found\n"
-                "Start an executor and point it to the center address\n"
+                "Start an executor and point it to the scheduler address\n"
                 "  from distributed import Executor\n"
-                "  executor = Executor('ip-addr-of-center:8787')\n")
+                "  executor = Executor('ip-addr-of-scheduler:8786')\n")
 
 
 def ensure_default_get(executor):
