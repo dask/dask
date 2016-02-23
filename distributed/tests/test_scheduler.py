@@ -138,7 +138,7 @@ def test_ready_add_worker(s, a, b):
 
 def test_update_state(loop):
     s = Scheduler()
-    s.start()
+    s.start(0)
     s.add_worker(address='alice', ncores=1)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
                    keys=['y'],
@@ -176,7 +176,7 @@ def test_update_state(loop):
 
 def test_update_state_with_processing(loop):
     s = Scheduler()
-    s.start()
+    s.start(0)
     s.add_worker(address='alice', ncores=1)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')},
                    keys=['z'],
@@ -215,7 +215,7 @@ def test_update_state_with_processing(loop):
 
 def test_update_state_respects_data_in_memory(loop):
     s = Scheduler()
-    s.start()
+    s.start(0)
     s.add_worker(address='alice', ncores=1)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
                    keys=['y'],
@@ -244,7 +244,7 @@ def test_update_state_respects_data_in_memory(loop):
 
 def test_update_state_supports_recomputing_released_results(loop):
     s = Scheduler()
-    s.start()
+    s.start(0)
     s.add_worker(address='alice', ncores=1)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x')},
                    keys=['z'],
@@ -670,7 +670,7 @@ def test_scheduler_as_center():
     b = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=2)
     b.data.update({'y': 2, 'z': 3})
     c = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=3)
-    yield [w._start() for w in [a, b, c]]
+    yield [w._start(0) for w in [a, b, c]]
 
     assert s.ncores == {w.address: w.ncores for w in [a, b, c]}
     assert s.who_has == {'x': {a.address},
