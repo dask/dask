@@ -70,6 +70,10 @@ def futures_to_dask_dataframe(futures, divisions=None, executor=None):
     return sync(executor.loop, _futures_to_dask_dataframe, futures,
                 divisions=divisions, executor=executor)
 
+
+def get_shape(x):
+    return x.shape
+
 def get_dim(x, i):
     return x.shape[i]
 
@@ -224,3 +228,70 @@ def futures_to_collection(futures, executor=None, **kwargs):
     executor = default_executor(executor)
     return sync(executor.loop, _futures_to_collection, futures,
                 executor=executor, **kwargs)
+
+
+@gen.coroutine
+def _future_to_dask_array(future, executor=None):
+    e = default_executor(executor)
+
+    name = 'array-' + future.key
+
+    shape, dtype = yield e._gather([e.submit(get_shape, future),
+                                    e.submit(get_dtype, future)])
+    dsk = {(name,) + (0,) * len(shape): future}
+    chunks = tuple((d,) for d in shape)
+
+    ensure_default_get(e)
+
+    raise gen.Return(da.Array(dsk, name, chunks, dtype))
+
+
+def future_to_dask_array(future, executor=None):
+    """
+    Convert a single future to a single-chunked dask.array
+
+    See Also:
+        dask.array.stack
+        dask.array.concatenate
+        futures_to_dask_array
+        futures_to_dask_arrays
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _future_to_dask_array, future,
+                executor=executor)
+
+
+@gen.coroutine
+def _futures_to_dask_arrays(futures, executor=None):
+    e = default_executor(executor)
+
+    names = ['array-' + future.key for future in futures]
+
+    shapes, dtypes = yield e._gather([e.map(get_shape, futures),
+                                      e.map(get_dtype, futures)])
+
+    dsks = [{(name,) + (0,) * len(shape): future}
+            for name, shape, future in zip(names, shapes, futures)]
+    chunkss = [tuple((d,) for d in shape) for shape in shapes]
+
+    ensure_default_get(e)
+
+    raise gen.Return([da.Array(dsk, name, chunks, dtype)
+            for dsk, name, chunks, dtype in zip(dsks, names, chunkss, dtypes)])
+
+
+def futures_to_dask_arrays(futures, executor=None):
+    """
+    Convert a list of futures into a list of dask arrays
+
+    Computation will be done to evaluate the shape and dtype of the futures.
+
+    See Also:
+        dask.array.stack
+        dask.array.concatenate
+        future_to_dask_array
+        futures_to_dask_array
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _futures_to_dask_arrays, futures,
+                executor=executor)

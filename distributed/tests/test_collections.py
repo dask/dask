@@ -8,8 +8,9 @@ from distributed.utils_test import cluster, loop, gen_cluster
 from distributed.collections import (_futures_to_dask_dataframe,
         futures_to_dask_dataframe, _futures_to_dask_array,
         futures_to_dask_array, _stack, stack, _futures_to_collection,
-        _futures_to_dask_bag, futures_to_dask_bag,
-        futures_to_collection)
+        _futures_to_dask_bag, futures_to_dask_bag, _future_to_dask_array,
+         _futures_to_dask_arrays, futures_to_collection, future_to_dask_array,
+         futures_to_dask_arrays)
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
@@ -181,6 +182,58 @@ def test_stack(loop):
             assert (remote.compute(get=e.get) == local).all()
 
             assert isinstance(remote[2, :, 1].compute(get=e.get), np.ndarray)
+
+
+@gen_cluster()
+def test__future_to_dask_array(s, a, b):
+    import dask.array as da
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    f = e.submit(np.ones, (5, 5))
+    a = yield _future_to_dask_array(f)
+
+    assert a.shape == (5, 5)
+    assert a.dtype == np.ones(1).dtype
+    assert isinstance(a, da.Array)
+
+    aa = yield e.compute(a)._result()
+    assert (aa == 1).all()
+
+    yield e._shutdown()
+
+
+@gen_cluster()
+def test__futures_to_dask_arrays(s, a, b):
+    import dask.array as da
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    fs = e.map(np.ones, [(5, i) for i in range(1, 6)], pure=False)
+    arrs = yield _futures_to_dask_arrays(fs)
+    assert len(fs) == len(arrs) == 5
+
+    assert all(a.shape == (5, i + 1) for i, a in enumerate(arrs))
+    assert all(a.dtype == np.ones(1).dtype for a in arrs)
+    assert all(isinstance(a, da.Array) for a in arrs)
+
+    xs = yield e._gather(e.compute(arrs))
+    assert all((x == 1).all() for x in xs)
+
+    yield e._shutdown()
+
+
+def test_futures_to_dask_arrays(loop):
+    with cluster() as (c, [a, b]):
+        with Executor(('127.0.0.1', c['port']), loop=loop) as e:
+            futures = e.map(np.ones, [(5, i) for i in range(1, 6)])
+            x = future_to_dask_array(futures[0])
+            assert x.shape == (5, 1)
+            assert (x.compute() == 1).all()
+
+            xs = futures_to_dask_arrays(futures)
+            assert [x.shape for x in xs] == [(5, i) for i in range(1, 6)]
+
 
 
 @gen_cluster()
