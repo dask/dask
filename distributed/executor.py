@@ -720,7 +720,8 @@ class Executor(object):
         elif isinstance(data, dict):
             out = {k: Future(k, self) for k in keys}
         else:
-            raise TypeError("")
+            raise TypeError(
+                    "Input to scatter must be a list, iterator, or queue")
 
         for key in keys:
             self.futures[key]['status'] = 'finished'
