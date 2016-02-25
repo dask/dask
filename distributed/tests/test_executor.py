@@ -2336,3 +2336,19 @@ def test_fatally_serialized_input(s):
         yield gen.sleep(0.01)
 
     yield e._shutdown()
+
+
+@gen_cluster()
+def test_balance_tasks_by_stacks(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    x = e.submit(inc, 1)
+    yield _wait(x)
+
+    y = e.submit(inc, 2)
+    yield _wait(y)
+
+    assert len(a.data) == len(b.data) == 1
+
+    yield e._shutdown()

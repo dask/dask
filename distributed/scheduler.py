@@ -357,7 +357,7 @@ class Scheduler(Server):
     def ensure_idle_ready(self):
         """ Run ready tasks on idle workers """
         while self.idle and self.ready and self.ncores:
-            worker = min(self.idle, key=lambda w: len(self.processing[w]))
+            worker = min(self.idle, key=lambda w: len(self.has_what[w]))
             self.ensure_occupied(worker)
 
     def mark_key_in_memory(self, key, workers=None, type=None):
