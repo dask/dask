@@ -7,8 +7,10 @@ Dask
 Dask provides multi-core execution on larger-than-memory datasets using blocked
 algorithms and task scheduling.  It maps high-level NumPy, Pandas, and list
 operations on large datasets on to many operations on small in-memory
-datasets.  It then executes these graphs in parallel on a single machine.  Dask
-lets us use traditional NumPy, Pandas, and list programming while operating on
+datasets.  It then executes these graphs in parallel on a single machine with the 
+multiprocessing and multithreaded scheduler, and on many machines with the distributed 
+scheduler.  New schedulers can be written or adapted in a straightforward manner
+as well.  Dask lets us use traditional NumPy, Pandas, and list programming while operating on
 inconveniently large data in a small amount of space.
 
 *  ``dask`` is a specification to describe task dependency graphs.
