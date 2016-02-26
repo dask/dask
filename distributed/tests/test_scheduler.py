@@ -1,3 +1,4 @@
+import cloudpickle
 from collections import defaultdict, deque
 from copy import deepcopy
 from operator import add
@@ -806,9 +807,14 @@ def test_dumps_task():
 
     f = lambda x, y=2: x + y
     d = dumps_task((apply, f, (1,), {'y': 10}))
-    assert loads(d['function'])(1, 2) == 3
-    assert loads(d['args']) == (1,)
-    assert loads(d['kwargs']) == {'y': 10}
+    assert cloudpickle.loads(d['function'])(1, 2) == 3
+    assert cloudpickle.loads(d['args']) == (1,)
+    assert cloudpickle.loads(d['kwargs']) == {'y': 10}
+
+    d = dumps_task((apply, f, (1,)))
+    assert cloudpickle.loads(d['function'])(1, 2) == 3
+    assert cloudpickle.loads(d['args']) == (1,)
+    assert set(d) == {'function', 'args'}
 
 
 @gen_cluster()
