@@ -1335,9 +1335,9 @@ class DataFrame(_Frame):
             return self._pd_cache.dtypes
 
     @derived_from(pd.DataFrame)
-    def set_index(self, other, **kwargs):
+    def set_index(self, other, drop=True, **kwargs):
         from .shuffle import set_index
-        return set_index(self, other, **kwargs)
+        return set_index(self, other, drop=drop, **kwargs)
 
     def set_partition(self, column, divisions, **kwargs):
         """ Set explicit divisions for new column index

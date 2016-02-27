@@ -137,13 +137,47 @@ def test_set_index():
     assert d4.index.name == 'b'
     assert eq(d4, full.set_index('b'))
 
+@pytest.mark.parametrize('drop', [True, False])
+def test_set_index_drop(drop):
+
+    pdf = pd.DataFrame({'A': list('ABAABBABAA'),
+                        'B': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                        'C': [1, 2, 3, 2, 1, 3, 2, 4, 2, 3]})
+    ddf = dd.from_pandas(pdf, 3)
+
+    assert eq(ddf.set_index('A', drop=drop),
+              pdf.set_index('A', drop=drop))
+    assert eq(ddf.set_index('B', drop=drop),
+              pdf.set_index('B', drop=drop))
+    assert eq(ddf.set_index('C', drop=drop),
+              pdf.set_index('C', drop=drop))
+    assert eq(ddf.set_index(ddf.A, drop=drop),
+              pdf.set_index(pdf.A, drop=drop))
+    assert eq(ddf.set_index(ddf.B, drop=drop),
+              pdf.set_index(pdf.B, drop=drop))
+    assert eq(ddf.set_index(ddf.C, drop=drop),
+              pdf.set_index(pdf.C, drop=drop))
+
+    # numeric columns
+    pdf = pd.DataFrame({0: list('ABAABBABAA'),
+                        1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                        2: [1, 2, 3, 2, 1, 3, 2, 4, 2, 3]})
+    ddf = dd.from_pandas(pdf, 3)
+    assert eq(ddf.set_index(0, drop=drop),
+              pdf.set_index(0, drop=drop))
+    assert eq(ddf.set_index(2, drop=drop),
+              pdf.set_index(2, drop=drop))
+
 
 def test_set_index_raises_error_on_bad_input():
     df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7],
                         'b': [7, 6, 5, 4, 3, 2, 1]})
     ddf = dd.from_pandas(df, 2)
 
-    assert raises(NotImplementedError, lambda: ddf.set_index(['a', 'b']))
+    msg = r"Dask dataframe does not yet support multi-indexes"
+    with tm.assertRaisesRegexp(NotImplementedError, msg):
+        ddf.set_index(['a', 'b'])
+
 
 def test_rename_columns():
     # GH 819
