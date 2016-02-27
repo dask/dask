@@ -16,7 +16,8 @@ from dask.dataframe.categorical import (strip_categories, _categorize,
 from .utils import shard_df_on_index
 
 
-def set_index(df, index, npartitions=None, compute=True, **kwargs):
+def set_index(df, index, npartitions=None, compute=True,
+              drop=True, **kwargs):
     """ Set DataFrame index to new column
 
     Sorts index and realigns Dataframe to new sorted order.
@@ -37,9 +38,10 @@ def set_index(df, index, npartitions=None, compute=True, **kwargs):
         index2 = index
 
     divisions = (index2
-                  .quantile(np.linspace(0, 1, npartitions+1))
+                  .quantile(np.linspace(0, 1, npartitions + 1))
                   .compute()).tolist()
-    return set_partition(df, index, divisions, compute=compute, **kwargs)
+    return set_partition(df, index, divisions, compute=compute,
+                         drop=drop, **kwargs)
 
 
 def new_categories(categories, index):
@@ -50,7 +52,7 @@ def new_categories(categories, index):
     return categories
 
 
-def set_partition(df, index, divisions, compute=False, **kwargs):
+def set_partition(df, index, divisions, compute=False, drop=True, **kwargs):
     """ Group DataFrame by index
 
     Sets a new index and partitions data along that index according to
@@ -65,6 +67,8 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
         Column to become the new index
     divisions: list
         Values to form new divisions between partitions
+    drop: bool, default True
+        Whether to delete columns to be used as the new index
 
     See Also
     --------
@@ -72,17 +76,13 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     shuffle
     partd
     """
-
     if isinstance(index, Series):
         assert df.divisions == index.divisions
-        metadata = df._pd
-        metadata.index.name = index.name
-    elif isinstance(index, (str, unicode)):
-        columns = [c for c in df.columns if c != index]
-        metadata = df._pd[columns]
-        metadata.index.name = index
+        metadata = df._pd.set_index(index._pd, drop=drop)
+    elif np.isscalar(index):
+        metadata = df._pd.set_index(index, drop=drop)
     else:
-        raise ValueError('index must be Series or str, {0} given'.format(type(index)))
+         raise ValueError('index must be Series or scalar, {0} given'.format(type(index)))
 
     token = tokenize(df, index, divisions)
     always_new_token = uuid.uuid1().hex
@@ -103,12 +103,12 @@ def set_partition(df, index, divisions, compute=False, **kwargs):
     name = 'set-partition--partition-' + always_new_token
     if isinstance(index, _Frame):
         dsk2 = dict(((name, i),
-                     (_set_partition, part, ind, divisions, p))
+                     (_set_partition, part, ind, divisions, p, drop))
                      for i, (part, ind)
                      in enumerate(zip(df._keys(), index._keys())))
     else:
         dsk2 = dict(((name, i),
-                     (_set_partition, part, index, divisions, p))
+                     (_set_partition, part, index, divisions, p, drop))
                      for i, part
                      in enumerate(df._keys()))
 
@@ -152,9 +152,9 @@ def barrier(args):
     list(args)
     return 0
 
-def _set_partition(df, index, divisions, p):
+def _set_partition(df, index, divisions, p, drop=True):
     """ Shard partition and dump into partd """
-    df = df.set_index(index)
+    df = df.set_index(index, drop=drop)
     df = strip_categories(df)
     divisions = list(divisions)
     shards = shard_df_on_index(df, divisions[1:-1])
