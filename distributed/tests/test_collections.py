@@ -115,6 +115,7 @@ def test_dataframes(s, a, b):
              lambda df: df.index,
              lambda df: df.x,
              lambda df: df.x.cumsum(),
+             lambda df: df.groupby(['x', 'y']).count(),
              lambda df: df.loc[50:75]]
     for f in exprs:
         local = f(ldf).compute(get=dask.get)
