@@ -1543,9 +1543,11 @@ def dumps_task(task):
     """
     if istask(task):
         if task[0] is apply and not any(map(_maybe_complex, task[2:])):
-            return {'function': dumps_function(task[1]),
-                        'args': dumps(task[2]),
-                      'kwargs': dumps(task[3])}
+            d = {'function': dumps_function(task[1]),
+                 'args': dumps(task[2])}
+            if len(task) == 4:
+                d['kwargs'] = dumps(task[3])
+            return d
         elif not any(map(_maybe_complex, task[1:])):
             return {'function': dumps_function(task[0]),
                         'args': dumps(task[1:])}
