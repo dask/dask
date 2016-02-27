@@ -229,14 +229,14 @@ def test_read_csv_sync(loop):
 
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 futures = read_csv('/tmp/test/*.csv', lineterminator='\n',
-                                   header=True, collection=False, lazy=False)
+                                   collection=False, lazy=False, header=0)
                 assert all(isinstance(f, Future) for f in futures)
                 L = e.gather(futures)
                 assert isinstance(L[0], pd.DataFrame)
                 assert list(L[0].columns) == ['name', 'amount', 'id']
 
                 df = read_csv('/tmp/test/*.csv', lineterminator='\n',
-                              header=True, collection=True, lazy=False)
+                              collection=True, lazy=False, header=0)
                 assert isinstance(df, dd.DataFrame)
                 assert list(df.head().iloc[0]) == ['Alice', 100, 1]
 
@@ -253,12 +253,28 @@ def test_read_csv(s, a, b):
         with hdfs.open('/tmp/test/2.csv', 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        df = yield _read_csv('/tmp/test/*.csv', header=True,
+        df = yield _read_csv('/tmp/test/*.csv',
                 lineterminator='\n', lazy=False)
         assert df._known_dtype
         result = e.compute(df.id.sum(), sync=False)
         result = yield result._result()
         assert result == 1 + 2 + 3 + 4
+        yield e._shutdown()
+
+
+@gen_cluster([(ip, 1), (ip, 1)], timeout=60)
+def test_read_csv_with_names(s, a, b):
+    with make_hdfs() as hdfs:
+        e = Executor((s.ip, s.port), start=False)
+        yield e._start()
+
+        with hdfs.open('/tmp/test/1.csv', 'wb') as f:
+            f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
+
+        df = yield _read_csv('/tmp/test/*.csv', names=['amount', 'name'],
+                             lineterminator='\n', lazy=False)
+        assert list(df.columns) == ['amount', 'name']
+
         yield e._shutdown()
 
 
@@ -274,7 +290,7 @@ def test_read_csv_lazy(s, a, b):
         with hdfs.open('/tmp/test/2.csv', 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        df = yield _read_csv('/tmp/test/*.csv', header=True, lazy=True,
+        df = yield _read_csv('/tmp/test/*.csv', lazy=True,
                              lineterminator='\n')
         assert df._known_dtype
         yield gen.sleep(0.5)

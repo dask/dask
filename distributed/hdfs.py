@@ -109,7 +109,7 @@ def bytes_read_csv(b, **kwargs):
 
 @gen.coroutine
 def _read_csv(path, executor=None, hdfs=None, lazy=True, lineterminator='\n',
-        header=True, names=None, collection=True, **kwargs):
+        collection=True, names=None, header='infer', **kwargs):
     from hdfs3 import HDFileSystem
     from hdfs3.core import ensure_bytes
     from dask import do
@@ -122,13 +122,15 @@ def _read_csv(path, executor=None, hdfs=None, lazy=True, lineterminator='\n',
     blockss = [read_bytes(fn, executor, hdfs, lazy=True,
                           delimiter=ensure_bytes(lineterminator))
                for fn in filenames]
-    if names is None and header:
-        with hdfs.open(filenames[0]) as f:
-            head = pd.read_csv(f, nrows=5, **kwargs)
-            names = head.columns
 
-    dfs1 = [[do(bytes_read_csv)(blocks[0], names=names, skiprows=1, **kwargs)] +
-            [do(bytes_read_csv)(b, names=names, **kwargs) for b in blocks[1:]]
+    with hdfs.open(filenames[0]) as f:
+        head = pd.read_csv(f, nrows=5, names=names, header=header, **kwargs)
+        names = list(head.columns)
+
+    dfs1 = [[do(bytes_read_csv)(blocks[0], names=names, skiprows=1,
+                                header=None, **kwargs)] +
+            [do(bytes_read_csv)(b, names=names, header=None, **kwargs)
+                for b in blocks[1:]]
             for blocks in blockss]
     dfs2 = sum(dfs1, [])
     if lazy:
