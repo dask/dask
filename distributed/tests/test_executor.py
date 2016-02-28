@@ -2042,3 +2042,20 @@ def test_balance_tasks_by_stacks(e, s, a, b):
     yield _wait(y)
 
     assert len(a.data) == len(b.data) == 1
+
+
+@gen_cluster(executor=True)
+def test_run(e, s, a, b):
+    results = yield e._run(inc, 1)
+    assert results == {a.address: 2, b.address: 2}
+
+
+def test_run_sync(loop):
+    def func(x, y=10):
+        return x + y
+
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            result = e.run(func, 1, y=2)
+            assert result == {('127.0.0.1', a['port']): 3,
+                              ('127.0.0.1', b['port']): 3}

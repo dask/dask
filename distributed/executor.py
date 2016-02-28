@@ -852,6 +852,27 @@ class Executor(object):
         return sync(self.loop, self._cancel, futures, block=False)
 
     @gen.coroutine
+    def _run(self, function, *args, **kwargs):
+        result = yield self.scheduler.broadcast(msg=dict(op='run',
+                                                function=dumps(function),
+                                                args=dumps(args),
+                                                kwargs=dumps(kwargs)))
+        raise Return(result)
+
+    def run(self, function, *args, **kwargs):
+        """
+        Run a function on all workers outside of task scheduling system
+
+        Examples
+        --------
+        >>> e.run(os.getpid)  # doctest: +SKIP
+        {('192.168.0.100', 9000): 1234,
+         ('192.168.0.101', 9000): 4321,
+         ('192.168.0.102', 9000): 5555}
+        """
+        return sync(self.loop, self._run, function, *args, **kwargs)
+
+    @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
         flatkeys = list(map(tokey, flatten([keys])))
         futures = {key: Future(key, self) for key in flatkeys}
