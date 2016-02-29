@@ -16,6 +16,7 @@ from ..utils import ignoring
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
                    remove, pluck, groupby, topk, compose, drop, curry)
+from toolz.compatibility import iteritems
 import toolz
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
@@ -412,10 +413,9 @@ class Bag(Base):
         >>> dict(b.frequencies())  # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
-        return self.reduction(compose(list, dictitems, frequencies),
-                              merge_frequencies,
+        return self.reduction(frequencies, merge_frequencies,
                               out_type=Bag, split_every=split_every,
-                              name='frequencies')
+                              name='frequencies').map_partitions(dictitems)
 
     def topk(self, k, key=None):
         """ K largest elements in collection
@@ -1311,7 +1311,15 @@ def from_imperative(values):
 
 
 def merge_frequencies(seqs):
-    return list(merge_with(sum, map(dict, seqs)).items())
+    first, rest = seqs[0], seqs[1:]
+    if not rest:
+        return first
+    out = defaultdict(int)
+    out.update(first)
+    for d in rest:
+        for k, v in iteritems(d):
+            out[k] += v
+    return out
 
 
 def bag_range(n, npartitions):
