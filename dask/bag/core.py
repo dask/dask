@@ -417,7 +417,7 @@ class Bag(Base):
                               out_type=Bag, split_every=split_every,
                               name='frequencies').map_partitions(dictitems)
 
-    def topk(self, k, key=None):
+    def topk(self, k, key=None, split_every=None):
         """ K largest elements in collection
 
         Optionally ordered by some key function
@@ -429,19 +429,14 @@ class Bag(Base):
         >>> list(b.topk(2, lambda x: -x))  # doctest: +SKIP
         [3, 4]
         """
-        token = tokenize(self, k, key)
-        a = 'topk-a-' + token
-        b = 'topk-b-' + token
         if key:
             if callable(key) and takes_multiple_arguments(key):
                 key = partial(apply, key)
-            func = partial(topk, key=key)
+            func = partial(topk, k, key=key)
         else:
-            func = topk
-        dsk = dict(((a, i), (list, (func, k, (self.name, i))))
-                   for i in range(self.npartitions))
-        dsk2 = {(b, 0): (list, (func, k, (toolz.concat, list(dsk.keys()))))}
-        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
+            func = partial(topk, k)
+        return self.reduction(func, compose(func, toolz.concat), out_type=Bag,
+                              split_every=split_every, name='topk')
 
     def distinct(self):
         """ Distinct elements of collection
