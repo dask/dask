@@ -15,7 +15,7 @@ from ..utils import ignoring
 
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
-                   remove, pluck, groupby, topk, compose, drop, curry)
+                   remove, pluck, groupby, topk, compose, curry)
 from toolz.compatibility import iteritems
 import toolz
 with ignoring(ImportError):
@@ -24,7 +24,7 @@ with ignoring(ImportError):
 
 from ..base import Base, normalize_token, tokenize
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
-        GzipFile)
+                             GzipFile)
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
@@ -392,10 +392,7 @@ class Bag(Base):
 
         Bag.foldby
         """
-        token = tokenize(self, binop, combine, initial)
         combine = combine or binop
-        a = 'foldbinop-{0}-{1}'.format(funcname(binop), token)
-        b = 'foldcombine-{0}-{1}'.format(funcname(combine), token)
         initial = quote(initial)
         if initial is not no_default:
             return self.reduction(curry(_reduce, binop, initial=initial),
@@ -448,7 +445,7 @@ class Bag(Base):
         ['Alice', 'Bob']
         """
         return self.reduction(set, curry(apply, set.union), out_type=Bag,
-                name='distinct')
+                              name='distinct')
 
     def reduction(self, perpartition, aggregate, split_every=None,
                   out_type=Item, name=None):
@@ -488,7 +485,8 @@ class Bag(Base):
         while k > 1:
             c = fmt + str(depth)
             dsk2 = dict(((c, i), (aggregate, [(b, j) for j in inds]))
-                 for i, inds in enumerate(partition_all(split_every, range(k))))
+                        for i, inds in enumerate(partition_all(split_every,
+                                                               range(k))))
             dsk.update(dsk2)
             k = len(dsk2)
             b = c
@@ -845,13 +843,13 @@ class Bag(Base):
               "Repartition only supports going to fewer partitions\n"
               " old: %d  new: %d" % (self.npartitions, npartitions))
         size = self.npartitions / npartitions
-        L = [int(i * self.npartitions / npartitions)
-                for i in range(npartitions + 1)]
+        L = [int(i * size) for i in range(npartitions + 1)]
         name = 'repartition-%d-%s' % (npartitions, self.name)
         dsk = dict(((name, i), (list,
-                                (toolz.concat, [(self.name, j)
-                                            for j in range(L[i], L[i + 1])])))
-                    for i in range(npartitions))
+                                (toolz.concat,
+                                 [(self.name, j) for j in range(L[i], L[i + 1])]
+                                 )))
+                   for i in range(npartitions))
         return Bag(merge(self.dask, dsk), name, npartitions)
 
 
@@ -1122,7 +1120,7 @@ def from_castra(x, columns=None, index=False):
     name = 'from-castra-' + tokenize(os.path.getmtime(x.path), x.path,
                                      columns, index)
     dsk = dict(((name, i), (load_castra_partition, x, part, columns, index))
-                for i, part in enumerate(x.partitions))
+               for i, part in enumerate(x.partitions))
     return Bag(dsk, name, len(x.partitions))
 
 
@@ -1139,8 +1137,7 @@ def load_castra_partition(castra, part, columns, index):
         items = df.iteritems() if index else iter(df)
 
     items = list(items)
-    if (items and isinstance(items[0], tuple)
-              and type(items[0]) is not tuple):
+    if items and isinstance(items[0], tuple) and type(items[0]) is not tuple:
         names = items[0]._fields
         items = [dict(zip(names, item)) for item in items]
 
@@ -1332,7 +1329,7 @@ def bag_range(n, npartitions):
     name = 'range-%d-npartitions-%d' % (n, npartitions)
     ijs = list(enumerate(take(npartitions, range(0, n, size))))
     dsk = dict(((name, i), (reify, (range, j, min(j + size, n))))
-                for i, j in ijs)
+               for i, j in ijs)
 
     if n % npartitions != 0:
         i, j = ijs[-1]
