@@ -189,8 +189,11 @@ def test_frequencies():
 
 def test_topk():
     assert list(b.topk(4)) == [4, 4, 4, 3]
-    assert list(b.topk(4, key=lambda x: -x).compute(get=dask.get)) == \
-            [0, 0, 0, 1]
+    c = b.topk(4, key=lambda x: -x)
+    assert list(c) == [0, 0, 0, 1]
+    c2 = b.topk(4, key=lambda x: -x, split_every=2)
+    assert list(c2) == [0, 0, 0, 1]
+    assert c.name != c2.name
     assert b.topk(4).name == b.topk(4).name
 
 
