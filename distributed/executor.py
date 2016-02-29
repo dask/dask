@@ -142,9 +142,9 @@ class Future(WrappedKey):
         """
         return sync(self.executor.loop, self._exception)
 
-    def cancel(self, block=False):
+    def cancel(self):
         """ Returns True if the future has been cancelled """
-        return self.executor.cancel([self], block=False)
+        return self.executor.cancel([self])
 
     def cancelled(self):
         """ Returns True if the future has been cancelled """
@@ -828,16 +828,14 @@ class Executor(object):
             return sync(self.loop, self._scatter, data, workers=workers,
                         broadcast=broadcast)
     @gen.coroutine
-    def _cancel(self, futures, block=False):
+    def _cancel(self, futures):
         keys = {f.key for f in futures_of(futures)}
         f = self.scheduler.cancel(keys=list(keys), client=self.id)
-        if block:
-            yield f
         for k in keys:
             with ignoring(KeyError):
                 del self.futures[k]
 
-    def cancel(self, futures, block=False):
+    def cancel(self, futures):
         """
         Cancel running futures
 
@@ -849,7 +847,7 @@ class Executor(object):
         ----------
         futures: list of Futures
         """
-        return sync(self.loop, self._cancel, futures, block=False)
+        return sync(self.loop, self._cancel, futures)
 
     @gen.coroutine
     def _run(self, function, *args, **kwargs):

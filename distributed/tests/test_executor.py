@@ -1733,7 +1733,7 @@ def test__cancel(e, s, a, b):
     while y.key not in s.tasks:
         yield gen.sleep(0.01)
 
-    yield e._cancel([x], block=True)
+    yield e._cancel([x])
 
     assert x.cancelled()
     assert 'cancel' in str(x)
@@ -1760,7 +1760,7 @@ def test__cancel_multi_client(s, a, b):
 
     assert x.key == y.key
 
-    yield e._cancel([x], block=True)
+    yield e._cancel([x])
 
     assert x.cancelled()
     assert not y.cancelled()
@@ -1797,7 +1797,7 @@ def test_cancel(loop):
             y = e.submit(slowinc, x)
             z = e.submit(slowinc, y)
 
-            e.cancel([y], block=True)
+            e.cancel([y])
 
             start = time()
             while not z.cancelled():
@@ -1806,7 +1806,7 @@ def test_cancel(loop):
 
             assert x.result() == 2
 
-            z.cancel(block=True)
+            z.cancel()
             assert z.cancelled()
 
 
