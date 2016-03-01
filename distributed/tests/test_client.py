@@ -28,8 +28,7 @@ def test_scatter_delete(loop):
         assert set(c.who_has) == set(keys)
         assert all(len(v) == 1 for v in c.who_has.values())
 
-        keys2, who_has, nbytes = yield scatter_to_workers([a.address_string,
-                                                           b.address_string],
+        keys2, who_has, nbytes = yield scatter_to_workers([a.address, b.address],
                                                           [4, 5, 6])
 
         m = merge(a.data, b.data)
@@ -38,7 +37,7 @@ def test_scatter_delete(loop):
             assert m[k] == v
 
         assert isinstance(who_has, dict)
-        assert set(concat(who_has.values())) == {a.address_string, b.address_string}
+        assert set(concat(who_has.values())) == {a.address, b.address}
         assert len(who_has) == len(keys2)
 
         assert isinstance(nbytes, dict)
@@ -62,8 +61,8 @@ def test_gather_with_missing_worker(loop):
         c.has_what[bad].add('z')
         c.ncores['z'] = 4
 
-        c.who_has['z'].add(a.address_string)
-        c.has_what[a.address_string].add('z')
+        c.who_has['z'].add(a.address)
+        c.has_what[a.address].add('z')
 
         a.data['z'] = 5
 
@@ -151,8 +150,7 @@ def test_scatter_round_robins_between_calls(loop):
 
 @gen_cluster()
 def test_broadcast_to_workers(s, a, b):
-    keys, nbytes = yield broadcast_to_workers([a.address_string,
-                                               b.address_string],
+    keys, nbytes = yield broadcast_to_workers([a.address, b.address],
                                                [1, 2, 3])
 
     assert len(keys) == 3

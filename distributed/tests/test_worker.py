@@ -48,15 +48,15 @@ def test_worker(loop):
         assert not a.active
         assert response['status'] == 'OK'
         assert a.data['x'] == 3
-        assert c.who_has['x'] == {a.address_string}
+        assert c.who_has['x'] == {a.address}
 
         response = yield bb.compute(key='y',
                                     function=dumps(add),
                                     args=dumps(['x', 10]),
-                                    who_has={'x': [a.address_string]})
+                                    who_has={'x': [a.address]})
         assert response['status'] == 'OK'
         assert b.data['y'] == 13
-        assert c.who_has['y'] == {b.address_string}
+        assert c.who_has['y'] == {b.address}
         assert response['nbytes'] == sizeof(b.data['y'])
 
         def bad_func():
@@ -78,13 +78,13 @@ def test_worker(loop):
         aa.close_streams()
         yield a._close()
 
-        assert a.address_string not in c.ncores and b.address_string in c.ncores
+        assert a.address not in c.ncores and b.address in c.ncores
 
-        assert list(c.ncores.keys()) == [b.address_string]
+        assert list(c.ncores.keys()) == [b.address]
 
-        assert isinstance(b.address_string, str)
-        assert b.ip in b.address_string
-        assert str(b.port) in b.address_string
+        assert isinstance(b.address, str)
+        assert b.ip in b.address
+        assert str(b.port) in b.address
 
         bb.close_streams()
         yield b._close()
@@ -107,13 +107,13 @@ def test_compute_who_has(loop):
         zz = rpc(ip=z.ip, port=z.port)
         yield zz.compute(function=dumps(inc),
                          args=dumps(('a',)),
-                         who_has={'a': [x.address_string]},
+                         who_has={'a': [x.address]},
                          key='b')
         assert z.data['b'] == 2
 
         yield zz.compute(function=dumps(inc),
                          args=dumps(('a',)),
-                         who_has={'a': [y.address_string]},
+                         who_has={'a': [y.address]},
                          key='c')
         assert z.data['c'] == 3
 
@@ -133,9 +133,9 @@ def test_workers_update_center(loop):
         assert response['nbytes'] == {'x': sizeof(1), 'y': sizeof(2)}
 
         assert a.data == {'x': 1, 'y': 2}
-        assert c.who_has == {'x': {a.address_string},
-                             'y': {a.address_string}}
-        assert c.has_what[a.address_string] == {'x', 'y'}
+        assert c.who_has == {'x': {a.address},
+                             'y': {a.address}}
+        assert c.has_what[a.address] == {'x', 'y'}
 
         yield aa.delete_data(keys=['x'], close=True)
         assert not c.who_has['x']
@@ -152,9 +152,9 @@ def dont_test_delete_data_with_missing_worker(loop):
     def f(c, a, b):
         bad = '127.0.0.1:9001'  # this worker doesn't exist
         c.who_has['z'].add(bad)
-        c.who_has['z'].add(a.address_string)
+        c.who_has['z'].add(a.address)
         c.has_what[bad].add('z')
-        c.has_what[a.address_string].add('z')
+        c.has_what[a.address].add('z')
         a.data['z'] = 5
 
         cc = rpc(ip=c.ip, port=c.port)
@@ -163,7 +163,7 @@ def dont_test_delete_data_with_missing_worker(loop):
         assert 'z' not in a.data
         assert not c.who_has['z']
         assert not c.has_what[bad]
-        assert not c.has_what[a.address_string]
+        assert not c.has_what[a.address]
 
         cc.close_streams()
 
@@ -244,7 +244,7 @@ def test_broadcast(loop):
     def f(c, a, b):
         cc = rpc(ip=c.ip, port=c.port)
         results = yield cc.broadcast(msg={'op': 'ping'})
-        assert results == {a.address_string: b'pong', b.address_string: b'pong'}
+        assert results == {a.address: b'pong', b.address: b'pong'}
 
         cc.close_streams()
 

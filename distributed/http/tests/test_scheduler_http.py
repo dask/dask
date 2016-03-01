@@ -33,11 +33,11 @@ def test_processing(s, a, b):
     server.listen(0)
     client = AsyncHTTPClient()
 
-    s.processing[a.address_string].add(('foo-1', 1))
+    s.processing[a.address].add(('foo-1', 1))
 
     response = yield client.fetch('http://localhost:%d/processing.json' % server.port)
     response = json.loads(response.body.decode())
-    assert response == {a.address_string: ['foo'], b.address_string: []}
+    assert response == {a.address: ['foo'], b.address: []}
 
     server.stop()
 
@@ -68,13 +68,13 @@ def test_broadcast(s, a, b):
     aa.listen(0)
     a.services['http'] = aa
     a.service_ports['http'] = aa.port
-    s.worker_services[a.address_string]['http'] = aa.port
+    s.worker_services[a.address]['http'] = aa.port
 
     bb = HTTPWorker(b)
     bb.listen(0)
     b.services['http'] = bb
     b.service_ports['http'] = bb.port
-    s.worker_services[b.address_string]['http'] = bb.port
+    s.worker_services[b.address]['http'] = bb.port
 
     client = AsyncHTTPClient()
 
@@ -83,8 +83,8 @@ def test_broadcast(s, a, b):
     s_response = yield client.fetch('http://localhost:%d/broadcast/info.json'
                                     % ss.port)
     assert (json.loads(s_response.body.decode()) ==
-            {a.address_string: json.loads(a_response.body.decode()),
-             b.address_string: json.loads(b_response.body.decode())})
+            {a.address: json.loads(a_response.body.decode()),
+             b.address: json.loads(b_response.body.decode())})
 
     ss.stop()
     aa.stop()
@@ -116,14 +116,14 @@ def test_with_data(s, a, b):
     out = json.loads(response.body.decode())
 
     assert all(isinstance(v, int) for v in out.values())
-    assert set(out) == {a.address_string, b.address_string}
+    assert set(out) == {a.address, b.address}
     assert sum(out.values()) == sum(map(sys.getsizeof,
                                         [1, 2, 3, 'Hello', 'world!']))
 
     response = yield client.fetch('http://localhost:%s/memory-load-by-key.json'
                                   % ss.port)
     out = json.loads(response.body.decode())
-    assert set(out) == {a.address_string, b.address_string}
+    assert set(out) == {a.address, b.address}
     assert all(isinstance(v, dict) for v in out.values())
     assert all(k in {'inc', 'data'} for d in out.values() for k in d)
     assert all(isinstance(v, int) for d in out.values() for v in d.values())

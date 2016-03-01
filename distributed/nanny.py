@@ -71,7 +71,7 @@ class Nanny(Server):
                             self.center.unregister(address=self.worker_address))
                 if result != 'OK':
                     logger.critical("Unable to unregister with center %s. "
-                            "Nanny: %s, Worker: %s", result, self.address,
+                            "Nanny: %s, Worker: %s", result, self.address_tuple,
                             self.worker_address)
                 else:
                     logger.info("Unregister worker %s:%d from center",
@@ -149,15 +149,19 @@ class Nanny(Server):
 
     @property
     def address(self):
+        return '%s:%d' % (self.ip, self.port)
+
+    @property
+    def address_tuple(self):
         return (self.ip, self.port)
 
     @property
-    def worker_address(self):
+    def worker_address_tuple(self):
         return (self.ip, self.worker_port)
 
     @property
-    def worker_address_string(self):
-        return '%s:%d' % self.worker_address
+    def worker_address(self):
+        return '%s:%d' % (self.ip, self.worker_port)
 
     def resource_collect(self):
         try:

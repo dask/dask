@@ -589,10 +589,10 @@ def test_remove_worker_from_scheduler(s, a, b):
     assert s.ready
     assert not any(stack for stack in s.stacks.values())
 
-    assert a.address_string in s.worker_queues
-    s.remove_worker(address=a.address_string)
-    assert a.address_string not in s.ncores
-    assert len(s.ready) + len(s.processing[b.address_string]) == \
+    assert a.address in s.worker_queues
+    s.remove_worker(address=a.address)
+    assert a.address not in s.ncores
+    assert len(s.ready) + len(s.processing[b.address]) == \
             len(dsk)  # b owns everything
     assert all(k in s.in_play for k in dsk)
     s.validate()
@@ -609,11 +609,11 @@ def test_add_worker(s, a, b):
     s.update_graph(tasks=valmap(dumps_task, dsk), keys=list(dsk), client='client',
                    dependencies={k: set() for k in dsk})
 
-    s.add_worker(address=w.address_string, keys=list(w.data),
+    s.add_worker(address=w.address, keys=list(w.data),
                  ncores=w.ncores, services=s.services)
 
     for k in w.data:
-        assert w.address_string in s.who_has[k]
+        assert w.address in s.who_has[k]
 
     s.validate(allow_overlap=True)
 
@@ -677,10 +677,10 @@ def test_scheduler_as_center():
     c = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=3)
     yield [w._start(0) for w in [a, b, c]]
 
-    assert s.ncores == {w.address_string: w.ncores for w in [a, b, c]}
-    assert s.who_has == {'x': {a.address_string},
-                         'y': {a.address_string, b.address_string},
-                         'z': {b.address_string}}
+    assert s.ncores == {w.address: w.ncores for w in [a, b, c]}
+    assert s.who_has == {'x': {a.address},
+                         'y': {a.address, b.address},
+                         'z': {b.address}}
 
     s.update_graph(tasks={'a': dumps_task((inc, 1))},
                    keys=['a'],
@@ -721,14 +721,14 @@ def test_rpc(s, a, b):
 @gen_cluster()
 def test_delete_callback(s, a, b):
     a.data['x'] = 1
-    s.who_has['x'].add(a.address_string)
-    s.has_what[a.address_string].add('x')
+    s.who_has['x'].add(a.address)
+    s.has_what[a.address].add('x')
 
     s.delete_data(keys=['x'])
     assert not s.who_has['x']
     assert not s.has_what['y']
     assert a.data['x'] == 1  # still in memory
-    assert s.deleted_keys == {a.address_string: {'x'}}
+    assert s.deleted_keys == {a.address: {'x'}}
     yield s.clear_data_from_workers()
     assert not s.deleted_keys
     assert not a.data
@@ -739,7 +739,7 @@ def test_delete_callback(s, a, b):
 @gen_cluster()
 def test_self_aliases(s, a, b):
     a.data['a'] = 1
-    s.update_data(who_has={'a': [a.address_string]},
+    s.update_data(who_has={'a': [a.address]},
                   nbytes={'a': 10}, client='client')
     s.update_graph(tasks=valmap(dumps_task, {'a': 'a', 'b': (inc, 'a')}),
                    keys=['b'], client='client',
@@ -838,13 +838,13 @@ def test_ready_remove_worker(s, a, b):
     assert not any(stack for stack in s.stacks.values())
     assert len(s.ready) + sum(map(len, s.processing.values())) == 20
 
-    s.remove_worker(address=a.address_string)
+    s.remove_worker(address=a.address)
 
     for collection in [s.ncores, s.stacks, s.processing]:
-        assert set(collection) == {b.address_string}
+        assert set(collection) == {b.address}
     assert all(len(s.processing[w]) == s.ncores[w]
                 for w in s.ncores)
-    assert set(s.processing) == {b.address_string}
+    assert set(s.processing) == {b.address}
     assert not any(stack for stack in s.stacks.values())
     assert len(s.ready) + sum(map(len, s.processing.values())) == 20
 
@@ -887,9 +887,9 @@ def test_ready_add_worker(s, a, b):
 
     w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1')
     w.listen(0)
-    s.add_worker(address=w.address_string, ncores=w.ncores)
+    s.add_worker(address=w.address, ncores=w.ncores)
 
-    assert w.address_string in s.ncores
+    assert w.address in s.ncores
     assert all(len(s.processing[w]) == s.ncores[w]
                 for w in s.ncores)
     assert len(s.ready) + sum(map(len, s.processing.values())) == 20

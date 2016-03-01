@@ -225,6 +225,10 @@ class Scheduler(Server):
 
     @property
     def address(self):
+        return '%s:%d' % (self.ip, self.port)
+
+    @property
+    def address_tuple(self):
         return (self.ip, self.port)
 
     def identity(self, stream):

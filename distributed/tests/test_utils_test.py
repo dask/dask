@@ -17,7 +17,7 @@ def test_gen_cluster(s, a, b):
     assert isinstance(s, Scheduler)
     for w in [a, b]:
         assert isinstance(w, Worker)
-    assert s.ncores == {w.address_string: w.ncores for w in [a, b]}
+    assert s.ncores == {w.address: w.ncores for w in [a, b]}
 
 
 @gen_test()

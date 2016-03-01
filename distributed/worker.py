@@ -179,11 +179,11 @@ class Worker(Server):
 
     @property
     def address(self):
-        return (self.ip, self.port)
+        return '%s:%d' % (self.ip, self.port)
 
     @property
-    def address_string(self):
-        return '%s:%d' % (self.ip, self.port)
+    def address_tuple(self):
+        return (self.ip, self.port)
 
     @gen.coroutine
     def compute(self, stream, function=None, key=None, args=(), kwargs={},

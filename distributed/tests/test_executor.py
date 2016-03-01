@@ -897,8 +897,8 @@ def test__scatter(s, a, b):
     d = yield e._scatter({'y': 20})
     assert isinstance(d['y'], Future)
     assert a.data.get('y') == 20 or b.data.get('y') == 20
-    assert (a.address_string in s.who_has['y'] or
-            b.address_string in s.who_has['y'])
+    assert (a.address in s.who_has['y'] or
+            b.address in s.who_has['y'])
     assert s.who_has['y']
     assert s.nbytes == {'y': sizeof(20)}
     yy = yield e._gather([d['y']])
@@ -909,8 +909,8 @@ def test__scatter(s, a, b):
     assert a.data.get(x.key) == 10 or b.data.get(x.key) == 10
     xx = yield e._gather([x])
     assert s.who_has[x.key]
-    assert (a.address_string in s.who_has[x.key] or
-            b.address_string in s.who_has[x.key])
+    assert (a.address in s.who_has[x.key] or
+            b.address in s.who_has[x.key])
     assert s.nbytes == {'y': sizeof(20), x.key: sizeof(10)}
     assert xx == [10]
 
@@ -1008,13 +1008,13 @@ def test_nbytes_determines_worker(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    x = e.submit(identity, 1, workers=[a.address[0]])
-    y = e.submit(identity, tuple(range(100)), workers=[b.address[0]])
+    x = e.submit(identity, 1, workers=[a.ip])
+    y = e.submit(identity, tuple(range(100)), workers=[b.ip])
     yield e._gather([x, y])
 
     z = e.submit(lambda x, y: None, x, y)
     yield z._result()
-    assert s.who_has[z.key] == {b.address_string}
+    assert s.who_has[z.key] == {b.address}
 
     yield e._shutdown()
 
@@ -1232,7 +1232,7 @@ def test_restart(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
 
-    assert s.ncores == {a.worker_address_string: 1, b.worker_address_string: 2}
+    assert s.ncores == {a.worker_address: 1, b.worker_address: 2}
 
     x = e.submit(inc, 1)
     y = e.submit(inc, x)
@@ -1546,7 +1546,7 @@ def test_start_is_idempotent(loop):
 def test_executor_with_scheduler(loop):
     @gen.coroutine
     def f(s, a, b):
-        assert s.ncores == {a.address_string: a.ncores, b.address_string: b.ncores}
+        assert s.ncores == {a.address: a.ncores, b.address: b.ncores}
         e = Executor(('127.0.0.1', s.port), start=False, loop=loop)
         yield e._start()
 
@@ -1577,17 +1577,17 @@ def test_allow_restrictions(s, a, b):
 
     x = e.submit(inc, 1, workers=a.ip)
     yield x._result()
-    assert s.who_has[x.key] == {a.address_string}
+    assert s.who_has[x.key] == {a.address}
     assert not s.loose_restrictions
 
     x = e.submit(inc, 2, workers=a.ip, allow_other_workers=True)
     yield x._result()
-    assert s.who_has[x.key] == {a.address_string}
+    assert s.who_has[x.key] == {a.address}
     assert x.key in s.loose_restrictions
 
     L = e.map(inc, range(3, 13), workers=a.ip, allow_other_workers=True)
     yield _wait(L)
-    assert all(s.who_has[f.key] == {a.address_string} for f in L)
+    assert all(s.who_has[f.key] == {a.address} for f in L)
     assert {f.key for f in L}.issubset(s.loose_restrictions)
 
     """
