@@ -861,6 +861,12 @@ class Executor(object):
         """
         Run a function on all workers outside of task scheduling system
 
+        This calls a function on all currently known workers immediately,
+        blocks until those results come back, and returns the results
+        asynchronously as a dictionary keyed by worker address.  This method
+        if generally used for side effects, such and collecting diagnostic
+        information or installing libraries.
+
         Examples
         --------
         >>> e.run(os.getpid)  # doctest: +SKIP

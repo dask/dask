@@ -15,6 +15,7 @@ API
    Executor.map
    Executor.persist
    Executor.restart
+   Executor.run
    Executor.scatter
    Executor.shutdown
    Executor.submit
