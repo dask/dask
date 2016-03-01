@@ -17,6 +17,7 @@ requirements:
     - locket
     - six
     - tblib
+    - lz4
 
   run:
     - python
@@ -29,6 +30,7 @@ requirements:
     - locket
     - six
     - tblib
+    - lz4
 
 test:
   imports:
