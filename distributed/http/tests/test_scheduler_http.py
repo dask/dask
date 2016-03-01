@@ -98,13 +98,10 @@ def test_services():
     assert s.services['http'].port
 
 
-@gen_cluster()
-def test_with_data(s, a, b):
+@gen_cluster(executor=True)
+def test_with_data(e, s, a, b):
     ss = HTTPScheduler(s)
     ss.listen(0)
-
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     L = e.map(inc, [1, 2, 3])
     L2 = yield e._scatter(['Hello', 'world!'])
@@ -132,4 +129,3 @@ def test_with_data(s, a, b):
             sum(map(sys.getsizeof, [1, 2, 3, 'Hello', 'world!']))
 
     ss.stop()
-    yield e._shutdown()

@@ -35,11 +35,8 @@ from distributed.utils_test import (cluster, slow,
         gen_cluster, gen_test, double, deep)
 
 
-@gen_cluster()
-def test_submit(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_submit(e, s, a, b):
     x = e.submit(inc, 10)
     assert not x.done()
 
@@ -55,14 +52,10 @@ def test_submit(s, a, b):
 
     result = yield z._result()
     assert result == 11 + 21
-    yield e._shutdown()
 
 
-@gen_cluster()
-def test_map(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_map(e, s, a, b):
     L1 = e.map(inc, range(5))
     assert len(L1) == 5
     assert isdistinct(x.key for x in L1)
@@ -104,7 +97,6 @@ def test_map(s, a, b):
     results = yield e._gather(L6)
     assert results == list(range(20, 25))
 
-    yield e._shutdown()
 
 @gen_cluster()
 def test_compatible_map(s, a, b):
@@ -130,21 +122,15 @@ def test_compatible_map(s, a, b):
     yield e._shutdown()
 
 
-@gen_cluster()
-def test_future(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_future(e, s, a, b):
     x = e.submit(inc, 10)
     assert str(x.key) in repr(x)
     assert str(x.status) in repr(x)
-    yield e._shutdown()
 
 
-@gen_cluster()
-def test_Future_exception(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
+@gen_cluster(executor=True)
+def test_Future_exception(e, s, a, b):
 
     x = e.submit(div, 1, 0)
     result = yield x._exception()
@@ -153,7 +139,6 @@ def test_Future_exception(s, a, b):
     x = e.submit(div, 1, 1)
     result = yield x._exception()
     assert result is None
-    yield e._shutdown()
 
 
 def test_Future_exception_sync(loop):
@@ -166,11 +151,8 @@ def test_Future_exception_sync(loop):
             assert x.exception() is None
 
 
-@gen_cluster()
-def test_map_naming(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_map_naming(e, s, a, b):
     L1 = e.map(inc, range(5))
     L2 = e.map(inc, range(5))
 
@@ -182,14 +164,9 @@ def test_map_naming(s, a, b):
     L4 = e.map(inc, [1, 1, 1, 1], pure=False)
     assert len({x.event for x in L4}) == 4
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_submit_naming(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_submit_naming(e, s, a, b):
     a = e.submit(inc, 1)
     b = e.submit(inc, 1)
 
@@ -198,14 +175,9 @@ def test_submit_naming(s, a, b):
     c = e.submit(inc, 1, pure=False)
     assert c.key != a.key
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_exceptions(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_exceptions(e, s, a, b):
     x = e.submit(div, 1, 2)
     result = yield x._result()
     assert result == 1 / 2
@@ -217,8 +189,6 @@ def test_exceptions(s, a, b):
     x = e.submit(div, 10, 2)  # continues to operate
     result = yield x._result()
     assert result == 10 / 2
-
-    yield e._shutdown()
 
 
 @gen_cluster()
@@ -265,11 +235,8 @@ def test_sync_exceptions(loop):
         e.shutdown()
 
 
-@gen_cluster()
-def test_stress_1(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_stress_1(e, s, a, b):
     n = 2**6
 
     seq = e.map(inc, range(n))
@@ -280,14 +247,9 @@ def test_stress_1(s, a, b):
     result = yield seq[0]._result()
     assert result == sum(map(inc, range(n)))
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_gather(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_gather(e, s, a, b):
     x = e.submit(inc, 10)
     y = e.submit(inc, x)
 
@@ -297,8 +259,6 @@ def test_gather(s, a, b):
     assert result == [11]
     result = yield e._gather({'x': x, 'y': [y]})
     assert result == {'x': 11, 'y': [12]}
-
-    yield e._shutdown()
 
 
 def test_gather_sync(loop):
@@ -316,11 +276,8 @@ def test_gather_sync(loop):
             assert xx == 2
 
 
-@gen_cluster()
-def test_gather_strict(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_gather_strict(e, s, a, b):
     x = e.submit(div, 2, 1)
     y = e.submit(div, 1, 0)
 
@@ -330,14 +287,9 @@ def test_gather_strict(s, a, b):
     [xx] = yield e._gather([x, y], errors='skip')
     assert xx == 2
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_get(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_get(e, s, a, b):
     result = yield e._get({'x': (inc, 1)}, 'x')
     assert result == 2
 
@@ -350,8 +302,6 @@ def test_get(s, a, b):
     result = yield e._get({('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
                           ('x', 2))
     assert result == 3
-
-    yield e._shutdown()
 
 
 def test_get_sync(loop):
@@ -373,11 +323,8 @@ def test_submit_errors(loop):
         e.map([1, 2, 3])
 
 
-@gen_cluster()
-def test_wait(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_wait(e, s, a, b):
     a = e.submit(inc, 1)
     b = e.submit(inc, 1)
     c = e.submit(inc, 2)
@@ -388,14 +335,9 @@ def test_wait(s, a, b):
     assert not_done == set()
     assert a.status == b.status == 'finished'
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test__as_completed(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test__as_completed(e, s, a, b):
     a = e.submit(inc, 1)
     b = e.submit(inc, 1)
     c = e.submit(inc, 2)
@@ -409,9 +351,6 @@ def test__as_completed(s, a, b):
 
     result = yield _first_completed([a, b, c])
     assert result in [a, b, c]
-
-    yield e._shutdown()
-
 
 
 def test_as_completed(loop):
@@ -438,12 +377,9 @@ def test_wait_sync(loop):
             assert x.status == y.status == 'finished'
 
 
-@gen_cluster()
-def test_garbage_collection(s, a, b):
+@gen_cluster(executor=True)
+def test_garbage_collection(e, s, a, b):
     import gc
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
     a = e.submit(inc, 1)
     b = e.submit(inc, 1)
 
@@ -460,14 +396,10 @@ def test_garbage_collection(s, a, b):
     bkey = b.key
     b.__del__()
     assert bkey not in e.futures
-    yield e._shutdown()
 
 
-@gen_cluster()
-def test_garbage_collection_with_scatter(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_garbage_collection_with_scatter(e, s, a, b):
     [a] = yield e._scatter([1])
     assert a.key in e.futures
     assert a.status == 'finished'
@@ -486,14 +418,9 @@ def test_garbage_collection_with_scatter(s, a, b):
             assert time() < start + 3
             yield gen.sleep(0.1)
 
-    yield e._shutdown()
 
-
-@gen_cluster(timeout=1000)
-def test_recompute_released_key(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=1000, executor=True)
+def test_recompute_released_key(e, s, a, b):
     x = e.submit(inc, 100)
     result1 = yield x._result()
     xkey = x.key
@@ -509,7 +436,6 @@ def test_recompute_released_key(s, a, b):
     assert x.key in e.futures
     result2 = yield x._result()
     assert result1 == result2
-    yield e._shutdown()
 
 
 def slowinc(x):
@@ -530,23 +456,15 @@ def test_stress_gc(loop, func, n):
 
 
 @slow
-@gen_cluster()
-def test_long_tasks_dont_trigger_timeout(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_long_tasks_dont_trigger_timeout(e, s, a, b):
     from time import sleep
     x = e.submit(sleep, 3)
     yield x._result()
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_missing_data_heals(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_missing_data_heals(e, s, a, b):
     x = e.submit(inc, 1)
     y = e.submit(inc, x)
     z = e.submit(inc, y)
@@ -563,7 +481,6 @@ def test_missing_data_heals(s, a, b):
 
     result = yield w._result()
     assert result == 3 + 4
-    yield e._shutdown()
 
 
 @slow
@@ -586,11 +503,8 @@ def test_missing_worker(s, a, b):
     yield e._shutdown()
 
 
-@gen_cluster()
-def test_gather_robust_to_missing_data(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_gather_robust_to_missing_data(e, s, a, b):
     x, y, z = e.map(inc, range(3))
     yield _wait([x, y, z])  # everything computed
 
@@ -603,14 +517,9 @@ def test_gather_robust_to_missing_data(s, a, b):
     xx, yy, zz = yield e._gather([x, y, z])
     assert (xx, yy, zz) == (1, 2, 3)
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_gather_robust_to_nested_missing_data(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_gather_robust_to_nested_missing_data(e, s, a, b):
     w = e.submit(inc, 1)
     x = e.submit(inc, w)
     y = e.submit(inc, x)
@@ -627,14 +536,9 @@ def test_gather_robust_to_nested_missing_data(s, a, b):
 
     assert result == [inc(inc(inc(inc(1))))]
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_tokenize_on_futures(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_tokenize_on_futures(e, s, a, b):
     x = e.submit(inc, 1)
     y = e.submit(inc, 1)
     tok = tokenize(x)
@@ -645,16 +549,11 @@ def test_tokenize_on_futures(s, a, b):
 
     assert tok == tokenize(y)
 
-    yield e._shutdown()
-
 
 @pytest.mark.skipif(sys.platform!='linux',
                     reason="Need 127.0.0.2 to mean localhost")
-@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)])
-def test_restrictions_submit(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
+def test_restrictions_submit(e, s, a, b):
     x = e.submit(inc, 1, workers={a.ip})
     y = e.submit(inc, x, workers={b.ip})
     yield _wait([x, y])
@@ -665,16 +564,11 @@ def test_restrictions_submit(s, a, b):
     assert s.restrictions[y.key] == {b.ip}
     assert y.key in b.data
 
-    yield e._shutdown()
-
 
 @pytest.mark.skipif(sys.platform!='linux',
                     reason="Need 127.0.0.2 to mean localhost")
-@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)])
-def test_restrictions_map(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
+def test_restrictions_map(e, s, a, b):
     L = e.map(inc, range(5), workers={a.ip})
     yield _wait(L)
 
@@ -695,16 +589,11 @@ def test_restrictions_map(s, a, b):
     with pytest.raises(ValueError):
         e.map(inc, [10, 11, 12], workers=[{a.ip}])
 
-    yield e._shutdown()
-
 
 @pytest.mark.skipif(sys.platform!='linux',
                     reason="Need 127.0.0.2 to mean localhost")
-@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)])
-def test_restrictions_get(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
+def test_restrictions_get(e, s, a, b):
     dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
     restrictions = {'y': {a.ip}, 'z': {b.ip}}
 
@@ -713,14 +602,9 @@ def test_restrictions_get(s, a, b):
     assert 'y' in a.data
     assert 'z' in b.data
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def dont_test_bad_restrictions_raise_exception(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def dont_test_bad_restrictions_raise_exception(e, s, a, b):
     z = e.submit(inc, 2, workers={'bad-address'})
     try:
         yield z._result()
@@ -728,8 +612,6 @@ def dont_test_bad_restrictions_raise_exception(s, a, b):
     except ValueError as e:
         assert 'bad-address' in str(e)
         assert z.key in str(e)
-
-    yield e._shutdown()
 
 
 def test_submit_after_failed_worker(loop):
@@ -771,11 +653,8 @@ def test_gather_then_submit_after_failed_workers(loop):
             assert result == [sum(map(inc, range(20)))]
 
 
-@gen_cluster(ncores=[('127.0.0.1', 1)])
-def test_errors_dont_block(s, w):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(ncores=[('127.0.0.1', 1)], executor=True)
+def test_errors_dont_block(e, s, w):
     L = [e.submit(inc, 1),
          e.submit(throws, 1),
          e.submit(inc, 2),
@@ -789,16 +668,11 @@ def test_errors_dont_block(s, w):
     result = yield e._gather([L[0], L[2]])
     assert result == [2, 3]
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_submit_quotes(s, a, b):
+@gen_cluster(executor=True)
+def test_submit_quotes(e, s, a, b):
     def assert_list(x, z=[]):
         return isinstance(x, list) and isinstance(z, list)
-
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     x = e.submit(assert_list, [1, 2, 3])
     result = yield x._result()
@@ -814,16 +688,11 @@ def test_submit_quotes(s, a, b):
     result = yield z._result()
     assert result
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_map_quotes(s, a, b):
+@gen_cluster(executor=True)
+def test_map_quotes(e, s, a, b):
     def assert_list(x, z=[]):
         return isinstance(x, list) and isinstance(z, list)
-
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     L = e.map(assert_list, [[1, 2, 3], [4]])
     result = yield e._gather(L)
@@ -836,8 +705,6 @@ def test_map_quotes(s, a, b):
     L = e.map(assert_list, [[1, 2, 3], [4]], [[]] * 3)
     result = yield e._gather(L)
     assert all(result)
-
-    yield e._shutdown()
 
 
 @gen_cluster()
@@ -861,39 +728,26 @@ def test_two_consecutive_executors_share_results(s, a, b):
     yield f._shutdown()
 
 
-@gen_cluster()
-def test_submit_then_get_with_Future(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_submit_then_get_with_Future(e, s, a, b):
     x = e.submit(slowinc, 1)
     dsk = {'y': (inc, x)}
 
     result = yield e._get(dsk, 'y')
     assert result == 3
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_aliases(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_aliases(e, s, a, b):
     x = e.submit(inc, 1)
 
     dsk = {'y': x}
     result = yield e._get(dsk, 'y')
     assert result == 2
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test__scatter(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test__scatter(e, s, a, b):
     d = yield e._scatter({'y': 20})
     assert isinstance(d['y'], Future)
     assert a.data.get('y') == 20 or b.data.get('y') == 20
@@ -920,32 +774,20 @@ def test__scatter(s, a, b):
     result = yield e._gather([z, x])
     assert result == [30, 10]
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_scatter_hash(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_scatter_hash(e, s, a, b):
     [a] = yield e._scatter([1])
     [b] = yield e._scatter([1])
 
     assert a.key == b.key
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_get_releases_data(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_get_releases_data(e, s, a, b):
     [x] = yield e._get({'x': (inc, 1)}, ['x'])
     import gc; gc.collect()
     assert e.refcount['x'] == 0
-
-    yield e._shutdown()
 
 
 def test_global_executors(loop):
@@ -965,11 +807,8 @@ def test_global_executors(loop):
     assert not _global_executor[0]
 
 
-@gen_cluster()
-def test_exception_on_exception(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_exception_on_exception(e, s, a, b):
     x = e.submit(lambda: 1 / 0)
     y = e.submit(inc, x)
 
@@ -981,14 +820,9 @@ def test_exception_on_exception(s, a, b):
     with pytest.raises(ZeroDivisionError):
         out = yield z._result()
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_nbytes(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_nbytes(e, s, a, b):
     [x] = yield e._scatter([1])
     assert s.nbytes == {x.key: sizeof(1)}
 
@@ -998,16 +832,11 @@ def test_nbytes(s, a, b):
     assert s.nbytes == {x.key: sizeof(1),
                         y.key: sizeof(2)}
 
-    yield e._shutdown()
-
 
 @pytest.mark.skipif(sys.platform!='linux',
                     reason="Need 127.0.0.2 to mean localhost")
-@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)])
-def test_nbytes_determines_worker(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
+def test_nbytes_determines_worker(e, s, a, b):
     x = e.submit(identity, 1, workers=[a.ip])
     y = e.submit(identity, tuple(range(100)), workers=[b.ip])
     yield e._gather([x, y])
@@ -1016,14 +845,9 @@ def test_nbytes_determines_worker(s, a, b):
     yield z._result()
     assert s.who_has[z.key] == {b.address}
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_pragmatic_move_small_data_to_large_data(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_pragmatic_move_small_data_to_large_data(e, s, a, b):
     lists = e.map(lambda n: list(range(n)), [10] * 10, pure=False)
     sums = e.map(sum, lists)
     total = e.submit(sum, sums)
@@ -1039,14 +863,9 @@ def test_pragmatic_move_small_data_to_large_data(s, a, b):
     for l, r in zip(lists, results):
         assert s.who_has[l.key] == s.who_has[r.key]
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_get_with_non_list_key(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_get_with_non_list_key(e, s, a, b):
     dsk = {('x', 0): (inc, 1), 5: (inc, 2)}
 
     x = yield e._get(dsk, ('x', 0))
@@ -1054,19 +873,12 @@ def test_get_with_non_list_key(s, a, b):
     assert x == 2
     assert y == 3
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_get_with_error(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_get_with_error(e, s, a, b):
     dsk = {'x': (div, 1, 0), 'y': (inc, 'x')}
     with pytest.raises(ZeroDivisionError):
         y = yield e._get(dsk, 'y')
-
-    yield e._shutdown()
 
 
 def test_get_with_error_sync(loop):
@@ -1077,16 +889,11 @@ def test_get_with_error_sync(loop):
                 y = e.get(dsk, 'y')
 
 
-@gen_cluster()
-def test_directed_scatter(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_directed_scatter(e, s, a, b):
     yield e._scatter([1, 2, 3], workers=[a.address])
     assert len(a.data) == 3
     assert not b.data
-
-    yield e._shutdown()
 
 
 def test_directed_scatter_sync(loop):
@@ -1177,32 +984,22 @@ def test_iterator_gather(loop):
             i_out = list(ff)
             assert i_out == i_in
 
-@gen_cluster()
-def test_many_submits_spread_evenly(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_many_submits_spread_evenly(e, s, a, b):
     L = [e.submit(inc, i) for i in range(10)]
     yield _wait(L)
 
     assert a.data and b.data
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_traceback(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_traceback(e, s, a, b):
     x = e.submit(div, 1, 0)
     tb = yield x._traceback()
 
     if sys.version_info[0] >= 3:
         assert any('x / y' in line
                    for line in pluck(3, traceback.extract_tb(tb)))
-
-    yield e._shutdown()
 
 
 def test_traceback_sync(loop):
@@ -1226,12 +1023,9 @@ def test_traceback_sync(loop):
             assert tb is None
 
 
-@gen_cluster(Worker=Nanny)
-def test_restart(s, a, b):
+@gen_cluster(Worker=Nanny, executor=True)
+def test_restart(e, s, a, b):
     from distributed import Nanny, rpc
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
     assert s.ncores == {a.worker_address: 1, b.worker_address: 2}
 
     x = e.submit(inc, 1)
@@ -1250,8 +1044,6 @@ def test_restart(s, a, b):
 
     assert x.cancelled()
     assert y.cancelled()
-
-    yield e._shutdown(fast=True)
 
 
 def test_restart_sync_no_center(loop):
@@ -1297,11 +1089,8 @@ def test_restart_fast(loop):
             assert x.result() == 2
 
 
-@gen_cluster(Worker=Nanny)
-def test_fast_kill(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(Worker=Nanny, executor=True)
+def test_fast_kill(e, s, a, b):
     L = e.map(sleep, range(10))
 
     start = time()
@@ -1313,14 +1102,10 @@ def test_fast_kill(s, a, b):
     x = e.submit(inc, 1)
     result = yield x._result()
     assert result == 2
-    yield e._shutdown(fast=True)
 
 
-@gen_cluster()
-def test_upload_file(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_upload_file(e, s, a, b):
     def g():
         import myfile
         return myfile.f()
@@ -1340,8 +1125,6 @@ def test_upload_file(s, a, b):
     result = yield y._result()
     assert result == 456
 
-    yield e._shutdown()
-
 
 def test_upload_file_sync(loop):
     with cluster() as (s, [a, b]):
@@ -1356,16 +1139,11 @@ def test_upload_file_sync(loop):
                 assert x.result() == 123
 
 
-@gen_cluster()
-def test_upload_file_exception(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_upload_file_exception(e, s, a, b):
     with tmp_text('myfile.py', 'syntax-error!') as fn:
         with pytest.raises(SyntaxError):
             yield e._upload_file(fn)
-
-    yield e._shutdown()
 
 
 def test_upload_file_exception_sync(loop):
@@ -1423,11 +1201,8 @@ def test_multiple_executors_restart(s, a, b):
     yield e2._shutdown(fast=True)
 
 
-@gen_cluster()
-def test_async_compute(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_async_compute(e, s, a, b):
     from dask.imperative import do, value
     x = value(1)
     y = do(inc)(x)
@@ -1444,14 +1219,9 @@ def test_async_compute(s, a, b):
     assert isinstance(e.compute(y), Future)
     assert isinstance(e.compute([y]), (tuple, list))
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_async_compute_with_scatter(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_async_compute_with_scatter(e, s, a, b):
     d = yield e._scatter({('x', 1): 1, ('y', 1): 2})
     x, y = d[('x', 1)], d[('y', 1)]
 
@@ -1461,8 +1231,6 @@ def test_async_compute_with_scatter(s, a, b):
 
     [result] = yield e._gather([zz])
     assert result == 2 + 3
-
-    yield e._shutdown()
 
 
 def test_sync_compute(loop):
@@ -1477,18 +1245,13 @@ def test_sync_compute(loop):
             assert (yy, zz) == (2, 0)
 
 
-@gen_cluster()
-def test_remote_scheduler(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_remote_scheduler(e, s, a, b):
     assert isinstance(e.scheduler_stream, IOStream)
     assert s.streams
 
     x = e.submit(inc, 1)
     result = yield x._result()
-
-    yield e._shutdown()
 
 
 @gen_cluster()
@@ -1502,11 +1265,8 @@ def test_start_with_scheduler(s, a, b):
     assert result == inc(1)
 
 
-@gen_cluster()
-def test_remote_scatter_gather(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_remote_scatter_gather(e, s, a, b):
     x, y, z = yield e._scatter([1, 2, 3])
 
     assert x.key in a.data or x.key in b.data
@@ -1516,20 +1276,13 @@ def test_remote_scatter_gather(s, a, b):
     xx, yy, zz = yield e._gather([x, y, z])
     assert (xx, yy, zz) == (1, 2, 3)
 
-    yield e._shutdown()
 
-
-@gen_cluster(timeout=1000)
-def test_remote_submit_on_Future(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=1000, executor=True)
+def test_remote_submit_on_Future(e, s, a, b):
     x = e.submit(lambda x: x + 1, 1)
     y = e.submit(lambda x: x + 1, x)
     result = yield y._result()
     assert result == 3
-
-    yield e._shutdown()
 
 
 def test_start_is_idempotent(loop):
@@ -1570,11 +1323,8 @@ def test_executor_with_scheduler(loop):
 
 @pytest.mark.skipif(sys.platform!='linux',
                     reason="Need 127.0.0.2 to mean localhost")
-@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)])
-def test_allow_restrictions(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)
+def test_allow_restrictions(e, s, a, b):
     x = e.submit(inc, 1, workers=a.ip)
     yield x._result()
     assert s.who_has[x.key] == {a.address}
@@ -1621,8 +1371,6 @@ def test_allow_restrictions(s, a, b):
     with pytest.raises(TypeError):
         e.map(inc, [20], workers='127.0.0.1', allow_other_workers='Hello!')
 
-    yield e._shutdown()
-
 
 @pytest.mark.skipif('True', reason='because')
 def test_bad_address():
@@ -1637,11 +1385,8 @@ def test_bad_address():
         assert "connect" in str(e).lower()
 
 
-@gen_cluster()
-def test_long_error(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_long_error(e, s, a, b):
     def bad(x):
         raise ValueError('a' * 100000)
 
@@ -1658,11 +1403,8 @@ def test_long_error(s, a, b):
                if isinstance(line, str))
 
 
-@gen_cluster()
-def test_map_on_futures_with_kwargs(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_map_on_futures_with_kwargs(e, s, a, b):
     def f(x, y=10):
         return x + y
 
@@ -1675,14 +1417,10 @@ def test_map_on_futures_with_kwargs(s, a, b):
     future2 = e.submit(f, future, y=200)
     result = yield future2._result()
     assert result == 100 + 1 + 200
-    yield e._shutdown()
 
 
-@gen_cluster(Worker=Nanny, timeout=60)
-def test_failed_worker_without_warning(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(Worker=Nanny, timeout=60, executor=True)
+def test_failed_worker_without_warning(e, s, a, b):
     L = e.map(inc, range(10))
     yield _wait(L)
 
@@ -1733,11 +1471,8 @@ class FatallySerializedObject(object):
         sys.exit(0)
 
 
-@gen_cluster()
-def test_badly_serialized_input(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_badly_serialized_input(e, s, a, b):
     o = BadlySerializedObject()
 
     future = e.submit(inc, o)
@@ -1745,8 +1480,6 @@ def test_badly_serialized_input(s, a, b):
 
     L = yield e._gather(futures)
     assert list(L) == list(map(inc, range(10)))
-
-    yield e._shutdown()
 
 
 @pytest.mark.xfail
@@ -1765,22 +1498,14 @@ def test_badly_serialized_input_stderr(capsys):
                 assert time() - start < 20
 
 
-@gen_cluster()
-def test_repr(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_repr(e, s, a, b):
     assert s.ip in str(e)
     assert str(s.port) in repr(e)
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_forget_simple(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_forget_simple(e, s, a, b):
     x = e.submit(inc, 1)
     y = e.submit(inc, 2)
     z = e.submit(add, x, y, workers=[a.ip], allow_other_workers=True)
@@ -1806,14 +1531,9 @@ def test_forget_simple(s, a, b):
     s.client_releases_keys(keys=[y.key], client=e.id)
     assert not s.tasks
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_forget_complex(s, A, B):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_forget_complex(e, s, A, B):
     a, b, c, d = yield e._scatter(list(range(4)))
     ab = e.submit(add, a, b)
     cd = e.submit(add, c, d)
@@ -1842,8 +1562,6 @@ def test_forget_complex(s, A, B):
     s.client_releases_keys(keys=[ac.key], client=e.id)
     assert set(s.tasks) == {f.key for f in [cd]}
 
-    yield e._shutdown()
-
 
 def test_repr_sync(loop):
     with cluster(nworkers=3) as (s, [a, b, c]):
@@ -1856,11 +1574,8 @@ def test_repr_sync(loop):
             assert 'threads' in s
 
 
-@gen_cluster()
-def test_waiting_data(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_waiting_data(e, s, a, b):
     x = e.submit(inc, 1)
     y = e.submit(inc, 2)
     z = e.submit(add, x, y, workers=[a.ip], allow_other_workers=True)
@@ -1871,8 +1586,6 @@ def test_waiting_data(s, a, b):
     assert y.key not in s.waiting_data[y.key]
     assert not s.waiting_data[x.key]
     assert not s.waiting_data[y.key]
-
-    yield e._shutdown()
 
 
 @gen_cluster()
@@ -1987,16 +1700,10 @@ def test_multi_garbage_collection(s, a, b):
     yield f._shutdown()
 
 
-@gen_cluster()
-def test__broadcast(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test__broadcast(e, s, a, b):
     x, y = yield e._scatter([1, 2], broadcast=True)
-
     assert a.data == b.data == {x.key: 1, y.key: 2}
-
-    yield e._shutdown()
 
 
 def test_broadcast(loop):
@@ -2018,11 +1725,8 @@ def test_broadcast(loop):
                                 '127.0.0.1:%d' % b['port']: {x.key, y.key}}
 
 
-@gen_cluster()
-def test__cancel(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test__cancel(e, s, a, b):
     x = e.submit(slowinc, 1)
     y = e.submit(slowinc, x)
 
@@ -2042,8 +1746,6 @@ def test__cancel(s, a, b):
 
     assert not s.tasks
     s.validate()
-
-    yield e._shutdown()
 
 
 @gen_cluster()
@@ -2075,11 +1777,8 @@ def test__cancel_multi_client(s, a, b):
     yield f._shutdown()
 
 
-@gen_cluster()
-def test__cancel_collection(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test__cancel_collection(e, s, a, b):
     import dask.bag as db
 
     L = e.map(double, [[1], [2], [3]])
@@ -2089,8 +1788,6 @@ def test__cancel_collection(s, a, b):
     yield e._cancel([x])
     assert all(f.cancelled() for f in L)
     assert not s.tasks
-
-    yield e._shutdown()
 
 
 def test_cancel(loop):
@@ -2113,24 +1810,16 @@ def test_cancel(loop):
             assert z.cancelled()
 
 
-@gen_cluster()
-def test_future_type(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_future_type(e, s, a, b):
     x = e.submit(inc, 1)
     yield _wait([x])
     assert x.type == int
     assert 'int' in str(x)
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_traceback_clean(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_traceback_clean(e, s, a, b):
     x = e.submit(div, 1, 0)
     try:
         yield x._result()
@@ -2143,12 +1832,9 @@ def test_traceback_clean(s, a, b):
             tb = tb.tb_next
 
 
-@gen_cluster()
-def test_map_queue(s, a, b):
+@gen_cluster(executor=True)
+def test_map_queue(e, s, a, b):
     from distributed.compatibility import Queue, isqueue
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
     q_1 = Queue(maxsize=2)
     q_2 = e.map(inc, q_1)
     assert isqueue(q_2)
@@ -2164,14 +1850,9 @@ def test_map_queue(s, a, b):
     result = yield f._result()
     assert result == (1 + 1) * 2
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_map_iterator(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_map_iterator(e, s, a, b):
     x = iter([1, 2, 3])
     y = iter([10, 20, 30])
     f1 = e.map(add, x, y)
@@ -2189,23 +1870,15 @@ def test_map_iterator(s, a, b):
     result = yield future._result()
     assert result == (1 + 10) * 2
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_map_infinite_iterators(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_map_infinite_iterators(e, s, a, b):
     futures = e.map(add, [1, 2], itertools.repeat(10))
     assert len(futures) == 2
 
 
-@gen_cluster()
-def test_map_differnet_lengths(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_map_differnet_lengths(e, s, a, b):
     assert len(e.map(add, [1, 2], [1, 2, 3])) == 2
 
 
@@ -2223,11 +1896,8 @@ def test_Future_exception_sync(loop, capsys):
     assert _globals['get'] == e.get
 
 
-@gen_cluster(timeout=60)
-def test_async_persist(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=60, executor=True)
+def test_async_persist(e, s, a, b):
     from dask.imperative import do, value, Value
     x = value(1)
     y = do(inc)(x)
@@ -2257,15 +1927,11 @@ def test_async_persist(s, a, b):
     assert isinstance(e.persist(y), Value)
     assert isinstance(e.persist([y]), (list, tuple))
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test__persist(s, a, b):
+@gen_cluster(executor=True)
+def test__persist(e, s, a, b):
     pytest.importorskip('dask.array')
     import dask.array as da
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     x = da.ones((10, 10), chunks=(5, 10))
     y = 2 * (x + 1)
@@ -2300,11 +1966,9 @@ def test_persist(loop):
             assert (yy.compute(get=e.get) == y.compute(get=e.get)).all()
 
 
-@gen_cluster(timeout=60)
-def test_long_traceback(s, a, b):
+@gen_cluster(timeout=60, executor=True)
+def test_long_traceback(e, s, a, b):
     from distributed.core import dumps
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     n = sys.getrecursionlimit()
     sys.setrecursionlimit(500)
@@ -2317,14 +1981,9 @@ def test_long_traceback(s, a, b):
     finally:
         sys.setrecursionlimit(n)
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_wait_on_collections(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_wait_on_collections(e, s, a, b):
     import dask.bag as db
 
     L = e.map(double, [[1], [2], [3]])
@@ -2332,8 +1991,6 @@ def test_wait_on_collections(s, a, b):
 
     yield _wait(x)
     assert all(f.key in a.data or f.key in b.data for f in L)
-
-    yield e._shutdown()
 
 
 def test_futures_of():
@@ -2349,11 +2006,8 @@ def test_futures_of():
     assert set(futures_of(b)) == {x, y, z}
 
 
-@gen_cluster(ncores=[('127.0.0.1', 1)])
-def test_dont_delete_recomputed_results(s, w):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(ncores=[('127.0.0.1', 1)], executor=True)
+def test_dont_delete_recomputed_results(e, s, w):
     x = e.submit(inc, 1)                        # compute first time
     yield _wait([x])
     x.__del__()                                 # trigger garbage collection
@@ -2368,14 +2022,9 @@ def test_dont_delete_recomputed_results(s, w):
         assert xx.key in w.data
         yield gen.sleep(0.01)
 
-    yield e._shutdown()
 
-
-@gen_cluster(ncores=[])
-def test_fatally_serialized_input(s):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(ncores=[], executor=True)
+def test_fatally_serialized_input(e, s):
     o = FatallySerializedObject()
 
     future = e.submit(inc, o)
@@ -2383,14 +2032,9 @@ def test_fatally_serialized_input(s):
     while not s.tasks:
         yield gen.sleep(0.01)
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_balance_tasks_by_stacks(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test_balance_tasks_by_stacks(e, s, a, b):
     x = e.submit(inc, 1)
     yield _wait(x)
 
@@ -2398,5 +2042,3 @@ def test_balance_tasks_by_stacks(s, a, b):
     yield _wait(y)
 
     assert len(a.data) == len(b.data) == 1
-
-    yield e._shutdown()

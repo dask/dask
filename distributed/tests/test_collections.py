@@ -38,11 +38,8 @@ def assert_equal(a, b):
         assert a == b
 
 
-@gen_cluster()
-def test__futures_to_dask_dataframe(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test__futures_to_dask_dataframe(e, s, a, b):
     remote_dfs = e.map(identity, dfs)
     ddf = yield _futures_to_dask_dataframe(remote_dfs, divisions=True,
             executor=e)
@@ -54,20 +51,14 @@ def test__futures_to_dask_dataframe(s, a, b):
     result = yield e._get(expr.dask, expr._keys())
     assert result == [sum([df.x.sum() for df in dfs])]
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test_no_divisions(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
+@gen_cluster(executor=True)
+def test_no_divisions(e, s, a, b):
     dfs = e.map(tm.makeTimeDataFrame, range(5, 10))
 
     df = yield _futures_to_dask_dataframe(dfs)
     assert not df.known_divisions
     assert list(df.columns) == list(tm.makeTimeDataFrame(5).columns)
-
-    yield e._shutdown()
 
 
 def test_futures_to_dask_dataframe(loop):
@@ -84,11 +75,8 @@ def test_futures_to_dask_dataframe(loop):
             assert ddf.dask == ddf2.dask
 
 
-@gen_cluster(timeout=120)
-def test_dataframes(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=120, executor=True)
+def test_dataframes(e, s, a, b):
     dfs = [pd.DataFrame({'x': np.random.random(100),
                          'y': np.random.random(100)},
                         index=list(range(i, i + 100)))
@@ -123,15 +111,10 @@ def test_dataframes(s, a, b):
         remote = yield gen.with_timeout(timedelta(seconds=5), remote._result())
         assert_equal(local, remote)
 
-    yield e._shutdown()
 
-
-@gen_cluster(timeout=60)
-def test__futures_to_dask_array(s, a, b):
+@gen_cluster(timeout=60, executor=True)
+def test__futures_to_dask_array(e, s, a, b):
     import dask.array as da
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
     remote_arrays = [[[e.submit(np.full, (2, 3, 4), i + j + k)
                         for i in range(2)]
                         for j in range(2)]
@@ -146,15 +129,10 @@ def test__futures_to_dask_array(s, a, b):
     result = yield e._get(expr.dask, expr._keys())
     assert isinstance(result[0], np.number)
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test__future_to_dask_array(s, a, b):
+@gen_cluster(executor=True)
+def test__future_to_dask_array(e, s, a, b):
     import dask.array as da
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
     f = e.submit(np.ones, (5, 5))
     a = yield _future_to_dask_array(f)
 
@@ -165,14 +143,10 @@ def test__future_to_dask_array(s, a, b):
     aa = yield e.compute(a)._result()
     assert (aa == 1).all()
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test__futures_to_dask_arrays(s, a, b):
+@gen_cluster(executor=True)
+def test__futures_to_dask_arrays(e, s, a, b):
     import dask.array as da
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     fs = e.map(np.ones, [(5, i) for i in range(1, 6)], pure=False)
     arrs = yield _futures_to_dask_arrays(fs)
@@ -184,8 +158,6 @@ def test__futures_to_dask_arrays(s, a, b):
 
     xs = yield e._gather(e.compute(arrs))
     assert all((x == 1).all() for x in xs)
-
-    yield e._shutdown()
 
 
 def test_futures_to_dask_arrays(loop):
@@ -201,11 +173,9 @@ def test_futures_to_dask_arrays(loop):
 
 
 
-@gen_cluster()
-def test__dask_array_collections(s, a, b):
+@gen_cluster(executor=True)
+def test__dask_array_collections(e, s, a, b):
     import dask.array as da
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     x_dsk = {('x', i, j): np.random.random((3, 3)) for i in range(3)
                                                    for j in range(2)}
@@ -234,14 +204,10 @@ def test__dask_array_collections(s, a, b):
 
         assert np.all(local == remote)
 
-    yield e._shutdown()
 
-
-@gen_cluster()
-def test__futures_to_dask_bag(s, a, b):
+@gen_cluster(executor=True)
+def test__futures_to_dask_bag(e, s, a, b):
     import dask.bag as db
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     L = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     futures = yield e._scatter(L)
@@ -261,8 +227,6 @@ def test__futures_to_dask_bag(s, a, b):
         remote = yield remote._result()
 
         assert local == remote
-
-    yield e._shutdown()
 
 
 def test_futures_to_dask_bag(loop):
@@ -297,11 +261,8 @@ def test_futures_to_dask_array(loop):
             assert x.dask == y.dask
 
 
-@gen_cluster()
-def test__futures_to_collection(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(executor=True)
+def test__futures_to_collection(e, s, a, b):
     remote_dfs = e.map(identity, dfs)
     ddf = yield _futures_to_collection(remote_dfs, divisions=True)
     ddf2 = yield _futures_to_dask_dataframe(remote_dfs, divisions=True)
@@ -322,5 +283,3 @@ def test__futures_to_collection(s, a, b):
 
     assert type(b) == type(c)
     assert b.dask == b.dask
-
-    yield e._shutdown()
