@@ -116,7 +116,7 @@ def test_identity(loop):
         remote = rpc(ip='127.0.0.1', port=8887)
         a = yield remote.identity()
         b = yield remote.identity()
-        assert a['type'] == b'Server'
+        assert a['type'] == 'Server'
         assert a['id'] == b['id']
 
         server.stop()

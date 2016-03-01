@@ -449,47 +449,47 @@ def div(x, y):
 @gen_cluster()
 def test_scheduler(s, a, b):
     stream = yield connect(s.ip, s.port)
-    yield write(stream, {'op': 'register-client', 'client': b'ident'})
+    yield write(stream, {'op': 'register-client', 'client': 'ident'})
     msg = yield read(stream)
     assert msg['op'] == 'stream-start'
 
     # Test update graph
     yield write(stream, {'op': 'update-graph',
-                         'tasks': valmap(dumps_task, {b'x': (inc, 1),
-                                                      b'y': (inc, 'x'),
-                                                      b'z': (inc, 'y')}),
-                         'dependencies': {b'x': [],
-                                          b'y': [b'x'],
-                                          b'z': [b'y']},
-                         'keys': [b'x', b'z'],
-                         'client': b'ident'})
+                         'tasks': valmap(dumps_task, {'x': (inc, 1),
+                                                      'y': (inc, 'x'),
+                                                      'z': (inc, 'y')}),
+                         'dependencies': {'x': [],
+                                          'y': ['x'],
+                                          'z': ['y']},
+                         'keys': ['x', 'z'],
+                         'client': 'ident'})
     while True:
         msg = yield read(stream)
-        if msg['op'] == 'key-in-memory' and msg['key'] == b'z':
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
             break
 
-    assert a.data.get(b'x') == 2 or b.data.get(b'x') == 2
+    assert a.data.get('x') == 2 or b.data.get('x') == 2
 
     # Test erring tasks
     yield write(stream, {'op': 'update-graph',
-                         'tasks': valmap(dumps_task, {b'a': (div, 1, 0),
-                                                       b'b': (inc, b'a')}),
-                         'dependencies': {b'a': [],
-                                           b'b': ['a']},
-                         'keys': [b'a', b'b'],
-                         'client': b'ident'})
+                         'tasks': valmap(dumps_task, {'a': (div, 1, 0),
+                                                       'b': (inc, 'a')}),
+                         'dependencies': {'a': [],
+                                           'b': ['a']},
+                         'keys': ['a', 'b'],
+                         'client': 'ident'})
 
     while True:
         msg = yield read(stream)
-        if msg['op'] == 'task-erred' and msg['key'] == b'b':
+        if msg['op'] == 'task-erred' and msg['key'] == 'b':
             break
 
     # Test missing data
-    yield write(stream, {'op': 'missing-data', 'missing': [b'z']})
+    yield write(stream, {'op': 'missing-data', 'missing': ['z']})
 
     while True:
         msg = yield read(stream)
-        if msg['op'] == 'key-in-memory' and msg['key'] == b'z':
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
             break
 
     # Test missing data without being informed
@@ -497,13 +497,13 @@ def test_scheduler(s, a, b):
         if 'z' in w.data:
             del w.data['z']
     yield write(stream, {'op': 'update-graph',
-                         'tasks': {b'zz': dumps_task((inc, b'z'))},
-                         'dependencies': {b'zz': [b'z']},
-                         'keys': [b'zz'],
-                         'client': b'ident'})
+                         'tasks': {'zz': dumps_task((inc, 'z'))},
+                         'dependencies': {'zz': ['z']},
+                         'keys': ['zz'],
+                         'client': 'ident'})
     while True:
         msg = yield read(stream)
-        if msg['op'] == 'key-in-memory' and msg['key'] == b'zz':
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'zz':
             break
 
     write(stream, {'op': 'close'})
@@ -520,17 +520,17 @@ def test_multi_queues(s, a, b):
 
     # Test update graph
     sched.put_nowait({'op': 'update-graph',
-                      'tasks': valmap(dumps_task, {b'x': (inc, 1),
-                                                   b'y': (inc, b'x'),
-                                                   b'z': (inc, b'y')}),
-                      'dependencies': {b'x': [],
-                                       b'y': [b'x'],
-                                       b'z': [b'y']},
-                      'keys': [b'z']})
+                      'tasks': valmap(dumps_task, {'x': (inc, 1),
+                                                   'y': (inc, 'x'),
+                                                   'z': (inc, 'y')}),
+                      'dependencies': {'x': [],
+                                       'y': ['x'],
+                                       'z': ['y']},
+                      'keys': ['z']})
 
     while True:
         msg = yield report.get()
-        if msg['op'] == 'key-in-memory' and msg['key'] == b'z':
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
             break
 
     slen, rlen = len(s.scheduler_queues), len(s.report_queues)
@@ -540,31 +540,31 @@ def test_multi_queues(s, a, b):
     assert rlen + 1 == len(s.report_queues)
 
     sched2.put_nowait({'op': 'update-graph',
-                       'tasks': {b'a': dumps_task((inc, 10))},
-                       'dependencies': {b'a': []},
-                       'keys': [b'a']})
+                       'tasks': {'a': dumps_task((inc, 10))},
+                       'dependencies': {'a': []},
+                       'keys': ['a']})
 
     for q in [report, report2]:
         while True:
             msg = yield q.get()
-            if msg['op'] == 'key-in-memory' and msg['key'] == b'a':
+            if msg['op'] == 'key-in-memory' and msg['key'] == 'a':
                 break
 
 
 @gen_cluster()
 def test_server(s, a, b):
     stream = yield connect('127.0.0.1', s.port)
-    yield write(stream, {'op': 'register-client', 'client': b'ident'})
+    yield write(stream, {'op': 'register-client', 'client': 'ident'})
     yield write(stream, {'op': 'update-graph',
-                         'tasks': {b'x': dumps_task((inc, 1)),
-                                   b'y': dumps_task((inc, b'x'))},
-                         'dependencies': {b'x': [], b'y': [b'x']},
-                         'keys': [b'y'],
-                         'client': b'ident'})
+                         'tasks': {'x': dumps_task((inc, 1)),
+                                   'y': dumps_task((inc, 'x'))},
+                         'dependencies': {'x': [], 'y': ['x']},
+                         'keys': ['y'],
+                         'client': 'ident'})
 
     while True:
         msg = yield read(stream)
-        if msg['op'] == 'key-in-memory' and msg['key'] == b'y':
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'y':
             break
 
     yield write(stream, {'op': 'close-stream'})
@@ -578,7 +578,7 @@ def test_server(s, a, b):
 def test_server_listens_to_other_ops(s, a, b):
     r = rpc(ip='127.0.0.1', port=s.port)
     ident = yield r.identity()
-    assert ident['type'] == b'Scheduler'
+    assert ident['type'] == 'Scheduler'
 
 
 @gen_cluster()
@@ -601,8 +601,8 @@ def test_remove_worker_from_scheduler(s, a, b):
 @gen_cluster()
 def test_add_worker(s, a, b):
     w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1')
-    w.data[b'x-5'] = 6
-    w.data[b'y'] = 1
+    w.data['x-5'] = 6
+    w.data['y'] = 1
     yield w._start(0)
 
     dsk = {('x-%d' % i).encode(): (inc, i) for i in range(10)}
@@ -643,7 +643,7 @@ def test_feed_setup_teardown(s, a, b):
 
     def func(scheduler, state):
         assert state == 1
-        return b'OK'
+        return 'OK'
 
     def teardown(scheduler, state):
         scheduler.flag = 'done'
@@ -657,7 +657,7 @@ def test_feed_setup_teardown(s, a, b):
 
     for i in range(5):
         response = yield read(stream)
-        assert response == b'OK'
+        assert response == 'OK'
 
     stream.close()
     start = time()
@@ -671,23 +671,23 @@ def test_scheduler_as_center():
     s = Scheduler()
     done = s.start(0)
     a = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=1)
-    a.data.update({b'x': 1, b'y': 2})
+    a.data.update({'x': 1, 'y': 2})
     b = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=2)
-    b.data.update({b'y': 2, b'z': 3})
+    b.data.update({'y': 2, 'z': 3})
     c = Worker('127.0.0.1', s.port, ip='127.0.0.1', ncores=3)
     yield [w._start(0) for w in [a, b, c]]
 
     assert s.ncores == {w.address_string: w.ncores for w in [a, b, c]}
-    assert s.who_has == {b'x': {a.address_string},
-                         b'y': {a.address_string, b.address_string},
-                         b'z': {b.address_string}}
+    assert s.who_has == {'x': {a.address_string},
+                         'y': {a.address_string, b.address_string},
+                         'z': {b.address_string}}
 
-    s.update_graph(tasks={b'a': dumps_task((inc, 1))},
-                   keys=[b'a'],
-                   dependencies={b'a': []})
-    while not s.who_has[b'a']:
+    s.update_graph(tasks={'a': dumps_task((inc, 1))},
+                   keys=['a'],
+                   dependencies={'a': []})
+    while not s.who_has['a']:
         yield gen.sleep(0.01)
-    assert b'a' in a.data or b'a' in b.data or b'a' in c.data
+    assert 'a' in a.data or 'a' in b.data or 'a' in c.data
 
     with ignoring(StreamClosedError):
         yield [w._close() for w in [a, b, c]]
@@ -700,13 +700,13 @@ def test_scheduler_as_center():
 
 @gen_cluster()
 def test_delete_data(s, a, b):
-    yield s.scatter(data=valmap(dumps, {b'x': 1, b'y': 2, b'z': 3}))
-    assert set(a.data) | set(b.data) == {b'x', b'y', b'z'}
-    assert merge(a.data, b.data) == {b'x': 1, b'y': 2, b'z': 3}
+    yield s.scatter(data=valmap(dumps, {'x': 1, 'y': 2, 'z': 3}))
+    assert set(a.data) | set(b.data) == {'x', 'y', 'z'}
+    assert merge(a.data, b.data) == {'x': 1, 'y': 2, 'z': 3}
 
-    s.delete_data(keys=[b'x', b'y'])
+    s.delete_data(keys=['x', 'y'])
     yield s.clear_data_from_workers()
-    assert set(a.data) | set(b.data) == {b'z'}
+    assert set(a.data) | set(b.data) == {'z'}
 
 
 @gen_cluster()
@@ -720,15 +720,15 @@ def test_rpc(s, a, b):
 
 @gen_cluster()
 def test_delete_callback(s, a, b):
-    a.data[b'x'] = 1
-    s.who_has[b'x'].add(a.address_string)
-    s.has_what[a.address_string].add(b'x')
+    a.data['x'] = 1
+    s.who_has['x'].add(a.address_string)
+    s.has_what[a.address_string].add('x')
 
-    s.delete_data(keys=[b'x'])
-    assert not s.who_has[b'x']
-    assert not s.has_what[b'y']
-    assert a.data[b'x'] == 1  # still in memory
-    assert s.deleted_keys == {a.address_string: {b'x'}}
+    s.delete_data(keys=['x'])
+    assert not s.who_has['x']
+    assert not s.has_what['y']
+    assert a.data['x'] == 1  # still in memory
+    assert s.deleted_keys == {a.address_string: {'x'}}
     yield s.clear_data_from_workers()
     assert not s.deleted_keys
     assert not a.data
@@ -738,12 +738,12 @@ def test_delete_callback(s, a, b):
 
 @gen_cluster()
 def test_self_aliases(s, a, b):
-    a.data[b'a'] = 1
-    s.update_data(who_has={b'a': [a.address_string]},
-                  nbytes={b'a': 10}, client=b'client')
-    s.update_graph(tasks=valmap(dumps_task, {b'a': b'a', b'b': (inc, b'a')}),
-                   keys=[b'b'], client=b'client',
-                   dependencies={b'b': [b'a']})
+    a.data['a'] = 1
+    s.update_data(who_has={'a': [a.address_string]},
+                  nbytes={'a': 10}, client='client')
+    s.update_graph(tasks=valmap(dumps_task, {'a': 'a', 'b': (inc, 'a')}),
+                   keys=['b'], client='client',
+                   dependencies={'b': ['a']})
 
     sched, report = Queue(), Queue()
     s.handle_queues(sched, report)
@@ -752,7 +752,7 @@ def test_self_aliases(s, a, b):
 
     while True:
         msg = yield report.get()
-        if msg['op'] == 'key-in-memory' and msg['key'] == b'b':
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'b':
             break
 
 
@@ -760,33 +760,33 @@ def test_self_aliases(s, a, b):
 def test_filtered_communication(s, a, b):
     e = yield connect(ip=s.ip, port=s.port)
     f = yield connect(ip=s.ip, port=s.port)
-    yield write(e, {'op': 'register-client', 'client': b'e'})
-    yield write(f, {'op': 'register-client', 'client': b'f'})
+    yield write(e, {'op': 'register-client', 'client': 'e'})
+    yield write(f, {'op': 'register-client', 'client': 'f'})
     yield read(e)
     yield read(f)
 
-    assert set(s.streams) == {b'e', b'f'}
+    assert set(s.streams) == {'e', 'f'}
 
     yield write(e, {'op': 'update-graph',
-                    'tasks': {b'x': dumps_task((inc, 1)),
-                              b'y': dumps_task((inc, b'x'))},
-                    'dependencies': {b'x': [], b'y': [b'x']},
-                    'client': b'e',
-                    'keys': [b'y']})
+                    'tasks': {'x': dumps_task((inc, 1)),
+                              'y': dumps_task((inc, 'x'))},
+                    'dependencies': {'x': [], 'y': ['x']},
+                    'client': 'e',
+                    'keys': ['y']})
 
     yield write(f, {'op': 'update-graph',
-                    'tasks': {b'x': dumps_task((inc, 1)),
-                              b'z': dumps_task((add, b'x', 10))},
-                    'dependencies': {b'x': [], b'z': [b'x']},
-                    'client': b'f',
-                    'keys': [b'z']})
+                    'tasks': {'x': dumps_task((inc, 1)),
+                              'z': dumps_task((add, 'x', 10))},
+                    'dependencies': {'x': [], 'z': ['x']},
+                    'client': 'f',
+                    'keys': ['z']})
 
     msg = yield read(e)
     assert msg['op'] == 'key-in-memory'
-    assert msg['key'] == b'y'
+    assert msg['key'] == 'y'
     msg = yield read(f)
     assert msg['op'] == 'key-in-memory'
-    assert msg['key'] == b'z'
+    assert msg['key'] == 'z'
 
 
 def test_maybe_complex():
@@ -900,11 +900,11 @@ def test_str_graph():
     assert str_graph(dsk) == dsk
 
     dsk = {('x', 1): (inc, 1)}
-    assert str_graph(dsk) == {str(('x', 1)).encode(): (inc, 1)}
+    assert str_graph(dsk) == {str(('x', 1)): (inc, 1)}
 
     dsk = {('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))}
-    assert str_graph(dsk) == {str(('x', 1)).encode(): (inc, 1),
-                              str(('x', 2)).encode(): (inc, str(('x', 1)).encode())}
+    assert str_graph(dsk) == {str(('x', 1)): (inc, 1),
+                              str(('x', 2)): (inc, str(('x', 1)))}
 
     dsks = [{'x': 1},
             {('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
@@ -913,6 +913,6 @@ def test_str_graph():
     for dsk in dsks:
         sdsk = str_graph(dsk)
         keys = list(dsk)
-        skeys = [str(k).encode() for k in keys]
-        assert all(isinstance(k, bytes) for k in sdsk)
+        skeys = [str(k) for k in keys]
+        assert all(isinstance(k, (str, bytes)) for k in sdsk)
         assert dask.get(dsk, keys) == dask.get(sdsk, skeys)

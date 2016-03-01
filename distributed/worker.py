@@ -19,7 +19,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
 
 from .client import pack_data, gather_from_workers
-from .compatibility import reload
+from .compatibility import reload, PY3
 from .core import rpc, Server, pingpong, dumps, loads, coerce_to_address
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
@@ -145,7 +145,7 @@ class Worker(Server):
             except (OSError, StreamClosedError):
                 logger.debug("Unable to register with center.  Waiting")
                 yield gen.sleep(0.5)
-        assert resp == b'OK'
+        assert resp == 'OK'
         logger.info('        Registered to: %20s:%d',
                     self.center.ip, self.center.port)
         self.status = 'running'
@@ -265,7 +265,7 @@ class Worker(Server):
             if report:
                 response = yield self.center.add_keys(address=(self.ip, self.port),
                                                       keys=[key])
-                if not response == b'OK':
+                if not response == 'OK':
                     logger.warn('Could not report results to center: %s',
                                 response.decode())
             out = {'status': 'OK',
@@ -288,7 +288,7 @@ class Worker(Server):
             except:
                 tb = None
 
-            out = {'status': b'error',
+            out = {'status': 'error',
                    'exception': dumps(e2),
                    'traceback': dumps(tb)}
 
@@ -304,9 +304,9 @@ class Worker(Server):
         if report:
             response = yield self.center.add_keys(address=(self.ip, self.port),
                                                   keys=list(data))
-            assert response == b'OK'
+            assert response == 'OK'
         info = {'nbytes': {k: sizeof(v) for k, v in data.items()},
-                'status': b'OK'}
+                'status': 'OK'}
         raise Return(info)
 
     @gen.coroutine
@@ -319,13 +319,13 @@ class Worker(Server):
             logger.debug("Reporting loss of keys to center")
             yield self.center.remove_keys(address=self.address,
                                           keys=list(keys))
-        raise Return(b'OK')
+        raise Return('OK')
 
     def get_data(self, stream, keys=None):
         return {k: dumps(self.data[k]) for k in keys if k in self.data}
 
     def upload_file(self, stream, filename=None, data=None, load=True):
-        if isinstance(filename, bytes):
+        if PY3 and isinstance(filename, bytes):
             filename = filename.decode()
         out_filename = os.path.join(self.local_dir, filename)
         with open(out_filename, 'wb') as f:

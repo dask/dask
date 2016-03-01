@@ -299,28 +299,28 @@ def iterator_to_queue(seq, maxsize=0):
     return q
 
 
-def tobytes(o):
+def tokey(o):
     """ Convert an object to a bytestring, using str
 
     Examples
     --------
 
-    >>> tobytes(b'x')
+    >>> tokey(b'x')
     b'x'
-    >>> tobytes('x')
-    b'x'
-    >>> tobytes(1)
-    b'1'
+    >>> tokey('x')
+    'x'
+    >>> tokey(1)
+    '1'
     """
-    if isinstance(o, bytes):
+    if isinstance(o, (str, bytes)):
         return o
     else:
-        return str(o).encode()
+        return str(o)
 
 
 import logging
 logging.basicConfig(format='%(name)s - %(levelname)s - %(message)s',
-                    level=logging.DEBUG)
+                    level=logging.INFO)
 
 # http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
 stream = logging.StreamHandler(sys.stderr)

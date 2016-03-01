@@ -69,7 +69,7 @@ class Nanny(Server):
             try:
                 result = yield gen.with_timeout(timedelta(seconds=timeout),
                             self.center.unregister(address=self.worker_address))
-                if result != b'OK':
+                if result != 'OK':
                     logger.critical("Unable to unregister with center %s. "
                             "Nanny: %s, Worker: %s", result, self.address,
                             self.worker_address)
@@ -85,7 +85,7 @@ class Nanny(Server):
             logger.info("Nanny %s:%d kills worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
             self.cleanup()
-        raise gen.Return(b'OK')
+        raise gen.Return('OK')
 
     @gen.coroutine
     def instantiate(self, stream=None):
@@ -115,7 +115,7 @@ class Nanny(Server):
                 yield gen.sleep(0.1)
         logger.info("Nanny %s:%d starts worker process %s:%d",
                     self.ip, self.port, self.ip, self.worker_port)
-        raise gen.Return(b'OK')
+        raise gen.Return('OK')
 
     def cleanup(self):
         if self.worker_dir and os.path.exists(self.worker_dir):
@@ -145,7 +145,7 @@ class Nanny(Server):
         self.center.close_streams()
         self.stop()
         self.status = 'closed'
-        raise gen.Return(b'OK')
+        raise gen.Return('OK')
 
     @property
     def address(self):

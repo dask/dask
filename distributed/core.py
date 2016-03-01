@@ -24,6 +24,7 @@ from tornado.tcpclient import TCPClient
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
+from .compatibility import PY3, unicode
 from . import protocol
 
 def dumps(x):
@@ -152,7 +153,7 @@ class Server(TCPServer):
                     msg = {'op': 'server-error',
                            'exception': truncate_exception(e),
                            'traceback': get_traceback()}
-                    yield write(stream, (b'error', msg))
+                    yield write(stream, ('error', msg))
                     continue
                 if not isinstance(msg, dict):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
@@ -167,7 +168,7 @@ class Server(TCPServer):
                 try:
                     handler = self.handlers[op]
                 except KeyError:
-                    result = b'No handler found: ' + op.encode()
+                    result = 'No handler found: ' + op.encode()
                     logger.warn(result)
                 else:
                     logger.debug("Calling into handler %s", handler.__name__)
@@ -216,11 +217,9 @@ def write(stream, msg):
     orig = msg
     try:
         msg = protocol.dumps(msg)
-        protocol.loads(msg)  # just for debugging
     except Exception as e:
-        f = 3
         logger.exception(e)
-        import pdb; pdb.set_trace()
+        raise
     yield stream.write(msg + sentinel)
     logger.debug("Written %s", orig)
 
@@ -257,17 +256,17 @@ def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True, 
     response = yield send_recv(stream, op='ping', reply=True)
     """
     if arg:
-        if isinstance(arg, (str, bytes)):
+        if isinstance(arg, (unicode, bytes)):
             addr = arg
         if isinstance(arg, tuple):
             ip, port = arg
     if addr:
         assert not ip and not port
-        if isinstance(addr, bytes):
+        if PY3 and isinstance(addr, bytes):
             addr = addr.decode()
         ip, port = addr.split(':')
         port = int(port)
-    if isinstance(ip, bytes):
+    if PY3 and isinstance(ip, bytes):
         ip = ip.decode()
     if stream is None:
         stream = yield connect(ip, port)
@@ -317,17 +316,17 @@ class rpc(object):
     """
     def __init__(self, arg=None, stream=None, ip=None, port=None, addr=None, timeout=3):
         if arg:
-            if isinstance(arg, (str, bytes)):
+            if isinstance(arg, (unicode, bytes)):
                 addr = arg
             if isinstance(arg, tuple):
                 ip, port = arg
         if addr:
-            if isinstance(addr, bytes):
+            if PY3 and isinstance(addr, bytes):
                 addr = addr.decode()
             assert not ip and not port
             ip, port = addr.split(':')
             port = int(port)
-        if isinstance(ip, bytes):
+        if PY3 and isinstance(ip, bytes):
             ip = ip.decode()
         self.streams = dict()
         if stream:
@@ -335,6 +334,8 @@ class rpc(object):
         self.ip = ip
         self.port = port
         self.timeout = timeout
+        assert self.ip
+        assert self.port
 
     @gen.coroutine
     def live_stream(self):
@@ -385,10 +386,10 @@ class rpc(object):
         return send_recv_from_rpc
 
 
-def coerce_to_address(o, out=tuple):
-    if isinstance(o, bytes):
+def coerce_to_address(o, out=str):
+    if PY3 and isinstance(o, bytes):
         o = o.decode()
-    if isinstance(o, str):
+    if isinstance(o, (unicode, str)):
         ip, port = o.split(':')
         port = int(port)
         o = (ip, port)
@@ -405,7 +406,7 @@ def coerce_to_address(o, out=tuple):
 
 def coerce_to_rpc(o, **kwargs):
     if isinstance(o, (bytes, str, tuple, list)):
-        ip, port = coerce_to_address(o)
+        ip, port = coerce_to_address(o, out=tuple)
         return rpc(ip=ip, port=int(port), **kwargs)
     elif isinstance(o, IOStream):
         return rpc(stream=o, **kwargs)

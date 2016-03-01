@@ -24,15 +24,15 @@ def test_diagnostic(s, a, b):
 
     assert counter.count == 0
     sched.put_nowait({'op': 'update-graph',
-                      'tasks': {b'x': dumps_task((inc, 1)),
-                                b'y': dumps_task((inc, b'x')),
-                                b'z': dumps_task((inc, b'y'))},
-                      'dependencies': {b'y': [b'x'], b'z': [b'y']},
-                      'keys': [b'z']})
+                      'tasks': {'x': dumps_task((inc, 1)),
+                                'y': dumps_task((inc, 'x')),
+                                'z': dumps_task((inc, 'y'))},
+                      'dependencies': {'y': ['x'], 'z': ['y']},
+                      'keys': ['z']})
 
     while True:
         msg = yield report.get()
-        if msg['op'] == 'key-in-memory' and msg['key'] == b'z':
+        if msg['op'] == 'key-in-memory' and msg['key'] == 'z':
             break
 
     assert counter.count == 3

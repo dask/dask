@@ -33,7 +33,7 @@ from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc, dumps
 from .scheduler import Scheduler, dumps_function, dumps_task, str_graph
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
-        tobytes, log_errors)
+        tokey, log_errors)
 from .compatibility import Queue as pyQueue, Empty, isqueue
 
 logger = logging.getLogger(__name__)
@@ -251,7 +251,7 @@ class Executor(object):
         self.refcount = defaultdict(lambda: 0)
         self.loop = loop or IOLoop() if start else IOLoop.current()
         self.coroutines = []
-        self.id = tobytes(uuid.uuid1())
+        self.id = str(uuid.uuid1())
         self._start_arg = address
 
         if start:
@@ -307,7 +307,7 @@ class Executor(object):
                 ident = yield r.identity()
             except (StreamClosedError, OSError):
                 raise IOError("Could not connect to %s:%d" % (ip, port))
-            if ident['type'] == b'Scheduler':
+            if ident['type'] == 'Scheduler':
                 self.scheduler = r
                 self.scheduler_stream = yield connect(ip, port)
                 yield write(self.scheduler_stream, {'op': 'register-client',
@@ -477,7 +477,7 @@ class Executor(object):
             else:
                 key = funcname(func) + '-' + str(uuid.uuid4())
 
-        key = tobytes(key)
+        key = tokey(key)
 
         if key in self.futures:
             return Future(key, self)
@@ -589,7 +589,7 @@ class Executor(object):
             keys = [funcname(func) + '-' + uid + '-' + str(i)
                     for i in range(min(map(len, iterables)))]
 
-        keys = [tobytes(key) for key in keys]
+        keys = [tokey(key) for key in keys]
 
         if not kwargs:
             dsk = {key: (func,) + args
@@ -600,7 +600,7 @@ class Executor(object):
 
         d = {key: unpack_remotedata(task, byte_keys=True) for key, task in dsk.items()}
         dsk2 = str_graph({k: v[0] for k, v in d.items()})
-        dependencies = {tobytes(k): set(map(tobytes, v[1])) for k, v in d.items()}
+        dependencies = {k: set(map(tokey, v[1])) for k, v in d.items()}
 
         if isinstance(workers, str):
             workers = [workers]
@@ -637,7 +637,7 @@ class Executor(object):
     @gen.coroutine
     def _gather(self, futures, errors='raise'):
         futures2, keys = unpack_remotedata(futures, byte_keys=True)
-        keys = [tobytes(key) for key in keys]
+        keys = [tokey(key) for key in keys]
         bad_data = dict()
 
         while True:
@@ -657,7 +657,7 @@ class Executor(object):
 
             response = yield self.scheduler.gather(keys=keys)
 
-            if response['status'] == b'error':
+            if response['status'] == 'error':
                 logger.debug("Couldn't gather keys %s", response['keys'])
                 self._send_to_scheduler({'op': 'missing-data',
                                          'missing': response['keys']})
@@ -722,9 +722,10 @@ class Executor(object):
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False):
-        if isinstance(data, dict) and not all(isinstance(k, bytes) for k in data):
-            d = yield self._scatter(keymap(tobytes, data), workers, broadcast)
-            raise gen.Return({k: d[tobytes(k)] for k in data})
+        if isinstance(data, dict) and not all(isinstance(k, (bytes, str))
+                                               for k in data):
+            d = yield self._scatter(keymap(tokey, data), workers, broadcast)
+            raise gen.Return({k: d[tokey(k)] for k in data})
 
         if isinstance(data, dict):
             data2 = valmap(dumps, data)
@@ -852,7 +853,7 @@ class Executor(object):
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
-        flatkeys = list(map(tobytes, flatten([keys])))
+        flatkeys = list(map(tokey, flatten([keys])))
         futures = {key: Future(key, self) for key in flatkeys}
 
         d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
@@ -860,10 +861,10 @@ class Executor(object):
         dsk3 = {k: v for k, v in dsk2.items() if (k == v) is not True}
 
         if restrictions:
-            restrictions = keymap(tobytes, restrictions)
+            restrictions = keymap(tokey, restrictions)
             restrictions = valmap(list, restrictions)
 
-        dependencies = {tobytes(k): set(map(tobytes, v[1])) for k, v in d.items()}
+        dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
 
         for k, v in dsk3.items():
             dependencies[k] |= set(_deps(dsk3, v))
@@ -964,12 +965,12 @@ class Executor(object):
         dsk = merge([opt(merge([v.dask for v in val]),
                          [v._keys() for v in val])
                     for opt, val in groups.items()])
-        names = [tobytes('finalize-%s' % tokenize(v)) for v in variables]
+        names = [tokey('finalize-%s' % tokenize(v)) for v in variables]
         dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
 
         d = {k: unpack_remotedata(v, byte_keys=True) for k, v in merge(dsk, dsk2).items()}
         dsk3 = str_graph({k: v[0] for k, v in d.items()})
-        dependencies = {tobytes(k): set(map(tobytes, v[1])) for k, v in d.items()}
+        dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
 
         for k, v in dsk3.items():
             dependencies[k] |= set(_deps(dsk3, v))
@@ -1039,12 +1040,12 @@ class Executor(object):
 
         d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
         dsk2 = str_graph({k: v[0] for k, v in d.items()})
-        dependencies = {tobytes(k): set(map(tobytes, v[1])) for k, v in d.items()}
+        dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
 
         for k, v in dsk2.items():
             dependencies[k] |= set(_deps(dsk2, v))
 
-        names = list({tobytes(k) for c in collections for k in flatten(c._keys())})
+        names = list({tokey(k) for c in collections for k in flatten(c._keys())})
 
         self._send_to_scheduler({'op': 'update-graph',
                                  'tasks': valmap(dumps_task, dsk2),
@@ -1052,7 +1053,7 @@ class Executor(object):
                                  'keys': names,
                                  'client': self.id})
 
-        result = [redict_collection(c, {k: Future(tobytes(k), self)
+        result = [redict_collection(c, {k: Future(tokey(k), self)
                                         for k in flatten(c._keys())})
                 for c in collections]
         if singleton:
@@ -1085,15 +1086,15 @@ class Executor(object):
                                                 'filename': fn,
                                                 'data': data})
 
-        if any(v[b'status'] == b'error' for v in d.values()):
-            exceptions = [cloudpickle.loads(v[b'exception']) for v in d.values()
-                          if v[b'status'] == b'error']
+        if any(v['status'] == 'error' for v in d.values()):
+            exceptions = [cloudpickle.loads(v['exception']) for v in d.values()
+                          if v['status'] == 'error']
             if raise_on_error:
                 raise exceptions[0]
             else:
                 raise gen.Return(exceptions[0])
 
-        assert all(len(data) == v[b'nbytes'] for v in d.values())
+        assert all(len(data) == v['nbytes'] for v in d.values())
 
     def upload_file(self, filename):
         """ Upload local package to workers

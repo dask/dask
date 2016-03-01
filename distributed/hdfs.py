@@ -78,7 +78,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
         offsets = [max([o, 1]) for o in offsets]
     lengths = [d['length'] for d in blocks]
     workers = [[h.decode() for h in d['hosts']] for d in blocks]
-    names = ['read-binary-%s-%d-%d' % (fn, offset, length)
+    names = [('read-binary-%s-%d-%d' % (fn, offset, length))
             for fn, offset, length in zip(filenames, offsets, lengths)]
 
     logger.debug("Read %d blocks of binary bytes from %s", len(blocks), fn)
@@ -86,10 +86,10 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
         restrictions = dict(zip(names, workers))
         executor._send_to_scheduler({'op': 'update-graph',
                                      'tasks': {},
-                                     'dependencies': set(),
+                                     'dependencies': [],
                                      'keys': [],
                                      'restrictions': restrictions,
-                                     'loose_restrictions': set(names),
+                                     'loose_restrictions': names,
                                      'client': executor.id})
         values = [Value(name, [{name: (read_block_from_hdfs, fn, offset, length, hdfs.host, hdfs.port, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]

@@ -69,8 +69,6 @@ class ProgressBar(object):
 
         while True:
             response = yield read(self.stream)
-            response = {k: v.decode() if isinstance(v, bytes) else v
-                        for k, v in response.items()}
             self._last_response = response
             self.status = response['status']
             self._draw_bar(**response)
@@ -189,8 +187,6 @@ class MultiProgressBar(object):
 
         while True:
             response = yield read(self.stream)
-            response = {k: v.decode() if isinstance(v, bytes) else v
-                        for k, v in response.items()}
             self._last_response = response
             self.status = response['status']
             self._draw_bar(**response)
@@ -230,7 +226,7 @@ class MultiProgressWidget(MultiProgressBar):
                                         height='10px')
                         for key in all}
         self.bar_texts = {key: HTML('', width = "140px") for key in all}
-        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">' + cgi.escape(key.decode()) + '</div>')
+        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">' + cgi.escape(key.decode() if isinstance(key, bytes) else key) + '</div>')
                             for key in all}
 
         def key(kv):

@@ -76,11 +76,11 @@ from distributed.diagnostics.progressbar import (ProgressWidget,
 
 @gen_cluster()
 def test_progressbar_widget(s, a, b):
-    s.update_graph(tasks=valmap(dumps_task, {b'x': (inc, 1),
-                                             b'y': (inc, b'x'),
-                                             b'z': (inc, b'y')}),
-                   keys=[b'z'],
-                   dependencies={b'y': {b'x'}, b'z': {b'y'}})
+    s.update_graph(tasks=valmap(dumps_task, {'x': (inc, 1),
+                                             'y': (inc, 'x'),
+                                             'z': (inc, 'y')}),
+                   keys=['z'],
+                   dependencies={'y': {'x'}, 'z': {'y'}})
 
     progress = ProgressWidget(['z'], scheduler=(s.ip, s.port))
     yield progress.listen()
@@ -94,30 +94,30 @@ def test_progressbar_widget(s, a, b):
 
 @gen_cluster()
 def test_multi_progressbar_widget(s, a, b):
-    s.update_graph(tasks=valmap(dumps_task, {b'x-1': (inc, 1),
-                                             b'x-2': (inc, b'x-1'),
-                                             b'x-3': (inc, b'x-2'),
-                                             b'y-1': (dec, b'x-3'),
-                                             b'y-2': (dec, b'y-1'),
-                                             b'e': (throws, b'y-2'),
-                                             b'other': (inc, 123)}),
-                   keys=[b'e'],
-                   dependencies={b'x-2': [b'x-1'], b'x-3': [b'x-2'],
-                                 b'y-1': [b'x-3'], b'y-2': [b'y-1'],
-                                 b'e': [b'y-2']})
+    s.update_graph(tasks=valmap(dumps_task, {'x-1': (inc, 1),
+                                             'x-2': (inc, 'x-1'),
+                                             'x-3': (inc, 'x-2'),
+                                             'y-1': (dec, 'x-3'),
+                                             'y-2': (dec, 'y-1'),
+                                             'e': (throws, 'y-2'),
+                                             'other': (inc, 123)}),
+                   keys=['e'],
+                   dependencies={'x-2': ['x-1'], 'x-3': ['x-2'],
+                                 'y-1': ['x-3'], 'y-2': ['y-1'],
+                                 'e': ['y-2']})
 
     p = MultiProgressWidget(['e'], scheduler=(s.ip, s.port))
     yield p.listen()
 
-    assert p.bars[b'x'].value == 1.0
-    assert p.bars[b'y'].value == 1.0
-    assert p.bars[b'e'].value == 0.0
-    assert '3 / 3' in p.bar_texts[b'x'].value
-    assert '2 / 2' in p.bar_texts[b'y'].value
-    assert '0 / 1' in p.bar_texts[b'e'].value
+    assert p.bars['x'].value == 1.0
+    assert p.bars['y'].value == 1.0
+    assert p.bars['e'].value == 0.0
+    assert '3 / 3' in p.bar_texts['x'].value
+    assert '2 / 2' in p.bar_texts['y'].value
+    assert '0 / 1' in p.bar_texts['e'].value
 
-    assert p.bars[b'x'].bar_style == 'success'
-    assert p.bars[b'y'].bar_style == 'success'
+    assert p.bars['x'].bar_style == 'success'
+    assert p.bars['y'].bar_style == 'success'
     # assert p.bars['e'].bar_style == 'danger'
 
     assert p.status == 'error'
@@ -130,22 +130,22 @@ def test_multi_progressbar_widget(s, a, b):
 
 @gen_cluster()
 def test_multi_progressbar_widget_after_close(s, a, b):
-    s.update_graph(tasks=valmap(dumps_task, {b'x-1': (inc, 1),
-                                             b'x-2': (inc, b'x-1'),
-                                             b'x-3': (inc, b'x-2'),
-                                             b'y-1': (dec, b'x-3'),
-                                             b'y-2': (dec, b'y-1'),
-                                             b'e': (throws, b'y-2'),
-                                             b'other': (inc, 123)}),
-                   keys=[b'e'],
-                   dependencies={b'x-2': {b'x-1'}, b'x-3': {b'x-2'},
-                                 b'y-1': {b'x-3'}, b'y-2': {b'y-1'},
-                                 b'e': {b'y-2'}})
+    s.update_graph(tasks=valmap(dumps_task, {'x-1': (inc, 1),
+                                             'x-2': (inc, 'x-1'),
+                                             'x-3': (inc, 'x-2'),
+                                             'y-1': (dec, 'x-3'),
+                                             'y-2': (dec, 'y-1'),
+                                             'e': (throws, 'y-2'),
+                                             'other': (inc, 123)}),
+                   keys=['e'],
+                   dependencies={'x-2': {'x-1'}, 'x-3': {'x-2'},
+                                 'y-1': {'x-3'}, 'y-2': {'y-1'},
+                                 'e': {'y-2'}})
 
     p = MultiProgressWidget(['x-1', 'x-2', 'x-3'], scheduler=(s.ip, s.port))
     yield p.listen()
 
-    assert b'x' in p.bars
+    assert 'x' in p.bars
 
 
 def test_values(loop):
@@ -155,11 +155,11 @@ def test_values(loop):
             wait(L)
             p = MultiProgressWidget(L)
             sync(loop, p.listen)
-            assert set(p.bars) == {b'inc'}
+            assert set(p.bars) == {'inc'}
             assert p.status == 'finished'
             assert p.stream.closed()
-            assert '5 / 5' in p.bar_texts[b'inc'].value
-            assert p.bars[b'inc'].value == 1.0
+            assert '5 / 5' in p.bar_texts['inc'].value
+            assert p.bars['inc'].value == 1.0
 
             x = e.submit(throws, 1)
             p = MultiProgressWidget([x])
@@ -190,25 +190,25 @@ def test_progressbar_done(loop):
 
 @gen_cluster()
 def test_multibar_complete(s, a, b):
-    s.update_graph(tasks=valmap(dumps_task, {b'x-1': (inc, 1),
-                                             b'x-2': (inc, b'x-1'),
-                                             b'x-3': (inc, b'x-2'),
-                                             b'y-1': (dec, b'x-3'),
-                                             b'y-2': (dec, b'y-1'),
-                                             b'e': (throws, b'y-2'),
-                                             b'other': (inc, 123)}),
-                   keys=[b'e'],
-                   dependencies={b'x-2': {b'x-1'}, b'x-3': {b'x-2'},
-                                 b'y-1': {b'x-3'}, b'y-2': {b'y-1'},
-                                 b'e': {b'y-2'}})
+    s.update_graph(tasks=valmap(dumps_task, {'x-1': (inc, 1),
+                                             'x-2': (inc, 'x-1'),
+                                             'x-3': (inc, 'x-2'),
+                                             'y-1': (dec, 'x-3'),
+                                             'y-2': (dec, 'y-1'),
+                                             'e': (throws, 'y-2'),
+                                             'other': (inc, 123)}),
+                   keys=['e'],
+                   dependencies={'x-2': {'x-1'}, 'x-3': {'x-2'},
+                                 'y-1': {'x-3'}, 'y-2': {'y-1'},
+                                 'e': {'y-2'}})
 
     p = MultiProgressWidget(['e'], scheduler=(s.ip, s.port), complete=True)
     yield p.listen()
 
-    assert p._last_response['all'] == {b'x': 3, b'y': 2, b'e': 1}
-    assert all(b.value == 1.0 for k, b in p.bars.items() if k != b'e')
-    assert '3 / 3' in p.bar_texts[b'x'].value
-    assert '2 / 2' in p.bar_texts[b'y'].value
+    assert p._last_response['all'] == {'x': 3, 'y': 2, 'e': 1}
+    assert all(b.value == 1.0 for k, b in p.bars.items() if k != 'e')
+    assert '3 / 3' in p.bar_texts['x'].value
+    assert '2 / 2' in p.bar_texts['y'].value
 
 
 def test_fast(loop):
@@ -219,4 +219,4 @@ def test_fast(loop):
             L3 = e.map(add, L, L2)
             p = progress(L3, multi=True, complete=True, notebook=True)
             sync(loop, p.listen)
-            assert set(p._last_response['all']) == {b'inc', b'dec', b'add'}
+            assert set(p._last_response['all']) == {'inc', 'dec', 'add'}

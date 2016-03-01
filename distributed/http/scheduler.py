@@ -9,13 +9,14 @@ from tornado.httpclient import AsyncHTTPClient
 
 from .core import RequestHandler, MyApp, Resources, Proxy
 from ..utils import key_split
+from ..compatibility import unicode
 
 
 logger = logging.getLogger(__name__)
 
 
 def ensure_string(s):
-    if not isinstance(s, str):
+    if not isinstance(s, unicode):
         s = s.decode()
     return s
 
@@ -66,7 +67,7 @@ class MemoryLoadByKey(RequestHandler):
             d = defaultdict(lambda: 0)
             for key in keys:
                 d[key_split(key)] += self.server.nbytes[key]
-            out[worker] = {k.decode(): v for k, v in d.items()}
+            out[worker] = {k: v for k, v in d.items()}
         self.write(out)
 
 

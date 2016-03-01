@@ -31,8 +31,8 @@ def test_text_progressbar(capsys, loop):
 
 @gen_cluster()
 def test_TextProgressBar_error(s, a, b):
-    s.update_graph(tasks={b'x': dumps_task((div, 1, 0))},
-                   keys=[b'x'],
+    s.update_graph(tasks={'x': dumps_task((div, 1, 0))},
+                   keys=['x'],
                    dependencies={})
 
     progress = TextProgressBar(['x'], scheduler=(s.ip, s.port),

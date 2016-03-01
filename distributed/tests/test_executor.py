@@ -710,8 +710,8 @@ def test_restrictions_get(s, a, b):
 
     result = yield e._get(dsk, ['y', 'z'], restrictions)
     assert result == [2, 3]
-    assert b'y' in a.data
-    assert b'z' in b.data
+    assert 'y' in a.data
+    assert 'z' in b.data
 
     yield e._shutdown()
 
@@ -896,11 +896,11 @@ def test__scatter(s, a, b):
 
     d = yield e._scatter({'y': 20})
     assert isinstance(d['y'], Future)
-    assert a.data.get(b'y') == 20 or b.data.get(b'y') == 20
-    assert (a.address_string in s.who_has[b'y'] or
-            b.address_string in s.who_has[b'y'])
-    assert s.who_has[b'y']
-    assert s.nbytes == {b'y': sizeof(20)}
+    assert a.data.get('y') == 20 or b.data.get('y') == 20
+    assert (a.address_string in s.who_has['y'] or
+            b.address_string in s.who_has['y'])
+    assert s.who_has['y']
+    assert s.nbytes == {'y': sizeof(20)}
     yy = yield e._gather([d['y']])
     assert yy == [20]
 
@@ -911,7 +911,7 @@ def test__scatter(s, a, b):
     assert s.who_has[x.key]
     assert (a.address_string in s.who_has[x.key] or
             b.address_string in s.who_has[x.key])
-    assert s.nbytes == {b'y': sizeof(20), x.key: sizeof(10)}
+    assert s.nbytes == {'y': sizeof(20), x.key: sizeof(10)}
     assert xx == [10]
 
     z = e.submit(add, x, d['y'])  # submit works on Future
@@ -2243,11 +2243,11 @@ def test_async_persist(s, a, b):
     assert y._keys() == yy._keys()
     assert w._keys() == ww._keys()
 
-    while y.key.encode() not in s.tasks and w.key.encode() not in s.tasks:
+    while y.key not in s.tasks and w.key not in s.tasks:
         yield gen.sleep(0.01)
 
-    assert s.who_wants[y.key.encode()] == {e.id}
-    assert s.who_wants[w.key.encode()] == {e.id}
+    assert s.who_wants[y.key] == {e.id}
+    assert s.who_wants[w.key] == {e.id}
 
     yyf, wwf = e.compute([yy, ww])
     yyy, www = yield e._gather([yyf, wwf])

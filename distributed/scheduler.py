@@ -18,7 +18,7 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
-from dask.compatibility import apply
+from dask.compatibility import apply, PY3
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
@@ -28,7 +28,7 @@ from .client import (scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
         ignore_exceptions, ensure_ip, get_traceback, truncate_exception,
-        tobytes, log_errors)
+        tokey, log_errors)
 
 
 dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
@@ -457,7 +457,7 @@ class Scheduler(Server):
         --------
         Scheduler.mark_key_in_memory
         """
-        who_has = {k: [coerce_to_address(vv, out=str) for vv in v]
+        who_has = {k: [coerce_to_address(vv) for vv in v]
                    for k, v in who_has.items()}
         logger.debug("Update data %s", who_has)
         for key, workers in who_has.items():
@@ -567,7 +567,7 @@ class Scheduler(Server):
         --------
         Scheduler.heal_state
         """
-        address = coerce_to_address(address, out=str)
+        address = coerce_to_address(address)
         logger.debug("Remove worker %s", address)
         if address not in self.processing:
             return
@@ -596,15 +596,12 @@ class Scheduler(Server):
         if heal:
             self.heal_state()
 
-        return b'OK'
+        return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
                    services=None):
         address = coerce_to_address(address)
-        address = "%s:%d" % address
         self.ncores[address] = ncores
-        if services:
-            services = keymap(bytes.decode, services)
         self.worker_services[address] = services
         if address not in self.processing:
             self.has_what[address] = set()
@@ -623,7 +620,7 @@ class Scheduler(Server):
         self.ensure_occupied(address)
 
         logger.info("Register %s", str(address))
-        return b'OK'
+        return 'OK'
 
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None,
@@ -994,22 +991,19 @@ class Scheduler(Server):
                     if istask(task):
                         task = {'task': task}
 
-                    task = {k.decode() if isinstance(k, bytes) else k: v
-                                for k, v in task.items()}
-
                     response = yield worker.compute(who_has=who_has,
                                                     key=key,
                                                     report=False,
                                                     **task)
-                    if response['status'] == b'OK':
+                    if response['status'] == 'OK':
                         nbytes = response['nbytes']
                     logger.debug("Compute response from worker %s, %s, %s",
                                  ident, key, response)
-                    if response['status'] == b'error':
+                    if response['status'] == 'error':
                         self.mark_task_erred(key, ident, response['exception'],
                                                          response['traceback'])
 
-                    elif response['status'] == b'missing-data':
+                    elif response['status'] == 'missing-data':
                         self.mark_missing_data(response['keys'],
                                                key=key, worker=ident)
 
@@ -1043,7 +1037,7 @@ class Scheduler(Server):
                 logger.debug("Remove %d keys from worker %s", len(keys), worker)
             yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
 
-        raise Return(b'OK')
+        raise Return('OK')
 
     def delete_data(self, stream=None, keys=None):
         for key in keys:
@@ -1119,7 +1113,7 @@ class Scheduler(Server):
 
         # All quiet
         resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
-        assert all(resp == b'OK' for resp in resps)
+        assert all(resp == 'OK' for resp in resps)
 
         self.start()
 
@@ -1192,7 +1186,6 @@ class Scheduler(Server):
     def broadcast(self, stream, msg=None):
         """ Broadcast message to workers, return all results """
         workers = list(self.ncores)
-        msg = keymap(bytes.decode, msg)
         results = yield All([send_recv(arg=address, close=True, **msg)
                              for address in workers])
         raise Return(dict(zip(workers, results)))
@@ -1202,43 +1195,43 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
                   loose_restrictions, nbytes, key):
     """ Decide which worker should take task
 
-    >>> dependencies = {b'c': {b'b'}, b'b': {b'a'}}
-    >>> stacks = {('alice', 8000): [b'z'], ('bob', 8000): []}
-    >>> who_has = {b'a': {('alice', 8000)}}
-    >>> nbytes = {b'a': 100}
+    >>> dependencies = {'c': {'b'}, 'b': {'a'}}
+    >>> stacks = {('alice', 8000): ['z'], ('bob', 8000): []}
+    >>> who_has = {'a': {('alice', 8000)}}
+    >>> nbytes = {'a': 100}
     >>> restrictions = {}
     >>> loose_restrictions = set()
 
-    We choose the worker that has the data on which b'b' depends (alice has b'a')
+    We choose the worker that has the data on which 'b' depends (alice has 'a')
 
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
-    ...               loose_restrictions, nbytes, b'b')
+    ...               loose_restrictions, nbytes, 'b')
     ('alice', 8000)
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
 
-    >>> who_has = {b'a': {('alice', 8000), ('bob', 8000)}}
+    >>> who_has = {'a': {('alice', 8000), ('bob', 8000)}}
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
-    ...               loose_restrictions, nbytes, b'b')
+    ...               loose_restrictions, nbytes, 'b')
     ('bob', 8000)
 
     Optionally provide restrictions of where jobs are allowed to occur
 
-    >>> restrictions = {b'b': {'alice', 'charile'}}
+    >>> restrictions = {'b': {'alice', 'charile'}}
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
-    ...               loose_restrictions, nbytes, b'b')
+    ...               loose_restrictions, nbytes, 'b')
     ('alice', 8000)
 
     If the task requires data communication, then we choose to minimize the
     number of bytes sent between workers. This takes precedence over worker
     occupancy.
 
-    >>> dependencies = {b'c': {b'a', b'b'}}
-    >>> who_has = {b'a': {('alice', 8000)}, b'b': {('bob', 8000)}}
-    >>> nbytes = {b'a': 1, b'b': 1000}
+    >>> dependencies = {'c': {'a', 'b'}}
+    >>> who_has = {'a': {('alice', 8000)}, 'b': {('bob', 8000)}}
+    >>> nbytes = {'a': 1, 'b': 1000}
     >>> stacks = {('alice', 8000): [], ('bob', 8000): []}
 
-    >>> decide_worker(dependencies, stacks, who_has, {}, set(), nbytes, b'c')
+    >>> decide_worker(dependencies, stacks, who_has, {}, set(), nbytes, 'c')
     ('bob', 8000)
     """
     deps = dependencies[key]
@@ -1365,13 +1358,13 @@ def keys_outside_frontier(dependencies, keys, frontier):
     Examples
     --------
     >>> f = lambda:1
-    >>> dsk = {b'x': 1, b'a': 2, b'y': (f, b'x'), b'b': (f, b'a'),
-    ...        b'z': (f, b'b', b'y')}
+    >>> dsk = {'x': 1, 'a': 2, 'y': (f, 'x'), 'b': (f, 'a'),
+    ...        'z': (f, 'b', 'y')}
     >>> dependencies, dependents = get_deps(dsk)
-    >>> keys = {b'z', b'b'}
-    >>> frontier = {b'y', b'a'}
+    >>> keys = {'z', 'b'}
+    >>> frontier = {'y', 'a'}
     >>> list(sorted(keys_outside_frontier(dependencies, keys, frontier)))
-    [b'b', b'z']
+    ['b', 'z']
     """
     assert isinstance(keys, set)
     assert isinstance(frontier, set)
@@ -1592,9 +1585,9 @@ def str_graph(dsk):
             return (task[0],) + tuple(map(convert, task[1:]))
         try:
             if task in dsk:
-                return tobytes(task)
+                return tokey(task)
         except TypeError:
             pass
         return task
 
-    return {tobytes(k): convert(v) for k, v in dsk.items()}
+    return {tokey(k): convert(v) for k, v in dsk.items()}

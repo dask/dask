@@ -9,7 +9,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from distributed import Center, Worker
-from distributed.utils import ignoring
+from distributed.utils import ignoring, tokey
 from distributed.utils_test import (cluster, loop, _test_cluster,
         cluster_center, gen_cluster)
 from distributed.client import (_gather, _scatter, _delete, _clear,
@@ -80,6 +80,8 @@ def test_gather_with_missing_worker(loop):
 
 
 def test_pack_data():
+    data = {'x': 1}
+    assert pack_data(('x', 'y'), data) == (1, 'y')
     data = {b'x': 1}
     assert pack_data((b'x', 'y'), data) == (1, 'y')
     assert pack_data({'a': b'x', 'b': 'y'}, data) == {'a': 1, 'b': 'y'}
@@ -87,7 +89,7 @@ def test_pack_data():
 
 
 def test_pack_data_with_key_mapping():
-    data = {str(('x', 1)).encode(): 1}
+    data = {tokey(('x', 1)): 1}
     assert pack_data((('x', 1), 'y'), data) == (1, 'y')
 
 
@@ -96,7 +98,7 @@ def test_gather_errors_voluminously(loop):
         try:
             gather(('127.0.0.1', c['port']), ['x', 'y', 'z'])
         except KeyError as e:
-            assert set(e.args) == {b'x', b'y', b'z'}
+            assert set(e.args) == {'x', 'y', 'z'}
 
 
 @pytest.mark.skipif(sys.platform!='linux',

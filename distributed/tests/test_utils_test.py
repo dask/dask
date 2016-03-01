@@ -8,7 +8,7 @@ def test_cluster(loop):
     with cluster() as (s, [a, b]):
         s = rpc(ip='127.0.0.1', port=s['port'])
         ident = loop.run_sync(s.identity)
-        assert ident['type'] == b'Scheduler'
+        assert ident['type'] == 'Scheduler'
         assert len(ident['workers']) == 2
 
 

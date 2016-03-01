@@ -15,7 +15,7 @@ from dask.base import tokenize
 from toolz import merge, concat, groupby, drop, valmap
 
 from .core import rpc, coerce_to_rpc, loads, coerce_to_address, dumps
-from .utils import ignore_exceptions, ignoring, All, log_errors, tobytes, sync
+from .utils import ignore_exceptions, ignoring, All, log_errors, tokey, sync
 
 
 no_default = '__no_default__'
@@ -70,7 +70,7 @@ def _gather(center, needed=[]):
         raise TypeError('Bad response from who_has: %s' % who_has)
 
     result = yield gather_from_workers(who_has)
-    raise Return([result[tobytes(key)] for key in needed])
+    raise Return([result[tokey(key)] for key in needed])
 
 _gather.__doc__ = gather.__doc__
 
@@ -174,10 +174,6 @@ def _scatter(center, data, serialize=True):
 
         result, who_has, nbytes = yield scatter_to_workers(ncores, data,
                                                            serialize=serialize)
-        print(result)
-        print(result)
-        print(result)
-        print(result)
     raise Return(result)
 
 
@@ -199,7 +195,7 @@ def scatter_to_workers(ncores, data, report=True, serialize=True):
     """
     if isinstance(ncores, Iterable) and not isinstance(ncores, dict):
         k = len(data) // len(ncores)
-        ncores = {coerce_to_address(worker, out=str): k for worker in ncores}
+        ncores = {coerce_to_address(worker): k for worker in ncores}
 
     workers = list(concat([w] * nc for w, nc in ncores.items()))
     in_type = type(data)
@@ -209,9 +205,9 @@ def scatter_to_workers(ncores, data, report=True, serialize=True):
         names = []
         for x in data:
             try:
-                names.append(tobytes(tokenize(x)))
+                names.append(tokenize(x))
             except:
-                names.append(tobytes(uuid.uuid1()))
+                names.append(uuid.uuid1())
 
     worker_iter = drop(_round_robin_counter[0] % len(workers), cycle(workers))
     _round_robin_counter[0] += len(data)
@@ -257,9 +253,9 @@ def broadcast_to_workers(workers, data, report=False, rpc=rpc, serialize=True):
         names = []
         for x in data:
             try:
-                names.append(tobytes(tokenize(x)))
+                names.append(tokenize(x))
             except:
-                names.append(tobytes(uuid.uuid1()))
+                names.append(uuid.uuid1())
         data = dict(zip(names, data))
 
     if serialize:
@@ -329,7 +325,7 @@ def unpack_remotedata(o, byte_keys=False):
     if isinstance(o, WrappedKey):
         k = o.key
         if byte_keys:
-            k = tobytes(k)
+            k = tokey(k)
         return k, {k}
     if isinstance(o, (tuple, list, set, frozenset)):
         if not o:
@@ -366,10 +362,11 @@ def pack_data(o, d):
     >>> pack_data({'a': ['x'], 'b': 'y'}, data)  # doctest: +SKIP
     {'a': [1], 'b': 'y'}
     """
-    if isinstance(o, bytes) and o in d:
-        return d[o]
-    if str(o).encode() in d:
-        return d[str(o).encode()]
+    if isinstance(o, (str, bytes)):
+        if o in d:
+            return d[o]
+    elif tokey(o) in d:
+        return d[tokey(o)]
 
     if isinstance(o, (tuple, list, set, frozenset)):
         return type(o)([pack_data(x, d) for x in o])

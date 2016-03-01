@@ -25,25 +25,23 @@ def test_metadata():
     assert alice in c.has_what
     assert c.ncores[alice] == 4
 
-    response = yield cc.add_keys(address=alice, keys=[b'x', b'y'])
-    assert response == b'OK'
+    response = yield cc.add_keys(address=alice, keys=['x', 'y'])
+    assert response == 'OK'
 
     response = yield cc.register(address=bob, ncores=4)
-    response = yield cc.add_keys(address=bob, keys=[b'y', b'z'])
-    assert response == b'OK'
+    response = yield cc.add_keys(address=bob, keys=['y', 'z'])
+    assert response == 'OK'
 
-    response = yield cc.who_has(keys=[b'x', b'y'])
+    response = yield cc.who_has(keys=['x', 'y'])
     assert valmap(set, response) == {
-                        b'x': {alice.encode()},
-                        b'y': {alice.encode(), bob.encode()}}
+                        'x': {alice},
+                        'y': {alice, bob}}
 
-    response = yield cc.remove_keys(address=bob, keys=[b'y'])
-    assert response == b'OK'
+    response = yield cc.remove_keys(address=bob, keys=['y'])
+    assert response == 'OK'
 
     response = yield cc.has_what(keys=[alice, bob])
-    assert valmap(set, response) == {
-                        alice: {b'x', b'y'},
-                        bob: {b'z'}}
+    assert valmap(set, response) == {alice: {'x', 'y'}, bob: {'z'}}
 
     response = yield cc.ncores()
     assert response == {alice: 4, bob: 4}
@@ -51,7 +49,7 @@ def test_metadata():
     assert response == {alice: 4, charlie: None}
 
     response = yield cc.unregister(address=alice, close=True)
-    assert response == b'OK'
+    assert response == 'OK'
     assert alice not in c.has_what
     assert alice not in c.ncores
 

@@ -12,7 +12,7 @@ from tornado.ioloop import PeriodicCallback, IOLoop
 from tornado import gen
 
 from .plugin import SchedulerPlugin
-from ..utils import sync, key_split, tobytes
+from ..utils import sync, key_split, tokey
 from ..executor import default_executor
 
 
@@ -64,7 +64,7 @@ class Progress(SchedulerPlugin):
     """
     def __init__(self, keys, scheduler, minimum=0, dt=0.1, complete=False):
         self.keys = {k.key if hasattr(k, 'key') else k for k in keys}
-        self.keys = {tobytes(k) for k in self.keys}
+        self.keys = {tokey(k) for k in self.keys}
         self.scheduler = scheduler
         self.complete = complete
         self._minimum = minimum
@@ -128,11 +128,8 @@ class Progress(SchedulerPlugin):
 
     def task_erred(self, scheduler, key, worker, exception):
         logger.debug("Progress sees task erred")
-        try:
-            if key in self.all_keys:
-                self.stop(exception=exception, key=key)
-        except AttributeError:
-            import pdb; pdb.set_trace()
+        if key in self.all_keys:
+            self.stop(exception=exception, key=key)
 
     def restart(self, scheduler):
         self.stop()

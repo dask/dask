@@ -35,6 +35,7 @@ except ImportError:
 from toolz import first, keymap
 
 from .utils import ignoring
+from .compatibility import unicode
 
 
 compressions = {}
