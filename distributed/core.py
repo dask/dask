@@ -9,10 +9,7 @@ import struct
 from time import sleep, time
 import uuid
 
-try:
-    from cytoolz import assoc, first, keymap
-except ImportError:
-    from toolz import assoc, first, keymap
+from toolz import assoc, first
 
 import tornado
 import pickle

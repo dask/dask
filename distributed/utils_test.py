@@ -274,6 +274,7 @@ def _test_cluster(f, loop=None, b_ip='127.0.0.1'):
             yield f(c, a, b)
         except Exception as e:
             logger.exception(e)
+            raise
         finally:
             logger.debug("Closing out test cluster")
             for w in [a, b]:

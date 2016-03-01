@@ -5,7 +5,7 @@ from timeit import default_timer
 import sys
 
 from dask.core import flatten
-from toolz import valmap, second, keymap
+from toolz import valmap
 from tornado import gen
 from tornado.ioloop import IOLoop
 

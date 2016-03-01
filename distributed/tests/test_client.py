@@ -54,7 +54,7 @@ def test_scatter_delete(loop):
 def test_gather_with_missing_worker(loop):
     @gen.coroutine
     def f(c, a, b):
-        bad = ('127.0.0.1', 9001)  # this worker doesn't exist
+        bad = '127.0.0.1:9001'  # this worker doesn't exist
         c.who_has['x'].add(bad)
         c.has_what[bad].add('x')
 

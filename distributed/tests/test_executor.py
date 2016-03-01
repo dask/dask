@@ -58,7 +58,7 @@ def test_submit(s, a, b):
     yield e._shutdown()
 
 
-@gen_cluster(timeout=10000)
+@gen_cluster()
 def test_map(s, a, b):
     e = Executor((s.ip, s.port), start=False)
     yield e._start()
@@ -569,7 +569,7 @@ def test_missing_data_heals(s, a, b):
 @slow
 @gen_cluster()
 def test_missing_worker(s, a, b):
-    bad = ('bad-host', 8788)
+    bad = 'bad-host:8788'
     s.ncores[bad] = 4
     s.who_has['b'] = {bad}
     s.has_what[bad] = {'b'}

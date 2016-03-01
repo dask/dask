@@ -207,7 +207,7 @@ def scatter_to_workers(ncores, data, report=True, serialize=True):
             try:
                 names.append(tokenize(x))
             except:
-                names.append(uuid.uuid1())
+                names.append(str(uuid.uuid1()))
 
     worker_iter = drop(_round_robin_counter[0] % len(workers), cycle(workers))
     _round_robin_counter[0] += len(data)
@@ -320,7 +320,7 @@ def unpack_remotedata(o, byte_keys=False):
 
     >>> rd = WrappedKey(('x', 1))
     >>> unpack_remotedata(rd, byte_keys=True)
-    (b"('x', 1)", {b"('x', 1)"})
+    ("('x', 1)", {"('x', 1)"})
     """
     if isinstance(o, WrappedKey):
         k = o.key

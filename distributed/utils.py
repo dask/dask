@@ -202,7 +202,7 @@ def key_split(s):
     'Other'
     """
     if isinstance(s, bytes):
-        return key_split(s.decode()).encode()
+        return key_split(s.decode())
     if isinstance(s, tuple):
         return key_split(s[0])
     try:

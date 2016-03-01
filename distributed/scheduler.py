@@ -1196,8 +1196,8 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     """ Decide which worker should take task
 
     >>> dependencies = {'c': {'b'}, 'b': {'a'}}
-    >>> stacks = {('alice', 8000): ['z'], ('bob', 8000): []}
-    >>> who_has = {'a': {('alice', 8000)}}
+    >>> stacks = {'alice:8000': ['z'], 'bob:8000': []}
+    >>> who_has = {'a': {'alice:8000'}}
     >>> nbytes = {'a': 100}
     >>> restrictions = {}
     >>> loose_restrictions = set()
@@ -1206,33 +1206,33 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
 
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
     ...               loose_restrictions, nbytes, 'b')
-    ('alice', 8000)
+    'alice:8000'
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
 
-    >>> who_has = {'a': {('alice', 8000), ('bob', 8000)}}
+    >>> who_has = {'a': {'alice:8000', 'bob:8000'}}
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
     ...               loose_restrictions, nbytes, 'b')
-    ('bob', 8000)
+    'bob:8000'
 
     Optionally provide restrictions of where jobs are allowed to occur
 
     >>> restrictions = {'b': {'alice', 'charile'}}
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
     ...               loose_restrictions, nbytes, 'b')
-    ('alice', 8000)
+    'alice:8000'
 
     If the task requires data communication, then we choose to minimize the
     number of bytes sent between workers. This takes precedence over worker
     occupancy.
 
     >>> dependencies = {'c': {'a', 'b'}}
-    >>> who_has = {'a': {('alice', 8000)}, 'b': {('bob', 8000)}}
+    >>> who_has = {'a': {'alice:8000'}, 'b': {'bob:8000'}}
     >>> nbytes = {'a': 1, 'b': 1000}
-    >>> stacks = {('alice', 8000): [], ('bob', 8000): []}
+    >>> stacks = {'alice:8000': [], 'bob:8000': []}
 
     >>> decide_worker(dependencies, stacks, who_has, {}, set(), nbytes, 'c')
-    ('bob', 8000)
+    'bob:8000'
     """
     deps = dependencies[key]
     workers = frequencies(w for dep in deps

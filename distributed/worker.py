@@ -19,7 +19,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
 
 from .client import pack_data, gather_from_workers
-from .compatibility import reload, PY3
+from .compatibility import reload, PY3, unicode
 from .core import rpc, Server, pingpong, dumps, loads, coerce_to_address
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
@@ -325,9 +325,9 @@ class Worker(Server):
         return {k: dumps(self.data[k]) for k in keys if k in self.data}
 
     def upload_file(self, stream, filename=None, data=None, load=True):
-        if PY3 and isinstance(filename, bytes):
-            filename = filename.decode()
         out_filename = os.path.join(self.local_dir, filename)
+        if isinstance(data, unicode):
+            data = data.encode()
         with open(out_filename, 'wb') as f:
             f.write(data)
             f.flush()

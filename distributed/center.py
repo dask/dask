@@ -125,7 +125,7 @@ class Center(Server):
     def unregister(self, stream, address=None):
         address = coerce_to_address(address)
         if address not in self.has_what:
-            return 'Address not found: ' + str(address).encode()
+            return 'Address not found: ' + address
         keys = self.has_what.pop(address)
         with ignoring(KeyError):
             del self.ncores[address]
@@ -198,8 +198,8 @@ class Center(Server):
             del self.who_has[key]
 
         # TODO: ignore missing workers
-        coroutines = [rpc(ip=worker[0], port=worker[1]).delete_data(
-                                keys=list(keys), report=False, close=True)
+        coroutines = [rpc(worker).delete_data(keys=list(keys), report=False,
+                                              close=True)
                       for worker, keys in d.items()]
         for worker, keys in d.items():
             logger.debug("Remove %d keys from worker %s", len(keys), worker)
@@ -211,6 +211,6 @@ class Center(Server):
     def broadcast(self, stream, msg=None):
         """ Broadcast message to workers, return all results """
         workers = list(self.ncores)
-        results = yield All([send_recv(ip=ip, port=port, close=True, **msg)
-                             for ip, port in workers])
+        results = yield All([send_recv(arg=worker, close=True, **msg)
+                             for worker in workers])
         raise Return(dict(zip(workers, results)))
