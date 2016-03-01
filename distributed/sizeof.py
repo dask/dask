@@ -19,7 +19,7 @@ with ignoring(ImportError):
     import numpy as np
     @sizeof.register(np.ndarray)
     def sizeof_numpy_ndarray(x):
-        return x.nbytes
+        return int(x.nbytes)
 
 
 with ignoring(ImportError):
@@ -28,20 +28,20 @@ with ignoring(ImportError):
     def sizeof_pandas_dataframe(df):
         o = sys.getsizeof(df)
         try:
-            return o + df.memory_usage(index=True, deep=True).sum()
+            return int(o + df.memory_usage(index=True, deep=True).sum())
         except:
-            return o + df.memory_usage(index=True).sum()
+            return int(o + df.memory_usage(index=True).sum())
 
     @sizeof.register(pd.Series)
     def sizeof_pandas_series(s):
         try:
-            return s.memory_usage(index=True, deep=True) # new in 0.17.1
+            return int(s.memory_usage(index=True, deep=True)) # new in 0.17.1
         except:
-            return sizeof(s.values) + sizeof(s.index)
+            return int(sizeof(s.values) + sizeof(s.index))
 
     @sizeof.register(pd.Index)
     def sizeof_pandas_index(i):
         try:
-            return i.memory_usage(deep=True)
+            return int(i.memory_usage(deep=True))
         except:
-            return i.nbytes
+            return int(i.nbytes)
