@@ -1,5 +1,6 @@
 tornado >= 4.2
 toolz
+msgpack-python
 cloudpickle
 dask
 click
