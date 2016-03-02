@@ -192,6 +192,8 @@ def key_split(s):
     'x'
     >>> key_split(('x-2', 1))
     'x'
+    >>> key_split("('x-2', 1)")
+    'x'
     >>> key_split('hello-world-1')
     'hello-world'
     >>> key_split(b'hello-world-1')
@@ -207,7 +209,7 @@ def key_split(s):
         return key_split(s[0])
     try:
         words = s.split('-')
-        result = words[0]
+        result = words[0].lstrip("'(\"")
         for word in words[1:]:
             if word.isalpha():
                 result += '-' + word
