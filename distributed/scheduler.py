@@ -1,12 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
-import cloudpickle
 from collections import defaultdict, deque
 from datetime import datetime
 from functools import partial
 import logging
 from math import ceil
-import pickle
 import socket
 from time import time
 import uuid
@@ -18,7 +16,7 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
-from dask.compatibility import apply, PY3
+from dask.compatibility import PY3
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
@@ -29,9 +27,6 @@ from .client import (scatter_to_workers,
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
         ignore_exceptions, ensure_ip, get_traceback, truncate_exception,
         tokey, log_errors)
-
-
-dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 logger = logging.getLogger(__name__)
@@ -911,6 +906,7 @@ class Scheduler(Server):
             except (StreamClosedError, AssertionError):
                 break
             except Exception as e:
+                from .core import dumps
                 put({'op': 'scheduler-error',
                      'exception': dumps(truncate_exception(e)),
                      'traceback': dumps(get_traceback())})
@@ -1147,6 +1143,7 @@ class Scheduler(Server):
 
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
+        import cloudpickle
         if function:
             function = cloudpickle.loads(function)
         if setup:
@@ -1527,72 +1524,3 @@ def heal_missing_data(tasks, dependencies, dependents,
     assert set(missing).issubset(in_play)
 
     return ready_to_run
-
-
-def _maybe_complex(task):
-    """ Possibly contains a nested task """
-    return (istask(task) or
-            isinstance(task, list) and any(map(_maybe_complex, task)) or
-            isinstance(task, dict) and any(map(_maybe_complex, task.values())))
-
-
-cache = dict()
-
-
-def dumps_function(func):
-    """ Dump a function to bytes, cache functions """
-    if func not in cache:
-        b = dumps(func)
-        cache[func] = b
-    return cache[func]
-
-
-def dumps_task(task):
-    """ Serialize a dask task
-
-    Returns a dict of bytestrings that can each be loaded with ``loads``
-
-    Examples
-    --------
-    Either returns a task as a function, args, kwargs dict
-
-    >>> from operator import add
-    >>> dumps_task((add, 1))  # doctest: +SKIP
-    {'function': b'\x80\x04\x95\x00\x8c\t_operator\x94\x8c\x03add\x94\x93\x94.'
-     'args': b'\x80\x04\x95\x07\x00\x00\x00K\x01K\x02\x86\x94.'}
-
-    Or as a single task blob if it can't easily decompose the result.  This
-    happens either if the task is highly nested, or if it isn't a task at all
-
-    >>> dumps_task(1)  # doctest: +SKIP
-    {'task': b'\x80\x04\x95\x03\x00\x00\x00\x00\x00\x00\x00K\x01.'}
-    """
-    if istask(task):
-        if task[0] is apply and not any(map(_maybe_complex, task[2:])):
-            d = {'function': dumps_function(task[1]),
-                 'args': dumps(task[2])}
-            if len(task) == 4:
-                d['kwargs'] = dumps(task[3])
-            return d
-        elif not any(map(_maybe_complex, task[1:])):
-            return {'function': dumps_function(task[0]),
-                        'args': dumps(task[1:])}
-    return {'task': dumps(task)}
-
-
-def str_graph(dsk):
-    def convert(task):
-        if isinstance(task, list):
-            return [convert(v) for v in task]
-        if isinstance(task, dict):
-            return valmap(convert, task)
-        if istask(task):
-            return (task[0],) + tuple(map(convert, task[1:]))
-        try:
-            if task in dsk:
-                return tokey(task)
-        except TypeError:
-            pass
-        return task
-
-    return {tokey(k): convert(v) for k, v in dsk.items()}

@@ -6,7 +6,7 @@ from tornado import gen
 from tornado.queues import Queue
 
 from dask.core import get_deps
-from distributed.scheduler import dumps_task
+from distributed.worker import dumps_task
 from distributed.utils_test import gen_cluster, cluster, inc, dec, gen_test
 from distributed.utils import All, key_split
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,

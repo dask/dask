@@ -66,7 +66,7 @@ import re
 from toolz import valmap
 
 from distributed.executor import Executor, wait
-from distributed.scheduler import dumps_task
+from distributed.worker import dumps_task
 from distributed.utils_test import (cluster, loop, inc,
         div, dec, throws, gen_cluster)
 from distributed.utils import sync

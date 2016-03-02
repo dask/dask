@@ -12,7 +12,7 @@ import tempfile
 from threading import Thread
 
 from dask import istask
-from toolz import memoize
+from toolz import memoize, valmap
 from tornado import gen
 
 from .compatibility import Queue
@@ -316,6 +316,31 @@ def tokey(o):
         return o
     else:
         return str(o)
+
+
+def _maybe_complex(task):
+    """ Possibly contains a nested task """
+    return (istask(task) or
+            isinstance(task, list) and any(map(_maybe_complex, task)) or
+            isinstance(task, dict) and any(map(_maybe_complex, task.values())))
+
+
+def str_graph(dsk):
+    def convert(task):
+        if isinstance(task, list):
+            return [convert(v) for v in task]
+        if isinstance(task, dict):
+            return valmap(convert, task)
+        if istask(task):
+            return (task[0],) + tuple(map(convert, task[1:]))
+        try:
+            if task in dsk:
+                return tokey(task)
+        except TypeError:
+            pass
+        return task
+
+    return {tokey(k): convert(v) for k, v in dsk.items()}
 
 
 import logging

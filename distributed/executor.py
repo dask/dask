@@ -31,9 +31,10 @@ from tornado.queues import Queue
 
 from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .core import read, write, connect, rpc, coerce_to_rpc, dumps
-from .scheduler import Scheduler, dumps_function, dumps_task, str_graph
+from .scheduler import Scheduler
+from .worker import dumps_function, dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
-        tokey, log_errors)
+        tokey, log_errors, str_graph)
 from .compatibility import Queue as pyQueue, Empty, isqueue
 
 logger = logging.getLogger(__name__)

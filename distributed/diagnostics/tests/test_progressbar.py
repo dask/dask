@@ -6,7 +6,7 @@ from distributed import Executor, Scheduler, Worker
 from distributed.diagnostics.progressbar import TextProgressBar, progress
 from distributed.utils_test import (cluster, loop, inc,
         div, dec, gen_cluster)
-from distributed.scheduler import dumps_task
+from distributed.worker import dumps_task
 from time import time, sleep
 
 

@@ -1,7 +1,7 @@
 from tornado import gen
 from tornado.queues import Queue
 
-from distributed.scheduler import dumps_task
+from distributed.worker import dumps_task
 from distributed.utils_test import inc, gen_cluster
 from distributed.diagnostics.plugin import SchedulerPlugin
 

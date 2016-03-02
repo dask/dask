@@ -7,10 +7,13 @@ from tornado.ioloop import IOLoop
 from tornado.locks import Event
 from time import time, sleep
 
-from distributed.utils import (All, sync, is_kernel, ensure_ip,
-        truncate_exception, get_traceback, queue_to_iterator, iterator_to_queue)
+import dask
+from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
+        truncate_exception, get_traceback, queue_to_iterator,
+        iterator_to_queue, _maybe_complex)
 from distributed.utils_test import loop, inc, throws, div
 from distributed.compatibility import Queue, isqueue
+
 
 def test_All(loop):
     @gen.coroutine
@@ -148,3 +151,35 @@ def test_iterator_to_queue():
     q = iterator_to_queue(seq)
     assert isqueue(q)
     assert q.get() == 1
+
+
+def test_str_graph():
+    dsk = {b'x': 1}
+    assert str_graph(dsk) == dsk
+
+    dsk = {('x', 1): (inc, 1)}
+    assert str_graph(dsk) == {str(('x', 1)): (inc, 1)}
+
+    dsk = {('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))}
+    assert str_graph(dsk) == {str(('x', 1)): (inc, 1),
+                              str(('x', 2)): (inc, str(('x', 1)))}
+
+    dsks = [{'x': 1},
+            {('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
+            {('x', 1): (sum, [1, 2, 3]),
+             ('x', 2): (sum, [('x', 1), ('x', 1)])}]
+    for dsk in dsks:
+        sdsk = str_graph(dsk)
+        keys = list(dsk)
+        skeys = [str(k) for k in keys]
+        assert all(isinstance(k, (str, bytes)) for k in sdsk)
+        assert dask.get(dsk, keys) == dask.get(sdsk, skeys)
+
+
+def test_maybe_complex():
+    assert not _maybe_complex(1)
+    assert not _maybe_complex('x')
+    assert _maybe_complex((inc, 1))
+    assert _maybe_complex([(inc, 1)])
+    assert _maybe_complex([(inc, 1)])
+    assert _maybe_complex({'x': (inc, 1)})

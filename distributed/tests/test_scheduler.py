@@ -17,12 +17,13 @@ import pytest
 from distributed import Nanny, Worker
 from distributed.core import connect, read, write, rpc, dumps
 from distributed.client import WrappedKey
-from distributed.scheduler import (validate_state, heal,
-        decide_worker, heal_missing_data, Scheduler,
-        _maybe_complex, dumps_function, dumps_task, apply, str_graph)
+from distributed.scheduler import (validate_state, heal, decide_worker,
+        heal_missing_data, Scheduler)
+from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
         loop)
 from distributed.utils import All
+from dask.compatibility import apply
 
 
 alice = 'alice:1234'
@@ -789,15 +790,6 @@ def test_filtered_communication(s, a, b):
     assert msg['key'] == 'z'
 
 
-def test_maybe_complex():
-    assert not _maybe_complex(1)
-    assert not _maybe_complex('x')
-    assert _maybe_complex((inc, 1))
-    assert _maybe_complex([(inc, 1)])
-    assert _maybe_complex([(inc, 1)])
-    assert _maybe_complex({'x': (inc, 1)})
-
-
 def test_dumps_function():
     a = dumps_function(inc)
     assert cloudpickle.loads(a)(10) == 11
@@ -893,29 +885,6 @@ def test_ready_add_worker(s, a, b):
     assert all(len(s.processing[w]) == s.ncores[w]
                 for w in s.ncores)
     assert len(s.ready) + sum(map(len, s.processing.values())) == 20
-
-
-def test_str_graph():
-    dsk = {b'x': 1}
-    assert str_graph(dsk) == dsk
-
-    dsk = {('x', 1): (inc, 1)}
-    assert str_graph(dsk) == {str(('x', 1)): (inc, 1)}
-
-    dsk = {('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))}
-    assert str_graph(dsk) == {str(('x', 1)): (inc, 1),
-                              str(('x', 2)): (inc, str(('x', 1)))}
-
-    dsks = [{'x': 1},
-            {('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
-            {('x', 1): (sum, [1, 2, 3]),
-             ('x', 2): (sum, [('x', 1), ('x', 1)])}]
-    for dsk in dsks:
-        sdsk = str_graph(dsk)
-        keys = list(dsk)
-        skeys = [str(k) for k in keys]
-        assert all(isinstance(k, (str, bytes)) for k in sdsk)
-        assert dask.get(dsk, keys) == dask.get(sdsk, skeys)
 
 
 @gen_cluster()
