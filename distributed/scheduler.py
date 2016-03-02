@@ -1,31 +1,37 @@
 from __future__ import print_function, division, absolute_import
 
+import cloudpickle
 from collections import defaultdict, deque
 from datetime import datetime
 from functools import partial
 import logging
 from math import ceil
+import pickle
 import socket
 from time import time
 import uuid
 
-from toolz import frequencies, memoize, concat, identity, valmap
+from toolz import frequencies, memoize, concat, identity, valmap, keymap
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
-from dask.compatibility import apply
+from dask.compatibility import apply, PY3
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv, dumps)
-from .client import (unpack_remotedata, scatter_to_workers,
+        Server, send_recv, coerce_to_address)
+from .client import (scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
-        ignore_exceptions, ensure_ip, get_traceback, truncate_exception)
+        ignore_exceptions, ensure_ip, get_traceback, truncate_exception,
+        tokey, log_errors)
+
+
+dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 logger = logging.getLogger(__name__)
@@ -210,19 +216,25 @@ class Scheduler(Server):
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)
 
-    def rpc(self, ip, port):
+    def rpc(self, arg=None, ip=None, port=None, addr=None):
         """ Cached rpc objects """
-        if (ip, port) not in self._rpcs:
-            self._rpcs[(ip, port)] = rpc(ip=ip, port=port)
-        return self._rpcs[(ip, port)]
+        key = arg, ip, port, addr
+        if key not in self._rpcs:
+            self._rpcs[key] = rpc(arg=arg, ip=ip, port=port, addr=addr)
+        return self._rpcs[key]
 
     @property
     def address(self):
+        return '%s:%d' % (self.ip, self.port)
+
+    @property
+    def address_tuple(self):
         return (self.ip, self.port)
 
     def identity(self, stream):
         """ Basic information about ourselves and our cluster """
-        d = {'type': type(self).__name__, 'id': self.id,
+        d = {'type': type(self).__name__,
+             'id': str(self.id),
              'workers': list(self.ncores),
              'services': {key: v.port for (key, v) in self.services.items()}}
         return d
@@ -390,7 +402,7 @@ class Scheduler(Server):
 
         msg = {'op': 'key-in-memory',
                'key': key,
-               'workers': workers}
+               'workers': list(workers)}
         if type:
             msg['type'] = type
         self.report(msg)
@@ -412,7 +424,7 @@ class Scheduler(Server):
             if self.who_has.get(key):
                 continue
             self.processing[worker].add(key)
-            logger.debug("Send job to worker: %s, %s, %s", worker, key)
+            logger.debug("Send job to worker: %s, %s", worker, key)
             self.worker_queues[worker].put_nowait(
                     {'op': 'compute-task',
                      'key': key,
@@ -428,13 +440,13 @@ class Scheduler(Server):
             if self.who_has.get(key):
                 continue
             self.processing[worker].add(key)
-            logger.debug("Send job to worker: %s, %s, %s", worker, key)
+            logger.debug("Send job to worker: %s, %s", worker, key)
             self.worker_queues[worker].put_nowait(
                     {'op': 'compute-task',
                      'key': key,
                      'task': self.tasks[key],
-                     'who_has': {dep: self.who_has[dep] for dep in
-                                 self.dependencies[key]}})
+                     'who_has': {dep: self.who_has[dep]
+                                  for dep in self.dependencies[key]}})
 
         if self.ncores[worker] > len(self.processing[worker]):
             self.idle.add(worker)
@@ -449,6 +461,8 @@ class Scheduler(Server):
         --------
         Scheduler.mark_key_in_memory
         """
+        who_has = {k: [coerce_to_address(vv) for vv in v]
+                   for k, v in who_has.items()}
         logger.debug("Update data %s", who_has)
         for key, workers in who_has.items():
             self.mark_key_in_memory(key, workers)
@@ -557,6 +571,7 @@ class Scheduler(Server):
         --------
         Scheduler.heal_state
         """
+        address = coerce_to_address(address)
         logger.debug("Remove worker %s", address)
         if address not in self.processing:
             return
@@ -585,10 +600,11 @@ class Scheduler(Server):
         if heal:
             self.heal_state()
 
-        return b'OK'
+        return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
                    services=None):
+        address = coerce_to_address(address)
         self.ncores[address] = ncores
         self.worker_services[address] = services
         if address not in self.processing:
@@ -608,7 +624,7 @@ class Scheduler(Server):
         self.ensure_occupied(address)
 
         logger.info("Register %s", str(address))
-        return b'OK'
+        return 'OK'
 
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None,
@@ -670,8 +686,9 @@ class Scheduler(Server):
             restrictions = {k: set(map(ensure_ip, v))
                             for k, v in restrictions.items()}
             self.restrictions.update(restrictions)
+
         if loose_restrictions:
-            self.loose_restrictions |= loose_restrictions
+            self.loose_restrictions |= set(loose_restrictions)
 
         new_keyorder = order(tasks)  # TODO: define order wrt old graph
         for key in new_keyorder:
@@ -825,7 +842,8 @@ class Scheduler(Server):
             streams = self.streams.values()
         for s in streams:
             try:
-                write(s, msg)  # asynchrnous
+                self._last_message = write(s, msg), msg  # asynchrnous
+                logger.debug("Scheduler sends message to client %s", msg)
             except StreamClosedError:
                 logger.critical("Tried writing to closed stream: %s", msg)
 
@@ -846,7 +864,7 @@ class Scheduler(Server):
         return future
 
     @gen.coroutine
-    def add_client(self, stream, address=None, client=None):
+    def add_client(self, stream, client=None):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
         self.streams[client] = stream
@@ -894,12 +912,15 @@ class Scheduler(Server):
                 break
             except Exception as e:
                 put({'op': 'scheduler-error',
-                     'exception': truncate_exception(e),
-                     'traceback': get_traceback()})
+                     'exception': dumps(truncate_exception(e)),
+                     'traceback': dumps(get_traceback())})
                 logger.exception(e)
                 continue
             logger.debug("scheduler receives message %s", msg)
-            op = msg.pop('op')
+            try:
+                op = msg.pop('op')
+            except Exception as e:
+                logger.exception(e)
 
             if op == 'close-stream':
                 break
@@ -915,7 +936,7 @@ class Scheduler(Server):
                     logger.exception(e)
                     raise
             else:
-                logger.warn("Bad message: op=%s, %s", op, msg)
+                logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
 
             if op == 'close':
                 break
@@ -957,45 +978,42 @@ class Scheduler(Server):
         Scheduler.mark_missing_data
         distributed.worker.Worker.compute
         """
-        worker = rpc(ip=ident[0], port=ident[1])
+        worker = rpc(addr=ident)
         logger.debug("Start worker core %s, %d", ident, i)
 
-        while True:
-            msg = yield self.worker_queues[ident].get()
-            if msg['op'] == 'close':
-                logger.debug("Worker core receives close message %s, %s",
-                        ident, msg)
-                break
-            if msg['op'] == 'compute-task':
-                key = msg['key']
-                who_has = msg['who_has']
-                task = msg['task']
-                if istask(task):
-                    task = {'task': task}
-                    serialized = False
-                else:
-                    serialized = True
+        with log_errors():
+            while True:
+                msg = yield self.worker_queues[ident].get()
+                if msg['op'] == 'close':
+                    logger.debug("Worker core receives close message %s, %s",
+                            ident, msg)
+                    break
+                if msg['op'] == 'compute-task':
+                    key = msg['key']
+                    who_has = valmap(list, msg['who_has'])
+                    task = msg['task']
+                    if istask(task):
+                        task = {'task': task}
 
-                response, content = yield worker.compute(who_has=who_has,
-                                                         key=key,
-                                                         report=False,
-                                            serialized=serialized,
-                                            **task)
-                if response == b'OK':
-                    nbytes = content['nbytes']
-                logger.debug("Compute response from worker %s, %s, %s, %s",
-                             ident, key, response, content)
-                if response == b'error':
-                    error, traceback = content
-                    self.mark_task_erred(key, ident, content['exception'],
-                                                     content['traceback'])
+                    response = yield worker.compute(who_has=who_has,
+                                                    key=key,
+                                                    report=False,
+                                                    **task)
+                    if response['status'] == 'OK':
+                        nbytes = response['nbytes']
+                    logger.debug("Compute response from worker %s, %s, %s",
+                                 ident, key, response)
+                    if response['status'] == 'error':
+                        self.mark_task_erred(key, ident, response['exception'],
+                                                         response['traceback'])
 
-                elif response == b'missing-data':
-                    self.mark_missing_data(content.args, key=key, worker=ident)
+                    elif response['status'] == 'missing-data':
+                        self.mark_missing_data(response['keys'],
+                                               key=key, worker=ident)
 
-                else:
-                    self.mark_task_finished(key, ident, nbytes,
-                                            type=content.get('type'))
+                    else:
+                        self.mark_task_finished(key, ident, nbytes,
+                                                type=response.get('type'))
 
         yield worker.close(close=True)
         worker.close_streams()
@@ -1015,15 +1033,15 @@ class Scheduler(Server):
             d = self.deleted_keys.copy()
             self.deleted_keys.clear()
 
-            coroutines = [self.rpc(ip=worker[0], port=worker[1]).delete_data(
-                                   keys=keys - self.has_what[worker],
+            coroutines = [self.rpc(addr=worker).delete_data(
+                                   keys=list(keys - self.has_what[worker]),
                                    report=False)
                           for worker, keys in d.items()]
             for worker, keys in d.items():
                 logger.debug("Remove %d keys from worker %s", len(keys), worker)
             yield ignore_exceptions(coroutines, socket.error, StreamClosedError)
 
-        raise Return(b'OK')
+        raise Return('OK')
 
     def delete_data(self, stream=None, keys=None):
         for key in keys:
@@ -1041,17 +1059,17 @@ class Scheduler(Server):
             broadcast=False):
         """ Send data out to workers """
         if not self.ncores:
-            raise ValueError("No workers yet found.  "
-                             "Try syncing with center.\n"
-                             "  e.sync_center()")
+            raise ValueError("No workers yet found.")
         if not broadcast:
             ncores = workers if workers is not None else self.ncores
             keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
-                                                             report=False)
+                                                             report=False,
+                                                             serialize=False)
         else:
             workers2 = workers if workers is not None else list(self.ncores)
             keys, nbytes = yield broadcast_to_workers(workers2, data,
-                                                      report=False)
+                                                      report=False,
+                                                      serialize=False)
             who_has = {k: set(workers2) for k in keys}
 
         self.update_data(who_has=who_has, nbytes=nbytes)
@@ -1065,11 +1083,11 @@ class Scheduler(Server):
         who_has = {key: self.who_has[key] for key in keys}
 
         try:
-            data = yield gather_from_workers(who_has)
-            result = (b'OK', data)
+            data = yield gather_from_workers(who_has, deserialize=False)
+            result = {'status': 'OK', 'data': data}
         except KeyError as e:
             logger.debug("Couldn't gather keys %s", e)
-            result = (b'error', e)
+            result = {'status': 'error', 'keys': e.args}
 
         raise gen.Return(result)
 
@@ -1087,8 +1105,8 @@ class Scheduler(Server):
             self.remove_worker(address=addr, heal=False)
 
         logger.debug("Send kill signal to nannies: %s", nannies)
-        nannies = [rpc(ip=ip, port=n_port)
-                   for (ip, w_port), n_port in nannies.items()]
+        nannies = [rpc(ip=worker_address.split(':')[0], port=n_port)
+                   for worker_address, n_port in nannies.items()]
         yield All([nanny.kill() for nanny in nannies])
         logger.debug("Received done signal from nannies")
 
@@ -1099,7 +1117,7 @@ class Scheduler(Server):
 
         # All quiet
         resps = yield All([nanny.instantiate(close=True) for nanny in nannies])
-        assert all(resp == b'OK' for resp in resps)
+        assert all(resp == 'OK' for resp in resps)
 
         self.start()
 
@@ -1129,6 +1147,12 @@ class Scheduler(Server):
 
     @gen.coroutine
     def feed(self, stream, function=None, setup=None, teardown=None, interval=1, **kwargs):
+        if function:
+            function = cloudpickle.loads(function)
+        if setup:
+            setup = cloudpickle.loads(setup)
+        if teardown:
+            teardown = cloudpickle.loads(teardown)
         state = setup(self) if setup else None
         if isinstance(state, gen.Future):
             state = yield state
@@ -1146,15 +1170,15 @@ class Scheduler(Server):
 
     def get_who_has(self, stream, keys=None):
         if keys is not None:
-            return {k: self.who_has[k] for k in keys}
+            return {k: list(self.who_has[k]) for k in keys}
         else:
-            return self.who_has
+            return valmap(list, self.who_has)
 
     def get_has_what(self, stream, keys=None):
         if keys is not None:
-            return {k: self.has_what[k] for k in keys}
+            return {k: list(self.has_what[k]) for k in keys}
         else:
-            return self.has_what
+            return valmap(list, self.has_what)
 
     def get_ncores(self, stream, addresses=None):
         if addresses is not None:
@@ -1166,8 +1190,8 @@ class Scheduler(Server):
     def broadcast(self, stream, msg=None):
         """ Broadcast message to workers, return all results """
         workers = list(self.ncores)
-        results = yield All([send_recv(ip=ip, port=port, close=True, **msg)
-                             for ip, port in workers])
+        results = yield All([send_recv(arg=address, close=True, **msg)
+                             for address in workers])
         raise Return(dict(zip(workers, results)))
 
 
@@ -1176,8 +1200,8 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
     """ Decide which worker should take task
 
     >>> dependencies = {'c': {'b'}, 'b': {'a'}}
-    >>> stacks = {('alice', 8000): ['z'], ('bob', 8000): []}
-    >>> who_has = {'a': {('alice', 8000)}}
+    >>> stacks = {'alice:8000': ['z'], 'bob:8000': []}
+    >>> who_has = {'a': {'alice:8000'}}
     >>> nbytes = {'a': 100}
     >>> restrictions = {}
     >>> loose_restrictions = set()
@@ -1186,33 +1210,33 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
 
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
     ...               loose_restrictions, nbytes, 'b')
-    ('alice', 8000)
+    'alice:8000'
 
     If both Alice and Bob have dependencies then we choose the less-busy worker
 
-    >>> who_has = {'a': {('alice', 8000), ('bob', 8000)}}
+    >>> who_has = {'a': {'alice:8000', 'bob:8000'}}
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
     ...               loose_restrictions, nbytes, 'b')
-    ('bob', 8000)
+    'bob:8000'
 
     Optionally provide restrictions of where jobs are allowed to occur
 
     >>> restrictions = {'b': {'alice', 'charile'}}
     >>> decide_worker(dependencies, stacks, who_has, restrictions,
     ...               loose_restrictions, nbytes, 'b')
-    ('alice', 8000)
+    'alice:8000'
 
     If the task requires data communication, then we choose to minimize the
     number of bytes sent between workers. This takes precedence over worker
     occupancy.
 
     >>> dependencies = {'c': {'a', 'b'}}
-    >>> who_has = {'a': {('alice', 8000)}, 'b': {('bob', 8000)}}
+    >>> who_has = {'a': {'alice:8000'}, 'b': {'bob:8000'}}
     >>> nbytes = {'a': 1, 'b': 1000}
-    >>> stacks = {('alice', 8000): [], ('bob', 8000): []}
+    >>> stacks = {'alice:8000': [], 'bob:8000': []}
 
     >>> decide_worker(dependencies, stacks, who_has, {}, set(), nbytes, 'c')
-    ('bob', 8000)
+    'bob:8000'
     """
     deps = dependencies[key]
     workers = frequencies(w for dep in deps
@@ -1221,9 +1245,9 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
         workers = stacks
     if key in restrictions:
         r = restrictions[key]
-        workers = {w for w in workers if w[0] in r}  # TODO: nonlinear
+        workers = {w for w in workers if w.split(':')[0] in r}  # TODO: nonlinear
         if not workers:
-            workers = {w for w in stacks if w[0] in r}
+            workers = {w for w in stacks if w.split(':')[0] in r}
             if not workers:
                 if key in loose_restrictions:
                     return decide_worker(dependencies, stacks, who_has,
@@ -1338,7 +1362,8 @@ def keys_outside_frontier(dependencies, keys, frontier):
     Examples
     --------
     >>> f = lambda:1
-    >>> dsk = {'x': 1, 'a': 2, 'y': (f, 'x'), 'b': (f, 'a'), 'z': (f, 'b', 'y')}
+    >>> dsk = {'x': 1, 'a': 2, 'y': (f, 'x'), 'b': (f, 'a'),
+    ...        'z': (f, 'b', 'y')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> keys = {'z', 'b'}
     >>> frontier = {'y', 'a'}
@@ -1552,3 +1577,21 @@ def dumps_task(task):
             return {'function': dumps_function(task[0]),
                         'args': dumps(task[1:])}
     return {'task': dumps(task)}
+
+
+def str_graph(dsk):
+    def convert(task):
+        if isinstance(task, list):
+            return [convert(v) for v in task]
+        if isinstance(task, dict):
+            return valmap(convert, task)
+        if istask(task):
+            return (task[0],) + tuple(map(convert, task[1:]))
+        try:
+            if task in dsk:
+                return tokey(task)
+        except TypeError:
+            pass
+        return task
+
+    return {tokey(k): convert(v) for k, v in dsk.items()}

@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from toolz import get
 from tornado import gen
 
-from ..core import connect, read, write, rpc
+from ..core import connect, read, write, rpc, dumps
 from ..utils import ignoring, is_kernel, key_split
 from ..executor import default_executor
 from ..scheduler import Scheduler
@@ -87,13 +87,13 @@ class Occupancy(object):
             nprocessing = list(map(len, processing))
             nstacks = [len(scheduler.stacks[w]) for w in workers]
 
-            return {'host': [host for host, port in workers],
+            return {'host': [w.split(':')[0] for w in workers],
                     'processing': processing,
                     'nprocessing': nprocessing,
                     'waiting': nstacks}
 
         yield write(self.stream, {'op': 'feed',
-                                  'function': func,
+                                  'function': dumps(func),
                                   'interval': interval})
         while True:
             try:

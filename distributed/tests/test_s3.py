@@ -69,25 +69,17 @@ def test_list_summary_object_with_prefix_and_delimiter():
                                      u'nested/nested2/file2']
 
 
-@gen_cluster(timeout=60)
-def test_read_bytes(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes(e, s, a, b):
     futures = read_bytes(test_bucket_name, prefix='test/', anon=True,
                          lazy=False)
     assert len(futures) >= len(files)
     results = yield e._gather(futures)
     assert set(results).issuperset(set(files.values()))
 
-    yield e._shutdown()
 
-
-@gen_cluster(timeout=60)
-def test_read_bytes_lazy(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes_lazy(e, s, a, b):
     values = read_bytes(test_bucket_name, 'test/', lazy=True, anon=True)
     assert all(isinstance(v, Value) for v in values)
 
@@ -95,8 +87,6 @@ def test_read_bytes_lazy(s, a, b):
     results = yield e._gather(results)
 
     assert set(results).issuperset(set(files.values()))
-
-    yield e._shutdown()
 
 
 def test_get_s3():
@@ -114,13 +104,11 @@ def test_get_s3_threadsafe():
     assert len(set(map(id, s3s))) <= 4
 
 
-@gen_cluster(timeout=60)
-def test_read_text(s, a, b):
+@gen_cluster(timeout=60, executor=True)
+def test_read_text(e, s, a, b):
     pytest.importorskip('dask.bag')
     import dask.bag as db
     from dask.imperative import Value
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
 
     b = read_text(test_bucket_name, 'test/accounts', lazy=True,
                   collection=True, anon=True)
@@ -140,8 +128,6 @@ def test_read_text(s, a, b):
     text = read_text(test_bucket_name, 'test/accounts', lazy=False,
                      collection=False, anon=True)
     assert all(isinstance(v, Future) for v in text)
-
-    yield e._shutdown()
 
 
 def test_read_text_sync(loop):

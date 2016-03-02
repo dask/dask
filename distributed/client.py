@@ -12,10 +12,10 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import StreamClosedError
 
 from dask.base import tokenize
-from toolz import merge, concat, groupby, drop
+from toolz import merge, concat, groupby, drop, valmap
 
-from .core import rpc, coerce_to_rpc
-from .utils import ignore_exceptions, ignoring, All
+from .core import rpc, coerce_to_rpc, loads, coerce_to_address, dumps
+from .utils import ignore_exceptions, ignoring, All, log_errors, tokey, sync
 
 
 no_default = '__no_default__'
@@ -70,13 +70,13 @@ def _gather(center, needed=[]):
         raise TypeError('Bad response from who_has: %s' % who_has)
 
     result = yield gather_from_workers(who_has)
-    raise Return([result[key] for key in needed])
+    raise Return([result[tokey(key)] for key in needed])
 
 _gather.__doc__ = gather.__doc__
 
 
 @gen.coroutine
-def gather_from_workers(who_has):
+def gather_from_workers(who_has, deserialize=True):
     """ Gather data directly from peers
 
     Parameters
@@ -92,33 +92,36 @@ def gather_from_workers(who_has):
     _gather
     """
     bad_addresses = set()
-    who_has = who_has.copy()
+    who_has = {k: set(v) for k, v in who_has.items()}
     results = dict()
 
-    while len(results) < len(who_has):
-        d = defaultdict(list)
-        rev = dict()
-        bad_keys = set()
-        for key, addresses in who_has.items():
-            if key in results:
-                continue
-            try:
-                addr = random.choice(list(addresses - bad_addresses))
-                d[addr].append(key)
-                rev[key] = addr
-            except IndexError:
-                bad_keys.add(key)
-        if bad_keys:
-            raise KeyError(*bad_keys)
+    with log_errors():
+        while len(results) < len(who_has):
+            d = defaultdict(list)
+            rev = dict()
+            bad_keys = set()
+            for key, addresses in who_has.items():
+                if key in results:
+                    continue
+                try:
+                    addr = random.choice(list(addresses - bad_addresses))
+                    d[addr].append(key)
+                    rev[key] = addr
+                except IndexError:
+                    bad_keys.add(key)
+            if bad_keys:
+                raise KeyError(*bad_keys)
 
-        coroutines = [rpc(ip=ip, port=port).get_data(keys=keys, close=True)
-                            for (ip, port), keys in d.items()]
-        response = yield ignore_exceptions(coroutines, socket.error,
-                                                       StreamClosedError)
-        response = merge(response)
-        bad_addresses |= {v for k, v in rev.items() if k not in response}
-        results.update(merge(response))
+            coroutines = [rpc(address).get_data(keys=keys, close=True)
+                                for address, keys in d.items()]
+            response = yield ignore_exceptions(coroutines, socket.error,
+                                                           StreamClosedError)
+            response = merge(response)
+            bad_addresses |= {v for k, v in rev.items() if k not in response}
+            results.update(merge(response))
 
+    if deserialize:
+        results = valmap(loads, results)
     raise Return(results)
 
 
@@ -136,7 +139,7 @@ class WrappedKey(object):
         self.key = key
 
 
-def scatter(center, data):
+def scatter(center, data, serialize=True):
     """ Scatter data to workers
 
     Parameters
@@ -160,17 +163,17 @@ def scatter(center, data):
     distributed.client._scatter:
     distributed.client.scatter_to_workers:
     """
-    func = lambda: _scatter(center, data)
-    result = IOLoop().run_sync(func)
-    return result
+    return sync(IOLoop(), _scatter, center, data, serialize=serialize)
 
 
 @gen.coroutine
-def _scatter(center, data):
-    center = coerce_to_rpc(center)
-    ncores = yield center.ncores()
+def _scatter(center, data, serialize=True):
+    with log_errors():
+        center = coerce_to_rpc(center)
+        ncores = yield center.ncores()
 
-    result, who_has, nbytes = yield scatter_to_workers(ncores, data)
+        result, who_has, nbytes = yield scatter_to_workers(ncores, data,
+                                                           serialize=serialize)
     raise Return(result)
 
 
@@ -181,7 +184,7 @@ _round_robin_counter = [0]
 
 
 @gen.coroutine
-def scatter_to_workers(ncores, data, report=True):
+def scatter_to_workers(ncores, data, report=True, serialize=True):
     """ Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
@@ -192,7 +195,7 @@ def scatter_to_workers(ncores, data, report=True):
     """
     if isinstance(ncores, Iterable) and not isinstance(ncores, dict):
         k = len(data) // len(ncores)
-        ncores = {worker: k for worker in ncores}
+        ncores = {coerce_to_address(worker): k for worker in ncores}
 
     workers = list(concat([w] * nc for w, nc in ncores.items()))
     in_type = type(data)
@@ -211,13 +214,14 @@ def scatter_to_workers(ncores, data, report=True):
 
     L = list(zip(worker_iter, names, data))
     d = groupby(0, L)
-    d = {k: {b: c for a, b, c in v}
-          for k, v in d.items()}
+    d = {worker: {key: dumps(value) if serialize else value
+                   for _, key, value in v}
+          for worker, v in d.items()}
 
-    out = yield All([rpc(ip=w_ip, port=w_port).update_data(data=v,
+    out = yield All([rpc(address).update_data(data=v,
                                              close=True, report=report)
-                 for (w_ip, w_port), v in d.items()])
-    nbytes = merge([o[1]['nbytes'] for o in out])
+                 for address, v in d.items()])
+    nbytes = merge(o['nbytes'] for o in out)
 
     who_has = {k: [w for w, _, _ in v] for k, v in groupby(1, L).items()}
 
@@ -225,7 +229,7 @@ def scatter_to_workers(ncores, data, report=True):
 
 
 @gen.coroutine
-def broadcast_to_workers(workers, data, report=False, rpc=rpc):
+def broadcast_to_workers(workers, data, report=False, rpc=rpc, serialize=True):
     """ Broadcast data directly to all workers
 
     This sends all data to every worker.
@@ -251,13 +255,15 @@ def broadcast_to_workers(workers, data, report=False, rpc=rpc):
             try:
                 names.append(tokenize(x))
             except:
-                names.append(str(uuid.uuid1()))
+                names.append(uuid.uuid1())
         data = dict(zip(names, data))
 
-    out = yield All([rpc(ip=w_ip, port=w_port).update_data(data=data,
-                                                           report=report)
-                     for (w_ip, w_port) in workers])
-    nbytes = merge([o[1]['nbytes'] for o in out])
+    if serialize:
+        data = valmap(dumps, data)
+
+    out = yield All([rpc(address).update_data(data=data, report=report)
+                     for address in workers])
+    nbytes = merge([o['nbytes'] for o in out])
 
     raise Return((names, nbytes))
 
@@ -289,11 +295,13 @@ def clear(center):
     return IOLoop().run_sync(lambda: _clear(center))
 
 
-def unpack_remotedata(o):
+def unpack_remotedata(o, byte_keys=False):
     """ Unpack WrappedKey objects from collection
 
     Returns original collection and set of all found keys
 
+    Examples
+    --------
     >>> rd = WrappedKey('mykey')
     >>> unpack_remotedata(1)
     (1, set())
@@ -307,17 +315,26 @@ def unpack_remotedata(o):
     ({1: 'mykey'}, {'mykey'})
     >>> unpack_remotedata({1: [rd]})
     ({1: ['mykey']}, {'mykey'})
+
+    Use the ``byte_keys=True`` keyword to force string keys
+
+    >>> rd = WrappedKey(('x', 1))
+    >>> unpack_remotedata(rd, byte_keys=True)
+    ("('x', 1)", {"('x', 1)"})
     """
     if isinstance(o, WrappedKey):
-        return o.key, {o.key}
+        k = o.key
+        if byte_keys:
+            k = tokey(k)
+        return k, {k}
     if isinstance(o, (tuple, list, set, frozenset)):
         if not o:
             return o, set()
-        out, sets = zip(*map(unpack_remotedata, o))
+        out, sets = zip(*[unpack_remotedata(item, byte_keys) for item in o])
         return type(o)(out), set.union(*sets)
     elif isinstance(o, dict):
         if o:
-            values, sets = zip(*map(unpack_remotedata, o.values()))
+            values, sets = zip(*[unpack_remotedata(v, byte_keys) for v in o.values()])
             return dict(zip(o.keys(), values)), set.union(*sets)
         else:
             return o, set()
@@ -345,11 +362,11 @@ def pack_data(o, d):
     >>> pack_data({'a': ['x'], 'b': 'y'}, data)  # doctest: +SKIP
     {'a': [1], 'b': 'y'}
     """
-    try:
+    if isinstance(o, (str, bytes)):
         if o in d:
             return d[o]
-    except (TypeError, KeyError):
-        pass
+    elif tokey(o) in d:
+        return d[tokey(o)]
 
     if isinstance(o, (tuple, list, set, frozenset)):
         return type(o)([pack_data(x, d) for x in o])

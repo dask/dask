@@ -63,7 +63,10 @@ def record_display(*args):
 from operator import add
 import re
 
+from toolz import valmap
+
 from distributed.executor import Executor, wait
+from distributed.scheduler import dumps_task
 from distributed.utils_test import (cluster, loop, inc,
         div, dec, throws, gen_cluster)
 from distributed.utils import sync
@@ -73,9 +76,9 @@ from distributed.diagnostics.progressbar import (ProgressWidget,
 
 @gen_cluster()
 def test_progressbar_widget(s, a, b):
-    s.update_graph(tasks={'x': (inc, 1),
-                          'y': (inc, 'x'),
-                          'z': (inc, 'y')},
+    s.update_graph(tasks=valmap(dumps_task, {'x': (inc, 1),
+                                             'y': (inc, 'x'),
+                                             'z': (inc, 'y')}),
                    keys=['z'],
                    dependencies={'y': {'x'}, 'z': {'y'}})
 
@@ -91,16 +94,17 @@ def test_progressbar_widget(s, a, b):
 
 @gen_cluster()
 def test_multi_progressbar_widget(s, a, b):
-    s.update_graph(tasks={'x-1': (inc, 1),
-                          'x-2': (inc, 'x-1'),
-                          'x-3': (inc, 'x-2'),
-                          'y-1': (dec, 'x-3'),
-                          'y-2': (dec, 'y-1'),
-                          'e': (throws, 'y-2'),
-                          'other': (inc, 123)},
+    s.update_graph(tasks=valmap(dumps_task, {'x-1': (inc, 1),
+                                             'x-2': (inc, 'x-1'),
+                                             'x-3': (inc, 'x-2'),
+                                             'y-1': (dec, 'x-3'),
+                                             'y-2': (dec, 'y-1'),
+                                             'e': (throws, 'y-2'),
+                                             'other': (inc, 123)}),
                    keys=['e'],
-                   dependencies={'x-2': {'x-1'}, 'x-3': {'x-2'}, 'y-1':
-                       {'x-3'}, 'y-2': {'y-1'}, 'e': {'y-2'}})
+                   dependencies={'x-2': ['x-1'], 'x-3': ['x-2'],
+                                 'y-1': ['x-3'], 'y-2': ['y-1'],
+                                 'e': ['y-2']})
 
     p = MultiProgressWidget(['e'], scheduler=(s.ip, s.port))
     yield p.listen()
@@ -126,16 +130,17 @@ def test_multi_progressbar_widget(s, a, b):
 
 @gen_cluster()
 def test_multi_progressbar_widget_after_close(s, a, b):
-    s.update_graph(tasks={'x-1': (inc, 1),
-                          'x-2': (inc, 'x-1'),
-                          'x-3': (inc, 'x-2'),
-                          'y-1': (dec, 'x-3'),
-                          'y-2': (dec, 'y-1'),
-                          'e': (throws, 'y-2'),
-                          'other': (inc, 123)},
+    s.update_graph(tasks=valmap(dumps_task, {'x-1': (inc, 1),
+                                             'x-2': (inc, 'x-1'),
+                                             'x-3': (inc, 'x-2'),
+                                             'y-1': (dec, 'x-3'),
+                                             'y-2': (dec, 'y-1'),
+                                             'e': (throws, 'y-2'),
+                                             'other': (inc, 123)}),
                    keys=['e'],
-                   dependencies={'x-2': {'x-1'}, 'x-3': {'x-2'}, 'y-1':
-                       {'x-3'}, 'y-2': {'y-1'}, 'e': {'y-2'}})
+                   dependencies={'x-2': {'x-1'}, 'x-3': {'x-2'},
+                                 'y-1': {'x-3'}, 'y-2': {'y-1'},
+                                 'e': {'y-2'}})
 
     p = MultiProgressWidget(['x-1', 'x-2', 'x-3'], scheduler=(s.ip, s.port))
     yield p.listen()
@@ -185,16 +190,17 @@ def test_progressbar_done(loop):
 
 @gen_cluster()
 def test_multibar_complete(s, a, b):
-    s.update_graph(tasks={'x-1': (inc, 1),
-                          'x-2': (inc, 'x-1'),
-                          'x-3': (inc, 'x-2'),
-                          'y-1': (dec, 'x-3'),
-                          'y-2': (dec, 'y-1'),
-                          'e': (throws, 'y-2'),
-                          'other': (inc, 123)},
+    s.update_graph(tasks=valmap(dumps_task, {'x-1': (inc, 1),
+                                             'x-2': (inc, 'x-1'),
+                                             'x-3': (inc, 'x-2'),
+                                             'y-1': (dec, 'x-3'),
+                                             'y-2': (dec, 'y-1'),
+                                             'e': (throws, 'y-2'),
+                                             'other': (inc, 123)}),
                    keys=['e'],
-                   dependencies={'x-2': {'x-1'}, 'x-3': {'x-2'}, 'y-1':
-                       {'x-3'}, 'y-2': {'y-1'}, 'e': {'y-2'}})
+                   dependencies={'x-2': {'x-1'}, 'x-3': {'x-2'},
+                                 'y-1': {'x-3'}, 'y-2': {'y-1'},
+                                 'e': {'y-2'}})
 
     p = MultiProgressWidget(['e'], scheduler=(s.ip, s.port), complete=True)
     yield p.listen()

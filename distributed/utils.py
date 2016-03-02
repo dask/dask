@@ -194,11 +194,15 @@ def key_split(s):
     'x'
     >>> key_split('hello-world-1')
     'hello-world'
+    >>> key_split(b'hello-world-1')
+    'hello-world'
     >>> key_split('ae05086432ca935f6eba409a8ecd4896')
     'data'
     >>> key_split(None)
     'Other'
     """
+    if isinstance(s, bytes):
+        return key_split(s.decode())
     if isinstance(s, tuple):
         return key_split(s[0])
     try:
@@ -233,10 +237,12 @@ def ensure_ip(hostname):
     """ Ensure that address is an IP address
 
     >>> ensure_ip('localhost')
-    '127.0.0.1'
+    b'127.0.0.1'
     >>> ensure_ip('123.123.123.123')  # pass through IP addresses
-    '123.123.123.123'
+    b'123.123.123.123'
     """
+    if isinstance(hostname, bytes):
+        hostname = hostname.decode()
     if re.match('\d+\.\d+\.\d+\.\d+', hostname):  # is IP
         return hostname
     else:
@@ -252,7 +258,8 @@ def get_traceback():
            os.path.join('distributed', 'scheduler'),
            os.path.join('tornado', 'gen.py'),
            os.path.join('concurrent', 'futures')]
-    while any(b in exc_traceback.tb_frame.f_code.co_filename for b in bad):
+    while exc_traceback and any(b in exc_traceback.tb_frame.f_code.co_filename
+                                for b in bad):
         exc_traceback = exc_traceback.tb_next
     return exc_traceback
 
@@ -290,6 +297,25 @@ def iterator_to_queue(seq, maxsize=0):
     t.start()
 
     return q
+
+
+def tokey(o):
+    """ Convert an object to a bytestring, using str
+
+    Examples
+    --------
+
+    >>> tokey(b'x')
+    b'x'
+    >>> tokey('x')
+    'x'
+    >>> tokey(1)
+    '1'
+    """
+    if isinstance(o, (str, bytes)):
+        return o
+    else:
+        return str(o)
 
 
 import logging

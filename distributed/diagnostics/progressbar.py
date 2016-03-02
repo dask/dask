@@ -5,13 +5,13 @@ from timeit import default_timer
 import sys
 
 from dask.core import flatten
-from toolz import valmap, second
+from toolz import valmap
 from tornado import gen
 from tornado.ioloop import IOLoop
 
 from .progress import format_time, Progress, MultiProgress
 
-from ..core import connect, read, write
+from ..core import connect, read, write, dumps
 from ..executor import default_executor, futures_of
 from ..utils import sync, ignoring, key_split, is_kernel
 
@@ -51,11 +51,10 @@ class ProgressBar(object):
         @gen.coroutine
         def setup(scheduler):
             p = Progress(keys, scheduler, complete=complete)
-            scheduler.add_plugin(p)
             yield p.setup()
             raise gen.Return(p)
 
-        def func(scheduler, p):
+        def function(scheduler, p):
             return {'all': len(p.all_keys),
                     'remaining': len(p.keys),
                     'status': p.status}
@@ -64,12 +63,13 @@ class ProgressBar(object):
         logger.debug("Progressbar Connected to scheduler")
 
         yield write(self.stream, {'op': 'feed',
-                                  'setup': setup,
-                                  'function': func,
+                                  'setup': dumps(setup),
+                                  'function': dumps(function),
                                   'interval': self.interval})
 
         while True:
-            self._last_response = response = yield read(self.stream)
+            response = yield read(self.stream)
+            self._last_response = response
             self.status = response['status']
             self._draw_bar(**response)
             if response['status'] in ('error', 'finished'):
@@ -181,12 +181,13 @@ class MultiProgressBar(object):
         logger.debug("Progressbar Connected to scheduler")
 
         yield write(self.stream, {'op': 'feed',
-                                  'setup': setup,
-                                  'function': function,
+                                  'setup': dumps(setup),
+                                  'function': dumps(function),
                                   'interval': self.interval})
 
         while True:
-            self._last_response = response = yield read(self.stream)
+            response = yield read(self.stream)
+            self._last_response = response
             self.status = response['status']
             self._draw_bar(**response)
             if response['status'] in ('error', 'finished'):
@@ -221,11 +222,12 @@ class MultiProgressWidget(MultiProgressBar):
         from ipywidgets import FloatProgress, HBox, VBox, HTML
         import cgi
         self.elapsed_time = HTML('')
-        self.bars = {key: FloatProgress(min=0, max=1, description='', height = '10px')
+        self.bars = {key: FloatProgress(min=0, max=1, description='',
+                                        height='10px')
                         for key in all}
         self.bar_texts = {key: HTML('', width = "140px") for key in all}
-        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">'
-                                     + cgi.escape(key) + '</div>') for key in all}
+        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">' + cgi.escape(key.decode() if isinstance(key, bytes) else key) + '</div>')
+                            for key in all}
 
         def key(kv):
             """ Order keys by most numerous, then by string name """
@@ -233,7 +235,10 @@ class MultiProgressWidget(MultiProgressBar):
 
         key_order = [k for k, v in sorted(all.items(), key=key, reverse=True)]
 
-        self.bar_widgets = VBox([ HBox([ self.bar_texts[key], self.bars[key], self.bar_labels[key] ]) for key in key_order ])
+        self.bar_widgets = VBox([ HBox([ self.bar_texts[key],
+                                         self.bars[key],
+                                         self.bar_labels[key] ])
+                                for key in key_order ])
         self.widget.children = (self.elapsed_time, self.bar_widgets)
 
     def _ipython_display_(self, **kwargs):

@@ -86,10 +86,10 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
         restrictions = dict(zip(names, workers))
         executor._send_to_scheduler({'op': 'update-graph',
                                      'tasks': {},
-                                     'dependencies': set(),
+                                     'dependencies': [],
                                      'keys': [],
                                      'restrictions': restrictions,
-                                     'loose_restrictions': set(names),
+                                     'loose_restrictions': names,
                                      'client': executor.id})
         values = [Value(name, [{name: (read_block_from_hdfs, fn, offset, length, hdfs.host, hdfs.port, delimiter)}])
                   for name, fn, offset, length in zip(names, filenames, offsets, lengths)]

@@ -9,7 +9,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from distributed import Center, Worker
-from distributed.utils import ignoring
+from distributed.utils import ignoring, tokey
 from distributed.utils_test import (cluster, loop, _test_cluster,
         cluster_center, gen_cluster)
 from distributed.client import (_gather, _scatter, _delete, _clear,
@@ -53,7 +53,7 @@ def test_scatter_delete(loop):
 def test_gather_with_missing_worker(loop):
     @gen.coroutine
     def f(c, a, b):
-        bad = ('127.0.0.1', 9001)  # this worker doesn't exist
+        bad = '127.0.0.1:9001'  # this worker doesn't exist
         c.who_has['x'].add(bad)
         c.has_what[bad].add('x')
 
@@ -81,8 +81,15 @@ def test_gather_with_missing_worker(loop):
 def test_pack_data():
     data = {'x': 1}
     assert pack_data(('x', 'y'), data) == (1, 'y')
-    assert pack_data({'a': 'x', 'b': 'y'}, data) == {'a': 1, 'b': 'y'}
-    assert pack_data({'a': ['x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
+    data = {b'x': 1}
+    assert pack_data((b'x', 'y'), data) == (1, 'y')
+    assert pack_data({'a': b'x', 'b': 'y'}, data) == {'a': 1, 'b': 'y'}
+    assert pack_data({'a': [b'x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
+
+
+def test_pack_data_with_key_mapping():
+    data = {tokey(('x', 1)): 1}
+    assert pack_data((('x', 1), 'y'), data) == (1, 'y')
 
 
 def test_gather_errors_voluminously(loop):
@@ -98,7 +105,7 @@ def test_gather_errors_voluminously(loop):
 def test_gather_scatter(loop):
     with cluster_center() as (c, [a, b]):
         data = {'x': 1, 'y': 2, 'z': 3}
-        addr = '127.0.0.1', c['port']
+        addr = '127.0.0.1:%d' % c['port']
         rds = scatter(addr, data)
         assert set(rds) == {'x', 'y', 'z'}
 
@@ -143,7 +150,8 @@ def test_scatter_round_robins_between_calls(loop):
 
 @gen_cluster()
 def test_broadcast_to_workers(s, a, b):
-    keys, nbytes = yield broadcast_to_workers([a.address, b.address], [1, 2, 3])
+    keys, nbytes = yield broadcast_to_workers([a.address, b.address],
+                                               [1, 2, 3])
 
     assert len(keys) == 3
     assert a.data == b.data == dict(zip(keys, [1, 2, 3]))

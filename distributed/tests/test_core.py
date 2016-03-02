@@ -49,6 +49,19 @@ def test_rpc(loop):
     loop.run_sync(f)
 
 
+def test_rpc_inputs():
+    L = [rpc('127.0.0.1:8887'),
+         rpc(b'127.0.0.1:8887'),
+         rpc(('127.0.0.1', 8887)),
+         rpc((b'127.0.0.1', 8887)),
+         rpc(ip='127.0.0.1', port=8887),
+         rpc(ip=b'127.0.0.1', port=8887),
+         rpc(addr='127.0.0.1:8887'),
+         rpc(addr=b'127.0.0.1:8887')]
+
+    assert all(r.ip == '127.0.0.1' and r.port == 8887 for r in L)
+
+
 def test_rpc_with_many_connections(loop):
     remote = rpc(ip='127.0.0.1', port=8887)
 

@@ -69,9 +69,9 @@ class Nanny(Server):
             try:
                 result = yield gen.with_timeout(timedelta(seconds=timeout),
                             self.center.unregister(address=self.worker_address))
-                if result != b'OK':
+                if result != 'OK':
                     logger.critical("Unable to unregister with center %s. "
-                            "Nanny: %s, Worker: %s", result, self.address,
+                            "Nanny: %s, Worker: %s", result, self.address_tuple,
                             self.worker_address)
                 else:
                     logger.info("Unregister worker %s:%d from center",
@@ -85,7 +85,7 @@ class Nanny(Server):
             logger.info("Nanny %s:%d kills worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
             self.cleanup()
-        raise gen.Return(b'OK')
+        raise gen.Return('OK')
 
     @gen.coroutine
     def instantiate(self, stream=None):
@@ -115,7 +115,7 @@ class Nanny(Server):
                 yield gen.sleep(0.1)
         logger.info("Nanny %s:%d starts worker process %s:%d",
                     self.ip, self.port, self.ip, self.worker_port)
-        raise gen.Return(b'OK')
+        raise gen.Return('OK')
 
     def cleanup(self):
         if self.worker_dir and os.path.exists(self.worker_dir):
@@ -145,15 +145,23 @@ class Nanny(Server):
         self.center.close_streams()
         self.stop()
         self.status = 'closed'
-        raise gen.Return(b'OK')
+        raise gen.Return('OK')
 
     @property
     def address(self):
+        return '%s:%d' % (self.ip, self.port)
+
+    @property
+    def address_tuple(self):
         return (self.ip, self.port)
 
     @property
-    def worker_address(self):
+    def worker_address_tuple(self):
         return (self.ip, self.worker_port)
+
+    @property
+    def worker_address(self):
+        return '%s:%d' % (self.ip, self.worker_port)
 
     def resource_collect(self):
         try:
@@ -161,13 +169,13 @@ class Nanny(Server):
         except ImportError:
             return {}
         p = psutil.Process(self.process.pid)
-        return {'timestamp': datetime.now(),
+        return {'timestamp': datetime.now().isoformat(),
                 'cpu_percent': psutil.cpu_percent(),
                 'status': p.status(),
                 'memory_percent': p.memory_percent(),
-                'memory_info_ex': p.memory_info_ex(),
-                'disk_io_counters': psutil.disk_io_counters(),
-                'net_io_counters': psutil.net_io_counters()}
+                'memory_info_ex': p.memory_info_ex()._asdict(),
+                'disk_io_counters': psutil.disk_io_counters()._asdict(),
+                'net_io_counters': psutil.net_io_counters()._asdict()}
 
     @gen.coroutine
     def monitor_resources(self, stream, interval=1):

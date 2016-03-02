@@ -272,6 +272,9 @@ def _test_cluster(f, loop=None, b_ip='127.0.0.1'):
                     raise Exception("Cluster creation timeout")
 
             yield f(c, a, b)
+        except Exception as e:
+            logger.exception(e)
+            raise
         finally:
             logger.debug("Closing out test cluster")
             for w in [a, b]:
@@ -376,7 +379,8 @@ def end_cluster(s, workers):
 
 
 def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
-        Worker=Worker):
+        Worker=Worker, executor=False):
+    from distributed import Executor
     """ Coroutine test with small cluster
 
     @gen_cluster()
@@ -397,9 +401,17 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
 
             s, workers = loop.run_sync(lambda: start_cluster(ncores,
                                                              Worker=Worker))
+            args = [s] + workers
+
+            if executor:
+                e = Executor((s.ip, s.port), loop=loop, start=False)
+                loop.run_sync(e._start)
+                args = [e] + args
             try:
-                loop.run_sync(lambda: cor(s, *workers), timeout=timeout)
+                loop.run_sync(lambda: cor(*args), timeout=timeout)
             finally:
+                if executor:
+                    loop.run_sync(e._shutdown)
                 loop.run_sync(lambda: end_cluster(s, workers))
                 loop.stop()
                 loop.close()

@@ -54,11 +54,8 @@ def test_avro_body():
         assert set(L[0]) == {'key', 'value'}
 
 
-@gen_cluster(timeout=60)
-def test_avro(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=60, executor=True)
+def test_avro(e, s, a, b):
     avro_files = {'/tmp/test/1.avro': avro_bytes,
                   '/tmp/test/2.avro': avro_bytes}
 
@@ -81,8 +78,6 @@ def test_avro(s, a, b):
         L = yield _read_avro('/tmp/test/*.avro', lazy=True)
         assert isinstance(L, list)
         assert all(isinstance(x, Value) for x in L)
-
-    yield e._shutdown()
 
 
 def test_avro_sync(loop):

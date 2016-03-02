@@ -1,7 +1,7 @@
 from tornado import gen
 from tornado.queues import Queue
 
-from distributed.scheduler import Scheduler
+from distributed.scheduler import dumps_task
 from distributed.utils_test import inc, gen_cluster
 from distributed.diagnostics.plugin import SchedulerPlugin
 
@@ -24,10 +24,10 @@ def test_diagnostic(s, a, b):
 
     assert counter.count == 0
     sched.put_nowait({'op': 'update-graph',
-                      'tasks': {'x': (inc, 1),
-                              'y': (inc, 'x'),
-                              'z': (inc, 'y')},
-                      'dependencies': {'y': {'x'}, 'z': {'y'}},
+                      'tasks': {'x': dumps_task((inc, 1)),
+                                'y': dumps_task((inc, 'x')),
+                                'z': dumps_task((inc, 'y'))},
+                      'dependencies': {'y': ['x'], 'z': ['y']},
                       'keys': ['z']})
 
     while True:

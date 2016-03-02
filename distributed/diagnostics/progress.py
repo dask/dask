@@ -12,14 +12,15 @@ from tornado.ioloop import PeriodicCallback, IOLoop
 from tornado import gen
 
 from .plugin import SchedulerPlugin
-from ..utils import sync, key_split
+from ..utils import sync, key_split, tokey
 from ..executor import default_executor
 
 
 logger = logging.getLogger(__name__)
 
 
-def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions, complete=False):
+def dependent_keys(keys, who_has, processing, stacks, dependencies, exceptions,
+                   complete=False):
     """ All keys that need to compute for these keys to finish """
     out = set()
     errors = set()
@@ -63,6 +64,7 @@ class Progress(SchedulerPlugin):
     """
     def __init__(self, keys, scheduler, minimum=0, dt=0.1, complete=False):
         self.keys = {k.key if hasattr(k, 'key') else k for k in keys}
+        self.keys = {tokey(k) for k in self.keys}
         self.scheduler = scheduler
         self.complete = complete
         self._minimum = minimum
@@ -168,7 +170,8 @@ class MultiProgress(Progress):
     {'x': {'x-1', 'x-2', 'x-3'},
      'y': {'y-1', 'y-2'}}
     """
-    def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1, complete=False):
+    def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1,
+                 complete=False):
         self.func = func
         Progress.__init__(self, keys, scheduler, minimum=minimum, dt=dt,
                             complete=complete)
