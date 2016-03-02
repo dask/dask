@@ -2071,3 +2071,48 @@ def test_run_sync(loop):
 
             result = e.run(func, 1, y=2, workers=['127.0.0.1:%d' % a['port']])
             assert result == {'127.0.0.1:%d' % a['port']: 3}
+
+
+def test_diagnostic_ui(loop):
+    with cluster() as (s, [a, b]):
+        a_addr = '127.0.0.1:%d' % a['port']
+        b_addr = '127.0.0.1:%d' % b['port']
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            d = e.ncores()
+            assert d == {a_addr: 1, b_addr: 1}
+
+            d = e.ncores([a_addr])
+            assert d == {a_addr: 1}
+            d = e.ncores(a_addr)
+            assert d == {a_addr: 1}
+            d = e.ncores(('127.0.0.1', a['port']))
+            assert d == {a_addr: 1}
+
+            x = e.submit(inc, 1)
+            y = e.submit(inc, 2)
+            z = e.submit(inc, 3)
+            wait([x, y, z])
+            d = e.who_has()
+            assert set(d) == {x.key, y.key, z.key}
+            assert all(w in [a_addr, b_addr] for v in d.values() for w in v)
+            assert all(d.values())
+
+            d = e.who_has([x, y])
+            assert set(d) == {x.key, y.key}
+
+            d = e.who_has(x)
+            assert set(d) == {x.key}
+
+
+            d = e.has_what()
+            assert set(d) == {a_addr, b_addr}
+            assert all(k in [x.key, y.key, z.key] for v in d.values() for k in v)
+
+            d = e.has_what([a_addr])
+            assert set(d) == {a_addr}
+
+            d = e.has_what(a_addr)
+            assert set(d) == {a_addr}
+
+            d = e.has_what(('127.0.0.1', a['port']))
+            assert set(d) == {a_addr}
