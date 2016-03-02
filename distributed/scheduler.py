@@ -1187,9 +1187,9 @@ class Scheduler(Server):
             return self.ncores
 
     @gen.coroutine
-    def broadcast(self, stream, msg=None):
+    def broadcast(self, stream=None, msg=None, workers=None):
         """ Broadcast message to workers, return all results """
-        workers = list(self.ncores)
+        workers = workers or list(self.ncores)
         results = yield All([send_recv(arg=address, close=True, **msg)
                              for address in workers])
         raise Return(dict(zip(workers, results)))

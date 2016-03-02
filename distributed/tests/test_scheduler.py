@@ -916,3 +916,12 @@ def test_str_graph():
         skeys = [str(k) for k in keys]
         assert all(isinstance(k, (str, bytes)) for k in sdsk)
         assert dask.get(dsk, keys) == dask.get(sdsk, skeys)
+
+
+@gen_cluster()
+def test_ready_add_worker(s, a, b):
+    result = yield s.broadcast(msg={'op': 'ping'})
+    assert result == {a.address: b'pong', b.address: b'pong'}
+
+    result = yield s.broadcast(msg={'op': 'ping'}, workers=[a.address])
+    assert result == {a.address: b'pong'}
