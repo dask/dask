@@ -1765,7 +1765,10 @@ def test__cancel_multi_client(s, a, b):
     assert x.cancelled()
     assert not y.cancelled()
 
-    assert y.key in s.tasks
+    start = time()
+    while y.key not in s.tasks:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
 
     out = yield y._result()
     assert out == 2

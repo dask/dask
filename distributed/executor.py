@@ -830,7 +830,7 @@ class Executor(object):
     @gen.coroutine
     def _cancel(self, futures):
         keys = {f.key for f in futures_of(futures)}
-        f = self.scheduler.cancel(keys=list(keys), client=self.id)
+        f = yield self.scheduler.cancel(keys=list(keys), client=self.id)
         for k in keys:
             with ignoring(KeyError):
                 del self.futures[k]
