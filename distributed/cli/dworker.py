@@ -18,6 +18,8 @@ logger = logging.getLogger('distributed.dworker')
 @click.argument('center', type=str)
 @click.option('--port', type=int, default=0,
               help="Serving port, defaults to randomly assigned")
+@click.option('--http-port', type=int, default=0,
+              help="Serving http port, defaults to randomly assigned")
 @click.option('--host', type=str, default=None,
               help="Serving host. Defaults to an ip address that can hopefully"
                    " be visible from the center network.")
@@ -26,7 +28,7 @@ logger = logging.getLogger('distributed.dworker')
 @click.option('--nprocs', type=int, default=1,
               help="Number of worker processes.  Defaults to one.")
 @click.option('--no-nanny', is_flag=True)
-def main(center, host, port, nthreads, nprocs, no_nanny):
+def main(center, host, port, http_port, nthreads, nprocs, no_nanny):
     try:
         center_host, center_port = center.split(':')
         center_ip = socket.gethostbyname(center_host)
@@ -41,7 +43,7 @@ def main(center, host, port, nthreads, nprocs, no_nanny):
     if not nthreads:
         nthreads = _ncores // nprocs
 
-    services = {'http': HTTPWorker}
+    services = {('http', http_port): HTTPWorker}
 
     loop = IOLoop.current()
     t = Worker if no_nanny else Nanny

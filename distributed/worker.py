@@ -103,17 +103,24 @@ class Worker(Server):
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
         self.active = set()
-        if services is not None:
-            self.services = {k: v(self) for k, v in services.items()}
-        else:
-            self.services = dict()
-        self.service_ports = service_ports or dict()
 
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
 
         if self.local_dir not in sys.path:
             sys.path.insert(0, self.local_dir)
+
+        self.services = {}
+        self.service_ports = service_ports or {}
+        for k, v in (services or {}).items():
+            if isinstance(k, tuple):
+                k, port = k
+            else:
+                port = 0
+
+            self.services[k] = v(self)
+            self.services[k].listen(port)
+            self.service_ports[k] = self.services[k].port
 
         handlers = {'compute': self.compute,
                     'run': self.run,

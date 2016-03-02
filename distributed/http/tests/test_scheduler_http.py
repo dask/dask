@@ -98,6 +98,13 @@ def test_services():
     assert s.services['http'].port
 
 
+@gen_test()
+def test_services_with_port():
+    s = Scheduler(services={('http', 9999): HTTPScheduler})
+    assert isinstance(s.services['http'], HTTPServer)
+    assert s.services['http'].port == 9999
+
+
 @gen_cluster(executor=True)
 def test_with_data(e, s, a, b):
     ss = HTTPScheduler(s)
