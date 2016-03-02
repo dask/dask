@@ -323,3 +323,20 @@ def test_read_text_sync(loop):
             with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 b = read_text('/tmp/test/*.txt', lazy=False)
                 assert list(b.str.upper()) == ['HELLO', 'WORLD']
+
+
+@gen_cluster([(ip, 1), (ip, 2)], timeout=60, executor=True)
+def test_deterministic_key_names(e, s, a, b):
+    with make_hdfs() as hdfs:
+        data = b'abc\n' * int(1e3)
+        fn = '/tmp/test/file'
+
+        with hdfs.open(fn, 'wb', replication=1) as f:
+            f.write(data)
+
+        x = read_bytes('/tmp/test/', hdfs=hdfs, lazy=True, delimiter=b'\n')
+        y = read_bytes('/tmp/test/', hdfs=hdfs, lazy=True, delimiter=b'\n')
+        z = read_bytes('/tmp/test/', hdfs=hdfs, lazy=True, delimiter=b'c')
+
+        assert [f.key for f in x] == [f.key for f in y]
+        assert [f.key for f in x] != [f.key for f in z]

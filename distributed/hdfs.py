@@ -9,6 +9,7 @@ import io
 import sys
 
 from dask.imperative import Value
+from dask.base import tokenize
 from tornado import gen
 from toolz import merge
 
@@ -78,7 +79,7 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
         offsets = [max([o, 1]) for o in offsets]
     lengths = [d['length'] for d in blocks]
     workers = [[h.decode() for h in d['hosts']] for d in blocks]
-    names = ['read-binary-%s-%d-%d' % (fn, offset, length)
+    names = ['read-binary-hdfs3-%s-%s' % (fn, tokenize(offset, length, delimiter, not_zero))
             for fn, offset, length in zip(filenames, offsets, lengths)]
 
     logger.debug("Read %d blocks of binary bytes from %s", len(blocks), fn)
