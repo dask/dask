@@ -2049,6 +2049,12 @@ def test_run(e, s, a, b):
     results = yield e._run(inc, 1)
     assert results == {a.address: 2, b.address: 2}
 
+    results = yield e._run(inc, 1, workers=[a.address])
+    assert results == {a.address: 2}
+
+    results = yield e._run(inc, 1, workers=[])
+    assert results == {}
+
 
 def test_run_sync(loop):
     def func(x, y=10):
@@ -2057,5 +2063,8 @@ def test_run_sync(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             result = e.run(func, 1, y=2)
-            assert result == {('127.0.0.1', a['port']): 3,
-                              ('127.0.0.1', b['port']): 3}
+            assert result == {'127.0.0.1:%d' % a['port']: 3,
+                              '127.0.0.1:%d' % b['port']: 3}
+
+            result = e.run(func, 1, y=2, workers=['127.0.0.1:%d' % a['port']])
+            assert result == {'127.0.0.1:%d' % a['port']: 3}

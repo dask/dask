@@ -851,10 +851,12 @@ class Executor(object):
 
     @gen.coroutine
     def _run(self, function, *args, **kwargs):
+        workers = kwargs.pop('workers', None)
         result = yield self.scheduler.broadcast(msg=dict(op='run',
                                                 function=dumps(function),
                                                 args=dumps(args),
-                                                kwargs=dumps(kwargs)))
+                                                kwargs=dumps(kwargs)),
+                                                workers=workers)
         raise Return(result)
 
     def run(self, function, *args, **kwargs):
@@ -867,12 +869,28 @@ class Executor(object):
         if generally used for side effects, such and collecting diagnostic
         information or installing libraries.
 
+        Parameters
+        ----------
+        function: callable
+        *args: arguments for remote function
+        **kwargs: keyword arguments for remote function
+        workers: list
+            Workers on which to run the function. Defaults to all known workers.
+
         Examples
         --------
         >>> e.run(os.getpid)  # doctest: +SKIP
-        {('192.168.0.100', 9000): 1234,
-         ('192.168.0.101', 9000): 4321,
-         ('192.168.0.102', 9000): 5555}
+        {'192.168.0.100:9000': 1234,
+         '192.168.0.101:9000': 4321,
+         '192.168.0.102:9000': 5555}
+
+        Restrict computation to particular workers with the ``workers=``
+        keyword argument.
+
+        >>> e.run(os.getpid, workers=['192.168.0.100:9000',
+        ...                           '192.168.0.101:9000'])  # doctest: +SKIP
+        {'192.168.0.100:9000': 1234,
+         '192.168.0.101:9000': 4321}
         """
         return sync(self.loop, self._run, function, *args, **kwargs)
 
