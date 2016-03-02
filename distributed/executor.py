@@ -142,9 +142,9 @@ class Future(WrappedKey):
         """
         return sync(self.executor.loop, self._exception)
 
-    def cancel(self, block=False):
+    def cancel(self):
         """ Returns True if the future has been cancelled """
-        return self.executor.cancel([self], block=False)
+        return self.executor.cancel([self])
 
     def cancelled(self):
         """ Returns True if the future has been cancelled """
@@ -828,16 +828,14 @@ class Executor(object):
             return sync(self.loop, self._scatter, data, workers=workers,
                         broadcast=broadcast)
     @gen.coroutine
-    def _cancel(self, futures, block=False):
+    def _cancel(self, futures):
         keys = {f.key for f in futures_of(futures)}
-        f = self.scheduler.cancel(keys=list(keys), client=self.id)
-        if block:
-            yield f
+        f = yield self.scheduler.cancel(keys=list(keys), client=self.id)
         for k in keys:
             with ignoring(KeyError):
                 del self.futures[k]
 
-    def cancel(self, futures, block=False):
+    def cancel(self, futures):
         """
         Cancel running futures
 
@@ -849,7 +847,52 @@ class Executor(object):
         ----------
         futures: list of Futures
         """
-        return sync(self.loop, self._cancel, futures, block=False)
+        return sync(self.loop, self._cancel, futures)
+
+    @gen.coroutine
+    def _run(self, function, *args, **kwargs):
+        workers = kwargs.pop('workers', None)
+        result = yield self.scheduler.broadcast(msg=dict(op='run',
+                                                function=dumps(function),
+                                                args=dumps(args),
+                                                kwargs=dumps(kwargs)),
+                                                workers=workers)
+        raise Return(result)
+
+    def run(self, function, *args, **kwargs):
+        """
+        Run a function on all workers outside of task scheduling system
+
+        This calls a function on all currently known workers immediately,
+        blocks until those results come back, and returns the results
+        asynchronously as a dictionary keyed by worker address.  This method
+        if generally used for side effects, such and collecting diagnostic
+        information or installing libraries.
+
+        Parameters
+        ----------
+        function: callable
+        *args: arguments for remote function
+        **kwargs: keyword arguments for remote function
+        workers: list
+            Workers on which to run the function. Defaults to all known workers.
+
+        Examples
+        --------
+        >>> e.run(os.getpid)  # doctest: +SKIP
+        {'192.168.0.100:9000': 1234,
+         '192.168.0.101:9000': 4321,
+         '192.168.0.102:9000': 5555}
+
+        Restrict computation to particular workers with the ``workers=``
+        keyword argument.
+
+        >>> e.run(os.getpid, workers=['192.168.0.100:9000',
+        ...                           '192.168.0.101:9000'])  # doctest: +SKIP
+        {'192.168.0.100:9000': 1234,
+         '192.168.0.101:9000': 4321}
+        """
+        return sync(self.loop, self._run, function, *args, **kwargs)
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):

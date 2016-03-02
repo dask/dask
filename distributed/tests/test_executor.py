@@ -1733,7 +1733,7 @@ def test__cancel(e, s, a, b):
     while y.key not in s.tasks:
         yield gen.sleep(0.01)
 
-    yield e._cancel([x], block=True)
+    yield e._cancel([x])
 
     assert x.cancelled()
     assert 'cancel' in str(x)
@@ -1760,12 +1760,15 @@ def test__cancel_multi_client(s, a, b):
 
     assert x.key == y.key
 
-    yield e._cancel([x], block=True)
+    yield e._cancel([x])
 
     assert x.cancelled()
     assert not y.cancelled()
 
-    assert y.key in s.tasks
+    start = time()
+    while y.key not in s.tasks:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
 
     out = yield y._result()
     assert out == 2
@@ -1797,7 +1800,7 @@ def test_cancel(loop):
             y = e.submit(slowinc, x)
             z = e.submit(slowinc, y)
 
-            e.cancel([y], block=True)
+            e.cancel([y])
 
             start = time()
             while not z.cancelled():
@@ -1806,7 +1809,7 @@ def test_cancel(loop):
 
             assert x.result() == 2
 
-            z.cancel(block=True)
+            z.cancel()
             assert z.cancelled()
 
 
@@ -2042,3 +2045,29 @@ def test_balance_tasks_by_stacks(e, s, a, b):
     yield _wait(y)
 
     assert len(a.data) == len(b.data) == 1
+
+
+@gen_cluster(executor=True)
+def test_run(e, s, a, b):
+    results = yield e._run(inc, 1)
+    assert results == {a.address: 2, b.address: 2}
+
+    results = yield e._run(inc, 1, workers=[a.address])
+    assert results == {a.address: 2}
+
+    results = yield e._run(inc, 1, workers=[])
+    assert results == {}
+
+
+def test_run_sync(loop):
+    def func(x, y=10):
+        return x + y
+
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            result = e.run(func, 1, y=2)
+            assert result == {'127.0.0.1:%d' % a['port']: 3,
+                              '127.0.0.1:%d' % b['port']: 3}
+
+            result = e.run(func, 1, y=2, workers=['127.0.0.1:%d' % a['port']])
+            assert result == {'127.0.0.1:%d' % a['port']: 3}

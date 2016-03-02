@@ -115,6 +115,7 @@ class Worker(Server):
             sys.path.insert(0, self.local_dir)
 
         handlers = {'compute': self.compute,
+                    'run': self.run,
                     'get_data': self.get_data,
                     'update_data': self.update_data,
                     'delete_data': self.delete_data,
@@ -296,6 +297,17 @@ class Worker(Server):
         with ignoring(KeyError):
             self.active.remove(key)
         raise Return(out)
+
+    @gen.coroutine
+    def run(self, stream, function=None, args=(), kwargs={}):
+        function = loads(function)
+        if args:
+            args = loads(args)
+        if kwargs:
+            kwargs = loads(kwargs)
+
+        result = function(*args, **kwargs)
+        raise Return(result)
 
     @gen.coroutine
     def update_data(self, stream, data=None, report=True):
