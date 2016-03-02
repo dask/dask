@@ -1163,6 +1163,95 @@ class Executor(object):
         if isinstance(result, Exception):
             raise result
 
+    def ncores(self, workers=None):
+        """ The number of threads/cores available on each worker node
+
+        Parameters
+        ----------
+        workers: list (optional)
+            A list of workers that we care about specifically.
+            Leave empty to receive information about all workers.
+
+        Examples
+        --------
+        >>> e.ncores()  # doctest: +SKIP
+        {'192.168.1.141:46784': 8,
+         '192.167.1.142:47548': 8,
+         '192.167.1.143:47329': 8,
+         '192.167.1.144:37297': 8}
+
+        See Also
+        --------
+        Executor.who_has
+        Executor.has_what
+        """
+        if (isinstance(workers, tuple)
+            and all(isinstance(i, (str, tuple)) for i in workers)):
+            workers = list(workers)
+        if workers is not None and not isinstance(workers, (list, set)):
+            workers = [workers]
+        return sync(self.loop, self.scheduler.ncores, addresses=workers)
+
+    def who_has(self, futures=None):
+        """ The workers storing each future's data
+
+        Parameters
+        ----------
+        futures: list (optional)
+            A list of futures, defaults to all data
+
+        Examples
+        --------
+        >>> x, y, z = e.map(inc, [1, 2, 3])  # doctest: +SKIP
+        >>> e.who_has()  # doctest: +SKIP
+        {'inc-1c8dd6be1c21646c71f76c16d09304ea': ['192.168.1.141:46784'],
+         'inc-1e297fc27658d7b67b3a758f16bcf47a': ['192.168.1.141:46784'],
+         'inc-fd65c238a7ea60f6a01bf4c8a5fcf44b': ['192.168.1.141:46784']}
+
+        >>> e.who_has([x, y])  # doctest: +SKIP
+        {'inc-1c8dd6be1c21646c71f76c16d09304ea': ['192.168.1.141:46784'],
+         'inc-1e297fc27658d7b67b3a758f16bcf47a': ['192.168.1.141:46784']}
+
+        See Also
+        --------
+        Executor.has_what
+        Executor.ncores
+        """
+        if futures is not None:
+            futures = futures_of(futures)
+            keys = list({f.key for f in futures})
+        else:
+            keys = None
+        return sync(self.loop, self.scheduler.who_has, keys=keys)
+
+    def has_what(self, workers=None):
+        """ Which keys are held by which workers
+
+        Parameters
+        ----------
+        workers: list (optional)
+            A list of worker addresses, defaults to all
+
+        Examples
+        --------
+        >>> x, y, z = e.map(inc, [1, 2, 3])  # doctest: +SKIP
+        >>> e.has_what()  # doctest: +SKIP
+        {'192.168.1.141:46784': ['inc-1c8dd6be1c21646c71f76c16d09304ea',
+                                 'inc-fd65c238a7ea60f6a01bf4c8a5fcf44b',
+                                 'inc-1e297fc27658d7b67b3a758f16bcf47a']}
+
+        See Also
+        --------
+        Executor.who_has
+        Executor.ncores
+        """
+        if (isinstance(workers, tuple)
+            and all(isinstance(i, (str, tuple)) for i in workers)):
+            workers = list(workers)
+        if workers is not None and not isinstance(workers, (list, set)):
+            workers = [workers]
+        return sync(self.loop, self.scheduler.has_what, keys=workers)
+
 
 class CompatibleExecutor(Executor):
     """ A concurrent.futures-compatible Executor

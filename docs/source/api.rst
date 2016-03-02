@@ -12,14 +12,17 @@ API
    Executor.compute
    Executor.gather
    Executor.get
+   Executor.has_what
    Executor.map
    Executor.persist
+   Executor.ncores
    Executor.restart
    Executor.run
    Executor.scatter
    Executor.shutdown
    Executor.submit
    Executor.upload_file
+   Executor.who_has
 
 **Future**
 

@@ -1173,12 +1173,14 @@ class Scheduler(Server):
 
     def get_has_what(self, stream, keys=None):
         if keys is not None:
+            keys = map(coerce_to_address, keys)
             return {k: list(self.has_what[k]) for k in keys}
         else:
             return valmap(list, self.has_what)
 
     def get_ncores(self, stream, addresses=None):
         if addresses is not None:
+            addresses = map(coerce_to_address, addresses)
             return {k: self.ncores.get(k, None) for k in addresses}
         else:
             return self.ncores
