@@ -1,12 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import partial, wraps
-from itertools import product
+from itertools import product, repeat
 from math import factorial, log, ceil
 import operator
 
 import numpy as np
-from toolz import compose, partition_all, merge, get
+from toolz import compose, partition_all, merge, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, atop, sqrt, lol_tuples
@@ -34,6 +34,22 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
     if dtype and 'dtype' in getargspec(aggregate).args:
         aggregate = partial(aggregate, dtype=dtype)
 
+    # Map chunk across all blocks
+    inds = tuple(range(x.ndim))
+    tmp = atop(partial(chunk, axis=axis, keepdims=True), inds, x, inds)
+    tmp._chunks = tuple((1,)*len(c) if i in axis else c for (i, c)
+                        in enumerate(tmp.chunks))
+
+    return _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
+                       combine)
+
+
+def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
+                combine=None):
+    """Perform the tree reduction step of a reduction.
+
+    Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
+    """
     # Normalize split_every
     split_every = split_every or _globals.get('split_every', 4)
     if isinstance(split_every, dict):
@@ -44,24 +60,18 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
     else:
         split_every = dict((k, v) for (k, v) in enumerate(x.numblocks) if k in axis)
 
-    # Map chunk across all blocks
-    inds = tuple(range(x.ndim))
-    tmp = atop(partial(chunk, axis=axis, keepdims=True), inds, x, inds)
-    tmp._chunks = tuple((1,)*len(c) if i in axis else c for (i, c)
-                        in enumerate(tmp.chunks))
-
     # Reduce across intermediates
     depth = 1
-    for i, n in enumerate(tmp.numblocks):
+    for i, n in enumerate(x.numblocks):
         if i in split_every and split_every[i] != 1:
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
     func = compose(partial(combine or aggregate, axis=axis, keepdims=True),
                    partial(_concatenate2, axes=axis))
     for i in range(depth - 1):
-        tmp = partial_reduce(func, tmp, split_every, True, None)
+        x = partial_reduce(func, x, split_every, True, None)
     func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
                    partial(_concatenate2, axes=axis))
-    return partial_reduce(func, tmp, split_every, keepdims=keepdims,
+    return partial_reduce(func, x, split_every, keepdims=keepdims,
                           dtype=dtype)
 
 
@@ -403,71 +413,130 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None):
                    split_every=split_every)**(1./ord)
 
 
-def _arg_combine(data, axis, argfunc):
+def _arg_combine(data, axis, argfunc, keepdims=False):
     """Merge intermediate results from ``arg_*`` functions"""
+    axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
     vals = data['vals']
     arg = data['arg']
-    ns = data['n']
-    args = argfunc(vals, axis=axis)
-    offsets = np.roll(np.cumsum(ns, axis=axis), 1, axis)
-    offsets[tuple(slice(None) if i != axis else 0 for i in range(ns.ndim))] = 0
-    inds = list(reversed(np.meshgrid(*map(np.arange, args.shape), sparse=True)))
-    inds.insert(axis, args)
+    if axis is None:
+        local_args = argfunc(vals, axis=axis, keepdims=keepdims)
+        vals = vals.ravel()[local_args]
+        arg = arg.ravel()[local_args]
+    else:
+        local_args = argfunc(vals, axis=axis)
+        inds = np.ogrid[tuple(map(slice, local_args.shape))]
+        inds.insert(axis, local_args)
+        vals = vals[inds]
+        arg = arg[inds]
+        if keepdims:
+            vals = np.expand_dims(vals, axis)
+            arg = np.expand_dims(arg, axis)
+    return arg, vals
 
-    arg = (arg + offsets)[tuple(inds)]
-    vals = vals[tuple(inds)]
-    n = ns.sum(axis=axis).take(0, 0)
-    return arg, vals, n
 
+def arg_chunk(func, argfunc, x, axis, offset_info):
+    arg_axis = None if len(axis) == x.ndim or x.ndim == 1 else axis[0]
+    vals = func(x, axis=arg_axis, keepdims=True)
+    arg = argfunc(x, axis=arg_axis, keepdims=True)
+    if arg_axis is None:
+        offset, total_shape = offset_info
+        ind = np.unravel_index(arg.ravel()[0], x.shape)
+        total_ind = tuple(o + i for (o, i) in zip(offset, ind))
+        arg[:] = np.ravel_multi_index(total_ind, total_shape)
+    else:
+        arg += offset_info
 
-def arg_chunk(func, argfunc, x, axis=None, **kwargs):
-    axis = axis[0] if isinstance(axis, tuple) else axis
-    vals = func(x, axis=axis, keepdims=True)
-    arg = argfunc(x, axis=axis, keepdims=True)
     result = np.empty(shape=vals.shape, dtype=[('vals', vals.dtype),
-                                               ('arg', arg.dtype),
-                                               ('n', 'i8')])
+                                               ('arg', arg.dtype)])
     result['vals'] = vals
     result['arg'] = arg
-    result['n'] = x.shape[axis]
     return result
 
 
 def arg_combine(func, argfunc, data, axis=None, **kwargs):
-    axis = axis[0] if isinstance(axis, tuple) else axis
-    arg, vals, n = _arg_combine(data, axis, argfunc)
-    shape = tuple(s if i != axis else 1 for (i, s) in enumerate(data.shape))
-    result = np.empty(shape=shape, dtype=[('vals', vals.dtype),
-                                          ('arg', arg.dtype),
-                                          ('n', 'i8')])
-    result['vals'] = vals.reshape(shape)
-    result['arg'] = arg.reshape(shape)
-    result['n'] = n
+    arg, vals = _arg_combine(data, axis, argfunc, keepdims=True)
+    result = np.empty(shape=vals.shape, dtype=[('vals', vals.dtype),
+                                               ('arg', arg.dtype)])
+    result['vals'] = vals
+    result['arg'] = arg
     return result
 
 
 def arg_agg(func, argfunc, data, axis=None, **kwargs):
-    axis = axis[0] if isinstance(axis, tuple) else axis
-    return _arg_combine(data, axis, argfunc)[0]
+    return _arg_combine(data, axis, argfunc, keepdims=False)[0]
 
 
-def arg_reduction(func, argfunc):
-    chunk = partial(arg_chunk, func, argfunc)
-    agg = partial(arg_agg, func, argfunc)
-    combine = partial(arg_combine, func, argfunc)
-    @wraps(argfunc)
-    def _(a, axis=None, split_every=None):
+def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None):
+    """Generic function for argreduction.
+
+    Parameters
+    ----------
+    x : Array
+    chunk : callable
+        Partialed ``arg_chunk``.
+    combine : callable
+        Partialed ``arg_combine``.
+    agg : callable
+        Partialed ``arg_agg``.
+    axis : int, optional
+    split_every : int or dict, optional
+    """
+    if axis is None:
+        axis = tuple(range(x.ndim))
+        ravel = True
+    elif isinstance(axis, int):
         if axis < 0:
-            axis = a.ndim + axis
-        return reduction(a, chunk, agg, axis=axis, dtype='i8',
-                         split_every=split_every, combine=combine)
+            axis += x.ndim
+        if axis < 0 or axis >= x.ndim:
+            raise ValueError("axis entry is out of bounds")
+        axis = (axis,)
+        ravel = x.ndim == 1
+    else:
+        raise TypeError("axis must be either `None` or int, "
+                        "got '{0}'".format(axis))
+
+    # Map chunk across all blocks
+    name = 'arg-reduce-chunk-{0}'.format(tokenize(chunk, axis))
+    old = x.name
+    keys = list(product(*map(range, x.numblocks)))
+    offsets = list(product(*(accumulate(operator.add, bd[:-1], 0)
+                             for bd in x.chunks)))
+    if ravel:
+        offset_info = zip(offsets, repeat(x.shape))
+    else:
+        offset_info = pluck(axis[0], offsets)
+
+    chunks = tuple((1,)*len(c) if i in axis else c for (i, c)
+                   in enumerate(x.chunks))
+    dsk = dict(((name,) + k, (chunk, (old,) + k, axis, off)) for (k, off)
+               in zip(keys, offset_info))
+    tmp = Array(merge(dsk, x.dask), name, chunks)
+    return _tree_reduce(tmp, agg, axis, False, np.int64, split_every, combine)
+
+
+def make_arg_reduction(func, argfunc):
+    """Create a argreduction callable.
+
+    Parameters
+    ----------
+    func : callable
+        The reduction (e.g. ``min``)
+    argfunc : callable
+        The argreduction (e.g. ``argmin``)
+    """
+    chunk = partial(arg_chunk, func, argfunc)
+    combine = partial(arg_combine, func, argfunc)
+    agg = partial(arg_agg, func, argfunc)
+    @wraps(argfunc)
+    def _(x, axis=None, split_every=None):
+        return arg_reduction(x, chunk, combine, agg, axis, split_every)
     return _
 
 
-argmin = arg_reduction(chunk.min, chunk.argmin)
-argmax = arg_reduction(chunk.max, chunk.argmax)
-nanargmin = arg_reduction(chunk.nanmin, chunk.nanargmin)
-nanargmax = arg_reduction(chunk.nanmax, chunk.nanargmax)
+argmin = make_arg_reduction(chunk.min, chunk.argmin)
+argmax = make_arg_reduction(chunk.max, chunk.argmax)
+nanargmin = make_arg_reduction(chunk.nanmin, chunk.nanargmin)
+nanargmax = make_arg_reduction(chunk.nanmax, chunk.nanargmax)
 
 
 def cumreduction(func, binop, ident, x, axis, dtype=None):

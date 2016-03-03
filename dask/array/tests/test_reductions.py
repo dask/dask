@@ -73,16 +73,6 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.nanmin, a, np.nanmin, x, False)
     reduction_1d_test(da.nanmax, a, np.nanmax, x, False)
 
-    assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-    assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
-
-    assert eq(da.argmax(a, axis=0, split_every=2), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0, split_every=2), np.argmin(x, axis=0))
-    assert eq(da.nanargmax(a, axis=0, split_every=2), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0, split_every=2), np.nanargmin(x, axis=0))
-
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
                       split_every=True):
@@ -144,23 +134,32 @@ def test_reductions_2D(dtype):
     reduction_2d_test(da.nanmin, a, np.nanmin, x, False)
     reduction_2d_test(da.nanmax, a, np.nanmax, x, False)
 
-    assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-    assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
-    assert eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
-    assert eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
-    assert eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
-    assert eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
-    assert eq(da.argmax(a, axis=0, split_every=2), np.argmax(x, axis=0))
-    assert eq(da.argmin(a, axis=0, split_every=2), np.argmin(x, axis=0))
-    assert eq(da.nanargmax(a, axis=0, split_every=2), np.nanargmax(x, axis=0))
-    assert eq(da.nanargmin(a, axis=0, split_every=2), np.nanargmin(x, axis=0))
-    assert eq(da.argmax(a, axis=1, split_every=2), np.argmax(x, axis=1))
-    assert eq(da.argmin(a, axis=1, split_every=2), np.argmin(x, axis=1))
-    assert eq(da.nanargmax(a, axis=1, split_every=2), np.nanargmax(x, axis=1))
-    assert eq(da.nanargmin(a, axis=1, split_every=2), np.nanargmin(x, axis=1))
+@pytest.mark.parametrize(['dfunc', 'func'],
+        [(da.argmin, np.argmin), (da.argmax, np.argmax),
+         (da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)])
+def test_arg_reductions(dfunc, func):
+    x = np.random.random((10, 10, 10))
+    a = da.from_array(x, chunks=(3, 4, 5))
+
+    assert eq(dfunc(a), func(x))
+    assert eq(dfunc(a, 0), func(x, 0))
+    assert eq(dfunc(a, 1), func(x, 1))
+    assert eq(dfunc(a, 2), func(x, 2))
+    with set_options(split_every=2):
+        assert eq(dfunc(a), func(x))
+        assert eq(dfunc(a, 0), func(x, 0))
+        assert eq(dfunc(a, 1), func(x, 1))
+        assert eq(dfunc(a, 2), func(x, 2))
+
+    pytest.raises(ValueError, lambda: dfunc(a, 3))
+    pytest.raises(TypeError, lambda: dfunc(a, (0, 1)))
+
+    x2 = np.arange(10)
+    a2 = da.from_array(x2, chunks=3)
+    assert eq(dfunc(a2), func(x2))
+    assert eq(dfunc(a2, 0), func(x2, 0))
+    assert eq(dfunc(a2, 0, split_every=2), func(x2, 0))
 
 
 def test_reductions_2D_nans():
