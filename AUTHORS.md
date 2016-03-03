@@ -12,6 +12,8 @@
 
 [John Kirkham](https://github.com/jakirkham)
 
+[Joshua Corbin](https://github.com/jcorbin)
+
 [Gabriele Lanaro](http://gabrielelanaro.github.io/)
 
 [Mariano Tepper](http://www.marianotepper.com.ar/)
