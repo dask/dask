@@ -291,3 +291,12 @@ def test_repr(s3):
     with s3.open('distributed-test/test/accounts.1.json', mode='rb') as f:
         assert 'distributed-test' in repr(f)
         assert 'accounts.1.json' in repr(f)
+
+
+def test_read_past_location(s3):
+    with s3.open('distributed-test/test/accounts.1.json', block_size=20) as f:
+        while f.read(10):
+            pass
+        f.seek(5000)
+        out = f.read(10)
+        assert out == b''

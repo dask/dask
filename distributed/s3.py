@@ -372,8 +372,8 @@ class S3File(object):
             if end > self.end:
                 if end > self.size:
                     return
-                new = self.s3.s3.get_object.get(Bucket=self.bucket, Key=self.key,
-                                             Range='bytes=%i-%i' % (self.end, end + self.blocksize - 1)
+                new = self.s3.s3.get_object(Bucket=self.bucket, Key=self.key,
+                                            Range='bytes=%i-%i' % (self.end, end + self.blocksize - 1)
                                              )['Body'].read()
                 self.end = end + self.blocksize
                 self.cache = self.cache + new
