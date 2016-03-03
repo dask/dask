@@ -8,7 +8,7 @@ def test_defaults():
         proc = Popen(['dscheduler'], stdout=PIPE, stderr=PIPE)
         e = Executor('127.0.0.1:%d' % Scheduler.default_port)
 
-        response = requests.get('http://127.0.0.1:8986/info.json')
+        response = requests.get('http://127.0.0.1:9786/info.json')
         assert response.ok
         assert response.json()['status'] == 'running'
     finally:
