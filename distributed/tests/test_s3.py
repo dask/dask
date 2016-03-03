@@ -1,5 +1,6 @@
 import pytest
 import json
+import io
 
 import boto3
 from tornado import gen
@@ -7,10 +8,10 @@ from tornado import gen
 from dask.imperative import Value
 from distributed import Executor
 from distributed.executor import _wait, Future
-from distributed.s3 import (read_bytes, get_list_of_summary_objects,
-        read_content_from_keys, get_s3, read_text)
+from distributed.s3 import (read_bytes, read_text,
+        seek_delimiter, S3FileSystem, _read_text)
 from distributed.utils import get_ip
-from distributed.utils_test import gen_cluster, loop, cluster
+from distributed.utils_test import gen_cluster, loop, cluster, slow
 
 
 ip = get_ip()
@@ -27,60 +28,174 @@ files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 700, "name": "Charlie"}\n'
                                    b'{"amount": 800, "name": "Dennis"}\n')}
 
+@pytest.yield_fixture
+def s3():
+    # could do with a bucket with write privileges.
+    yield S3FileSystem(anon=True)
 
 
-def test_get_list_of_summary_objects():
-    L = get_list_of_summary_objects(test_bucket_name, prefix='test/accounts',
-                                    anon=True)
+def test_s3_file_access(s3):
+    fn = 'distributed-test/nested/file1'
+    data = b'hello\n'
+    assert s3.cat(fn) == data
+    assert s3.head(fn, 3) == data[:3]
+    assert s3.tail(fn, 3) == data[-3:]
+    assert s3.tail(fn, 10000) == data
+
+
+def test_s3_file_info(s3):
+    fn = 'distributed-test/nested/file1'
+    data = b'hello\n'
+    assert fn in s3.walk('distributed-test')
+    assert s3.exists(fn)
+    assert not s3.exists(fn+'another')
+    assert s3.info(fn)['Size'] == len(data)
+    with pytest.raises((OSError, IOError)):
+        s3.info(fn+'another')
+
+def test_du(s3):
+    d = s3.du(test_bucket_name, deep=True)
+    assert all(isinstance(v, int) and v >= 0 for v in d.values())
+    assert 'distributed-test/nested/file1' in d
+
+    assert s3.du(test_bucket_name + '/test/', total=True) ==\
+           sum(map(len, files.values()))
+
+
+def test_s3_ls(s3):
+    fn = 'distributed-test/nested/file1'
+    assert fn not in s3.ls('distributed-test/')
+    assert fn in s3.ls('distributed-test/nested/')
+    assert fn in s3.ls('distributed-test/nested')
+    assert s3.ls('s3://distributed-test/nested/') == s3.ls('distributed-test/nested')
+
+
+def test_s3_ls_detail(s3):
+    L = s3.ls('distributed-test/nested', detail=True)
+    assert all(isinstance(item, dict) for item in L)
+
+
+def test_s3_glob(s3):
+    fn = 'distributed-test/nested/file1'
+    assert fn not in s3.glob('distributed-test/')
+    assert fn not in s3.glob('distributed-test/*')
+    assert fn in s3.glob('distributed-test/nested')
+    assert fn in s3.glob('distributed-test/nested/*')
+    assert fn in s3.glob('distributed-test/nested/file*')
+    assert fn in s3.glob('distributed-test/*/*')
+
+
+def test_get_list_of_summary_objects(s3):
+    L = s3.ls(test_bucket_name + '/test')
 
     assert len(L) == 2
-    assert list(map(lambda o: o.key, L)) == sorted(list(files))
+    assert [l.lstrip(test_bucket_name).lstrip('/') for l in sorted(L)] == sorted(list(files))
 
-    L2 = get_list_of_summary_objects('s3://' + test_bucket_name, prefix='/test/accounts',
-                                    anon=True)
+    L2 = s3.ls('s3://' + test_bucket_name + '/test')
 
     assert L == L2
 
 
-def test_read_keys_from_bucket():
+def test_read_keys_from_bucket(s3):
     for k, data in files.items():
-        file_contents = read_content_from_keys('distributed-test', k, anon=True)
-
+        file_contents = s3.cat('/'.join([test_bucket_name, k]))
         assert file_contents == data
 
-    assert (read_content_from_keys('s3://distributed-test', k, anon=True) ==
-            read_content_from_keys('distributed-test', k, anon=True))
+    assert (s3.cat('/'.join([test_bucket_name, k])) ==
+            s3.cat('s3://' + '/'.join([test_bucket_name, k])))
 
 
-def test_list_summary_object_with_prefix_and_delimiter():
-    keys = get_list_of_summary_objects(test_bucket_name, 'nested/nested2/',
-                                       delimiter='/', anon=True)
+@slow
+def test_seek_delimiter(s3):
+    fn = 'test/accounts.1.json'
+    data = files[fn]
+    with s3.open('/'.join([test_bucket_name, fn])) as f:
+        seek_delimiter(f, b'}', 0)
+        assert f.tell() == 0
+        f.seek(1)
+        seek_delimiter(f, b'}', 5)
+        assert f.tell() == data.index(b'}') + 1
+        seek_delimiter(f, b'\n', 5)
+        assert f.tell() == data.index(b'\n') + 1
+        f.seek(1, 1)
+        ind = data.index(b'\n') + data[data.index(b'\n')+1:].index(b'\n') + 1
+        seek_delimiter(f, b'\n', 5)
+        assert f.tell() == ind + 1
 
-    assert len(keys) == 2
-    assert [k.key for k in keys] == [u'nested/nested2/file1',
-                                     u'nested/nested2/file2']
 
-    keys = get_list_of_summary_objects(test_bucket_name, 'nested/', anon=True)
-
-    assert len(keys) == 4
-    assert [k.key for k in keys] == [u'nested/file1',
-                                     u'nested/file2',
-                                     u'nested/nested2/file1',
-                                     u'nested/nested2/file2']
+def test_read_s3_block(s3):
+    import io
+    data = files['test/accounts.1.json']
+    lines = io.BytesIO(data).readlines()
+    path = 'distributed-test/test/accounts.1.json'
+    assert s3.read_block(path, 1, 35, b'\n') == lines[1]
+    assert s3.read_block(path, 0, 30, b'\n') == lines[0]
+    assert s3.read_block(path, 0, 35, b'\n') == lines[0] + lines[1]
+    assert s3.read_block(path, 0, 5000, b'\n') == data
+    assert len(s3.read_block(path, 0, 5)) == 5
+    assert len(s3.read_block(path, 0, 5000)) == len(data)
+    assert s3.read_block(path, 5000, 5010) == b''
 
 
 @gen_cluster(timeout=60, executor=True)
 def test_read_bytes(e, s, a, b):
-    futures = read_bytes(test_bucket_name, prefix='test/', anon=True,
-                         lazy=False)
+    futures = read_bytes(test_bucket_name+'/test/accounts.*', lazy=False)
     assert len(futures) >= len(files)
     results = yield e._gather(futures)
-    assert set(results).issuperset(set(files.values()))
+    assert set(results) == set(files.values())
+
+
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes_block(e, s, a, b):
+    for bs in [5, 15, 45, 1500]:
+        vals = read_bytes(test_bucket_name+'/test/account*', blocksize=bs)
+        assert len(vals) == sum([(len(v) // bs + 1) for v in files.values()])
+        futures = e.compute(vals)
+        results = yield e._gather(futures)
+        assert sum(len(r) for r in results) == sum(len(v) for v in
+                   files.values())
+        futures = read_bytes(test_bucket_name+'/test/accounts*', blocksize=bs,
+                             lazy=False)
+        assert len(vals) == len(futures)
+        results = yield e._gather(futures)
+        assert sum(len(r) for r in results) == sum(len(v) for v in
+                   files.values())
+        ourlines = b"".join(results).split(b'\n')
+        testlines = b"".join(files.values()).split(b'\n')
+        assert set(ourlines) == set(testlines)
+
+
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes_delimited(e, s, a, b):
+    for bs in [5, 15, 45, 1500]:
+        futures = read_bytes(test_bucket_name+'/test/accounts*',
+                             lazy=False, blocksize=bs, delimiter=b'\n')
+        futures2 = read_bytes(test_bucket_name+'/test/accounts*',
+                             lazy=False, blocksize=bs, delimiter=b'foo')
+        assert [a.key for a in futures] != [b.key for b in futures2]
+        results = yield e._gather(futures)
+        res = [r for r in results if r]
+        assert all(r.endswith(b'\n') for r in res)
+        ourlines = b''.join(res).split(b'\n')
+        testlines = b"".join(files[k] for k in sorted(files)).split(b'\n')
+        assert ourlines == testlines
+
+        # delimiter not at the end
+        d = b'}'
+        futures = read_bytes(test_bucket_name+'/test/accounts*',
+                             lazy=False, blocksize=bs, delimiter=d)
+        results = yield e._gather(futures)
+        res = [r for r in results if r]
+        # All should end in } except EOF
+        assert sum(r.endswith(b'}') for r in res) == len(res) - 2
+        ours = b"".join(res)
+        test = b"".join(files[v] for v in sorted(files))
+        assert ours == test
 
 
 @gen_cluster(timeout=60, executor=True)
 def test_read_bytes_lazy(e, s, a, b):
-    values = read_bytes(test_bucket_name, 'test/', lazy=True, anon=True)
+    values = read_bytes(test_bucket_name+'/test/', lazy=True)
     assert all(isinstance(v, Value) for v in values)
 
     results = e.compute(values, sync=False)
@@ -89,29 +204,14 @@ def test_read_bytes_lazy(e, s, a, b):
     assert set(results).issuperset(set(files.values()))
 
 
-def test_get_s3():
-    assert get_s3(True) is get_s3(True)
-    assert get_s3(False) is get_s3(False)
-    assert get_s3(True) is not get_s3(False)
-    assert 'boto3' in type(get_s3(True)).__module__
-
-
-def test_get_s3_threadsafe():
-    from multiprocessing.pool import ThreadPool
-    tp = ThreadPool(2)
-
-    s3s = tp.map(get_s3, [True] * 8 + [False * 8])
-    assert len(set(map(id, s3s))) <= 4
-
-
 @gen_cluster(timeout=60, executor=True)
 def test_read_text(e, s, a, b):
     pytest.importorskip('dask.bag')
     import dask.bag as db
     from dask.imperative import Value
 
-    b = read_text(test_bucket_name, 'test/accounts', lazy=True,
-                  collection=True, anon=True)
+    b = yield _read_text(test_bucket_name+'/test/accounts*', lazy=True,
+                  collection=True)
     assert isinstance(b, db.Bag)
     yield gen.sleep(0.2)
     assert not s.tasks
@@ -121,12 +221,12 @@ def test_read_text(e, s, a, b):
 
     assert result == (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) * 100
 
-    text = read_text(test_bucket_name, 'test/accounts', lazy=True,
-                     collection=False, anon=True)
+    text = yield _read_text(test_bucket_name+'/test/accounts*', lazy=True,
+                     collection=False)
     assert all(isinstance(v, Value) for v in text)
 
-    text = read_text(test_bucket_name, 'test/accounts', lazy=False,
-                     collection=False, anon=True)
+    text = yield _read_text(test_bucket_name+'/test/accounts*', lazy=False,
+                     collection=False)
     assert all(isinstance(v, Future) for v in text)
 
 
@@ -135,10 +235,68 @@ def test_read_text_sync(loop):
     import dask.bag as db
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            b = read_text(test_bucket_name, 'test/accounts', lazy=True,
+            b = read_text(test_bucket_name+'/test/accounts*', lazy=True,
                           collection=True)
             assert isinstance(b, db.Bag)
             c = b.filter(None).map(json.loads).pluck('amount').sum()
             result = c.compute(get=e.get)
 
             assert result == (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) * 100
+
+
+def test_pickle(s3):
+    import pickle
+    a = pickle.loads(pickle.dumps(s3))
+
+    assert [a.anon, a.key, a.secret, a.kwargs, a.dirs] == \
+           [s3.anon, s3.key, s3.secret, s3.kwargs, s3.dirs]
+
+    assert a.ls('distributed-test/') == s3.ls('distributed-test/')
+
+
+def test_errors(s3):
+    try:
+        s3.open('distributed-test/test/accounts.1.json', mode='rt')
+    except Exception as e:
+        assert "mode='rb'" in str(e)
+    try:
+        s3.open('distributed-test/test/accounts.1.json', mode='r')
+    except Exception as e:
+        assert "mode='rb'" in str(e)
+
+
+def test_seek(s3):
+    fn = 'test/accounts.1.json'
+    b = io.BytesIO(files[fn])
+    with s3.open('/'.join([test_bucket_name, fn])) as f:
+        assert f.tell() == b.tell()
+        f.seek(10)
+        b.seek(10)
+        assert f.tell() == b.tell()
+        f.seek(10, 1)
+        b.seek(10, 1)
+        assert f.tell() == b.tell()
+        assert f.read(5) == b.read(5)
+        assert f.tell() == b.tell()
+        f.seek(10, 2)
+        b.seek(10, 2)
+        assert f.tell() == b.tell()
+        assert f.read(5) == b.read(5)
+        assert f.tell() == b.tell()
+        assert f.read(1000) == b.read(1000)
+        assert f.tell() == b.tell()
+
+
+def test_repr(s3):
+    with s3.open('distributed-test/test/accounts.1.json', mode='rb') as f:
+        assert 'distributed-test' in repr(f)
+        assert 'accounts.1.json' in repr(f)
+
+
+def test_read_past_location(s3):
+    with s3.open('distributed-test/test/accounts.1.json', block_size=20) as f:
+        while f.read(10):
+            pass
+        f.seek(5000)
+        out = f.read(10)
+        assert out == b''
