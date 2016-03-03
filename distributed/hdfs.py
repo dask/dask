@@ -109,8 +109,9 @@ def bytes_read_csv(b, **kwargs):
 
 
 @gen.coroutine
-def _read_csv(path, executor=None, hdfs=None, lazy=True, lineterminator='\n',
-        collection=True, names=None, header='infer', **kwargs):
+def _read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
+        lineterminator='\n', names=None, header='infer', **kwargs):
+
     from hdfs3 import HDFileSystem
     from hdfs3.core import ensure_bytes
     from dask import do
@@ -153,7 +154,7 @@ def _read_csv(path, executor=None, hdfs=None, lazy=True, lineterminator='\n',
             raise gen.Return(futures)
 
 
-def read_csv(fn, executor=None, hdfs=None, lazy=True, **kwargs):
+def read_csv(fn, executor=None, hdfs=None, lazy=True, collection=True, **kwargs):
     """ Read CSV encoded data from bytes on HDFS
 
     Parameters
@@ -168,7 +169,7 @@ def read_csv(fn, executor=None, hdfs=None, lazy=True, **kwargs):
     List of futures of Python objects
     """
     executor = default_executor(executor)
-    return sync(executor.loop, _read_csv, fn, executor, hdfs, lazy, **kwargs)
+    return sync(executor.loop, _read_csv, fn, executor, hdfs, lazy, collection, **kwargs)
 
 
 def avro_body(data, header):
