@@ -5,11 +5,6 @@ from timeit import default_timer
 from numbers import Number
 import sys
 
-try:
-    import cachey
-except ImportError:
-    pass
-
 overhead = sys.getsizeof(1.23) * 4 + sys.getsizeof(()) * 4
 
 
@@ -19,16 +14,28 @@ class Cache(Callback):
     Examples
     --------
 
-    >>> cache = Cache(1e9)  # available bytes
+    >>> cache = Cache(1e9)          # doctest: +SKIP
 
-    >>> with cache:         # use as a context manager around get/compute calls
-    ...     result = x.compute()  # doctest: +SKIP
+    The cache can be used locally as a context manager around ``compute`` or
+    ``get`` calls:
 
-    >>> cache.register()    # or use globally
-    >>> cache.unregister()
+    >>> with cache:                 # doctest: +SKIP
+    ...     result = x.compute()
+
+    You can also register a cache globally, so that it works for all
+    computations:
+
+    >>> cache.register()            # doctest: +SKIP
+    >>> cache.unregister()          # doctest: +SKIP
     """
 
     def __init__(self, cache, *args, **kwargs):
+        try:
+            import cachey
+        except ImportError as ex:
+            raise ImportError('Cache requires cachey, "{ex}" problem '
+                              'importing'.format(ex=str(ex)))
+        self._nbytes = cachey.nbytes
         if isinstance(cache, Number):
             cache = cachey.Cache(cache, *args, **kwargs)
         else:
@@ -51,7 +58,7 @@ class Cache(Callback):
         if deps:
             duration += max(self.durations.get(k, 0) for k in deps)
         self.durations[key] = duration
-        nb = cachey.nbytes(value) + overhead + sys.getsizeof(key) * 4
+        nb = self._nbytes(value) + overhead + sys.getsizeof(key) * 4
         self.cache.put(key, value, cost=duration / nb / 1e9, nbytes=nb)
 
     def _finish(self, dsk, state, errored):
