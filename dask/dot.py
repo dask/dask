@@ -208,6 +208,13 @@ def dot_graph(dsk, filename='mydask', format=None, **kwargs):
         format = 'png'
 
     data = g.pipe(format=format)
+    if not data:
+        raise RuntimeError("Graphviz failed to properly produce an image. "
+                           "This probably means your installation of graphviz "
+                           "is missing png support. See: "
+                           "https://github.com/ContinuumIO/anaconda-issues/"
+                           "issues/485 for more information.")
+
     display_cls = _get_display_cls(format)
 
     if not filename:
@@ -217,4 +224,4 @@ def dot_graph(dsk, filename='mydask', format=None, **kwargs):
     with open(full_filename, 'wb') as f:
         f.write(data)
 
-    return _get_display_cls(format)(filename=full_filename)
+    return display_cls(filename=full_filename)
