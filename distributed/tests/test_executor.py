@@ -19,6 +19,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
 
+from dask import do, value
 from dask.context import _globals
 from dask.compatibility import apply
 from distributed import Worker, Nanny
@@ -443,6 +444,10 @@ def slowinc(x):
     sleep(0.02)
     return x + 1
 
+def slowadd(x, y):
+    from time import sleep
+    sleep(0.02)
+    return x + y
 
 @pytest.mark.parametrize(('func', 'n'), [(slowinc, 100), (inc, 1000)])
 def test_stress_gc(loop, func, n):
@@ -1561,6 +1566,31 @@ def test_forget_complex(e, s, A, B):
 
     s.client_releases_keys(keys=[ac.key], client=e.id)
     assert set(s.tasks) == {f.key for f in [cd]}
+
+
+@gen_cluster(executor=True)
+def test_forget_in_flight(e, s, A, B):
+    a, b, c, d = [do(slowinc)(i) for i in range(4)]
+    ab = do(slowadd)(a, b)
+    cd = do(slowadd)(c, d)
+    ac = do(slowadd)(a, c)
+    acab = do(slowadd)(ac, ab)
+
+    x, y = e.compute([ac, acab])
+    s.validate()
+
+    for i in range(5):
+        yield gen.sleep(0.01)
+        s.validate()
+
+    s.client_releases_keys(keys=[y.key], client=e.id)
+    s.validate()
+
+    for k in [acab.key, ab.key, b.key]:
+        assert k not in s.tasks
+        assert k not in s.waiting
+        assert k not in s.who_has
+
 
 
 def test_repr_sync(loop):

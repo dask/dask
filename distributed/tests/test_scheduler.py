@@ -409,6 +409,10 @@ def test_validate_state():
         validate_state(**locals())
 
     finished_results.add('y')
+    with pytest.raises(Exception):
+        validate_state(**locals())
+
+    waiting_data.pop('x')
     validate_state(**locals())
 
 
