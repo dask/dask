@@ -834,6 +834,15 @@ def test_range():
         assert list(b) == list(range(100))
 
 
+@pytest.mark.parametrize("npartitions", [1, 7, 10, 28])
+def test_zip(npartitions, hi=1000):
+    evens = db.from_sequence(range(0, hi, 2), npartitions=npartitions)
+    odds = db.from_sequence(range(1, hi, 2), npartitions=npartitions)
+    pairs = db.zip(evens, odds)
+    assert pairs.npartitions == npartitions
+    assert list(pairs) == list(zip(range(0, hi, 2), range(1, hi, 2)))
+
+
 def test_repartition():
     for x, y in [(10, 5), (7, 3), (5, 1), (5, 4)]:
         b = db.from_sequence(range(20), npartitions=x)
