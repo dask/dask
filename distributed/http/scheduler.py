@@ -4,6 +4,7 @@ from collections import defaultdict
 import json
 import logging
 
+from toolz import countby
 from tornado import web, gen
 from tornado.httpclient import AsyncHTTPClient
 
@@ -80,13 +81,14 @@ class Status(RequestHandler):
         bytes= {w: sum(self.server.nbytes[k]
                        for k in self.server.has_what[w])
                   for w in workers}
-        processing = {w: [ensure_string(key_split(t)) for t in tasks]
+        processing = {w: countby(key_split, tasks)
                     for w, tasks in self.server.processing.items()}
 
-        result = {'ncores': self.server.ncores,
+        result = {'address': self.server.address,
+                  'ncores': self.server.ncores,
                   'bytes': bytes, 'processing': processing,
                   'tasks': len(self.server.tasks),
-                  'finished': len(self.server.who_has),
+                  'in-memory': len(self.server.who_has),
                   'ready': len(self.server.ready)
                          + sum(map(len, self.server.stacks.values())),
                   'waiting': len(self.server.waiting),

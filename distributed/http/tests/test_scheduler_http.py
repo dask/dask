@@ -148,9 +148,9 @@ def test_with_status(e, s, a, b):
                                   ss.port)
     out = json.loads(response.body.decode())
     assert out['failed'] == 0
-    assert out['finished'] == 0
+    assert out['in-memory'] == 0
     assert out['bytes'] == {a.address: 0, b.address: 0}
-    assert out['processing'] == {a.address: [], b.address: []}
+    assert out['processing'] == {a.address: {}, b.address: {}}
     assert out['ready'] == 0
     assert out['tasks'] == 0
     assert out['waiting'] == 0
@@ -163,11 +163,11 @@ def test_with_status(e, s, a, b):
                                   ss.port)
     out = json.loads(response.body.decode())
     assert out['failed'] == 1
-    assert out['finished'] == 9
+    assert out['in-memory'] == 9
     assert out['ready'] == 0
     assert out['tasks'] == 10
     assert out['waiting'] == 0
-    assert out['processing'] == {a.address: [], b.address: []}
+    assert out['processing'] == {a.address: {}, b.address: {}}
     assert set(out['bytes']) == {a.address, b.address}
     assert all(v > 0 for v in out['bytes'].values())
 
