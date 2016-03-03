@@ -527,3 +527,80 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     executor = default_executor(executor)
     return sync(executor.loop, _read_text, fn, encoding, errors,
             lineterminator, executor, fs, lazy, collection)
+
+
+def bytes_read_csv(b, **kwargs):
+    from io import BytesIO
+    import pandas as pd
+    bio = BytesIO(b)
+    return pd.read_csv(bio, **kwargs)
+
+
+@gen.coroutine
+def _read_csv(path, executor=None, fs=None, lazy=True, collection=True,
+        names=None, delimiter='\n', header='infer', blocksize=2**27, **kwargs):
+
+    from dask import do
+    import pandas as pd
+    fs = fs or S3FileSystem()
+    executor = default_executor(executor)
+
+    if kwargs.get('compression'):
+        blocksize=1e30
+
+    filenames = sorted(fs.glob(path))
+    blockss = [read_bytes(fn, executor, fs, lazy=True,
+                          delimiter=delimiter.encode(),
+                          blocksize=blocksize)
+               for fn in filenames]
+
+    with fs.open(filenames[0], mode='rb') as f:
+        head = pd.read_csv(f, nrows=5, names=names, header=header, **kwargs)
+        names = list(head.columns)
+
+    dfs1 = [[do(bytes_read_csv)(blocks[0], names=names, skiprows=1,
+                                header=None, **kwargs)] +
+            [do(bytes_read_csv)(b, names=names, header=None, **kwargs)
+                for b in blocks[1:]]
+            for blocks in blockss]
+    dfs2 = sum(dfs1, [])
+    if lazy:
+        from dask.dataframe import from_imperative
+        if collection:
+            ensure_default_get(executor)
+            raise gen.Return(from_imperative(dfs2, head))
+        else:
+            raise gen.Return(dfs2)
+
+    else:
+        futures = executor.compute(dfs2)
+        from distributed.collections import _futures_to_dask_dataframe
+        if collection:
+            ensure_default_get(executor)
+            df = yield _futures_to_dask_dataframe(futures)
+            raise gen.Return(df)
+        else:
+            raise gen.Return(futures)
+
+
+def read_csv(fn, executor=None, fs=None, lazy=True, collection=True, **kwargs):
+    """ Read CSV encoded data from bytes on S3
+
+    Parameters
+    ----------
+    fn: string
+        bucket and filename or globstring of CSV files on S3
+    lazy: boolean, optional
+        If True return dask Value objects
+
+    Examples
+    --------
+    >>> df = distributed.s3.read_csv('distributed-test/csv/2015/')  # doctest: +SKIP
+
+    Returns
+    -------
+    List of futures of Python objects
+    """
+    executor = default_executor(executor)
+    return sync(executor.loop, _read_csv, fn, executor, fs, lazy, collection,
+            **kwargs)
