@@ -16,7 +16,7 @@ from ..utils import ignoring
 from toolz import (merge, frequencies, merge_with, take, reduce,
                    join, reduceby, valmap, count, map, partition_all, filter,
                    remove, pluck, groupby, topk, compose, curry)
-from toolz.compatibility import iteritems
+from toolz.compatibility import iteritems, zip
 import toolz
 with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
