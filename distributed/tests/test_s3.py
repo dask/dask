@@ -40,6 +40,7 @@ def test_s3_file_access(s3):
     assert s3.cat(fn) == data
     assert s3.head(fn, 3) == data[:3]
     assert s3.tail(fn, 3) == data[-3:]
+    assert s3.tail(fn, 10000) == data
 
 
 def test_s3_file_info(s3):
@@ -49,9 +50,16 @@ def test_s3_file_info(s3):
     assert s3.exists(fn)
     assert not s3.exists(fn+'another')
     assert s3.info(fn)['Size'] == len(data)
-    with pytest.raises(OSError):
+    with pytest.raises((OSError, IOError)):
         s3.info(fn+'another')
-    assert s3.du(test_bucket_name, deep=True)[fn] == len(data)
+
+def test_du(s3):
+    d = s3.du(test_bucket_name, deep=True)
+    assert all(isinstance(v, int) and v >= 0 for v in d.values())
+    assert 'distributed-test/nested/file1' in d
+
+    assert s3.du(test_bucket_name + '/test/', total=True) ==\
+           sum(map(len, files.values()))
 
 
 def test_s3_ls(s3):
@@ -59,7 +67,12 @@ def test_s3_ls(s3):
     assert fn not in s3.ls('distributed-test/')
     assert fn in s3.ls('distributed-test/nested/')
     assert fn in s3.ls('distributed-test/nested')
-    assert fn in s3.ls('s3://distributed-test/nested/')
+    assert s3.ls('s3://distributed-test/nested/') == s3.ls('distributed-test/nested')
+
+
+def test_s3_ls_detail(s3):
+    L = s3.ls('distributed-test/nested', detail=True)
+    assert all(isinstance(item, dict) for item in L)
 
 
 def test_s3_glob(s3):
@@ -124,23 +137,16 @@ def test_read_s3_block(s3):
     assert s3.read_block(path, 5000, 5010) == b''
 
 
-@gen_cluster(timeout=60)
-def test_read_bytes(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes(e, s, a, b):
     futures = read_bytes(test_bucket_name+'/test/accounts.*', lazy=False)
     assert len(futures) >= len(files)
     results = yield e._gather(futures)
     assert set(results) == set(files.values())
 
-    yield e._shutdown()
 
-
-@gen_cluster(timeout=60)
-def test_read_bytes_block(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes_block(e, s, a, b):
     for bs in [5, 15, 45, 1500]:
         vals = read_bytes(test_bucket_name+'/test/account*', blocksize=bs)
         assert len(vals) == sum([(len(v) // bs + 1) for v in files.values()])
@@ -157,13 +163,10 @@ def test_read_bytes_block(s, a, b):
         ourlines = b"".join(results).split(b'\n')
         testlines = b"".join(files.values()).split(b'\n')
         assert set(ourlines) == set(testlines)
-    yield e._shutdown()
 
 
-@gen_cluster(timeout=60)
-def test_read_bytes_delimited(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes_delimited(e, s, a, b):
     for bs in [5, 15, 45, 1500]:
         futures = read_bytes(test_bucket_name+'/test/accounts*',
                              lazy=False, blocksize=bs, delimiter=b'\n')
@@ -188,14 +191,10 @@ def test_read_bytes_delimited(s, a, b):
         ours = b"".join(res)
         test = b"".join(files[v] for v in sorted(files))
         assert ours == test
-    yield e._shutdown()
 
 
-@gen_cluster(timeout=60)
-def test_read_bytes_lazy(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes_lazy(e, s, a, b):
     values = read_bytes(test_bucket_name+'/test/', lazy=True)
     assert all(isinstance(v, Value) for v in values)
 
@@ -205,11 +204,8 @@ def test_read_bytes_lazy(s, a, b):
     assert set(results).issuperset(set(files.values()))
 
 
-@gen_cluster(timeout=60)
-def test_read_text(s, a, b):
-    e = Executor((s.ip, s.port), start=False)
-    yield e._start()
-
+@gen_cluster(timeout=60, executor=True)
+def test_read_text(e, s, a, b):
     pytest.importorskip('dask.bag')
     import dask.bag as db
     from dask.imperative import Value
@@ -246,3 +242,52 @@ def test_read_text_sync(loop):
             result = c.compute(get=e.get)
 
             assert result == (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) * 100
+
+
+def test_pickle(s3):
+    import pickle
+    a = pickle.loads(pickle.dumps(s3))
+
+    assert [a.anon, a.key, a.secret, a.kwargs, a.dirs] == \
+           [s3.anon, s3.key, s3.secret, s3.kwargs, s3.dirs]
+
+    assert a.ls('distributed-test/') == s3.ls('distributed-test/')
+
+
+def test_errors(s3):
+    try:
+        s3.open('distributed-test/test/accounts.1.json', mode='rt')
+    except Exception as e:
+        assert "mode='rb'" in str(e)
+    try:
+        s3.open('distributed-test/test/accounts.1.json', mode='r')
+    except Exception as e:
+        assert "mode='rb'" in str(e)
+
+
+def test_seek(s3):
+    fn = 'test/accounts.1.json'
+    b = io.BytesIO(files[fn])
+    with s3.open('/'.join([test_bucket_name, fn])) as f:
+        assert f.tell() == b.tell()
+        f.seek(10)
+        b.seek(10)
+        assert f.tell() == b.tell()
+        f.seek(10, 1)
+        b.seek(10, 1)
+        assert f.tell() == b.tell()
+        assert f.read(5) == b.read(5)
+        assert f.tell() == b.tell()
+        f.seek(10, 2)
+        b.seek(10, 2)
+        assert f.tell() == b.tell()
+        assert f.read(5) == b.read(5)
+        assert f.tell() == b.tell()
+        assert f.read(1000) == b.read(1000)
+        assert f.tell() == b.tell()
+
+
+def test_repr(s3):
+    with s3.open('distributed-test/test/accounts.1.json', mode='rb') as f:
+        assert 'distributed-test' in repr(f)
+        assert 'accounts.1.json' in repr(f)

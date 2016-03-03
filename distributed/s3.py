@@ -109,7 +109,7 @@ class S3FileSystem(object):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self.connect(self.anon, self.key, self.secret, self.kwargs)
+        self.s3 = self.connect(self.anon, self.key, self.secret, self.kwargs)
 
     def open(self, path, mode='rb', block_size=4*1024**2):
         """ Open a file for reading or writing
@@ -125,7 +125,7 @@ class S3FileSystem(object):
         """
         if 'b' not in mode:
             raise NotImplementedError("Text mode not supported, use mode='%s'"
-                    " and manage bytes" % (mode + 'b'))
+                    " and manage bytes" % (mode[0] + 'b'))
         return S3File(self, path, mode, block_size=block_size)
 
     def _ls(self, path, refresh=False):
@@ -182,7 +182,9 @@ class S3FileSystem(object):
             return [f['Key'] for f in files]
 
     def info(self, path):
-        path = path.lstrip('s3://').rstrip('/')
+        if path.startswith('s3://'):
+            path = path[len('s3://'):]
+        path = path.rstrip('/')
         files = self._ls(path)
         files = [f for f in files if f['Key'].rstrip('/') == path]
         if len(files) == 1:
@@ -234,43 +236,12 @@ class S3FileSystem(object):
         else:
             return {p['Key']: p['Size'] for p in files}
 
-    def df(self):
-        total = 0
-        for files in self.dirs.values():
-            total += sum(f['Size'] for f in files)
-        return {'capacity': None, 'used': total, 'percent-free': None}
-
-    def __repr__(self):
-        return 'S3 File System'
-
     def exists(self, path):
         return bool(self.ls(path))
-
-    def get(self, s3_path, local_path, blocksize=2**16):
-        """ Copy S3 file to local """
-        if not self.exists(s3_path):
-            raise IOError(s3_path)
-        with self.open(s3_path, 'rb') as f:
-            with open(local_path, 'wb') as f2:
-                out = 1
-                while out:
-                    out = f.read(blocksize)
-                    f2.write(out)
 
     def cat(self, path):
         with self.open(path, 'rb') as f:
             return f.read()
-
-    def getmerge(self, path, filename, blocksize=2**27):
-        """ Concat all files in path (a directory) to output file """
-        files = self.ls(path)
-        with open(filename, 'wb') as f2:
-            for apath in files:
-                with self.open(apath['name'], 'rb') as f:
-                    out = 1
-                    while out:
-                        out = f.read(blocksize)
-                        f2.write(out)
 
     def tail(self, path, size=1024):
         """ Return last bytes of file """
@@ -434,8 +405,10 @@ class S3File(object):
         self.cache = None
         self.closed = True
 
-    def __repr__(self):
-        return "Cached S3 key %s/%s" % (self.bucket, self.key)
+    def __str__(self):
+        return "<S3File %s/%s>" % (self.bucket, self.key)
+
+    __repr__ = __str__
 
     def __enter__(self):
         return self
