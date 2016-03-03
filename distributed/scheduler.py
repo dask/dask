@@ -387,13 +387,7 @@ class Scheduler(Server):
                 if not s:  # new task ready to run
                     self.mark_ready_to_run(dep)
 
-        for dep in self.dependencies.get(key, []):
-            if dep in self.waiting_data:
-                s = self.waiting_data[dep]
-                with ignoring(KeyError):
-                    s.remove(key)
-                if not s and dep and dep not in self.who_wants:
-                    self.delete_data(keys=[dep])
+        self.release_live_dependencies(key)
 
         msg = {'op': 'key-in-memory',
                'key': key,
@@ -401,6 +395,19 @@ class Scheduler(Server):
         if type:
             msg['type'] = type
         self.report(msg)
+
+    def release_live_dependencies(self, key):
+        """ We no longer need to keep data in memory to compute this
+
+        This occurs after we've computed it or after we've forgotten it
+        """
+        for dep in self.dependencies.get(key, []):
+            if dep in self.waiting_data:
+                s = self.waiting_data[dep]
+                if key in s:
+                    s.remove(key)
+                if not s and dep and dep not in self.who_wants:
+                    self.delete_data(keys=[dep])
 
     def ensure_occupied(self, worker):
         """ Send tasks to worker while it has tasks and free cores
@@ -500,8 +507,9 @@ class Scheduler(Server):
                      'traceback': self.tracebacks[failing_key]})
         if key in self.waiting:
             del self.waiting[key]
-        if key in self.waiting_data:
-            del self.waiting_data[key]
+
+        self.release_live_dependencies(key)
+
         self.in_play.remove(key)
         for dep in self.dependents[key]:
             self.mark_failed(dep, failing_key)
@@ -739,11 +747,13 @@ class Scheduler(Server):
                 self.delete_data(keys=keys2)  # async
 
         changed = True
+        keys2 = keys.copy()
         while changed:
             changed = False
-            for key in keys:
+            for key in list(keys2):
                 if key in self.tasks and not self.dependents.get(key):
                     self.forget(key)
+                    keys2.remove(key)
                     changed = True
 
     def forget(self, key):
@@ -755,6 +765,7 @@ class Scheduler(Server):
         assert not self.dependents[key] and key not in self.who_wants
         if key in self.tasks:
             del self.tasks[key]
+            self.release_live_dependencies(key)
             del self.dependents[key]
             for dep in self.dependencies[key]:
                 s = self.dependents[dep]
@@ -771,6 +782,12 @@ class Scheduler(Server):
                 del self.exceptions[key]
             if key in self.exceptions_blame:
                 del self.exceptions_blame[key]
+
+            if key in self.waiting:
+                del self.waiting[key]
+            if key in self.waiting_data:
+                del self.waiting_data[key]
+
         if key in self.who_has:
             self.delete_data(keys=[key])
 
@@ -1131,7 +1148,7 @@ class Scheduler(Server):
         validate_state(self.dependencies, self.dependents, self.waiting,
                 self.waiting_data, self.ready, self.who_has, self.stacks,
                 self.processing, None, released, self.in_play, self.who_wants,
-                self.wants_what,
+                self.wants_what, tasks=self.tasks,
                 allow_overlap=allow_overlap, allow_bad_stacks=allow_bad_stacks)
         if not (set(self.ncores) == \
                 set(self.has_what) == \
@@ -1270,7 +1287,7 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
 
 def validate_state(dependencies, dependents, waiting, waiting_data, ready,
         who_has, stacks, processing, finished_results, released, in_play,
-        who_wants, wants_what, allow_overlap=False, allow_bad_stacks=False,
+        who_wants, wants_what, tasks=None, allow_overlap=False, allow_bad_stacks=False,
         **kwargs):
     """
     Validate a current runtime state
@@ -1285,6 +1302,29 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
     in_stacks = {k for v in stacks.values() for k in v}
     in_processing = {k for v in processing.values() for k in v}
     keys = {key for key in dependents if not dependents[key]}
+    ready_set = set(ready)
+
+    assert set(waiting).issubset(dependencies)
+    assert set(waiting_data).issubset(dependents)
+    if tasks is not None:
+        assert ready_set.issubset(tasks)
+        assert set(dependents).issubset(set(tasks))
+        assert set(dependencies).issubset(set(tasks))
+
+    for k, v in waiting.items():
+        assert v
+        assert v.issubset(dependencies[k])
+        for vv in v:
+            assert vv not in who_has
+            assert vv in in_play
+
+    for k, v in waiting_data.items():
+        for vv in v:
+            assert vv in in_play
+            assert (vv in ready_set or
+                    vv in waiting or
+                    vv in in_stacks or
+                    vv in in_processing)
 
     @memoize
     def check_key(key):
@@ -1331,7 +1371,6 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
 
         if key in waiting:
             assert waiting[key], 'waiting empty'
-
 
         if key in ready:
             assert key not in waiting
