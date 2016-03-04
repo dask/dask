@@ -286,12 +286,18 @@ class S3FileSystem(object):
         >>> s3.read_block('data/file.csv', 0, 13, delimiter=b'\\n')  # doctest: +SKIP
         b'Alice, 100\\nBob, 200\\n'
 
+        Use ``length=None`` to read to the end of the file.
+        >>> s3.read_block('data/file.csv', 0, None, delimiter=b'\\n')  # doctest: +SKIP
+        b'Alice, 100\\nBob, 200\\nCharlie, 300'
+
         See Also
         --------
         distributed.utils.read_block
         """
         with self.open(fn, 'rb') as f:
             size = f.info()['Size']
+            if length is None:
+                length = size
             if offset + length > size:
                 length = size - offset
             bytes = read_block(f, offset, length, delimiter)
@@ -447,14 +453,19 @@ def read_bytes(fn, executor=None, s3=None, lazy=True, delimiter=None,
         s3 = S3FileSystem(**s3pars)
     executor = default_executor(executor)
     filenames, lengths, offsets = [], [], []
-    for afile in s3.glob(fn):
-        size = s3.info(afile)['Size']
-        offset = list(range(0, size, blocksize))
-        if not_zero:
-            offset[0] = 1
-        offsets.extend(offset)
-        filenames.extend([afile]*len(offset))
-        lengths.extend([blocksize]*len(offset))
+    if blocksize is None:
+        filenames = sorted(s3.glob(fn))
+        lengths = [None] * len(filenames)
+        offsets = [0] * len(filenames)
+    else:
+        for afile in sorted(s3.glob(fn)):
+            size = s3.info(afile)['Size']
+            offset = list(range(0, size, blocksize))
+            if not_zero:
+                offset[0] = 1
+            offsets.extend(offset)
+            filenames.extend([afile]*len(offset))
+            lengths.extend([blocksize]*len(offset))
     names = ['read-binary-s3-%s-%s' % (fn, tokenize(offset, length, delimiter, not_zero))
             for fn, offset, length in zip(filenames, offsets, lengths)]
 

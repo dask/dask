@@ -133,8 +133,10 @@ def test_read_s3_block(s3):
     assert s3.read_block(path, 0, 35, b'\n') == lines[0] + lines[1]
     assert s3.read_block(path, 0, 5000, b'\n') == data
     assert len(s3.read_block(path, 0, 5)) == 5
-    assert len(s3.read_block(path, 0, 5000)) == len(data)
+    assert len(s3.read_block(path, 4, 5000)) == len(data) - 4
     assert s3.read_block(path, 5000, 5010) == b''
+
+    assert s3.read_block(path, 5, None) == s3.read_block(path, 5, 1000)
 
 
 @gen_cluster(timeout=60, executor=True)
@@ -143,6 +145,13 @@ def test_read_bytes(e, s, a, b):
     assert len(futures) >= len(files)
     results = yield e._gather(futures)
     assert set(results) == set(files.values())
+
+
+@gen_cluster(timeout=60, executor=True)
+def test_read_bytes_blocksize_none(e, s, a, b):
+    futures = read_bytes(test_bucket_name+'/test/accounts.*', lazy=False,
+                         blocksize=None)
+    assert len(futures) == len(files)
 
 
 @gen_cluster(timeout=60, executor=True)
