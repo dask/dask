@@ -526,9 +526,13 @@ class Executor(object):
             raise NotImplementedError()
 
         while True:
-            args = [get(q) for q in qs_in]
+            try:
+                args = [get(q) for q in qs_in]
+            except StopIteration:
+                break
             f = self.submit(func, *args, **kwargs)
             q_out.put(f)
+
 
     def map(self, func, *iterables, **kwargs):
         """ Map a function on a sequence of arguments
