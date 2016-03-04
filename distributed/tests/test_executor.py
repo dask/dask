@@ -2172,3 +2172,24 @@ def test_diagnostic_ui(loop):
 
             d = e.has_what(('127.0.0.1', a['port']))
             assert set(d) == {a_addr}
+
+
+@gen_test()
+def test_worker_aliases():
+    s = Scheduler()
+    s.start()
+    a = Worker(s.ip, s.port, name='alice')
+    b = Worker(s.ip, s.port, name='bob')
+    yield [a._start(), b._start()]
+
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+
+    L = e.map(inc, range(10), workers='alice')
+    yield _wait(L)
+    assert len(a.data) == 10
+    assert len(b.data) == 0
+
+    yield e._shutdown()
+    yield [a._close(), b._close()]
+    yield s.close()

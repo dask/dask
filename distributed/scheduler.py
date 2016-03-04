@@ -693,12 +693,16 @@ class Scheduler(Server):
                 self.waiting_data[key] = set()
 
         if restrictions:
-            restrictions = {k: set(map(ensure_ip, v))
+            aliases = self.aliases()
+            restrictions = {k: {ensure_ip(aliases.get(addr, addr))
+                                for addr in v}
                             for k, v in restrictions.items()}
             self.restrictions.update(restrictions)
 
-        if loose_restrictions:
-            self.loose_restrictions |= set(loose_restrictions)
+            if loose_restrictions:
+                loose_restrictions = {ensure_ip(aliases.get(addr, addr))
+                        for addr in loose_restrictions}
+                self.loose_restrictions |= set(loose_restrictions)
 
         new_keyorder = order(tasks)  # TODO: define order wrt old graph
         for key in new_keyorder:
@@ -1218,6 +1222,9 @@ class Scheduler(Server):
         results = yield All([send_recv(arg=address, close=True, **msg)
                              for address in workers])
         raise Return(dict(zip(workers, results)))
+
+    def aliases(self):
+        return {v.get('name', k): k for k, v in self.worker_info.items()}
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions,
