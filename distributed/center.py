@@ -37,9 +37,8 @@ class Center(Server):
         Set of keys owned by a particular worker
     *   ``ncores:: {worker: int}``
         Number of cores per worker
-    *   ``worker_services:: {worker: {str: port}}``:
-        Ports of other running services on each worker.
-        E.g. ``{('192.168.1.100', 8000): {'http': 9001, 'nanny': 9002}}``
+    *   ``worker_info``:: {worker: {str: data}}``:
+        Information on each worker
 
     Workers and clients check in with the Center to discover available resources
 
@@ -74,10 +73,10 @@ class Center(Server):
      ('bob', 8788): 4,
      ('charlie', 8788): 4}
 
-    >>> center.worker_services # doctest: +SKIP
-    {('alice', 8788): {'nanny', 8789},
-     ('bob', 8788): {'nanny', 8789},
-     ('charlie', 8788): {'nanny', 8789}}
+    >>> center.worker_info  # doctest: +SKIP
+    {('alice', 8788): {'services': {'nanny', 8789}},
+     ('bob', 8788): {'services': {'nanny', 8789}},
+     ('charlie', 8788): {'servies': {'nanny', 8789}}}
 
     See Also
     --------
@@ -88,7 +87,7 @@ class Center(Server):
         self.who_has = defaultdict(set)
         self.has_what = defaultdict(set)
         self.ncores = dict()
-        self.worker_services = defaultdict(dict)
+        self.worker_info = defaultdict(dict)
         self.status = None
 
         d = {func.__name__: func
@@ -112,13 +111,13 @@ class Center(Server):
         return 'OK'
 
     def register(self, stream, address=None, keys=(), ncores=None,
-                 services=None):
+                 **info):
         address = coerce_to_address(address)
         self.has_what[address] = set(keys)
         for key in keys:
             self.who_has[key].add(address)
         self.ncores[address] = ncores
-        self.worker_services[address] = services
+        self.worker_info[address] = info
         logger.info("Register %s", str(address))
         return 'OK'
 
@@ -130,7 +129,7 @@ class Center(Server):
         with ignoring(KeyError):
             del self.ncores[address]
         with ignoring(KeyError):
-            del self.worker_services[address]
+            del self.worker_info[address]
         for key in keys:
             s = self.who_has[key]
             s.remove(address)
@@ -181,9 +180,11 @@ class Center(Server):
         if addresses:
             addresses = [coerce_to_address(a) for a in address]
         if addresses is not None:
-            return {k: self.worker_services.get(k, None) for k in addresses}
+            return {k: self.worker_info.get(k, {}).get('services', None)
+                    for k in addresses}
         else:
-            return self.worker_services
+            return {k: self.worker_info[k].get('services', None)
+                    for k in self.worker_info}
 
     @gen.coroutine
     def delete_data(self, stream, keys=None):

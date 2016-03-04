@@ -25,22 +25,22 @@ def test_nanny():
     nn = rpc(ip=n.ip, port=n.port)
     assert n.process.is_alive()
     assert c.ncores[n.worker_address] == 2
-    assert c.worker_services[n.worker_address]['nanny'] > 1024
+    assert c.worker_info[n.worker_address]['services']['nanny'] > 1024
 
     yield nn.kill()
     assert n.worker_address not in c.ncores
-    assert n.worker_address not in c.worker_services
+    assert n.worker_address not in c.worker_info
     assert not n.process
 
     yield nn.kill()
     assert n.worker_address not in c.ncores
-    assert n.worker_address not in c.worker_services
+    assert n.worker_address not in c.worker_info
     assert not n.process
 
     yield nn.instantiate()
     assert n.process.is_alive()
     assert c.ncores[n.worker_address] == 2
-    assert c.worker_services[n.worker_address]['nanny'] > 1024
+    assert c.worker_info[n.worker_address]['services']['nanny'] > 1024
 
     yield nn.terminate()
     assert not n.process

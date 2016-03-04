@@ -27,8 +27,9 @@ logger = logging.getLogger('distributed.dworker')
               help="Number of threads per process. Defaults to number of cores")
 @click.option('--nprocs', type=int, default=1,
               help="Number of worker processes.  Defaults to one.")
+@click.option('--name', type=str, default='', help="Alias")
 @click.option('--no-nanny', is_flag=True)
-def main(center, host, port, http_port, nthreads, nprocs, no_nanny):
+def main(center, host, port, http_port, nthreads, nprocs, no_nanny, name):
     try:
         center_host, center_port = center.split(':')
         center_ip = socket.gethostbyname(center_host)
@@ -54,7 +55,7 @@ def main(center, host, port, http_port, nthreads, nprocs, no_nanny):
         # reach the center
         ip = get_ip(center_ip, center_port)
     nannies = [t(center_ip, center_port, ncores=nthreads, ip=ip,
-                 services=services, loop=loop)
+                 services=services, name=name, loop=loop)
                for i in range(nprocs)]
 
     for nanny in nannies:
