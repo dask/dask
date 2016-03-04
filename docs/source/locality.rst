@@ -51,8 +51,8 @@ For example the existence of specialized hardware such as GPUs or database
 connections may restrict the set of valid workers for a particular task.
 
 In these cases use the ``workers=`` keyword argument to the ``submit``,
-``map``, or ``scatter`` functions, providing a hostname or IP address as
-follows:
+``map``, or ``scatter`` functions, providing a hostname, IP address, or alias
+as follows:
 
 .. code-block:: python
 
@@ -83,5 +83,28 @@ data.
 
 *  Alice: ``[1, 2, 3]``
 *  Bob: ``[1, 2, 3]``
+
+
+Valid arguments for ``workers=`` include the following:
+
+*   A single IP addresses, IP/Port pair, or hostname like the following::
+
+   192.168.1.100, 192.168.1.100:8989, alice, alice:8989
+
+*  A list or set of the above::
+
+   ['alice'], ['192.168.1.100', '192.168.1.101:9999']
+
+If only a hostname or IP is given then any worker on that machine will be
+considered valid.  Additionally, you can provide aliases to workers upon
+creation.::
+
+    $ dworker scheduler_address:8786 --name worker_1
+
+And then use this name when specifying workers instead.
+
+.. code-block:: python
+
+   e.map(func, sequence, workers='worker_1')
 
 See the :doc:`efficiency <efficiency>` page to learn about best practices.
