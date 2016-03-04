@@ -63,8 +63,8 @@ def scheduler_status_widget(d, widget=None):
     sched = scheduler_progress_df(d)
     workers = worker_status_df(d)
     widget.children[0].value = header
-    widget.children[1].value = sched.to_html()
-    widget.children[2].value = workers.to_html()
+    widget.children[1].value = sched.style.set_table_attributes('class="table"').render()
+    widget.children[2].value = workers.style.set_table_attributes('class="table"').render()
     logger.debug("Update scheduler status widget")
     return widget
 
