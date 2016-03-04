@@ -353,6 +353,19 @@ def test_read_csv(e, s, a, b):
     assert all(isinstance(v, Value) for v in values)
 
 
+@gen_cluster(timeout=60, executor=True)
+def test_read_csv_gzip(e, s, a, b):
+    dd = pytest.importorskip('dask.dataframe')
+    s3 = S3FileSystem(anon=True)
+
+    df = yield _read_csv('distributed-test/csv/gzip/', compression='gzip')
+    assert isinstance(df, dd.DataFrame)
+    assert list(df.columns) == ['name', 'amount', 'id']
+    f = e.compute(df.amount.sum())
+    result = yield f._result()
+    assert result == (100 + 200 + 300 + 400 + 500 + 600)
+
+
 def test_read_csv_sync(loop):
     dd = pytest.importorskip('dask.dataframe')
     with cluster() as (s, [a, b]):

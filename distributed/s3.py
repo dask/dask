@@ -557,7 +557,7 @@ def _read_csv(path, executor=None, fs=None, lazy=True, collection=True,
     executor = default_executor(executor)
 
     if kwargs.get('compression'):
-        blocksize=1e30
+        blocksize = None
 
     filenames = sorted(fs.glob(path))
     blockss = [read_bytes(fn, executor, fs, lazy=True,
