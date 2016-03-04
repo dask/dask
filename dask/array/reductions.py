@@ -466,6 +466,13 @@ def arg_agg(func, argfunc, data, axis=None, **kwargs):
     return _arg_combine(data, axis, argfunc, keepdims=False)[0]
 
 
+def nanarg_agg(func, argfunc, data, axis=None, **kwargs):
+    arg, vals = _arg_combine(data, axis, argfunc, keepdims=False)
+    if np.any(np.isnan(vals)):
+        raise ValueError("All NaN slice encountered")
+    return arg
+
+
 def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None):
     """Generic function for argreduction.
 
@@ -514,7 +521,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None):
     return _tree_reduce(tmp, agg, axis, False, np.int64, split_every, combine)
 
 
-def make_arg_reduction(func, argfunc):
+def make_arg_reduction(func, argfunc, is_nan_func=False):
     """Create a argreduction callable.
 
     Parameters
@@ -526,17 +533,34 @@ def make_arg_reduction(func, argfunc):
     """
     chunk = partial(arg_chunk, func, argfunc)
     combine = partial(arg_combine, func, argfunc)
-    agg = partial(arg_agg, func, argfunc)
+    if is_nan_func:
+        agg = partial(nanarg_agg, func, argfunc)
+    else:
+        agg = partial(arg_agg, func, argfunc)
     @wraps(argfunc)
     def _(x, axis=None, split_every=None):
         return arg_reduction(x, chunk, combine, agg, axis, split_every)
     return _
 
 
+def _nanargmin(x, axis, **kwargs):
+    try:
+        return chunk.nanargmin(x, axis, **kwargs)
+    except ValueError:
+        return chunk.nanargmin(np.where(np.isnan(x), np.inf, x), axis, **kwargs)
+
+
+def _nanargmax(x, axis, **kwargs):
+    try:
+        return chunk.nanargmax(x, axis, **kwargs)
+    except ValueError:
+        return chunk.nanargmax(np.where(np.isnan(x), -np.inf, x), axis, **kwargs)
+
+
 argmin = make_arg_reduction(chunk.min, chunk.argmin)
 argmax = make_arg_reduction(chunk.max, chunk.argmax)
-nanargmin = make_arg_reduction(chunk.nanmin, chunk.nanargmin)
-nanargmax = make_arg_reduction(chunk.nanmax, chunk.nanargmax)
+nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
+nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
 
 
 def cumreduction(func, binop, ident, x, axis, dtype=None):

@@ -162,6 +162,26 @@ def test_arg_reductions(dfunc, func):
     assert eq(dfunc(a2, 0, split_every=2), func(x2, 0))
 
 
+@pytest.mark.parametrize(['dfunc', 'func'],
+         [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)])
+def test_nanarg_reductions(dfunc, func):
+    x = np.random.random((10, 10, 10))
+    x[5] = np.nan
+    a = da.from_array(x, chunks=(3, 4, 5))
+    assert eq(dfunc(a), func(x))
+    assert eq(dfunc(a, 0), func(x, 0))
+    with pytest.raises(ValueError):
+        dfunc(a, 1).compute()
+
+    with pytest.raises(ValueError):
+        dfunc(a, 2).compute()
+
+    x[:] = np.nan
+    a = da.from_array(x, chunks=(3, 4, 5))
+    with pytest.raises(ValueError):
+        dfunc(a).compute()
+
+
 def test_reductions_2D_nans():
     # chunks are a mix of some/all/no NaNs
     x = np.full((4, 4), np.nan)
@@ -189,17 +209,18 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.nanmin, a, np.nanmin, x, False, False)
     reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
 
-    # TODO: fix these tests, which fail with this error from NumPy:
-    # ValueError("All-NaN slice encountered"), because some of the chunks
-    # (not all) have all NaN values.
-    # assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
-    # assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-    # assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    # assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
-    # assert eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
-    # assert eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
-    # assert eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
-    # assert eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
+    assert eq(da.argmax(a), np.argmax(x))
+    assert eq(da.argmin(a), np.argmin(x))
+    assert eq(da.nanargmax(a), np.nanargmax(x))
+    assert eq(da.nanargmin(a), np.nanargmin(x))
+    assert eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
+    assert eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
+    assert eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
+    assert eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
+    assert eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
+    assert eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
+    assert eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
+    assert eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
 
 def test_moment():
