@@ -41,6 +41,10 @@ def main(center, host, port, http_port, nthreads, nprocs, no_nanny, name):
         logger.error("Failed to launch worker.  You cannot use the --port argument when nprocs > 1.")
         exit(1)
 
+    if nprocs > 1 and name:
+        logger.error("Failed to launch worker.  You cannot use the --name argument when nprocs > 1.")
+        exit(1)
+
     if not nthreads:
         nthreads = _ncores // nprocs
 
