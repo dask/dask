@@ -308,6 +308,7 @@ class Scheduler(Server):
         yield self.cleanup()
         yield self.finished()
         self.status = 'closed'
+        self.stop()
 
     @gen.coroutine
     def cleanup(self):

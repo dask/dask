@@ -62,6 +62,8 @@ class Worker(Server):
         Path on local machine to store temporary files
     * **center:** ``rpc``:
         Location of center or scheduler.  See ``.ip/.port`` attributes.
+    * **name:** ``string``:
+        Alias
     * **services:** ``{str: Server}``:
         Auxiliary web servers running on this worker
     * **service_ports:** ``{str: port}``:
@@ -92,7 +94,7 @@ class Worker(Server):
 
     def __init__(self, center_ip, center_port, ip=None, ncores=None,
                  loop=None, local_dir=None, services=None, service_ports=None,
-                 **kwargs):
+                 name=None, **kwargs):
         self.ip = ip or get_ip()
         self._port = 0
         self.ncores = ncores or _ncores
@@ -103,6 +105,7 @@ class Worker(Server):
         self.executor = ThreadPoolExecutor(self.ncores)
         self.center = rpc(ip=center_ip, port=center_port)
         self.active = set()
+        self.name = name
 
         if not os.path.exists(self.local_dir):
             os.mkdir(self.local_dir)
@@ -136,6 +139,7 @@ class Worker(Server):
     @gen.coroutine
     def _start(self, port=0):
         self.listen(port)
+        self.name = self.name or self.address
         for k, v in self.services.items():
             v.listen(0)
             self.service_ports[k] = v.port
@@ -149,7 +153,8 @@ class Worker(Server):
             try:
                 resp = yield self.center.register(
                         ncores=self.ncores, address=(self.ip, self.port),
-                        keys=list(self.data), services=self.service_ports)
+                        keys=list(self.data), services=self.service_ports,
+                        name=self.name)
                 break
             except (OSError, StreamClosedError):
                 logger.debug("Unable to register with center.  Waiting")
@@ -180,6 +185,7 @@ class Worker(Server):
         for k, v in self.services.items():
             v.stop()
         self.status = 'closed'
+        self.stop()
 
     @gen.coroutine
     def terminate(self, stream, report=True):

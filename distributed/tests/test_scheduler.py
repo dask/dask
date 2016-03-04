@@ -898,3 +898,15 @@ def test_ready_add_worker(s, a, b):
 
     result = yield s.broadcast(msg={'op': 'ping'}, workers=[a.address])
     assert result == {a.address: b'pong'}
+
+
+@gen_test()
+def test_worker_name():
+    s = Scheduler()
+    s.start()
+    w = Worker(s.ip, s.port, name='alice')
+    yield w._start()
+    assert s.worker_info[w.address]['name'] == 'alice'
+
+    yield s.close()
+    yield w._close()
