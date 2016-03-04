@@ -1903,11 +1903,24 @@ def test_map_iterator(e, s, a, b):
     result = yield future._result()
     assert result == (1 + 10) * 2
 
+    items = enumerate(range(10))
+    futures = e.map(lambda x: x, items)
+    result = yield next(futures)._result()
+    assert result == (0, 0)
+
 
 @gen_cluster(executor=True)
 def test_map_infinite_iterators(e, s, a, b):
     futures = e.map(add, [1, 2], itertools.repeat(10))
     assert len(futures) == 2
+
+
+def test_map_iterator_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            items = enumerate(range(10))
+            futures = e.map(lambda x: x, items)
+            next(futures).result() == (0, 0)
 
 
 @gen_cluster(executor=True)
