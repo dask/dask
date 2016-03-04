@@ -85,9 +85,8 @@ class Scheduler(Server):
         Set of workers that are not fully utilized
     * **services:** ``{str: port}``:
         Other services running on this scheduler, like HTTP
-    * **worker_services:** ``{worker: {str: port}}``:
-        Ports of other running services on each worker.
-        E.g. ``{('192.168.1.100', 8000): {'http': 9001, 'nanny': 9002}}``
+    * **worker_info:** ``{worker: {str: data}}``:
+        Information about each worker
     * **who_has:** ``{key: {worker}}``:
         Where each key lives.  The current state of distributed memory.
     * **has_what:** ``{worker: {key}}``:
@@ -158,7 +157,7 @@ class Scheduler(Server):
         self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
-        self.worker_services = defaultdict(dict)
+        self.worker_info = defaultdict(dict)
         self.processing = dict()
         self.restrictions = dict()
         self.loose_restrictions = set()
@@ -592,7 +591,7 @@ class Scheduler(Server):
         del self.ncores[address]
         del self.stacks[address]
         del self.processing[address]
-        del self.worker_services[address]
+        del self.worker_info[address]
         if address in self.idle:
             self.idle.remove(address)
         if not self.stacks:
@@ -613,10 +612,10 @@ class Scheduler(Server):
         return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
-                   services=None):
+                    **info):
         address = coerce_to_address(address)
         self.ncores[address] = ncores
-        self.worker_services[address] = services
+        self.worker_info[address] = info
         if address not in self.processing:
             self.has_what[address] = set()
             self.processing[address] = set()
@@ -1119,7 +1118,8 @@ class Scheduler(Server):
         for q in self.scheduler_queues + self.report_queues:
             clear_queue(q)
 
-        nannies = {addr: d['nanny'] for addr, d in self.worker_services.items()}
+        nannies = {addr: d['services']['nanny']
+                   for addr, d in self.worker_info.items()}
 
         for addr in nannies:
             self.remove_worker(address=addr, heal=False)
@@ -1161,7 +1161,7 @@ class Scheduler(Server):
                 set(self.has_what) == \
                 set(self.stacks) == \
                 set(self.processing) == \
-                set(self.worker_services) == \
+                set(self.worker_info) == \
                 set(self.worker_queues)):
             raise ValueError("Workers not the same in all collections")
 
