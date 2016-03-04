@@ -1,20 +1,14 @@
-import json
-import logging
-import requests
 import os
 import pandas as pd
 
-from tornado.ioloop import IOLoop, PeriodicCallback
-from tornado.httpclient import AsyncHTTPClient
-from tornado import gen
-
-
-logger = logging.getLogger(__name__)
-
 
 def scheduler_status_str(d):
-    """ Render the result of the /status.json route as a string
+    """ Render scheduler status as a string
 
+    Consumes data from status.json route
+
+    Examples
+    --------
     >>> d = {"address": "SCHEDULER_ADDRESS:9999",
     ...      "ready": 5,
     ...      "ncores": {"192.168.1.107:44544": 4,
@@ -50,51 +44,10 @@ def scheduler_status_str(d):
     return os.linesep.join(map(str.rstrip, s.split(os.linesep)))
 
 
-def scheduler_status_widget(d, widget=None):
-    """ IPython widget to display scheduler status
-
-    See also:
-        scheduler_status_str
-    """
-    from ipywidgets import HTML, VBox
-    if widget is None:
-        widget = VBox([HTML(''), HTML(''), HTML('')])
-    header = '<h3>Scheduler: %s</h3>' % d['address']
-    sched = scheduler_progress_df(d)
-    workers = worker_status_df(d)
-    widget.children[0].value = header
-    widget.children[1].value = sched.style.set_table_attributes('class="table"').render()
-    widget.children[2].value = workers.style.set_table_attributes('class="table"').render()
-    logger.debug("Update scheduler status widget")
-    return widget
-
-
-@gen.coroutine
-def update_status_widget(widget, ip, port):
-    client = AsyncHTTPClient()
-    try:
-        response = yield client.fetch('http://%s:%d/status.json' % (ip, port))
-        d = json.loads(response.body.decode())
-        scheduler_status_widget(d, widget)
-    except Exception as e:
-        logger.exception(e)
-        raise
-
-
-def live_info(e, interval=200, port=9786, loop=None):
-    from ipywidgets import HTML, VBox
-    loop = loop or IOLoop.current()
-    widget = VBox([HTML(''), HTML(''), HTML('')])
-    cb = lambda: update_status_widget(widget, e.scheduler.ip, port)
-    loop.add_callback(cb)
-    pc = PeriodicCallback(cb, interval, io_loop=loop)
-    pc.start()
-
-    return widget
-
-
 def scheduler_progress_df(d):
     """ Convert status response to DataFrame of total progress
+
+    Consumes dictionary from status.json route
 
     Examples
     --------
@@ -132,8 +85,12 @@ def scheduler_progress_df(d):
 
 
 def worker_status_df(d):
-    """
+    """ Status of workers as a Pandas DataFrame
 
+    Consumes data from status.json route.
+
+    Examples
+    --------
     >>> d = {"other-keys-are-fine-too": '',
     ...      "ncores": {"192.168.1.107:44544": 4,
     ...                 "192.168.1.107:36441": 4},

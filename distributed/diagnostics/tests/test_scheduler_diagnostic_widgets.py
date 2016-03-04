@@ -67,7 +67,8 @@ d = {"address": "SCHEDULER_ADDRESS:9999",
      "bytes": {"192.168.1.107:44544": 1000,
                "192.168.1.107:36441": 2000}}
 
-from distributed.http.client import scheduler_status_widget, live_info
+from distributed.diagnostics.scheduler_widgets import (scheduler_status_widget,
+        scheduler_status)
 from distributed.http.scheduler import HTTPScheduler
 from time import time
 
@@ -77,16 +78,13 @@ from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 
 
-
-
-
 def test_scheduler_status_widget():
     widget = scheduler_status_widget(d)
     assert d['address'] in widget.children[0].value
 
 
 @gen_cluster(executor=True)
-def test_live_info(e, s, a, b):
+def test_scheduler_status(e, s, a, b):
     ss = HTTPScheduler(s)
     ss.listen(0)
 
@@ -94,7 +92,7 @@ def test_live_info(e, s, a, b):
 
     response = yield client.fetch('http://localhost:%d/status.json' % ss.port)
 
-    widget = live_info(e, 50, port=ss.port, loop=e.loop)
+    widget = scheduler_status(e, 50, port=ss.port, loop=e.loop)
 
     yield gen.sleep(1)
 
