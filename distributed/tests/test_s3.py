@@ -155,6 +155,16 @@ def test_read_bytes_blocksize_none(e, s, a, b):
 
 
 @gen_cluster(timeout=60, executor=True)
+def test_read_bytes_blocksize_on_large_data(e, s, a, b):
+    L = read_bytes('dask-data/nyc-taxi/2015/yellow_tripdata_2015-01.csv',
+                    lazy=True, blocksize=None)
+    assert len(L) == 1
+
+    L = read_bytes('dask-data/nyc-taxi/2014/*.csv', lazy=True, blocksize=None)
+    assert len(L) == 12
+
+
+@gen_cluster(timeout=60, executor=True)
 def test_read_bytes_block(e, s, a, b):
     for bs in [5, 15, 45, 1500]:
         vals = read_bytes(test_bucket_name+'/test/account*', blocksize=bs)
@@ -344,13 +354,21 @@ def test_read_csv(e, s, a, b):
                               collection=False, lazy=False)
     assert len(futures) == 3
     assert all(isinstance(f, Future) for f in futures)
-    result = yield futures[0]._result()
-    assert result.id.sum() == 1 + 2 + 3
+    results = yield e._gather(futures)
+    assert results[0].id.sum() == 1 + 2 + 3
+    assert results[1].id.sum() == 0
+    assert results[2].id.sum() == 4 + 5 + 6
 
     values = yield _read_csv('distributed-test/csv/2015/',
                               collection=False, lazy=True)
-    assert len(futures) == 3
+    assert len(values) == 3
     assert all(isinstance(v, Value) for v in values)
+
+    df2 = yield _read_csv('distributed-test/csv/2015/',
+                          collection=True, lazy=True, blocksize=20)
+    assert df2.npartitions > df.npartitions
+    result = yield e.compute(df2.id.sum())._result()
+    assert result == 1 + 2 + 3 + 4 + 5 + 6
 
 
 @gen_cluster(timeout=60, executor=True)
