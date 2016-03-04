@@ -92,6 +92,8 @@ class Server(TCPServer):
     *  ``{'op': 'ping'}``
     *  ``{'op': 'add': 'x': 10, 'y': 20}``
     """
+    default_port = 0
+
     def __init__(self, handlers, max_buffer_size=MAX_BUFFER_SIZE, **kwargs):
         self.handlers = assoc(handlers, 'identity', self.identity)
         self.id = str(uuid.uuid1())
@@ -110,7 +112,9 @@ class Server(TCPServer):
     def identity(self, stream):
         return {'type': type(self).__name__, 'id': self.id}
 
-    def listen(self, port):
+    def listen(self, port=None):
+        if port is None:
+            port = self.default_port
         while True:
             try:
                 super(Server, self).listen(port)

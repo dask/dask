@@ -135,6 +135,8 @@ class Scheduler(Server):
     *  **loop:** ``IOLoop``:
         The running Torando IOLoop
     """
+    default_port = 8786
+
     def __init__(self, center=None, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
@@ -203,10 +205,15 @@ class Scheduler(Server):
                          'has_what': self.get_has_what,
                          'who_has': self.get_who_has}
 
-        services = services or {}
-        self.services = {k: v(self) for k, v in services.items()}
-        for v in self.services.values():
-            v.listen(0)
+        self.services = {}
+        for k, v in (services or {}).items():
+            if isinstance(k, tuple):
+                k, port = k
+            else:
+                port = 0
+
+            self.services[k] = v(self)
+            self.services[k].listen(port)
 
         super(Scheduler, self).__init__(handlers=self.handlers,
                 max_buffer_size=max_buffer_size, **kwargs)

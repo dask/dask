@@ -28,12 +28,14 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.command()
 @click.argument('center', type=str, default='')
 @click.option('--port', type=int, default=8786, help="Serving port")
+@click.option('--http-port', type=int, default=9786, help="HTTP port")
 @click.option('--host', type=str, default=ip,
               help="Serving host defaults to %s" % ip)
-def main(center, host, port):
+def main(center, host, port, http_port):
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
-    scheduler = Scheduler(center, services={'http': HTTPScheduler}, ip=ip)
+    scheduler = Scheduler(center, ip=ip,
+                          services={('http', http_port): HTTPScheduler})
     if center:
         loop.run_sync(scheduler.sync_center)
     scheduler.start(port)
