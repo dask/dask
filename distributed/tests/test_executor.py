@@ -570,6 +570,19 @@ def test_restrictions_submit(e, s, a, b):
     assert y.key in b.data
 
 
+@gen_cluster(executor=True)
+def test_restrictions_ip_port(e, s, a, b):
+    x = e.submit(inc, 1, workers={a.address})
+    y = e.submit(inc, x, workers={b.address})
+    yield _wait([x, y])
+
+    assert s.restrictions[x.key] == {a.address}
+    assert x.key in a.data
+
+    assert s.restrictions[y.key] == {b.address}
+    assert y.key in b.data
+
+
 @pytest.mark.skipif(sys.platform!='linux',
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster([('127.0.0.1', 1), ('127.0.0.2', 2)], executor=True)

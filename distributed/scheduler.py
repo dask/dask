@@ -1270,9 +1270,9 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
         workers = stacks
     if key in restrictions:
         r = restrictions[key]
-        workers = {w for w in workers if w.split(':')[0] in r}  # TODO: nonlinear
+        workers = {w for w in workers if w in r or w.split(':')[0] in r}  # TODO: nonlinear
         if not workers:
-            workers = {w for w in stacks if w.split(':')[0] in r}
+            workers = {w for w in stacks if w in r or w.split(':')[0] in r}
             if not workers:
                 if key in loose_restrictions:
                     return decide_worker(dependencies, stacks, who_has,
