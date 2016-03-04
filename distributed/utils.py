@@ -238,11 +238,18 @@ def log_errors():
 def ensure_ip(hostname):
     """ Ensure that address is an IP address
 
+    Examples
+    --------
     >>> ensure_ip('localhost')
-    b'127.0.0.1'
+    '127.0.0.1'
     >>> ensure_ip('123.123.123.123')  # pass through IP addresses
-    b'123.123.123.123'
+    '123.123.123.123'
+    >>> ensure_ip('localhost:5000')
+    '127.0.0.1:5000'
     """
+    if ':' in hostname:
+        host, port = hostname.split(':')
+        return ':'.join([ensure_ip(host), port])
     if isinstance(hostname, bytes):
         hostname = hostname.decode()
     if re.match('\d+\.\d+\.\d+\.\d+', hostname):  # is IP
