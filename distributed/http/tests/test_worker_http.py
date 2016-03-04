@@ -50,7 +50,7 @@ def test_services(s, a, b):
     yield c._start()
     assert isinstance(c.services['http'], HTTPServer)
     assert c.service_ports['http'] == c.services['http'].port
-    assert s.worker_services[c.address]['http'] == c.service_ports['http']
+    assert s.worker_info[c.address]['services']['http'] == c.service_ports['http']
 
     yield c._close()
 
@@ -63,7 +63,7 @@ def test_services_port(s, a, b):
     assert isinstance(c.services['http'], HTTPServer)
     assert (c.service_ports['http']
          == c.services['http'].port
-         == s.worker_services[c.address]['http']
+         == s.worker_info[c.address]['services']['http']
          == 9898)
 
     c.services['http'].stop()
