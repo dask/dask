@@ -347,7 +347,6 @@ def gen_test(timeout=10):
     return _
 
 
-
 from .scheduler import Scheduler
 from .worker import Worker
 from .executor import Executor
@@ -356,7 +355,8 @@ from .executor import Executor
 def start_cluster(ncores, Worker=Worker):
     s = Scheduler(ip='127.0.0.1')
     done = s.start(0)
-    workers = [Worker(s.ip, s.port, ncores=v, ip=k) for k, v in ncores]
+    workers = [Worker(s.ip, s.port, ncores=v, ip=k, name=i)
+                for i, (k, v) in enumerate(ncores)]
 
     yield [w._start() for w in workers]
 

@@ -21,7 +21,7 @@ from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv, coerce_to_address)
+        Server, send_recv)
 from .client import (scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
@@ -158,6 +158,7 @@ class Scheduler(Server):
         self.nbytes = dict()
         self.ncores = dict()
         self.worker_info = defaultdict(dict)
+        self.aliases = dict()
         self.processing = dict()
         self.restrictions = dict()
         self.loose_restrictions = set()
@@ -470,7 +471,7 @@ class Scheduler(Server):
         --------
         Scheduler.mark_key_in_memory
         """
-        who_has = {k: [coerce_to_address(vv) for vv in v]
+        who_has = {k: [self.coerce_address(vv) for vv in v]
                    for k, v in who_has.items()}
         logger.debug("Update data %s", who_has)
         for key, workers in who_has.items():
@@ -581,7 +582,7 @@ class Scheduler(Server):
         --------
         Scheduler.heal_state
         """
-        address = coerce_to_address(address)
+        address = self.coerce_address(address)
         logger.debug("Remove worker %s", address)
         if address not in self.processing:
             return
@@ -592,6 +593,7 @@ class Scheduler(Server):
         del self.ncores[address]
         del self.stacks[address]
         del self.processing[address]
+        del self.aliases[self.worker_info[address]['name']]
         del self.worker_info[address]
         if address in self.idle:
             self.idle.remove(address)
@@ -613,10 +615,20 @@ class Scheduler(Server):
         return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
-                    **info):
-        address = coerce_to_address(address)
+                   name=None, coerce_address=True, **info):
+        if coerce_address:
+            address = self.coerce_address(address)
+        name = name or address
+        if name in self.aliases:
+            return 'name taken, %s' % name
+
         self.ncores[address] = ncores
+
+        self.aliases[name] = address
+
+        info['name'] = name
         self.worker_info[address] = info
+
         if address not in self.processing:
             self.has_what[address] = set()
             self.processing[address] = set()
@@ -693,15 +705,11 @@ class Scheduler(Server):
                 self.waiting_data[key] = set()
 
         if restrictions:
-            aliases = self.aliases()
-            restrictions = {k: {ensure_ip(aliases.get(addr, addr))
-                                for addr in v}
+            restrictions = {k: set(map(self.coerce_address, v))
                             for k, v in restrictions.items()}
             self.restrictions.update(restrictions)
 
             if loose_restrictions:
-                loose_restrictions = {ensure_ip(aliases.get(addr, addr))
-                        for addr in loose_restrictions}
                 self.loose_restrictions |= set(loose_restrictions)
 
         new_keyorder = order(tasks)  # TODO: define order wrt old graph
@@ -1085,6 +1093,8 @@ class Scheduler(Server):
         if not self.ncores:
             raise ValueError("No workers yet found.")
         if not broadcast:
+            if workers:
+                workers = [self.coerce_address(w) for w in workers]
             ncores = workers if workers is not None else self.ncores
             keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
                                                              report=False,
@@ -1202,14 +1212,14 @@ class Scheduler(Server):
 
     def get_has_what(self, stream, keys=None):
         if keys is not None:
-            keys = map(coerce_to_address, keys)
+            keys = map(self.coerce_address, keys)
             return {k: list(self.has_what[k]) for k in keys}
         else:
             return valmap(list, self.has_what)
 
     def get_ncores(self, stream, addresses=None):
         if addresses is not None:
-            addresses = map(coerce_to_address, addresses)
+            addresses = map(self.coerce_address, addresses)
             return {k: self.ncores.get(k, None) for k in addresses}
         else:
             return self.ncores
@@ -1223,8 +1233,32 @@ class Scheduler(Server):
                              for address in workers])
         raise Return(dict(zip(workers, results)))
 
-    def aliases(self):
-        return {v.get('name', k): k for k, v in self.worker_info.items()}
+    def coerce_address(self, addr):
+        """ Coerce possible input addresses to canonical form
+
+        Handles lists, strings, bytes, tuples, or aliases
+        """
+        if isinstance(addr, list):
+            addr = tuple(addr)
+        if addr in self.aliases:
+            addr = self.aliases[addr]
+        if isinstance(addr, bytes):
+            addr = addr.decode()
+        if addr in self.aliases:
+            addr = self.aliases[addr]
+        if isinstance(addr, str):
+            if ':' in addr:
+                addr = tuple(addr.rsplit(':', 1))
+            else:
+                addr = ensure_ip(addr)
+        if isinstance(addr, tuple):
+            ip, port = addr
+            if PY3 and isinstance(ip, bytes):
+                ip = ip.decode()
+            ip = ensure_ip(ip)
+            port = int(port)
+            addr = '%s:%d' % (ip, port)
+        return addr
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions,

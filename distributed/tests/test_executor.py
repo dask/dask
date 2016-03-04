@@ -913,6 +913,9 @@ def test_directed_scatter(e, s, a, b):
     assert len(a.data) == 3
     assert not b.data
 
+    yield e._scatter([4, 5], workers=[b.name])
+    assert len(b.data) == 2
+
 
 def test_directed_scatter_sync(loop):
     with cluster() as (s, [a, b]):
@@ -2177,7 +2180,7 @@ def test_diagnostic_ui(loop):
 @gen_test()
 def test_worker_aliases():
     s = Scheduler()
-    s.start()
+    s.start(0)
     a = Worker(s.ip, s.port, name='alice')
     b = Worker(s.ip, s.port, name='bob')
     yield [a._start(), b._start()]

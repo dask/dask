@@ -157,9 +157,10 @@ class Worker(Server):
                         name=self.name)
                 break
             except (OSError, StreamClosedError):
-                logger.debug("Unable to register with center.  Waiting")
+                logger.debug("Unable to register with scheduler.  Waiting")
                 yield gen.sleep(0.5)
-        assert resp == 'OK'
+        if resp != 'OK':
+            raise ValueError(resp)
         logger.info('        Registered to: %20s:%d',
                     self.center.ip, self.center.port)
         self.status = 'running'
