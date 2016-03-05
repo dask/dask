@@ -933,6 +933,7 @@ def test_coerce_address():
     assert s.coerce_address(('127.0.0.1', '8000')) == '127.0.0.1:8000'
     assert s.coerce_address(b'localhost') == '127.0.0.1'
     assert s.coerce_address('localhost') == '127.0.0.1'
+    assert s.coerce_address(u'localhost') == '127.0.0.1'
     assert s.coerce_address('localhost:8000') == '127.0.0.1:8000'
     assert s.coerce_address(a.address) == a.address
     assert s.coerce_address(a.address_tuple) == a.address

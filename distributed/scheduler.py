@@ -16,7 +16,7 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
-from dask.compatibility import PY3
+from dask.compatibility import PY3, unicode
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
@@ -1246,7 +1246,7 @@ class Scheduler(Server):
             addr = addr.decode()
         if addr in self.aliases:
             addr = self.aliases[addr]
-        if isinstance(addr, str):
+        if isinstance(addr, unicode):
             if ':' in addr:
                 addr = tuple(addr.rsplit(':', 1))
             else:
