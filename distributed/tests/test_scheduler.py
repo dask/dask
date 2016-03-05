@@ -132,7 +132,7 @@ def test_heal_culls():
 @gen_cluster()
 def test_ready_add_worker(s, a, b):
     s.add_client(client='client')
-    s.add_worker(address=alice)
+    s.add_worker(address=alice, coerce_address=False)
 
     s.update_graph(tasks={'x-%d' % i: dumps_task((inc, i)) for i in range(20)},
                    keys=['x-%d' % i for i in range(20)],
@@ -143,7 +143,7 @@ def test_ready_add_worker(s, a, b):
 def test_update_state(loop):
     s = Scheduler()
     s.start(0)
-    s.add_worker(address=alice, ncores=1)
+    s.add_worker(address=alice, ncores=1, coerce_address=False)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
                    keys=['y'],
                    dependencies={'y': 'x', 'x': set()},
@@ -181,7 +181,7 @@ def test_update_state(loop):
 def test_update_state_with_processing(loop):
     s = Scheduler()
     s.start(0)
-    s.add_worker(address=alice, ncores=1)
+    s.add_worker(address=alice, ncores=1, coerce_address=False)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')},
                    keys=['z'],
                    dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
@@ -220,7 +220,7 @@ def test_update_state_with_processing(loop):
 def test_update_state_respects_data_in_memory(loop):
     s = Scheduler()
     s.start(0)
-    s.add_worker(address=alice, ncores=1)
+    s.add_worker(address=alice, ncores=1, coerce_address=False)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x')},
                    keys=['y'],
                    dependencies={'y': {'x'}, 'x': set()},
@@ -249,7 +249,7 @@ def test_update_state_respects_data_in_memory(loop):
 def test_update_state_supports_recomputing_released_results(loop):
     s = Scheduler()
     s.start(0)
-    s.add_worker(address=alice, ncores=1)
+    s.add_worker(address=alice, ncores=1, coerce_address=False)
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (inc, 'x')},
                    keys=['z'],
                    dependencies={'y': {'x'}, 'x': set(), 'z': {'y'}},
@@ -615,7 +615,7 @@ def test_add_worker(s, a, b):
                    dependencies={k: set() for k in dsk})
 
     s.add_worker(address=w.address, keys=list(w.data),
-                 ncores=w.ncores, services=s.services)
+                 ncores=w.ncores, services=s.services, coerce_address=False)
 
     for k in w.data:
         assert w.address in s.who_has[k]
@@ -883,7 +883,7 @@ def test_ready_add_worker(s, a, b):
 
     w = Worker(s.ip, s.port, ncores=3, ip='127.0.0.1')
     w.listen(0)
-    s.add_worker(address=w.address, ncores=w.ncores)
+    s.add_worker(address=w.address, ncores=w.ncores, coerce_address=False)
 
     assert w.address in s.ncores
     assert all(len(s.processing[w]) == s.ncores[w]
@@ -898,3 +898,47 @@ def test_ready_add_worker(s, a, b):
 
     result = yield s.broadcast(msg={'op': 'ping'}, workers=[a.address])
     assert result == {a.address: b'pong'}
+
+
+@gen_test()
+def test_worker_name():
+    s = Scheduler()
+    s.start(0)
+    w = Worker(s.ip, s.port, name='alice')
+    yield w._start()
+    assert s.worker_info[w.address]['name'] == 'alice'
+    assert s.aliases['alice'] == w.address
+
+    with pytest.raises(ValueError):
+        w = Worker(s.ip, s.port, name='alice')
+        yield w._start()
+
+    yield s.close()
+    yield w._close()
+
+
+@gen_test()
+def test_coerce_address():
+    s = Scheduler()
+    s.start(0)
+    a = Worker(s.ip, s.port, name='alice')
+    b = Worker(s.ip, s.port, name=123)
+    c = Worker(s.ip, s.port, name='charlie', ip='127.0.0.2')
+    yield [a._start(), b._start(), c._start()]
+
+    assert s.coerce_address(b'127.0.0.1') == '127.0.0.1'
+    assert s.coerce_address(('127.0.0.1', 8000)) == '127.0.0.1:8000'
+    assert s.coerce_address(['127.0.0.1', 8000]) == '127.0.0.1:8000'
+    assert s.coerce_address([b'127.0.0.1', 8000]) == '127.0.0.1:8000'
+    assert s.coerce_address(('127.0.0.1', '8000')) == '127.0.0.1:8000'
+    assert s.coerce_address(b'localhost') == '127.0.0.1'
+    assert s.coerce_address('localhost') == '127.0.0.1'
+    assert s.coerce_address(u'localhost') == '127.0.0.1'
+    assert s.coerce_address('localhost:8000') == '127.0.0.1:8000'
+    assert s.coerce_address(a.address) == a.address
+    assert s.coerce_address(a.address_tuple) == a.address
+    assert s.coerce_address(123) == b.address
+    assert s.coerce_address('charlie') == c.address
+
+    yield s.close()
+    yield [w._close() for w in [a, b, c]]

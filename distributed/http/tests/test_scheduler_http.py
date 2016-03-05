@@ -68,13 +68,13 @@ def test_broadcast(s, a, b):
     aa.listen(0)
     a.services['http'] = aa
     a.service_ports['http'] = aa.port
-    s.worker_services[a.address]['http'] = aa.port
+    s.worker_info[a.address]['services']['http'] = aa.port
 
     bb = HTTPWorker(b)
     bb.listen(0)
     b.services['http'] = bb
     b.service_ports['http'] = bb.port
-    s.worker_services[b.address]['http'] = bb.port
+    s.worker_info[b.address]['services']['http'] = bb.port
 
     client = AsyncHTTPClient()
 

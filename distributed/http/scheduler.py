@@ -41,9 +41,9 @@ class Broadcast(RequestHandler):
     """ Send call to all workers, collate their responses """
     @gen.coroutine
     def get(self, rest):
-        addresses = [addr.split(':') + [d['http']]
-                     for addr, d in self.server.worker_services.items()
-                     if 'http' in d]
+        addresses = [addr.split(':') + [d['services']['http']]
+                     for addr, d in self.server.worker_info.items()
+                     if 'http' in d['services']]
         client = AsyncHTTPClient()
         responses = {'%s:%s' % (ip, tcp_port): client.fetch("http://%s:%s/%s" %
                                                   (ip, http_port, rest))

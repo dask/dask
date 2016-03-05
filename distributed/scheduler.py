@@ -16,12 +16,12 @@ from tornado.queues import Queue
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 
-from dask.compatibility import PY3
+from dask.compatibility import PY3, unicode
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv, coerce_to_address)
+        Server, send_recv)
 from .client import (scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
@@ -85,9 +85,8 @@ class Scheduler(Server):
         Set of workers that are not fully utilized
     * **services:** ``{str: port}``:
         Other services running on this scheduler, like HTTP
-    * **worker_services:** ``{worker: {str: port}}``:
-        Ports of other running services on each worker.
-        E.g. ``{('192.168.1.100', 8000): {'http': 9001, 'nanny': 9002}}``
+    * **worker_info:** ``{worker: {str: data}}``:
+        Information about each worker
     * **who_has:** ``{key: {worker}}``:
         Where each key lives.  The current state of distributed memory.
     * **has_what:** ``{worker: {key}}``:
@@ -158,7 +157,8 @@ class Scheduler(Server):
         self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
-        self.worker_services = defaultdict(dict)
+        self.worker_info = defaultdict(dict)
+        self.aliases = dict()
         self.processing = dict()
         self.restrictions = dict()
         self.loose_restrictions = set()
@@ -309,6 +309,7 @@ class Scheduler(Server):
         yield self.cleanup()
         yield self.finished()
         self.status = 'closed'
+        self.stop()
 
     @gen.coroutine
     def cleanup(self):
@@ -470,7 +471,7 @@ class Scheduler(Server):
         --------
         Scheduler.mark_key_in_memory
         """
-        who_has = {k: [coerce_to_address(vv) for vv in v]
+        who_has = {k: [self.coerce_address(vv) for vv in v]
                    for k, v in who_has.items()}
         logger.debug("Update data %s", who_has)
         for key, workers in who_has.items():
@@ -581,7 +582,7 @@ class Scheduler(Server):
         --------
         Scheduler.heal_state
         """
-        address = coerce_to_address(address)
+        address = self.coerce_address(address)
         logger.debug("Remove worker %s", address)
         if address not in self.processing:
             return
@@ -592,7 +593,8 @@ class Scheduler(Server):
         del self.ncores[address]
         del self.stacks[address]
         del self.processing[address]
-        del self.worker_services[address]
+        del self.aliases[self.worker_info[address]['name']]
+        del self.worker_info[address]
         if address in self.idle:
             self.idle.remove(address)
         if not self.stacks:
@@ -613,10 +615,20 @@ class Scheduler(Server):
         return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
-                   services=None):
-        address = coerce_to_address(address)
+                   name=None, coerce_address=True, **info):
+        if coerce_address:
+            address = self.coerce_address(address)
+        name = name or address
+        if name in self.aliases:
+            return 'name taken, %s' % name
+
         self.ncores[address] = ncores
-        self.worker_services[address] = services
+
+        self.aliases[name] = address
+
+        info['name'] = name
+        self.worker_info[address] = info
+
         if address not in self.processing:
             self.has_what[address] = set()
             self.processing[address] = set()
@@ -693,12 +705,12 @@ class Scheduler(Server):
                 self.waiting_data[key] = set()
 
         if restrictions:
-            restrictions = {k: set(map(ensure_ip, v))
+            restrictions = {k: set(map(self.coerce_address, v))
                             for k, v in restrictions.items()}
             self.restrictions.update(restrictions)
 
-        if loose_restrictions:
-            self.loose_restrictions |= set(loose_restrictions)
+            if loose_restrictions:
+                self.loose_restrictions |= set(loose_restrictions)
 
         new_keyorder = order(tasks)  # TODO: define order wrt old graph
         for key in new_keyorder:
@@ -1081,6 +1093,8 @@ class Scheduler(Server):
         if not self.ncores:
             raise ValueError("No workers yet found.")
         if not broadcast:
+            if workers:
+                workers = [self.coerce_address(w) for w in workers]
             ncores = workers if workers is not None else self.ncores
             keys, who_has, nbytes = yield scatter_to_workers(ncores, data,
                                                              report=False,
@@ -1119,7 +1133,8 @@ class Scheduler(Server):
         for q in self.scheduler_queues + self.report_queues:
             clear_queue(q)
 
-        nannies = {addr: d['nanny'] for addr, d in self.worker_services.items()}
+        nannies = {addr: d['services']['nanny']
+                   for addr, d in self.worker_info.items()}
 
         for addr in nannies:
             self.remove_worker(address=addr, heal=False)
@@ -1161,7 +1176,7 @@ class Scheduler(Server):
                 set(self.has_what) == \
                 set(self.stacks) == \
                 set(self.processing) == \
-                set(self.worker_services) == \
+                set(self.worker_info) == \
                 set(self.worker_queues)):
             raise ValueError("Workers not the same in all collections")
 
@@ -1197,14 +1212,14 @@ class Scheduler(Server):
 
     def get_has_what(self, stream, keys=None):
         if keys is not None:
-            keys = map(coerce_to_address, keys)
+            keys = map(self.coerce_address, keys)
             return {k: list(self.has_what[k]) for k in keys}
         else:
             return valmap(list, self.has_what)
 
     def get_ncores(self, stream, addresses=None):
         if addresses is not None:
-            addresses = map(coerce_to_address, addresses)
+            addresses = map(self.coerce_address, addresses)
             return {k: self.ncores.get(k, None) for k in addresses}
         else:
             return self.ncores
@@ -1217,6 +1232,33 @@ class Scheduler(Server):
         results = yield All([send_recv(arg=address, close=True, **msg)
                              for address in workers])
         raise Return(dict(zip(workers, results)))
+
+    def coerce_address(self, addr):
+        """ Coerce possible input addresses to canonical form
+
+        Handles lists, strings, bytes, tuples, or aliases
+        """
+        if isinstance(addr, list):
+            addr = tuple(addr)
+        if addr in self.aliases:
+            addr = self.aliases[addr]
+        if isinstance(addr, bytes):
+            addr = addr.decode()
+        if addr in self.aliases:
+            addr = self.aliases[addr]
+        if isinstance(addr, unicode):
+            if ':' in addr:
+                addr = tuple(addr.rsplit(':', 1))
+            else:
+                addr = ensure_ip(addr)
+        if isinstance(addr, tuple):
+            ip, port = addr
+            if PY3 and isinstance(ip, bytes):
+                ip = ip.decode()
+            ip = ensure_ip(ip)
+            port = int(port)
+            addr = '%s:%d' % (ip, port)
+        return addr
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions,
@@ -1269,9 +1311,9 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
         workers = stacks
     if key in restrictions:
         r = restrictions[key]
-        workers = {w for w in workers if w.split(':')[0] in r}  # TODO: nonlinear
+        workers = {w for w in workers if w in r or w.split(':')[0] in r}  # TODO: nonlinear
         if not workers:
-            workers = {w for w in stacks if w.split(':')[0] in r}
+            workers = {w for w in stacks if w in r or w.split(':')[0] in r}
             if not workers:
                 if key in loose_restrictions:
                     return decide_worker(dependencies, stacks, who_has,

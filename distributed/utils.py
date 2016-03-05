@@ -15,7 +15,7 @@ from dask import istask
 from toolz import memoize, valmap
 from tornado import gen
 
-from .compatibility import Queue
+from .compatibility import Queue, PY3
 
 logger = logging.getLogger(__name__)
 
@@ -238,17 +238,29 @@ def log_errors():
 def ensure_ip(hostname):
     """ Ensure that address is an IP address
 
+    Examples
+    --------
     >>> ensure_ip('localhost')
-    b'127.0.0.1'
+    '127.0.0.1'
     >>> ensure_ip('123.123.123.123')  # pass through IP addresses
-    b'123.123.123.123'
+    '123.123.123.123'
+    >>> ensure_ip('localhost:5000')
+    '127.0.0.1:5000'
     """
-    if isinstance(hostname, bytes):
+    if ':' in hostname:
+        host, port = hostname.split(':')
+        return ':'.join([ensure_ip(host), port])
+    if PY3 and isinstance(hostname, bytes):
         hostname = hostname.decode()
     if re.match('\d+\.\d+\.\d+\.\d+', hostname):  # is IP
         return hostname
     else:
-        return socket.gethostbyname(hostname)
+        try:
+            return socket.gethostbyname(hostname)
+        except Exception as e:
+            logger.warn("Could not resolve hostname: %s", hostname,
+                        exc_info=True)
+            raise
 
 
 tblib.pickling_support.install()
