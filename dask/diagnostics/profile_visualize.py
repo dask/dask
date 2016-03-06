@@ -233,8 +233,18 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     r = p.rect(source=source, x='x', y='y', height=1, width='width',
         color='color', line_color='gray')
 
-    if results:
+    def update(results, dsk):
         data = r.data_source.data
+
+        if not results:
+            data['width'] = []
+            data['x'] = []
+            data['y'] = []
+            data['function'] = []
+            data['color'] = []
+            data['key'] = []
+            return
+
         keys, tasks, starts, ends, ids = zip(*results)
 
         id_group = groupby(itemgetter(4), results)
@@ -272,6 +282,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     """
     hover.point_policy = 'follow_mouse'
 
+    update(results, dsk)
     return p
 
 
