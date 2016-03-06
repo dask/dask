@@ -5,7 +5,7 @@ from operator import itemgetter, add
 
 from toolz import unique, groupby, accumulate, pluck
 import bokeh.plotting as bp
-from bokeh.io import _state
+from bokeh.io import _state, push_notebook
 from bokeh.palettes import brewer
 from bokeh.models import HoverTool, LinearAxis, Range1d
 
@@ -233,7 +233,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     r = p.rect(source=source, x='x', y='y', height=1, width='width',
         color='color', line_color='gray')
 
-    def update(results, dsk):
+    def update(results, dsk, push=True):
         data = r.data_source.data
 
         if not results:
@@ -263,6 +263,10 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
         data['color'] = get_colors(palette, funcs)
         data['key'] = [str(i) for i in keys]
 
+        if push and _state._notebook:
+            # TODO: verify last plot is p-ish
+            push_notebook()
+
     p.grid.grid_line_color = None
     p.axis.axis_line_color = None
     p.axis.major_tick_line_color = None
@@ -282,7 +286,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     """
     hover.point_policy = 'follow_mouse'
 
-    update(results, dsk)
+    update(results, dsk, push=False)
     return p
 
 
