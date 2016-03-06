@@ -223,6 +223,12 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     bp.Figure.properties())
 
+    p = bp.figure(**defaults)
+    p.x_range.start = 0
+    p.y_range.start = 0
+    # TODO: was there any benefit to the discrete y_range:
+    # y_range=[str(i) for i in range(len(id_lk))], x_range=[0, right - left]
+
     if results:
         keys, tasks, starts, ends, ids = zip(*results)
 
@@ -233,10 +239,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
                     key=itemgetter(1), reverse=True)))
 
         left = min(starts)
-        right = max(ends)
-
-        p = bp.figure(y_range=[str(i) for i in range(len(id_lk))],
-                    x_range=[0, right - left], **defaults)
+        # right = max(ends)
 
         data = {}
         data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
@@ -250,9 +253,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
 
         p.rect(source=source, x='x', y='y', height=1, width='width',
             color='color', line_color='gray')
-    else:
-        p = bp.figure(y_range=[str(i) for i in range(8)], x_range=[0, 10],
-                      **defaults)
+
     p.grid.grid_line_color = None
     p.axis.axis_line_color = None
     p.axis.major_tick_line_color = None
