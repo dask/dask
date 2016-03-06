@@ -57,10 +57,16 @@ class Profiler(Callback):
         self._results = {}
         self.results = []
         self._dsk = {}
+        self._update = None
+        self.watching = False
 
     def __enter__(self):
         self.clear()
         return super(Profiler, self).__enter__()
+
+    def __exit__(self, exc_type, exc_val, tb):
+        self.watching = False
+        self._update = None
 
     def _start(self, dsk):
         self._dsk.update(dsk)
@@ -78,13 +84,21 @@ class Profiler(Callback):
         data += (end, id)
         task_data = TaskData(*data)
         self.results.append(task_data)
+        self.update_plot()
 
     def _finish(self, dsk, state, failed):
         self._results.clear()
 
     def _plot(self, **kwargs):
         from .profile_visualize import plot_tasks
-        return plot_tasks(self.results, self._dsk, **kwargs)
+        p, update = plot_tasks(**kwargs)
+        self._update = update
+        self._update(self.results, self._dsk, push=False)
+        return p
+
+    def update_plot(self):
+        if self._update:
+            self._update(self.results, self._dsk)
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
@@ -94,6 +108,7 @@ class Profiler(Callback):
         dask.diagnostics.profile_visualize.visualize
         """
         from .profile_visualize import visualize
+        self.watching = kwargs.pop('watch', False)
         return visualize(self, **kwargs)
 
     def clear(self):
@@ -101,6 +116,8 @@ class Profiler(Callback):
         self._results.clear()
         del self.results[:]
         self._dsk = {}
+        self.watching = False
+        self._update = None
 
 
 ResourceData = namedtuple('ResourceData', ('time', 'mem', 'cpu'))

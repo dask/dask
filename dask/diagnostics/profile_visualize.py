@@ -195,15 +195,11 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     return p
 
 
-def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
+def plot_tasks(palette='YlGnBu', label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
     ----------
-    results : sequence
-        Output of Profiler.results
-    dsk : dict
-        The dask graph being profiled.
     palette : string, optional
         Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
     label_size: int (optional)
@@ -234,6 +230,20 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
         color='color', line_color='gray')
 
     def update(results, dsk, push=True):
+        '''
+        Update the task plot data source
+
+        Parameters
+        ----------
+        results : sequence
+            Output of Profiler.results
+        dsk : dict
+            The dask graph being profiled.
+        push : bool, optional
+            If True (the default) call bokeh.io.push_notebook(); useful to set
+            this False for the first update before output_notebook() has
+            happened.
+        '''
         data = r.data_source.data
 
         if not results:
@@ -286,8 +296,7 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     """
     hover.point_policy = 'follow_mouse'
 
-    update(results, dsk, push=False)
-    return p
+    return p, update
 
 
 def plot_resources(results, palette='YlGnBu', **kwargs):
