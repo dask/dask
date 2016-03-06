@@ -71,11 +71,15 @@ class Profiler(Callback):
 
     def _posttask(self, key, value, dsk, state, id):
         end = default_timer()
-        self._results[key] += (end, id)
+        try:
+            data = self._results.pop(key)
+        except KeyError:
+            return
+        data += (end, id)
+        task_data = TaskData(*data)
+        self.results.append(task_data)
 
     def _finish(self, dsk, state, failed):
-        results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
-        self.results += list(starmap(TaskData, results.values()))
         self._results.clear()
 
     def _plot(self, **kwargs):
