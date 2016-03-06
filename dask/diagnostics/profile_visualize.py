@@ -230,6 +230,10 @@ def plot_tasks(palette='YlGnBu', label_size=60, **kwargs):
     r = p.rect(source=source, x='x', y='y', height=1, width='width',
         color='color', line_color='gray')
 
+    # TODO: reify this closure, maybe even rework to get direct pre/post task
+    # callbacks so we can cause even less churn to the plot data, plus show
+    # ongoing tasks somehow
+
     def update(results, dsk, push=True):
         '''
         Update the task plot data source

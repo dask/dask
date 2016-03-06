@@ -84,6 +84,8 @@ class Profiler(Callback):
         data += (end, id)
         task_data = TaskData(*data)
         self.results.append(task_data)
+        # TODO: we really should coalesce updates to reduce notebook load when
+        # a lot of short tasks finish quickly
         self.update_plot()
 
     def _finish(self, dsk, state, failed):
