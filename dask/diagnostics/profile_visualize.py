@@ -230,9 +230,11 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
     # y_range=[str(i) for i in range(len(id_lk))], x_range=[0, right - left]
 
     source = bp.ColumnDataSource(data={})
+    r = p.rect(source=source, x='x', y='y', height=1, width='width',
+        color='color', line_color='gray')
 
     if results:
-        data = source.data
+        data = r.data_source.data
         keys, tasks, starts, ends, ids = zip(*results)
 
         id_group = groupby(itemgetter(4), results)
@@ -250,9 +252,6 @@ def plot_tasks(results, dsk, palette='YlGnBu', label_size=60, **kwargs):
         data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
         data['color'] = get_colors(palette, funcs)
         data['key'] = [str(i) for i in keys]
-
-        p.rect(source=source, x='x', y='y', height=1, width='width',
-            color='color', line_color='gray')
 
     p.grid.grid_line_color = None
     p.axis.axis_line_color = None
