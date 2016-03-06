@@ -276,6 +276,8 @@ def test_from_bcolz():
     assert str(d.dtypes['a']) == 'category'
     assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
     assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
+    L = list(d.index.compute(get=get_sync))
+    assert L == [0, 1, 2]
 
     d = dd.from_bcolz(t, chunksize=2, index='x')
     L = list(d.index.compute(get=get_sync))
