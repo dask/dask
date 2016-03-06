@@ -4,6 +4,7 @@ from itertools import cycle
 from operator import itemgetter, add
 
 from toolz import unique, groupby, accumulate, pluck
+from toolz.compatibility import iteritems, zip
 import bokeh.plotting as bp
 from bokeh.io import _state, push_notebook
 from bokeh.palettes import brewer
@@ -258,10 +259,11 @@ def plot_tasks(palette='YlGnBu', label_size=60, **kwargs):
         keys, tasks, starts, ends, ids = zip(*results)
 
         id_group = groupby(itemgetter(4), results)
-        timings = dict((k, [i.end_time - i.start_time for i in v]) for (k, v) in
-                    id_group.items())
-        id_lk = dict((t[0], n) for (n, t) in enumerate(sorted(timings.items(),
-                    key=itemgetter(1), reverse=True)))
+        timings = ((k, [i.end_time - i.start_time for i in v])
+                   for (k, v) in iteritems(id_group))
+        timings = sorted(timings, key=itemgetter(1), reverse=True)
+
+        id_lk = dict((t[0], n) for (n, t) in enumerate(timings))
 
         left = min(starts)
         # right = max(ends)
