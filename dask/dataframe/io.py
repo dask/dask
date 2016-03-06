@@ -439,9 +439,8 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
                 categories[name] = da.unique(a)
 
     columns = tuple(x.dtype.names)
-    divisions = (0,) + tuple(range(-1, len(x), chunksize))[1:]
-    if divisions[-1] != len(x) - 1:
-        divisions = divisions + (len(x) - 1,)
+    divisions = tuple(range(0, len(x), chunksize))
+    divisions = divisions + (len(x) - 1,)
     if x.rootdir:
         token = tokenize((x.rootdir, os.path.getmtime(x.rootdir)), chunksize,
                          categorize, index, kwargs)
@@ -483,17 +482,17 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
     >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
     >>> dataframe_from_ctable(x, slice(1, 3))
        a   b
-    0  2  20
-    1  3  30
+    1  2  20
+    2  3  30
 
     >>> dataframe_from_ctable(x, slice(1, 3), columns=['b'])
         b
-    0  20
-    1  30
+    1  20
+    2  30
 
     >>> dataframe_from_ctable(x, slice(1, 3), columns='b')
-    0    20
-    1    30
+    1    20
+    2    30
     Name: b, dtype: int...
 
     """
@@ -504,6 +503,13 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
         columns = list(columns)
 
     x = x[columns]
+    if type(slc) is slice:
+        start = slc.start
+        stop = slc.stop if slc.stop < len(x) else len(x)
+    else:
+        start = slc[0].start
+        stop = slc[0].stop if slc[0].stop < len(x) else len(x)
+    idx = pd.Index(range(start, stop))
 
     if isinstance(x, bcolz.ctable):
         chunks = [x[name][slc] for name in columns]
@@ -513,7 +519,8 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
                                                 categories[name], True)
                        if name in categories else chunk
                        for name, chunk in zip(columns, chunks)]
-        return pd.DataFrame(dict(zip(columns, chunks)), columns=columns)
+        return pd.DataFrame(dict(zip(columns, chunks)), columns=columns,
+                            index=idx)
 
     elif isinstance(x, bcolz.carray):
         chunk = x[slc]
@@ -521,7 +528,8 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
             chunk = pd.Categorical.from_codes(
                         np.searchsorted(categories[columns], chunk),
                         categories[columns], True)
-        return pd.Series(chunk, name=columns)
+        return pd.Series(chunk, name=columns, index=idx)
+
 
 
 def locked_df_from_ctable(*args, **kwargs):
