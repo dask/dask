@@ -53,16 +53,20 @@ class Profiler(Callback):
     >>> prof.clear()
 
     """
-    def __init__(self):
+    def __init__(self, watch=False):
         self._results = {}
         self.results = []
         self._dsk = {}
         self._update = None
+        self.watch = watch
         self.watching = False
 
     def __enter__(self):
         self.clear()
-        return super(Profiler, self).__enter__()
+        r = super(Profiler, self).__enter__()
+        if self.watch:
+            self.visualize(watch=True)
+        return r
 
     def __exit__(self, exc_type, exc_val, tb):
         self.watching = False
