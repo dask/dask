@@ -373,7 +373,7 @@ class Executor(object):
                 try:
                     msg = yield next_message()
                 except StreamClosedError:
-                    logger.info("Stream closed to scheduler")
+                    logger.info("Stream closed to scheduler", exc_info=True)
                     break
 
                 logger.debug("Executor receives message %s", msg)
@@ -901,8 +901,14 @@ class Executor(object):
 
     @gen.coroutine
     def _get(self, dsk, keys, restrictions=None, raise_on_error=True):
+        keyset = set(flatten([keys]))
         flatkeys = list(map(tokey, flatten([keys])))
         futures = {key: Future(key, self) for key in flatkeys}
+
+        values = {k for k, v in dsk.items() if isinstance(v, Future)
+                                            and k not in keyset}
+        if values:
+            dsk = dask.optimize.inline(dsk, keys=values)
 
         d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
         dsk2 = str_graph({k: v[0] for k, v in d.items()})

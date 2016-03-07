@@ -370,6 +370,12 @@ def test_read_csv(e, s, a, b):
     result = yield e.compute(df2.id.sum())._result()
     assert result == 1 + 2 + 3 + 4 + 5 + 6
 
+    df2 = yield _read_csv('distributed-test/csv/2015/',
+                          collection=True, lazy=False, blocksize=20)
+    f = e.compute(df2.amount.sum())
+    result = yield f._result()
+    assert result == (100 + 200 + 300 + 400 + 500 + 600)
+
 
 @gen_cluster(timeout=60, executor=True)
 def test_read_csv_gzip(e, s, a, b):
@@ -388,8 +394,11 @@ def test_read_csv_sync(loop):
     dd = pytest.importorskip('dask.dataframe')
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
-            df = read_csv('distributed-test/csv/2015/')
+            df = read_csv('distributed-test/csv/2015/', lazy=True)
             assert isinstance(df, dd.DataFrame)
             assert list(df.columns) == ['name', 'amount', 'id']
             f = e.compute(df.amount.sum())
             assert f.result() == (100 + 200 + 300 + 400 + 500 + 600)
+
+            df = read_csv('distributed-test/csv/2015/', lazy=False)
+            assert df.amount.sum().compute() == (100 + 200 + 300 + 400 + 500 + 600)

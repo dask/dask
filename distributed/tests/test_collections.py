@@ -166,7 +166,7 @@ def test_futures_to_dask_arrays(loop):
             futures = e.map(np.ones, [(5, i) for i in range(1, 6)])
             x = future_to_dask_array(futures[0])
             assert x.shape == (5, 1)
-            assert (x.compute() == 1).all()
+            assert (x.compute(get=e.get) == 1).all()
 
             xs = futures_to_dask_arrays(futures)
             assert [x.shape for x in xs] == [(5, i) for i in range(1, 6)]
