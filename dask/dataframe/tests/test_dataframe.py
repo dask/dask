@@ -1387,6 +1387,8 @@ def test_apply():
     # specify columns
     assert eq(ddf.apply(lambda xy: xy[0] + xy[1], axis=1, columns=None),
               df.apply(lambda xy: xy[0] + xy[1], axis=1))
+    assert eq(ddf.apply(lambda xy: xy[0] + xy[1], axis='columns', columns=None),
+              df.apply(lambda xy: xy[0] + xy[1], axis='columns'))
 
     # inferrence
     assert eq(ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
@@ -1394,7 +1396,7 @@ def test_apply():
     assert eq(ddf.apply(lambda xy: xy, axis=1),
               df.apply(lambda xy: xy, axis=1))
 
-    # dataframe
+    # result will be dataframe
     func = lambda x: pd.Series([x, x])
     assert eq(ddf.x.apply(func, name=[0, 1]), df.x.apply(func))
     # inference
@@ -1403,6 +1405,9 @@ def test_apply():
     # axis=0
     with tm.assertRaises(NotImplementedError):
         ddf.apply(lambda xy: xy, axis=0)
+
+    with tm.assertRaises(NotImplementedError):
+        ddf.apply(lambda xy: xy, axis='index')
 
 
 def test_apply_infer_columns():
