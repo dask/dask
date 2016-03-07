@@ -215,6 +215,10 @@ def test_read_csv_sync(loop):
                 assert isinstance(df, dd.DataFrame)
                 assert list(df.head().iloc[0]) == ['Alice', 100, 1]
 
+                for lazy in [True, False]:
+                    df = read_csv('/tmp/test/*.csv', collection=True, lazy=lazy)
+                    assert df.amount.sum().compute(get=e.get) == 1000
+
 
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60, executor=True)
 def test_read_csv(e, s, a, b):

@@ -135,23 +135,21 @@ def _read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
                 for b in blocks[1:]]
             for blocks in blockss]
     dfs2 = sum(dfs1, [])
-    if lazy:
-        from dask.dataframe import from_imperative
-        if collection:
-            ensure_default_get(executor)
-            raise gen.Return(from_imperative(dfs2, head))
-        else:
-            raise gen.Return(dfs2)
 
+    ensure_default_get(executor)
+    from dask.dataframe import from_imperative
+    if collection:
+        result = from_imperative(dfs2, head)
     else:
-        futures = executor.compute(dfs2)
-        from distributed.collections import _futures_to_dask_dataframe
+        result = dfs2
+
+    if not lazy:
         if collection:
-            ensure_default_get(executor)
-            df = yield _futures_to_dask_dataframe(futures)
-            raise gen.Return(df)
+            result = executor.persist(result)
         else:
-            raise gen.Return(futures)
+            result = executor.compute(result)
+
+    raise gen.Return(result)
 
 
 def read_csv(fn, executor=None, hdfs=None, lazy=True, collection=True, **kwargs):
