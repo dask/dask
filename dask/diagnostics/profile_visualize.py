@@ -196,45 +196,62 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     return p
 
 
-def plot_tasks(palette='YlGnBu', label_size=60, **kwargs):
-    """Visualize the results of profiling in a bokeh plot.
+class TasksPlot(object):
+    def __init__(self, palette='YlGnBu', label_size=60, **kwargs):
+        '''
+        Create a new TasksPlot
 
-    Parameters
-    ----------
-    palette : string, optional
-        Name of the bokeh palette to use, must be key in bokeh.palettes.brewer.
-    label_size: int (optional)
-        Maximum size of output labels in plot, defaults to 60
-    **kwargs
-        Other keyword arguments, passed to bokeh.figure. These will override
-        all defaults set by visualize.
+        Parameters
+        ----------
+        palette : string, optional
+            Name of the bokeh palette to use, must be key in
+            bokeh.palettes.brewer.
+        label_size: int (optional)
+            Maximum size of output labels in plot, defaults to 60
+        **kwargs
+            Other keyword arguments, passed to bokeh.figure. These will
+            override all defaults set by visualize.
+        '''
 
-    Returns
-    -------
-    The completed bokeh plot object.
-    """
+        defaults = dict(title="Profile Results",
+                        tools="hover,save,reset,resize,xwheel_zoom,xpan",
+                        plot_width=800, plot_height=300)
+        defaults.update((k, v) for (k, v) in kwargs.items() if k in
+                        bp.Figure.properties())
 
-    defaults = dict(title="Profile Results",
-                    tools="hover,save,reset,resize,xwheel_zoom,xpan",
-                    plot_width=800, plot_height=300)
-    defaults.update((k, v) for (k, v) in kwargs.items() if k in
-                    bp.Figure.properties())
+        self.palette = palette
+        self.label_size = label_size
+        self.plot = bp.figure(**defaults)
+        self.plot.x_range.start = 0
+        self.plot.y_range.start = 0
+        self.plot.grid.grid_line_color = None
+        self.plot.axis.axis_line_color = None
+        self.plot.axis.major_tick_line_color = None
+        self.plot.yaxis.axis_label = "Worker ID"
+        self.plot.xaxis.axis_label = "Time (s)"
 
-    p = bp.figure(**defaults)
-    p.x_range.start = 0
-    p.y_range.start = 0
-    # TODO: was there any benefit to the discrete y_range:
-    # y_range=[str(i) for i in range(len(id_lk))], x_range=[0, right - left]
+        hover = self.plot.select(HoverTool)
+        hover.tooltips = """
+        <div>
+            <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
+            <span style="font-size: 10px; font-family: Monaco, monospace;">@key</span>
+        </div>
+        <div>
+            <span style="font-size: 14px; font-weight: bold;">Task:</span>&nbsp;
+            <span style="font-size: 10px; font-family: Monaco, monospace;">@function</span>
+        </div>
+        """
+        hover.point_policy = 'follow_mouse'
 
-    source = bp.ColumnDataSource(data={})
-    r = p.rect(source=source, x='x', y='y', height=1, width='width',
-        color='color', line_color='gray')
+        # TODO: was there any benefit to the discrete y_range:
+        # y_range=[str(i) for i in range(len(id_lk))], x_range=[0, right - left]
 
-    # TODO: reify this closure, maybe even rework to get direct pre/post task
-    # callbacks so we can cause even less churn to the plot data, plus show
-    # ongoing tasks somehow
+        self.rect = self.plot.rect(
+            source=bp.ColumnDataSource(data={}),
+            x='x', y='y', height=1, width='width',
+            color='color', line_color='gray')
 
-    def update(results, dsk, push=True):
+    def update(self, results, dsk, push=True):
         '''
         Update the task plot data source
 
@@ -249,7 +266,7 @@ def plot_tasks(palette='YlGnBu', label_size=60, **kwargs):
             this False for the first update before output_notebook() has
             happened.
         '''
-        data = r.data_source.data
+        data = self.rect.data_source.data
 
         if not results:
             data['width'] = []
@@ -275,34 +292,13 @@ def plot_tasks(palette='YlGnBu', label_size=60, **kwargs):
         data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
         data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
         data['y'] = [id_lk[i] + 1 for i in ids]
-        data['function'] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
-        data['color'] = get_colors(palette, funcs)
+        data['function'] = funcs = [pprint_task(i, dsk, self.label_size) for i in tasks]
+        data['color'] = get_colors(self.palette, funcs)
         data['key'] = [str(i) for i in keys]
 
         if push and _state._notebook:
             # TODO: verify last plot is p-ish
             push_notebook()
-
-    p.grid.grid_line_color = None
-    p.axis.axis_line_color = None
-    p.axis.major_tick_line_color = None
-    p.yaxis.axis_label = "Worker ID"
-    p.xaxis.axis_label = "Time (s)"
-
-    hover = p.select(HoverTool)
-    hover.tooltips = """
-    <div>
-        <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
-        <span style="font-size: 10px; font-family: Monaco, monospace;">@key</span>
-    </div>
-    <div>
-        <span style="font-size: 14px; font-weight: bold;">Task:</span>&nbsp;
-        <span style="font-size: 10px; font-family: Monaco, monospace;">@function</span>
-    </div>
-    """
-    hover.point_policy = 'follow_mouse'
-
-    return p, update
 
 
 def plot_resources(results, palette='YlGnBu', **kwargs):
