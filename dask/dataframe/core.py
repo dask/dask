@@ -1165,7 +1165,35 @@ class Series(_Frame):
         bind_method(cls, name, meth)
 
     def apply(self, func, convert_dtype=True, name=no_default, args=(), **kwds):
-        """ Parallel version of pandas.Series.apply """
+        """ Parallel version of pandas.Series.apply
+
+        This mimics the pandas version except for the following:
+
+        1.  The user should provide output name.
+
+        Parameters
+        ----------
+
+        func: function
+            Function to apply
+        convert_dtype: boolean, default True
+            Try to find better dtype for elementwise function results.
+            If False, leave as dtype=object
+        name: list, scalar or None, optional
+            If list is given, the result is a DataFrame which columns is
+            specified list. Otherwise, the result is a Series which name is
+            given scalar or None (no name). If name keyword is not given, dask
+            tries to infer the result type using its beggining of data. This
+            inference may take some time and lead to unexpected result.
+        args: tuple
+            Positional arguments to pass to function in addition to the array/series
+
+        Additional keyword arguments will be passed as keywords to the function
+
+        Returns
+        -------
+        applied : Series or DataFrame depending on name keyword
+        """
 
         if name is no_default:
             msg = ("name is not specified, inferred from partial data. "
@@ -1573,9 +1601,35 @@ class DataFrame(_Frame):
 
         This mimics the pandas version except for the following:
 
-        1.  The user must specify axis=0 explicitly
-        2.  The user must provide output columns or column
+        1.  The user must specify axis=1 explicitly.
+        2.  The user should provide output columns.
+
+        Parameters
+        ----------
+
+        func: function
+            Function to apply to each column
+        axis: {0 or 'index', 1 or 'columns'}, default 0
+            - 0 or 'index': apply function to each column (NOT SUPPORTED)
+            - 1 or 'columns': apply function to each row
+        columns: list, scalar or None
+            If list is given, the result is a DataFrame which columns is
+            specified list. Otherwise, the result is a Series which name is
+            given scalar or None (no name). If name keyword is not given, dask
+            tries to infer the result type using its beggining of data. This
+            inference may take some time and lead to unexpected result
+        args : tuple
+            Positional arguments to pass to function in addition to the array/series
+
+        Additional keyword arguments will be passed as keywords to the function
+
+        Returns
+        -------
+        applied : Series or DataFrame depending on name keyword
         """
+
+        axis = self._validate_axis(axis)
+
         if axis == 0:
             raise NotImplementedError(
                     "dd.DataFrame.apply only supports axis=1\n"
