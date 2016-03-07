@@ -4,7 +4,7 @@ import cloudpickle
 from collections import defaultdict, deque
 from copy import deepcopy
 from operator import add
-from time import time
+from time import time, sleep
 
 import dask
 from dask.core import get_deps
@@ -944,3 +944,28 @@ def test_coerce_address():
 
     yield s.close()
     yield [w._close() for w in [a, b, c]]
+
+
+def test_file_descriptors_dont_leak(loop):
+    psutil = pytest.importorskip('psutil')
+    proc = psutil.Process()
+    before = proc.num_fds()
+    s = Scheduler()
+    s.listen()
+    s.start(0)
+
+    w = Worker(s.ip, s.port)
+    @gen.coroutine
+    def f():
+        yield w._start(0)
+        yield w._close()
+    loop.run_sync(f)
+
+    during = proc.num_fds()
+    s.stop()
+    s.close()
+
+    start = time()
+    while proc.num_fds() > before:
+        loop.run_sync(lambda: gen.sleep(0.01))
+        assert time() < start + 5

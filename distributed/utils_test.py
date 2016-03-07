@@ -31,7 +31,7 @@ def loop():
     sync(loop, loop.stop)
     for i in range(5):
         with ignoring(Exception):
-            loop.close()
+            loop.close(all_fds=True)
             break
 
 
@@ -81,7 +81,10 @@ def run_center(q):
                     exc_info=True)
 
     q.put(center.port)
-    loop.start()
+    try:
+        loop.start()
+    finally:
+        loop.close(all_fds=True)
 
 
 def run_scheduler(q, center_port=None, **kwargs):
@@ -102,7 +105,10 @@ def run_scheduler(q, center_port=None, **kwargs):
     done = scheduler.start(0)
 
     q.put(scheduler.port)
-    loop.start()
+    try:
+        loop.start()
+    finally:
+        loop.close(all_fds=True)
 
 
 def run_worker(q, center_port, **kwargs):
@@ -117,7 +123,10 @@ def run_worker(q, center_port, **kwargs):
         worker = Worker('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
         loop.run_sync(lambda: worker._start(0))
         q.put(worker.port)
-        loop.start()
+        try:
+            loop.start()
+        finally:
+            loop.close(all_fds=True)
 
 
 def run_nanny(q, center_port, **kwargs):
@@ -132,7 +141,10 @@ def run_nanny(q, center_port, **kwargs):
         worker = Nanny('127.0.0.1', center_port, ip='127.0.0.1', **kwargs)
         loop.run_sync(lambda: worker._start(0))
         q.put(worker.port)
-        loop.start()
+        try:
+            loop.start()
+        finally:
+            loop.close(all_fds=True)
 
 
 @contextmanager
@@ -175,15 +187,20 @@ def cluster(nworkers=2, nanny=False):
         yield {'proc': scheduler, 'port': sport}, workers
     finally:
         logger.debug("Closing out test cluster")
-        for port in [sport] + [w['port'] for w in workers]:
+        with ignoring(socket.error, TimeoutError, StreamClosedError):
+            loop.run_sync(lambda: disconnect('127.0.0.1', sport), timeout=0.5)
+        scheduler.terminate()
+
+        for port in [w['port'] for w in workers]:
             with ignoring(socket.error, TimeoutError, StreamClosedError):
                 loop.run_sync(lambda: disconnect('127.0.0.1', port),
                               timeout=0.5)
-        for proc in [scheduler] + [w['proc'] for w in workers]:
+        for proc in [w['proc'] for w in workers]:
             with ignoring(Exception):
                 proc.terminate()
         for fn in glob('_test_worker-*'):
             shutil.rmtree(fn)
+        loop.close(all_fds=True)
 
 
 @contextmanager
@@ -240,9 +257,11 @@ def cluster_center(nworkers=2, nanny=False):
 @gen.coroutine
 def disconnect(ip, port):
     stream = yield connect(ip, port)
-    yield write(stream, {'op': 'terminate', 'close': True})
-    response = yield read(stream)
-    stream.close()
+    try:
+        yield write(stream, {'op': 'terminate', 'close': True})
+        response = yield read(stream)
+    finally:
+        stream.close()
 
 
 import pytest
@@ -315,12 +334,12 @@ def _test_scheduler(f, loop=None, b_ip='127.0.0.1'):
             yield f(s, a, b)
         finally:
             logger.debug("Closing out test cluster")
+            yield s.close()
             for w in [a, b]:
                 with ignoring(TimeoutError, StreamClosedError, OSError):
                     yield w._close()
                 if os.path.exists(w.local_dir):
                     shutil.rmtree(w.local_dir)
-            yield s.close()
 
     loop = loop or IOLoop.current()
     loop.run_sync(g)
@@ -345,7 +364,7 @@ def gen_test(timeout=10):
                 loop.run_sync(cor, timeout=timeout)
             finally:
                 loop.stop()
-                loop.close()
+                loop.close(all_fds=True)
         return test_func
     return _
 
@@ -417,7 +436,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)], timeout=10,
                     loop.run_sync(e._shutdown)
                 loop.run_sync(lambda: end_cluster(s, workers))
                 loop.stop()
-                loop.close()
+                loop.close(all_fds=True)
 
         return test_func
     return _

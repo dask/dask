@@ -2273,6 +2273,9 @@ def test_persist_get(e, s, a, b):
     result = yield e.compute(xxyy3)._result()
     assert result == ((1+1) + (2+2)) + 10
 
+    result = yield e.compute(xxyy3)._result()
+    assert result == ((1+1) + (2+2)) + 10
+
 
 def test_executor_num_fds(loop):
     psutil = pytest.importorskip('psutil')
@@ -2284,6 +2287,7 @@ def test_executor_num_fds(loop):
         after = proc.num_fds()
 
         assert before >= after
+
 
 @gen_cluster()
 def test_startup_shutdown_startup(s, a, b):

@@ -44,7 +44,7 @@ def split_path(path):
     Examples
     --------
     >>> split_path("s3://mybucket/path/to/file")
-    ("mybucket", "path/to/file")
+    ['mybucket', 'path/to/file']
     """
     if path.startswith('s3://'):
         path = path[5:]

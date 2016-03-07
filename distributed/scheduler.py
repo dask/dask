@@ -225,6 +225,9 @@ class Scheduler(Server):
             self._rpcs[key] = rpc(arg=arg, ip=ip, port=port, addr=addr)
         return self._rpcs[key]
 
+    def __del__(self):
+        self.close_streams()
+
     @property
     def address(self):
         return '%s:%d' % (self.ip, self.port)
@@ -298,6 +301,12 @@ class Scheduler(Server):
         while any(not c.done() for c in self.coroutines):
             yield All(self.coroutines)
 
+    def close_streams(self):
+        for r in self._rpcs.values():
+            r.close_streams()
+        for stream in self.streams.values():
+            stream.close()
+
     @gen.coroutine
     def close(self, stream=None):
         """ Send cleanup signal to all coroutines then wait until finished
@@ -308,6 +317,7 @@ class Scheduler(Server):
         """
         yield self.cleanup()
         yield self.finished()
+        self.close_streams()
         self.status = 'closed'
         self.stop()
 
