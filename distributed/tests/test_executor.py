@@ -2269,3 +2269,15 @@ def test_persist_get(e, s, a, b):
 
         result = yield e.compute(xxyy3)._result()
         assert result == ((1+1) + (2+2)) + 10
+
+
+def test_executor_num_fds(loop):
+    psutil = pytest.importorskip('psutil')
+    with cluster() as (s, [a, b]):
+        proc = psutil.Process()
+        before = proc.num_fds()
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            during = proc.num_fds()
+        after = proc.num_fds()
+
+        assert before >= after
