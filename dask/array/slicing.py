@@ -182,6 +182,9 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     """
     shape = tuple(map(sum, blockdims))
     assert all(isinstance(i, (slice, list, int, long)) for i in index)
+    assert len(blockdims) == len(index)
+    for bd, i in zip(blockdims, index):
+        check_index(i, sum(bd))
 
     # Change indices like -1 to 9
     index2 = posify_index(shape, index)
@@ -617,3 +620,49 @@ def replace_ellipsis(n, index):
     return (index[:loc]
           + (slice(None, None, None),) * (n - len(index) + 1)
           + index[loc+1:])
+
+
+def check_index(ind, dimension):
+    """ Check validity of index for a given dimension
+
+    Examples
+    --------
+    >>> check_index(3, 5)
+    >>> check_index(5, 5)
+    Traceback (most recent call last):
+    ...
+    IndexError: Index is not smaller than dimension 5 >= 5
+
+    >>> check_index(6, 5)
+    Traceback (most recent call last):
+    ...
+    IndexError: Index is not smaller than dimension 6 >= 5
+
+    >>> check_index(-1, 5)
+    >>> check_index(-6, 5)
+    Traceback (most recent call last):
+    ...
+    IndexError: Negative index is not greater than negative dimension -6 <= -5
+
+    >>> check_index([1, 2], 5)
+    >>> check_index([6, 3], 5)
+    Traceback (most recent call last):
+    ...
+    IndexError: Index is not smaller than dimension 6 >= 5
+
+    >>> check_index(slice(0, 3), 5)
+    """
+    if isinstance(ind, list):
+        for i in ind:
+            check_index(i, dimension)
+    elif isinstance(ind, slice):
+        return
+
+    elif ind >= dimension:
+        raise IndexError("Index is not smaller than dimension %d >= %d"
+                % (ind, dimension))
+
+    elif ind <= -dimension:
+        raise IndexError(
+                "Negative index is not greater than negative dimension %d <= -%d"
+                % (ind, dimension))
