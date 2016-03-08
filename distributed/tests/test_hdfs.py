@@ -12,7 +12,7 @@ from distributed.compatibility import unicode
 from distributed.utils_test import gen_cluster, cluster, loop, make_hdfs
 from distributed.utils import get_ip
 from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
-        _read_csv, read_csv, _read_text, read_text)
+        read_csv, _read_text, read_text)
 from distributed import Executor
 from distributed.executor import _wait, Future
 
@@ -242,8 +242,7 @@ def test_read_csv(e, s, a, b):
         with hdfs.open('/tmp/test/2.csv', 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        df = yield _read_csv('/tmp/test/*.csv',
-                lineterminator='\n', lazy=False)
+        df = read_csv('/tmp/test/*.csv', lineterminator='\n', lazy=False)
         assert df._known_dtype
         result = e.compute(df.id.sum(), sync=False)
         result = yield result._result()
@@ -256,7 +255,7 @@ def test_read_csv_with_names(e, s, a, b):
         with hdfs.open('/tmp/test/1.csv', 'wb') as f:
             f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
 
-        df = yield _read_csv('/tmp/test/*.csv', names=['amount', 'name'],
+        df = read_csv('/tmp/test/*.csv', names=['amount', 'name'],
                              lineterminator='\n', lazy=False)
         assert list(df.columns) == ['amount', 'name']
 
@@ -270,8 +269,7 @@ def test_read_csv_lazy(e, s, a, b):
         with hdfs.open('/tmp/test/2.csv', 'wb') as f:
             f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-        df = yield _read_csv('/tmp/test/*.csv', lazy=True,
-                             lineterminator='\n')
+        df = read_csv('/tmp/test/*.csv', lazy=True, lineterminator='\n')
         assert df._known_dtype
         yield gen.sleep(0.5)
         assert not s.tasks

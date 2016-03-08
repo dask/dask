@@ -15,7 +15,8 @@ from toolz import merge
 
 from .compatibility import unicode
 from .executor import default_executor, ensure_default_get
-from .utils import ignoring, sync
+from .utils import ignoring, sync, ensure_bytes
+from . import formats
 
 
 logger = logging.getLogger(__name__)
@@ -101,58 +102,8 @@ def read_bytes(fn, executor=None, hdfs=None, lazy=True, delimiter=None,
                 workers=workers, allow_other_workers=True)
 
 
-def bytes_read_csv(b, **kwargs):
-    from io import BytesIO
-    import pandas as pd
-    bio = BytesIO(b)
-    return pd.read_csv(bio, **kwargs)
-
-
-@gen.coroutine
-def _read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
-        lineterminator='\n', names=None, header='infer', **kwargs):
-
-    from hdfs3 import HDFileSystem
-    from hdfs3.core import ensure_bytes
-    from dask import do
-    import pandas as pd
-    hdfs = hdfs or HDFileSystem()
-    executor = default_executor(executor)
-    kwargs['lineterminator'] = lineterminator
-
-    filenames = walk_glob(hdfs, path)
-    blockss = [read_bytes(fn, executor, hdfs, lazy=True,
-                          delimiter=ensure_bytes(lineterminator))
-               for fn in filenames]
-
-    with hdfs.open(filenames[0]) as f:
-        head = pd.read_csv(f, nrows=5, names=names, header=header, **kwargs)
-        names = list(head.columns)
-
-    dfs1 = [[do(bytes_read_csv)(blocks[0], names=names, skiprows=1,
-                                header=None, **kwargs)] +
-            [do(bytes_read_csv)(b, names=names, header=None, **kwargs)
-                for b in blocks[1:]]
-            for blocks in blockss]
-    dfs2 = sum(dfs1, [])
-
-    ensure_default_get(executor)
-    from dask.dataframe import from_imperative
-    if collection:
-        result = from_imperative(dfs2, head)
-    else:
-        result = dfs2
-
-    if not lazy:
-        if collection:
-            result = executor.persist(result)
-        else:
-            result = executor.compute(result)
-
-    raise gen.Return(result)
-
-
-def read_csv(fn, executor=None, hdfs=None, lazy=True, collection=True, **kwargs):
+def read_csv(path, executor=None, hdfs=None, lazy=True, collection=True,
+        **kwargs):
     """ Read CSV encoded data from bytes on HDFS
 
     Parameters
@@ -166,8 +117,28 @@ def read_csv(fn, executor=None, hdfs=None, lazy=True, collection=True, **kwargs)
     -------
     List of futures of Python objects
     """
+    from hdfs3 import HDFileSystem
+    import pandas as pd
+    hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
-    return sync(executor.loop, _read_csv, fn, executor, hdfs, lazy, collection, **kwargs)
+    lineterminator = kwargs.get('lineterminator', '\n')
+
+    filenames = walk_glob(hdfs, path)
+    blockss = [read_bytes(fn, executor, hdfs, lazy=True,
+                          delimiter=ensure_bytes(lineterminator))
+               for fn in filenames]
+
+    with hdfs.open(filenames[0]) as f:
+        if kwargs.get('header') in (0, 'infer'):
+            header = f.readline()
+            f.seek(0)
+        else:
+            header = b''
+        head = pd.read_csv(f, nrows=5, **kwargs)
+
+    result = formats.read_csv(blockss, header, head, kwargs, lazy, collection)
+
+    return result
 
 
 def avro_body(data, header):
