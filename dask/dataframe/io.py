@@ -327,7 +327,7 @@ def from_array(x, chunksize=50000, columns=None):
     return _Frame(dsk, name, dummy, divisions)
 
 
-def from_pandas(data, npartitions, sort=True):
+def from_pandas(data, npartitions=None, chunksize=None, sort=True):
     """Construct a dask object from a pandas object.
 
     If given a ``pandas.Series`` a ``dask.Series`` will be returned. If given a
@@ -338,8 +338,11 @@ def from_pandas(data, npartitions, sort=True):
     ----------
     df : pandas.DataFrame or pandas.Series
         The DataFrame/Series with which to construct a dask DataFrame/Series
-    npartitions : int
-        The number of partitions of the index to create
+    npartitions : int, optional
+        The number of partitions of the index to create.
+    chunksize : int, optional
+        The size of the partitions of the index.
+
 
     Returns
     -------
@@ -381,8 +384,14 @@ def from_pandas(data, npartitions, sort=True):
     if not isinstance(data, (pd.Series, pd.DataFrame)):
         raise TypeError("Input must be a pandas DataFrame or Series")
 
+    if ((npartitions is None) == (chunksize is None)):
+        raise ValueError('Exactly one of npartitions and chunksize must be specified.')
     nrows = len(data)
-    chunksize = int(ceil(nrows / npartitions))
+    if chunksize is None:
+        chunksize = int(ceil(nrows / npartitions))
+    else:
+        npartitions = int(ceil(nrows / chunksize))
+
     if sort and not data.index.is_monotonic_increasing:
         data = data.sort_index(ascending=True)
     if sort:
@@ -407,12 +416,12 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, **kwargs):
 
     x : bcolz.ctable
         Input data
-    chunksize : int (optional)
+    chunksize : int, optional
         The size of blocks to pull out from ctable.  Ideally as large as can
         comfortably fit in memory
-    categorize : bool (defaults to True)
+    categorize : bool, defaults to True
         Automatically categorize all string dtypes
-    index : string (optional)
+    index : string, optional
         Column to make the index
 
     See Also
@@ -529,7 +538,6 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
                         np.searchsorted(categories[columns], chunk),
                         categories[columns], True)
         return pd.Series(chunk, name=columns, index=idx)
-
 
 
 def locked_df_from_ctable(*args, **kwargs):
