@@ -525,18 +525,17 @@ def _read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminat
     raise gen.Return(result)
 
 
-def read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminator='\n',
+def read_text(path, keyname=None, encoding='utf-8', errors='strict', lineterminator='\n',
               executor=None, fs=None, lazy=False, collection=True,
               blocksize=2**27, compression=None):
     """ Read text lines from S3
 
-    >>> b = distributed.s3.read_text('bucket/my-data.*.json.gz',
-    ...                 compression='gzip').map(json.loads)  # doctest: +SKIP
-
     Parameters
     ----------
-    fn: string
-        filename or globstring of files on S3, including both bucket and key
+    path: string
+        Path of files on S3, including both bucket, key, or globstring
+    keyname: string, optional
+        If path is only the bucket name, provide key name as second argument
     collection: boolean, optional
         Whether or not to return a high level collection
     lazy: boolean, optional
@@ -550,12 +549,32 @@ def read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminato
         Compression to use options include: gzip
         The use of compression will suppress blocking
 
+    Examples
+    --------
+
+    Provide bucket and keyname joined by slash.
+    >>> b = read_text('bucket/key-directory/')  # doctest: +SKIP
+
+    Alternatively use support globstrings
+    >>> b = read_text('bucket/key-directory/2015-*.json').map(json.loads)  # doctest: +SKIP
+
+    Or separate bucket and keyname
+    >>> b = read_text('bucket', 'key-directory/2015-*.json').map(json.loads)  # doctest: +SKIP
+
+    Optionally provide blocksizes and delimiter to chunk up large files
+    >>> b = read_text('bucket', 'key-directory/2015-*.json',
+    ...               linedelimiter='\\n', blocksize=2**25)  # doctest: +SKIP
+
+    Specify compression, blocksizes not allowed
+    >>> b = read_text('bucket/my-data.*.json.gz',
+    ...               compression='gzip', blocksize=None)  # doctest: +SKIP
+
     Returns
     -------
-    Dask bag (if collection=True) or Futures or dask values
+    Dask bag if collection=True or Futures or dask values otherwise
     """
     executor = default_executor(executor)
-    return sync(executor.loop, _read_text, fn, keyname, encoding, errors,
+    return sync(executor.loop, _read_text, path, keyname, encoding, errors,
             lineterminator, executor, fs, lazy, collection,
             blocksize=blocksize, compression=compression)
 
