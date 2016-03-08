@@ -1096,7 +1096,7 @@ def test_restart_sync(loop):
 
 def test_restart_fast(loop):
     with cluster(nanny=True) as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port'])) as e:
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             L = e.map(sleep, range(10))
 
             start = time()
@@ -1148,7 +1148,7 @@ def test_upload_file(e, s, a, b):
 
 def test_upload_file_sync(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port'])) as e:
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             def g():
                 import myfile
                 return myfile.x
@@ -1168,7 +1168,7 @@ def test_upload_file_exception(e, s, a, b):
 
 def test_upload_file_exception_sync(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port'])) as e:
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             with tmp_text('myfile.py', 'syntax-error!') as fn:
                 with pytest.raises(SyntaxError):
                     e.upload_file(fn)
@@ -1255,7 +1255,7 @@ def test_async_compute_with_scatter(e, s, a, b):
 
 def test_sync_compute(loop):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port'])) as e:
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             from dask.imperative import do, value
             x = value(1)
             y = do(inc)(x)
@@ -1505,7 +1505,7 @@ def test_badly_serialized_input(e, s, a, b):
 @pytest.mark.xfail
 def test_badly_serialized_input_stderr(capsys):
     with cluster() as (s, [a, b]):
-        with Executor(('127.0.0.1', s['port'])) as e:
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             o = BadlySerializedObject()
             future = e.submit(inc, o)
 
