@@ -6,7 +6,7 @@ from numbers import Number
 from operator import getitem, add
 
 import numpy as np
-from toolz import merge, first, accumulate
+from toolz import merge, first, accumulate, pluck
 
 from ..base import tokenize
 from ..compatibility import long
@@ -242,9 +242,10 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     # Get a list (for each dimension) of dicts{blocknum: slice()}
     block_slices = list(map(_slice_1d, shape, blockdims, index))
+    sorted_block_slices = [sorted(i.items()) for i in block_slices]
 
     # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
-    in_names = list(product([in_name], *[sorted(i.keys()) for i in block_slices]))
+    in_names = list(product([in_name], *[pluck(0, s) for s in sorted_block_slices]))
 
     # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
     out_names = list(product([out_name],
@@ -252,7 +253,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
                                  for d, i in zip(block_slices, index)
                                  if not isinstance(i, (int, long))]))
 
-    all_slices = list(product(*[i.values() for i in block_slices]))
+    all_slices = list(product(*[pluck(1, s) for s in sorted_block_slices]))
 
     dsk_out = dict((out_name, (getitem, in_name, slices))
                    for out_name, in_name, slices
