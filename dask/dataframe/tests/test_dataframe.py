@@ -1410,6 +1410,49 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis='index')
 
 
+def test_cov():
+    df = pd.util.testing.makeMissingDataframe(0.3, 42)
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert eq(ddf.cov(), df.cov())
+    assert eq(ddf.cov(10), df.cov(10))
+    assert ddf.cov()._name == ddf.cov()._name
+    assert ddf.cov(10)._name != ddf.cov()._name
+
+    a = df.A
+    b = df.B
+    da = dd.from_pandas(a, npartitions=3)
+    db = dd.from_pandas(b, npartitions=4)
+    assert eq(da.cov(db), a.cov(b))
+    assert eq(da.cov(db, 10), a.cov(b, 10))
+    assert da.cov(db)._name == da.cov(db)._name
+    assert da.cov(db, 10)._name != da.cov(db)._name
+
+
+def test_corr():
+    df = pd.util.testing.makeMissingDataframe(0.3, 42)
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert eq(ddf.corr(), df.corr())
+    assert eq(ddf.corr(min_periods=10), df.corr(min_periods=10))
+    assert ddf.corr()._name == ddf.corr()._name
+    assert ddf.corr(min_periods=10)._name != ddf.corr()._name
+
+    pytest.raises(NotImplementedError, lambda: ddf.corr(method='spearman'))
+
+    a = df.A
+    b = df.B
+    da = dd.from_pandas(a, npartitions=3)
+    db = dd.from_pandas(b, npartitions=4)
+    assert eq(da.corr(db), a.corr(b))
+    assert eq(da.corr(db, min_periods=10), a.corr(b, min_periods=10))
+    assert da.corr(db)._name == da.corr(db)._name
+    assert da.corr(db, min_periods=10)._name != da.corr(db)._name
+
+    pytest.raises(NotImplementedError, lambda: da.corr(db, method='spearman'))
+    pytest.raises(TypeError, lambda: da.corr(ddf))
+
+
 def test_apply_infer_columns():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
