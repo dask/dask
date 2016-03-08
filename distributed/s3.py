@@ -14,9 +14,9 @@ from tornado import gen
 from dask.imperative import Value, do
 from dask.base import tokenize
 
-from .utils import read_block, seek_delimiter
+from . import formats
+from .utils import read_block, seek_delimiter, ensure_bytes, ignoring, sync
 from .executor import default_executor, ensure_default_get
-from .utils import ignoring, sync
 from .compatibility import unicode, gzip_decompress
 
 logger = logging.getLogger(__name__)
@@ -579,53 +579,34 @@ def read_text(path, keyname=None, encoding='utf-8', errors='strict', linetermina
             blocksize=blocksize, compression=compression)
 
 
-def bytes_read_csv(b, **kwargs):
-    from io import BytesIO
-    import pandas as pd
-    bio = BytesIO(b)
-    return pd.read_csv(bio, **kwargs)
-
-
 @gen.coroutine
 def _read_csv(path, executor=None, fs=None, lazy=True, collection=True,
-        names=None, delimiter='\n', header='infer', blocksize=2**27, **kwargs):
+        lineterminator='\n', blocksize=2**27, **kwargs):
     import pandas as pd
     fs = fs or S3FileSystem()
     executor = default_executor(executor)
 
     if kwargs.get('compression'):
         blocksize = None
+    lineterminator = kwargs.get('lineterminator', '\n')
 
     filenames = sorted(fs.glob(path))
     blockss = [read_bytes(fn, executor, fs, lazy=True,
-                          delimiter=delimiter.encode(),
+                          delimiter=ensure_bytes(lineterminator),
                           blocksize=blocksize)
                for fn in filenames]
 
     with fs.open(filenames[0], mode='rb') as f:
-        head = pd.read_csv(f, nrows=5, names=names, header=header, **kwargs)
-        names = list(head.columns)
-
-    dfs1 = [[do(bytes_read_csv)(blocks[0], names=names, skiprows=1,
-                                header=None, **kwargs)] +
-            [do(bytes_read_csv)(b, names=names, header=None, **kwargs)
-                for b in blocks[1:]]
-            for blocks in blockss]
-    dfs2 = sum(dfs1, [])
-
-    ensure_default_get(executor)
-
-    from dask.dataframe import from_imperative
-    if collection:
-        result = from_imperative(dfs2, head)
-    else:
-        result = dfs2
-
-    if not lazy:
-        if collection:
-            result = executor.persist(result)
+        b = f.read(10000)
+        ff = io.BytesIO(b)
+        if kwargs.get('header', None) in (None, 'infer', 0):
+            header = ff.readline()
+            ff.seek(0)
         else:
-            result = executor.compute(result)
+            header = b''
+        head = pd.read_csv(ff, nrows=5, lineterminator=lineterminator, **kwargs)
+
+    result = formats.read_csv(blockss, header, head, kwargs, lazy, collection)
 
     raise gen.Return(result)
 
@@ -638,7 +619,9 @@ def read_csv(fn, executor=None, fs=None, lazy=True, collection=True, **kwargs):
     fn: string
         bucket and filename or globstring of CSV files on S3
     lazy: boolean, optional
-        If True return dask Value objects
+        Start compuatation immediately or return a fully lazy object
+    collection: boolean, optional
+        If True return a dask.dataframe, otherwise return a list of futures
 
     Examples
     --------

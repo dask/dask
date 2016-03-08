@@ -475,3 +475,19 @@ def tmpfile(extension=''):
                 os.remove(filename)
             except OSError:  # sometimes we can't remove a generated temp file
                 pass
+
+
+def ensure_bytes(s):
+    """ Turn string or bytes to bytes
+
+    >>> ensure_bytes('123')
+    b'123'
+    >>> ensure_bytes(b'123')
+    b'123'
+    """
+    if isinstance(s, bytes):
+        return s
+    if hasattr(s, 'encode'):
+        return s.encode()
+    raise TypeError(
+            "Object %s is neither a bytes object nor has an encode method" % s)
