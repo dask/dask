@@ -2193,9 +2193,13 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False):
     min_periods : int, optional
         Minimum number of observations required per pair of columns
         to have a valid result.
+    corr : bool, optional
+        If True, compute the Pearson correlation. If False [default], compute
+        the covariance.
     scalar : bool, optional
-        If True, extract the diagonal entry of the 2x2 covariance/correlation
-        matrix. Only valid if `df` has 2 columns.
+        If True, compute covariance between two variables as a scalar. Only
+        valid if `df` has 2 columns.  If False [default], compute the entire
+        covariance/correlation matrix.
     """
     if min_periods is None:
         min_periods = 2
@@ -2243,7 +2247,7 @@ def cov_corr_chunk(df, corr=False):
 
 def cov_corr_agg(data, meta, min_periods=2, corr=False, scalar=False):
     """Aggregation part of a covariance or correlation computation"""
-    data = np.stack(data)
+    data = np.concatenate(data).reshape((len(data),) + data[0].shape)
     sums = np.nan_to_num(data['sum'])
     counts = data['count']
 
