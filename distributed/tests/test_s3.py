@@ -1,6 +1,7 @@
-import pytest
-import json
 import io
+import json
+from math import ceil
+import pytest
 
 import boto3
 from tornado import gen
@@ -27,6 +28,17 @@ files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 600, "name": "Bob"}\n'
                                    b'{"amount": 700, "name": "Charlie"}\n'
                                    b'{"amount": 800, "name": "Dennis"}\n')}
+
+csv_files = {'2014-01-01.csv': (b'name,amount,id\n'
+                                b'Alice,100,1\n'
+                                b'Bob,200,2\n'
+                                b'Charlie,300,3\n'),
+             '2014-01-02.csv': (b'name,amount,id\n'),
+             '2014-01-03.csv': (b'name,amount,id\n'
+                                b'Dennis,400,4\n'
+                                b'Edith,500,5\n'
+                                b'Frank,600,6\n')}
+
 
 @pytest.yield_fixture
 def s3():
@@ -249,6 +261,21 @@ def test_read_text(e, s, a, b):
     assert all(isinstance(v, Future) for v in text)
 
 
+@gen_cluster(timeout=60, executor=True)
+def test_read_text_blocksize(e, s, a, b):
+    b = yield _read_text(test_bucket_name+'/test/accounts*', lazy=True,
+                         blocksize=20, collection=True)
+    assert b.npartitions == sum(ceil(len(b) / 20) for b in files.values())
+
+
+@gen_cluster(timeout=60, executor=True)
+def test_read_text_compression(e, s, a, b):
+    b = yield _read_text('distributed-test/csv/gzip/', compression='gzip')
+    result = yield e.compute(b)._result()
+    assert result == [line for k in sorted(csv_files)
+                           for line in csv_files[k].decode().split('\n')]
+
+
 def test_read_text_sync(loop):
     pytest.importorskip('dask.bag')
     import dask.bag as db
@@ -319,17 +346,6 @@ def test_read_past_location(s3):
         f.seek(5000)
         out = f.read(10)
         assert out == b''
-
-
-csv_files = {'2014-01-01.csv': (b'name,amount,id\n',
-                                b'Alice,100,1\n',
-                                b'Bob,200,2\n',
-                                b'Charlie,300,3\n'),
-             '2014-01-02.csv': (b'name,amount,id\n'),
-             '2014-01-03.csv': (b'name,amount,id\n',
-                                b'Dennis,400,4\n',
-                                b'Edith,500,5\n',
-                                b'Frank,600,6\n')}
 
 
 @gen_cluster(timeout=60, executor=True)

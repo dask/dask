@@ -11,13 +11,13 @@ import boto3
 from botocore.exceptions import ClientError
 from tornado import gen
 
-from dask.imperative import Value
+from dask.imperative import Value, do
 from dask.base import tokenize
 
 from .utils import read_block, seek_delimiter
 from .executor import default_executor, ensure_default_get
 from .utils import ignoring, sync
-from .compatibility import unicode
+from .compatibility import unicode, gzip_decompress
 
 logger = logging.getLogger(__name__)
 
@@ -487,39 +487,43 @@ def read_block_from_s3(filename, offset, length, s3pars={}, delimiter=None):
 
 @gen.coroutine
 def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
-               executor=None, fs=None, lazy=True, collection=True):
-    from dask import do
+               executor=None, fs=None, lazy=True, collection=True,
+               blocksize=2**27, compression=None):
     fs = fs or S3FileSystem()
     executor = default_executor(executor)
+
+    if compression:
+        blocksize=None
+        decompress = decompressors[compression]
 
     filenames = sorted(fs.glob(fn))
     blocks = [block for fn in filenames
                     for block in read_bytes(fn, executor, fs, lazy=True,
-                                            delimiter=lineterminator.encode())]
+                                            delimiter=lineterminator.encode(),
+                                            blocksize=blocksize)]
+    if compression:
+        blocks = [do(decompress)(b) for b in blocks]
     strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
     lines = [do(unicode.split)(s, lineterminator) for s in strings]
 
-    if lazy:
-        from dask.bag import from_imperative
-        if collection:
-            ensure_default_get(executor)
-            raise gen.Return(from_imperative(lines))
-        else:
-            raise gen.Return(lines)
-
+    from dask.bag import from_imperative
+    if collection:
+        result = from_imperative(lines)
     else:
-        futures = executor.compute(lines)
-        from distributed.collections import _futures_to_dask_bag
+        result = lines
+
+    if not lazy:
         if collection:
-            ensure_default_get(executor)
-            b = yield _futures_to_dask_bag(futures)
-            raise gen.Return(b)
+            result = executor.persist(result)
         else:
-            raise gen.Return(futures)
+            result = executor.compute(result)
+
+    raise gen.Return(result)
 
 
 def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
-              executor=None, fs=None, lazy=False, collection=True, **kwargs):
+              executor=None, fs=None, lazy=False, collection=True,
+              blocksize=2**27, compression=None):
     """ Read text lines from S3
 
     Parameters
@@ -537,7 +541,8 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     """
     executor = default_executor(executor)
     return sync(executor.loop, _read_text, fn, encoding, errors,
-            lineterminator, executor, fs, lazy, collection)
+            lineterminator, executor, fs, lazy, collection,
+            blocksize=blocksize, compression=compression)
 
 
 def bytes_read_csv(b, **kwargs):
@@ -550,7 +555,6 @@ def bytes_read_csv(b, **kwargs):
 @gen.coroutine
 def _read_csv(path, executor=None, fs=None, lazy=True, collection=True,
         names=None, delimiter='\n', header='infer', blocksize=2**27, **kwargs):
-    from dask import do
     import pandas as pd
     fs = fs or S3FileSystem()
     executor = default_executor(executor)
@@ -574,7 +578,9 @@ def _read_csv(path, executor=None, fs=None, lazy=True, collection=True,
                 for b in blocks[1:]]
             for blocks in blockss]
     dfs2 = sum(dfs1, [])
+
     ensure_default_get(executor)
+
     from dask.dataframe import from_imperative
     if collection:
         result = from_imperative(dfs2, head)
@@ -611,3 +617,6 @@ def read_csv(fn, executor=None, fs=None, lazy=True, collection=True, **kwargs):
     executor = default_executor(executor)
     return sync(executor.loop, _read_csv, fn, executor, fs, lazy, collection,
             **kwargs)
+
+
+decompressors = {'gzip': gzip_decompress}
