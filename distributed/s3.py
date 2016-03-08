@@ -486,9 +486,13 @@ def read_block_from_s3(filename, offset, length, s3pars={}, delimiter=None):
 
 
 @gen.coroutine
-def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
+def _read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminator='\n',
                executor=None, fs=None, lazy=True, collection=True,
                blocksize=2**27, compression=None):
+    if keyname is not None:
+        if not keyname.startswith('/'):
+            keyname = '/' + keyname
+        fn = fn + keyname
     fs = fs or S3FileSystem()
     executor = default_executor(executor)
 
@@ -521,7 +525,7 @@ def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     raise gen.Return(result)
 
 
-def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
+def read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminator='\n',
               executor=None, fs=None, lazy=False, collection=True,
               blocksize=2**27, compression=None):
     """ Read text lines from S3
@@ -549,7 +553,7 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     Dask bag (if collection=True) or Futures or dask values
     """
     executor = default_executor(executor)
-    return sync(executor.loop, _read_text, fn, encoding, errors,
+    return sync(executor.loop, _read_text, fn, keyname, encoding, errors,
             lineterminator, executor, fs, lazy, collection,
             blocksize=blocksize, compression=compression)
 

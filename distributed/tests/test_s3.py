@@ -279,7 +279,6 @@ def test_read_text_compression(e, s, a, b):
 
 
 def test_read_text_sync(loop):
-    pytest.importorskip('dask.bag')
     import dask.bag as db
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
@@ -290,6 +289,16 @@ def test_read_text_sync(loop):
             result = c.compute(get=e.get)
 
             assert result == (1 + 2 + 3 + 4 + 5 + 6 + 7 + 8) * 100
+
+
+def test_read_text_bucket_key_inputs(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            a = read_text(test_bucket_name, '/text/accounts', lazy=True)
+            b = read_text(test_bucket_name, 'text/accounts', lazy=True)
+            c = read_text(test_bucket_name + '/text/accounts', lazy=True)
+
+            assert a._keys() == b._keys() == c._keys()
 
 
 def test_pickle(s3):
