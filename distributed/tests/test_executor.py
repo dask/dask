@@ -2300,9 +2300,11 @@ def test_startup_shutdown_startup_sync(loop):
     with cluster() as (s, [a, b]):
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             pass
+        sleep(0.1)
         with Executor(('127.0.0.1', s['port']), loop=loop) as e:
             pass
         with Executor(('127.0.0.1', s['port'])) as e:
             pass
+        sleep(0.1)
         with Executor(('127.0.0.1', s['port'])) as e:
             pass
