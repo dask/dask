@@ -327,7 +327,7 @@ def from_array(x, chunksize=50000, columns=None):
     return _Frame(dsk, name, dummy, divisions)
 
 
-def from_pandas(data, npartitions, sort=True):
+def from_pandas(data, npartitions=None, chunksize=None, sort=True):
     """Construct a dask object from a pandas object.
 
     If given a ``pandas.Series`` a ``dask.Series`` will be returned. If given a
@@ -338,8 +338,11 @@ def from_pandas(data, npartitions, sort=True):
     ----------
     df : pandas.DataFrame or pandas.Series
         The DataFrame/Series with which to construct a dask DataFrame/Series
-    npartitions : int
+    npartitions : int (defaults to None)
         The number of partitions of the index to create
+    chunksize : int (defaults to None)
+        The size of blocks to pull out from ctable.  Ideally as large as can
+        comfortably fit in memory
 
     Returns
     -------
@@ -357,6 +360,12 @@ def from_pandas(data, npartitions, sort=True):
      Timestamp('2010-01-05 00:00:00', offset='D'),
      Timestamp('2010-01-06 00:00:00', offset='D'))
     >>> ddf = from_pandas(df.a, npartitions=3)  # Works with Series too!
+    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
+    (Timestamp('2010-01-01 00:00:00', offset='D'),
+     Timestamp('2010-01-03 00:00:00', offset='D'),
+     Timestamp('2010-01-05 00:00:00', offset='D'),
+     Timestamp('2010-01-06 00:00:00', offset='D'))
+    >>> ddf = from_pandas(df, chunksize=2)
     >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
     (Timestamp('2010-01-01 00:00:00', offset='D'),
      Timestamp('2010-01-03 00:00:00', offset='D'),
@@ -381,8 +390,14 @@ def from_pandas(data, npartitions, sort=True):
     if not isinstance(data, (pd.Series, pd.DataFrame)):
         raise TypeError("Input must be a pandas DataFrame or Series")
 
+    if ((npartitions is None) + (chunksize is None)) in [0, 2]:
+        raise ValueError('Exactly one of npartitions and chunksize must be None.')
     nrows = len(data)
-    chunksize = int(ceil(nrows / npartitions))
+    if chunksize is None:
+        chunksize = int(ceil(nrows / npartitions))
+    else:
+        npartitions = int(ceil(nrows / chunksize))
+
     if sort and not data.index.is_monotonic_increasing:
         data = data.sort_index(ascending=True)
     if sort:
@@ -529,7 +544,6 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None):
                         np.searchsorted(categories[columns], chunk),
                         categories[columns], True)
         return pd.Series(chunk, name=columns, index=idx)
-
 
 
 def locked_df_from_ctable(*args, **kwargs):
