@@ -2254,21 +2254,24 @@ def test_persist_get_sync(loop):
 
 @gen_cluster(executor=True)
 def test_persist_get(e, s, a, b):
-        dadd = do(add)
-        x, y = value(1), value(2)
-        xx = do(add)(x, x)
-        yy = do(add)(y, y)
-        xxyy = do(add)(xx, yy)
+    dadd = do(add)
+    x, y = value(1), value(2)
+    xx = do(add)(x, x)
+    yy = do(add)(y, y)
+    xxyy = do(add)(xx, yy)
 
-        xxyy2 = e.persist(xxyy)
-        xxyy3 = do(add)(xxyy2, 10)
+    xxyy2 = e.persist(xxyy)
+    xxyy3 = do(add)(xxyy2, 10)
 
-        yield gen.sleep(0.5)
-        result = yield e._get(xxyy3.dask, xxyy3._keys())
-        assert result[0] == ((1+1) + (2+2)) + 10
+    yield gen.sleep(0.5)
+    result = yield e._get(xxyy3.dask, xxyy3._keys())
+    assert result[0] == ((1+1) + (2+2)) + 10
 
-        result = yield e.compute(xxyy3)._result()
-        assert result == ((1+1) + (2+2)) + 10
+    result = yield e.compute(xxyy3)._result()
+    assert result == ((1+1) + (2+2)) + 10
+
+    result = yield e.compute(xxyy3)._result()
+    assert result == ((1+1) + (2+2)) + 10
 
 
 def test_executor_num_fds(loop):
@@ -2281,3 +2284,25 @@ def test_executor_num_fds(loop):
         after = proc.num_fds()
 
         assert before >= after
+
+@gen_cluster()
+def test_startup_shutdown_startup(s, a, b):
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+    yield e._shutdown()
+
+    e = Executor((s.ip, s.port), start=False)
+    yield e._start()
+    yield e._shutdown()
+
+
+def test_startup_shutdown_startup_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            pass
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            pass
+        with Executor(('127.0.0.1', s['port'])) as e:
+            pass
+        with Executor(('127.0.0.1', s['port'])) as e:
+            pass
