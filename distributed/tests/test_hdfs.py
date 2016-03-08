@@ -215,6 +215,19 @@ def test_read_csv_sync(loop):
                 assert isinstance(df, dd.DataFrame)
                 assert list(df.head().iloc[0]) == ['Alice', 100, 1]
 
+
+def test_read_csv_sync_compute(loop):
+    import dask.dataframe as dd
+    import pandas as pd
+    with cluster(nworkers=1) as (s, [a]):
+        with make_hdfs() as hdfs:
+            with hdfs.open('/tmp/test/1.csv', 'wb') as f:
+                f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
+
+            with hdfs.open('/tmp/test/2.csv', 'wb') as f:
+                f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
+
+            with Executor(('127.0.0.1', s['port']), loop=loop) as e:
                 for lazy in [True, False]:
                     df = read_csv('/tmp/test/*.csv', collection=True, lazy=lazy)
                     assert df.amount.sum().compute(get=e.get) == 1000
