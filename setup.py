@@ -19,7 +19,8 @@ setup(name='distributed',
       maintainer_email='mrocklin@gmail.com',
       license='BSD',
       install_requires=requires,
-      packages=['distributed', 'distributed.cli', 'distributed.diagnostics', 'distributed.http'],
+      packages=['distributed', 'distributed.cli', 'distributed.diagnostics',
+          'distributed.http', 'distributed.formats'],
       long_description=(open('README.md').read() if os.path.exists('README.md')
                         else ''),
       entry_points='''
