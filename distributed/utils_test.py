@@ -190,6 +190,7 @@ def cluster(nworkers=2, nanny=False):
         with ignoring(socket.error, TimeoutError, StreamClosedError):
             loop.run_sync(lambda: disconnect('127.0.0.1', sport), timeout=0.5)
         scheduler.terminate()
+        scheduler.join(timeout=2)
 
         for port in [w['port'] for w in workers]:
             with ignoring(socket.error, TimeoutError, StreamClosedError):
@@ -198,6 +199,9 @@ def cluster(nworkers=2, nanny=False):
         for proc in [w['proc'] for w in workers]:
             with ignoring(Exception):
                 proc.terminate()
+                proc.join(timeout=2)
+        for q in [w['queue'] for w in workers]:
+            q.close()
         for fn in glob('_test_worker-*'):
             shutil.rmtree(fn)
         loop.close(all_fds=True)
@@ -250,6 +254,7 @@ def cluster_center(nworkers=2, nanny=False):
         for proc in [center] + [w['proc'] for w in workers]:
             with ignoring(Exception):
                 proc.terminate()
+                proc.join(timeout=2)
         for fn in glob('_test_worker-*'):
             shutil.rmtree(fn)
 
