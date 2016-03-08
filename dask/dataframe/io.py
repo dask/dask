@@ -365,6 +365,12 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True):
      Timestamp('2010-01-03 00:00:00', offset='D'),
      Timestamp('2010-01-05 00:00:00', offset='D'),
      Timestamp('2010-01-06 00:00:00', offset='D'))
+    >>> ddf = from_pandas(df, chunksize=3)
+    >>> ddf.divisions  # doctest: +NORMALIZE_WHITESPACE
+    (Timestamp('2010-01-01 00:00:00', offset='D'),
+     Timestamp('2010-01-03 00:00:00', offset='D'),
+     Timestamp('2010-01-05 00:00:00', offset='D'),
+     Timestamp('2010-01-06 00:00:00', offset='D'))
 
     Raises
     ------
