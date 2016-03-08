@@ -542,11 +542,13 @@ def read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminato
     lazy: boolean, optional
         Whether or not to start reading immediately
     blocksize: int, optional
-        Number of bytes per partition
+        Number of bytes per partition.  Use ``None`` for no blocking.
+        Silently ignored if data is compressed with a non-splittable format like gzip.
     lineterminator: str, optional
         The endline string used to deliniate line breaks
     compression: str, optional
         Compression to use options include: gzip
+        The use of compression will suppress blocking
 
     Returns
     -------

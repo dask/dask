@@ -239,7 +239,6 @@ def test_read_bytes_lazy(e, s, a, b):
 
 @gen_cluster(timeout=60, executor=True)
 def test_read_text(e, s, a, b):
-    pytest.importorskip('dask.bag')
     import dask.bag as db
     from dask.imperative import Value
 
@@ -265,9 +264,10 @@ def test_read_text(e, s, a, b):
 
 @gen_cluster(timeout=60, executor=True)
 def test_read_text_blocksize(e, s, a, b):
-    b = yield _read_text(test_bucket_name+'/test/accounts*', lazy=True,
-                         blocksize=20, collection=True)
-    assert b.npartitions == sum(ceil(len(b) / 20) for b in files.values())
+    for bs in [20, 27, 12]:
+        b = yield _read_text(test_bucket_name+'/test/accounts*', lazy=True,
+                             blocksize=bs, collection=True)
+        assert b.npartitions == sum(ceil(len(b) / bs) for b in files.values())
 
 
 @gen_cluster(timeout=60, executor=True)
