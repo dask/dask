@@ -1139,6 +1139,9 @@ class Scheduler(Server):
         for addr in nannies:
             self.remove_worker(address=addr, heal=False)
 
+        for client, keys in self.wants_what.items():
+            self.client_releases_keys(keys=keys, client=client)
+
         logger.debug("Send kill signal to nannies: %s", nannies)
         nannies = [rpc(ip=worker_address.split(':')[0], port=n_port)
                    for worker_address, n_port in nannies.items()]

@@ -1050,6 +1050,7 @@ def test_restart(e, s, a, b):
 
     x = e.submit(inc, 1)
     y = e.submit(inc, x)
+    z = e.submit(div, 1, 0)
     yield y._result()
 
     assert set(s.who_has) == {x.key, y.key}
@@ -1064,6 +1065,11 @@ def test_restart(e, s, a, b):
 
     assert x.cancelled()
     assert y.cancelled()
+    assert z.cancelled()
+    assert z.key not in s.exceptions
+
+    assert not s.who_wants
+    assert not s.wants_what
 
 
 def test_restart_sync_no_center(loop):
@@ -1606,6 +1612,39 @@ def test_forget_in_flight(e, s, A, B):
         assert k not in s.waiting
         assert k not in s.who_has
 
+
+@gen_cluster(executor=True)
+def test_forget_errors(e, s, a, b):
+    x = e.submit(div, 1, 0)
+    y = e.submit(inc, x)
+    z = e.submit(inc, y)
+    yield _wait([y])
+
+    assert x.key in s.exceptions
+    assert x.key in s.exceptions_blame
+    assert y.key in s.exceptions_blame
+    assert z.key in s.exceptions_blame
+
+    s.client_releases_keys(keys=[z.key], client=e.id)
+
+    assert x.key in s.exceptions
+    assert x.key in s.exceptions_blame
+    assert y.key in s.exceptions_blame
+    assert z.key not in s.exceptions_blame
+
+    s.client_releases_keys(keys=[x.key], client=e.id)
+
+    assert x.key in s.exceptions
+    assert x.key in s.exceptions_blame
+    assert y.key in s.exceptions_blame
+    assert z.key not in s.exceptions_blame
+
+    s.client_releases_keys(keys=[y.key], client=e.id)
+
+    assert x.key not in s.exceptions
+    assert x.key not in s.exceptions_blame
+    assert y.key not in s.exceptions_blame
+    assert z.key not in s.exceptions_blame
 
 
 def test_repr_sync(loop):
