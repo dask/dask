@@ -24,6 +24,8 @@ on the header.
 We often terminate each message with a sentinel value.  This happens
 outside of this module though and is not baked in.
 """
+from __future__ import print_function, division, absolute_import
+
 from io import BytesIO
 import struct
 

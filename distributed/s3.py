@@ -526,14 +526,23 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
               blocksize=2**27, compression=None):
     """ Read text lines from S3
 
+    >>> b = distributed.s3.read_text('bucket/my-data.*.json.gz',
+    ...                 compression='gzip').map(json.loads)  # doctest: +SKIP
+
     Parameters
     ----------
     fn: string
-        filename or globstring of files on S3
+        filename or globstring of files on S3, including both bucket and key
     collection: boolean, optional
         Whether or not to return a high level collection
     lazy: boolean, optional
         Whether or not to start reading immediately
+    blocksize: int, optional
+        Number of bytes per partition
+    lineterminator: str, optional
+        The endline string used to deliniate line breaks
+    compression: str, optional
+        Compression to use options include: gzip
 
     Returns
     -------

@@ -1,3 +1,5 @@
+from __future__ import print_function, division, absolute_import
+
 from distributed.cluster import Cluster
 from distributed.core import rpc
 from distributed.utils_test import slow

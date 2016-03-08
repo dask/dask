@@ -1,3 +1,5 @@
+from __future__ import print_function, division, absolute_import
+
 from distributed.utils_test import (cluster, loop, gen_cluster,
         gen_test)
 from distributed.core import rpc

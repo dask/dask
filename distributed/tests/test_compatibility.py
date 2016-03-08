@@ -1,3 +1,5 @@
+from __future__ import print_function, division, absolute_import
+
 from distributed.compatibility import gzip_compress, gzip_decompress
 
 def test_gzip():
