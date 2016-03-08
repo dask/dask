@@ -13,9 +13,18 @@ if sys.version_info[0] == 2:
 
     import gzip
     def gzip_decompress(b):
-        f = GzipFile(fileobj=BytesIO(b))
+        f = gzip.GzipFile(fileobj=BytesIO(b))
         result = f.read()
         f.close()
+        return result
+
+    def gzip_compress(b):
+        bio = BytesIO()
+        f = gzip.GzipFile(fileobj=bio, mode='w')
+        f.write(b)
+        f.close()
+        bio.seek(0)
+        result = bio.read()
         return result
 
     def isqueue(o):
@@ -32,6 +41,7 @@ if sys.version_info[0] == 3:
     PY3 = True
     unicode = str
     from gzip import decompress as gzip_decompress
+    from gzip import compress as gzip_compress
 
     def isqueue(o):
         return isinstance(o, Queue)
