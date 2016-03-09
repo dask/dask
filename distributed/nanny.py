@@ -83,6 +83,7 @@ class Nanny(Server):
                         self.ip, self.port, self.ip, self.worker_port,
                         exc_info=True)
             self.process.terminate()
+            self.process.join(timeout=timeout)
             self.process = None
             logger.info("Nanny %s:%d kills worker process %s:%d",
                         self.ip, self.port, self.ip, self.worker_port)
@@ -118,6 +119,7 @@ class Nanny(Server):
                 yield gen.sleep(0.1)
         logger.info("Nanny %s:%d starts worker process %s:%d",
                     self.ip, self.port, self.ip, self.worker_port)
+        q.close()
         raise gen.Return('OK')
 
     def cleanup(self):

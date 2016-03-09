@@ -82,6 +82,10 @@ class ProgressBar(object):
     def _draw_stop(self, **kwargs):
         pass
 
+    def __del__(self):
+        with ignoring(AttributeError):
+            self.stream.close()
+
 
 class TextProgressBar(ProgressBar):
     def __init__(self, keys, scheduler=None, interval=0.1, width=40,
@@ -145,7 +149,6 @@ class ProgressWidget(ProgressBar):
         self.bar_text.value = '<div style="padding: 0px 10px 0px 10px; text-align:right;">%d / %d</div>' % (ndone, all)
 
 
-
 class MultiProgressBar(object):
     def __init__(self, keys, scheduler=None, func=key_split, interval=0.1, complete=False):
         self.scheduler = get_scheduler(scheduler)
@@ -198,6 +201,10 @@ class MultiProgressBar(object):
 
     def _draw_stop(self, **kwargs):
         pass
+
+    def __del__(self):
+        with ignoring(AttributeError):
+            self.stream.close()
 
 
 class MultiProgressWidget(MultiProgressBar):

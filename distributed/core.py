@@ -234,8 +234,8 @@ def connect(ip, port, timeout=3):
     client = TCPClient()
     start = time()
     while True:
+        future = client.connect(ip, port, max_buffer_size=MAX_BUFFER_SIZE)
         try:
-            future = client.connect(ip, port, max_buffer_size=MAX_BUFFER_SIZE)
             stream = yield gen.with_timeout(timedelta(seconds=timeout), future)
             raise Return(stream)
         except StreamClosedError:
@@ -385,6 +385,9 @@ class rpc(object):
             self.streams[stream] = True  # mark as open
             raise Return(result)
         return send_recv_from_rpc
+
+    def __del__(self):
+        self.close_streams()
 
 
 def coerce_to_address(o, out=str):
