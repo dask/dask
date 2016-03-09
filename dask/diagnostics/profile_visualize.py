@@ -231,6 +231,7 @@ class TasksPlot(object):
         self.plot.yaxis.axis_label = "Worker ID"
         self.plot.xaxis.axis_label = "Time (s)"
 
+        self.worker_y = {}
         self.left = None
         self.worker_tasks = defaultdict(list)
 
@@ -248,7 +249,7 @@ class TasksPlot(object):
         hover.point_policy = 'follow_mouse'
 
         # TODO: was there any benefit to the discrete y_range:
-        # y_range=[str(i) for i in range(len(id_lk))], x_range=[0, right - left]
+        # y_range=[str(i) for i in range(len(self.worker_y))], x_range=[0, right - left]
 
         self.rect = self.plot.rect(
             source=bp.ColumnDataSource(data={}),
@@ -290,14 +291,13 @@ class TasksPlot(object):
                    for (k, v) in iteritems(self.worker_tasks))
         timings = sorted(timings, key=itemgetter(1), reverse=True)
 
-        id_lk = dict((t[0], n) for (n, t) in enumerate(timings))
-
+        self.worker_y = dict((t[0], n) for (n, t) in enumerate(timings))
         self.left = min(starts)
         funcs = [pprint_task(i, dsk, self.label_size) for i in tasks]
         width = [e - s for (s, e) in zip(starts, ends)]
         data['width'] = width
         data['x'] = [w/2 + s - self.left for (w, s) in zip(width, starts)]
-        data['y'] = [id_lk[i] + 1 for i in ids]
+        data['y'] = [self.worker_y[i] + 1 for i in ids]
         data['function'] = funcs
         data['color'] = get_colors(self.palette, funcs)
         data['key'] = [str(i) for i in keys]
