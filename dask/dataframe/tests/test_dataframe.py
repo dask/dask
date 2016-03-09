@@ -72,6 +72,11 @@ def test_head_tail():
            sorted(d.tail(3, compute=False).dask)
 
 
+def test_index_head():
+    assert eq(d.index.head(2), full.index[:2])
+    assert eq(d.index.head(3), full.index[:3])
+
+
 def test_Series():
     assert isinstance(d.a, dd.Series)
     assert isinstance(d.a + 1, dd.Series)

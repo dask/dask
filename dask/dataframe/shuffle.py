@@ -22,7 +22,7 @@ def set_index(df, index, npartitions=None, compute=True,
 
     Sorts index and realigns Dataframe to new sorted order.
 
-    This shuffles and repartitions your data.  If done in parallel the
+    This shuffles and repartitions your data. If done in parallel the
     resulting order is non-deterministic.
     """
     if isinstance(index, (DataFrame, tuple, list)):
@@ -40,6 +40,7 @@ def set_index(df, index, npartitions=None, compute=True,
     divisions = (index2
                   .quantile(np.linspace(0, 1, npartitions + 1))
                   .compute()).tolist()
+
     return set_partition(df, index, divisions, compute=compute,
                          drop=drop, **kwargs)
 
@@ -175,12 +176,12 @@ def _set_collect(group, p, barrier_token, columns):
 def shuffle(df, index, npartitions=None):
     """ Group DataFrame by index
 
-    Hash grouping of elements.  After this operation all elements that have
-    the same index will be in the same partition.  Note that this requires
-    full dataset read, serialization and shuffle.  This is expensive.  If
+    Hash grouping of elements. After this operation all elements that have
+    the same index will be in the same partition. Note that this requires
+    full dataset read, serialization and shuffle. This is expensive. If
     possible you should avoid shuffles.
 
-    This does not preserve a meaningful index/partitioning scheme.  This is not
+    This does not preserve a meaningful index/partitioning scheme. This is not
     deterministic if done in parallel.
 
     See Also
