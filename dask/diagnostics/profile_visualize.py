@@ -231,6 +231,7 @@ class TasksPlot(object):
         self.plot.yaxis.axis_label = "Worker ID"
         self.plot.xaxis.axis_label = "Time (s)"
 
+        self.left = None
         self.worker_tasks = defaultdict(list)
 
         hover = self.plot.select(HoverTool)
@@ -291,13 +292,11 @@ class TasksPlot(object):
 
         id_lk = dict((t[0], n) for (n, t) in enumerate(timings))
 
-        left = min(starts)
-        # right = max(ends)
-
+        self.left = min(starts)
         funcs = [pprint_task(i, dsk, self.label_size) for i in tasks]
         width = [e - s for (s, e) in zip(starts, ends)]
         data['width'] = width
-        data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
+        data['x'] = [w/2 + s - self.left for (w, s) in zip(width, starts)]
         data['y'] = [id_lk[i] + 1 for i in ids]
         data['function'] = funcs
         data['color'] = get_colors(self.palette, funcs)
