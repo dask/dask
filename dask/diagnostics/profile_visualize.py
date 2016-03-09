@@ -256,6 +256,25 @@ class TasksPlot(object):
             x='x', y='y', height=1, width='width',
             color='color', line_color='gray')
 
+    def update_task(self, task, dsk, push=True):
+        if self.left is None:
+            self.left = task.start_time
+        if task.worker_id not in self.worker_y:
+            self.worker_y[task.worker_id] = len(self.worker_y)
+        width = task.end_time - task.start_time
+        func = pprint_task(task.task, dsk, self.label_size)
+        data = self.rect.data_source.data
+        data['width'].append(width)
+        data['x'].append(width / 2 + task.start_time - self.left)
+        data['y'].append(self.worker_y[task.worker_id] + 1)
+        data['function'].append(func)
+        data['color'] = get_colors(self.palette, data['function'])
+        data['key'].append(str(task.key))
+
+        if push and _state._notebook:
+            # TODO: verify last plot is p-ish
+            push_notebook()
+
     def update(self, results, dsk, push=True):
         '''
         Update the task plot data source
