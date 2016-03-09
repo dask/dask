@@ -2308,3 +2308,21 @@ def test_startup_shutdown_startup_sync(loop):
         sleep(0.1)
         with Executor(('127.0.0.1', s['port'])) as e:
             pass
+
+
+@gen_cluster(executor=True)
+def test_badly_serialized_exceptions(e, s, a, b):
+    def f():
+        class BadlySerializedException(Exception):
+            def __reduce__(self):
+                raise TypeError()
+        raise BadlySerializedException('hello world')
+
+    x = e.submit(f)
+
+    try:
+        result = yield x._result()
+    except Exception as e:
+        assert 'hello world' in str(e)
+    else:
+        assert False
