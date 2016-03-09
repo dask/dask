@@ -29,7 +29,10 @@ def loop():
     loop.make_current()
     yield loop
     loop.stop()
-    loop.close()
+    for i in range(5):
+        with ignoring(Exception):
+            loop.close()
+            break
 
 
 def inc(x):
