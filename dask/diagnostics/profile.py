@@ -88,9 +88,8 @@ class Profiler(Callback):
         data += (end, id)
         task_data = TaskData(*data)
         self.results.append(task_data)
-        # TODO: we really should coalesce updates to reduce notebook load when
-        # a lot of short tasks finish quickly
-        self.update_plot()
+        if self._tasks_plot:
+            self._tasks_plot.update_task(task_data, self._dsk)
 
     def _finish(self, dsk, state, failed):
         self._results.clear()
@@ -100,10 +99,6 @@ class Profiler(Callback):
         self._tasks_plot = TasksPlot(**kwargs)
         self._tasks_plot.update(self.results, self._dsk, push=False)
         return self._tasks_plot.plot
-
-    def update_plot(self):
-        if self._tasks_plot:
-            self._tasks_plot.update(self.results, self._dsk)
 
     def visualize(self, **kwargs):
         """Visualize the profiling run in a bokeh plot.
