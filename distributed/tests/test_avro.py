@@ -17,7 +17,7 @@ except:
 import fastavro
 from dask.imperative import Value
 
-from distributed.hdfs import _read_avro, avro_body, read_avro
+from distributed.hdfs import avro_body, read_avro
 from distributed.utils_test import gen_cluster, cluster, make_hdfs, loop
 from distributed import Executor
 from distributed.executor import Future
@@ -67,7 +67,7 @@ def test_avro(e, s, a, b):
 
             assert hdfs.info(k)['size'] > 0
 
-        L = yield _read_avro('/tmp/test/*.avro', lazy=False)
+        L = read_avro('/tmp/test/*.avro', lazy=False)
         assert isinstance(L, list)
         assert all(isinstance(x, Future) for x in L)
 
@@ -76,7 +76,7 @@ def test_avro(e, s, a, b):
         assert results[0][:5] == data[:5]
         assert results[-1][-5:] == data[-5:]
 
-        L = yield _read_avro('/tmp/test/*.avro', lazy=True)
+        L = read_avro('/tmp/test/*.avro', lazy=True)
         assert isinstance(L, list)
         assert all(isinstance(x, Value) for x in L)
 

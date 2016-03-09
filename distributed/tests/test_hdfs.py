@@ -12,7 +12,7 @@ from distributed.compatibility import unicode
 from distributed.utils_test import gen_cluster, cluster, loop, make_hdfs
 from distributed.utils import get_ip
 from distributed.hdfs import (read_bytes, get_block_locations, write_bytes,
-        read_csv, _read_text, read_text)
+        read_csv, read_text)
 from distributed import Executor
 from distributed.executor import _wait, Future
 
@@ -290,7 +290,7 @@ def test__read_text(e, s, a, b):
         with hdfs.open('/tmp/test/other.txt', 'wb') as f:
             f.write('a b\nc d'.encode())
 
-        b = yield _read_text('/tmp/test/text.*.txt',
+        b = read_text('/tmp/test/text.*.txt',
                              collection=True, lazy=True)
         yield gen.sleep(0.5)
         assert not s.tasks
@@ -299,17 +299,17 @@ def test__read_text(e, s, a, b):
         result = yield future._result()
         assert result == [2, 2, 2, 2, 2, 2]
 
-        b = yield _read_text('/tmp/test/other.txt',
+        b = read_text('/tmp/test/other.txt',
                              collection=True, lazy=False)
         future = e.compute(b.str.split().concat())
         result = yield future._result()
         assert result == ['a', 'b', 'c', 'd']
 
-        L = yield _read_text('/tmp/test/text.*.txt',
+        L = read_text('/tmp/test/text.*.txt',
                              collection=False, lazy=False)
         assert all(isinstance(x, Future) for x in L)
 
-        L = yield _read_text('/tmp/test/text.*.txt',
+        L = read_text('/tmp/test/text.*.txt',
                              collection=False, lazy=True)
         assert all(isinstance(x, Value) for x in L)
 
@@ -322,7 +322,7 @@ def test__read_text_unicode(e, s, a, b):
         with hdfs.open(fn, 'wb') as f:
             f.write(b'\n'.join([data, data]))
 
-        f = yield _read_text(fn, collection=False, lazy=False)
+        f = read_text(fn, collection=False, lazy=False)
         result = yield f[0]._result()
         assert len(result) == 2
         assert list(map(unicode.strip, result)) == [data.decode('utf-8')] * 2

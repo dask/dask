@@ -10,7 +10,6 @@ import sys
 
 from dask.imperative import Value
 from dask.base import tokenize
-from tornado import gen
 from toolz import merge
 
 from .compatibility import unicode
@@ -174,9 +173,20 @@ def avro_to_df(b, av):
     return pd.DataFrame(data=avro_body(b, av))
 
 
-@gen.coroutine
-def _read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
-    """ See distributed.hdfs.read_avro for docstring """
+def read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
+    """ Read avro encoded data from bytes on HDFS
+
+    Parameters
+    ----------
+    fn: string
+        filename or globstring of avro files on HDFS
+    lazy: boolean, optional
+        If True return dask Value objects
+
+    Returns
+    -------
+    List of futures of Python objects
+    """
     from hdfs3 import HDFileSystem
     from dask import do
     import fastavro
@@ -200,28 +210,10 @@ def _read_avro(path, executor=None, hdfs=None, lazy=True, **kwargs):
                                             for b in blocks]
 
     if lazy:
-        raise gen.Return(lazy_values)
+        return lazy_values
     else:
         futures = executor.compute(lazy_values)
-        raise gen.Return(futures)
-
-
-def read_avro(fn, executor=None, hdfs=None, lazy=True, **kwargs):
-    """ Read avro encoded data from bytes on HDFS
-
-    Parameters
-    ----------
-    fn: string
-        filename or globstring of avro files on HDFS
-    lazy: boolean, optional
-        If True return dask Value objects
-
-    Returns
-    -------
-    List of futures of Python objects
-    """
-    executor = default_executor(executor)
-    return sync(executor.loop, _read_avro, fn, executor, hdfs, lazy, **kwargs)
+        return futures
 
 
 def write_block_to_hdfs(fn, data, hdfs=None):
@@ -277,43 +269,8 @@ def write_bytes(path, futures, executor=None, hdfs=None, **hdfs_auth):
     return executor.map(write_block_to_hdfs, filenames, futures, hdfs=hdfs)
 
 
-@gen.coroutine
-def _read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
-               executor=None, hdfs=None, lazy=True, collection=True):
-    from hdfs3 import HDFileSystem
-    from dask import do
-    import pandas as pd
-    hdfs = hdfs or HDFileSystem()
-    executor = default_executor(executor)
-
-    filenames = sorted(hdfs.glob(fn))
-    blocks = [block for fn in filenames
-                    for block in read_bytes(fn, executor, hdfs, lazy=True,
-                                            delimiter=lineterminator.encode())]
-    strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
-    lines = [do(unicode.split)(s, lineterminator) for s in strings]
-
-    if lazy:
-        from dask.bag import from_imperative
-        if collection:
-            ensure_default_get(executor)
-            raise gen.Return(from_imperative(lines))
-        else:
-            raise gen.Return(lines)
-
-    else:
-        futures = executor.compute(lines)
-        from distributed.collections import _futures_to_dask_bag
-        if collection:
-            ensure_default_get(executor)
-            b = yield _futures_to_dask_bag(futures)
-            raise gen.Return(b)
-        else:
-            raise gen.Return(futures)
-
-
 def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
-              executor=None, hdfs=None, lazy=False, collection=True):
+               executor=None, hdfs=None, lazy=True, collection=True):
     """ Read text lines from HDFS
 
     Parameters
@@ -329,6 +286,30 @@ def read_text(fn, encoding='utf-8', errors='strict', lineterminator='\n',
     -------
     Dask bag (if collection=True) or Futures or dask values
     """
+    from hdfs3 import HDFileSystem
+    from dask import do
+    import pandas as pd
+    hdfs = hdfs or HDFileSystem()
     executor = default_executor(executor)
-    return sync(executor.loop, _read_text, fn, encoding, errors,
-            lineterminator, executor, hdfs, lazy, collection)
+    ensure_default_get(executor)
+
+    filenames = sorted(hdfs.glob(fn))
+    blocks = [block for fn in filenames
+                    for block in read_bytes(fn, executor, hdfs, lazy=True,
+                                            delimiter=lineterminator.encode())]
+    strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
+    lines = [do(unicode.split)(s, lineterminator) for s in strings]
+
+    from dask.bag import from_imperative
+    if collection:
+        result = from_imperative(lines)
+    else:
+        result = lines
+
+    if not lazy:
+        if collection:
+            result = executor.persist(result)
+        else:
+            result = executor.compute(result)
+
+    return result

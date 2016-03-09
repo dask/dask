@@ -9,7 +9,6 @@ import sys
 
 import boto3
 from botocore.exceptions import ClientError
-from tornado import gen
 
 from dask.imperative import Value, do
 from dask.base import tokenize
@@ -485,49 +484,9 @@ def read_block_from_s3(filename, offset, length, s3pars={}, delimiter=None):
     return bytes
 
 
-@gen.coroutine
-def _read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminator='\n',
+def read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminator='\n',
                executor=None, fs=None, lazy=True, collection=True,
                blocksize=2**27, compression=None):
-    if keyname is not None:
-        if not keyname.startswith('/'):
-            keyname = '/' + keyname
-        fn = fn + keyname
-    fs = fs or S3FileSystem()
-    executor = default_executor(executor)
-
-    if compression:
-        blocksize=None
-        decompress = decompressors[compression]
-
-    filenames = sorted(fs.glob(fn))
-    blocks = [block for fn in filenames
-                    for block in read_bytes(fn, executor, fs, lazy=True,
-                                            delimiter=lineterminator.encode(),
-                                            blocksize=blocksize)]
-    if compression:
-        blocks = [do(decompress)(b) for b in blocks]
-    strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
-    lines = [do(unicode.split)(s, lineterminator) for s in strings]
-
-    from dask.bag import from_imperative
-    if collection:
-        result = from_imperative(lines)
-    else:
-        result = lines
-
-    if not lazy:
-        if collection:
-            result = executor.persist(result)
-        else:
-            result = executor.compute(result)
-
-    raise gen.Return(result)
-
-
-def read_text(path, keyname=None, encoding='utf-8', errors='strict', lineterminator='\n',
-              executor=None, fs=None, lazy=False, collection=True,
-              blocksize=2**27, compression=None):
     """ Read text lines from S3
 
     Parameters
@@ -573,15 +532,62 @@ def read_text(path, keyname=None, encoding='utf-8', errors='strict', linetermina
     -------
     Dask bag if collection=True or Futures or dask values otherwise
     """
+    if keyname is not None:
+        if not keyname.startswith('/'):
+            keyname = '/' + keyname
+        fn = fn + keyname
+    fs = fs or S3FileSystem()
     executor = default_executor(executor)
-    return sync(executor.loop, _read_text, path, keyname, encoding, errors,
-            lineterminator, executor, fs, lazy, collection,
-            blocksize=blocksize, compression=compression)
+
+    if compression:
+        blocksize=None
+        decompress = decompressors[compression]
+
+    filenames = sorted(fs.glob(fn))
+    blocks = [block for fn in filenames
+                    for block in read_bytes(fn, executor, fs, lazy=True,
+                                            delimiter=lineterminator.encode(),
+                                            blocksize=blocksize)]
+    if compression:
+        blocks = [do(decompress)(b) for b in blocks]
+    strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
+    lines = [do(unicode.split)(s, lineterminator) for s in strings]
+
+    from dask.bag import from_imperative
+    if collection:
+        result = from_imperative(lines)
+    else:
+        result = lines
+
+    if not lazy:
+        if collection:
+            result = executor.persist(result)
+        else:
+            result = executor.compute(result)
+
+    return result
 
 
-@gen.coroutine
-def _read_csv(path, executor=None, fs=None, lazy=True, collection=True,
-        lineterminator='\n', blocksize=2**27, **kwargs):
+def read_csv(path, executor=None, fs=None, lazy=True, collection=True, lineterminator='\n', blocksize=2**27, **kwargs):
+    """ Read CSV encoded data from bytes on S3
+
+    Parameters
+    ----------
+    fn: string
+        bucket and filename or globstring of CSV files on S3
+    lazy: boolean, optional
+        Start compuatation immediately or return a fully lazy object
+    collection: boolean, optional
+        If True return a dask.dataframe, otherwise return a list of futures
+
+    Examples
+    --------
+    >>> df = distributed.s3.read_csv('distributed-test/csv/2015/')  # doctest: +SKIP
+
+    Returns
+    -------
+    List of futures of Python objects
+    """
     import pandas as pd
     fs = fs or S3FileSystem()
     executor = default_executor(executor)
@@ -608,32 +614,7 @@ def _read_csv(path, executor=None, fs=None, lazy=True, collection=True,
 
     result = formats.read_csv(blockss, header, head, kwargs, lazy, collection)
 
-    raise gen.Return(result)
-
-
-def read_csv(fn, executor=None, fs=None, lazy=True, collection=True, **kwargs):
-    """ Read CSV encoded data from bytes on S3
-
-    Parameters
-    ----------
-    fn: string
-        bucket and filename or globstring of CSV files on S3
-    lazy: boolean, optional
-        Start compuatation immediately or return a fully lazy object
-    collection: boolean, optional
-        If True return a dask.dataframe, otherwise return a list of futures
-
-    Examples
-    --------
-    >>> df = distributed.s3.read_csv('distributed-test/csv/2015/')  # doctest: +SKIP
-
-    Returns
-    -------
-    List of futures of Python objects
-    """
-    executor = default_executor(executor)
-    return sync(executor.loop, _read_csv, fn, executor, fs, lazy, collection,
-            **kwargs)
+    return result
 
 
 decompressors = {'gzip': gzip_decompress}
