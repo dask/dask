@@ -499,3 +499,11 @@ def test_uneven_blockdims():
            ('in', 1, 2): (getitem, ('out', 8, 7), (slice(0, 27, 1), slice(0, 18, 1)))}
     assert dsk_out == sol
     assert bd_out == ((3, 27), (1, 31, 18))
+
+
+def test_oob_check():
+    x = da.ones(5, chunks=(2,))
+    with pytest.raises(IndexError):
+        x[6]
+    with pytest.raises(IndexError):
+        x[[6]]
