@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import io
 import logging
 import re
 
@@ -402,29 +403,22 @@ class S3File(object):
     def __exit__(self, *args):
         self.close()
 
-MAX_ATTEMPTS = 10
 
 
-def _fetch_range(client, bucket, key, start, end):
-    try:
-        for i in range(MAX_ATTEMPTS):
-            try:
-                resp = client.get_object(Bucket=bucket, Key=key,
-                                         Range='bytes=%i-%i' % (start, end - 1))
-            except ClientError as e:
-                if e.response['Error'].get('Code', 'Unknown') in ['416', 'InvalidRange']:
-                    return b''
-            except Exception as e:
-                logger.debug('Exception %e on S3 download', e)
-                continue
-            buff = io.BytesIO()
-            buffer_size = 1024 * 16
-            for chunk in iter(lambda: resp['Body'].read(buffer_size),
-                              b''):
-                buff.write(chunk)
-            buff.seek(0)
-            return buff.read()
-        raise RuntimeError("Max number of S3 retries exceeded")
-    finally:
-        logger.debug("EXITING _fetch_range for part: %s/%s, %s-%s",
-                     bucket, key, start, end)
+def _fetch_range(client, bucket, key, start, end, max_attempts=10):
+    logger.debug("Fetch: %s/%s, %s-%s", bucket, key, start, end)
+    for i in range(max_attempts):
+        try:
+            resp = client.get_object(Bucket=bucket, Key=key,
+                                     Range='bytes=%i-%i' % (start, end - 1))
+            return resp['Body'].read()
+        except boto3.s3.transfer.S3_RETRYABLE_ERRORS as e:
+            logger.debug('Exception %e on S3 download, retrying',
+                         exc_info=True)
+            continue
+        except ClientError as e:
+            if e.response['Error'].get('Code', 'Unknown') in ['416', 'InvalidRange']:
+                return b''
+            else:
+                raise
+    raise RuntimeError("Max number of S3 retries exceeded")

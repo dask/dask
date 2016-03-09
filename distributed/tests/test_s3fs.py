@@ -3,7 +3,6 @@ import pytest
 from distributed.s3fs import S3FileSystem
 from distributed.s3 import seek_delimiter
 from distributed.utils_test import slow
-import moto
 
 # These get mirrored on s3://distributed-test/
 test_bucket_name = 'distributed-test'
@@ -50,6 +49,7 @@ def test_s3_file_info(s3):
     assert s3.info(fn)['Size'] == len(data)
     with pytest.raises((OSError, IOError)):
         s3.info(fn+'another')
+
 
 def test_du(s3):
     d = s3.du(test_bucket_name, deep=True)
