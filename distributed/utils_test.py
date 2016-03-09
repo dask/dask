@@ -15,7 +15,7 @@ from tornado.ioloop import IOLoop, TimeoutError
 from tornado.iostream import StreamClosedError
 
 from .core import connect, read, write, rpc
-from .utils import ignoring, log_errors
+from .utils import ignoring, log_errors, sync
 import pytest
 
 
@@ -28,7 +28,7 @@ def loop():
     loop = IOLoop()
     loop.make_current()
     yield loop
-    loop.stop()
+    sync(loop, loop.stop)
     for i in range(5):
         with ignoring(Exception):
             loop.close()

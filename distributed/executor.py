@@ -439,7 +439,7 @@ class Executor(object):
         with ignoring(AttributeError):
             self.scheduler.close_streams()
         if self._should_close_loop:
-            self.loop.stop()
+            sync(self.loop, self.loop.stop)
             self.loop.close()
             self._loop_thread.join(timeout=timeout)
         if _global_executor[0] is self:
