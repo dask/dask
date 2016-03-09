@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import defaultdict
 from itertools import cycle
 from operator import itemgetter, add
 
@@ -230,6 +231,8 @@ class TasksPlot(object):
         self.plot.yaxis.axis_label = "Worker ID"
         self.plot.xaxis.axis_label = "Time (s)"
 
+        self.worker_tasks = defaultdict(list)
+
         hover = self.plot.select(HoverTool)
         hover.tooltips = """
         <div>
@@ -277,11 +280,13 @@ class TasksPlot(object):
             data['key'] = []
             return
 
+        for task in results:
+            self.worker_tasks[task.id].append(task)
+
         keys, tasks, starts, ends, ids = zip(*results)
 
-        id_group = groupby(itemgetter(4), results)
         timings = ((k, [i.end_time - i.start_time for i in v])
-                   for (k, v) in iteritems(id_group))
+                   for (k, v) in iteritems(self.worker_tasks))
         timings = sorted(timings, key=itemgetter(1), reverse=True)
 
         id_lk = dict((t[0], n) for (n, t) in enumerate(timings))
