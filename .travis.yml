@@ -51,6 +51,7 @@ install:
   - conda install pytest coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests
   - pip install git+https://github.com/dask/dask.git --upgrade
   - conda install -c pandas pandas=v0.18.0rc1
+  - pip install moto
 
   # Install distributed
   - python setup.py install
