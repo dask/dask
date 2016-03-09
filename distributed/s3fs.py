@@ -4,6 +4,7 @@ import re
 
 import boto3
 from botocore.exceptions import ClientError
+from botocore.client import Config
 
 from dask.base import tokenize
 from .utils import read_block
@@ -40,6 +41,8 @@ class S3FileSystem(object):
     Access S3 data as if it were a file system.
     """
     _conn = {}
+    connect_timeout=5
+    read_timeout=15
 
     def __init__(self, anon=True, key=None, secret=None, **kwargs):
         """
@@ -73,11 +76,14 @@ class S3FileSystem(object):
                          self.anon)
             if self.anon:
                 from botocore import UNSIGNED
-                from botocore.client import Config
-                s3 = boto3.Session().client('s3',
-                         config=Config(signature_version=UNSIGNED))
+                conf = Config(connect_timeout=self.connect_timeout,
+                              read_timeout=self.read_timeout,
+                              signature_version=UNSIGNED)
+                s3 = boto3.Session().client('s3', config=conf)
             else:
-                s3 = boto3.Session(self.key, self.secret,
+                conf = Config(connect_timeout=self.connect_timeout,
+                              read_timeout=self.read_timeout)
+                s3 = boto3.Session(self.key, self.secret, config=conf
                                    **self.kwargs).client('s3')
             self._conn[tok] = s3
         return self._conn[tok]
@@ -342,31 +348,24 @@ class S3File(object):
         return self.loc
 
     def _fetch(self, start, end):
-        try:
-            if self.start is None and self.end is None:
-                # First read
-                self.start = start
-                self.end = end + self.blocksize
-                self.cache = self.s3.s3.get_object(Bucket=self.bucket, Key=self.key,
-                                                Range='bytes=%i-%i' % (start, self.end - 1)
-                                                )['Body'].read()
-            if start < self.start:
-                new = self.s3.s3.get_object(Bucket=self.bucket, Key=self.key,
-                                         Range='bytes=%i-%i' % (start, self.start - 1)
-                                         )['Body'].read()
-                self.start = start
-                self.cache = new + self.cache
-            if end > self.end:
-                if end > self.size:
-                    return
-                new = self.s3.s3.get_object(Bucket=self.bucket, Key=self.key,
-                                            Range='bytes=%i-%i' % (self.end, end + self.blocksize - 1)
-                                             )['Body'].read()
-                self.end = end + self.blocksize
-                self.cache = self.cache + new
-        except ClientError:
-            self.start = min([start, self.start or self.size])
-            self.end = max(end, self.end or self.size)
+        if self.start is None and self.end is None:
+            # First read
+            self.start = start
+            self.end = end + self.blocksize
+            self.cache = _fetch_range(self.s3.s3, self.bucket, self.key,
+                                      start, self.end)
+        if start < self.start:
+            new = _fetch_range(self.s3.s3, self.bucket, self.key,
+                               start, self.start)
+            self.start = start
+            self.cache = new + self.cache
+        if end > self.end:
+            if end > self.size:
+                return
+            new = _fetch_range(self.s3.s3, self.bucket, self.key,
+                               self.end, end + self.blocksize)
+            self.end = end + self.blocksize
+            self.cache = self.cache + new
 
     def read(self, length=-1):
         """
@@ -402,3 +401,30 @@ class S3File(object):
 
     def __exit__(self, *args):
         self.close()
+
+MAX_ATTEMPTS = 10
+
+
+def _fetch_range(client, bucket, key, start, end):
+    try:
+        for i in range(MAX_ATTEMPTS):
+            try:
+                resp = client.get_object(Bucket=bucket, Key=key,
+                                         Range='bytes=%i-%i' % (start, end - 1))
+            except ClientError as e:
+                if e.response['Error'].get('Code', 'Unknown') in ['416', 'InvalidRange']:
+                    return b''
+            except Exception as e:
+                logger.debug('Exception %e on S3 download', e)
+                continue
+            buff = io.BytesIO()
+            buffer_size = 1024 * 16
+            for chunk in iter(lambda: resp['Body'].read(buffer_size),
+                              b''):
+                buff.write(chunk)
+            buff.seek(0)
+            return buff.read()
+        raise RuntimeError("Max number of S3 retries exceeded")
+    finally:
+        logger.debug("EXITING _fetch_range for part: %s/%s, %s-%s",
+                     bucket, key, start, end)
