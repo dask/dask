@@ -117,6 +117,8 @@ class Future(WrappedKey):
         if self.status == 'error':
             exception = d['exception']
             traceback = d['traceback']
+            if isinstance(traceback, str):
+                traceback = None
             if raiseit:
                 six.reraise(type(exception), exception, traceback)
             else:
@@ -403,7 +405,8 @@ class Executor(object):
                     if msg['key'] in self.futures:
                         self.futures[msg['key']]['status'] = 'error'
                         self.futures[msg['key']]['exception'] = cloudpickle.loads(msg['exception'])
-                        self.futures[msg['key']]['traceback'] = cloudpickle.loads(msg['traceback'])
+                        self.futures[msg['key']]['traceback'] = (cloudpickle.loads(msg['traceback'])
+                                                                 if msg['traceback'] else None)
                         self.futures[msg['key']]['event'].set()
                 elif msg['op'] == 'restart':
                     logger.info("Receive restart signal from scheduler")

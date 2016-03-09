@@ -8,6 +8,7 @@ from multiprocessing.pool import ThreadPool
 import os
 import pkg_resources
 import tempfile
+import traceback
 import shutil
 import sys
 
@@ -236,12 +237,8 @@ class Worker(Server):
                 kwargs = loads(kwargs)
         except Exception as e:
             logger.warn("Could not deserialize task", exc_info=True)
-            tb = get_traceback()
-            e2 = truncate_exception(e, 1000)
             self.active.remove(key)
-            raise Return({'error': 'error',
-                          'exception': dumps(e2),
-                          'traceback': dumps(tb)})
+            raise Return(error_message(e))
 
         if task is not None:
             assert not function and not args and not kwargs
@@ -289,9 +286,6 @@ class Worker(Server):
             if result is not None:
                 out['type'] = dumps(type(result))
         except Exception as e:
-            tb = get_traceback()
-            e2 = truncate_exception(e, 1000)
-
             logger.warn(" Compute Failed\n"
                 "Function: %s\n"
                 "args:     %s\n"
@@ -299,14 +293,7 @@ class Worker(Server):
                 str(funcname(function))[:1000], str(args2)[:1000],
                 str(kwargs2)[:1000], exc_info=True)
 
-            try:
-                assert len(dumps(tb)) < 1e6
-            except:
-                tb = None
-
-            out = {'status': 'error',
-                   'exception': dumps(e2),
-                   'traceback': dumps(tb)}
+            out = error_message(e)
 
         logger.debug("Send compute response to scheduler: %s, %s", key, out)
         with ignoring(KeyError):
@@ -445,3 +432,31 @@ def dumps_task(task):
     return {'task': dumps(task)}
 
 
+def error_message(e):
+    """ Produce message to send back given an exception has occurred
+
+    This does the following:
+
+    1.  Gets the traceback
+    2.  Trunctes the exception and the traceback
+    3.  Serializes the exception and traceback or
+    4.  If they can't be serialized send string versions
+    5.  Format a message and return
+    """
+    tb = get_traceback()
+    e2 = truncate_exception(e, 1000)
+    try:
+        e3 = dumps(e2)
+    except Exception:
+        e3 = Exception(str(e2))
+        e3 = dumps(e3)
+    try:
+        tb2 = dumps(tb)
+    except Exception:
+        tb2 = ''.join(traceback.format_tb(tb))
+        tb2 = dumps(tb2)
+
+    if len(tb2) > 10000:
+        tb2 = None
+
+    return {'status': 'error', 'exception': e3, 'traceback': tb2}
