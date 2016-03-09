@@ -300,6 +300,22 @@ def test_map_partitions():
     assert b.map_partitions(lambda a: len(a) + 1).name != b.map_partitions(len).name
 
 
+def test_map_partitions_starargs():
+    assert sum(b.map_partitions(
+        lambda f, part: sum(x / f for x in part),
+        2
+    )) == 15
+    assert sum(b.map_partitions(
+        lambda total, part: sum(x / total for x in part),
+        b.reduction(sum, sum)
+    )) == 1.0
+    assert sum(b.map_partitions(
+        lambda lo, hi, part: sum((x - lo) / (hi - lo) for x in part),
+        b.reduction(min, min),
+        b.reduction(max, max)
+    )) == 7.5
+
+
 def test_lazify_task():
     task = (sum, (reify, (map, inc, [1, 2, 3])))
     assert lazify_task(task) == (sum, (map, inc, [1, 2, 3]))

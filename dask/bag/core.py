@@ -29,7 +29,8 @@ from ..core import list2, quote, istask, get_dependencies, reverse_dict
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (file_size, infer_compression, open, system_encoding,
-                     takes_multiple_arguments, textblock, funcname)
+                     takes_multiple_arguments, textblock, funcname,
+                     flat_unique, unzip)
 
 no_default = '__no__default__'
 
@@ -330,18 +331,38 @@ class Bag(Base):
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
-    def map_partitions(self, func):
+    def map_partitions(self, func, *args):
         """ Apply function to every partition within collection
 
         Note that this requires you to understand how dask.bag partitions your
         data and so is somewhat internal.
 
         >>> b.map_partitions(myfunc)  # doctest: +SKIP
+
+        Any additional arguments get passed to the function _before_ the
+        partition argument; argument values are first passed through
+        dask.imperative.to_task_dasks and any resulting dasks merged into the
+        result Bag dask:
+
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(100), partition_size=10)
+        >>> b.map_partitions(
+        ...     lambda total, part: [p / total for p in part],
+        ...     b.sum()
+        ... ).sum().compute()
+        1.0
         """
         name = 'map-partitions-{0}-{1}'.format(funcname(func),
-                                               tokenize(self, func))
-        dsk = dict(((name, i), (func, (self.name, i)))
+                                               tokenize(self, func, *args))
+        args_dsk = {}
+        if args:
+            args, dasks = unzip(map(to_task_dasks, args), 2)
+            dasks = flat_unique(dasks)
+            args_dsk = merge(*dasks)
+            args = tuple(args)
+        dsk = dict(((name, i), (func,) + args + ((self.name, i),))
                    for i in range(self.npartitions))
+        dsk = merge(dsk, args_dsk)
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def pluck(self, key, default=no_default):
