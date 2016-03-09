@@ -289,10 +289,12 @@ class TasksPlot(object):
         left = min(starts)
         # right = max(ends)
 
-        data['width'] = width = [e - s for (s, e) in zip(starts, ends)]
+        funcs = [pprint_task(i, dsk, self.label_size) for i in tasks]
+        width = [e - s for (s, e) in zip(starts, ends)]
+        data['width'] = width
         data['x'] = [w/2 + s - left for (w, s) in zip(width, starts)]
         data['y'] = [id_lk[i] + 1 for i in ids]
-        data['function'] = funcs = [pprint_task(i, dsk, self.label_size) for i in tasks]
+        data['function'] = funcs
         data['color'] = get_colors(self.palette, funcs)
         data['key'] = [str(i) for i in keys]
 
