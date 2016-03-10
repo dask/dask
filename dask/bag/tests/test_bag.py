@@ -68,6 +68,27 @@ def test_map_function_with_multiple_arguments():
     assert list(b.map(list).compute()) == [[1, 10], [2, 20], [3, 30]]
 
 
+def test_map_with_starargs():
+    b = db.from_sequence(range(10), npartitions=4)
+
+    assert sum(
+        b.map(lambda m, a: a * m, 2)
+        ) == 90
+    assert sum(
+        b.map(lambda t, a: a / t, b.sum())
+        ) == 1.0
+
+    assert sum(
+        b.map(lambda m, b, a: a * m + b, 2, 1)
+        ) == 100
+    assert sum(
+        b.map(lambda m, f, a: a * m / f, 2, b.sum())
+        ) == 2.0
+    assert sum(
+        b.map(lambda lo, hi, a: (a - lo) / (hi - lo), b.min(), b.max())
+        ) == 5.0
+
+
 class A(object):
     def __init__(self, a, b, c):
         pass
