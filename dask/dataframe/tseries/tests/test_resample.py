@@ -1,4 +1,5 @@
 from itertools import product
+from distutils.version import LooseVersion
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -6,6 +7,14 @@ import pytest
 
 from dask.utils import raises
 import dask.dataframe as dd
+
+
+if LooseVersion(pd.__version__) >= '0.18.0':
+    def resample(df, freq, how='mean', **kwargs):
+        return getattr(df.resample(freq, **kwargs), how)()
+else:
+    def resample(df, freq, how='mean', **kwargs):
+        return df.resample(freq, how=how, **kwargs)
 
 
 @pytest.mark.parametrize(['method', 'npartitions', 'freq', 'closed', 'label'],
@@ -20,10 +29,10 @@ def test_series_resample(method, npartitions, freq, closed, label):
     df = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(df, npartitions=npartitions)
     # Series output
-    result = ds.resample(freq, how=method, closed=closed, label=label)
+    result = resample(ds, freq, how=method, closed=closed, label=label)
     divisions = result.divisions
     result = result.compute()
-    expected = df.resample(freq, how=method, closed=closed, label=label)
+    expected = resample(df, freq, how=method, closed=closed, label=label)
     if method != 'ohlc':
         tm.assert_series_equal(result, expected, check_dtype=False)
     else:
@@ -37,4 +46,4 @@ def test_series_resample_not_implemented():
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day
-    assert raises(NotImplementedError, lambda: ds.resample('57T'))
+    assert raises(NotImplementedError, lambda: resample(ds, '57T'))
