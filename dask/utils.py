@@ -567,3 +567,11 @@ def funcname(func):
 def flat_unique(ls):
     """Flatten ``ls``, filter by unique id, and return a list"""
     return list(unique(chain.from_iterable(ls), key=id))
+
+
+def unzip(ls, nout):
+    """Unzip a list of lists into ``nout`` outputs."""
+    out = list(zip(*ls))
+    if not out:
+        out = [()] * nout
+    return out

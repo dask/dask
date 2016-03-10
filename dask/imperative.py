@@ -8,20 +8,12 @@ import uuid
 from toolz import merge, curry, first
 
 from .optimize import cull, fuse
-from .utils import funcname, ignoring, flat_unique
+from .utils import funcname, ignoring, flat_unique, unzip
 from . import base
 from .compatibility import apply
 from . import threaded
 
 __all__ = ['compute', 'do', 'value', 'Value']
-
-
-def unzip(ls, nout):
-    """Unzip a list of lists into ``nout`` outputs."""
-    out = list(zip(*ls))
-    if not out:
-        out = [()] * nout
-    return out
 
 
 def to_task_dasks(expr):
