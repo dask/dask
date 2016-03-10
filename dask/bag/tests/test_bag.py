@@ -323,15 +323,15 @@ def test_map_partitions():
 
 def test_map_partitions_starargs():
     assert sum(b.map_partitions(
-        lambda f, part: sum(x / f for x in part),
+        lambda part, f: sum(x / f for x in part),
         2
     )) == 15
     assert sum(b.map_partitions(
-        lambda total, part: sum(x / total for x in part),
+        lambda part, total: sum(x / total for x in part),
         b.reduction(sum, sum)
     )) == 1.0
     assert sum(b.map_partitions(
-        lambda lo, hi, part: sum((x - lo) / (hi - lo) for x in part),
+        lambda part, lo, hi: sum((x - lo) / (hi - lo) for x in part),
         b.reduction(min, min),
         b.reduction(max, max)
     )) == 7.5

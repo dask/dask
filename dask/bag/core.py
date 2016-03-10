@@ -354,7 +354,7 @@ class Bag(Base):
 
         >>> b.map_partitions(myfunc)  # doctest: +SKIP
 
-        Any additional arguments get passed to the function _before_ the
+        Any additional arguments get passed to the function _after? the
         partition argument; argument values are first passed through
         dask.imperative.to_task_dasks and any resulting dasks merged into the
         result Bag dask:
@@ -362,7 +362,7 @@ class Bag(Base):
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(100), partition_size=10)
         >>> b.map_partitions(
-        ...     lambda total, part: [p / total for p in part],
+        ...     lambda part, total: [p / total for p in part],
         ...     b.sum()
         ... ).sum().compute()
         1.0
@@ -375,7 +375,7 @@ class Bag(Base):
             dasks = flat_unique(dasks)
             args_dsk = merge(*dasks)
             args = tuple(args)
-        dsk = dict(((name, i), (func,) + args + ((self.name, i),))
+        dsk = dict(((name, i), (func, (self.name, i),) + args)
                    for i in range(self.npartitions))
         dsk = merge(dsk, args_dsk)
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
