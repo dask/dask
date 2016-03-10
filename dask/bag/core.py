@@ -22,7 +22,7 @@ with ignoring(ImportError):
     from cytoolz import (frequencies, merge_with, join, reduceby,
                          count, pluck, groupby, topk)
 
-from ..base import Base, normalize_token, tokenize
+from ..base import Base, normalize_token, tokenize, normalize_to_dasks
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
                              GzipFile)
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
@@ -32,6 +32,39 @@ from ..utils import (file_size, infer_compression, open, system_encoding,
                      takes_multiple_arguments, textblock, funcname)
 
 no_default = '__no__default__'
+
+
+def to_task_dasks(expr):
+    """Normalize a python object and extract all sub-dasks.
+
+    - Replace ``Items`` with their keys
+    - Convert literals to things the schedulers can handle
+    - Extract dasks from all enclosed values
+
+    Parameters
+    ----------
+    expr : object
+        The object to be normalized. This function knows how to handle
+        ``Item``s, as well as most builtin python types.
+
+    Returns
+    -------
+    task : normalized task to be run
+    dasks : list of dasks that form the dag for this task
+
+    Examples
+    --------
+
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(range(100))
+    >>> s = b.sum()
+    >>> task, dasks = to_task_dasks([s, 42])
+    >>> task  # doctest: +SKIP
+    ['sum-aggregate-55dba0e57481b225df8a07c2afa1820c2', 42]
+    """
+    return normalize_to_dasks(
+        expr,
+        (Item, lambda expr: (expr.key, [expr.dask])))
 
 
 def lazify_task(task, start=True):
