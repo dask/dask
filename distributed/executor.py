@@ -404,7 +404,11 @@ class Executor(object):
                 elif msg['op'] == 'task-erred':
                     if msg['key'] in self.futures:
                         self.futures[msg['key']]['status'] = 'error'
-                        self.futures[msg['key']]['exception'] = cloudpickle.loads(msg['exception'])
+                        try:
+                            self.futures[msg['key']]['exception'] = cloudpickle.loads(msg['exception'])
+                        except TypeError:
+                            self.futures[msg['key']]['exception'] = \
+                                Exception('Undeserializable exception', msg['exception'])
                         self.futures[msg['key']]['traceback'] = (cloudpickle.loads(msg['traceback'])
                                                                  if msg['traceback'] else None)
                         self.futures[msg['key']]['event'].set()

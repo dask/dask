@@ -447,6 +447,7 @@ def error_message(e):
     e2 = truncate_exception(e, 1000)
     try:
         e3 = dumps(e2)
+        loads(e3)
     except Exception:
         e3 = Exception(str(e2))
         e3 = dumps(e3)

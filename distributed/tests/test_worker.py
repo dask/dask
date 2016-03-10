@@ -14,7 +14,7 @@ from tornado.ioloop import TimeoutError
 from distributed.center import Center
 from distributed.core import rpc, dumps, loads
 from distributed.sizeof import sizeof
-from distributed.worker import Worker
+from distributed.worker import Worker, error_message
 from distributed.utils_test import loop, _test_cluster, inc, gen_cluster, slow
 
 
@@ -303,3 +303,14 @@ def test_worker_task_bytes(s, a, b):
 
     yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y')
     assert a.data['y'] == 11
+
+
+def test_error_message():
+    class MyException(Exception):
+        def __init__(self, a, b):
+            self.args = (a + b,)
+        def __str__(self):
+            return "MyException(%s)" % self.args
+
+    msg = error_message(MyException('Hello', 'World!'))
+    assert 'Hello' in str(msg['exception'])
