@@ -2,24 +2,18 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 from functools import wraps
-from itertools import chain, count
 import operator
 import uuid
 
-from toolz import merge, unique, curry, first
+from toolz import merge, curry, first
 
 from .optimize import cull, fuse
-from .utils import concrete, funcname, ignoring
+from .utils import funcname, ignoring, flat_unique
 from . import base
 from .compatibility import apply
 from . import threaded
 
 __all__ = ['compute', 'do', 'value', 'Value']
-
-
-def flat_unique(ls):
-    """Flatten ``ls``, filter by unique id, and return a list"""
-    return list(unique(chain.from_iterable(ls), key=id))
 
 
 def unzip(ls, nout):
