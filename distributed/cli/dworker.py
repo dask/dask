@@ -24,6 +24,8 @@ logger = logging.getLogger('distributed.dworker')
               help="Serving http port, defaults to randomly assigned")
 @click.option('--nanny-port', type=int, default=0,
               help="Serving nanny port, defaults to randomly assigned")
+@click.option('--port', type=int, default=0,
+              help="Deprecated, see --nanny-port")
 @click.option('--host', type=str, default=None,
               help="Serving host. Defaults to an ip address that can hopefully"
                    " be visible from the center network.")
@@ -33,7 +35,12 @@ logger = logging.getLogger('distributed.dworker')
               help="Number of worker processes.  Defaults to one.")
 @click.option('--name', type=str, default='', help="Alias")
 @click.option('--no-nanny', is_flag=True)
-def main(center, host, worker_port, http_port, nanny_port, nthreads, nprocs, no_nanny, name):
+def main(center, host, worker_port, http_port, nanny_port, nthreads, nprocs,
+        no_nanny, name, port):
+    if port:
+        logger.info("--port is deprecated, use --nanny-port instead")
+        assert not nanny_port
+        nanny_port = port
     try:
         center_host, center_port = center.split(':')
         center_ip = socket.gethostbyname(center_host)
