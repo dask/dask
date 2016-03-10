@@ -72,20 +72,20 @@ def test_map_with_starargs():
     b = db.from_sequence(range(10), npartitions=4)
 
     assert sum(
-        b.map(lambda m, a: a * m, 2)
+        b.map(lambda a, m: a * m, 2)
         ) == 90
     assert sum(
-        b.map(lambda t, a: a / t, b.sum())
+        b.map(lambda a, t: a / t, b.sum())
         ) == 1.0
 
     assert sum(
-        b.map(lambda m, b, a: a * m + b, 2, 1)
+        b.map(lambda a, m, b: a * m + b, 2, 1)
         ) == 100
     assert sum(
-        b.map(lambda m, f, a: a * m / f, 2, b.sum())
+        b.map(lambda a, m, f: a * m / f, 2, b.sum())
         ) == 2.0
     assert sum(
-        b.map(lambda lo, hi, a: (a - lo) / (hi - lo), b.min(), b.max())
+        b.map(lambda a, lo, hi: (a - lo) / (hi - lo), b.min(), b.max())
         ) == 5.0
 
 

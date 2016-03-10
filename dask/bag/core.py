@@ -68,6 +68,13 @@ def to_task_dasks(expr):
         (Item, lambda expr: (expr.key, [expr.dask])))
 
 
+def map_with_args(args, func, iterable):
+    # NOTE: this is only ever used in single-iterable context, so it is
+    # intentionally simplified to not support *iterables
+    args = tuple(args)
+    return map(lambda item: func(item, *args), iterable)
+
+
 def lazify_task(task, start=True):
     """
     Given a task, remove unnecessary calls to ``list``
@@ -286,24 +293,25 @@ class Bag(Base):
         >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
         [0, 10, 20, 30, 40]
 
-        Any additional arguments get passed to the function _before_ the data
+        Any additional arguments get passed to the function _after_ the data
         argument; argument values may either by concrete or a dask computation.
 
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(10), partition_size=2)
-        >>> b.map(lambda total, n: n / total, b.sum()).sum().compute()
+        >>> b.map(lambda n, total: n / total, b.sum()).sum().compute()
         1.0
         """
         name = 'map-{0}-{1}'.format(funcname(func), tokenize(self, func, *args))
         args_dsk = {}
+        mapper = (map,)
         if args:
             args, dasks = unzip(map(to_task_dasks, args), 2)
             dasks = flat_unique(dasks)
             args_dsk = merge(*dasks)
-            func = (partial, func) + tuple(args)
+            mapper = (map_with_args, list(args))
         elif takes_multiple_arguments(func):
             func = partial(apply, func)
-        dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
+        dsk = dict(((name, i), (reify, mapper + (func, (self.name, i))))
                    for i in range(self.npartitions))
         dsk = merge(dsk, args_dsk)
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
