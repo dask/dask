@@ -377,7 +377,7 @@ class Executor(object):
                 try:
                     msg = yield next_message()
                 except StreamClosedError:
-                    logger.info("Stream closed to scheduler", exc_info=True)
+                    logger.debug("Stream closed to scheduler", exc_info=True)
                     break
 
                 logger.debug("Executor receives message %s", msg)
