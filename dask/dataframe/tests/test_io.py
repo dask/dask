@@ -401,12 +401,27 @@ def test_from_pandas_dataframe():
     assert len(ddf.divisions) == len(ddf.dask) + 1
     assert type(ddf.divisions[0]) == type(df.index[0])
     tm.assert_frame_equal(df, ddf.compute())
+    ddf = dd.from_pandas(df, chunksize=8)
+    msg = 'Exactly one of npartitions and chunksize must be specified.'
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.from_pandas(df, npartitions=2, chunksize=2)
+    with tm.assertRaisesRegexp(ValueError, msg):
+        dd.from_pandas(df)
+    assert len(ddf.dask) == 3
+    assert len(ddf.divisions) == len(ddf.dask) + 1
+    assert type(ddf.divisions[0]) == type(df.index[0])
+    tm.assert_frame_equal(df, ddf.compute())
 
 
 def test_from_pandas_small():
     df = pd.DataFrame({'x': [1, 2, 3]})
     for i in [1, 2, 30]:
         a = dd.from_pandas(df, i)
+        assert len(a.compute()) == 3
+        assert a.divisions[0] == 0
+        assert a.divisions[-1] == 2
+
+        a = dd.from_pandas(df, chunksize=i)
         assert len(a.compute()) == 3
         assert a.divisions[0] == 0
         assert a.divisions[-1] == 2
@@ -422,10 +437,20 @@ def test_from_pandas_series():
     assert type(ds.divisions[0]) == type(s.index[0])
     tm.assert_series_equal(s, ds.compute())
 
+    ds = dd.from_pandas(s, chunksize=8)
+    assert len(ds.dask) == 3
+    assert len(ds.divisions) == len(ds.dask) + 1
+    assert type(ds.divisions[0]) == type(s.index[0])
+    tm.assert_series_equal(s, ds.compute())
+
 
 def test_from_pandas_non_sorted():
     df = pd.DataFrame({'x': [1, 2, 3]}, index=[3, 1, 2])
     ddf = dd.from_pandas(df, npartitions=2, sort=False)
+    assert not ddf.known_divisions
+    eq(df, ddf)
+    
+    ddf = dd.from_pandas(df, chunksize=2, sort=False)
     assert not ddf.known_divisions
     eq(df, ddf)
 
@@ -905,7 +930,8 @@ def test_from_pandas_with_datetime_index():
                          parse_dates=['Date'])
         ddf = dd.from_pandas(df, 2)
         eq(df, ddf)
-
+        ddf = dd.from_pandas(df, chunksize=2)
+        eq(df, ddf)
 
 @pytest.mark.parametrize('encoding', ['utf-16', 'utf-16-le', 'utf-16-be'])
 def test_encoding_gh601(encoding):
