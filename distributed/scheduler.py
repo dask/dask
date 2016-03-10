@@ -241,7 +241,8 @@ class Scheduler(Server):
         d = {'type': type(self).__name__,
              'id': str(self.id),
              'workers': list(self.ncores),
-             'services': {key: v.port for (key, v) in self.services.items()}}
+             'services': {key: v.port for (key, v) in self.services.items()},
+             'workers': dict(self.worker_info)}
         return d
 
     def put(self, msg):

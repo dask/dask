@@ -18,10 +18,12 @@ logger = logging.getLogger('distributed.dworker')
 
 @click.command()
 @click.argument('center', type=str)
-@click.option('--port', type=int, default=0,
-              help="Serving port, defaults to randomly assigned")
+@click.option('--worker-port', type=int, default=0,
+              help="Serving worker port, defaults to randomly assigned")
 @click.option('--http-port', type=int, default=0,
               help="Serving http port, defaults to randomly assigned")
+@click.option('--nanny-port', type=int, default=0,
+              help="Serving nanny port, defaults to randomly assigned")
 @click.option('--host', type=str, default=None,
               help="Serving host. Defaults to an ip address that can hopefully"
                    " be visible from the center network.")
@@ -31,7 +33,7 @@ logger = logging.getLogger('distributed.dworker')
               help="Number of worker processes.  Defaults to one.")
 @click.option('--name', type=str, default='', help="Alias")
 @click.option('--no-nanny', is_flag=True)
-def main(center, host, port, http_port, nthreads, nprocs, no_nanny, name):
+def main(center, host, worker_port, http_port, nanny_port, nthreads, nprocs, no_nanny, name):
     try:
         center_host, center_port = center.split(':')
         center_ip = socket.gethostbyname(center_host)
@@ -39,7 +41,7 @@ def main(center, host, port, http_port, nthreads, nprocs, no_nanny, name):
     except IndexError:
         logger.info("Usage:  dworker center_host:center_port")
 
-    if nprocs > 1 and port != 0:
+    if nprocs > 1 and worker_port != 0:
         logger.error("Failed to launch worker.  You cannot use the --port argument when nprocs > 1.")
         exit(1)
 
@@ -61,11 +63,12 @@ def main(center, host, port, http_port, nthreads, nprocs, no_nanny, name):
         # reach the center
         ip = get_ip(center_ip, center_port)
     nannies = [t(center_ip, center_port, ncores=nthreads, ip=ip,
-                 services=services, name=name, loop=loop)
+                 services=services, name=name, loop=loop,
+                 worker_port=worker_port)
                for i in range(nprocs)]
 
     for nanny in nannies:
-        nanny.start(port)
+        nanny.start(nanny_port)
     try:
         loop.start()
     except KeyboardInterrupt:
