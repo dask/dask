@@ -22,11 +22,12 @@ class Nanny(Server):
     The nanny spins up Worker processes, watches then, and kills or restarts
     them as necessary.
     """
-    def __init__(self, center_ip, center_port, ip=None,
+    def __init__(self, center_ip, center_port, ip=None, worker_port=0,
                 ncores=None, loop=None, local_dir=None, services=None,
                 name=None, **kwargs):
         self.ip = ip or get_ip()
         self.worker_port = None
+        self._given_worker_port = worker_port
         self.ncores = ncores
         self.local_dir = local_dir
         self.worker_dir = ''
@@ -102,8 +103,8 @@ class Nanny(Server):
         self.process = Process(target=run_worker,
                                args=(q, self.ip, self.center.ip,
                                      self.center.port, self.ncores,
-                                     self.port, self.local_dir, self.services,
-                                     self.name))
+                                     self.port, self._given_worker_port,
+                                     self.local_dir, self.services, self.name))
         self.process.daemon = True
         self.process.start()
         while True:
@@ -191,7 +192,7 @@ class Nanny(Server):
 
 
 def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
-        local_dir, services, name):
+        worker_port, local_dir, services, name):
     """ Function run by the Nanny when creating the worker """
     from distributed import Worker  # pragma: no cover
     from tornado.ioloop import IOLoop  # pragma: no cover
@@ -205,7 +206,7 @@ def run_worker(q, ip, center_ip, center_port, ncores, nanny_port,
     @gen.coroutine  # pragma: no cover
     def start():
         try:  # pragma: no cover
-            yield worker._start()  # pragma: no cover
+            yield worker._start(worker_port)  # pragma: no cover
         except Exception as e:  # pragma: no cover
             logger.exception(e)  # pragma: no cover
             q.put(e)  # pragma: no cover
