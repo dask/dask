@@ -541,7 +541,7 @@ class Scheduler(Server):
     def mark_task_finished(self, key, worker, nbytes, type=None):
         """ Mark that a task has finished execution on a particular worker """
         logger.debug("Mark task as finished %s, %s", key, worker)
-        if key in self.processing[worker]:
+        if worker in self.processing and key in self.processing[worker]:
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker], type=type)
             self.ensure_occupied(worker)
