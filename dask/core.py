@@ -38,7 +38,12 @@ def istask(x):
     >>> istask(1)
     False
     """
-    return type(x) is tuple and x and callable(x[0])
+    if type(x) is not tuple:
+        return False
+    head = x[0]
+    if callable(head):
+        return True
+    return False
 
 
 def preorder_traversal(task):
