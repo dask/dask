@@ -304,6 +304,7 @@ def subs(task, key, val):
         if isinstance(task, list):
             return [subs(x, key, val) for x in task]
         return task
+    head = task[:1]
     newargs = []
     for arg in task[1:]:
         if istask(arg):
@@ -313,7 +314,7 @@ def subs(task, key, val):
         elif type(arg) is type(key) and arg == key:
             arg = val
         newargs.append(arg)
-    return task[:1] + tuple(newargs)
+    return head + tuple(newargs)
 
 
 def _toposort(dsk, keys=None, returncycle=False):
