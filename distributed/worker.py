@@ -542,7 +542,7 @@ def apply_function(function, args, kwargs):
         msg = {'status': 'OK',
                'result': result,
                'nbytes': sizeof(result),
-               'type': dumps(type(result)) if result is not None else None}
+               'type': dumps_function(type(result)) if result is not None else None}
     finally:
         end = default_timer()
     msg['compute-time'] = end - start
