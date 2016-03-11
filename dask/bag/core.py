@@ -254,9 +254,14 @@ class Bag(Base):
         """
         name = 'map-{0}-{1}'.format(funcname(func), tokenize(self, func))
         dsk = self.dask.copy()
-        if takes_multiple_arguments(func):
-            func = partial(apply, func)
-        dsk.update(((name, i), (reify, (map, func, (self.name, i))))
+        if isinstance(func, Value):
+            dsk = merge(dsk, func.dask)
+            func = (dsk.pop(func.key),)
+        elif takes_multiple_arguments(func):
+            func = (partial(apply, func),)
+        else:
+            func = (func,)
+        dsk.update(((name, i), (reify, (map,) + func + ((self.name, i),)))
                    for i in range(self.npartitions))
         return type(self)(dsk, name, self.npartitions)
 
