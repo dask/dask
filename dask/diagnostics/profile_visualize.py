@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import partial
 from itertools import cycle
 from operator import itemgetter, add
 
@@ -66,8 +67,16 @@ def pprint_task(task, keys, label_size=60):
             tail = ')'
             args = unquote(task[2]) if len(task) > 2 else ()
             kwargs = unquote(task[3]) if len(task) > 3 else {}
+        elif func is partial:
+            head = 'partial(%s, ' % funcname(task[1])
+            args = task[2:]
+            kwargs = {}
+            tail = '))'
         else:
-            if hasattr(func, 'funcs'):
+            if istask(func):
+                head = pprint_task(func, keys, label_size)
+                tail = ')'
+            elif hasattr(func, 'funcs'):
                 head = '('.join(funcname(f) for f in func.funcs)
                 tail = ')'*len(func.funcs)
             else:

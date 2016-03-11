@@ -1,3 +1,4 @@
+from functools import partial
 from operator import add, mul
 import os
 from time import sleep
@@ -153,6 +154,11 @@ def test_pprint_task():
     task = (apply, foo, (tuple, ['a', 'b']),
             (dict, [['y', ['a', 1]], ['z', 1]]))
     assert pprint_task(task, keys) == 'foo(_, _, y=[_, *], z=*)'
+
+    # With computed function
+    # TODO: the extra internal parenthetical is undesirable
+    task = ((partial, add, 'a'), 'b')
+    assert pprint_task(task, keys) == 'partial(add, (_))(_)'
 
 
 @pytest.mark.skipif("not bokeh")
