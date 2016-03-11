@@ -18,7 +18,7 @@ def getnanos(rule):
 
 if LooseVersion(pd.__version__) >= '0.18.0':
     def _resample_apply(s, rule, how, resample_kwargs):
-        return getattr(s.resample(rule, how=how, **resample_kwargs), how)()
+        return getattr(s.resample(rule, **resample_kwargs), how)()
 
     def _resample(obj, rule, how, **kwargs):
         resampler = Resampler(obj, rule, **kwargs)

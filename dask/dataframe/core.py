@@ -1771,8 +1771,7 @@ def _loc(df, start, stop, include_right_boundary=True):
     """
     result = df.loc[start:stop]
     if not include_right_boundary:
-        right_index = result.index.get_slice_bound(stop, 'left',
-                                                   result.index.inferred_type)
+        right_index = result.index.get_slice_bound(stop, 'left', 'loc')
         result = result.iloc[:right_index]
     return result
 
