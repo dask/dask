@@ -314,6 +314,9 @@ class Bag(Base):
         name = 'map-partitions-{0}-{1}'.format(funcname(func),
                                                tokenize(self, func))
         dsk = self.dask.copy()
+        if isinstance(func, Value):
+            dsk = merge(dsk, func.dask)
+            func = dsk.pop(func.key)
         dsk.update(((name, i), (func, (self.name, i)))
                    for i in range(self.npartitions))
         return type(self)(dsk, name, self.npartitions)
