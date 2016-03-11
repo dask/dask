@@ -477,7 +477,8 @@ class Bag(Base):
             split_every = self.npartitions
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
-        dsk = dict(((a, i), (perpartition, (self.name, i)))
+        dsk = self.dask.copy()
+        dsk.update(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
@@ -495,9 +496,9 @@ class Bag(Base):
 
         if out_type is Item:
             dsk[b] = dsk.pop((b, 0))
-            return Item(merge(self.dask, dsk), b)
+            return Item(dsk, b)
         else:
-            return Bag(merge(self.dask, dsk), b, 1)
+            return Bag(dsk, b, 1)
 
     @wraps(sum)
     def sum(self, split_every=None):
