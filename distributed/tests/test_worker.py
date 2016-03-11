@@ -281,7 +281,7 @@ def test_worker_waits_for_center_to_come_up(loop):
 @gen_cluster()
 def test_worker_task(s, a, b):
     aa = rpc(ip=a.ip, port=a.port)
-    yield aa.compute(task=dumps((inc, 1)), key='x')
+    yield aa.compute(task=dumps((inc, 1)), key='x', report=False)
 
     assert a.data['x'] == 2
 
@@ -289,7 +289,7 @@ def test_worker_task(s, a, b):
 @gen_cluster()
 def test_worker_task_data(s, a, b):
     aa = rpc(ip=a.ip, port=a.port)
-    yield aa.compute(task=dumps(2), key='x')
+    yield aa.compute(task=dumps(2), key='x', report=False)
 
     assert a.data['x'] == 2
 
@@ -298,10 +298,11 @@ def test_worker_task_data(s, a, b):
 def test_worker_task_bytes(s, a, b):
     aa = rpc(ip=a.ip, port=a.port)
 
-    yield aa.compute(task=dumps((inc, 1)), key='x')
+    yield aa.compute(task=dumps((inc, 1)), key='x', report=False)
     assert a.data['x'] == 2
 
-    yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y')
+    yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y',
+            report=False)
     assert a.data['y'] == 11
 
 

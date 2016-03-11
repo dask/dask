@@ -8,13 +8,14 @@ from multiprocessing.pool import ThreadPool
 import os
 import pkg_resources
 import tempfile
+from timeit import default_timer
 import traceback
 import shutil
 import sys
 
 from dask.core import istask
 from dask.compatibility import apply
-from toolz import merge, valmap
+from toolz import merge, valmap, dissoc
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -26,7 +27,7 @@ from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
         error_message)
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
-    ignoring, _maybe_complex)
+    ignoring, _maybe_complex, log_errors)
 
 _ncores = ThreadPool()._processes
 
@@ -220,10 +221,8 @@ class Worker(Server):
             raise Return({'status': 'OK'})
 
     @gen.coroutine
-    def compute(self, stream, function=None, key=None, args=(), kwargs={},
-            task=None, who_has=None, report=True):
-        """ Execute function """
-        self.active.add(key)
+    def _ready_task(self, function=None, key=None, args=(), kwargs={},
+            task=None, who_has=None):
         if who_has:
             local_data = {k: self.data[k] for k in who_has if k in self.data}
             who_has = {k: set(map(coerce_to_address, v))
@@ -232,18 +231,21 @@ class Worker(Server):
             try:
                 logger.info("gather %d keys from peers: %s",
                             len(who_has), str(who_has))
+                start = default_timer()
                 other = yield gather_from_workers(who_has)
+                transfer_time = default_timer() - start
+                data = merge(local_data, other)
             except KeyError as e:
                 logger.warn("Could not find data during gather in compute",
                             exc_info=True)
-                self.active.remove(key)
                 raise Return({'status': 'missing-data',
-                              'keys': e.args})
-            data = merge(local_data, other)
+                              'keys': e.args,
+                              'key': key})
         else:
             data = {}
-
+            transfer_time = 0
         try:
+            start = default_timer()
             if task is not None:
                 task = loads(task)
             if function is not None:
@@ -252,9 +254,9 @@ class Worker(Server):
                 args = loads(args)
             if kwargs:
                 kwargs = loads(kwargs)
+            deserialization_time = default_timer() - start
         except Exception as e:
             logger.warn("Could not deserialize task", exc_info=True)
-            self.active.remove(key)
             raise Return(error_message(e))
 
         if task is not None:
@@ -266,56 +268,92 @@ class Worker(Server):
         args2 = pack_data(args, data)
         kwargs2 = pack_data(kwargs, data)
 
-        # Log and compute in separate thread
+        raise Return({'status': 'OK',
+                      'function': function,
+                      'args': args2,
+                      'kwargs': kwargs2,
+                      'diagnostics': {'transfer': transfer_time,
+                                      'deserialization': deserialization_time},
+                      'key': key})
+
+    @gen.coroutine
+    def executor_submit(self, key, function, *args, **kwargs):
+        """ Safely run function in thread pool executor
+
+        We've run into issues running concurrent.future futures within
+        tornado.  Apparently it's advantageous to use timeouts and periodic
+        callbacks to ensure things run smoothly.  This can get tricky, so we
+        pull it off into an separate method.
+        """
+        job_counter[0] += 1
+        i = job_counter[0]
+        logger.info("Start job %d, %s", i, key)
+        future = self.executor.submit(function, *args, **kwargs)
+        pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
+            key, future._state), 1000); pc.start()
         try:
-            job_counter[0] += 1
-            i = job_counter[0]
-            logger.info("Start job %d: %s - %s", i, funcname(function), key)
-            future = self.executor.submit(function, *args2, **kwargs)
-            pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
-                key, future._state), 1000)
-            pc.start()
-            try:
-                if sys.version_info < (3, 2):
-                    yield future
-                else:
-                    while not future.done() and future._state != 'FINISHED':
-                        try:
-                            yield gen.with_timeout(timedelta(seconds=1), future)
-                            break
-                        except gen.TimeoutError:
-                            logger.info("work queue size: %d", self.executor._work_queue.qsize())
-                            logger.info("future state: %s", future._state)
-                            logger.info("Pending job %d: %s", i, future)
-            finally:
-                pc.stop()
-            result = future.result()
-            logger.info("Finish job %d: %s - %s", i, funcname(function), key)
-            self.data[key] = result
-            if report:
-                response = yield self.center.add_keys(address=(self.ip, self.port),
-                                                      keys=[key])
-                if not response == 'OK':
-                    logger.warn('Could not report results to center: %s',
-                                response.decode())
-            out = {'status': 'OK',
-                   'nbytes': sizeof(result)}
-            if result is not None:
-                out['type'] = dumps(type(result))
-        except Exception as e:
-            logger.warn(" Compute Failed\n"
-                "Function: %s\n"
-                "args:     %s\n"
-                "kwargs:   %s\n",
-                str(funcname(function))[:1000], str(args2)[:1000],
-                str(kwargs2)[:1000], exc_info=True)
+            if sys.version_info < (3, 2):
+                yield future
+            else:
+                while not future.done() and future._state != 'FINISHED':
+                    try:
+                        yield gen.with_timeout(timedelta(seconds=1), future)
+                        break
+                    except gen.TimeoutError:
+                        logger.info("work queue size: %d", self.executor._work_queue.qsize())
+                        logger.info("future state: %s", future._state)
+                        logger.info("Pending job %d: %s", i, future)
+        finally:
+            pc.stop()
 
-            out = error_message(e)
+        result = future.result()
+        logger.info("Finish job %d, %s", i, key)
+        return result
 
-        logger.debug("Send compute response to scheduler: %s, %s", key, out)
-        with ignoring(KeyError):
-            self.active.remove(key)
-        raise Return(out)
+    @gen.coroutine
+    def compute(self, stream, function=None, key=None, args=(), kwargs={},
+            task=None, who_has=None, report=True):
+        """ Execute function """
+        with log_errors():
+            self.active.add(key)
+
+            # Ready function for computation
+            msg = yield self._ready_task(function=function, key=key, args=args,
+                kwargs=kwargs, task=task, who_has=who_has)
+            if msg['status'] != 'OK':
+                self.active.remove(key)
+                raise Return(msg)
+            else:
+                function = msg['function']
+                args = msg['args']
+                kwargs = msg['kwargs']
+
+            # Log and compute in separate thread
+            result = yield self.executor_submit(key, apply_function, function,
+                                                args, kwargs)
+            result['key'] = key
+            result.update(msg['diagnostics'])
+
+            if result['status'] == 'OK':
+                self.data[key] = result.pop('result')
+                if report:
+                    response = yield self.center.add_keys(address=(self.ip, self.port),
+                                                          keys=[key])
+                    if not response == 'OK':
+                        logger.warn('Could not report results to center: %s',
+                                    response.decode())
+            else:
+                logger.warn(" Compute Failed\n"
+                    "Function: %s\n"
+                    "args:     %s\n"
+                    "kwargs:   %s\n",
+                    str(funcname(function))[:1000], str(args)[:1000],
+                    str(kwargs)[:1000], exc_info=True)
+
+            logger.debug("Send compute response to scheduler: %s, %s", key, msg)
+            with ignoring(KeyError):
+                self.active.remove(key)
+            raise Return(result)
 
     @gen.coroutine
     def run(self, stream, function=None, args=(), kwargs={}):
@@ -461,3 +499,26 @@ def dumps_task(task):
             return {'function': dumps_function(task[0]),
                         'args': dumps(task[1:])}
     return {'task': dumps(task)}
+
+
+def apply_function(function, args, kwargs):
+    """ Run a function, collect information
+
+    Returns
+    -------
+    msg: dictionary with status, result/error, timings, etc..
+    """
+    start = default_timer()
+    try:
+        result = function(*args, **kwargs)
+    except Exception as e:
+        msg = error_message(e)
+    else:
+        msg = {'status': 'OK',
+               'result': result,
+               'nbytes': sizeof(result),
+               'type': dumps(type(result)) if result is not None else None}
+    finally:
+        end = default_timer()
+    msg['compute-time'] = end - start
+    return msg
