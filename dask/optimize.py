@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import partial
 from itertools import count
 from operator import getitem
 
@@ -220,7 +221,11 @@ def functions_of(task):
     result = set()
     if istask(task):
         args = set.union(*map(functions_of, task[1:])) if task[1:] else set()
-        return set([unwrap_partial(task[0])]) | args
+        if istask(task[0]):
+            args |= functions_of(task[0])
+        else:
+            args.add(unwrap_partial(task[0]))
+        return args
     if isinstance(task, (list, tuple)):
         if not task:
             return set()
@@ -229,7 +234,7 @@ def functions_of(task):
 
 
 def unwrap_partial(func):
-    while hasattr(func, 'func'):
+    while hasattr(func, 'func') and func is not partial:
         func = func.func
     return func
 

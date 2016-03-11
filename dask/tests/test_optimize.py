@@ -186,6 +186,7 @@ def test_functions_of():
     assert functions_of(1) == set()
     assert functions_of(a) == set()
     assert functions_of((a,)) == set([a])
+    assert functions_of(((partial, add, 1), 2)) == set([partial])
 
 
 def test_dealias():
