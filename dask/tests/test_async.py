@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from functools import partial
 from operator import add
 from copy import deepcopy
 
@@ -87,6 +88,15 @@ def test_finish_task():
 
 def test_get():
     dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
+    assert get_sync(dsk, 'w') == 4
+    assert get_sync(dsk, ['w', 'z']) == (4, 2)
+
+
+def test_get_with_computed_func():
+    dsk = {'x': 1,
+           'y': 2,
+           'z': (inc, 'x'),
+           'w': ((partial, add, 'z'), 'y')}
     assert get_sync(dsk, 'w') == 4
     assert get_sync(dsk, ['w', 'z']) == (4, 2)
 

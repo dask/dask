@@ -553,6 +553,9 @@ def derived_from(original_klass, version=None, ua_args=[]):
 
 def funcname(func):
     """Get the name of a function."""
+    from .imperative import Value
+    if isinstance(func, Value):
+        return 'value-func-' + str(func.key)
     while hasattr(func, 'func'):
         func = func.func
     try:

@@ -26,6 +26,7 @@ from ..base import Base, normalize_token, tokenize
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
                              GzipFile)
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
+from ..imperative import Value
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (file_size, infer_compression, open, system_encoding,
@@ -52,6 +53,7 @@ def lazify_task(task, start=True):
         task = task[1]
         return lazify_task(*tail, start=False)
     else:
+        head = lazify_task(head, start=False)
         return (head,) + tuple([lazify_task(arg, False) for arg in tail])
 
 
@@ -253,11 +255,17 @@ class Bag(Base):
         [0, 10, 20, 30, 40]
         """
         name = 'map-{0}-{1}'.format(funcname(func), tokenize(self, func))
-        if takes_multiple_arguments(func):
-            func = partial(apply, func)
-        dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
+        dsk = self.dask.copy()
+        if isinstance(func, Value):
+            dsk = merge(dsk, func.dask)
+            func = (dsk.pop(func.key),)
+        elif takes_multiple_arguments(func):
+            func = (partial(apply, func),)
+        else:
+            func = (func,)
+        dsk.update(((name, i), (reify, (map,) + func + ((self.name, i),)))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(dsk, name, self.npartitions)
 
     @property
     def _args(self):
@@ -307,9 +315,13 @@ class Bag(Base):
         """
         name = 'map-partitions-{0}-{1}'.format(funcname(func),
                                                tokenize(self, func))
-        dsk = dict(((name, i), (func, (self.name, i)))
+        dsk = self.dask.copy()
+        if isinstance(func, Value):
+            dsk = merge(dsk, func.dask)
+            func = dsk.pop(func.key)
+        dsk.update(((name, i), (func, (self.name, i)))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(dsk, name, self.npartitions)
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
@@ -394,6 +406,7 @@ class Bag(Base):
         """
         combine = combine or binop
         initial = quote(initial)
+        # TODO: support value-funcs
         if initial is not no_default:
             return self.reduction(curry(_reduce, binop, initial=initial),
                                   curry(_reduce, combine),
@@ -476,11 +489,18 @@ class Bag(Base):
             split_every = self.npartitions
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
-        dsk = dict(((a, i), (perpartition, (self.name, i)))
+        dsk = self.dask.copy()
+        if isinstance(perpartition, Value):
+            dsk = merge(dsk, perpartition.dask)
+            perpartition = dsk.pop(perpartition.key)
+        dsk.update(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
         fmt = '%s-aggregate-%s' % (name or funcname(aggregate), token)
+        if isinstance(aggregate, Value):
+            dsk = merge(dsk, aggregate.dask)
+            aggregate = dsk.pop(aggregate.key)
         depth = 0
         while k > 1:
             c = fmt + str(depth)
@@ -494,9 +514,9 @@ class Bag(Base):
 
         if out_type is Item:
             dsk[b] = dsk.pop((b, 0))
-            return Item(merge(self.dask, dsk), b)
+            return Item(dsk, b)
         else:
-            return Bag(merge(self.dask, dsk), b, 1)
+            return Bag(dsk, b, 1)
 
     @wraps(sum)
     def sum(self, split_every=None):

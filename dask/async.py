@@ -242,6 +242,8 @@ def _execute_task(arg, cache, dsk=None):
         return [_execute_task(a, cache) for a in arg]
     elif istask(arg):
         func, args = arg[0], arg[1:]
+        if istask(func):
+            func = _execute_task(func, cache)
         args2 = [_execute_task(a, cache) for a in args]
         return func(*args2)
     elif not ishashable(arg):

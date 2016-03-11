@@ -1,4 +1,5 @@
 from collections import namedtuple
+from functools import partial
 from operator import add
 
 from dask.utils import raises
@@ -29,11 +30,13 @@ def test_istask():
     assert not istask((1, 2))
     f = namedtuple('f', ['x', 'y'])
     assert not istask(f(sum, 2))
+    assert istask(((partial, lambda a, b: a + b, 1), 2))
 
 
 d = {':x': 1,
      ':y': (inc, ':x'),
-     ':z': (add, ':x', ':y')}
+     ':z': (add, ':x', ':y'),
+     ':zz': ((partial, lambda a, b: a + b, ':x'), ':y')}
 
 
 def test_preorder_traversal():
@@ -49,6 +52,7 @@ def test_get():
     assert get(d, ':x') == 1
     assert get(d, ':y') == 2
     assert get(d, ':z') == 3
+    assert get(d, ':zz') == 3
     assert get(d, 'pass-through') == 'pass-through'
 
 
