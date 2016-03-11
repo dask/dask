@@ -43,7 +43,7 @@ def istask(x):
     head = x[0]
     if callable(head):
         return True
-    return False
+    return istask(head)
 
 
 def preorder_traversal(task):
@@ -65,19 +65,30 @@ def _get_task(d, task, maxdepth=1000):
     # non-recursive.  DAG property is checked upon reaching maxdepth.
     _iter = lambda *args: iter(args)
 
+    def _get_task_args(task):
+        args = list(task[:0:-1])
+        if istask(task[0]):
+            args.insert(0, task[0])
+        return args
+
     # We construct a nested heirarchy of tuples to mimic the execution stack
     # of frames that Python would maintain for a recursive implementation.
     # A frame is associated with a single task from a Dask.
     # A frame tuple has three elements:
-    #    1) The function for the task.
+    #    1) The function for the task; this may itself be a task.
     #    2) The arguments for the task (typically keys in the Dask).
     #       Arguments are stored in reverse order, and elements are popped
     #       as they are evaluated.
-    #    3) The calculated results of the arguments from (2).
-    stack = [(task[0], list(task[:0:-1]), [])]
+    #    3) The calculated results of the arguments from (2); if the function
+    #       in (1) was itself a task, then results[-1] will be the computed
+    #       function.
+    stack = [(task[0], _get_task_args(task), [])]
     while True:
         func, args, results = stack[-1]
+
         if not args:
+            if istask(func):
+                func, results = results[-1], results[:-1]
             val = func(*results)
             if len(stack) == 1:
                 return val
@@ -103,7 +114,7 @@ def _get_task(d, task, maxdepth=1000):
             v = key
 
         if istask(v):
-            stack.append((v[0], list(v[:0:-1]), []))
+            stack.append((v[0], _get_task_args(v), []))
         else:
             results.append(v)
 
@@ -141,6 +152,8 @@ def get(d, key, get=None, **kwargs):
             # use non-recursive method by default
             return _get_task(d, v)
         func, args = v[0], v[1:]
+        if istask(func):
+            func = get(d, func, get=get)
         args2 = [get(d, arg, get=get) for arg in args]
         return func(*[get(d, arg, get=get) for arg in args2])
     else:
@@ -169,6 +182,8 @@ def _deps(dsk, arg):
     """
     if istask(arg):
         result = []
+        if istask(arg[0]):
+            result.extend(_deps(dsk, arg[0]))
         for a in arg[1:]:
             result.extend(_deps(dsk, a))
         return result
@@ -213,6 +228,8 @@ def get_dependencies(dsk, task, as_list=False):
     while args:
         arg = args.pop()
         if istask(arg):
+            if istask(arg[0]):
+                args.append(arg[0])
             args.extend(arg[1:])
         elif isinstance(arg, list):
             args.extend(arg)
@@ -305,6 +322,8 @@ def subs(task, key, val):
             return [subs(x, key, val) for x in task]
         return task
     head = task[:1]
+    if istask(head[0]):
+        head = (subs(head[0], key, val),)
     newargs = []
     for arg in task[1:]:
         if istask(arg):
