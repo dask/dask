@@ -253,11 +253,12 @@ class Bag(Base):
         [0, 10, 20, 30, 40]
         """
         name = 'map-{0}-{1}'.format(funcname(func), tokenize(self, func))
+        dsk = self.dask.copy()
         if takes_multiple_arguments(func):
             func = partial(apply, func)
-        dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
+        dsk.update(((name, i), (reify, (map, func, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(dsk, name, self.npartitions)
 
     @property
     def _args(self):
