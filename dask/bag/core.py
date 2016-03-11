@@ -487,11 +487,17 @@ class Bag(Base):
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
         dsk = self.dask.copy()
+        if isinstance(perpartition, Value):
+            dsk = merge(dsk, perpartition.dask)
+            perpartition = dsk.pop(perpartition.key)
         dsk.update(((a, i), (perpartition, (self.name, i)))
                    for i in range(self.npartitions))
         k = self.npartitions
         b = a
         fmt = '%s-aggregate-%s' % (name or funcname(aggregate), token)
+        if isinstance(aggregate, Value):
+            dsk = merge(dsk, aggregate.dask)
+            aggregate = dsk.pop(aggregate.key)
         depth = 0
         while k > 1:
             c = fmt + str(depth)
