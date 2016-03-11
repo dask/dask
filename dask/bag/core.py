@@ -26,6 +26,7 @@ from ..base import Base, normalize_token, tokenize
 from ..compatibility import (apply, BytesIO, unicode, urlopen, urlparse,
                              GzipFile)
 from ..core import list2, quote, istask, get_dependencies, reverse_dict
+from ..imperative import Value
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
 from ..utils import (file_size, infer_compression, open, system_encoding,
@@ -52,6 +53,7 @@ def lazify_task(task, start=True):
         task = task[1]
         return lazify_task(*tail, start=False)
     else:
+        head = lazify_task(head, start=False)
         return (head,) + tuple([lazify_task(arg, False) for arg in tail])
 
 
