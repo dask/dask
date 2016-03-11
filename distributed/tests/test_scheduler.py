@@ -573,7 +573,7 @@ def test_feed_setup_teardown(s, a, b):
         assert time() - start < 5
 
 
-@gen_test()
+@gen_test(timeout=None)
 def test_scheduler_as_center():
     s = Scheduler()
     done = s.start(0)
@@ -592,7 +592,9 @@ def test_scheduler_as_center():
     s.update_graph(tasks={'a': dumps_task((inc, 1))},
                    keys=['a'],
                    dependencies={'a': []})
+    start = time()
     while not s.who_has['a']:
+        assert time() - start < 5
         yield gen.sleep(0.01)
     assert 'a' in a.data or 'a' in b.data or 'a' in c.data
 

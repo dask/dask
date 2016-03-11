@@ -22,7 +22,7 @@ from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv)
+        Server, send_recv, coerce_to_address)
 from .client import (scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
@@ -269,7 +269,7 @@ class Scheduler(Server):
             for c in self._worker_coroutines:
                 c.cancel()
 
-        self._worker_coroutines = [self.worker(w) for w in self.ncores]
+        self._worker_coroutines = [self.worker_stream(w) for w in self.ncores]
         self._delete_periodic_callback = \
                 PeriodicCallback(callback=self.clear_data_from_workers,
                                  callback_time=self.delete_interval,
@@ -329,16 +329,16 @@ class Scheduler(Server):
 
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
-        n = 0
+
         for w, nc in self.ncores.items():
-            for i in range(nc):
-                self.worker_queues[w].put_nowait({'op': 'close'}); n += 1
+            self.worker_queues[w].put_nowait({'op': 'close'})
 
         for s in self.scheduler_queues[1:]:
             s.put_nowait({'op': 'close-stream'})
 
-        for i in range(n):
+        for _ in self.ncores:
             msg = yield self.scheduler_queues[0].get()
+            assert msg['op'] == 'worker-finished'
 
         for q in self.report_queues:
             q.put_nowait({'op': 'close'})
@@ -437,6 +437,17 @@ class Scheduler(Server):
         We update the idle workers set appropriately.
         """
         logger.debug('Ensure worker is occupied: %s', worker)
+        def message(key):
+            msg = {'op': 'compute-task',
+                   'key': key,
+                   'who_has': {dep: list(self.who_has[dep])
+                               for dep in self.dependencies[key]}}
+            if isinstance(self.tasks[key], dict):
+                msg.update(self.tasks[key])
+            else:
+                msg['task'] = self.tasks[key]
+            return msg
+
         while (self.stacks[worker] and
                self.ncores[worker] > len(self.processing[worker])):
             key = self.stacks[worker].pop()
@@ -446,12 +457,7 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.worker_queues[worker].put_nowait(
-                    {'op': 'compute-task',
-                     'key': key,
-                     'task': self.tasks[key],
-                     'who_has': {dep: self.who_has[dep] for dep in
-                                 self.dependencies[key]}})
+            self.worker_queues[worker].put_nowait(message(key))
 
         while (self.ready and
                self.ncores[worker] > len(self.processing[worker])):
@@ -462,12 +468,7 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.worker_queues[worker].put_nowait(
-                    {'op': 'compute-task',
-                     'key': key,
-                     'task': self.tasks[key],
-                     'who_has': {dep: self.who_has[dep]
-                                  for dep in self.dependencies[key]}})
+            self.worker_queues[worker].put_nowait(message(key))
 
         if self.ncores[worker] > len(self.processing[worker]):
             self.idle.add(worker)
@@ -652,7 +653,7 @@ class Scheduler(Server):
         for key in keys:
             self.mark_key_in_memory(key, [address])
 
-        self._worker_coroutines.append(self.worker(address))
+        self._worker_coroutines.append(self.worker_stream(address))
 
         if self.ncores[address] > len(self.processing[address]):
             self.idle.add(address)
@@ -960,83 +961,61 @@ class Scheduler(Server):
         logger.debug('Finished scheduling coroutine')
 
     @gen.coroutine
-    def worker(self, ident):
-        """ Manage a single distributed worker node
+    def worker_stream(self, ident):
+        logger.info("Starting worker compute stream, %s", ident)
+        yield gen.sleep(0)
+        ip, port = coerce_to_address(ident, out=tuple)
+        stream = yield connect(ip, port)
+        yield write(stream, {'op': 'compute-stream'})
 
-        This coroutine manages one remote worker.  It spins up several
-        ``worker_core`` coroutines, one for each core.  It reports a closed
-        connection to scheduler if one occurs.
-        """
-        try:
-            yield All([self.worker_core(ident, i)
-                    for i in range(self.ncores[ident])])
-        except (IOError, OSError):
-            logger.info("Worker failed from closed stream: %s", ident)
-            self.remove_worker(address=ident)
-
-    @gen.coroutine
-    def worker_core(self, ident, i):
-        """ Manage one core on one distributed worker node
-
-        This coroutine listens on worker_queue for the following operations
-
-        **Incoming Messages**:
-
-        - compute-task:  call worker.compute(...) on remote node, report when done
-        - close: close connection to worker node, report `worker-finished` to
-          scheduler
-
-        See Also
-        --------
-        Scheduler.mark_task_finished
-        Scheduler.mark_task_erred
-        Scheduler.mark_missing_data
-        distributed.worker.Worker.compute
-        """
-        worker = rpc(addr=ident)
-        logger.debug("Start worker core %s, %d", ident, i)
-
-        with log_errors():
+        @gen.coroutine
+        def send():
             while True:
                 msg = yield self.worker_queues[ident].get()
+                yield write(stream, msg)
+
                 if msg['op'] == 'close':
-                    logger.debug("Worker core receives close message %s, %s",
-                            ident, msg)
+                    logger.debug("Worker coroutine close message %s, %s",
+                                 ident, msg)
+                    if msg.get('report', True):
+                        self.put({'op': 'worker-finished',
+                                  'worker': ident})
                     break
-                if msg['op'] == 'compute-task':
-                    key = msg['key']
-                    who_has = valmap(list, msg['who_has'])
-                    task = msg['task']
-                    if istask(task):
-                        task = {'task': task}
 
-                    response = yield worker.compute(who_has=who_has,
-                                                    key=key,
-                                                    report=False,
-                                                    **task)
-                    if response['status'] == 'OK':
-                        nbytes = response['nbytes']
-                    logger.debug("Compute response from worker %s, %s, %s",
-                                 ident, key, response)
-                    if response['status'] == 'error':
-                        self.mark_task_erred(key, ident, response['exception'],
-                                                         response['traceback'])
+        @gen.coroutine
+        def recv():
+            while True:
+                assert not stream._closed
+                msg = yield read(stream)
 
-                    elif response['status'] == 'missing-data':
-                        self.mark_missing_data(response['keys'],
-                                               key=key, worker=ident)
+                logger.debug("Compute response from worker %s, %s",
+                             ident, msg)
 
-                    else:
-                        self.mark_task_finished(key, ident, nbytes,
-                                                type=response.get('type'))
+                if msg == 'OK':  # from close
+                    break
+
+                if msg['status'] == 'error':
+                    self.mark_task_erred(msg['key'], ident, msg['exception'],
+                                                            msg['traceback'])
+                elif msg['status'] == 'missing-data':
+                    self.mark_missing_data(msg['keys'], key=msg['key'],
+                                           worker=ident)
+                elif msg['status'] == 'OK':
+                    self.mark_task_finished(msg['key'], ident, msg['nbytes'],
+                                            type=msg.get('type'))
+                else:
+                    logger.warn("Unknown message type, %s, %s", msg['status'],
+                            msg)
+
                 self.ensure_occupied(ident)
-
-        yield worker.close(close=True)
-        worker.close_streams()
-        if msg.get('report', True):
-            self.put({'op': 'worker-finished',
-                      'worker': ident})
-        logger.debug("Close worker core, %s, %d", ident, i)
+        try:
+            with log_errors():
+                yield All([send(), recv()])
+            stream.close()
+        except (IOError, OSError):
+            logger.info("Worker failed from closed stream: %s", ident)
+        finally:
+            self.remove_worker(address=ident)
 
     @gen.coroutine
     def clear_data_from_workers(self):

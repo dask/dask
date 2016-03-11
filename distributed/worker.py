@@ -15,16 +15,17 @@ import sys
 
 from dask.core import istask
 from dask.compatibility import apply
-from toolz import merge, valmap, dissoc
+from toolz import merge, valmap, assoc
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
+from tornado.queues import Queue
 
 from .client import pack_data, gather_from_workers
 from .compatibility import reload, PY3, unicode
 from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
-        error_message)
+        error_message, read, write)
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
     ignoring, _maybe_complex, log_errors)
@@ -130,6 +131,7 @@ class Worker(Server):
 
         handlers = {'compute': self.compute,
                     'gather': self.gather,
+                    'compute-stream': self.compute_stream,
                     'run': self.run,
                     'get_data': self.get_data,
                     'update_data': self.update_data,
@@ -257,7 +259,7 @@ class Worker(Server):
             deserialization_time = default_timer() - start
         except Exception as e:
             logger.warn("Could not deserialize task", exc_info=True)
-            raise Return(error_message(e))
+            raise Return(assoc(error_message(e), 'key', key))
 
         if task is not None:
             assert not function and not args and not kwargs
@@ -311,7 +313,30 @@ class Worker(Server):
         return result
 
     @gen.coroutine
-    def compute(self, stream, function=None, key=None, args=(), kwargs={},
+    def compute_stream(self, stream):
+        logger.info("Open compute stream")
+
+        @gen.coroutine
+        def process(msg):
+            result = yield self.compute(report=False, **msg)
+            yield write(stream, result)
+
+        with log_errors():
+            while True:
+                msg = yield read(stream)
+                op = msg.pop('op', None)
+                if op == 'close':
+                    break
+                if op == 'compute-task':
+                    process(msg)
+                else:
+                    logger.warning("Unknown operation %s, %s", op, msg)
+
+        stream.close()
+        logger.info("Close compute stream")
+
+    @gen.coroutine
+    def compute(self, stream=None, function=None, key=None, args=(), kwargs={},
             task=None, who_has=None, report=True):
         """ Execute function """
         with log_errors():

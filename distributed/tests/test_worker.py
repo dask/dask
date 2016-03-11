@@ -12,7 +12,7 @@ from tornado import gen
 from tornado.ioloop import TimeoutError
 
 from distributed.center import Center
-from distributed.core import rpc, dumps, loads
+from distributed.core import rpc, dumps, loads, connect, read, write
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message
 from distributed.utils_test import loop, _test_cluster, inc, gen_cluster, slow
@@ -327,3 +327,28 @@ def test_gather(s, a, b):
 
     assert a.data['x'] == b.data['x']
     assert a.data['y'] == b.data['y']
+
+
+@gen_cluster()
+def test_compute_stream(s, a, b):
+    stream = yield connect(a.ip, a.port)
+    yield write(stream, {'op': 'compute-stream'})
+    msgs = [{'op': 'compute-task', 'function': dumps(inc), 'args': dumps((i,)), 'key': 'x-%d' % i}
+            for i in range(10)]
+    for msg in msgs[:5]:
+        yield write(stream, msg)
+
+    for i in range(5):
+        msg = yield read(stream)
+        assert msg['status'] == 'OK'
+        assert msg['key'][0] == 'x'
+
+    for msg in msgs[5:]:
+        yield write(stream, msg)
+
+    for i in range(5):
+        msg = yield read(stream)
+        assert msg['status'] == 'OK'
+        assert msg['key'][0] == 'x'
+
+    yield write(stream, {'op': 'close'})
