@@ -393,15 +393,20 @@ class Scheduler(Server):
         for worker in workers:
             self.who_has[key].add(worker)
             self.has_what[worker].add(key)
-            with ignoring(KeyError):
+            try:
                 self.processing[worker].remove(key)
+            except KeyError:
+                pass
 
-        for dep in sorted(self.dependents.get(key, []), key=self.keyorder.get,
+        for dep in sorted(self.dependents.get(key, []),
+                          key=self.keyorder.get,
                           reverse=True):
             if dep in self.waiting:
                 s = self.waiting[dep]
-                with ignoring(KeyError):
+                try:
                     s.remove(key)
+                except KeyError:
+                    pass
                 if not s:  # new task ready to run
                     self.mark_ready_to_run(dep)
 
@@ -749,10 +754,14 @@ class Scheduler(Server):
 
     def client_releases_keys(self, keys=None, client=None):
         for k in list(keys):
-            with ignoring(KeyError):
+            try:
                 self.wants_what[client].remove(k)
-            with ignoring(KeyError):
+            except KeyError:
+                pass
+            try:
                 self.who_wants[k].remove(client)
+            except KeyError:
+                pass
             if not self.who_wants[k]:
                 del self.who_wants[k]
                 self.release_held_data([k])

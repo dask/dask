@@ -376,8 +376,10 @@ class Worker(Server):
                     str(kwargs)[:1000], exc_info=True)
 
             logger.debug("Send compute response to scheduler: %s, %s", key, msg)
-            with ignoring(KeyError):
+            try:
                 self.active.remove(key)
+            except KeyError:
+                pass
             raise Return(result)
 
     @gen.coroutine
