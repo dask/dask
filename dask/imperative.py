@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
-from functools import wraps
+from functools import partial, wraps
 from itertools import chain, count
 import operator
 import uuid
@@ -121,6 +121,27 @@ def applyfunc(func, args, kwargs, pure=False):
         task = (apply, func, list(args), dask_kwargs)
     else:
         task = (func,) + args
+    name = funcname(func) + '-' + tokenize(*task, pure=pure)
+    dasks = flat_unique(dasks)
+    dasks.append({name: task})
+    return Value(name, dasks)
+
+
+def partial_apply(func, args, kwargs={}):
+    return partial(func, *args, **kwargs)
+
+
+def partialfunc(func, args, kwargs, pure=False):
+    """Create a Value by partially applying a function to args.
+    """
+
+    args, dasks = unzip(map(to_task_dasks, args), 2)
+    if kwargs:
+        dask_kwargs, dasks2 = to_task_dasks(kwargs)
+        dasks = dasks + (dasks2,)
+        task = (partial_apply, func, list(args), dask_kwargs)
+    else:
+        task = (partial_apply, func, list(args))
     name = funcname(func) + '-' + tokenize(*task, pure=pure)
     dasks = flat_unique(dasks)
     dasks.append({name: task})
