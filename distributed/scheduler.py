@@ -21,10 +21,11 @@ from dask.compatibility import PY3, unicode
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
-from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv, coerce_to_address)
+from .batched import BatchedStream
 from .client import (scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
+from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
+        Server, send_recv, coerce_to_address)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
         ignore_exceptions, ensure_ip, get_traceback, truncate_exception,
         tokey, log_errors)
@@ -863,8 +864,9 @@ class Scheduler(Server):
         for q in self.report_queues:
             q.put_nowait(msg)
         if 'key' in msg:
-            streams = {self.streams.get(c, ())
-                       for c in self.who_wants.get(msg['key'], ())}
+            streams = {self.streams[c]
+                       for c in self.who_wants.get(msg['key'], ())
+                       if c in self.streams}
         else:
             streams = self.streams.values()
         for s in streams:
@@ -891,16 +893,21 @@ class Scheduler(Server):
         return future
 
     @gen.coroutine
-    def add_client(self, stream, client=None):
+    def add_client(self, stream, client=None, batched=False):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
+        if batched:
+            stream = BatchedStream(stream, 10)
         self.streams[client] = stream
         try:
             yield self.handle_messages(stream, stream, client=client)
         finally:
             if not stream.closed():
-                yield write(stream, {'op': 'stream-closed'})
-                stream.close()
+                if isinstance(stream, BatchedStream):
+                    stream.send({'op': 'stream-closed'})
+                else:
+                    yield write(stream, {'op': 'stream-closed'})
+                yield gen.maybe_future(stream.close())
             del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
                         client)
@@ -917,58 +924,63 @@ class Scheduler(Server):
 
         This runs once per Queue or Stream.
         """
-        if isinstance(in_queue, Queue):
-            next_message = in_queue.get
-        elif isinstance(in_queue, IOStream):
-            next_message = lambda: read(in_queue)
-        else:
-            raise NotImplementedError()
+        with log_errors():
+            if isinstance(in_queue, Queue):
+                next_message = in_queue.get
+            elif isinstance(in_queue, IOStream):
+                next_message = lambda: read(in_queue)
+            elif isinstance(in_queue, BatchedStream):
+                next_message = in_queue.recv
+            else:
+                raise NotImplementedError()
 
-        if isinstance(report, Queue):
-            put = report.put_nowait
-        elif isinstance(report, IOStream):
-            put = lambda msg: write(report, msg)
-        else:
-            put = lambda msg: None
-        put({'op': 'stream-start'})
+            if isinstance(report, Queue):
+                put = report.put_nowait
+            elif isinstance(report, IOStream):
+                put = lambda msg: write(report, msg)
+            elif isinstance(report, BatchedStream):
+                put = report.send
+            else:
+                put = lambda msg: None
+            put({'op': 'stream-start'})
 
-        while True:
-            try:
-                msg = yield next_message()  # in_queue.get()
-            except (StreamClosedError, AssertionError):
-                break
-            except Exception as e:
-                from .core import dumps
-                logger.exception(e)
-                put(error_message(e, status='scheduler-error'))
-                continue
-            logger.debug("scheduler receives message %s", msg)
-            try:
-                op = msg.pop('op')
-            except Exception as e:
-                logger.exception(e)
-
-            if op == 'close-stream':
-                break
-            elif op == 'close':
-                self.close()
-                break
-            elif op in self.compute_handlers:
+            while True:
                 try:
-                    result = self.compute_handlers[op](**msg)
-                    if isinstance(result, gen.Future):
-                        yield result
+                    msg = yield next_message()  # in_queue.get()
+                except (StreamClosedError, AssertionError):
+                    break
                 except Exception as e:
                     logger.exception(e)
                     put(error_message(e, status='scheduler-error'))
-            else:
-                logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
+                    continue
+                logger.debug("scheduler receives message %s", msg)
+                try:
+                    op = msg.pop('op')
+                except Exception as e:
+                    logger.exception(e)
+                    put(error_message(e, status='scheduler-error'))
 
-            if op == 'close':
-                break
+                if op == 'close-stream':
+                    break
+                elif op == 'close':
+                    self.close()
+                    break
+                elif op in self.compute_handlers:
+                    try:
+                        result = self.compute_handlers[op](**msg)
+                        if isinstance(result, gen.Future):
+                            yield result
+                    except Exception as e:
+                        logger.exception(e)
+                        raise
+                else:
+                    logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
 
-        self.remove_client(client=client)
-        logger.debug('Finished scheduling coroutine')
+                if op == 'close':
+                    break
+
+            self.remove_client(client=client)
+            logger.debug('Finished scheduling coroutine')
 
     @gen.coroutine
     def worker_stream(self, ident):
@@ -981,7 +993,10 @@ class Scheduler(Server):
         @gen.coroutine
         def send():
             while True:
-                msg = yield self.worker_queues[ident].get()
+                try:
+                    msg = yield self.worker_queues[ident].get()
+                except KeyError:
+                    break
                 yield write(stream, msg)
 
                 if msg['op'] == 'close':

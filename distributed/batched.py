@@ -3,9 +3,11 @@ from __future__ import print_function, division, absolute_import
 import logging
 from timeit import default_timer
 
+from toolz import partition_all
 from tornado import gen
 from tornado.queues import Queue
 from tornado.iostream import StreamClosedError
+from tornado.ioloop import PeriodicCallback
 
 from .core import read, write
 from .utils import log_errors
@@ -24,7 +26,8 @@ class BatchedStream(object):
         self._background_send_coroutine = self._background_send()
         self._background_recv_coroutine = self._background_recv()
 
-        self._last_write = None
+        self.pc = PeriodicCallback(lambda: None, 100)
+        self.pc.start()
 
     @gen.coroutine
     def _background_send(self):
@@ -33,14 +36,14 @@ class BatchedStream(object):
                 msg = yield self.send_q.get()
                 msgs = [msg]
                 now = default_timer()
-                wait_time = now - self.last_transmission + self.interval
+                wait_time = self.last_transmission + self.interval - now
                 if wait_time > 0:
                     yield gen.sleep(wait_time)
                 while not self.send_q.empty():
                     msgs.append(self.send_q.get_nowait())
 
-                self._last_write = write(self.stream, msgs)
-                yield self._last_write
+                yield write(self.stream, msgs)
+
                 if len(msgs) > 1:
                     logger.debug("Batched messages: %d", len(msgs))
                 for _ in msgs:
@@ -56,8 +59,7 @@ class BatchedStream(object):
                     break
                 assert isinstance(msgs, list)
                 if len(msgs) > 1:
-                    # logger.info("Batched messages: %d", len(msgs))
-                    print("Batched messages: %d" % len(msgs))
+                    logger.debug("Batched messages: %d", len(msgs))
                 for msg in msgs:
                     self.recv_q.put_nowait(msg)
 

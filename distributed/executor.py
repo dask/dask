@@ -29,14 +29,15 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
+from .batched import BatchedStream
 from .client import (WrappedKey, unpack_remotedata, pack_data)
+from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import (read, write, connect, rpc, coerce_to_rpc, dumps,
         clean_exception)
 from .scheduler import Scheduler
 from .worker import dumps_function, dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
         tokey, log_errors, str_graph, ensure_ip)
-from .compatibility import Queue as pyQueue, Empty, isqueue
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +288,7 @@ class Executor(object):
         sync(self.loop, self._start, **kwargs)
 
     def _send_to_scheduler(self, msg):
-        self.loop.add_callback(write, self.scheduler_stream, msg)
+        self.loop.add_callback(self.scheduler_stream.send, msg)
 
     @gen.coroutine
     def _start(self, timeout=3, **kwargs):
@@ -299,8 +300,10 @@ class Executor(object):
         if ident['type'] == 'Scheduler':
             self.scheduler = r
             self.scheduler_stream = yield connect(r.ip, r.port)
-            yield write(self.scheduler_stream, {'op': 'register-client',
-                                                'client': self.id})
+            write(self.scheduler_stream, {'op': 'register-client',
+                                          'client': self.id,
+                                          'batched': True})
+            self.scheduler_stream = BatchedStream(self.scheduler_stream, 10)
         else:
             raise ValueError("Unknown Type")
 
@@ -344,7 +347,7 @@ class Executor(object):
         with log_errors():
             while True:
                 try:
-                    msg = yield read(self.scheduler_stream)
+                    msg = yield self.scheduler_stream.recv()
                 except StreamClosedError:
                     logger.debug("Stream closed to scheduler", exc_info=True)
                     break
@@ -411,7 +414,8 @@ class Executor(object):
     def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates """
         with ignoring(AttributeError):
-            sync(self.loop, write, self.scheduler_stream, {'op': 'close-stream'})
+            self.scheduler_stream.send({'op': 'close-stream'})
+            sync(self.loop, self.scheduler_stream.flush)
             self.scheduler_stream.close()
         with ignoring(AttributeError):
             self.scheduler.close_streams()
