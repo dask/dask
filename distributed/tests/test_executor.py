@@ -1284,17 +1284,6 @@ def test_remote_scheduler(e, s, a, b):
     result = yield x._result()
 
 
-@gen_cluster()
-def test_start_with_scheduler(s, a, b):
-    e2 = Executor(s, start=False, loop=loop)
-    yield e2._start()
-    assert isinstance(e2.scheduler, Scheduler)
-
-    future = e2.submit(inc, 1)
-    result = yield future._result()
-    assert result == inc(1)
-
-
 @gen_cluster(executor=True)
 def test_remote_scatter_gather(e, s, a, b):
     x, y, z = yield e._scatter([1, 2, 3])

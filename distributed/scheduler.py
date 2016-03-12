@@ -806,6 +806,7 @@ class Scheduler(Server):
                 s = self.dependents[dep]
                 s.remove(key)
                 if not s and dep not in self.who_wants:
+                    assert dep is not key
                     self.forget(dep)
             del self.dependencies[key]
             if key in self.restrictions:

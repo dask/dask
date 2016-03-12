@@ -35,7 +35,7 @@ from .core import (read, write, connect, rpc, coerce_to_rpc, dumps,
 from .scheduler import Scheduler
 from .worker import dumps_function, dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
-        tokey, log_errors, str_graph)
+        tokey, log_errors, str_graph, ensure_ip)
 from .compatibility import Queue as pyQueue, Empty, isqueue
 
 logger = logging.getLogger(__name__)
@@ -287,43 +287,22 @@ class Executor(object):
         sync(self.loop, self._start, **kwargs)
 
     def _send_to_scheduler(self, msg):
-        if isinstance(self.scheduler, Scheduler):
-            self.loop.add_callback(self.scheduler_queue.put_nowait, msg)
-        elif isinstance(self.scheduler_stream, IOStream):
-            self.loop.add_callback(write, self.scheduler_stream, msg)
-        else:
-            raise NotImplementedError()
+        self.loop.add_callback(write, self.scheduler_stream, msg)
 
     @gen.coroutine
     def _start(self, timeout=3, **kwargs):
-        if isinstance(self._start_arg, Scheduler):
-            self.scheduler = self._start_arg
-        if isinstance(self._start_arg, str):
-            host, port = tuple(self._start_arg.split(':'))
-            self._start_arg = (host, int(port))
-        if isinstance(self._start_arg, tuple):
-            host, port = self._start_arg
-            ip = socket.gethostbyname(host)
-            r = coerce_to_rpc((ip, port), timeout=timeout)
-            try:
-                ident = yield r.identity()
-            except (StreamClosedError, OSError):
-                raise IOError("Could not connect to %s:%d" % (ip, port))
-            if ident['type'] == 'Scheduler':
-                self.scheduler = r
-                self.scheduler_stream = yield connect(ip, port)
-                yield write(self.scheduler_stream, {'op': 'register-client',
-                                                    'client': self.id})
-            else:
-                raise ValueError("Unknown Type")
-
-        if isinstance(self.scheduler, Scheduler):
-            if self.scheduler.status != 'running':
-                self.scheduler.start(0)
-            self.scheduler_queue = Queue()
-            self.report_queue = Queue()
-            self.coroutines.append(self.scheduler.handle_queues(
-                self.scheduler_queue, self.report_queue))
+        r = coerce_to_rpc(self._start_arg, timeout=timeout)
+        try:
+            ident = yield r.identity()
+        except (StreamClosedError, OSError):
+            raise IOError("Could not connect to %s:%d" % (r.ip, r.port))
+        if ident['type'] == 'Scheduler':
+            self.scheduler = r
+            self.scheduler_stream = yield connect(r.ip, r.port)
+            yield write(self.scheduler_stream, {'op': 'register-client',
+                                                'client': self.id})
+        else:
+            raise ValueError("Unknown Type")
 
         start_event = Event()
         self.coroutines.append(self._handle_report(start_event))
@@ -362,17 +341,10 @@ class Executor(object):
     @gen.coroutine
     def _handle_report(self, start_event):
         """ Listen to scheduler """
-        if isinstance(self.scheduler, Scheduler):
-            next_message = self.report_queue.get
-        elif isinstance(self.scheduler_stream, IOStream):
-            next_message = lambda: read(self.scheduler_stream)
-        else:
-            raise NotImplemented()
-
         with log_errors():
             while True:
                 try:
-                    msg = yield next_message()
+                    msg = yield read(self.scheduler_stream)
                 except StreamClosedError:
                     logger.debug("Stream closed to scheduler", exc_info=True)
                     break
