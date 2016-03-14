@@ -15,7 +15,7 @@ from time import sleep, time
 import traceback
 
 import pytest
-from toolz import identity, isdistinct, first, concat, pluck, keymap
+from toolz import identity, isdistinct, first, concat, pluck, keymap, valmap
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
@@ -2330,3 +2330,61 @@ def test_badly_serialized_exceptions(e, s, a, b):
         assert 'hello world' in str(e)
     else:
         assert False
+
+
+@gen_cluster(executor=True)
+def test_rebalance(e, s, a, b):
+    x, y = yield e._scatter([1, 2], workers=[a.address])
+    assert len(a.data) == 2
+    assert len(b.data) == 0
+
+    yield e._rebalance()
+
+    assert len(b.data) == 1
+    assert s.has_what[b.address] == set(b.data)
+    assert b.address in s.who_has[x.key] or b.address in s.who_has[y.key]
+
+    assert len(a.data) == 1
+    assert s.has_what[a.address] == set(a.data)
+    assert (a.address not in s.who_has[x.key] or
+            a.address not in s.who_has[y.key])
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1)] * 4, executor=True)
+def test_rebalance_workers(e, s, a, b, c, d):
+    w, x, y, z = yield e._scatter([1, 2, 3, 4], workers=[a.address])
+    assert len(a.data) == 4
+    assert len(b.data) == 0
+    assert len(c.data) == 0
+    assert len(d.data) == 0
+
+    yield e._rebalance([x, y], workers=[a.address, c.address])
+    assert len(a.data) == 3
+    assert len(b.data) == 0
+    assert len(c.data) == 1
+    assert len(d.data) == 0
+    assert c.data == {x.key: 2} or c.data == {y.key: 3}
+
+    yield e._rebalance()
+    assert len(a.data) == 1
+    assert len(b.data) == 1
+    assert len(c.data) == 1
+    assert len(d.data) == 1
+
+
+@gen_cluster(executor=True)
+def test_rebalance_execution(e, s, a, b):
+    futures = e.map(inc, range(10), workers=a.address)
+    yield e._rebalance(futures)
+    assert len(a.data) == len(b.data) == 5
+
+
+def test_rebalance_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            futures = e.map(inc, range(10), workers=[('127.0.0.1', a['port'])])
+            e.rebalance(futures)
+
+            has_what = e.has_what()
+            assert len(has_what) == 2
+            assert list(valmap(len, has_what).values()) == [5, 5]

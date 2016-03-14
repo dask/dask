@@ -127,6 +127,7 @@ class Worker(Server):
             self.service_ports[k] = self.services[k].port
 
         handlers = {'compute': self.compute,
+                    'gather': self.gather,
                     'run': self.run,
                     'get_data': self.get_data,
                     'update_data': self.update_data,
@@ -201,6 +202,21 @@ class Worker(Server):
     @property
     def address_tuple(self):
         return (self.ip, self.port)
+
+    @gen.coroutine
+    def gather(self, stream=None, who_has=None):
+        who_has = {k: [coerce_to_address(addr) for addr in v]
+                    for k, v in who_has.items()
+                    if k not in self.data}
+        try:
+            result = yield gather_from_workers(who_has)
+        except KeyError as e:
+            logger.warn("Could not find data during gather", exc_info=True)
+            raise Return({'status': 'missing-data',
+                          'keys': e.args})
+        else:
+            self.data.update(result)
+            raise Return({'status': 'OK'})
 
     @gen.coroutine
     def compute(self, stream, function=None, key=None, args=(), kwargs={},

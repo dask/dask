@@ -1192,6 +1192,33 @@ class Executor(object):
         if isinstance(result, Exception):
             raise result
 
+    @gen.coroutine
+    def _rebalance(self, futures=None, workers=None):
+        yield _wait(futures)
+        keys = list({f.key for f in futures_of(futures)})
+        result = yield self.scheduler.rebalance(keys=keys, workers=workers)
+        assert result['status'] == 'OK'
+
+    def rebalance(self, futures=None, workers=None):
+        """ Rebalance data within network
+
+        Move data between workers to roughly balance memory burden.  This
+        either affects a subset of the keys/workers or the entire network,
+        depending on keyword arguments.
+
+        This operation is generally not well tested against normal operation of
+        the scheduler.  It it not recommended to use it while waiting on
+        computations.
+
+        Parameters
+        ----------
+        futures: list, optional
+            A list of futures to balance, defaults all data
+        workers: list, optional
+            A list of workers on which to balance, defaults to all workers
+        """
+        sync(self.loop, self._rebalance, futures, workers),
+
     def ncores(self, workers=None):
         """ The number of threads/cores available on each worker node
 
