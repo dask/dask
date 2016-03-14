@@ -1463,9 +1463,9 @@ def bag_zip(*bags):
     [(0, 0), (3, None), (None, 5), (6, None), (None 10), (9, None),
      (12, None), (15, 15), (18, None), (None, 20), (None, 25), (None, 30)]
     """
-    npartitions = bags[0].npartitions
     assert all(isinstance(bag, Bag)
                for bag in bags)
+    npartitions = bags[0].npartitions
     assert all(bag.npartitions == npartitions for bag in bags)
     # TODO: do more checks
 
