@@ -414,6 +414,7 @@ class Scheduler(Server):
         if type:
             msg['type'] = type
         self.report(msg)
+        # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def release_live_dependencies(self, key):
         """ We no longer need to keep data in memory to compute this
@@ -490,6 +491,12 @@ class Scheduler(Server):
 
         self.nbytes.update(nbytes)
 
+        for key in who_has:
+            if key not in self.dependents:
+                self.dependents[key] = set()
+            if key not in self.dependencies:
+                self.dependencies[key] = set()
+
         if client:
             self.client_wants_keys(keys=list(who_has), client=client)
 
@@ -548,6 +555,7 @@ class Scheduler(Server):
         else:
             logger.debug("Key not found in processing, %s, %s, %s",
                          key, worker, self.processing[worker])
+        # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def mark_missing_data(self, missing=None, key=None, worker=None):
         """ Mark that certain keys have gone missing.  Recover.
@@ -1367,27 +1375,27 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
     keys = {key for key in dependents if not dependents[key]}
     ready_set = set(ready)
 
-    assert set(waiting).issubset(dependencies)
-    assert set(waiting_data).issubset(dependents)
+    assert set(waiting).issubset(dependencies), "waiting not subset of deps"
+    assert set(waiting_data).issubset(dependents), "waiting_data not subset"
     if tasks is not None:
-        assert ready_set.issubset(tasks)
-        assert set(dependents).issubset(set(tasks))
-        assert set(dependencies).issubset(set(tasks))
+        assert ready_set.issubset(tasks), "All ready tasks are tasks"
+        assert set(dependents).issubset(set(tasks) | set(who_has)), "all dependents tasks"
+        assert set(dependencies).issubset(set(tasks) | set(who_has)), "all dependencies tasks"
 
     for k, v in waiting.items():
         assert v
-        assert v.issubset(dependencies[k])
+        assert v.issubset(dependencies[k]), "waiting set not dependencies"
         for vv in v:
-            assert vv not in who_has
-            assert vv in in_play
+            assert vv not in who_has, "dependency not in memory"
+            assert vv in in_play, "dependency not in play"
 
     for k, v in waiting_data.items():
         for vv in v:
-            assert vv in in_play
+            assert vv in in_play, 'dependent not in play'
             assert (vv in ready_set or
                     vv in waiting or
                     vv in in_stacks or
-                    vv in in_processing)
+                    vv in in_processing), 'dependent not in play2'
 
     @memoize
     def check_key(key):
@@ -1404,7 +1412,7 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
         if not (key in released) != (key in in_play):
             raise ValueError("Key released != in_play", key)
 
-        if not all(map(check_key, dependencies[key])):# Recursive case
+        if not all(map(check_key, dependencies[key])):  # Recursive case
             raise ValueError("Failed to check dependencies")
 
         if who_has.get(key):
