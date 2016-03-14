@@ -314,3 +314,15 @@ def test_error_message():
 
     msg = error_message(MyException('Hello', 'World!'))
     assert 'Hello' in str(msg['exception'])
+
+
+@gen_cluster()
+def test_gather(s, a, b):
+    b.data['x'] = 1
+    b.data['y'] = 2
+    aa = rpc(ip=a.ip, port=a.port)
+    resp = yield aa.gather(who_has={'x': [b.address], 'y': [b.address]})
+    assert resp['status'] == 'OK'
+
+    assert a.data['x'] == b.data['x']
+    assert a.data['y'] == b.data['y']
