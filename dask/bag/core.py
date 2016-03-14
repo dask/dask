@@ -1427,7 +1427,7 @@ def bag_range(n, npartitions):
     return Bag(dsk, name, npartitions)
 
 
-def bag_zip(*bags):
+def bag_zip(*parts):
     """ Partition-wise bag zip
 
     All passed bags must have the same number of partitions.
@@ -1463,16 +1463,17 @@ def bag_zip(*bags):
     [(0, 0), (3, None), (None, 5), (6, None), (None 10), (9, None),
      (12, None), (15, 15), (18, None), (None, 20), (None, 25), (None, 30)]
     """
-    assert all(isinstance(bag, Bag)
-               for bag in bags)
+    assert all(isinstance(part, Bag)
+               for part in parts)
+    bags = parts
     npartitions = bags[0].npartitions
     assert all(bag.npartitions == npartitions for bag in bags)
     # TODO: do more checks
 
-    name = 'zip-' + tokenize(*bags)
-    dsk = merge(*(bag.dask for bag in bags))
+    name = 'zip-' + tokenize(*parts)
+    dsk = merge(*(part.dask for part in parts))
     dsk.update(
-        ((name, i), (reify, (zip,) + tuple((bag.name, i) for bag in bags)))
+        ((name, i), (reify, (zip,) + tuple((bag.name, i) for bag in parts)))
         for i in range(npartitions))
     return Bag(dsk, name, npartitions)
 
