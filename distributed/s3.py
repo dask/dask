@@ -146,6 +146,7 @@ def read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminato
     strings = [do(bytes.decode)(b, encoding, errors) for b in blocks]
     lines = [do(unicode.split)(s, lineterminator) for s in strings]
 
+    ensure_default_get(executor)
     from dask.bag import from_imperative
     if collection:
         result = from_imperative(lines)
