@@ -84,8 +84,8 @@ class S3FileSystem(object):
             else:
                 conf = Config(connect_timeout=self.connect_timeout,
                               read_timeout=self.read_timeout)
-                s3 = boto3.Session(self.key, self.secret, config=conf
-                                   **self.kwargs).client('s3')
+                s3 = boto3.Session(self.key, self.secret,
+                                   **self.kwargs).client('s3', config=conf)
             self._conn[tok] = s3
         return self._conn[tok]
 

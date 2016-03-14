@@ -3,6 +3,9 @@ import pytest
 from distributed.s3fs import S3FileSystem
 from distributed.s3 import seek_delimiter
 from distributed.utils_test import slow
+from distributed.utils import ignoring
+
+from botocore.exceptions import NoCredentialsError
 
 # These get mirrored on s3://distributed-test/
 test_bucket_name = 'distributed-test'
@@ -29,6 +32,12 @@ csv_files = {'2014-01-01.csv': (b'name,amount,id\n'
 def s3():
     # could do with a bucket with write privileges.
     yield S3FileSystem(anon=True)
+
+
+def test_non_anonymous_access():
+    with ignoring(NoCredentialsError):
+        fs = S3FileSystem(anon=False)
+        fs.ls('distributed-test')
 
 
 def test_s3_file_access(s3):
