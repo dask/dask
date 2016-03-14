@@ -9,7 +9,8 @@ import socket
 from time import time
 import uuid
 
-from toolz import frequencies, memoize, concat, identity, valmap, keymap
+from toolz import (frequencies, memoize, concat, identity, valmap, keymap,
+        first, second)
 from tornado import gen
 from tornado.gen import Return
 from tornado.queues import Queue
@@ -203,7 +204,8 @@ class Scheduler(Server):
                          'broadcast': self.broadcast,
                          'ncores': self.get_ncores,
                          'has_what': self.get_has_what,
-                         'who_has': self.get_who_has}
+                         'who_has': self.get_who_has,
+                         'rebalance': self.rebalance}
 
         self.services = {}
         for k, v in (services or {}).items():
@@ -1281,6 +1283,78 @@ class Scheduler(Server):
             port = int(port)
             addr = '%s:%d' % (ip, port)
         return addr
+
+    @gen.coroutine
+    def rebalance(self, stream=None, keys=None, workers=None):
+        with log_errors():
+            keys = set(keys or self.who_has)
+            workers = set(workers or self.ncores)
+            if not keys.issubset(self.who_has):
+                raise Return({'status': 'missing-data',
+                              'keys': list(keys - set(self.who_has))})
+
+            workers_by_key = {k: self.who_has[k] & workers for k in keys}
+            keys_by_worker = {w: set() for w in workers}
+            for k, v in workers_by_key.items():
+                for vv in v:
+                    keys_by_worker[vv].add(k)
+
+            worker_bytes = {w: sum(self.nbytes[k] for k in v)
+                            for w, v in keys_by_worker.items()}
+            avg = sum(worker_bytes.values()) / len(worker_bytes)
+
+            sorted_workers = list(map(first, sorted(worker_bytes.items(),
+                                              key=second, reverse=True)))
+
+            recipients = iter(reversed(sorted_workers))
+            recipient = next(recipients)
+            msgs = []  # (sender, recipient, key)
+            for sender in sorted_workers[:len(workers) // 2]:
+                sender_keys = {k: self.nbytes[k] for k in keys_by_worker[sender]}
+                sender_keys = iter(sorted(sender_keys.items(),
+                                          key=second, reverse=True))
+
+                try:
+                    while worker_bytes[sender] > avg:
+                        while worker_bytes[recipient] < avg and worker_bytes[sender] > avg:
+                            k, nb = next(sender_keys)
+                            if k not in keys_by_worker[recipient]:
+                                keys_by_worker[recipient].add(k)
+                                # keys_by_worker[sender].remove(k)
+                                msgs.append((sender, recipient, k))
+                                worker_bytes[sender] -= nb
+                                worker_bytes[recipient] += nb
+                        if worker_bytes[sender] > avg:
+                            recipient = next(recipients)
+                except StopIteration:
+                    break
+
+            to_recipients = defaultdict(lambda: defaultdict(list))
+            to_senders = defaultdict(list)
+            for sender, recipient, key in msgs:
+                to_recipients[recipient][key].append(sender)
+                to_senders[sender].append(key)
+
+            result = yield {r: self.rpc(addr=r).gather(who_has=v)
+                            for r, v in to_recipients.items()}
+
+            if not all(r['status'] == 'OK' for r in result.values()):
+                raise Return({'status': 'missing-data',
+                              'keys': sum([r['keys'] for r in result
+                                                     if 'keys' in r], [])})
+
+            for sender, recipient, key in msgs:
+                self.who_has[key].add(recipient)
+                self.has_what[recipient].add(key)
+
+            result = yield {r: self.rpc(addr=r).delete_data(keys=v, report=False)
+                            for r, v in to_senders.items()}
+
+            for sender, recipient, key in msgs:
+                self.who_has[key].remove(sender)
+                self.has_what[sender].remove(key)
+
+            raise Return({'status': 'OK'})
 
 
 def decide_worker(dependencies, stacks, who_has, restrictions,
