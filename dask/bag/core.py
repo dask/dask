@@ -1470,11 +1470,11 @@ def bag_zip(*bags):
     # TODO: do more checks
 
     name = 'zip-' + tokenize(*bags)
-    dsk = dict(
+    dsk = merge(*(bag.dask for bag in bags))
+    dsk.update(
         ((name, i), (reify, (zip,) + tuple((bag.name, i) for bag in bags)))
         for i in range(npartitions))
-    bags_dsk = merge(*(bag.dask for bag in bags))
-    return Bag(merge(bags_dsk, dsk), name, npartitions)
+    return Bag(dsk, name, npartitions)
 
 
 def _reduce(binop, sequence, initial=no_default):
