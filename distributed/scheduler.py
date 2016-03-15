@@ -1496,49 +1496,6 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
     assert all(map(check_key, keys))
 
 
-def keys_outside_frontier(dependencies, keys, frontier):
-    """ All keys required by terminal keys within graph up to frontier
-
-    Given:
-
-    1. A graph
-    2. A set of desired keys
-    3. A frontier/set of already-computed (or already-about-to-be-computed) keys
-
-    Find all keys necessary to compute the desired set that are outside of the
-    frontier.
-
-    Parameters
-    ----------
-    tasks: dict
-    keys: iterable of keys
-    frontier: set of keys
-
-    Examples
-    --------
-    >>> f = lambda:1
-    >>> dsk = {'x': 1, 'a': 2, 'y': (f, 'x'), 'b': (f, 'a'),
-    ...        'z': (f, 'b', 'y')}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> keys = {'z', 'b'}
-    >>> frontier = {'y', 'a'}
-    >>> list(sorted(keys_outside_frontier(dependencies, keys, frontier)))
-    ['b', 'z']
-    """
-    assert isinstance(keys, set)
-    assert isinstance(frontier, set)
-    stack = list(keys - frontier)
-    result = set()
-    while stack:
-        x = stack.pop()
-        if x in result or x in frontier:
-            continue
-        result.add(x)
-        stack.extend(dependencies[x])
-
-    return result
-
-
 _round_robin = [0]
 
 
