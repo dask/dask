@@ -2171,6 +2171,18 @@ def test_run_sync(loop):
             assert result == {'127.0.0.1:%d' % a['port']: 3}
 
 
+def test_run_exception(loop):
+    def raise_exception(exc_type, exc_msg):
+        raise exc_type(exc_msg)
+
+    with cluster() as (s, [a, b]):
+        with Executor(('127.0.0.1', s['port']), loop=loop) as e:
+            for exc_type in [ValueError, RuntimeError]:
+                with pytest.raises(exc_type) as excinfo:
+                    e.run(raise_exception, exc_type, 'informative message')
+                assert 'informative message' in str(excinfo.value)
+
+
 def test_diagnostic_ui(loop):
     with cluster() as (s, [a, b]):
         a_addr = '127.0.0.1:%d' % a['port']
