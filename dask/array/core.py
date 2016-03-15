@@ -660,7 +660,7 @@ def topk(k, x):
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
 
 
-def store(sources, targets, **kwargs):
+def store(sources, targets, lock=None, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
@@ -706,7 +706,8 @@ def store(sources, targets, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d]"
                          % (len(sources), len(targets)))
 
-    updates = [insert_to_ooc(tgt, src) for tgt, src in zip(targets, sources)]
+    updates = [insert_to_ooc(tgt, src, lock=lock)
+               for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
     Array._get(dsk, keys, **kwargs)
@@ -1971,8 +1972,8 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
-def insert_to_ooc(out, arr):
-    lock = Lock()
+def insert_to_ooc(out, arr, lock=None):
+    lock = lock or Lock()
 
     def store(x, index):
         with lock:
