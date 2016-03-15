@@ -839,10 +839,11 @@ class Scheduler(Server):
     def my_heal_missing_data(self, missing):
         """ Recover from lost data """
         logger.info("Heal missing data, %s", missing)
+        missing2 = {m for m in missing if m in self.dependencies}  # remove scattered
         in_play = set(self.tasks) - set(self.released)
         ready_to_run = heal_missing_data(self.tasks, self.dependencies,
                 self.dependents, self.who_has, in_play, self.waiting,
-                self.waiting_data, self.released, missing)
+                self.waiting_data, self.released, missing2)
         for key in ready_to_run:
             self.mark_ready_to_run(key)
 
@@ -927,10 +928,8 @@ class Scheduler(Server):
                 break
             except Exception as e:
                 from .core import dumps
-                put({'op': 'scheduler-error',
-                     'exception': dumps(truncate_exception(e)),
-                     'traceback': dumps(get_traceback())})
                 logger.exception(e)
+                put(error_message(e, status='scheduler-error'))
                 continue
             logger.debug("scheduler receives message %s", msg)
             try:
@@ -950,7 +949,7 @@ class Scheduler(Server):
                         yield result
                 except Exception as e:
                     logger.exception(e)
-                    raise
+                    put(error_message(e, status='scheduler-error'))
             else:
                 logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
 

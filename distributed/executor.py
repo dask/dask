@@ -30,7 +30,8 @@ from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
 from .client import (WrappedKey, unpack_remotedata, pack_data)
-from .core import read, write, connect, rpc, coerce_to_rpc, dumps
+from .core import (read, write, connect, rpc, coerce_to_rpc, dumps,
+        clean_exception)
 from .scheduler import Scheduler
 from .worker import dumps_function, dumps_task
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator, _deps,
@@ -115,14 +116,10 @@ class Future(WrappedKey):
 
         yield d['event'].wait()
         if self.status == 'error':
-            exception = d['exception']
-            traceback = d['traceback']
-            if isinstance(traceback, str):
-                traceback = None
             if raiseit:
-                six.reraise(type(exception), exception, traceback)
+                six.reraise(*clean_exception(**d))
             else:
-                raise Return([type(exception), exception, traceback])
+                raise Return(clean_exception(**d))
         else:
             result = yield self.executor._gather([self])
             raise gen.Return(result[0])
@@ -420,7 +417,7 @@ class Executor(object):
                         e.set()
                     with ignoring(AttributeError):
                         self._restart_event.set()
-                elif msg['op'] == 'scheduler-error':
+                elif 'error' in msg['op']:
                     logger.warn("Scheduler exception:")
                     logger.exception(msg['exception'])
 

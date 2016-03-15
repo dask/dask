@@ -22,7 +22,8 @@ from tornado.iostream import StreamClosedError
 
 from .client import pack_data, gather_from_workers
 from .compatibility import reload, PY3, unicode
-from .core import rpc, Server, pingpong, dumps, loads, coerce_to_address
+from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
+        error_message)
 from .sizeof import sizeof
 from .utils import (funcname, get_ip, get_traceback, truncate_exception,
     ignoring, _maybe_complex)
@@ -460,34 +461,3 @@ def dumps_task(task):
             return {'function': dumps_function(task[0]),
                         'args': dumps(task[1:])}
     return {'task': dumps(task)}
-
-
-def error_message(e):
-    """ Produce message to send back given an exception has occurred
-
-    This does the following:
-
-    1.  Gets the traceback
-    2.  Trunctes the exception and the traceback
-    3.  Serializes the exception and traceback or
-    4.  If they can't be serialized send string versions
-    5.  Format a message and return
-    """
-    tb = get_traceback()
-    e2 = truncate_exception(e, 1000)
-    try:
-        e3 = dumps(e2)
-        loads(e3)
-    except Exception:
-        e3 = Exception(str(e2))
-        e3 = dumps(e3)
-    try:
-        tb2 = dumps(tb)
-    except Exception:
-        tb2 = ''.join(traceback.format_tb(tb))
-        tb2 = dumps(tb2)
-
-    if len(tb2) > 10000:
-        tb2 = None
-
-    return {'status': 'error', 'exception': e3, 'traceback': tb2}

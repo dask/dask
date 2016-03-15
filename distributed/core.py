@@ -4,9 +4,11 @@ from datetime import timedelta
 from hashlib import md5
 import logging
 import signal
+import six
 import socket
 import struct
 from time import sleep, time
+import traceback
 import uuid
 
 from toolz import assoc, first
@@ -22,6 +24,7 @@ from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream, StreamClosedError
 
 from .compatibility import PY3, unicode
+from .utils import get_traceback, truncate_exception
 from . import protocol
 
 def dumps(x):
@@ -150,11 +153,7 @@ class Server(TCPServer):
                     logger.info("Lost connection: %s", str(address))
                     break
                 except Exception as e:
-                    logger.exception(e)
-                    msg = {'op': 'server-error',
-                           'exception': truncate_exception(e),
-                           'traceback': get_traceback()}
-                    yield write(stream, ('error', msg))
+                    yield write(stream, error_message(e, status='uncaught-error'))
                     continue
                 if not isinstance(msg, dict):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
@@ -177,7 +176,7 @@ class Server(TCPServer):
                         result = yield gen.maybe_future(handler(stream, **msg))
                     except Exception as e:
                         logger.exception(e)
-                        raise
+                        result = error_message(e, status='uncaught-error')
                 if reply:
                     try:
                         yield write(stream, result)
@@ -279,6 +278,8 @@ def send_recv(stream=None, arg=None, ip=None, port=None, addr=None, reply=True, 
 
     if reply:
         response = yield read(stream)
+        if isinstance(response, dict) and response.get('status') == 'uncaught-error':
+            six.reraise(*clean_exception(**response))
     else:
         response = None
     if kwargs.get('close'):
@@ -418,3 +419,55 @@ def coerce_to_rpc(o, **kwargs):
         return o
     else:
         raise TypeError()
+
+
+def error_message(e, status='error'):
+    """ Produce message to send back given an exception has occurred
+
+    This does the following:
+
+    1.  Gets the traceback
+    2.  Trunctes the exception and the traceback
+    3.  Serializes the exception and traceback or
+    4.  If they can't be serialized send string versions
+    5.  Format a message and return
+
+    See Also
+    --------
+    clean_exception: deserialize and unpack message into exception/traceback
+    six.reraise: raise exception/traceback
+    """
+    tb = get_traceback()
+    e2 = truncate_exception(e, 1000)
+    try:
+        e3 = dumps(e2)
+        loads(e3)
+    except Exception:
+        e3 = Exception(str(e2))
+        e3 = dumps(e3)
+    try:
+        tb2 = dumps(tb)
+    except Exception:
+        tb2 = ''.join(traceback.format_tb(tb))
+        tb2 = dumps(tb2)
+
+    if len(tb2) > 10000:
+        tb2 = None
+
+    return {'status': status, 'exception': e3, 'traceback': tb2}
+
+
+def clean_exception(exception, traceback, **kwargs):
+    """ Reraise exception and traceback. Deserialize if necessary
+
+    See Also
+    --------
+    error_message: create and serialize errors into message
+    """
+    if isinstance(exception, bytes):
+        exception = loads(exception)
+    if isinstance(traceback, bytes):
+        traceback = loads(traceback)
+    if isinstance(traceback, str):
+        traceback = None
+    return type(exception), exception, traceback
