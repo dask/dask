@@ -1045,6 +1045,8 @@ class Array(Base):
 
     def astype(self, dtype, **kwargs):
         """ Copy of the array, cast to a specified type """
+        if dtype == self._dtype:
+            return self
         name = tokenize('astype', self, dtype, kwargs)
         return elemwise(lambda x: x.astype(dtype, **kwargs), self,
                         dtype=dtype, name=name)

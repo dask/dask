@@ -967,6 +967,8 @@ def test_astype():
     assert_eq(d.astype('i8'), x.astype('i8'))
     assert same_keys(d.astype('i8'), d.astype('i8'))
 
+    assert d.astype(d.dtype) is d
+
 
 def test_arithmetic():
     x = np.arange(5).astype('f4') + 2
