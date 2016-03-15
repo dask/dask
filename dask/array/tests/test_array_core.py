@@ -285,6 +285,17 @@ def test_concatenate():
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
+def test_concatenate_fixlen_strings():
+    x = np.array(['a', 'b', 'c'])
+    y = np.array(['aa', 'bb', 'cc'])
+
+    a = da.from_array(x, chunks=(2,))
+    b = da.from_array(y, chunks=(2,))
+
+    assert_eq(np.concatenate([x, y]),
+              da.concatenate([a, b]))
+
+
 def test_vstack():
     x = np.arange(5)
     y = np.ones(5)
