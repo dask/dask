@@ -835,10 +835,16 @@ def test_bag_compute_forward_kwargs():
 
 def test_to_imperative():
     from dask.imperative import Value
+
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
     a, b, c = b.map(inc).to_imperative()
     assert all(isinstance(x, Value) for x in [a, b, c])
     assert b.compute() == [4, 5]
+
+    b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
+    t = b.sum().to_imperative()
+    assert isinstance(t, Value)
+    assert t.compute() == 21
 
 
 def test_from_imperative():

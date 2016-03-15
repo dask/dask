@@ -226,6 +226,14 @@ class Item(Base):
 
     __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
+    def to_imperative(self):
+        """ Convert bag item to dask Value
+
+        Returns a single value.
+        """
+        from dask.imperative import Value
+        return Value(self.key, [self.dask])
+
 
 class Bag(Base):
     """ Parallel collection of Python objects
