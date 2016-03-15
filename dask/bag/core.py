@@ -278,9 +278,10 @@ class Bag(Base):
         name = 'map-{0}-{1}'.format(funcname(func), tokenize(self, func))
         if takes_multiple_arguments(func):
             func = partial(apply, func)
-        dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
+        dsk = self.dask.copy()
+        dsk.update(((name, i), (reify, (map, func, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(dsk, name, self.npartitions)
 
     @property
     def _args(self):
