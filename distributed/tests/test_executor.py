@@ -1696,6 +1696,7 @@ def test_multi_executor(s, a, b):
 def test_broken_worker_during_computation(e, s, a, b):
     n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
     n.start(0)
+
     start = time()
     while len(s.ncores) < 3:
         yield gen.sleep(0.01)
@@ -1706,12 +1707,13 @@ def test_broken_worker_during_computation(e, s, a, b):
         L = e.map(add, *zip(*partition_all(2, L)))
 
     yield gen.sleep(0.3)
-    s.validate()
     n.process.terminate()
-    yield gen.sleep(0.1)
-    s.validate()
+    yield gen.sleep(0.3)
+    n.process.terminate()
 
-    result = e._gather(L)
+    result = yield e._gather(L)
+    assert isinstance(result[0], int)
+
 
 @gen_cluster()
 def test_cleanup_after_broken_executor_connection(s, a, b):
