@@ -331,9 +331,11 @@ class Bag(Base):
         """
         name = 'map-partitions-{0}-{1}'.format(funcname(func),
                                                tokenize(self, func))
-        dsk = dict(((name, i), (func, (self.name, i)))
+        dsk = self.dask.copy()
+        dsk.update(((name, i),
+                    (func, (self.name, i)))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(dsk, name, self.npartitions)
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
