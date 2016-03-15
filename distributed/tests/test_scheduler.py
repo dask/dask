@@ -239,9 +239,9 @@ def test_decide_worker_with_loose_restrictions():
     assert result == charlie
 
     restrictions = {'x': {'david', 'ethel'}}
-    with pytest.raises(ValueError):
-        result = decide_worker(dependencies, stacks, who_has, restrictions,
-                               set(), nbytes, 'x')
+    result = decide_worker(dependencies, stacks, who_has, restrictions,
+                           set(), nbytes, 'x')
+    assert result is None
 
     restrictions = {'x': {'david', 'ethel'}}
     result = decide_worker(dependencies, stacks, who_has, restrictions,

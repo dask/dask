@@ -105,6 +105,8 @@ class Scheduler(Server):
         List of keys waiting to be sent to each worker
     * **released:** ``{keys}``
         Set of keys that are known, but released from memory
+    * **unrunnable:** ``{key}``
+        Keys that we are unable to run
     * **retrictions:** ``{key: {hostnames}}``:
         A set of hostnames per key of where that key can be run.  Usually this
         is empty unless a key has been specifically restricted to only run on
@@ -167,6 +169,7 @@ class Scheduler(Server):
         self.waiting = dict()
         self.waiting_data = dict()
         self.ready = deque()
+        self.unrunnable = set()
         self.idle = set()
         self.who_has = defaultdict(set)
         self.deleted_keys = defaultdict(set)
@@ -372,7 +375,7 @@ class Scheduler(Server):
                     self.who_has, self.restrictions, self.loose_restrictions,
                     self.nbytes, key)
             if not new_worker:
-                raise ValueError("No valid workers found")
+                self.unrunnable.add(key)
             else:
                 self.stacks[new_worker].append(key)
                 self.ensure_occupied(new_worker)
@@ -628,6 +631,7 @@ class Scheduler(Server):
             if not s:
                 self.who_has.pop(key)
                 missing_keys.add(key)
+                self.report({'op': 'lost-data', 'key': key})
 
         missing_keys = {k for k in missing_keys if k in self.tasks}
         self.my_heal_missing_data(missing_keys)
@@ -1395,7 +1399,7 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
                     return decide_worker(dependencies, stacks, who_has,
                                          {}, set(), nbytes, key)
                 else:
-                    raise ValueError("Task has no valid workers", key, r)
+                    return None
     if not workers or not stacks:
         return None
 
