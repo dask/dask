@@ -19,7 +19,7 @@ import pytest
 from distributed import Nanny, Worker
 from distributed.core import connect, read, write, rpc, dumps
 from distributed.client import WrappedKey
-from distributed.scheduler import (validate_state, heal, decide_worker,
+from distributed.scheduler import (validate_state, decide_worker,
         heal_missing_data, Scheduler)
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
@@ -30,105 +30,6 @@ from dask.compatibility import apply
 
 alice = 'alice:1234'
 bob = 'bob:1234'
-
-
-def test_heal():
-    dsk = {'x': 1, 'y': (inc, 'x')}
-    dependencies = {'x': set(), 'y': {'x'}}
-    dependents = {'x': {'y'}, 'y': set()}
-
-    who_has = dict()
-    stacks = {alice: [], bob: []}
-    processing = {alice: set(), bob: set()}
-
-    waiting = {'y': {'x'}}
-    ready = {'x'}
-    waiting_data = {'x': {'y'}, 'y': set()}
-    finished_results = set()
-
-    local = {k: v for k, v in locals().items() if '@' not in k}
-
-    output = heal(**local)
-
-    assert output['dependencies'] == dependencies
-    assert output['dependents'] == dependents
-    assert output['who_has'] == who_has
-    assert output['processing'] == processing
-    assert output['stacks'] == stacks
-    assert output['waiting'] == waiting
-    assert output['waiting_data'] == waiting_data
-    assert output['released'] == set()
-
-    state = {'who_has': dict(),
-             'stacks': {alice: ['x'], bob: []},
-             'processing': {alice: set(), bob: set()},
-             'waiting': {}, 'waiting_data': {}, 'ready': set()}
-
-    heal(dependencies, dependents, **state)
-
-
-def test_heal_2():
-    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y'),
-           'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
-           'result': (add, 'z', 'c')}
-    dependencies = {'x': set(), 'y': {'x'}, 'z': {'y'},
-                    'a': set(), 'b': {'a'}, 'c': {'b'},
-                    'result': {'z', 'c'}}
-    dependents = {'x': {'y'}, 'y': {'z'}, 'z': {'result'},
-                  'a': {'b'}, 'b': {'c'}, 'c': {'result'},
-                  'result': set()}
-
-    state = {'who_has': {'y': {alice}, 'a': {alice}},  # missing 'b'
-             'stacks': {alice: ['z'], bob: []},
-             'processing': {alice: set(), bob: set(['c'])},
-             'waiting': {}, 'waiting_data': {}, 'ready': set()}
-
-    output = heal(dependencies, dependents, **state)
-    assert output['waiting'] == {'c': {'b'}, 'result': {'c', 'z'}}
-    assert output['ready'] == {'b'}
-    assert output['waiting_data'] == {'a': {'b'}, 'b': {'c'}, 'c': {'result'},
-                                      'y': {'z'}, 'z': {'result'},
-                                      'result': set()}
-    assert output['who_has'] == {'y': {alice}, 'a': {alice}}
-    assert output['stacks'] == {alice: ['z'], bob: []}
-    assert output['processing'] == {alice: set(), bob: set()}
-    assert output['released'] == {'x'}
-
-
-def test_heal_restarts_leaf_tasks():
-    dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
-           'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
-    dependents, dependencies = get_deps(dsk)
-
-    state = {'who_has': dict(),  # missing 'b'
-             'stacks': {alice: ['a'], bob: ['x']},
-             'processing': {alice: set(), bob: set()},
-             'waiting': {}, 'waiting_data': {}, 'ready': set()}
-
-    del state['stacks'][bob]
-    del state['processing'][bob]
-
-    output = heal(dependencies, dependents, **state)
-    assert 'x' in output['waiting']
-
-
-def test_heal_culls():
-    dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
-           'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
-    dependencies, dependents = get_deps(dsk)
-
-    state = {'who_has': {'c': {alice}, 'y': {alice}},
-             'stacks': {alice: ['a'], bob: []},
-             'processing': {alice: set(), bob: set('y')},
-             'waiting': {}, 'waiting_data': {}, 'ready': set()}
-
-    output = heal(dependencies, dependents, **state)
-    assert 'a' not in output['stacks'][alice]
-    assert output['released'] == {'a', 'b', 'x'}
-    assert output['finished_results'] == {'c'}
-    assert 'y' not in output['processing'][bob]
-
-    assert output['ready'] == {'z'}
 
 
 @gen_cluster()

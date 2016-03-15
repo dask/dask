@@ -15,7 +15,8 @@ from time import sleep, time
 import traceback
 
 import pytest
-from toolz import identity, isdistinct, first, concat, pluck, keymap, valmap
+from toolz import (identity, isdistinct, first, concat, pluck, keymap, valmap,
+        partition_all)
 from tornado.ioloop import IOLoop
 from tornado.iostream import IOStream
 from tornado import gen
@@ -444,10 +445,12 @@ def slowinc(x):
     sleep(0.02)
     return x + 1
 
+
 def slowadd(x, y):
     from time import sleep
     sleep(0.02)
     return x + y
+
 
 @pytest.mark.parametrize(('func', 'n'), [(slowinc, 100), (inc, 1000)])
 def test_stress_gc(loop, func, n):
@@ -1710,6 +1713,27 @@ def test_multi_executor(s, a, b):
     assert not s.tasks
 
 
+@gen_cluster(executor=True, timeout=60)
+def test_broken_worker_during_computation(e, s, a, b):
+    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n.start(0)
+    start = time()
+    while len(s.ncores) < 3:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+    L = e.map(inc, range(256))
+    for i in range(8):
+        L = e.map(add, *zip(*partition_all(2, L)))
+
+    yield gen.sleep(0.3)
+    s.validate()
+    n.process.terminate()
+    yield gen.sleep(0.1)
+    s.validate()
+
+    result = e._gather(L)
+
 @gen_cluster()
 def test_cleanup_after_broken_executor_connection(s, a, b):
     def f(ip, port):
@@ -1733,7 +1757,6 @@ def test_cleanup_after_broken_executor_connection(s, a, b):
     while s.tasks:
         yield gen.sleep(0.01)
         assert time() < start + 5
-
 
 
 @gen_cluster()
