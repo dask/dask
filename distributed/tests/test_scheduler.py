@@ -76,7 +76,6 @@ def test_update_state(loop):
     assert s.wants_what == {'client': {'y', 'z'}}
 
     assert list(s.ready) == ['a']
-    assert s.in_play == {'a', 'x', 'y', 'z'}
 
     s.stop()
 
@@ -100,7 +99,6 @@ def test_update_state_with_processing(loop):
     assert s.wants_what == {'client': {'z'}}
 
     assert s.who_has == {'x': {alice}}
-    assert s.in_play == {'z', 'x', 'y'}
 
     s.update_graph(tasks={'a': (inc, 'x'), 'b': (add,'a','y'), 'c': (inc, 'z')},
                    keys=['b', 'c'],
@@ -115,7 +113,6 @@ def test_update_state_with_processing(loop):
 
     assert s.who_wants == {'b': {'client'}, 'c': {'client'}, 'z': {'client'}}
     assert s.wants_what == {'client': {'b', 'c', 'z'}}
-    assert s.in_play == {'x', 'y', 'z', 'a', 'b', 'c'}
 
     s.stop()
 
@@ -132,6 +129,7 @@ def test_update_state_respects_data_in_memory(loop):
     s.mark_task_finished('x', alice, nbytes=10, type=dumps(int))
     s.mark_task_finished('y', alice, nbytes=10, type=dumps(int))
 
+    assert s.released == {'x'}
     assert s.who_has == {'y': {alice}}
 
     s.update_graph(tasks={'x': 1, 'y': (inc, 'x'), 'z': (add, 'y', 'x')},
@@ -139,12 +137,12 @@ def test_update_state_respects_data_in_memory(loop):
                    dependencies={'y': {'x'}, 'z': {'y', 'x'}},
                    client='client')
 
+    assert s.released == set()
     assert s.waiting == {'z': {'x'}}
     assert s.processing[alice] == {'x'}  # x was released, need to recompute
     assert s.waiting_data == {'x': {'z'}, 'y': {'z'}, 'z': set()}
     assert s.who_wants == {'y': {'client'}, 'z': {'client'}}
     assert s.wants_what == {'client': {'y', 'z'}}
-    assert s.in_play == {'x', 'y', 'z'}
 
     s.stop()
 
@@ -337,18 +335,20 @@ def test_fill_missing_data():
     e_ready = {'x'}
     e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
     e_in_play = {'x', 'y', 'z'}
+    e_released = set()
 
     lost = {'z'}
     del who_has['z']
     in_play.remove('z')
 
     ready = heal_missing_data(dsk, dependencies, dependents, who_has, in_play, waiting,
-            waiting_data, lost)
+            waiting_data, released, lost)
 
     assert waiting == e_waiting
     assert waiting_data == e_waiting_data
     assert ready == e_ready
     assert in_play == e_in_play
+    assert released == e_released
 
 
 def div(x, y):
@@ -502,7 +502,6 @@ def test_remove_worker_from_scheduler(s, a, b):
     assert a.address not in s.ncores
     assert len(s.ready) + len(s.processing[b.address]) == \
             len(dsk)  # b owns everything
-    assert all(k in s.in_play for k in dsk)
     s.validate()
 
 
@@ -870,3 +869,14 @@ def test_file_descriptors_dont_leak(loop):
     while proc.num_fds() > before:
         loop.run_sync(lambda: gen.sleep(0.01))
         assert time() < start + 5
+
+
+@gen_cluster()
+def test_update_graph_culls(s, a, b):
+    s.add_client(client='client')
+    s.update_graph(tasks={'x': (inc, 1), 'y': (inc, 'x'), 'z': (inc, 2)},
+                   keys=['y'],
+                   dependencies={'y': 'x', 'x': [], 'z': []},
+                   client='client')
+    assert 'z' not in s.tasks
+    assert 'z' not in s.dependencies

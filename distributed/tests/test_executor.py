@@ -1551,7 +1551,7 @@ def test_forget_simple(e, s, a, b):
     s.client_releases_keys(keys=[z.key], client=e.id)
     for coll in [s.tasks, s.dependencies, s.dependents, s.waiting,
             s.waiting_data, s.who_has, s.restrictions, s.loose_restrictions,
-            s.in_play, s.keyorder, s.exceptions, s.who_wants,
+            s.released, s.keyorder, s.exceptions, s.who_wants,
             s.exceptions_blame]:
         assert x.key not in coll
         assert z.key not in coll

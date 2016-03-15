@@ -102,6 +102,8 @@ class Scheduler(Server):
         Set of keys currently in execution on each worker
     * **stacks:** ``{worker: [keys]}``:
         List of keys waiting to be sent to each worker
+    * **released:** ``{keys}``
+        Set of keys that are known, but released from memory
     * **retrictions:** ``{key: {hostnames}}``:
         A set of hostnames per key of where that key can be run.  Usually this
         is empty unless a key has been specifically restricted to only run on
@@ -110,9 +112,6 @@ class Scheduler(Server):
     * **loose_retrictions:** ``{key}``:
         Set of keys for which we are allow to violate restrictions (see above)
         if not valid workers are present.
-    * **in_play:** ``{key}``:
-        All keys in one of who_has, waiting, stacks, processing.  This is any
-        key that will eventually be in memory.
     * **keyorder:** ``{key: tuple}``:
         A score per key that determines its priority
     * **scheduler_queues:** ``[Queues]``:
@@ -154,7 +153,7 @@ class Scheduler(Server):
         self.dependents = dict()
         self.generation = 0
         self.has_what = defaultdict(set)
-        self.in_play = set()
+        self.released = set()
         self.keyorder = dict()
         self.nbytes = dict()
         self.ncores = dict()
@@ -254,7 +253,7 @@ class Scheduler(Server):
     def start(self, port=8786, start_queues=True):
         """ Clear out old state and restart all running coroutines """
         collections = [self.tasks, self.dependencies, self.dependents,
-                self.waiting, self.waiting_data, self.in_play, self.keyorder,
+                self.waiting, self.waiting_data, self.released, self.keyorder,
                 self.nbytes, self.processing, self.restrictions,
                 self.loose_restrictions, self.ready, self.who_wants,
                 self.wants_what]
@@ -500,8 +499,6 @@ class Scheduler(Server):
         if client:
             self.client_wants_keys(keys=list(who_has), client=client)
 
-        self.in_play.update(who_has)
-
     def mark_task_erred(self, key, worker, exception, traceback):
         """ Mark that a task has erred on a particular worker
 
@@ -509,7 +506,7 @@ class Scheduler(Server):
         --------
         Scheduler.mark_failed
         """
-        if key in self.processing[worker]:
+        if worker in self.processing and key in self.processing[worker]:
             self.processing[worker].remove(key)
             self.exceptions[key] = exception
             self.tracebacks[key] = traceback
@@ -536,7 +533,7 @@ class Scheduler(Server):
 
         self.release_live_dependencies(key)
 
-        self.in_play.remove(key)
+        self.released.add(key)
         for dep in self.dependents[key]:
             self.mark_failed(dep, failing_key)
 
@@ -591,9 +588,8 @@ class Scheduler(Server):
     def log_state(self, msg=''):
         """ Log current full state of the scheduler """
         logger.debug("Runtime State: %s", msg)
-        logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n'
-                'in_play: %s\n\n', self.waiting, self.stacks, self.processing,
-                self.in_play)
+        logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n',
+                     self.waiting, self.stacks, self.processing)
 
     def remove_worker(self, stream=None, address=None):
         """ Mark that a worker no longer seems responsive
@@ -677,50 +673,48 @@ class Scheduler(Server):
             if tasks[k] is k:
                 del tasks[k]
 
-        if not isinstance(keys, set):
-            keys = set(keys)
-
-        for key, task in tasks.items():
-            if key not in self.tasks:
-                self.tasks[key] = task
-
-        for key in tasks:  # add dependencies/dependents
-            if key in self.dependencies:
-                continue
-
-            task = self.tasks[key]
-            self.dependencies[key] = set(dependencies.get(key, ()))
-
-            for dep in self.dependencies[key]:
-                if dep not in self.dependents:
-                    self.dependents[dep] = set()
-                self.dependents[dep].add(key)
-
-            if key not in self.dependents:
-                self.dependents[key] = set()
-
+        keys = set(keys)
         for k in keys:
             self.who_wants[k].add(client)
             self.wants_what[client].add(k)
 
-        ready_to_run = set()
+        stack = list(keys)
+        touched = set()
+        while stack:
+            k = stack.pop()
+            if k in self.tasks and k not in self.released:
+                continue
+            touched.add(k)
+            if k not in self.tasks and k in tasks:
+                self.tasks[k] = tasks[k]
+                self.dependencies[k] = set(dependencies.get(k, ()))
+                for dep in self.dependencies[k]:
+                    if dep not in self.dependents:
+                        self.dependents[dep] = set()
+                    self.dependents[dep].add(k)
+                if k not in self.dependents:
+                    self.dependents[k] = set()
 
-        exterior = keys_outside_frontier(self.dependencies, keys, self.in_play)
-        self.in_play |= exterior
-        for key in exterior:
-            deps = self.dependencies[key]
-            wait_keys = {d for d in deps if not self.who_has.get(d)}
-            if wait_keys:
-                self.waiting[key] = wait_keys
-            else:
-                ready_to_run.add(key)
-            for dep in deps:
+            if k in self.released:
+                self.released.remove(k)
+
+            self.waiting[k] = {dep for dep in self.dependencies[k]
+                                    if dep not in self.who_has}
+            stack.extend(self.dependencies[k])
+
+            for dep in self.dependencies[k]:
                 if dep not in self.waiting_data:
                     self.waiting_data[dep] = set()
-                self.waiting_data[dep].add(key)
+                self.waiting_data[dep].add(k)
 
-            if key not in self.waiting_data:
-                self.waiting_data[key] = set()
+            if k not in self.waiting_data:
+                self.waiting_data[k] = set()
+
+        new_keyorder = order(tasks)  # TODO: define order wrt old graph
+        self.generation += 1  # older graph generations take precedence
+        for key in set(new_keyorder) & touched:
+            if key not in self.keyorder:
+                self.keyorder[key] = (self.generation, new_keyorder[key]) # prefer old
 
         if restrictions:
             restrictions = {k: set(map(self.coerce_address, v))
@@ -730,20 +724,12 @@ class Scheduler(Server):
             if loose_restrictions:
                 self.loose_restrictions |= set(loose_restrictions)
 
-        new_keyorder = order(tasks)  # TODO: define order wrt old graph
-        for key in new_keyorder:
-            if key not in self.keyorder:
-                # TODO: add test for this
-                self.keyorder[key] = (self.generation, new_keyorder[key]) # prefer old
-        if len(tasks) > 1:
-            self.generation += 1  # older graph generations take precedence
-
-        for key in tasks:
+        for key in touched | keys:
             for dep in self.dependencies[key]:
                 if dep in self.exceptions_blame:
                     self.mark_failed(key, self.exceptions_blame[dep])
 
-        for key in keys:
+        for key in touched | keys:
             if self.who_has.get(key):
                 self.mark_key_in_memory(key)
 
@@ -753,8 +739,9 @@ class Scheduler(Server):
             except Exception as e:
                 logger.exception(e)
 
-        for key in ready_to_run:
-            self.mark_ready_to_run(key)
+        for key in touched | keys:
+            if not self.waiting.get(key):
+                self.mark_ready_to_run(key)
 
         self.ensure_idle_ready()
         # self.validate()
@@ -820,7 +807,8 @@ class Scheduler(Server):
                 del self.exceptions[key]
             if key in self.exceptions_blame:
                 del self.exceptions_blame[key]
-
+            if key in self.released:
+                self.released.remove(key)
             if key in self.waiting:
                 del self.waiting[key]
             if key in self.waiting_data:
@@ -851,9 +839,10 @@ class Scheduler(Server):
     def my_heal_missing_data(self, missing):
         """ Recover from lost data """
         logger.info("Heal missing data, %s", missing)
+        in_play = set(self.tasks) - set(self.released)
         ready_to_run = heal_missing_data(self.tasks, self.dependencies,
-                self.dependents, self.who_has, self.in_play, self.waiting,
-                self.waiting_data, missing)
+                self.dependents, self.who_has, in_play, self.waiting,
+                self.waiting_data, self.released, missing)
         for key in ready_to_run:
             self.mark_ready_to_run(key)
 
@@ -1082,11 +1071,9 @@ class Scheduler(Server):
                 else:
                     if key in self.ready:  # O(n), though infrequent
                         self.ready.remove(key)
-                        assert key in self.in_play
                 if key in self.waiting_data:
                     del self.waiting_data[key]
-                if key in self.in_play:
-                    self.in_play.remove(key)
+                self.released.add(key)
 
     @gen.coroutine
     def scatter(self, stream=None, data=None, workers=None, client=None,
@@ -1171,10 +1158,9 @@ class Scheduler(Server):
                 logger.exception(e)
 
     def validate(self, allow_overlap=False, allow_bad_stacks=True):
-        released = set(self.tasks) - self.in_play
         validate_state(self.dependencies, self.dependents, self.waiting,
                 self.waiting_data, self.ready, self.who_has, self.stacks,
-                self.processing, None, released, self.in_play, self.who_wants,
+                self.processing, None, self.released, self.who_wants,
                 self.wants_what, tasks=self.tasks,
                 allow_overlap=allow_overlap, allow_bad_stacks=allow_bad_stacks)
         if not (set(self.ncores) == \
@@ -1414,7 +1400,7 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
 
 
 def validate_state(dependencies, dependents, waiting, waiting_data, ready,
-        who_has, stacks, processing, finished_results, released, in_play,
+        who_has, stacks, processing, finished_results, released,
         who_wants, wants_what, tasks=None, allow_overlap=False, allow_bad_stacks=False,
         **kwargs):
     """
@@ -1443,12 +1429,12 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
         assert v
         assert v.issubset(dependencies[k]), "waiting set not dependencies"
         for vv in v:
-            assert vv not in who_has, "dependency not in memory"
-            assert vv in in_play, "dependency not in play"
+            assert vv not in who_has, "waiting dependency in memory"
+            assert vv not in released, "dependency released"
 
     for k, v in waiting_data.items():
         for vv in v:
-            if vv not in in_play:
+            if vv in released:
                 raise ValueError('dependent not in play', vv)
             assert (vv in ready_set or
                     vv in waiting or
@@ -1467,9 +1453,6 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
         if ((allow_overlap and sum(vals) < 1) or
             (not allow_overlap and sum(vals) != 1)):
             raise ValueError("Key exists in wrong number of places", key, vals)
-
-        if not (key in released) != (key in in_play):
-            raise ValueError("Key released != in_play", key)
 
         if not all(map(check_key, dependencies[key])):  # Recursive case
             raise ValueError("Failed to check dependencies")
@@ -1557,7 +1540,8 @@ _round_robin = [0]
 
 
 def heal_missing_data(tasks, dependencies, dependents,
-                      who_has, in_play, waiting, waiting_data, missing):
+                      who_has, in_play, waiting, waiting_data, released,
+                      missing):
     """ Return to healthy state after discovering missing data
 
     When we identify that we're missing certain keys we rewind runtime state to
@@ -1584,9 +1568,12 @@ def heal_missing_data(tasks, dependencies, dependents,
         else:
             ready_to_run.add(key)
             logger.debug("Added key to ready-to-run: %s", key)
-        waiting_data[key] = {dep for dep in dependents[key] if dep in in_play
-                                                    and not who_has.get(dep)}
+        waiting_data[key] = {dep for dep in dependents[key]
+                                 if dep in waiting
+                                 and not who_has.get(dep)}
         in_play.add(key)
+        if key in released:
+            released.remove(key)
 
     for key in missing:
         ensure_key(key)
