@@ -307,9 +307,23 @@ class Worker(Server):
             args = loads(args)
         if kwargs:
             kwargs = loads(kwargs)
+        try:
+            result = function(*args, **kwargs)
+        except Exception as e:
+            logger.warn(" Run Failed\n"
+                "Function: %s\n"
+                "args:     %s\n"
+                "kwargs:   %s\n",
+                str(funcname(function))[:1000], str(args)[:1000],
+                str(kwargs)[:1000], exc_info=True)
 
-        result = function(*args, **kwargs)
-        raise Return(result)
+            response = error_message(e)
+        else:
+            response = {
+                'status': 'OK',
+                'result': dumps(result),
+            }
+        raise Return(response)
 
     @gen.coroutine
     def update_data(self, stream, data=None, report=True):
