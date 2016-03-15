@@ -103,6 +103,17 @@ def test_map_with_builtins():
         [True, False]
 
 
+def test_map_with_kwargs():
+    b = db.from_sequence(range(100), npartitions=10)
+    assert b.map(lambda x, factor=0: x * factor,
+                 factor=2).sum().compute() == 9900.0
+    assert b.map(lambda x, total=0: x / total,
+                 total=b.sum()).sum().compute() == 1.0
+    assert b.map(lambda x, factor=0, total=0: x * factor / total,
+                 total=b.sum(),
+                 factor=2).sum().compute() == 2.0
+
+
 def test_filter():
     c = b.filter(iseven)
     expected = merge(dsk, dict(((c.name, i),
