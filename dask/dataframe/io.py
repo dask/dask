@@ -565,11 +565,11 @@ def from_dask_array(x, columns=None):
     >>> x = da.ones((4, 2), chunks=(2, 2))
     >>> df = dd.io.from_dask_array(x, columns=['a', 'b'])
     >>> df.compute()
-       a  b
-    0  1  1
-    1  1  1
-    2  1  1
-    3  1  1
+         a    b
+    0  1.0  1.0
+    1  1.0  1.0
+    2  1.0  1.0
+    3  1.0  1.0
     """
 
     dummy = _dummy_from_array(x, columns)

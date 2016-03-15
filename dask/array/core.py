@@ -1045,6 +1045,8 @@ class Array(Base):
 
     def astype(self, dtype, **kwargs):
         """ Copy of the array, cast to a specified type """
+        if dtype == self._dtype:
+            return self
         name = tokenize('astype', self, dtype, kwargs)
         return elemwise(lambda x: x.astype(dtype, **kwargs), self,
                         dtype=dtype, name=name)
@@ -1798,6 +1800,13 @@ def concatenate(seq, axis=0):
               + seq[0].chunks[axis + 1:])
 
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
+
+    if all(a._dtype is not None for a in seq):
+        dt = reduce(np.promote_types, [a._dtype for a in seq])
+        seq = [x.astype(dt) for x in seq]
+    else:
+        dt = None
+
     names = [a.name for a in seq]
 
     name = 'concatenate-' + tokenize(names, axis)
@@ -1812,10 +1821,7 @@ def concatenate(seq, axis=0):
     dsk = dict(zip(keys, values))
     dsk2 = merge(dsk, *[a.dask for a in seq])
 
-    if all(a._dtype is not None for a in seq):
-        dt = reduce(np.promote_types, [a._dtype for a in seq])
-    else:
-        dt = None
+
 
     return Array(dsk2, name, chunks, dtype=dt)
 

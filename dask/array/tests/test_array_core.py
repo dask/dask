@@ -285,6 +285,17 @@ def test_concatenate():
     assert raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
+def test_concatenate_fixlen_strings():
+    x = np.array(['a', 'b', 'c'])
+    y = np.array(['aa', 'bb', 'cc'])
+
+    a = da.from_array(x, chunks=(2,))
+    b = da.from_array(y, chunks=(2,))
+
+    assert_eq(np.concatenate([x, y]),
+              da.concatenate([a, b]))
+
+
 def test_vstack():
     x = np.arange(5)
     y = np.ones(5)
@@ -966,6 +977,8 @@ def test_astype():
     assert d.astype('i8')._dtype == 'i8'
     assert_eq(d.astype('i8'), x.astype('i8'))
     assert same_keys(d.astype('i8'), d.astype('i8'))
+
+    assert d.astype(d.dtype) is d
 
 
 def test_arithmetic():
