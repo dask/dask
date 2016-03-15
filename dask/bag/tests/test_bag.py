@@ -10,7 +10,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, fuse, map, collect,
         reduceby, bz2_stream, stream_decompress, reify, partition,
         _parse_s3_URI, inline_singleton_lists, optimize, system_encoding,
         from_imperative)
-from dask.compatibility import BZ2File, GzipFile
+from dask.compatibility import BZ2File, GzipFile, reduce
 from dask.utils import filetexts, tmpfile, raises, open
 from dask.async import get_sync
 import dask
@@ -309,6 +309,20 @@ def test_map_partitions():
     assert list(b.map_partitions(len)) == [5, 5, 5]
     assert b.map_partitions(len).name == b.map_partitions(len).name
     assert b.map_partitions(lambda a: len(a) + 1).name != b.map_partitions(len).name
+
+
+def test_map_partitions_with_kwargs():
+    b = db.from_sequence(range(100), npartitions=10)
+    assert b.map_partitions(
+        lambda X, factor=0: [x * factor for x in X],
+        factor=2).sum().compute() == 9900.0
+    assert b.map_partitions(
+        lambda X, total=0: [x / total for x in X],
+        total=b.sum()).sum().compute() == 1.0
+    assert b.map_partitions(
+        lambda X, factor=0, total=0: [x * factor / total for x in X],
+        total=b.sum(),
+        factor=2).sum().compute() == 2.0
 
 
 def test_lazify_task():
