@@ -25,6 +25,7 @@ class BatchedStream(object):
         self.recv_q = Queue()
         self._background_send_coroutine = self._background_send()
         self._background_recv_coroutine = self._background_recv()
+        self._broken = None
 
         self.pc = PeriodicCallback(lambda: None, 100)
         self.pc.start()
@@ -34,6 +35,8 @@ class BatchedStream(object):
         with log_errors():
             while True:
                 msg = yield self.send_q.get()
+                if msg == 'close':
+                    break
                 msgs = [msg]
                 now = default_timer()
                 wait_time = self.last_transmission + self.interval - now
@@ -42,7 +45,12 @@ class BatchedStream(object):
                 while not self.send_q.empty():
                     msgs.append(self.send_q.get_nowait())
 
-                yield write(self.stream, msgs)
+                try:
+                    yield write(self.stream, msgs)
+                except StreamClosedError:
+                    self.recv_q.put_nowait('close')
+                    self._broken = True
+                    break
 
                 if len(msgs) > 1:
                     logger.debug("Batched messages: %d", len(msgs))
@@ -56,6 +64,9 @@ class BatchedStream(object):
                 try:
                     msgs = yield read(self.stream)
                 except StreamClosedError:
+                    self.recv_q.put_nowait('close')
+                    self.send_q.put_nowait('close')
+                    self._broken = True
                     break
                 assert isinstance(msgs, list)
                 if len(msgs) > 1:
@@ -67,11 +78,20 @@ class BatchedStream(object):
     def flush(self):
         yield self.send_q.join()
 
+    @gen.coroutine
     def send(self, msg):
-        self.send_q.put_nowait(msg)
+        if self._broken:
+            raise StreamClosedError('Batch Stream is Closed')
+        else:
+            self.send_q.put_nowait(msg)
 
+    @gen.coroutine
     def recv(self):
-        return self.recv_q.get()
+        result = yield self.recv_q.get()
+        if result == 'close':
+            raise StreamClosedError('Batched Stream is Closed')
+        else:
+            raise gen.Return(result)
 
     @gen.coroutine
     def close(self):

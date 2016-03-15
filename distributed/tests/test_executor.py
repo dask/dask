@@ -18,7 +18,6 @@ import pytest
 from toolz import (identity, isdistinct, first, concat, pluck, keymap, valmap,
         partition_all)
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream
 from tornado import gen
 
 from dask import do, value
@@ -1273,15 +1272,6 @@ def test_sync_compute(loop):
 
             yy, zz = e.compute([y, z], sync=True)
             assert (yy, zz) == (2, 0)
-
-
-@gen_cluster(executor=True)
-def test_remote_scheduler(e, s, a, b):
-    assert isinstance(e.scheduler_stream, IOStream)
-    assert s.streams
-
-    x = e.submit(inc, 1)
-    result = yield x._result()
 
 
 @gen_cluster(executor=True)
