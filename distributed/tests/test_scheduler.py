@@ -486,6 +486,24 @@ def test_server(s, a, b):
 
 
 @gen_cluster()
+def test_remove_client(s, a, b):
+    s.add_client(client='ident')
+    s.update_graph(tasks={'x': dumps_task((inc, 1)),
+                          'y': dumps_task((inc, 'x'))},
+                   dependencies={'x': [], 'y': ['x']},
+                   keys=['y'],
+                   client='ident')
+
+    assert s.tasks
+    assert s.dependencies
+
+    s.remove_client(client='ident')
+
+    assert not s.tasks
+    assert not s.dependencies
+
+
+@gen_cluster()
 def test_server_listens_to_other_ops(s, a, b):
     r = rpc(ip='127.0.0.1', port=s.port)
     ident = yield r.identity()
@@ -525,7 +543,7 @@ def test_add_worker(s, a, b):
     for k in w.data:
         assert w.address in s.who_has[k]
 
-    s.validate(allow_overlap=True)
+    s.validate()
 
 
 @gen_cluster()

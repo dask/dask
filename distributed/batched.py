@@ -96,7 +96,7 @@ class BatchedStream(object):
     @gen.coroutine
     def close(self):
         yield self.flush()
-        return self.stream.close()
+        raise gen.Return(self.stream.close())
 
     def closed(self):
         return self.stream.closed()

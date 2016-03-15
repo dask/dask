@@ -629,6 +629,7 @@ class Scheduler(Server):
                 self.who_has.pop(key)
                 missing_keys.add(key)
 
+        missing_keys = {k for k in missing_keys if k in self.tasks}
         self.my_heal_missing_data(missing_keys)
 
         # self.validate()
@@ -997,6 +998,7 @@ class Scheduler(Server):
                     msg = yield self.worker_queues[ident].get()
                 except KeyError:
                     break
+
                 yield write(stream, msg)
 
                 if msg['op'] == 'close':

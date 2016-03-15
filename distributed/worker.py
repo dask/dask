@@ -215,7 +215,7 @@ class Worker(Server):
         try:
             result = yield gather_from_workers(who_has)
         except KeyError as e:
-            logger.warn("Could not find data during gather", exc_info=True)
+            logger.warn("Could not find data", e)
             raise Return({'status': 'missing-data',
                           'keys': e.args})
         else:
@@ -310,7 +310,7 @@ class Worker(Server):
 
         result = future.result()
         logger.info("Finish job %d, %s", i, key)
-        return result
+        raise gen.Return(result)
 
     @gen.coroutine
     def compute_stream(self, stream):
@@ -323,7 +323,10 @@ class Worker(Server):
 
         with log_errors():
             while True:
-                msg = yield read(stream)
+                try:
+                    msg = yield read(stream)
+                except StreamClosedError:
+                    break
                 op = msg.pop('op', None)
                 if op == 'close':
                     break
