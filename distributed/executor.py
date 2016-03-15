@@ -876,12 +876,18 @@ class Executor(object):
     @gen.coroutine
     def _run(self, function, *args, **kwargs):
         workers = kwargs.pop('workers', None)
-        result = yield self.scheduler.broadcast(msg=dict(op='run',
+        responses = yield self.scheduler.broadcast(msg=dict(op='run',
                                                 function=dumps(function),
                                                 args=dumps(args),
                                                 kwargs=dumps(kwargs)),
                                                 workers=workers)
-        raise Return(result)
+        results = {}
+        for key, resp in responses.items():
+            if resp['status'] == 'OK':
+                results[key] = cloudpickle.loads(resp['result'])
+            elif resp['status'] == 'error':
+                raise cloudpickle.loads(resp['exception'])
+        raise Return(results)
 
     def run(self, function, *args, **kwargs):
         """
