@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import Iterator
 from functools import partial
 from hashlib import md5
 from operator import attrgetter
@@ -13,7 +14,8 @@ from toolz.functoolz import Compose
 
 from .compatibility import bind_method, unicode
 from .context import _globals
-from .utils import Dispatch, ignoring
+from .utils import Dispatch, ignoring, concrete, flat_unique, unzip
+
 
 __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
 
@@ -238,3 +240,38 @@ def tokenize(*args, **kwargs):
     if kwargs:
         args = args + (kwargs,)
     return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
+
+
+def normalize_to_dasks(expr, *specials):
+    """Normalize a python object and extract all sub-dasks.
+
+    This is primarily an internal function used to implement normalizers with
+    respect to each of the collections; for examples
+    dask.imperative.to_task_dasks.
+    """
+    for T, handle in specials:
+        if isinstance(expr, T):
+            return handle(expr)
+    if isinstance(expr, Base):
+        name = tokenize(expr, pure=True)
+        keys = expr._keys()
+        dsk = expr._optimize(expr.dask, keys)
+        dsk[name] = (expr._finalize, (concrete, keys))
+        return name, [dsk]
+    if isinstance(expr, tuple) and type(expr) != tuple:
+        return expr, []
+    if isinstance(expr, (Iterator, list, tuple, set)):
+        args, dasks = unzip((normalize_to_dasks(e, *specials)
+                            for e in expr), 2)
+        args = list(args)
+        dasks = flat_unique(dasks)
+        # Ensure output type matches input type
+        if isinstance(expr, (tuple, set)):
+            return (type(expr), args), dasks
+        else:
+            return args, dasks
+    if isinstance(expr, dict):
+        args, dasks = normalize_to_dasks([[k, v] for k, v in expr.items()],
+                                         *specials)
+        return (dict, args), dasks
+    return expr, []

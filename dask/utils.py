@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from collections import Iterator
 from contextlib import contextmanager
 from errno import ENOENT
+from itertools import chain
 import functools
 import io
 import os
@@ -13,6 +14,8 @@ import tempfile
 import inspect
 import codecs
 from sys import getdefaultencoding
+
+from toolz import unique
 
 from .compatibility import long, getargspec, BZ2File, GzipFile
 
@@ -559,3 +562,16 @@ def funcname(func):
         return func.__name__
     except:
         return str(func)
+
+
+def flat_unique(ls):
+    """Flatten ``ls``, filter by unique id, and return a list"""
+    return list(unique(chain.from_iterable(ls), key=id))
+
+
+def unzip(ls, nout):
+    """Unzip a list of lists into ``nout`` outputs."""
+    out = list(zip(*ls))
+    if not out:
+        out = [()] * nout
+    return out

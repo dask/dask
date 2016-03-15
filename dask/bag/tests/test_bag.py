@@ -68,6 +68,27 @@ def test_map_function_with_multiple_arguments():
     assert list(b.map(list).compute()) == [[1, 10], [2, 20], [3, 30]]
 
 
+def test_map_with_starargs():
+    b = db.from_sequence(range(10), npartitions=4)
+
+    assert sum(
+        b.map(lambda a, m: a * m, 2)
+        ) == 90
+    assert sum(
+        b.map(lambda a, t: a / t, b.sum())
+        ) == 1.0
+
+    assert sum(
+        b.map(lambda a, m, b: a * m + b, 2, 1)
+        ) == 100
+    assert sum(
+        b.map(lambda a, m, f: a * m / f, 2, b.sum())
+        ) == 2.0
+    assert sum(
+        b.map(lambda a, lo, hi: (a - lo) / (hi - lo), b.min(), b.max())
+        ) == 5.0
+
+
 class A(object):
     def __init__(self, a, b, c):
         pass
@@ -298,6 +319,22 @@ def test_map_partitions():
     assert list(b.map_partitions(len)) == [5, 5, 5]
     assert b.map_partitions(len).name == b.map_partitions(len).name
     assert b.map_partitions(lambda a: len(a) + 1).name != b.map_partitions(len).name
+
+
+def test_map_partitions_starargs():
+    assert sum(b.map_partitions(
+        lambda part, f: sum(x / f for x in part),
+        2
+    )) == 15
+    assert sum(b.map_partitions(
+        lambda part, total: sum(x / total for x in part),
+        b.reduction(sum, sum)
+    )) == 1.0
+    assert sum(b.map_partitions(
+        lambda part, lo, hi: sum((x - lo) / (hi - lo) for x in part),
+        b.reduction(min, min),
+        b.reduction(max, max)
+    )) == 7.5
 
 
 def test_lazify_task():

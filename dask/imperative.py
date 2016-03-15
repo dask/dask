@@ -1,33 +1,18 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
 from functools import wraps
-from itertools import chain, count
 import operator
 import uuid
 
-from toolz import merge, unique, curry, first
+from toolz import merge, curry, first
 
 from .optimize import cull, fuse
-from .utils import concrete, funcname, ignoring
+from .utils import funcname, ignoring, flat_unique, unzip
 from . import base
 from .compatibility import apply
 from . import threaded
 
 __all__ = ['compute', 'do', 'value', 'Value']
-
-
-def flat_unique(ls):
-    """Flatten ``ls``, filter by unique id, and return a list"""
-    return list(unique(chain.from_iterable(ls), key=id))
-
-
-def unzip(ls, nout):
-    """Unzip a list of lists into ``nout`` outputs."""
-    out = list(zip(*ls))
-    if not out:
-        out = [()] * nout
-    return out
 
 
 def to_task_dasks(expr):
@@ -65,29 +50,9 @@ def to_task_dasks(expr):
     >>> dasks # doctest: +SKIP
     [{'a': 1}, {'b': 2}]
     """
-    if isinstance(expr, Value):
-        return expr.key, expr._dasks
-    if isinstance(expr, base.Base):
-        name = tokenize(expr, pure=True)
-        keys = expr._keys()
-        dsk = expr._optimize(expr.dask, keys)
-        dsk[name] = (expr._finalize, (concrete, keys))
-        return name, [dsk]
-    if isinstance(expr, tuple) and type(expr) != tuple:
-        return expr, []
-    if isinstance(expr, (Iterator, list, tuple, set)):
-        args, dasks = unzip(map(to_task_dasks, expr), 2)
-        args = list(args)
-        dasks = flat_unique(dasks)
-        # Ensure output type matches input type
-        if isinstance(expr, (tuple, set)):
-            return (type(expr), args), dasks
-        else:
-            return args, dasks
-    if isinstance(expr, dict):
-        args, dasks = to_task_dasks([[k, v] for k, v in expr.items()])
-        return (dict, args), dasks
-    return expr, []
+    return base.normalize_to_dasks(
+        expr,
+        (Value, lambda expr: (expr.key, expr._dasks)))
 
 
 def tokenize(*args, **kwargs):
