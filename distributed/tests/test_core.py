@@ -9,7 +9,7 @@ import pytest
 
 from distributed.core import (read, write, pingpong, Server, rpc, connect,
         coerce_to_rpc)
-from distributed.utils_test import slow, loop
+from distributed.utils_test import slow, loop, gen_test
 
 def test_server(loop):
     @gen.coroutine
@@ -161,3 +161,18 @@ def test_coerce_to_rpc():
     assert (r.ip, r.port) == ('127.0.0.1', 8000)
     r = coerce_to_rpc('127.0.0.1:8000')
     assert (r.ip, r.port) == ('127.0.0.1', 8000)
+
+
+def stream_div(stream=None, x=None, y=None):
+    return x / y
+
+@gen_test()
+def test_errors():
+    server = Server({'div': stream_div})
+    server.listen(0)
+
+    r = rpc(ip='127.0.0.1', port=server.port)
+    with pytest.raises(ZeroDivisionError):
+        yield r.div(x=1, y=0)
+
+    r.close_streams()
