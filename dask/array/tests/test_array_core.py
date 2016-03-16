@@ -4,9 +4,10 @@ import pytest
 pytest.importorskip('numpy')
 
 from operator import add, sub
-from tempfile import mkdtemp
-import shutil
 import os
+import shutil
+from tempfile import mkdtemp
+import time
 
 from toolz import merge
 from toolz.curried import identity
@@ -881,6 +882,34 @@ def test_store_compute_false():
     assert (at == 0).all() and (bt == 0).all()
     v.compute()
     assert (at == 2).all() and (bt == 3).all()
+
+
+class ThreadSafetyError(Exception):
+    pass
+
+
+class NonthreadSafeStore(object):
+    def __init__(self):
+        self.in_use = False
+
+    def __setitem__(self, key, value):
+        if self.in_use:
+            raise ThreadSafetyError()
+        self.in_use = True
+        time.sleep(0.001)
+        self.in_use = False
+
+
+class ThreadSafeStore(object):
+    def __init__(self):
+        self.concurrent_uses = 0
+        self.max_concurrent_uses = 0
+
+    def __setitem__(self, key, value):
+        self.concurrent_uses += 1
+        self.max_concurrent_uses = max(self.concurrent_uses, self.max_concurrent_uses)
+        time.sleep(0.01)
+        self.concurrent_uses -= 1
 
 
 def test_to_hdf5():
