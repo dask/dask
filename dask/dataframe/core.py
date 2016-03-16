@@ -91,8 +91,12 @@ class Scalar(Base):
     def _args(self):
         return (self.dask, self._name)
 
+    @property
+    def key(self):
+        return (self._name, 0)
+
     def _keys(self):
-        return [(self._name, 0)]
+        return [self.key]
 
     @classmethod
     def _get_unary_operator(cls, op):
