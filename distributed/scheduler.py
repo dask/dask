@@ -21,10 +21,11 @@ from dask.compatibility import PY3, unicode
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
-from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
-        Server, send_recv)
+from .batched import BatchedStream
 from .client import (scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
+from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
+        Server, send_recv, coerce_to_address)
 from .utils import (All, ignoring, clear_queue, _deps, get_ip,
         ignore_exceptions, ensure_ip, get_traceback, truncate_exception,
         tokey, log_errors)
@@ -269,7 +270,7 @@ class Scheduler(Server):
             for c in self._worker_coroutines:
                 c.cancel()
 
-        self._worker_coroutines = [self.worker(w) for w in self.ncores]
+        self._worker_coroutines = [self.worker_stream(w) for w in self.ncores]
         self._delete_periodic_callback = \
                 PeriodicCallback(callback=self.clear_data_from_workers,
                                  callback_time=self.delete_interval,
@@ -329,16 +330,16 @@ class Scheduler(Server):
 
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
-        n = 0
+
         for w, nc in self.ncores.items():
-            for i in range(nc):
-                self.worker_queues[w].put_nowait({'op': 'close'}); n += 1
+            self.worker_queues[w].put_nowait({'op': 'close'})
 
         for s in self.scheduler_queues[1:]:
             s.put_nowait({'op': 'close-stream'})
 
-        for i in range(n):
+        for _ in self.ncores:
             msg = yield self.scheduler_queues[0].get()
+            assert msg['op'] == 'worker-finished'
 
         for q in self.report_queues:
             q.put_nowait({'op': 'close'})
@@ -393,15 +394,20 @@ class Scheduler(Server):
         for worker in workers:
             self.who_has[key].add(worker)
             self.has_what[worker].add(key)
-            with ignoring(KeyError):
+            try:
                 self.processing[worker].remove(key)
+            except KeyError:
+                pass
 
-        for dep in sorted(self.dependents.get(key, []), key=self.keyorder.get,
+        for dep in sorted(self.dependents.get(key, []),
+                          key=self.keyorder.get,
                           reverse=True):
             if dep in self.waiting:
                 s = self.waiting[dep]
-                with ignoring(KeyError):
+                try:
                     s.remove(key)
+                except KeyError:
+                    pass
                 if not s:  # new task ready to run
                     self.mark_ready_to_run(dep)
 
@@ -437,6 +443,17 @@ class Scheduler(Server):
         We update the idle workers set appropriately.
         """
         logger.debug('Ensure worker is occupied: %s', worker)
+        def message(key):
+            msg = {'op': 'compute-task',
+                   'key': key,
+                   'who_has': {dep: list(self.who_has[dep])
+                               for dep in self.dependencies[key]}}
+            if isinstance(self.tasks[key], dict):
+                msg.update(self.tasks[key])
+            else:
+                msg['task'] = self.tasks[key]
+            return msg
+
         while (self.stacks[worker] and
                self.ncores[worker] > len(self.processing[worker])):
             key = self.stacks[worker].pop()
@@ -446,12 +463,7 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.worker_queues[worker].put_nowait(
-                    {'op': 'compute-task',
-                     'key': key,
-                     'task': self.tasks[key],
-                     'who_has': {dep: self.who_has[dep] for dep in
-                                 self.dependencies[key]}})
+            self.worker_queues[worker].put_nowait(message(key))
 
         while (self.ready and
                self.ncores[worker] > len(self.processing[worker])):
@@ -462,12 +474,7 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.worker_queues[worker].put_nowait(
-                    {'op': 'compute-task',
-                     'key': key,
-                     'task': self.tasks[key],
-                     'who_has': {dep: self.who_has[dep]
-                                  for dep in self.dependencies[key]}})
+            self.worker_queues[worker].put_nowait(message(key))
 
         if self.ncores[worker] > len(self.processing[worker]):
             self.idle.add(worker)
@@ -540,7 +547,7 @@ class Scheduler(Server):
     def mark_task_finished(self, key, worker, nbytes, type=None):
         """ Mark that a task has finished execution on a particular worker """
         logger.debug("Mark task as finished %s, %s", key, worker)
-        if key in self.processing[worker]:
+        if worker in self.processing and key in self.processing[worker]:
             self.nbytes[key] = nbytes
             self.mark_key_in_memory(key, [worker], type=type)
             self.ensure_occupied(worker)
@@ -622,6 +629,7 @@ class Scheduler(Server):
                 self.who_has.pop(key)
                 missing_keys.add(key)
 
+        missing_keys = {k for k in missing_keys if k in self.tasks}
         self.my_heal_missing_data(missing_keys)
 
         # self.validate()
@@ -652,7 +660,7 @@ class Scheduler(Server):
         for key in keys:
             self.mark_key_in_memory(key, [address])
 
-        self._worker_coroutines.append(self.worker(address))
+        self._worker_coroutines.append(self.worker_stream(address))
 
         if self.ncores[address] > len(self.processing[address]):
             self.idle.add(address)
@@ -748,10 +756,14 @@ class Scheduler(Server):
 
     def client_releases_keys(self, keys=None, client=None):
         for k in list(keys):
-            with ignoring(KeyError):
+            try:
                 self.wants_what[client].remove(k)
-            with ignoring(KeyError):
+            except KeyError:
+                pass
+            try:
                 self.who_wants[k].remove(client)
+            except KeyError:
+                pass
             if not self.who_wants[k]:
                 del self.who_wants[k]
                 self.release_held_data([k])
@@ -796,6 +808,7 @@ class Scheduler(Server):
                 s = self.dependents[dep]
                 s.remove(key)
                 if not s and dep not in self.who_wants:
+                    assert dep is not key
                     self.forget(dep)
             del self.dependencies[key]
             if key in self.restrictions:
@@ -852,8 +865,9 @@ class Scheduler(Server):
         for q in self.report_queues:
             q.put_nowait(msg)
         if 'key' in msg:
-            streams = {self.streams.get(c, ())
-                       for c in self.who_wants.get(msg['key'], ())}
+            streams = {self.streams[c]
+                       for c in self.who_wants.get(msg['key'], ())
+                       if c in self.streams}
         else:
             streams = self.streams.values()
         for s in streams:
@@ -880,16 +894,21 @@ class Scheduler(Server):
         return future
 
     @gen.coroutine
-    def add_client(self, stream, client=None):
+    def add_client(self, stream, client=None, batched=False):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
+        if batched:
+            stream = BatchedStream(stream, 10)
         self.streams[client] = stream
         try:
             yield self.handle_messages(stream, stream, client=client)
         finally:
             if not stream.closed():
-                yield write(stream, {'op': 'stream-closed'})
-                stream.close()
+                if isinstance(stream, BatchedStream):
+                    stream.send({'op': 'stream-closed'})
+                else:
+                    yield write(stream, {'op': 'stream-closed'})
+                yield gen.maybe_future(stream.close())
             del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
                         client)
@@ -906,137 +925,122 @@ class Scheduler(Server):
 
         This runs once per Queue or Stream.
         """
-        if isinstance(in_queue, Queue):
-            next_message = in_queue.get
-        elif isinstance(in_queue, IOStream):
-            next_message = lambda: read(in_queue)
-        else:
-            raise NotImplementedError()
+        with log_errors():
+            if isinstance(in_queue, Queue):
+                next_message = in_queue.get
+            elif isinstance(in_queue, IOStream):
+                next_message = lambda: read(in_queue)
+            elif isinstance(in_queue, BatchedStream):
+                next_message = in_queue.recv
+            else:
+                raise NotImplementedError()
 
-        if isinstance(report, Queue):
-            put = report.put_nowait
-        elif isinstance(report, IOStream):
-            put = lambda msg: write(report, msg)
-        else:
-            put = lambda msg: None
-        put({'op': 'stream-start'})
+            if isinstance(report, Queue):
+                put = report.put_nowait
+            elif isinstance(report, IOStream):
+                put = lambda msg: write(report, msg)
+            elif isinstance(report, BatchedStream):
+                put = report.send
+            else:
+                put = lambda msg: None
+            put({'op': 'stream-start'})
 
-        while True:
-            try:
-                msg = yield next_message()  # in_queue.get()
-            except (StreamClosedError, AssertionError):
-                break
-            except Exception as e:
-                from .core import dumps
-                logger.exception(e)
-                put(error_message(e, status='scheduler-error'))
-                continue
-            logger.debug("scheduler receives message %s", msg)
-            try:
-                op = msg.pop('op')
-            except Exception as e:
-                logger.exception(e)
-
-            if op == 'close-stream':
-                break
-            elif op == 'close':
-                self.close()
-                break
-            elif op in self.compute_handlers:
+            while True:
                 try:
-                    result = self.compute_handlers[op](**msg)
-                    if isinstance(result, gen.Future):
-                        yield result
+                    msg = yield next_message()  # in_queue.get()
+                except (StreamClosedError, AssertionError):
+                    break
                 except Exception as e:
                     logger.exception(e)
                     put(error_message(e, status='scheduler-error'))
-            else:
-                logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
+                    continue
+                logger.debug("scheduler receives message %s", msg)
+                try:
+                    op = msg.pop('op')
+                except Exception as e:
+                    logger.exception(e)
+                    put(error_message(e, status='scheduler-error'))
 
-            if op == 'close':
-                break
-
-        self.remove_client(client=client)
-        logger.debug('Finished scheduling coroutine')
-
-    @gen.coroutine
-    def worker(self, ident):
-        """ Manage a single distributed worker node
-
-        This coroutine manages one remote worker.  It spins up several
-        ``worker_core`` coroutines, one for each core.  It reports a closed
-        connection to scheduler if one occurs.
-        """
-        try:
-            yield All([self.worker_core(ident, i)
-                    for i in range(self.ncores[ident])])
-        except (IOError, OSError):
-            logger.info("Worker failed from closed stream: %s", ident)
-            self.remove_worker(address=ident)
-
-    @gen.coroutine
-    def worker_core(self, ident, i):
-        """ Manage one core on one distributed worker node
-
-        This coroutine listens on worker_queue for the following operations
-
-        **Incoming Messages**:
-
-        - compute-task:  call worker.compute(...) on remote node, report when done
-        - close: close connection to worker node, report `worker-finished` to
-          scheduler
-
-        See Also
-        --------
-        Scheduler.mark_task_finished
-        Scheduler.mark_task_erred
-        Scheduler.mark_missing_data
-        distributed.worker.Worker.compute
-        """
-        worker = rpc(addr=ident)
-        logger.debug("Start worker core %s, %d", ident, i)
-
-        with log_errors():
-            while True:
-                msg = yield self.worker_queues[ident].get()
-                if msg['op'] == 'close':
-                    logger.debug("Worker core receives close message %s, %s",
-                            ident, msg)
+                if op == 'close-stream':
                     break
-                if msg['op'] == 'compute-task':
-                    key = msg['key']
-                    who_has = valmap(list, msg['who_has'])
-                    task = msg['task']
-                    if istask(task):
-                        task = {'task': task}
+                elif op == 'close':
+                    self.close()
+                    break
+                elif op in self.compute_handlers:
+                    try:
+                        result = self.compute_handlers[op](**msg)
+                        if isinstance(result, gen.Future):
+                            yield result
+                    except Exception as e:
+                        logger.exception(e)
+                        raise
+                else:
+                    logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
 
-                    response = yield worker.compute(who_has=who_has,
-                                                    key=key,
-                                                    report=False,
-                                                    **task)
-                    if response['status'] == 'OK':
-                        nbytes = response['nbytes']
-                    logger.debug("Compute response from worker %s, %s, %s",
-                                 ident, key, response)
-                    if response['status'] == 'error':
-                        self.mark_task_erred(key, ident, response['exception'],
-                                                         response['traceback'])
+                if op == 'close':
+                    break
 
-                    elif response['status'] == 'missing-data':
-                        self.mark_missing_data(response['keys'],
-                                               key=key, worker=ident)
+            self.remove_client(client=client)
+            logger.debug('Finished scheduling coroutine')
 
-                    else:
-                        self.mark_task_finished(key, ident, nbytes,
-                                                type=response.get('type'))
+    @gen.coroutine
+    def worker_stream(self, ident):
+        logger.info("Starting worker compute stream, %s", ident)
+        yield gen.sleep(0)
+        ip, port = coerce_to_address(ident, out=tuple)
+        stream = yield connect(ip, port)
+        yield write(stream, {'op': 'compute-stream'})
+
+        @gen.coroutine
+        def send():
+            while True:
+                try:
+                    msg = yield self.worker_queues[ident].get()
+                except KeyError:
+                    break
+
+                yield write(stream, msg)
+
+                if msg['op'] == 'close':
+                    logger.debug("Worker coroutine close message %s, %s",
+                                 ident, msg)
+                    if msg.get('report', True):
+                        self.put({'op': 'worker-finished',
+                                  'worker': ident})
+                    break
+
+        @gen.coroutine
+        def recv():
+            while True:
+                msg = yield read(stream)
+
+                logger.debug("Compute response from worker %s, %s",
+                             ident, msg)
+
+                if msg == 'OK':  # from close
+                    break
+
+                if msg['status'] == 'error':
+                    self.mark_task_erred(msg['key'], ident, msg['exception'],
+                                                            msg['traceback'])
+                elif msg['status'] == 'missing-data':
+                    self.mark_missing_data(msg['keys'], key=msg['key'],
+                                           worker=ident)
+                elif msg['status'] == 'OK':
+                    self.mark_task_finished(msg['key'], ident, msg['nbytes'],
+                                            type=msg.get('type'))
+                else:
+                    logger.warn("Unknown message type, %s, %s", msg['status'],
+                            msg)
+
                 self.ensure_occupied(ident)
-
-        yield worker.close(close=True)
-        worker.close_streams()
-        if msg.get('report', True):
-            self.put({'op': 'worker-finished',
-                      'worker': ident})
-        logger.debug("Close worker core, %s, %d", ident, i)
+        try:
+            yield All([send(), recv()])
+            stream.close()
+        except (StreamClosedError, IOError, OSError):
+            logger.info("Worker failed from closed stream: %s", ident)
+        finally:
+            self.remove_worker(address=ident)
 
     @gen.coroutine
     def clear_data_from_workers(self):
@@ -1490,49 +1494,6 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
         return True
 
     assert all(map(check_key, keys))
-
-
-def keys_outside_frontier(dependencies, keys, frontier):
-    """ All keys required by terminal keys within graph up to frontier
-
-    Given:
-
-    1. A graph
-    2. A set of desired keys
-    3. A frontier/set of already-computed (or already-about-to-be-computed) keys
-
-    Find all keys necessary to compute the desired set that are outside of the
-    frontier.
-
-    Parameters
-    ----------
-    tasks: dict
-    keys: iterable of keys
-    frontier: set of keys
-
-    Examples
-    --------
-    >>> f = lambda:1
-    >>> dsk = {'x': 1, 'a': 2, 'y': (f, 'x'), 'b': (f, 'a'),
-    ...        'z': (f, 'b', 'y')}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> keys = {'z', 'b'}
-    >>> frontier = {'y', 'a'}
-    >>> list(sorted(keys_outside_frontier(dependencies, keys, frontier)))
-    ['b', 'z']
-    """
-    assert isinstance(keys, set)
-    assert isinstance(frontier, set)
-    stack = list(keys - frontier)
-    result = set()
-    while stack:
-        x = stack.pop()
-        if x in result or x in frontier:
-            continue
-        result.add(x)
-        stack.extend(dependencies[x])
-
-    return result
 
 
 _round_robin = [0]

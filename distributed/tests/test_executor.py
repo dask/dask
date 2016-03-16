@@ -18,7 +18,6 @@ import pytest
 from toolz import (identity, isdistinct, first, concat, pluck, keymap, valmap,
         partition_all)
 from tornado.ioloop import IOLoop
-from tornado.iostream import IOStream
 from tornado import gen
 
 from dask import do, value
@@ -1276,26 +1275,6 @@ def test_sync_compute(loop):
 
 
 @gen_cluster(executor=True)
-def test_remote_scheduler(e, s, a, b):
-    assert isinstance(e.scheduler_stream, IOStream)
-    assert s.streams
-
-    x = e.submit(inc, 1)
-    result = yield x._result()
-
-
-@gen_cluster()
-def test_start_with_scheduler(s, a, b):
-    e2 = Executor(s, start=False, loop=loop)
-    yield e2._start()
-    assert isinstance(e2.scheduler, Scheduler)
-
-    future = e2.submit(inc, 1)
-    result = yield future._result()
-    assert result == inc(1)
-
-
-@gen_cluster(executor=True)
 def test_remote_scatter_gather(e, s, a, b):
     x, y, z = yield e._scatter([1, 2, 3])
 
@@ -1717,6 +1696,7 @@ def test_multi_executor(s, a, b):
 def test_broken_worker_during_computation(e, s, a, b):
     n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
     n.start(0)
+
     start = time()
     while len(s.ncores) < 3:
         yield gen.sleep(0.01)
@@ -1727,12 +1707,13 @@ def test_broken_worker_during_computation(e, s, a, b):
         L = e.map(add, *zip(*partition_all(2, L)))
 
     yield gen.sleep(0.3)
-    s.validate()
     n.process.terminate()
-    yield gen.sleep(0.1)
-    s.validate()
+    yield gen.sleep(0.3)
+    n.process.terminate()
 
-    result = e._gather(L)
+    result = yield e._gather(L)
+    assert isinstance(result[0], int)
+
 
 @gen_cluster()
 def test_cleanup_after_broken_executor_connection(s, a, b):

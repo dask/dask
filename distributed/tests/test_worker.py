@@ -12,7 +12,7 @@ from tornado import gen
 from tornado.ioloop import TimeoutError
 
 from distributed.center import Center
-from distributed.core import rpc, dumps, loads
+from distributed.core import rpc, dumps, loads, connect, read, write
 from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message
 from distributed.utils_test import loop, _test_cluster, inc, gen_cluster, slow
@@ -281,7 +281,7 @@ def test_worker_waits_for_center_to_come_up(loop):
 @gen_cluster()
 def test_worker_task(s, a, b):
     aa = rpc(ip=a.ip, port=a.port)
-    yield aa.compute(task=dumps((inc, 1)), key='x')
+    yield aa.compute(task=dumps((inc, 1)), key='x', report=False)
 
     assert a.data['x'] == 2
 
@@ -289,7 +289,7 @@ def test_worker_task(s, a, b):
 @gen_cluster()
 def test_worker_task_data(s, a, b):
     aa = rpc(ip=a.ip, port=a.port)
-    yield aa.compute(task=dumps(2), key='x')
+    yield aa.compute(task=dumps(2), key='x', report=False)
 
     assert a.data['x'] == 2
 
@@ -298,10 +298,11 @@ def test_worker_task_data(s, a, b):
 def test_worker_task_bytes(s, a, b):
     aa = rpc(ip=a.ip, port=a.port)
 
-    yield aa.compute(task=dumps((inc, 1)), key='x')
+    yield aa.compute(task=dumps((inc, 1)), key='x', report=False)
     assert a.data['x'] == 2
 
-    yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y')
+    yield aa.compute(function=dumps(inc), args=dumps((10,)), key='y',
+            report=False)
     assert a.data['y'] == 11
 
 
@@ -326,3 +327,28 @@ def test_gather(s, a, b):
 
     assert a.data['x'] == b.data['x']
     assert a.data['y'] == b.data['y']
+
+
+@gen_cluster()
+def test_compute_stream(s, a, b):
+    stream = yield connect(a.ip, a.port)
+    yield write(stream, {'op': 'compute-stream'})
+    msgs = [{'op': 'compute-task', 'function': dumps(inc), 'args': dumps((i,)), 'key': 'x-%d' % i}
+            for i in range(10)]
+    for msg in msgs[:5]:
+        yield write(stream, msg)
+
+    for i in range(5):
+        msg = yield read(stream)
+        assert msg['status'] == 'OK'
+        assert msg['key'][0] == 'x'
+
+    for msg in msgs[5:]:
+        yield write(stream, msg)
+
+    for i in range(5):
+        msg = yield read(stream)
+        assert msg['status'] == 'OK'
+        assert msg['key'][0] == 'x'
+
+    yield write(stream, {'op': 'close'})

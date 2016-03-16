@@ -17,6 +17,7 @@ from tornado import gen
 import pytest
 
 from distributed import Nanny, Worker
+from distributed.batched import BatchedStream
 from distributed.core import connect, read, write, rpc, dumps
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, decide_worker,
@@ -462,8 +463,10 @@ def test_multi_queues(s, a, b):
 @gen_cluster()
 def test_server(s, a, b):
     stream = yield connect('127.0.0.1', s.port)
-    yield write(stream, {'op': 'register-client', 'client': 'ident'})
-    yield write(stream, {'op': 'update-graph',
+    write(stream, {'op': 'register-client', 'client': 'ident',
+                         'batched': True})
+    stream = BatchedStream(stream, 0)
+    write(stream, {'op': 'update-graph',
                          'tasks': {'x': dumps_task((inc, 1)),
                                    'y': dumps_task((inc, 'x'))},
                          'dependencies': {'x': [], 'y': ['x']},
@@ -475,11 +478,29 @@ def test_server(s, a, b):
         if msg['op'] == 'key-in-memory' and msg['key'] == 'y':
             break
 
-    yield write(stream, {'op': 'close-stream'})
+    write(stream, {'op': 'close-stream'})
     msg = yield read(stream)
     assert msg == {'op': 'stream-closed'}
     assert stream.closed()
     stream.close()
+
+
+@gen_cluster()
+def test_remove_client(s, a, b):
+    s.add_client(client='ident')
+    s.update_graph(tasks={'x': dumps_task((inc, 1)),
+                          'y': dumps_task((inc, 'x'))},
+                   dependencies={'x': [], 'y': ['x']},
+                   keys=['y'],
+                   client='ident')
+
+    assert s.tasks
+    assert s.dependencies
+
+    s.remove_client(client='ident')
+
+    assert not s.tasks
+    assert not s.dependencies
 
 
 @gen_cluster()
@@ -522,7 +543,7 @@ def test_add_worker(s, a, b):
     for k in w.data:
         assert w.address in s.who_has[k]
 
-    s.validate(allow_overlap=True)
+    s.validate()
 
 
 @gen_cluster()
@@ -573,7 +594,7 @@ def test_feed_setup_teardown(s, a, b):
         assert time() - start < 5
 
 
-@gen_test()
+@gen_test(timeout=None)
 def test_scheduler_as_center():
     s = Scheduler()
     done = s.start(0)
@@ -592,7 +613,9 @@ def test_scheduler_as_center():
     s.update_graph(tasks={'a': dumps_task((inc, 1))},
                    keys=['a'],
                    dependencies={'a': []})
+    start = time()
     while not s.who_has['a']:
+        assert time() - start < 5
         yield gen.sleep(0.01)
     assert 'a' in a.data or 'a' in b.data or 'a' in c.data
 

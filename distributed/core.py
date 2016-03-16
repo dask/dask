@@ -200,28 +200,35 @@ sentinel = md5(b'7f57da0f9202f6b4df78e251058be6f0').hexdigest().encode()
 @gen.coroutine
 def read(stream):
     """ Read a message from a stream """
-    msg = yield stream.read_until(sentinel)
-    msg = msg[:-len(sentinel)]
-    try:
-        msg = protocol.loads(msg)
-        if 'op' in msg:
-            msg['op'] = msg['op'].decode()
-    except Exception as e:
-        f = e
-    raise Return(msg)
+    if isinstance(stream, BatchedStream):
+        msg = yield stream.recv()
+        raise Return(msg)
+    else:
+        msg = yield stream.read_until(sentinel)
+        msg = msg[:-len(sentinel)]
+        try:
+            msg = protocol.loads(msg)
+            if 'op' in msg:
+                msg['op'] = msg['op'].decode()
+        except Exception as e:
+            f = e
+        raise Return(msg)
 
 
 @gen.coroutine
 def write(stream, msg):
     """ Write a message to a stream """
-    orig = msg
-    try:
-        msg = protocol.dumps(msg)
-    except Exception as e:
-        logger.exception(e)
-        raise
-    yield stream.write(msg + sentinel)
-    logger.debug("Written %s", orig)
+    if isinstance(stream, BatchedStream):
+        stream.send(msg)
+    else:
+        orig = msg
+        try:
+            msg = protocol.dumps(msg)
+        except Exception as e:
+            logger.exception(e)
+            raise
+        yield stream.write(msg + sentinel)
+        logger.debug("Written %s", orig)
 
 
 def pingpong(stream):
@@ -471,3 +478,6 @@ def clean_exception(exception, traceback, **kwargs):
     if isinstance(traceback, str):
         traceback = None
     return type(exception), exception, traceback
+
+
+from .batched import BatchedStream

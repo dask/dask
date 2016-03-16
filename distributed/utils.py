@@ -224,13 +224,15 @@ def key_split(s):
 
 
 @contextmanager
-def log_errors():
+def log_errors(pdb=False):
     try:
         yield
     except gen.Return:
         raise
     except Exception as e:
         logger.exception(e)
+        if pdb:
+            import pdb; pdb.set_trace()
         raise
 
 
