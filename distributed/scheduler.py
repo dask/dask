@@ -676,24 +676,41 @@ class Scheduler(Server):
 
     def ensure_in_play(self, key):
         """ Ensure that a key is on track to enter memory in the future """
-        if key not in self.released:
-            return
-        for dep in self.dependencies[key]:
-            self.ensure_in_play(dep)
-            try:
-                self.waiting_data[dep].add(key)
-            except KeyError:
-                self.waiting_data[dep] = {key}
-        waiting = {dep for dep in self.dependencies[key]
-                    if dep not in self.who_has}
-        self.released.remove(key)
-        if waiting:
-            self.waiting[key] = waiting
-        else:
-            self.mark_ready_to_run(key)
+        stack = [key]
+        visited = set()
+        stack2 = [key]
+        while stack:
+            k = stack.pop()
+            if k not in self.released or k in visited:
+                continue
+            visited.add(k)
+            stack.extend(self.dependencies[k])
+            stack2.extend(self.dependencies[k])
 
-        if key not in self.waiting_data:
-            self.waiting_data[key] = set()
+        visited.clear()
+        while stack2:
+            k = stack2.pop()
+            if k not in self.released or k in visited:
+                continue
+            visited.add(k)
+
+            for dep in self.dependencies[k]:
+                try:
+                    self.waiting_data[dep].add(k)
+                except KeyError:
+                    self.waiting_data[dep] = {k}
+
+            waiting = {dep for dep in self.dependencies[k]
+                        if not self.who_has.get(dep)}
+            self.released.remove(k)
+
+            if waiting:
+                self.waiting[k] = waiting
+            else:
+                self.mark_ready_to_run(k)
+
+            if k not in self.waiting_data:
+                self.waiting_data[k] = set()
 
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None,
