@@ -931,6 +931,11 @@ def test_store_locks():
     v = store([a, b], [at, at], lock=lock,
               get=dask.threaded.get, num_workers=10)
 
+    # Don't assume thread safety by default
+    at = NonthreadSafeStore()
+    store(a, at, get=dask.threaded.get, num_workers=10)
+    a.store(at, get=dask.threaded.get, num_workers=10)
+
     # Ensure locks can be removed
     at = ThreadSafeStore()
     for i in range(10):

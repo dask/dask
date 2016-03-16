@@ -660,7 +660,7 @@ def topk(k, x):
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
 
 
-def store(sources, targets, lock=None, compute=True, **kwargs):
+def store(sources, targets, lock=True, compute=True, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
@@ -677,6 +677,12 @@ def store(sources, targets, lock=None, compute=True, **kwargs):
     sources: Array or iterable of Arrays
     targets: array-like or iterable of array-likes
         These should support setitem syntax ``target[10:20] = ...``
+    lock: boolean or threading.Lock, optional
+        Whether or not to lock the data stores while storing.
+        Pass True (lock each file individually), False (don't lock) or a
+        particular ``threading.Lock`` object to be shared among all writes.
+    compute: boolean, optional
+        If true compute immediately, return lazy Value object otherwise
 
     Examples
     --------
