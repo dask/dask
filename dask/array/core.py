@@ -1978,18 +1978,25 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
-def insert_to_ooc(out, arr, lock=None):
-    lock = lock or Lock()
+def insert_to_ooc(out, arr, lock=True):
+    if lock is True:
+        lock = Lock()
 
-    def store(x, index):
-        with lock:
+    def store(x, index, lock):
+        if lock:
+            lock.acquire()
+        try:
             out[index] = np.asanyarray(x)
+        finally:
+            if lock:
+                lock.release()
+
         return None
 
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = dict(((name,) + t[1:], (store, t, slc))
+    dsk = dict(((name,) + t[1:], (store, t, slc, lock))
                 for t, slc in zip(core.flatten(arr._keys()), slices))
     return dsk
 

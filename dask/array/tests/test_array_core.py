@@ -912,6 +912,34 @@ class ThreadSafeStore(object):
         self.concurrent_uses -= 1
 
 
+def test_store_locks():
+    _Lock = type(Lock())
+    d = da.ones((10, 10), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.zeros(shape=(10, 10))
+    bt = np.zeros(shape=(10, 10))
+
+    lock = Lock()
+    v = store([a, b], [at, bt], compute=False, lock=lock)
+    dsk = v.dask
+    locks = {vv for v in dsk.values() for vv in v if isinstance(vv, _Lock)}
+    assert locks == {lock}
+
+    # Ensure same lock applies over multiple stores
+    at = NonthreadSafeStore()
+    v = store([a, b], [at, at], lock=lock)
+
+    # Ensure locks can be removed
+    at = ThreadSafeStore()
+    for i in range(10):
+        a.store(at, lock=False)
+        if at.max_concurrent_uses > 1:
+            break
+        if i == 9:
+            assert False
+
+
 def test_to_hdf5():
     try:
         import h5py
