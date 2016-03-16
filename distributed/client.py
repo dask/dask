@@ -95,30 +95,29 @@ def gather_from_workers(who_has, deserialize=True):
     who_has = {k: set(v) for k, v in who_has.items()}
     results = dict()
 
-    with log_errors():
-        while len(results) < len(who_has):
-            d = defaultdict(list)
-            rev = dict()
-            bad_keys = set()
-            for key, addresses in who_has.items():
-                if key in results:
-                    continue
-                try:
-                    addr = random.choice(list(addresses - bad_addresses))
-                    d[addr].append(key)
-                    rev[key] = addr
-                except IndexError:
-                    bad_keys.add(key)
-            if bad_keys:
-                raise KeyError(*bad_keys)
+    while len(results) < len(who_has):
+        d = defaultdict(list)
+        rev = dict()
+        bad_keys = set()
+        for key, addresses in who_has.items():
+            if key in results:
+                continue
+            try:
+                addr = random.choice(list(addresses - bad_addresses))
+                d[addr].append(key)
+                rev[key] = addr
+            except IndexError:
+                bad_keys.add(key)
+        if bad_keys:
+            raise KeyError(*bad_keys)
 
-            coroutines = [rpc(address).get_data(keys=keys, close=True)
-                                for address, keys in d.items()]
-            response = yield ignore_exceptions(coroutines, socket.error,
-                                                           StreamClosedError)
-            response = merge(response)
-            bad_addresses |= {v for k, v in rev.items() if k not in response}
-            results.update(merge(response))
+        coroutines = [rpc(address).get_data(keys=keys, close=True)
+                            for address, keys in d.items()]
+        response = yield ignore_exceptions(coroutines, socket.error,
+                                                       StreamClosedError)
+        response = merge(response)
+        bad_addresses |= {v for k, v in rev.items() if k not in response}
+        results.update(merge(response))
 
     if deserialize:
         results = valmap(loads, results)

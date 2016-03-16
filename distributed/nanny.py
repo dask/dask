@@ -136,7 +136,7 @@ class Nanny(Server):
                 yield self._close()
                 break
             if self.process and not self.process.is_alive():
-                logger.info("Discovered failed worker.  Restarting")
+                logger.warn("Discovered failed worker.  Restarting")
                 self.cleanup()
                 yield self.center.unregister(address=self.worker_address)
                 yield self.instantiate()

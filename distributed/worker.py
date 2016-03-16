@@ -238,8 +238,7 @@ class Worker(Server):
                 transfer_time = default_timer() - start
                 data = merge(local_data, other)
             except KeyError as e:
-                logger.warn("Could not find data during gather in compute",
-                            exc_info=True)
+                logger.warn("Could not find data for %s", key)
                 raise Return({'status': 'missing-data',
                               'keys': e.args,
                               'key': key})
@@ -349,7 +348,10 @@ class Worker(Server):
             msg = yield self._ready_task(function=function, key=key, args=args,
                 kwargs=kwargs, task=task, who_has=who_has)
             if msg['status'] != 'OK':
-                self.active.remove(key)
+                try:
+                    self.active.remove(key)
+                except KeyError:
+                    pass
                 raise Return(msg)
             else:
                 function = msg['function']
