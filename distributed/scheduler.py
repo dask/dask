@@ -670,6 +670,27 @@ class Scheduler(Server):
         logger.info("Register %s", str(address))
         return 'OK'
 
+    def ensure_in_play(self, key):
+        """ Ensure that a key is on track to enter memory in the future """
+        if key not in self.released:
+            return
+        for dep in self.dependencies[key]:
+            self.ensure_in_play(dep)
+            try:
+                self.waiting_data[dep].add(key)
+            except KeyError:
+                self.waiting_data[dep] = {key}
+        waiting = {dep for dep in self.dependencies[key]
+                    if dep not in self.who_has}
+        self.released.remove(key)
+        if waiting:
+            self.waiting[key] = waiting
+        else:
+            self.mark_ready_to_run(key)
+
+        if key not in self.waiting_data:
+            self.waiting_data[key] = set()
+
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None,
                      loose_restrictions=None):
@@ -690,12 +711,13 @@ class Scheduler(Server):
         touched = set()
         while stack:
             k = stack.pop()
-            if k in self.tasks and k not in self.released:
+            if k in self.tasks:
                 continue
             touched.add(k)
             if k not in self.tasks and k in tasks:
                 self.tasks[k] = tasks[k]
                 self.dependencies[k] = set(dependencies.get(k, ()))
+                self.released.add(k)
                 for dep in self.dependencies[k]:
                     if dep not in self.dependents:
                         self.dependents[dep] = set()
@@ -703,20 +725,7 @@ class Scheduler(Server):
                 if k not in self.dependents:
                     self.dependents[k] = set()
 
-            if k in self.released:
-                self.released.remove(k)
-
-            self.waiting[k] = {dep for dep in self.dependencies[k]
-                                    if dep not in self.who_has}
             stack.extend(self.dependencies[k])
-
-            for dep in self.dependencies[k]:
-                if dep not in self.waiting_data:
-                    self.waiting_data[dep] = set()
-                self.waiting_data[dep].add(k)
-
-            if k not in self.waiting_data:
-                self.waiting_data[k] = set()
 
         new_keyorder = order(tasks)  # TODO: define order wrt old graph
         self.generation += 1  # older graph generations take precedence
@@ -732,12 +741,15 @@ class Scheduler(Server):
             if loose_restrictions:
                 self.loose_restrictions |= set(loose_restrictions)
 
+        for key in keys:
+            self.ensure_in_play(key)
+
         for key in touched | keys:
             for dep in self.dependencies[key]:
                 if dep in self.exceptions_blame:
                     self.mark_failed(key, self.exceptions_blame[dep])
 
-        for key in touched | keys:
+        for key in keys:
             if self.who_has.get(key):
                 self.mark_key_in_memory(key)
 
@@ -746,10 +758,6 @@ class Scheduler(Server):
                 plugin.update_graph(self, tasks, keys, restrictions or {})
             except Exception as e:
                 logger.exception(e)
-
-        for key in touched | keys:
-            if not self.waiting.get(key):
-                self.mark_ready_to_run(key)
 
         self.ensure_idle_ready()
         # self.validate()
