@@ -923,17 +923,18 @@ def test_store_locks():
     lock = Lock()
     v = store([a, b], [at, bt], compute=False, lock=lock)
     dsk = v.dask
-    locks = {vv for v in dsk.values() for vv in v if isinstance(vv, _Lock)}
-    assert locks == {lock}
+    locks = set(vv for v in dsk.values() for vv in v if isinstance(vv, _Lock))
+    assert locks == set([lock])
 
     # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
-    v = store([a, b], [at, at], lock=lock)
+    v = store([a, b], [at, at], lock=lock,
+              get=dask.threaded.get, num_workers=10)
 
     # Ensure locks can be removed
     at = ThreadSafeStore()
     for i in range(10):
-        a.store(at, lock=False)
+        a.store(at, lock=False, get=dask.threaded.get, num_workers=10)
         if at.max_concurrent_uses > 1:
             break
         if i == 9:
