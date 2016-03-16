@@ -21,7 +21,7 @@ from distributed.batched import BatchedStream
 from distributed.core import connect, read, write, rpc, dumps
 from distributed.client import WrappedKey
 from distributed.scheduler import (validate_state, decide_worker,
-        heal_missing_data, Scheduler)
+        Scheduler)
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
         loop)
@@ -316,40 +316,6 @@ def test_validate_state():
 
     waiting_data.pop('x')
     validate_state(**locals())
-
-
-def test_fill_missing_data():
-    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y')}
-    dependencies, dependents = get_deps(dsk)
-
-    waiting = {}
-    waiting_data = {'z': set()}
-
-    who_wants = defaultdict(set, z={'client'})
-    wants_what = defaultdict(set, client={'z'})
-    who_has = {'z': {alice}}
-    processing = set()
-    released = set()
-    in_play = {'z'}
-
-    e_waiting = {'y': {'x'}, 'z': {'y'}}
-    e_ready = {'x'}
-    e_waiting_data = {'x': {'y'}, 'y': {'z'}, 'z': set()}
-    e_in_play = {'x', 'y', 'z'}
-    e_released = set()
-
-    lost = {'z'}
-    del who_has['z']
-    in_play.remove('z')
-
-    ready = heal_missing_data(dsk, dependencies, dependents, who_has, in_play, waiting,
-            waiting_data, released, lost)
-
-    assert waiting == e_waiting
-    assert waiting_data == e_waiting_data
-    assert ready == e_ready
-    assert in_play == e_in_play
-    assert released == e_released
 
 
 def div(x, y):
