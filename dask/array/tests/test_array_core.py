@@ -870,6 +870,19 @@ def test_store():
     assert raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
+def test_store_compute_false():
+    d = da.ones((4, 4), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.zeros(shape=(4, 4))
+    bt = np.zeros(shape=(4, 4))
+
+    v = store([a, b], [at, bt], compute=False)
+    assert (at == 0).all() and (bt == 0).all()
+    v.compute()
+    assert (at == 2).all() and (bt == 3).all()
+
+
 def test_to_hdf5():
     try:
         import h5py

@@ -660,7 +660,7 @@ def topk(k, x):
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
 
 
-def store(sources, targets, lock=None, **kwargs):
+def store(sources, targets, lock=None, compute=True, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
@@ -710,7 +710,13 @@ def store(sources, targets, lock=None, **kwargs):
                for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
-    Array._get(dsk, keys, **kwargs)
+    if compute:
+        Array._get(dsk, keys, **kwargs)
+    else:
+        from ..imperative import Value
+        name = tokenize(*keys)
+        dsk[name] = keys
+        return Value(name, [dsk])
 
 
 def blockdims_from_blockshape(shape, chunks):
