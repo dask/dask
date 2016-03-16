@@ -2404,3 +2404,15 @@ def test_rebalance_sync(loop):
             has_what = e.has_what()
             assert len(has_what) == 2
             assert list(valmap(len, has_what).values()) == [5, 5]
+
+
+@gen_cluster(executor=True)
+def test_receive_lost_key(e, s, a, b):
+    x = e.submit(inc, 1, workers=[a.address])
+    result = yield x._result()
+    yield a._close()
+
+    start = time()
+    while x.status == 'finished':
+        assert time() < start + 5
+        yield gen.sleep(0.01)

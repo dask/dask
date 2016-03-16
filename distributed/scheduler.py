@@ -105,6 +105,8 @@ class Scheduler(Server):
         List of keys waiting to be sent to each worker
     * **released:** ``{keys}``
         Set of keys that are known, but released from memory
+    * **unrunnable:** ``{key}``
+        Keys that we are unable to run
     * **retrictions:** ``{key: {hostnames}}``:
         A set of hostnames per key of where that key can be run.  Usually this
         is empty unless a key has been specifically restricted to only run on
@@ -167,6 +169,7 @@ class Scheduler(Server):
         self.waiting = dict()
         self.waiting_data = dict()
         self.ready = deque()
+        self.unrunnable = set()
         self.idle = set()
         self.who_has = defaultdict(set)
         self.deleted_keys = defaultdict(set)
@@ -372,7 +375,7 @@ class Scheduler(Server):
                     self.who_has, self.restrictions, self.loose_restrictions,
                     self.nbytes, key)
             if not new_worker:
-                raise ValueError("No valid workers found")
+                self.unrunnable.add(key)
             else:
                 self.stacks[new_worker].append(key)
                 self.ensure_occupied(new_worker)
@@ -562,12 +565,38 @@ class Scheduler(Server):
             self.ensure_occupied(worker)
         # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
+    def recover_missing(self, key):
+        """ Recover a recently lost piece of data
+
+        This assumes that we've already removed this key from who_has/has_what.
+        """
+        if key in self.released:
+            return
+        if key in self.who_has:
+            return
+        if key not in self.tasks:
+            logger.warn("Lost irrecoverable data %s", key)
+            return
+
+        self.released.add(key)
+        self.ensure_in_play(key)
+
+        for dep in self.dependents[key]:
+            if dep in self.released:
+                continue
+            if dep in self.who_has:
+                continue
+            if dep in self.waiting:
+                self.waiting[dep].add(key)
+            else:
+                self.waiting[dep] = {key}
+
     def mark_missing_data(self, missing=None, key=None, worker=None):
         """ Mark that certain keys have gone missing.  Recover.
 
         See Also
         --------
-        heal_missing_data
+        recover_missing
         """
         if key and worker:
             try:
@@ -583,11 +612,9 @@ class Scheduler(Server):
                 workers = self.who_has.pop(k)
                 for worker in workers:
                     self.has_what[worker].remove(k)
-        self.my_heal_missing_data(missing)
+            self.recover_missing(k)
 
-        if key and worker:
-            self.waiting[key] = missing
-            logger.debug('task missing data, %s, %s', key, self.waiting)
+        if worker:
             self.ensure_occupied(worker)
 
         # self.validate(allow_overlap=True, allow_bad_stacks=True)
@@ -603,36 +630,41 @@ class Scheduler(Server):
 
         See Also
         --------
-        Scheduler.my_heal_missing_data
+        Scheduler.recover_missing
         """
         address = self.coerce_address(address)
         logger.debug("Remove worker %s", address)
         if address not in self.processing:
             return
-        missing_keys = set()
         for i in range(self.ncores[address]):  # send close message, in case not dead
             self.worker_queues[address].put_nowait({'op': 'close', 'report': False})
         del self.worker_queues[address]
         del self.ncores[address]
-        missing_keys.update(self.stacks.pop(address))
-        missing_keys.update(self.processing.pop(address))
         del self.aliases[self.worker_info[address]['name']]
         del self.worker_info[address]
         if address in self.idle:
             self.idle.remove(address)
-        if not self.stacks:
-            logger.critical("Lost all workers")
+
+        in_flight = set(self.stacks.pop(address))
+        in_flight |= self.processing.pop(address)
+        missing = set()
+
         for key in self.has_what.pop(address):
             s = self.who_has[key]
             s.remove(address)
             if not s:
                 self.who_has.pop(key)
-                missing_keys.add(key)
+                self.report({'op': 'lost-data', 'key': key})
+                missing.add(key)
 
-        missing_keys = {k for k in missing_keys if k in self.tasks}
-        self.my_heal_missing_data(missing_keys)
+        for key in missing:
+            self.recover_missing(key)
+        for key in in_flight:
+            self.released.add(key)
+            self.ensure_in_play(key)
 
-        # self.validate()
+        if not self.stacks:
+            logger.critical("Lost all workers")
 
         return 'OK'
 
@@ -670,6 +702,47 @@ class Scheduler(Server):
         logger.info("Register %s", str(address))
         return 'OK'
 
+    def ensure_in_play(self, key):
+        """ Ensure that a key is on track to enter memory in the future
+
+        This will only act on keys currently in self.released.
+        """
+        stack = [key]
+        visited = set()
+        stack2 = [key]
+        while stack:
+            k = stack.pop()
+            if k not in self.released or k in visited:
+                continue
+            visited.add(k)
+            stack.extend(self.dependencies.get(k, []))
+            stack2.extend(self.dependencies.get(k, []))
+
+        visited.clear()
+        while stack2:
+            k = stack2.pop()
+            if k not in self.released or k in visited:
+                continue
+            visited.add(k)
+
+            for dep in self.dependencies[k]:
+                try:
+                    self.waiting_data[dep].add(k)
+                except KeyError:
+                    self.waiting_data[dep] = {k}
+
+            waiting = {dep for dep in self.dependencies[k]
+                        if not self.who_has.get(dep)}
+            self.released.remove(k)
+
+            if waiting:
+                self.waiting[k] = waiting
+            else:
+                self.mark_ready_to_run(k)
+
+            if k not in self.waiting_data:
+                self.waiting_data[k] = set()
+
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None,
                      loose_restrictions=None):
@@ -690,12 +763,13 @@ class Scheduler(Server):
         touched = set()
         while stack:
             k = stack.pop()
-            if k in self.tasks and k not in self.released:
+            if k in self.tasks:
                 continue
             touched.add(k)
             if k not in self.tasks and k in tasks:
                 self.tasks[k] = tasks[k]
                 self.dependencies[k] = set(dependencies.get(k, ()))
+                self.released.add(k)
                 for dep in self.dependencies[k]:
                     if dep not in self.dependents:
                         self.dependents[dep] = set()
@@ -703,20 +777,7 @@ class Scheduler(Server):
                 if k not in self.dependents:
                     self.dependents[k] = set()
 
-            if k in self.released:
-                self.released.remove(k)
-
-            self.waiting[k] = {dep for dep in self.dependencies[k]
-                                    if dep not in self.who_has}
             stack.extend(self.dependencies[k])
-
-            for dep in self.dependencies[k]:
-                if dep not in self.waiting_data:
-                    self.waiting_data[dep] = set()
-                self.waiting_data[dep].add(k)
-
-            if k not in self.waiting_data:
-                self.waiting_data[k] = set()
 
         new_keyorder = order(tasks)  # TODO: define order wrt old graph
         self.generation += 1  # older graph generations take precedence
@@ -732,12 +793,15 @@ class Scheduler(Server):
             if loose_restrictions:
                 self.loose_restrictions |= set(loose_restrictions)
 
+        for key in keys:
+            self.ensure_in_play(key)
+
         for key in touched | keys:
             for dep in self.dependencies[key]:
                 if dep in self.exceptions_blame:
                     self.mark_failed(key, self.exceptions_blame[dep])
 
-        for key in touched | keys:
+        for key in keys:
             if self.who_has.get(key):
                 self.mark_key_in_memory(key)
 
@@ -746,10 +810,6 @@ class Scheduler(Server):
                 plugin.update_graph(self, tasks, keys, restrictions or {})
             except Exception as e:
                 logger.exception(e)
-
-        for key in touched | keys:
-            if not self.waiting.get(key):
-                self.mark_ready_to_run(key)
 
         self.ensure_idle_ready()
         # self.validate()
@@ -848,17 +908,6 @@ class Scheduler(Server):
         logger.info("Client %s requests to cancel keys %s", client, keys)
         for key in keys:
             self.cancel_key(key, client)
-
-    def my_heal_missing_data(self, missing):
-        """ Recover from lost data """
-        logger.info("Heal missing data, %s", missing)
-        missing2 = {m for m in missing if m in self.dependencies}  # remove scattered
-        in_play = set(self.tasks) - set(self.released)
-        ready_to_run = heal_missing_data(self.tasks, self.dependencies,
-                self.dependents, self.who_has, in_play, self.waiting,
-                self.waiting_data, self.released, missing2)
-        for key in ready_to_run:
-            self.mark_ready_to_run(key)
 
     def report(self, msg):
         """ Publish updates to all listening Queues and Streams """
@@ -1387,7 +1436,7 @@ def decide_worker(dependencies, stacks, who_has, restrictions,
                     return decide_worker(dependencies, stacks, who_has,
                                          {}, set(), nbytes, key)
                 else:
-                    raise ValueError("Task has no valid workers", key, r)
+                    return None
     if not workers or not stacks:
         return None
 
@@ -1411,10 +1460,6 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
 
     This performs a sequence of checks on the entire graph, running in about
     linear time.  This raises assert errors if anything doesn't check out.
-
-    See Also
-    --------
-    heal: fix a broken runtime state
     """
     in_stacks = {k for v in stacks.values() for k in v}
     in_processing = {k for v in processing.values() for k in v}
@@ -1497,47 +1542,3 @@ def validate_state(dependencies, dependents, waiting, waiting_data, ready,
 
 
 _round_robin = [0]
-
-
-def heal_missing_data(tasks, dependencies, dependents,
-                      who_has, in_play, waiting, waiting_data, released,
-                      missing):
-    """ Return to healthy state after discovering missing data
-
-    When we identify that we're missing certain keys we rewind runtime state to
-    evaluate those keys.
-    """
-    logger.debug("Healing missing: %s", missing)
-
-    ready_to_run = set()
-
-    for key in missing:
-        if key in in_play:
-            in_play.remove(key)
-
-    def ensure_key(key):
-        if key in in_play:
-            return
-        for dep in dependencies[key]:
-            ensure_key(dep)
-            waiting_data[dep].add(key)
-        s = {dep for dep in dependencies[key] if not who_has.get(dep)}
-        if s:
-            waiting[key] = s
-            logger.debug("Added key to waiting: %s", key)
-        else:
-            ready_to_run.add(key)
-            logger.debug("Added key to ready-to-run: %s", key)
-        waiting_data[key] = {dep for dep in dependents[key]
-                                 if dep in waiting
-                                 and not who_has.get(dep)}
-        in_play.add(key)
-        if key in released:
-            released.remove(key)
-
-    for key in missing:
-        ensure_key(key)
-
-    assert set(missing).issubset(in_play)
-
-    return ready_to_run
