@@ -484,7 +484,7 @@ def test_remove_worker_from_scheduler(s, a, b):
     assert s.ready
     assert not any(stack for stack in s.stacks.values())
 
-    assert a.address in s.worker_queues
+    assert a.address in s.worker_streams
     s.remove_worker(address=a.address)
     assert a.address not in s.ncores
     assert len(s.ready) + len(s.processing[b.address]) == \

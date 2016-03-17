@@ -22,6 +22,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError
 from tornado.queues import Queue
 
+from .batched import BatchedSend
 from .client import pack_data, gather_from_workers
 from .compatibility import reload, PY3, unicode
 from .core import (rpc, Server, pingpong, dumps, loads, coerce_to_address,
@@ -288,7 +289,7 @@ class Worker(Server):
         """
         job_counter[0] += 1
         i = job_counter[0]
-        logger.info("Start job %d, %s", i, key)
+        logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
         future = self.executor.submit(function, *args, **kwargs)
         pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
             key, future._state), 1000); pc.start()
@@ -313,29 +314,38 @@ class Worker(Server):
 
     @gen.coroutine
     def compute_stream(self, stream):
-        logger.info("Open compute stream")
+        with log_errors():
+            logger.info("Open compute stream")
+            bstream = BatchedSend(interval=10, loop=self.loop)
+            bstream.start(stream)
 
         @gen.coroutine
         def process(msg):
-            result = yield self.compute(report=False, **msg)
-            yield write(stream, result)
+            with log_errors():
+                result = yield self.compute(report=False, **msg)
+                bstream.send(result)
 
         with log_errors():
             while True:
                 try:
-                    msg = yield read(stream)
+                    msgs = yield read(stream)
                 except StreamClosedError:
                     break
-                op = msg.pop('op', None)
-                if op == 'close':
-                    break
-                if op == 'compute-task':
-                    process(msg)
-                else:
-                    logger.warning("Unknown operation %s, %s", op, msg)
+                if not isinstance(msgs, list):
+                    msgs = [msgs]
 
-        stream.close()
-        logger.info("Close compute stream")
+                for msg in msgs:
+                    op = msg.pop('op', None)
+                    if op == 'close':
+                        break
+                    if op == 'compute-task':
+                        self.loop.add_callback(process, msg)
+                    else:
+                        logger.warning("Unknown operation %s, %s", op, msg)
+
+
+            yield bstream.close()
+            logger.info("Close compute stream")
 
     @gen.coroutine
     def compute(self, stream=None, function=None, key=None, args=(), kwargs={},
