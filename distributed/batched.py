@@ -6,10 +6,10 @@ from timeit import default_timer
 from toolz import partition_all
 from tornado import gen
 from tornado.queues import Queue
-from tornado.iostream import StreamClosedError
+from tornado.iostream import StreamClosedError, IOStream
 from tornado.ioloop import PeriodicCallback, IOLoop
 
-from .core import read, write
+from .core import read, write, coerce_to_address, connect
 from .utils import log_errors
 
 
@@ -22,50 +22,76 @@ class BatchedSend(object):
     Like a one-sided BatchedStream, but faster, because sometimes Queues are
     too slow.
     """
-    def __init__(self, stream, interval, loop=None):
+    def __init__(self, interval, loop=None):
         self.loop = loop or IOLoop.current()
-        self.stream = stream
         self.interval = interval / 1000.
         self.last_transmission = 0
-        self.last_send = gen.sleep(0)
         self.next_send = None
         self.buffer = []
+        self.stream = None
+        self.last_send = gen.sleep(0)
+
+    def start(self, stream):
+        with log_errors(pdb=True):
+            self.stream = stream
+            if self.buffer:
+                self.send_next()
 
     @gen.coroutine
     def send_next(self):
-        now = default_timer()
-        wait_time = min(self.last_transmission + self.interval - now,
-                        self.interval)
-        yield gen.sleep(wait_time)
-        yield self.last_send
-        self.buffer, payload = [], self.buffer
-        self.last_transmission = now
-        future = write(self.stream, payload)
-        self.next_send = future
+        with log_errors():
+            now = default_timer()
+            wait_time = min(self.last_transmission + self.interval - now,
+                            self.interval)
+            yield gen.sleep(wait_time)
+            yield self.last_send
+            self.buffer, payload = [], self.buffer
+            self.last_transmission = now
+            future = write(self.stream, payload)
+            self.next_send = future
 
     @gen.coroutine
-    def send_simple(self, payload):
-        yield self.last_send
-        self.last_send = write(self.stream, payload)
+    def _write(self, payload):
+        yield gen.sleep(0)
+        with log_errors():
+            yield write(self.stream, payload)
+
 
     def send(self, msg):
-        if self.stream._closed:
-            raise StreamClosedError()
+        with log_errors():
+            if self.stream is None:  # not yet started
+                self.buffer.append(msg)
+                return
 
+            if self.stream._closed:
+                raise StreamClosedError()
+
+            if self.buffer:
+                self.buffer.append(msg)
+                return
+
+            # If we're new and early,
+            now = default_timer()
+            if (now < self.last_transmission + self.interval
+                or not self.last_send._done):
+                self.buffer.append(msg)
+                self.send_next()
+                return
+
+            try:
+                # self.last_send = write(self.stream, [msg])
+                self.last_send = self._write([msg])
+            except AttributeError:
+                raise self._connection_error
+            self.last_transmission = now
+
+    @gen.coroutine
+    def close(self):
+        yield self.last_send
         if self.buffer:
-            self.buffer.append(msg)
-            return
-
-        # If we're new and early,
-        now = default_timer()
-        if (now < self.last_transmission + self.interval
-            or not self.last_send._done):
-            self.buffer.append(msg)
-            self.send_next()
-            return
-
-        self.last_send = write(self.stream, [msg])
-        self.last_transmission = now
+            self.buffer, payload = [], self.buffer
+            yield write(self.stream, payload)
+        self.stream.close()
 
 
 class BatchedStream(object):
