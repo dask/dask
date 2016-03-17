@@ -38,12 +38,13 @@ class BatchedSend(object):
                 self.send_next()
 
     @gen.coroutine
-    def send_next(self):
+    def send_next(self, wait=True):
         with log_errors():
             now = default_timer()
-            wait_time = min(self.last_transmission + self.interval - now,
-                            self.interval)
-            yield gen.sleep(wait_time)
+            if wait:
+                wait_time = min(self.last_transmission + self.interval - now,
+                                self.interval)
+                yield gen.sleep(wait_time)
             yield self.last_send
             self.buffer, payload = [], self.buffer
             self.last_transmission = now
@@ -75,15 +76,11 @@ class BatchedSend(object):
             if (now < self.last_transmission + self.interval
                 or not self.last_send._done):
                 self.buffer.append(msg)
-                self.send_next()
+                self.loop.add_callback(self.send_next)
                 return
 
-            try:
-                # self.last_send = write(self.stream, [msg])
-                self.last_send = self._write([msg])
-            except AttributeError:
-                raise self._connection_error
-            self.last_transmission = now
+            self.buffer.append(msg)
+            self.loop.add_callback(self.send_next, wait=False)
 
     @gen.coroutine
     def close(self):

@@ -110,17 +110,15 @@ def test_BatchedSend():
 
         yield gen.sleep(0.020)
 
-        b.send('hello')  # first sends immediately
-        b.send('hello')  # second two batch
+        b.send('hello')
+        b.send('hello')
         b.send('world')
         yield gen.sleep(0.020)
-        b.send('HELLO')  # after a delay the next sends immediately
+        b.send('HELLO')
         b.send('HELLO')
 
-        result = yield read(stream); assert result == ['hello']
-        result = yield read(stream); assert result == ['hello', 'world']
-        result = yield read(stream); assert result == ['HELLO']
-        result = yield read(stream); assert result == ['HELLO']
+        result = yield read(stream); assert result == ['hello', 'hello', 'world']
+        result = yield read(stream); assert result == ['HELLO', 'HELLO']
 
 
 @gen_test()
