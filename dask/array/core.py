@@ -660,7 +660,7 @@ def topk(k, x):
     return Array(merge(dsk, x.dask), name2, chunks, dtype=x.dtype)
 
 
-def store(sources, targets, **kwargs):
+def store(sources, targets, lock=True, compute=True, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
@@ -677,6 +677,12 @@ def store(sources, targets, **kwargs):
     sources: Array or iterable of Arrays
     targets: array-like or iterable of array-likes
         These should support setitem syntax ``target[10:20] = ...``
+    lock: boolean or threading.Lock, optional
+        Whether or not to lock the data stores while storing.
+        Pass True (lock each file individually), False (don't lock) or a
+        particular ``threading.Lock`` object to be shared among all writes.
+    compute: boolean, optional
+        If true compute immediately, return lazy Value object otherwise
 
     Examples
     --------
@@ -706,10 +712,17 @@ def store(sources, targets, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d]"
                          % (len(sources), len(targets)))
 
-    updates = [insert_to_ooc(tgt, src) for tgt, src in zip(targets, sources)]
+    updates = [insert_to_ooc(tgt, src, lock=lock)
+               for tgt, src in zip(targets, sources)]
     dsk = merge([src.dask for src in sources] + updates)
     keys = [key for u in updates for key in u]
-    Array._get(dsk, keys, **kwargs)
+    if compute:
+        Array._get(dsk, keys, **kwargs)
+    else:
+        from ..imperative import Value
+        name = tokenize(*keys)
+        dsk[name] = keys
+        return Value(name, [dsk])
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -1971,18 +1984,25 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
-def insert_to_ooc(out, arr):
-    lock = Lock()
+def insert_to_ooc(out, arr, lock=True):
+    if lock is True:
+        lock = Lock()
 
-    def store(x, index):
-        with lock:
+    def store(x, index, lock):
+        if lock:
+            lock.acquire()
+        try:
             out[index] = np.asanyarray(x)
+        finally:
+            if lock:
+                lock.release()
+
         return None
 
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = dict(((name,) + t[1:], (store, t, slc))
+    dsk = dict(((name,) + t[1:], (store, t, slc, lock))
                 for t, slc in zip(core.flatten(arr._keys()), slices))
     return dsk
 

@@ -4,9 +4,10 @@ import pytest
 pytest.importorskip('numpy')
 
 from operator import add, sub
-from tempfile import mkdtemp
-import shutil
 import os
+import shutil
+from tempfile import mkdtemp
+import time
 
 from toolz import merge
 from toolz.curried import identity
@@ -868,6 +869,81 @@ def test_store():
     assert raises(ValueError, lambda: store([a], [at, bt]))
     assert raises(ValueError, lambda: store(at, at))
     assert raises(ValueError, lambda: store([at, bt], [at, bt]))
+
+
+def test_store_compute_false():
+    d = da.ones((4, 4), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.zeros(shape=(4, 4))
+    bt = np.zeros(shape=(4, 4))
+
+    v = store([a, b], [at, bt], compute=False)
+    assert (at == 0).all() and (bt == 0).all()
+    v.compute()
+    assert (at == 2).all() and (bt == 3).all()
+
+
+class ThreadSafetyError(Exception):
+    pass
+
+
+class NonthreadSafeStore(object):
+    def __init__(self):
+        self.in_use = False
+
+    def __setitem__(self, key, value):
+        if self.in_use:
+            raise ThreadSafetyError()
+        self.in_use = True
+        time.sleep(0.001)
+        self.in_use = False
+
+
+class ThreadSafeStore(object):
+    def __init__(self):
+        self.concurrent_uses = 0
+        self.max_concurrent_uses = 0
+
+    def __setitem__(self, key, value):
+        self.concurrent_uses += 1
+        self.max_concurrent_uses = max(self.concurrent_uses, self.max_concurrent_uses)
+        time.sleep(0.01)
+        self.concurrent_uses -= 1
+
+
+def test_store_locks():
+    _Lock = type(Lock())
+    d = da.ones((10, 10), chunks=(2, 2))
+    a, b = d + 1, d + 2
+
+    at = np.zeros(shape=(10, 10))
+    bt = np.zeros(shape=(10, 10))
+
+    lock = Lock()
+    v = store([a, b], [at, bt], compute=False, lock=lock)
+    dsk = v.dask
+    locks = set(vv for v in dsk.values() for vv in v if isinstance(vv, _Lock))
+    assert locks == set([lock])
+
+    # Ensure same lock applies over multiple stores
+    at = NonthreadSafeStore()
+    v = store([a, b], [at, at], lock=lock,
+              get=dask.threaded.get, num_workers=10)
+
+    # Don't assume thread safety by default
+    at = NonthreadSafeStore()
+    store(a, at, get=dask.threaded.get, num_workers=10)
+    a.store(at, get=dask.threaded.get, num_workers=10)
+
+    # Ensure locks can be removed
+    at = ThreadSafeStore()
+    for i in range(10):
+        a.store(at, lock=False, get=dask.threaded.get, num_workers=10)
+        if at.max_concurrent_uses > 1:
+            break
+        if i == 9:
+            assert False
 
 
 def test_to_hdf5():
