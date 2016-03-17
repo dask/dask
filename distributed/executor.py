@@ -415,7 +415,7 @@ class Executor(object):
                 yield [gen.with_timeout(timedelta(seconds=2), f)
                         for f in self.coroutines]
         with ignoring(AttributeError):
-            yield self.scheduler_stream.close()
+            yield self.scheduler_stream.close(ignore_closed=True)
         with ignoring(AttributeError):
             self.scheduler.close_streams()
 

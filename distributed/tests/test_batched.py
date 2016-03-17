@@ -138,7 +138,7 @@ def test_send_before_start():
 
 
 @gen_test()
-def test_send_after_start_before_finish():
+def test_send_after_stream_start_before_stream_finish():
     with echo_server() as e:
         client = TCPClient()
         stream = yield client.connect('127.0.0.1', e.port)
@@ -152,17 +152,12 @@ def test_send_after_start_before_finish():
 
 
 @gen_test()
-def test_send_after_start_before_finish():
+def test_send_after_stream_finish():
     with echo_server() as e:
         client = TCPClient()
         stream = yield client.connect('127.0.0.1', e.port)
 
         b = BatchedSend(interval=10)
-        yield b.last_send
-
-        client = TCPClient()
-        stream = yield client.connect('127.0.0.1', e.port)
-
         b.start(stream)
         yield b.last_send
 
@@ -170,7 +165,7 @@ def test_send_after_start_before_finish():
         result = yield read(stream); assert result == ['hello']
 
 @gen_test()
-def test_send_after_start_before_finish():
+def test_send_before_close():
     with echo_server() as e:
         client = TCPClient()
         stream = yield client.connect('127.0.0.1', e.port)
@@ -190,4 +185,20 @@ def test_send_after_start_before_finish():
             assert time() < start + 5
 
         with pytest.raises(StreamClosedError):
-            yield b.send('123')
+            b.send('123')
+
+
+@gen_test()
+def test_close_closed():
+    with echo_server() as e:
+        client = TCPClient()
+        stream = yield client.connect('127.0.0.1', e.port)
+
+        b = BatchedSend(interval=10)
+        b.start(stream)
+        yield b.last_send
+
+        b.send(123)
+        stream.close()  # external closing
+
+        yield b.close(ignore_closed=True)

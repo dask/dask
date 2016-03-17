@@ -99,14 +99,19 @@ class BatchedSend(object):
             self.loop.add_callback(self.send_next, wait=False)
         except Exception as e:
             logger.exception(e)
+            raise
 
     @gen.coroutine
-    def close(self):
+    def close(self, ignore_closed=False):
         """ Flush existing messages and then close stream """
-        yield self.last_send
-        if self.buffer:
-            self.buffer, payload = [], self.buffer
-            yield write(self.stream, payload)
+        try:
+            yield self.last_send
+            if self.buffer:
+                self.buffer, payload = [], self.buffer
+                yield write(self.stream, payload)
+        except StreamClosedError:
+            if not ignore_closed:
+                raise
         self.stream.close()
 
 

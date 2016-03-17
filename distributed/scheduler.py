@@ -338,7 +338,7 @@ class Scheduler(Server):
 
         for w, bstream in self.worker_streams.items():
             with ignoring(AttributeError):
-                yield bstream.close()
+                yield bstream.close(ignore_closed=True)
 
         for s in self.scheduler_queues[1:]:
             s.put_nowait({'op': 'close-stream'})
@@ -944,7 +944,7 @@ class Scheduler(Server):
         finally:
             if not stream.closed():
                 bstream.send({'op': 'stream-closed'})
-                yield bstream.close()
+                yield bstream.close(ignore_closed=True)
             del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
                         client)
