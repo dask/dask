@@ -17,10 +17,23 @@ logger = logging.getLogger(__name__)
 
 
 class BatchedSend(object):
-    """ Batch messages on a stream
+    """ Batch messages in batches on a stream
 
-    Like a one-sided BatchedStream, but faster, because sometimes Queues are
-    too slow.
+    This takes an IOStream and an interval (in ms) and ensures that we send no
+    more than one message every interval milliseconds.  We send lists of
+    messages.
+
+    Example
+    -------
+    >>> stream = yield connect(ip, port)
+    >>> bstream = BatchedSend(interval=10)  # 10 ms
+    >>> bstream.start(stream)
+    >>> bstream.send('Hello,')
+    >>> bstream.send('world!')
+
+    On the other side, the recipient will get a message like the following::
+
+        ['Hello,', 'world!']
     """
     def __init__(self, interval, loop=None):
         self.loop = loop or IOLoop.current()
@@ -58,6 +71,10 @@ class BatchedSend(object):
         yield write(self.stream, payload)
 
     def send(self, msg):
+        """ Send a message to the other side
+
+        This completes quickly and synchronously
+        """
         try:
             if self.stream is None:  # not yet started
                 self.buffer.append(msg)
@@ -85,6 +102,7 @@ class BatchedSend(object):
 
     @gen.coroutine
     def close(self):
+        """ Flush existing messages and then close stream """
         yield self.last_send
         if self.buffer:
             self.buffer, payload = [], self.buffer
@@ -93,6 +111,7 @@ class BatchedSend(object):
 
 
 class BatchedStream(object):
+    """ Mostly obsolete, see BatchedSend """
     def __init__(self, stream, interval):
         self.stream = stream
         self.interval = interval / 1000.
