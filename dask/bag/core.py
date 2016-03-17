@@ -183,6 +183,29 @@ def finalize_item(results):
     return results[0]
 
 
+def unpack_kwargs(kwargs):
+    """ Extracts dask values from kwargs
+
+    Currently only dask.bag.Item and python literal values are supported.
+
+    Returns a merged dask graph and a list of [key, val] pairs suitable for
+    eventually constructing a dict.
+    """
+    dsk = {}
+    kw_pairs = []
+    for key, val in iteritems(kwargs):
+        if isinstance(val, Item):
+            dsk.update(val.dask)
+            val = val.key
+        # TODO elif isinstance(val, Value):
+        elif isinstance(val, Base):
+            raise NotImplementedError(
+                '%s not supported as kwarg value to Bag.map_partitions'
+                % type(val).__name__)
+        kw_pairs.append([key, val])
+    return dsk, kw_pairs
+
+
 class Item(Base):
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(mpget)
@@ -244,20 +267,53 @@ class Bag(Base):
         self.npartitions = npartitions
         self.str = StringAccessor(self)
 
-    def map(self, func):
+    def map(self, func, **kwargs):
         """ Map a function across all elements in collection
 
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
         >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
         [0, 10, 20, 30, 40]
+
+        Keyword arguments are passed through to `func`. These can be either
+        `dask.bag.Item`s, or normal python objects.
+
+        Example
+        -------
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(1, 101), npartitions=10)
+        >>> def div(num, den=1):
+        ...     return num / den
+
+        Using a python object:
+
+        >>> hi = b.max().compute()
+        >>> hi
+        100
+        >>> b.map(div, den=hi).take(5)
+        (0.01, 0.02, 0.03, 0.04, 0.05)
+
+        Using an `Item`:
+
+        >>> b.map(div, den=b.max()).take(5)
+        (0.01, 0.02, 0.03, 0.04, 0.05)
+
+        Note that while both versions give the same output, the second forms a
+        single graph, and then computes everything at once, and in some cases
+        may be more efficient.
         """
-        name = 'map-{0}-{1}'.format(funcname(func), tokenize(self, func))
+        name = 'map-{0}-{1}'.format(funcname(func),
+                                    tokenize(self, func, kwargs))
         if takes_multiple_arguments(func):
             func = partial(apply, func)
-        dsk = dict(((name, i), (reify, (map, func, (self.name, i))))
+        dsk = self.dask.copy()
+        if kwargs:
+            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
+            dsk.update(kw_dsk)
+            func = (apply, partial, [func], (dict, kw_pairs))
+        dsk.update(((name, i), (reify, (map, func, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(dsk, name, self.npartitions)
 
     @property
     def _args(self):
@@ -297,19 +353,52 @@ class Bag(Base):
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
-    def map_partitions(self, func):
+    def map_partitions(self, func, **kwargs):
         """ Apply function to every partition within collection
 
         Note that this requires you to understand how dask.bag partitions your
         data and so is somewhat internal.
 
         >>> b.map_partitions(myfunc)  # doctest: +SKIP
+
+        Keyword arguments are passed through to `func`. These can be either
+        `dask.bag.Item`s, or normal python objects.
+
+        Example
+        -------
+        >>> import dask.bag as db
+        >>> b = db.from_sequence(range(1, 101), npartitions=10)
+        >>> def div(nums, den=1):
+        ...     return [num / den for num in nums]
+
+        Using a python object:
+
+        >>> hi = b.max().compute()
+        >>> hi
+        100
+        >>> b.map_partitions(div, den=hi).take(5)
+        (0.01, 0.02, 0.03, 0.04, 0.05)
+
+        Using an `Item`:
+
+        >>> b.map_partitions(div, den=b.max()).take(5)
+        (0.01, 0.02, 0.03, 0.04, 0.05)
+
+        Note that while both versions give the same output, the second forms a
+        single graph, and then computes everything at once, and in some cases
+        may be more efficient.
         """
         name = 'map-partitions-{0}-{1}'.format(funcname(func),
-                                               tokenize(self, func))
-        dsk = dict(((name, i), (func, (self.name, i)))
+                                               tokenize(self, func, kwargs))
+        dsk = self.dask.copy()
+        if kwargs:
+            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
+            dsk.update(kw_dsk)
+        dsk.update(((name, i),
+                    (apply, func, [(self.name, i)], (dict, kw_pairs))
+                    if kwargs else (func, (self.name, i)))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        return type(self)(dsk, name, self.npartitions)
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
