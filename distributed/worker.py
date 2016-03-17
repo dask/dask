@@ -289,7 +289,7 @@ class Worker(Server):
         """
         job_counter[0] += 1
         i = job_counter[0]
-        logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
+        # logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
         future = self.executor.submit(function, *args, **kwargs)
         pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
             key, future._state), 1000); pc.start()
@@ -315,7 +315,7 @@ class Worker(Server):
     @gen.coroutine
     def compute_stream(self, stream):
         with log_errors():
-            logger.info("Open compute stream")
+            logger.debug("Open compute stream")
             bstream = BatchedSend(interval=10, loop=self.loop)
             bstream.start(stream)
 
