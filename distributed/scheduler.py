@@ -311,7 +311,7 @@ class Scheduler(Server):
         for r in self._rpcs.values():
             r.close_streams()
         for stream in self.streams.values():
-            stream.close()
+            stream.stream.close()
 
     @gen.coroutine
     def close(self, stream=None):
@@ -338,7 +338,7 @@ class Scheduler(Server):
 
         for w, bstream in self.worker_streams.items():
             with ignoring(AttributeError):
-                bstream.stream.close()
+                yield bstream.close()
 
         for s in self.scheduler_queues[1:]:
             s.put_nowait({'op': 'close-stream'})
@@ -911,7 +911,12 @@ class Scheduler(Server):
             streams = self.streams.values()
         for s in streams:
             try:
-                self._last_message = write(s, msg), msg  # asynchrnous
+                if isinstance(s, IOStream):
+                    self._last_message = write(s, msg), msg  # asynchrnous
+                elif isinstance(s, BatchedSend):
+                    s.send(msg)
+                else:
+                    raise NotImplementedError()
                 logger.debug("Scheduler sends message to client %s", msg)
             except StreamClosedError:
                 logger.critical("Tried writing to closed stream: %s", msg)
@@ -933,21 +938,19 @@ class Scheduler(Server):
         return future
 
     @gen.coroutine
-    def add_client(self, stream, client=None, batched=False):
+    def add_client(self, stream, client=None):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
-        if batched:
-            stream = BatchedStream(stream, 10)
-        self.streams[client] = stream
+        bstream = BatchedSend(interval=10)
+        bstream.start(stream)
+        self.streams[client] = bstream
+
         try:
-            yield self.handle_messages(stream, stream, client=client)
+            yield self.handle_messages(stream, bstream, client=client)
         finally:
             if not stream.closed():
-                if isinstance(stream, BatchedStream):
-                    stream.send({'op': 'stream-closed'})
-                else:
-                    yield write(stream, {'op': 'stream-closed'})
-                yield gen.maybe_future(stream.close())
+                bstream.send({'op': 'stream-closed'})
+                yield bstream.close()
             del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
                         client)
@@ -969,8 +972,6 @@ class Scheduler(Server):
                 next_message = in_queue.get
             elif isinstance(in_queue, IOStream):
                 next_message = lambda: read(in_queue)
-            elif isinstance(in_queue, BatchedStream):
-                next_message = in_queue.recv
             else:
                 raise NotImplementedError()
 
@@ -978,45 +979,57 @@ class Scheduler(Server):
                 put = report.put_nowait
             elif isinstance(report, IOStream):
                 put = lambda msg: write(report, msg)
-            elif isinstance(report, BatchedStream):
+            elif isinstance(report, BatchedSend):
                 put = report.send
             else:
                 put = lambda msg: None
             put({'op': 'stream-start'})
 
+            breakout = False
+
             while True:
                 try:
-                    msg = yield next_message()  # in_queue.get()
+                    msgs = yield next_message()  # in_queue.get()
                 except (StreamClosedError, AssertionError):
                     break
                 except Exception as e:
                     logger.exception(e)
                     put(error_message(e, status='scheduler-error'))
                     continue
-                logger.debug("scheduler receives message %s", msg)
-                try:
-                    op = msg.pop('op')
-                except Exception as e:
-                    logger.exception(e)
-                    put(error_message(e, status='scheduler-error'))
 
-                if op == 'close-stream':
-                    break
-                elif op == 'close':
-                    self.close()
-                    break
-                elif op in self.compute_handlers:
+                if not isinstance(msgs, list):
+                    msgs = [msgs]
+
+                for msg in msgs:
+                    logger.debug("scheduler receives message %s", msg)
                     try:
-                        result = self.compute_handlers[op](**msg)
-                        if isinstance(result, gen.Future):
-                            yield result
+                        op = msg.pop('op')
                     except Exception as e:
                         logger.exception(e)
-                        raise
-                else:
-                    logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
+                        put(error_message(e, status='scheduler-error'))
 
-                if op == 'close':
+                    if op == 'close-stream':
+                        breakout = True
+                        break
+                    elif op == 'close':
+                        breakout = True
+                        self.close()
+                        break
+                    elif op in self.compute_handlers:
+                        try:
+                            result = self.compute_handlers[op](**msg)
+                            if isinstance(result, gen.Future):
+                                yield result
+                        except Exception as e:
+                            logger.exception(e)
+                            raise
+                    else:
+                        logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
+
+                    if op == 'close':
+                        breakout = True
+                        break
+                if breakout:
                     break
 
             self.remove_client(client=client)
@@ -1044,31 +1057,30 @@ class Scheduler(Server):
         logger.info("Starting worker compute stream, %s", ident)
 
         try:
-            with log_errors():
-                while True:
-                    msgs = yield read(stream)
-                    if not isinstance(msgs, list):
-                        msgs = [msgs]
+            while True:
+                msgs = yield read(stream)
+                if not isinstance(msgs, list):
+                    msgs = [msgs]
 
-                    for msg in msgs:
-                        logger.debug("Compute response from worker %s, %s",
-                                     ident, msg)
+                for msg in msgs:
+                    logger.debug("Compute response from worker %s, %s",
+                                 ident, msg)
 
-                        if msg == 'OK':  # from close
-                            break
+                    if msg == 'OK':  # from close
+                        break
 
-                        if msg['status'] == 'error':
-                            self.mark_task_erred(msg['key'], ident, msg['exception'],
-                                                                    msg['traceback'])
-                        elif msg['status'] == 'missing-data':
-                            self.mark_missing_data(msg['keys'], key=msg['key'],
-                                                   worker=ident)
-                        elif msg['status'] == 'OK':
-                            self.mark_task_finished(msg['key'], ident, msg['nbytes'],
-                                                    type=msg.get('type'))
-                        else:
-                            logger.warn("Unknown message type, %s, %s", msg['status'],
-                                    msg)
+                    if msg['status'] == 'error':
+                        self.mark_task_erred(msg['key'], ident, msg['exception'],
+                                                                msg['traceback'])
+                    elif msg['status'] == 'missing-data':
+                        self.mark_missing_data(msg['keys'], key=msg['key'],
+                                               worker=ident)
+                    elif msg['status'] == 'OK':
+                        self.mark_task_finished(msg['key'], ident, msg['nbytes'],
+                                                type=msg.get('type'))
+                    else:
+                        logger.warn("Unknown message type, %s, %s", msg['status'],
+                                msg)
 
                 self.ensure_occupied(ident)
         except (StreamClosedError, IOError, OSError) as e:

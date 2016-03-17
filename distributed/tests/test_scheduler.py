@@ -325,6 +325,7 @@ def div(x, y):
 def test_scheduler(s, a, b):
     stream = yield connect(s.ip, s.port)
     yield write(stream, {'op': 'register-client', 'client': 'ident'})
+    stream = BatchedStream(stream, 10)
     msg = yield read(stream)
     assert msg['op'] == 'stream-start'
 
@@ -429,22 +430,21 @@ def test_multi_queues(s, a, b):
 @gen_cluster()
 def test_server(s, a, b):
     stream = yield connect('127.0.0.1', s.port)
-    write(stream, {'op': 'register-client', 'client': 'ident',
-                         'batched': True})
+    yield write(stream, {'op': 'register-client', 'client': 'ident'})
     stream = BatchedStream(stream, 0)
-    write(stream, {'op': 'update-graph',
-                         'tasks': {'x': dumps_task((inc, 1)),
-                                   'y': dumps_task((inc, 'x'))},
-                         'dependencies': {'x': [], 'y': ['x']},
-                         'keys': ['y'],
-                         'client': 'ident'})
+    stream.send({'op': 'update-graph',
+                 'tasks': {'x': dumps_task((inc, 1)),
+                           'y': dumps_task((inc, 'x'))},
+                 'dependencies': {'x': [], 'y': ['x']},
+                 'keys': ['y'],
+                 'client': 'ident'})
 
     while True:
         msg = yield read(stream)
         if msg['op'] == 'key-in-memory' and msg['key'] == 'y':
             break
 
-    write(stream, {'op': 'close-stream'})
+    stream.send({'op': 'close-stream'})
     msg = yield read(stream)
     assert msg == {'op': 'stream-closed'}
     assert stream.closed()
@@ -660,6 +660,8 @@ def test_filtered_communication(s, a, b):
     yield write(f, {'op': 'register-client', 'client': 'f'})
     yield read(e)
     yield read(f)
+    e = BatchedStream(e, 0)
+    f = BatchedStream(f, 0)
 
     assert set(s.streams) == {'e', 'f'}
 
