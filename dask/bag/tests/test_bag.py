@@ -848,13 +848,17 @@ def test_to_imperative():
 
 
 def test_from_imperative():
-    from dask.imperative import value
+    from dask.imperative import value, do
     a, b, c = value([1, 2, 3]), value([4, 5, 6]), value([7, 8, 9])
     bb = from_imperative([a, b, c])
     assert bb.name == from_imperative([a, b, c]).name
 
     assert isinstance(bb, Bag)
     assert list(bb) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    asum_value = do(lambda X: sum(X))(a)
+    asum_item = db.Item.from_imperative(asum_value)
+    assert asum_value.compute() == asum_item.compute() == 6
 
 
 def test_range():
