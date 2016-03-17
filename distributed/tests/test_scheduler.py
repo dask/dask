@@ -842,7 +842,6 @@ def test_file_descriptors_dont_leak(loop):
     proc = psutil.Process()
     before = proc.num_fds()
     s = Scheduler()
-    s.listen()
     s.start(0)
 
     w = Worker(s.ip, s.port)

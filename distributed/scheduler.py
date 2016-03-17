@@ -621,42 +621,41 @@ class Scheduler(Server):
         --------
         Scheduler.recover_missing
         """
-        with log_errors():
-            address = self.coerce_address(address)
-            logger.debug("Remove worker %s", address)
-            if address not in self.processing:
-                return
-            with ignoring(AttributeError):
-                self.worker_streams[address].stream.close()
-            del self.worker_streams[address]
-            del self.ncores[address]
-            del self.aliases[self.worker_info[address]['name']]
-            del self.worker_info[address]
-            if address in self.idle:
-                self.idle.remove(address)
+        address = self.coerce_address(address)
+        logger.debug("Remove worker %s", address)
+        if address not in self.processing:
+            return
+        with ignoring(AttributeError):
+            self.worker_streams[address].stream.close()
+        del self.worker_streams[address]
+        del self.ncores[address]
+        del self.aliases[self.worker_info[address]['name']]
+        del self.worker_info[address]
+        if address in self.idle:
+            self.idle.remove(address)
 
-            in_flight = set(self.stacks.pop(address))
-            in_flight |= self.processing.pop(address)
-            missing = set()
+        in_flight = set(self.stacks.pop(address))
+        in_flight |= self.processing.pop(address)
+        missing = set()
 
-            for key in self.has_what.pop(address):
-                s = self.who_has[key]
-                s.remove(address)
-                if not s:
-                    self.who_has.pop(key)
-                    self.report({'op': 'lost-data', 'key': key})
-                    missing.add(key)
+        for key in self.has_what.pop(address):
+            s = self.who_has[key]
+            s.remove(address)
+            if not s:
+                self.who_has.pop(key)
+                self.report({'op': 'lost-data', 'key': key})
+                missing.add(key)
 
-            for key in missing:
-                self.recover_missing(key)
-            for key in in_flight:
-                self.released.add(key)
-                self.ensure_in_play(key)
+        for key in missing:
+            self.recover_missing(key)
+        for key in in_flight:
+            self.released.add(key)
+            self.ensure_in_play(key)
 
-            if not self.stacks:
-                logger.critical("Lost all workers")
+        if not self.stacks:
+            logger.critical("Lost all workers")
 
-            return 'OK'
+        return 'OK'
 
     def add_worker(self, stream=None, address=None, keys=(), ncores=None,
                    name=None, coerce_address=True, **info):
@@ -911,12 +910,7 @@ class Scheduler(Server):
             streams = self.streams.values()
         for s in streams:
             try:
-                if isinstance(s, IOStream):
-                    self._last_message = write(s, msg), msg  # asynchrnous
-                elif isinstance(s, BatchedSend):
-                    s.send(msg)
-                else:
-                    raise NotImplementedError()
+                s.send(msg)
                 logger.debug("Scheduler sends message to client %s", msg)
             except StreamClosedError:
                 logger.critical("Tried writing to closed stream: %s", msg)
