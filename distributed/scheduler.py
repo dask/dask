@@ -155,6 +155,7 @@ class Scheduler(Server):
         self.ip = ip or get_ip()
         self.delete_interval = delete_interval
         self.heartbeat_interval = heartbeat_interval
+        self._worker_coroutines = []
 
         self.tasks = dict()
         self.dependencies = dict()
@@ -264,23 +265,15 @@ class Scheduler(Server):
         """ Clear out old state and restart all running coroutines """
         collections = [self.tasks, self.dependencies, self.dependents,
                 self.waiting, self.waiting_data, self.released, self.keyorder,
-                self.nbytes, self.processing, self.restrictions,
-                self.loose_restrictions, self.ready, self.who_wants,
-                self.wants_what]
+                self.nbytes, self.restrictions, self.loose_restrictions,
+                self.ready, self.who_wants, self.wants_what]
         for collection in collections:
             collection.clear()
-
-        self.processing = {addr: set() for addr in self.ncores}
-        self.stacks = {addr: list() for addr in self.ncores}
-
-        self.worker_streams = {w: BatchedSend(interval=10, loop=self.loop)
-                                for w in self.ncores}
 
         with ignoring(AttributeError):
             for c in self._worker_coroutines:
                 c.cancel()
 
-        self._worker_coroutines = [self.worker_stream(w) for w in self.ncores]
         self._delete_periodic_callback = \
                 PeriodicCallback(callback=self.clear_data_from_workers,
                                  callback_time=self.delete_interval,
