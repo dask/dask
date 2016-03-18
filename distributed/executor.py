@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import cloudpickle
-from collections import defaultdict, Iterator
+from collections import defaultdict, Iterator, Iterable
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from concurrent import futures
 import copy
@@ -734,14 +734,20 @@ class Executor(object):
 
         if isinstance(data, dict):
             data2 = valmap(dumps, data)
-        if isinstance(data, (list, tuple, set, frozenset)):
-            data2 = type(data)(map(dumps, data))
+        elif isinstance(data, (list, tuple, set, frozenset)):
+            data2 = list(map(dumps, data))
+        elif isinstance(data, (Iterable, Iterator)):
+            data2 = list(map(dumps, data))
+        else:
+            raise TypeError("Don't know how to scatter %s" % type(data))
         keys = yield self.scheduler.scatter(data=data2, workers=workers,
                                             client=self.id, broadcast=broadcast)
-        if isinstance(data, (tuple, list, set, frozenset)):
-            out = type(data)([Future(k, self) for k in keys])
-        elif isinstance(data, dict):
+        if isinstance(data, dict):
             out = {k: Future(k, self) for k in keys}
+        elif isinstance(data, (tuple, list, set, frozenset)):
+            out = type(data)([Future(k, self) for k in keys])
+        elif isinstance(data, (Iterable, Iterator)):
+            out = [Future(k, self) for k in keys]
         else:
             raise TypeError(
                     "Input to scatter must be a list, iterator, or queue")
