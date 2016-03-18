@@ -108,6 +108,9 @@ class Worker(Server):
         self.status = None
         self.local_dir = local_dir or tempfile.mkdtemp(prefix='worker-')
         self.executor = ThreadPoolExecutor(self.ncores)
+        self.thread_tokens = Queue()  # https://github.com/tornadoweb/tornado/issues/1595#issuecomment-198551572
+        for i in range(self.ncores):
+            self.thread_tokens.put_nowait(i)
         self.center = rpc(ip=center_ip, port=center_port)
         self.active = set()
         self.name = name
@@ -287,6 +290,7 @@ class Worker(Server):
         callbacks to ensure things run smoothly.  This can get tricky, so we
         pull it off into an separate method.
         """
+        token = yield self.thread_tokens.get()
         job_counter[0] += 1
         i = job_counter[0]
         # logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
@@ -307,8 +311,10 @@ class Worker(Server):
                         logger.info("Pending job %d: %s", i, future)
         finally:
             pc.stop()
+            self.thread_tokens.put(token)
 
         result = future.result()
+
         logger.info("Finish job %d, %s", i, key)
         raise gen.Return(result)
 
@@ -321,9 +327,12 @@ class Worker(Server):
 
         @gen.coroutine
         def process(msg):
-            with log_errors():
+            try:
                 result = yield self.compute(report=False, **msg)
                 bstream.send(result)
+            except Exception as e:
+                logger.exception(e)
+                bstream.send(assoc(error_message(e), 'key', msg.get('key')))
 
         with log_errors():
             while True:
@@ -338,11 +347,10 @@ class Worker(Server):
                     op = msg.pop('op', None)
                     if op == 'close':
                         break
-                    if op == 'compute-task':
+                    elif op == 'compute-task':
                         self.loop.add_callback(process, msg)
                     else:
                         logger.warning("Unknown operation %s, %s", op, msg)
-
 
             yield bstream.close()
             logger.info("Close compute stream")
@@ -351,51 +359,51 @@ class Worker(Server):
     def compute(self, stream=None, function=None, key=None, args=(), kwargs={},
             task=None, who_has=None, report=True):
         """ Execute function """
-        with log_errors():
-            self.active.add(key)
+        self.active.add(key)
 
-            # Ready function for computation
-            msg = yield self._ready_task(function=function, key=key, args=args,
-                kwargs=kwargs, task=task, who_has=who_has)
-            if msg['status'] != 'OK':
-                try:
-                    self.active.remove(key)
-                except KeyError:
-                    pass
-                raise Return(msg)
-            else:
-                function = msg['function']
-                args = msg['args']
-                kwargs = msg['kwargs']
-
-            # Log and compute in separate thread
-            result = yield self.executor_submit(key, apply_function, function,
-                                                args, kwargs)
-            result['key'] = key
-            result.update(msg['diagnostics'])
-
-            if result['status'] == 'OK':
-                self.data[key] = result.pop('result')
-                if report:
-                    response = yield self.center.add_keys(address=(self.ip, self.port),
-                                                          keys=[key])
-                    if not response == 'OK':
-                        logger.warn('Could not report results to center: %s',
-                                    response.decode())
-            else:
-                logger.warn(" Compute Failed\n"
-                    "Function: %s\n"
-                    "args:     %s\n"
-                    "kwargs:   %s\n",
-                    str(funcname(function))[:1000], str(args)[:1000],
-                    str(kwargs)[:1000], exc_info=True)
-
-            logger.debug("Send compute response to scheduler: %s, %s", key, msg)
+        # Ready function for computation
+        msg = yield self._ready_task(function=function, key=key, args=args,
+            kwargs=kwargs, task=task, who_has=who_has)
+        if msg['status'] != 'OK':
             try:
                 self.active.remove(key)
             except KeyError:
                 pass
-            raise Return(result)
+            raise Return(msg)
+        else:
+            function = msg['function']
+            args = msg['args']
+            kwargs = msg['kwargs']
+
+        # Log and compute in separate thread
+        result = yield self.executor_submit(key, apply_function, function,
+                                            args, kwargs)
+
+        result['key'] = key
+        result.update(msg['diagnostics'])
+
+        if result['status'] == 'OK':
+            self.data[key] = result.pop('result')
+            if report:
+                response = yield self.center.add_keys(address=(self.ip, self.port),
+                                                      keys=[key])
+                if not response == 'OK':
+                    logger.warn('Could not report results to center: %s',
+                                str(response))
+        else:
+            logger.warn(" Compute Failed\n"
+                "Function: %s\n"
+                "args:     %s\n"
+                "kwargs:   %s\n",
+                str(funcname(function))[:1000], str(args)[:1000],
+                str(kwargs)[:1000], exc_info=True)
+
+        logger.debug("Send compute response to scheduler: %s, %s", key, msg)
+        try:
+            self.active.remove(key)
+        except KeyError:
+            pass
+        raise Return(result)
 
     @gen.coroutine
     def run(self, stream, function=None, args=(), kwargs={}):
