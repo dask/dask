@@ -796,6 +796,22 @@ def test__scatter(e, s, a, b):
 
 
 @gen_cluster(executor=True)
+def test__scatter_types(e, s, a, b):
+    d = yield e._scatter({'x': 1})
+    assert isinstance(d, dict)
+    assert list(d) == ['x']
+
+    for seq in [[1], (1,), {1}, frozenset([1])]:
+        L = yield e._scatter(seq)
+        assert isinstance(L, type(seq))
+        assert len(L) == 1
+
+    seq = yield e._scatter(range(5))
+    assert isinstance(seq, list)
+    assert len(seq) == 5
+
+
+@gen_cluster(executor=True)
 def test_scatter_hash(e, s, a, b):
     [a] = yield e._scatter([1])
     [b] = yield e._scatter([1])
