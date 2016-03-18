@@ -21,7 +21,7 @@ from dask.compatibility import PY3, unicode
 from dask.core import get_deps, reverse_dict, istask
 from dask.order import order
 
-from .batched import BatchedStream
+from .batched import BatchedStream, BatchedSend
 from .client import (scatter_to_workers,
         gather_from_workers, broadcast_to_workers)
 from .core import (rpc, coerce_to_rpc, connect, read, write, MAX_BUFFER_SIZE,
@@ -145,6 +145,7 @@ class Scheduler(Server):
             ip=None, services=None, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
+        self.worker_streams = dict()
         self.streams = dict()
         self.status = None
         self.coroutines = []
@@ -267,7 +268,8 @@ class Scheduler(Server):
         self.processing = {addr: set() for addr in self.ncores}
         self.stacks = {addr: list() for addr in self.ncores}
 
-        self.worker_queues = {addr: Queue() for addr in self.ncores}
+        self.worker_streams = {w: BatchedSend(interval=10, loop=self.loop)
+                                for w in self.ncores}
 
         with ignoring(AttributeError):
             for c in self._worker_coroutines:
@@ -309,7 +311,7 @@ class Scheduler(Server):
         for r in self._rpcs.values():
             r.close_streams()
         for stream in self.streams.values():
-            stream.close()
+            stream.stream.close()
 
     @gen.coroutine
     def close(self, stream=None):
@@ -334,15 +336,12 @@ class Scheduler(Server):
         self.status = 'closing'
         logger.debug("Cleaning up coroutines")
 
-        for w, nc in self.ncores.items():
-            self.worker_queues[w].put_nowait({'op': 'close'})
+        for w, bstream in self.worker_streams.items():
+            with ignoring(AttributeError):
+                yield bstream.close(ignore_closed=True)
 
         for s in self.scheduler_queues[1:]:
             s.put_nowait({'op': 'close-stream'})
-
-        for _ in self.ncores:
-            msg = yield self.scheduler_queues[0].get()
-            assert msg['op'] == 'worker-finished'
 
         for q in self.report_queues:
             q.put_nowait({'op': 'close'})
@@ -446,16 +445,6 @@ class Scheduler(Server):
         We update the idle workers set appropriately.
         """
         logger.debug('Ensure worker is occupied: %s', worker)
-        def message(key):
-            msg = {'op': 'compute-task',
-                   'key': key,
-                   'who_has': {dep: list(self.who_has[dep])
-                               for dep in self.dependencies[key]}}
-            if isinstance(self.tasks[key], dict):
-                msg.update(self.tasks[key])
-            else:
-                msg['task'] = self.tasks[key]
-            return msg
 
         while (self.stacks[worker] and
                self.ncores[worker] > len(self.processing[worker])):
@@ -466,7 +455,7 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.worker_queues[worker].put_nowait(message(key))
+            self.send_task_to_worker(worker, key)
 
         while (self.ready and
                self.ncores[worker] > len(self.processing[worker])):
@@ -477,7 +466,7 @@ class Scheduler(Server):
                 continue
             self.processing[worker].add(key)
             logger.debug("Send job to worker: %s, %s", worker, key)
-            self.worker_queues[worker].put_nowait(message(key))
+            self.send_task_to_worker(worker, key)
 
         if self.ncores[worker] > len(self.processing[worker]):
             self.idle.add(worker)
@@ -636,9 +625,9 @@ class Scheduler(Server):
         logger.debug("Remove worker %s", address)
         if address not in self.processing:
             return
-        for i in range(self.ncores[address]):  # send close message, in case not dead
-            self.worker_queues[address].put_nowait({'op': 'close', 'report': False})
-        del self.worker_queues[address]
+        with ignoring(AttributeError):
+            self.worker_streams[address].stream.close()
+        del self.worker_streams[address]
         del self.ncores[address]
         del self.aliases[self.worker_info[address]['name']]
         del self.worker_info[address]
@@ -687,11 +676,11 @@ class Scheduler(Server):
             self.has_what[address] = set()
             self.processing[address] = set()
             self.stacks[address] = []
-            self.worker_queues[address] = Queue()
 
         for key in keys:
             self.mark_key_in_memory(key, [address])
 
+        self.worker_streams[address] = BatchedSend(interval=10, loop=self.loop)
         self._worker_coroutines.append(self.worker_stream(address))
 
         if self.ncores[address] > len(self.processing[address]):
@@ -921,7 +910,7 @@ class Scheduler(Server):
             streams = self.streams.values()
         for s in streams:
             try:
-                self._last_message = write(s, msg), msg  # asynchrnous
+                s.send(msg)
                 logger.debug("Scheduler sends message to client %s", msg)
             except StreamClosedError:
                 logger.critical("Tried writing to closed stream: %s", msg)
@@ -943,21 +932,19 @@ class Scheduler(Server):
         return future
 
     @gen.coroutine
-    def add_client(self, stream, client=None, batched=False):
+    def add_client(self, stream, client=None):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
-        if batched:
-            stream = BatchedStream(stream, 10)
-        self.streams[client] = stream
+        bstream = BatchedSend(interval=10)
+        bstream.start(stream)
+        self.streams[client] = bstream
+
         try:
-            yield self.handle_messages(stream, stream, client=client)
+            yield self.handle_messages(stream, bstream, client=client)
         finally:
             if not stream.closed():
-                if isinstance(stream, BatchedStream):
-                    stream.send({'op': 'stream-closed'})
-                else:
-                    yield write(stream, {'op': 'stream-closed'})
-                yield gen.maybe_future(stream.close())
+                bstream.send({'op': 'stream-closed'})
+                yield bstream.close(ignore_closed=True)
             del self.streams[client]
             logger.info("Close connection to %s, %s", type(self).__name__,
                         client)
@@ -979,8 +966,6 @@ class Scheduler(Server):
                 next_message = in_queue.get
             elif isinstance(in_queue, IOStream):
                 next_message = lambda: read(in_queue)
-            elif isinstance(in_queue, BatchedStream):
-                next_message = in_queue.recv
             else:
                 raise NotImplementedError()
 
@@ -988,107 +973,114 @@ class Scheduler(Server):
                 put = report.put_nowait
             elif isinstance(report, IOStream):
                 put = lambda msg: write(report, msg)
-            elif isinstance(report, BatchedStream):
+            elif isinstance(report, BatchedSend):
                 put = report.send
             else:
                 put = lambda msg: None
             put({'op': 'stream-start'})
 
+            breakout = False
+
             while True:
                 try:
-                    msg = yield next_message()  # in_queue.get()
+                    msgs = yield next_message()  # in_queue.get()
                 except (StreamClosedError, AssertionError):
                     break
                 except Exception as e:
                     logger.exception(e)
                     put(error_message(e, status='scheduler-error'))
                     continue
-                logger.debug("scheduler receives message %s", msg)
-                try:
-                    op = msg.pop('op')
-                except Exception as e:
-                    logger.exception(e)
-                    put(error_message(e, status='scheduler-error'))
 
-                if op == 'close-stream':
-                    break
-                elif op == 'close':
-                    self.close()
-                    break
-                elif op in self.compute_handlers:
+                if not isinstance(msgs, list):
+                    msgs = [msgs]
+
+                for msg in msgs:
+                    logger.debug("scheduler receives message %s", msg)
                     try:
-                        result = self.compute_handlers[op](**msg)
-                        if isinstance(result, gen.Future):
-                            yield result
+                        op = msg.pop('op')
                     except Exception as e:
                         logger.exception(e)
-                        raise
-                else:
-                    logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
+                        put(error_message(e, status='scheduler-error'))
 
-                if op == 'close':
+                    if op == 'close-stream':
+                        breakout = True
+                        break
+                    elif op == 'close':
+                        breakout = True
+                        self.close()
+                        break
+                    elif op in self.compute_handlers:
+                        try:
+                            result = self.compute_handlers[op](**msg)
+                            if isinstance(result, gen.Future):
+                                yield result
+                        except Exception as e:
+                            logger.exception(e)
+                            raise
+                    else:
+                        logger.warn("Bad message: op=%s, %s", op, msg, exc_info=True)
+
+                    if op == 'close':
+                        breakout = True
+                        break
+                if breakout:
                     break
 
             self.remove_client(client=client)
             logger.debug('Finished scheduling coroutine')
 
+    def send_task_to_worker(self, ident, key):
+        msg = {'op': 'compute-task',
+               'key': key,
+               'who_has': {dep: list(self.who_has[dep])
+                           for dep in self.dependencies[key]}}
+        if isinstance(self.tasks[key], dict):
+            msg.update(self.tasks[key])
+        else:
+            msg['task'] = self.tasks[key]
+
+        self.worker_streams[ident].send(msg)
+
     @gen.coroutine
     def worker_stream(self, ident):
-        logger.info("Starting worker compute stream, %s", ident)
         yield gen.sleep(0)
         ip, port = coerce_to_address(ident, out=tuple)
         stream = yield connect(ip, port)
         yield write(stream, {'op': 'compute-stream'})
+        self.worker_streams[ident].start(stream)
+        logger.info("Starting worker compute stream, %s", ident)
 
-        @gen.coroutine
-        def send():
+        try:
             while True:
-                try:
-                    msg = yield self.worker_queues[ident].get()
-                except KeyError:
-                    break
+                msgs = yield read(stream)
+                if not isinstance(msgs, list):
+                    msgs = [msgs]
 
-                yield write(stream, msg)
-
-                if msg['op'] == 'close':
-                    logger.debug("Worker coroutine close message %s, %s",
+                for msg in msgs:
+                    logger.debug("Compute response from worker %s, %s",
                                  ident, msg)
-                    if msg.get('report', True):
-                        self.put({'op': 'worker-finished',
-                                  'worker': ident})
-                    break
 
-        @gen.coroutine
-        def recv():
-            while True:
-                msg = yield read(stream)
+                    if msg == 'OK':  # from close
+                        break
 
-                logger.debug("Compute response from worker %s, %s",
-                             ident, msg)
-
-                if msg == 'OK':  # from close
-                    break
-
-                if msg['status'] == 'error':
-                    self.mark_task_erred(msg['key'], ident, msg['exception'],
-                                                            msg['traceback'])
-                elif msg['status'] == 'missing-data':
-                    self.mark_missing_data(msg['keys'], key=msg['key'],
-                                           worker=ident)
-                elif msg['status'] == 'OK':
-                    self.mark_task_finished(msg['key'], ident, msg['nbytes'],
-                                            type=msg.get('type'))
-                else:
-                    logger.warn("Unknown message type, %s, %s", msg['status'],
-                            msg)
+                    if msg['status'] == 'error':
+                        self.mark_task_erred(msg['key'], ident, msg['exception'],
+                                                                msg['traceback'])
+                    elif msg['status'] == 'missing-data':
+                        self.mark_missing_data(msg['keys'], key=msg['key'],
+                                               worker=ident)
+                    elif msg['status'] == 'OK':
+                        self.mark_task_finished(msg['key'], ident, msg['nbytes'],
+                                                type=msg.get('type'))
+                    else:
+                        logger.warn("Unknown message type, %s, %s", msg['status'],
+                                msg)
 
                 self.ensure_occupied(ident)
-        try:
-            yield All([send(), recv()])
-            stream.close()
-        except (StreamClosedError, IOError, OSError):
+        except (StreamClosedError, IOError, OSError) as e:
             logger.info("Worker failed from closed stream: %s", ident)
         finally:
+            stream.close()
             self.remove_worker(address=ident)
 
     @gen.coroutine
@@ -1220,7 +1212,7 @@ class Scheduler(Server):
                 set(self.stacks) == \
                 set(self.processing) == \
                 set(self.worker_info) == \
-                set(self.worker_queues)):
+                set(self.worker_streams)):
             raise ValueError("Workers not the same in all collections")
         for w, n in self.ncores.items():
             assert (len(self.processing[w]) < n) == (w in self.idle)

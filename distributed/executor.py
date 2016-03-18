@@ -29,7 +29,7 @@ from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.queues import Queue
 
-from .batched import BatchedStream
+from .batched import BatchedSend
 from .client import (WrappedKey, unpack_remotedata, pack_data)
 from .compatibility import Queue as pyQueue, Empty, isqueue
 from .core import (read, write, connect, rpc, coerce_to_rpc, dumps,
@@ -299,11 +299,12 @@ class Executor(object):
             raise IOError("Could not connect to %s:%d" % (r.ip, r.port))
         if ident['type'] == 'Scheduler':
             self.scheduler = r
-            self.scheduler_stream = yield connect(r.ip, r.port)
-            write(self.scheduler_stream, {'op': 'register-client',
-                                          'client': self.id,
-                                          'batched': True})
-            self.scheduler_stream = BatchedStream(self.scheduler_stream, 10)
+            stream = yield connect(r.ip, r.port)
+            yield write(stream, {'op': 'register-client',
+                                 'client': self.id})
+            bstream = BatchedSend(interval=10)
+            bstream.start(stream)
+            self.scheduler_stream = bstream
         else:
             raise ValueError("Unknown Type")
 
@@ -347,54 +348,61 @@ class Executor(object):
         with log_errors():
             while True:
                 try:
-                    msg = yield self.scheduler_stream.recv()
+                    msgs = yield read(self.scheduler_stream.stream)
                 except StreamClosedError:
                     logger.debug("Stream closed to scheduler", exc_info=True)
                     break
+                if not isinstance(msgs, list):
+                    msgs = [msgs]
 
-                logger.debug("Executor receives message %s", msg)
+                breakout = False
+                for msg in msgs:
+                    logger.debug("Executor receives message %s", msg)
 
-                if msg['op'] == 'stream-start':
-                    start_event.set()
-                elif msg['op'] == 'close':
+                    if msg['op'] == 'stream-start':
+                        start_event.set()
+                    elif msg['op'] == 'close':
+                        breakout = True
+                        break
+                    elif msg['op'] == 'key-in-memory':
+                        if msg['key'] in self.futures:
+                            self.futures[msg['key']]['status'] = 'finished'
+                            self.futures[msg['key']]['event'].set()
+                            if (msg.get('type') and
+                                not self.futures[msg['key']].get('type')):
+                                self.futures[msg['key']]['type'] = cloudpickle.loads(msg['type'])
+                    elif msg['op'] == 'lost-data':
+                        if msg['key'] in self.futures:
+                            self.futures[msg['key']]['status'] = 'lost'
+                            self.futures[msg['key']]['event'].clear()
+                    elif msg['op'] == 'cancelled-key':
+                        if msg['key'] in self.futures:
+                            self.futures[msg['key']]['event'].set()
+                            del self.futures[msg['key']]
+                    elif msg['op'] == 'task-erred':
+                        if msg['key'] in self.futures:
+                            self.futures[msg['key']]['status'] = 'error'
+                            try:
+                                self.futures[msg['key']]['exception'] = cloudpickle.loads(msg['exception'])
+                            except TypeError:
+                                self.futures[msg['key']]['exception'] = \
+                                    Exception('Undeserializable exception', msg['exception'])
+                            self.futures[msg['key']]['traceback'] = (cloudpickle.loads(msg['traceback'])
+                                                                     if msg['traceback'] else None)
+                            self.futures[msg['key']]['event'].set()
+                    elif msg['op'] == 'restart':
+                        logger.info("Receive restart signal from scheduler")
+                        events = [d['event'] for d in self.futures.values()]
+                        self.futures.clear()
+                        for e in events:
+                            e.set()
+                        with ignoring(AttributeError):
+                            self._restart_event.set()
+                    elif 'error' in msg['op']:
+                        logger.warn("Scheduler exception:")
+                        logger.exception(msg['exception'])
+                if breakout:
                     break
-                elif msg['op'] == 'key-in-memory':
-                    if msg['key'] in self.futures:
-                        self.futures[msg['key']]['status'] = 'finished'
-                        self.futures[msg['key']]['event'].set()
-                        if (msg.get('type') and
-                            not self.futures[msg['key']].get('type')):
-                            self.futures[msg['key']]['type'] = cloudpickle.loads(msg['type'])
-                elif msg['op'] == 'lost-data':
-                    if msg['key'] in self.futures:
-                        self.futures[msg['key']]['status'] = 'lost'
-                        self.futures[msg['key']]['event'].clear()
-                elif msg['op'] == 'cancelled-key':
-                    if msg['key'] in self.futures:
-                        self.futures[msg['key']]['event'].set()
-                        del self.futures[msg['key']]
-                elif msg['op'] == 'task-erred':
-                    if msg['key'] in self.futures:
-                        self.futures[msg['key']]['status'] = 'error'
-                        try:
-                            self.futures[msg['key']]['exception'] = cloudpickle.loads(msg['exception'])
-                        except TypeError:
-                            self.futures[msg['key']]['exception'] = \
-                                Exception('Undeserializable exception', msg['exception'])
-                        self.futures[msg['key']]['traceback'] = (cloudpickle.loads(msg['traceback'])
-                                                                 if msg['traceback'] else None)
-                        self.futures[msg['key']]['event'].set()
-                elif msg['op'] == 'restart':
-                    logger.info("Receive restart signal from scheduler")
-                    events = [d['event'] for d in self.futures.values()]
-                    self.futures.clear()
-                    for e in events:
-                        e.set()
-                    with ignoring(AttributeError):
-                        self._restart_event.set()
-                elif 'error' in msg['op']:
-                    logger.warn("Scheduler exception:")
-                    logger.exception(msg['exception'])
 
     @gen.coroutine
     def _shutdown(self, fast=False):
@@ -407,16 +415,16 @@ class Executor(object):
                 yield [gen.with_timeout(timedelta(seconds=2), f)
                         for f in self.coroutines]
         with ignoring(AttributeError):
-            self.scheduler_stream.close()
+            yield self.scheduler_stream.close(ignore_closed=True)
         with ignoring(AttributeError):
             self.scheduler.close_streams()
 
     def shutdown(self, timeout=10):
         """ Send shutdown signal and wait until scheduler terminates """
         with ignoring(AttributeError):
-            self.scheduler_stream.send({'op': 'close-stream'})
-            sync(self.loop, self.scheduler_stream.flush)
-            self.scheduler_stream.close()
+            self.loop.add_callback(self.scheduler_stream.send,
+                                   {'op': 'close-stream'})
+            sync(self.loop, self.scheduler_stream.close)
         with ignoring(AttributeError):
             self.scheduler.close_streams()
         if self._should_close_loop:

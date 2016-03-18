@@ -11,6 +11,7 @@ from toolz import pluck
 from tornado import gen
 from tornado.ioloop import TimeoutError
 
+from distributed.batched import BatchedStream
 from distributed.center import Center
 from distributed.core import rpc, dumps, loads, connect, read, write
 from distributed.sizeof import sizeof
@@ -335,11 +336,13 @@ def test_compute_stream(s, a, b):
     yield write(stream, {'op': 'compute-stream'})
     msgs = [{'op': 'compute-task', 'function': dumps(inc), 'args': dumps((i,)), 'key': 'x-%d' % i}
             for i in range(10)]
+
+    bstream = BatchedStream(stream, 0)
     for msg in msgs[:5]:
         yield write(stream, msg)
 
     for i in range(5):
-        msg = yield read(stream)
+        msg = yield read(bstream)
         assert msg['status'] == 'OK'
         assert msg['key'][0] == 'x'
 
@@ -347,7 +350,7 @@ def test_compute_stream(s, a, b):
         yield write(stream, msg)
 
     for i in range(5):
-        msg = yield read(stream)
+        msg = yield read(bstream)
         assert msg['status'] == 'OK'
         assert msg['key'][0] == 'x'
 

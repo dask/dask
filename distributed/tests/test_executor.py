@@ -1714,6 +1714,8 @@ def test_broken_worker_during_computation(e, s, a, b):
     result = yield e._gather(L)
     assert isinstance(result[0], int)
 
+    yield n._close()
+
 
 @gen_cluster()
 def test_cleanup_after_broken_executor_connection(s, a, b):
@@ -2416,3 +2418,15 @@ def test_receive_lost_key(e, s, a, b):
     while x.status == 'finished':
         assert time() < start + 5
         yield gen.sleep(0.01)
+
+
+@gen_cluster(executor=True, ncores=[])
+def test_add_worker_after_tasks(e, s):
+    futures = e.map(inc, range(10))
+
+    n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+    n.start(0)
+
+    result = yield e._gather(futures)
+
+    yield n._close()
