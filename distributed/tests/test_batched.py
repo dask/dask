@@ -1,5 +1,7 @@
 
 from contextlib import contextmanager
+from datetime import timedelta
+import random
 from time import time
 
 import pytest
@@ -10,8 +12,8 @@ from tornado.tcpclient import TCPClient
 from tornado.iostream import StreamClosedError
 
 from distributed.core import read, write
-from distributed.utils import sync
-from distributed.utils_test import gen_test
+from distributed.utils import sync, All
+from distributed.utils_test import gen_test, slow
 from distributed.batched import BatchedStream, BatchedSend
 
 
@@ -202,3 +204,35 @@ def test_close_closed():
         stream.close()  # external closing
 
         yield b.close(ignore_closed=True)
+
+
+@slow
+@gen_test(timeout=50)
+def test_stress():
+    with echo_server() as e:
+        client = TCPClient()
+        stream = yield client.connect('127.0.0.1', e.port)
+        L = []
+
+        @gen.coroutine
+        def send():
+            b = BatchedSend(interval=3)
+            b.start(stream)
+            for i in range(0, 10000, 2):
+                b.send(i)
+                b.send(i + 1)
+                yield gen.sleep(0.00001 * random.randint(1, 10))
+
+        @gen.coroutine
+        def recv():
+            while True:
+                result = yield gen.with_timeout(timedelta(seconds=1), read(stream))
+                print(result)
+                L.extend(result)
+                if result[-1] == 9999:
+                    break
+
+        yield All([send(), recv()])
+
+        assert L == list(range(0, 10000, 1))
+        stream.close()
