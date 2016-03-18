@@ -67,3 +67,4 @@ Contents
    journey
    plugins
    related-work
+   dec2
