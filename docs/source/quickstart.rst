@@ -25,7 +25,8 @@ command, providing hostnames or IP addresses::
 
    $ dcluster 127.0.0.1 127.0.0.1 127.0.0.1 127.0.0.1
 
-See :doc:`setup <setup>` for advanced use.
+See :doc:`setup <setup>` for advanced use or :doc:`EC2 quickstart <dec2>` for
+instructions on how to deploy on Amazon's Elastic Compute Cloud.
 
 Launch Executor
 ---------------

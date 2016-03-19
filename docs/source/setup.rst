@@ -5,36 +5,11 @@ A ``distributed`` network consists of one ``Scheduler`` node and several
 ``Worker`` nodes.  One can set these up in a variety of ways
 
 
-``dcluster``
-------------
-
-The convenience script ``dcluster`` opens several ssh connections to your
-target computers and initializes the network accordingly.  You can give it a
-list of hostnames or IP addresses::
-
-   $ dcluster 192.168.0.1 192.168.0.2 192.168.0.3 192.168.0.4
-
-Or you can use normal UNIX grouping::
-
-   $ dcluster 192.168.0.{1,2,3,4}
-
-Or you can specify a hostfile that includes a list of hosts::
-
-   $ cat hostfile.txt
-   192.168.0.1
-   192.168.0.2
-   192.168.0.3
-   192.168.0.4
-
-   $ dcluster --hostfile hostfile.txt
-
-
 ``dscheduler`` and ``dworker``
 ---------------------------
 
-Alternatively you can launch the ``dscheduler`` and ``dworker`` processes in
-some other way either by manually SSHing into remote nodes or by using a
-deployment system like SunGrid Engine.
+We launch the ``dscheduler`` executable in one process and the ``dworker``
+executable in several processes, possibly on different machines.
 
 Launch ``dscheduler`` on one node::
 
@@ -55,6 +30,39 @@ node that hosts ``dscheduler``::
    $ dworker 192.168.0.1:8786
    Start worker at:            192.168.0.4:12347
    Registered with center at:  192.168.0.1:8786
+
+There are various mechanisms to deploy these executables on a cluster, ranging
+from manualy SSH-ing into all of the nodes to more automated systems like
+SGE/SLURM/Torque or Yarn/Mesos.
+
+EC2 Easy Startup Script
+-----------------------
+
+See the :doc:`EC2 quickstart <dec2>` for information on the ``dec2`` easy setup
+script to launch a canned cluster on EC2.
+
+``dcluster``
+------------
+
+The convenience script ``dcluster`` opens several SSH connections to your
+target computers and initializes the network accordingly.  You can give it a
+list of hostnames or IP addresses::
+
+   $ dcluster 192.168.0.1 192.168.0.2 192.168.0.3 192.168.0.4
+
+Or you can use normal UNIX grouping::
+
+   $ dcluster 192.168.0.{1,2,3,4}
+
+Or you can specify a hostfile that includes a list of hosts::
+
+   $ cat hostfile.txt
+   192.168.0.1
+   192.168.0.2
+   192.168.0.3
+   192.168.0.4
+
+   $ dcluster --hostfile hostfile.txt
 
 
 ``Scheduler`` and ``Worker`` objects
