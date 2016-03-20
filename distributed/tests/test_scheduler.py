@@ -3,12 +3,13 @@ from __future__ import print_function, division, absolute_import
 import cloudpickle
 from collections import defaultdict, deque
 from copy import deepcopy
+from datetime import datetime
 from operator import add
 from time import time, sleep
 
 import dask
 from dask.core import get_deps
-from toolz import merge, concat, valmap
+from toolz import merge, concat, valmap, first
 from tornado.queues import Queue
 from tornado.iostream import StreamClosedError
 from tornado.gen import TimeoutError
@@ -511,6 +512,9 @@ def test_add_worker(s, a, b):
 
     s.validate()
 
+    assert w.ip in s.host_info
+    assert s.host_info[w.ip]['ports'] == set(map(str, [a.port, b.port, w.port]))
+
 
 @gen_cluster()
 def test_feed(s, a, b):
@@ -870,3 +874,48 @@ def test_update_graph_culls(s, a, b):
                    client='client')
     assert 'z' not in s.tasks
     assert 'z' not in s.dependencies
+
+
+@gen_cluster(ncores=[('127.0.0.1', 2), ('127.0.0.2', 2), ('127.0.0.1', 1)])
+def test_host_health(s, a, b, c):
+    start = time()
+    while any('last-seen' not in v for v in s.host_info.values()):
+        yield gen.sleep(0.1)
+        assert time() < start + 5
+
+    for w in [a, b, c]:
+        assert w.ip in s.host_info
+        assert 0 < s.host_info[w.ip]['latency'] < 1
+        assert 0 <= s.host_info[w.ip]['cpu'] <= 100
+        assert 0 < s.host_info[w.ip]['total-memory']
+        assert 0 < s.host_info[w.ip]['available-memory'] < s.host_info[w.ip]['total-memory']
+
+        assert isinstance(s.host_info[w.ip]['last-seen'], datetime)
+        assert s.host_info[w.ip]['heartbeat-port'] in s.host_info[w.ip]['ports']
+
+    assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
+    assert s.host_info['127.0.0.1']['cores'] == 3
+    assert s.host_info['127.0.0.1']['ports'] == {str(a.port), str(c.port)}
+    assert s.host_info['127.0.0.2']['cores'] == 2
+    assert s.host_info['127.0.0.2']['ports'] == {str(b.port)}
+
+    s.remove_worker(address=a.address)
+
+    assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
+    assert s.host_info['127.0.0.1']['cores'] == 1
+    assert s.host_info['127.0.0.1']['ports'] == {str(c.port)}
+    assert s.host_info[c.ip]['heartbeat-port'] == str(c.port)
+    assert s.host_info['127.0.0.2']['cores'] == 2
+    assert s.host_info['127.0.0.2']['ports'] == {str(b.port)}
+    assert s.host_info[b.ip]['heartbeat-port'] == str(b.port)
+
+    s.remove_worker(address=b.address)
+
+    assert set(s.host_info) == {'127.0.0.1'}
+    assert s.host_info['127.0.0.1']['cores'] == 1
+    assert s.host_info['127.0.0.1']['ports'] == {str(c.port)}
+    assert s.host_info[c.ip]['heartbeat-port'] == str(c.port)
+
+    s.remove_worker(address=c.address)
+
+    assert not s.host_info

@@ -1,12 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 import logging
 from math import ceil
 import socket
 from time import time
+from timeit import default_timer
 import uuid
 
 from toolz import (frequencies, memoize, concat, identity, valmap, keymap,
@@ -89,6 +90,8 @@ class Scheduler(Server):
         Other services running on this scheduler, like HTTP
     * **worker_info:** ``{worker: {str: data}}``:
         Information about each worker
+    * **host_info:** ``{hostname: dict}``:
+        Information about each worker host
     * **who_has:** ``{key: {worker}}``:
         Where each key lives.  The current state of distributed memory.
     * **has_what:** ``{worker: {key}}``:
@@ -142,7 +145,7 @@ class Scheduler(Server):
     def __init__(self, center=None, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
-            ip=None, services=None, **kwargs):
+            ip=None, services=None, heartbeat_interval=1000, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
         self.worker_streams = dict()
@@ -151,6 +154,7 @@ class Scheduler(Server):
         self.coroutines = []
         self.ip = ip or get_ip()
         self.delete_interval = delete_interval
+        self.heartbeat_interval = heartbeat_interval
 
         self.tasks = dict()
         self.dependencies = dict()
@@ -162,6 +166,7 @@ class Scheduler(Server):
         self.nbytes = dict()
         self.ncores = dict()
         self.worker_info = defaultdict(dict)
+        self.host_info = defaultdict(dict)
         self.aliases = dict()
         self.processing = dict()
         self.restrictions = dict()
@@ -614,6 +619,25 @@ class Scheduler(Server):
         logger.debug('\n\nwaiting: %s\n\nstacks: %s\n\nprocessing: %s\n\n',
                      self.waiting, self.stacks, self.processing)
 
+    def _restart_heartbeat(self, host):
+        """ Restart heartbeat periodic callback from among active ports """
+        d = self.host_info[host]
+
+        if 'heartbeat-port' in d and d['heartbeat-port'] in d['ports']:
+            return
+
+        if 'heartbeat' in d:
+            d['heartbeat'].stop()
+
+        port = first(d['ports'])
+
+        pc = PeriodicCallback(callback=lambda: self.heartbeat(host),
+                              callback_time=self.heartbeat_interval,
+                              io_loop=self.loop)
+        self.loop.add_callback(pc.start)
+        d['heartbeat'] = pc
+        d['heartbeat-port'] = port
+
     def remove_worker(self, stream=None, address=None):
         """ Mark that a worker no longer seems responsive
 
@@ -627,6 +651,16 @@ class Scheduler(Server):
             return
         with ignoring(AttributeError):
             self.worker_streams[address].stream.close()
+        host, port = self.coerce_address(address).split(':')
+
+        self.host_info[host]['cores'] -= self.ncores[address]
+        self.host_info[host]['ports'].remove(port)
+
+        if not self.host_info[host]['ports']:
+            del self.host_info[host]
+        else:
+            self._restart_heartbeat(host)
+
         del self.worker_streams[address]
         del self.ncores[address]
         del self.aliases[self.worker_info[address]['name']]
@@ -664,6 +698,17 @@ class Scheduler(Server):
         name = name or address
         if name in self.aliases:
             return 'name taken, %s' % name
+
+        if coerce_address:
+            host, port = self.coerce_address(address).split(':')
+            if host not in self.host_info:
+                self.host_info[host] = dict()
+                self.host_info[host]['ports'] = set()
+                self.host_info[host]['cores'] = 0
+
+            self.host_info[host]['ports'].add(port)
+            self.host_info[host]['cores'] += ncores
+            self._restart_heartbeat(host)
 
         self.ncores[address] = ncores
 
@@ -1118,6 +1163,27 @@ class Scheduler(Server):
                 if key in self.waiting_data:
                     del self.waiting_data[key]
                 self.released.add(key)
+
+    @gen.coroutine
+    def heartbeat(self, host):
+        port = self.host_info[host]['heartbeat-port']
+        start = default_timer()
+
+        try:
+            d = yield gen.with_timeout(timedelta(seconds=0.1),
+                                       self.rpc(ip=host, port=port).health())
+        except gen.TimeoutError:
+            logger.warn("Heartbeat failed for %s", address)
+        except Exception as e:
+            logger.exception(e)
+
+        end = default_timer()
+        last_seen = datetime.now()
+
+        d['latency'] = end - start
+        d['last-seen'] = last_seen
+
+        self.host_info[host].update(d)
 
     @gen.coroutine
     def scatter(self, stream=None, data=None, workers=None, client=None,
