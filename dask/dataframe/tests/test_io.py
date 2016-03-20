@@ -690,8 +690,24 @@ def test_read_hdf():
               dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
               pd.read_hdf(fn, '/data', start=1, stop=3))
 
-        assert sorted(dd.read_hdf(fn, '/data').dask) == \
-               sorted(dd.read_hdf(fn, '/data').dask)
+        assert (sorted(dd.read_hdf(fn, '/data').dask) ==
+                sorted(dd.read_hdf(fn, '/data').dask))
+
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+        a = dd.read_hdf(fn, '/data', chunksize=2, index=True)
+        assert a.npartitions == 2
+        assert a._known_dtype
+        assert a.divisions == (1., 3., 4.)
+
+        tm.assert_frame_equal(a.compute(), df)
+
+        a = dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3, index=True)
+        b = pd.read_hdf(fn, '/data', start=1, stop=3)
+
+        assert a.divisions == (2., 4.)
+
+        tm.assert_frame_equal(a.compute(), b)
 
 
 def test_to_csv():
