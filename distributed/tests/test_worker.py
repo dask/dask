@@ -35,6 +35,12 @@ def test_identity():
     assert ident['center'] == ('127.0.0.1', 8019)
 
 
+def test_health():
+    w = Worker('127.0.0.1', 8019)
+    d = w.health()
+    assert isinstance(d, dict)
+
+
 def test_worker(loop):
     @gen.coroutine
     def f(c, a, b):

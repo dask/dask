@@ -142,6 +142,7 @@ class Worker(Server):
                     'delete_data': self.delete_data,
                     'terminate': self.terminate,
                     'ping': pingpong,
+                    'health': self.health,
                     'upload_file': self.upload_file}
 
         super(Worker, self).__init__(handlers, **kwargs)
@@ -484,6 +485,17 @@ class Worker(Server):
                 logger.exception(e)
                 return {'status': 'error', 'exception': dumps(e)}
         return {'status': 'OK', 'nbytes': len(data)}
+
+    def health(self, stream=None):
+        """ Information about worker """
+        try:
+            import psutil
+            mem = psutil.virtual_memory()
+            return {'cpu': psutil.cpu_percent(),
+                    'total-memory': mem.total,
+                    'available-memory': mem.available}
+        except:
+            return {}
 
 
 job_counter = [0]
