@@ -30,13 +30,15 @@ class Status_Monitor(object):
     interval: Number, optional
         Interval between updates.  Defaults to 1s
     """
-    def __init__(self, addr=None, interval=500.00):
+    def __init__(self, addr=None, interval=1000.00):
         if addr is None:
             scheduler = default_executor().scheduler
             if isinstance(scheduler, rpc):
                 addr = (scheduler.ip, scheduler.port) # doesn't work
             elif isinstance(scheduler, Scheduler):
                 addr = ('127.0.0.1', scheduler.services['http'].port)
+        self.addr = addr
+        self.interval = interval
 
         self.display_notebook = False
 
@@ -60,9 +62,11 @@ class Status_Monitor(object):
                                     row_headers=False, width=600, height=60)
 
         ts_props = ['time','workers', 'nbytes']
+        # self.ts_source = ColumnDataSource({k: [[0,1],[0,1]] for k in ts_props})
         self.ts_source = ColumnDataSource({k: [] for k in ts_props})
         self.plot = figure(height=400, width=600, x_axis_type='datetime')
-        self.plot.multi_line(xs='time', ys='nbytes', color=Spectral11,
+        self.plot.multi_line(xs='time', ys='nbytes',
+                             color=Spectral11,
                              source=self.ts_source)
 
         # For managing monitor state
@@ -75,17 +79,17 @@ class Status_Monitor(object):
         self.client = AsyncHTTPClient()
 
         loop = IOLoop.current()
-        cb = lambda: self.update(*addr)
-        loop.add_callback(cb)
-        pc = PeriodicCallback(cb, interval, io_loop=loop)
+        loop.add_callback(self.update)
+        pc = PeriodicCallback(self.update, self.interval, io_loop=loop)
         pc.start()
 
     def _ipython_display_(self, **kwargs):
         show(self.output)
+        # show(vplot(self.task_table, self.worker_table))
         self.display_notebook = True
 
     @gen.coroutine
-    def update(self, ip, port):
+    def update(self):
         """ Query the Scheduler, update the figure
 
         This opens a connection to the scheduler, sends it a function to run
@@ -93,7 +97,7 @@ class Status_Monitor(object):
         the bokeh figure
         """
 
-        response = yield self.client.fetch('http://%s:%d/status.json' % (ip, port))
+        response = yield self.client.fetch('http://%s:%d/status.json' % self.addr)
         d = json.loads(response.body.decode())
 
         self.wkr_source.data['time'] = [time.time()]
