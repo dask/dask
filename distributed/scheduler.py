@@ -708,6 +708,7 @@ class Scheduler(Server):
 
             self.host_info[host]['ports'].add(port)
             self.host_info[host]['cores'] += ncores
+            self.loop.add_callback(self.heartbeat, host)
             self._restart_heartbeat(host)
 
         self.ncores[address] = ncores
