@@ -1,29 +1,28 @@
 import json
 
 from distributed.utils_test import gen_cluster, div
-from distributed.diagnostics.scheduler import status, workers
+from distributed.diagnostics.scheduler import tasks, workers
 from distributed.executor import _wait
 
 @gen_cluster(executor=True)
-def test_status(e, s, a, b):
-    d = status(s)
+def test_tasks(e, s, a, b):
+    d = tasks(s)
 
     assert d['failed'] == 0
     assert d['in-memory'] == 0
     assert d['ready'] == 0
-    assert d['tasks'] == 0
+    assert d['total'] == 0
     assert d['waiting'] == 0
 
     L = e.map(div, range(10), range(10))
     yield _wait(L)
 
-    d = status(s)
+    d = tasks(s)
     assert d['failed'] == 1
     assert d['in-memory'] == 9
     assert d['ready'] == 0
-    assert d['tasks'] == 10
+    assert d['total'] == 10
     assert d['waiting'] == 0
-    assert all(v > 0 for v in d['bytes'].values())
 
 
 @gen_cluster(executor=True)

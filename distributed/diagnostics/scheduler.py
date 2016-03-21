@@ -9,16 +9,12 @@ from toolz import countby, concat, dissoc
 from ..utils import key_split
 
 
-def status(s):
+def tasks(s):
     """ Task and worker status of scheduler """
-    workers = list(s.ncores)
-
     processing = sum(map(len, s.processing.values()))
 
-    return {'address': s.address,
-            'ncores': s.ncores,
-            'processing': processing,
-            'tasks': len(s.tasks),
+    return {'processing': processing,
+            'total': len(s.tasks),
             'in-memory': len(s.who_has),
             'ready': len(s.ready)
                    + sum(map(len, s.stacks.values())),

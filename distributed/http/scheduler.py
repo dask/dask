@@ -72,11 +72,11 @@ class MemoryLoadByKey(RequestHandler):
         self.write(out)
 
 
-class Status(RequestHandler):
+class Tasks(RequestHandler):
     """ Lots of information about all the workers """
     def get(self):
-        from ..diagnostics.scheduler import status
-        self.write(status(self.server))
+        from ..diagnostics.scheduler import tasks
+        self.write(tasks(self.server))
 
 
 class Workers(RequestHandler):
@@ -93,9 +93,8 @@ def HTTPScheduler(scheduler):
         (r'/processing.json', Processing, {'server': scheduler}),
         (r'/proxy/([\w.-]+):(\d+)/(.+)', Proxy),
         (r'/broadcast/(.+)', Broadcast, {'server': scheduler}),
-        (r'/status.json', Status, {'server': scheduler}),
+        (r'/tasks.json', Tasks, {'server': scheduler}),
         (r'/workers.json', Workers, {'server': scheduler}),
-        (r'/', Status, {'server': scheduler}),
         (r'/memory-load.json', MemoryLoad, {'server': scheduler}),
         (r'/memory-load-by-key.json', MemoryLoadByKey, {'server': scheduler}),
         ]))

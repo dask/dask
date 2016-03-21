@@ -46,13 +46,7 @@ class Status_Monitor(object):
             output_notebook()
             assert curstate().notebook
 
-        task_props = ['waiting', 'ready', 'failed', 'in-progress',
-                      'in-memory', 'total']
-        self.task_source = ColumnDataSource({k: [] for k in task_props})
-
-        task_columns = [TableColumn(field=prop, title=prop) for prop in task_props]
-        self.task_table = DataTable(source=self.task_source, columns=task_columns,
-                                    row_headers=False, width=600, height=60)
+        self.task_source, self.task_table = task_table_plot()
 
         ts_props = ['time','workers', 'nbytes']
         # self.ts_source = ColumnDataSource({k: [[0,1],[0,1]] for k in ts_props})
@@ -78,7 +72,6 @@ class Status_Monitor(object):
 
     def _ipython_display_(self, **kwargs):
         show(self.output)
-        # show(vplot(self.task_table, self.worker_table))
         self.display_notebook = True
 
     @gen.coroutine
@@ -90,15 +83,10 @@ class Status_Monitor(object):
         the bokeh figure
         """
 
-        response = yield self.client.fetch('http://%s:%d/status.json' % self.addr)
+        response = yield self.client.fetch('http://%s:%d/tasks.json' % self.addr)
         d = json.loads(response.body.decode())
 
-        self.task_source.data['waiting'] = [d['waiting']]
-        self.task_source.data['ready'] = [d['ready']]
-        self.task_source.data['failed'] = [d['failed']]
-        self.task_source.data['in-progress'] = [sum(v for vv in d['processing'].values() for v in vv.values())]
-        self.task_source.data['in-memory'] = [d['in-memory']]
-        self.task_source.data['total'] = [d['tasks']]
+        task_table_update(self.task_source, d)
 
         for k,v in d['bytes'].items():
             self.nbytes[k].append(v)
@@ -112,10 +100,25 @@ class Status_Monitor(object):
             push_notebook()
 
 
+def task_table_plot(row_headers=False, width=600, height=100):
+    names = ['waiting', 'ready', 'failed', 'processing', 'in-memory', 'total']
+    source = ColumnDataSource({k: [] for k in names})
+
+    columns = [TableColumn(field=name, title=name) for name in names]
+    table = DataTable(source=source, columns=columns,
+                      row_headers=row_headers, width=width, height=height)
+    return source, table
+
+
+def task_table_update(source, d):
+    d = {k: [v] for k, v in d.items()}
+    source.data = d
+
+
 def worker_table_plot(width=600, height=100, **kwargs):
     """ Column data source and plot for host table """
-    names = ['cpu', 'available-memory', 'cores', 'processes', 'processing',
-            'latency', 'last-seen']
+    names = ['workers', 'cpu', 'available-memory', 'cores', 'processes',
+             'processing', 'latency', 'last-seen']
     source = ColumnDataSource({k: [] for k in names})
 
     columns = [TableColumn(field=name, title=name) for name in names]
