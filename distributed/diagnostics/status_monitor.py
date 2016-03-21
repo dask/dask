@@ -46,13 +46,6 @@ class Status_Monitor(object):
             output_notebook()
             assert curstate().notebook
 
-        wkr_props = ['workers', 'ncores', 'nbytes', 'processing']
-        self.wkr_source = ColumnDataSource({k: [] for k in wkr_props})
-
-        wkr_columns = [TableColumn(field=prop, title=prop) for prop in wkr_props]
-        self.worker_table = DataTable(source=self.wkr_source, columns=wkr_columns,
-                                      width=600, height=100)
-
         task_props = ['waiting', 'ready', 'failed', 'in-progress',
                       'in-memory', 'total']
         self.task_source = ColumnDataSource({k: [] for k in task_props})
@@ -74,7 +67,7 @@ class Status_Monitor(object):
         self.times = []
         self.start = time.time()
 
-        self.output = vplot(self.task_table, self.worker_table, self.plot)
+        self.output = vplot(self.task_table, self.plot)
 
         self.client = AsyncHTTPClient()
 
@@ -100,15 +93,6 @@ class Status_Monitor(object):
         response = yield self.client.fetch('http://%s:%d/status.json' % self.addr)
         d = json.loads(response.body.decode())
 
-        self.wkr_source.data['time'] = [time.time()]
-        self.wkr_source.data['workers'] = [k for k, v in sorted(d['ncores'].items(),
-                                           key=lambda x: x[0], reverse=True)]
-        self.wkr_source.data['ncores'] = [v for k, v in sorted(d['ncores'].items(),
-                                          key=lambda x: x[0], reverse=True)]
-        self.wkr_source.data['nbytes'] = [v for k, v in sorted(d['bytes'].items(),
-                                          key=lambda x: x[0], reverse=True)]
-        self.wkr_source.data['processing'] = [list(v.keys()) for v in d['processing'].values()]
-
         self.task_source.data['waiting'] = [d['waiting']]
         self.task_source.data['ready'] = [d['ready']]
         self.task_source.data['failed'] = [d['failed']]
@@ -126,3 +110,30 @@ class Status_Monitor(object):
 
         if self.display_notebook:
             push_notebook()
+
+
+def worker_table_plot(width=600, height=100, **kwargs):
+    """ Column data source and plot for host table """
+    names = ['cpu', 'available-memory', 'cores', 'processes', 'processing',
+            'latency', 'last-seen']
+    source = ColumnDataSource({k: [] for k in names})
+
+    columns = [TableColumn(field=name, title=name) for name in names]
+    table = DataTable(source=source, columns=columns, width=width,
+                      height=height, **kwargs)
+
+    return source, table
+
+
+def worker_table_update(source, d):
+    """ Update host table source """
+    source.data['time'] = [time.time()]
+    workers = sorted(d, reverse=True)
+
+    source.data['workers'] = workers
+    for name in ['cores', 'cpu', 'available-memory', 'latency', 'last-seen',
+                 'total-memory']:
+        source.data[name] = [d[w][name] for w in workers]
+
+    source.data['processing'] = [sorted(d[w]['processing']) for w in workers]
+    source.data['processes'] = [len(d[w]['ports']) for w in workers]
