@@ -79,6 +79,13 @@ class Status(RequestHandler):
         self.write(status(self.server))
 
 
+class Workers(RequestHandler):
+    """ Lots of information about all the workers """
+    def get(self):
+        from ..diagnostics.scheduler import workers
+        self.write(workers(self.server))
+
+
 def HTTPScheduler(scheduler):
     application = MyApp(web.Application([
         (r'/info.json', Info, {'server': scheduler}),
@@ -87,6 +94,7 @@ def HTTPScheduler(scheduler):
         (r'/proxy/([\w.-]+):(\d+)/(.+)', Proxy),
         (r'/broadcast/(.+)', Broadcast, {'server': scheduler}),
         (r'/status.json', Status, {'server': scheduler}),
+        (r'/workers.json', Workers, {'server': scheduler}),
         (r'/', Status, {'server': scheduler}),
         (r'/memory-load.json', MemoryLoad, {'server': scheduler}),
         (r'/memory-load-by-key.json', MemoryLoadByKey, {'server': scheduler}),
