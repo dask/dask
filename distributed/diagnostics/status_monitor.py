@@ -6,7 +6,7 @@ import time
 from tornado import gen
 
 from ..core import rpc
-from ..utils import ignoring, is_kernel
+from ..utils import ignoring, is_kernel, log_errors
 from ..executor import default_executor
 from ..scheduler import Scheduler
 
@@ -30,11 +30,11 @@ class Status_Monitor(object):
     interval: Number, optional
         Interval between updates.  Defaults to 1s
     """
-    def __init__(self, addr=None, interval=1000.00):
+    def __init__(self, addr=None, interval=1000.00, loop=None):
         if addr is None:
             scheduler = default_executor().scheduler
             if isinstance(scheduler, rpc):
-                addr = (scheduler.ip, scheduler.port) # doesn't work
+                addr = (scheduler.ip, 9786)
             elif isinstance(scheduler, Scheduler):
                 addr = ('127.0.0.1', scheduler.services['http'].port)
         self.addr = addr
@@ -47,28 +47,16 @@ class Status_Monitor(object):
             assert curstate().notebook
 
         self.task_source, self.task_table = task_table_plot()
+        self.worker_source, self.worker_table = worker_table_plot()
 
-        ts_props = ['time','workers', 'nbytes']
-        # self.ts_source = ColumnDataSource({k: [[0,1],[0,1]] for k in ts_props})
-        self.ts_source = ColumnDataSource({k: [] for k in ts_props})
-        self.plot = figure(height=400, width=600, x_axis_type='datetime')
-        self.plot.multi_line(xs='time', ys='nbytes',
-                             color=Spectral11,
-                             source=self.ts_source)
-
-        # For managing monitor state
-        self.nbytes = defaultdict(list)
-        self.times = []
-        self.start = time.time()
-
-        self.output = vplot(self.task_table, self.plot)
+        self.output = vplot(self.worker_table, self.task_table)
 
         self.client = AsyncHTTPClient()
 
-        loop = IOLoop.current()
-        loop.add_callback(self.update)
-        pc = PeriodicCallback(self.update, self.interval, io_loop=loop)
-        pc.start()
+        self.loop = loop or IOLoop.current()
+        self.loop.add_callback(self.update)
+        self._pc = PeriodicCallback(self.update, self.interval, io_loop=self.loop)
+        self._pc.start()
 
     def _ipython_display_(self, **kwargs):
         show(self.output)
@@ -82,22 +70,19 @@ class Status_Monitor(object):
         periodically, streams the results back and uses those results to update
         the bokeh figure
         """
+        with log_errors():
+            tasks, workers = yield [
+                    self.client.fetch('http://%s:%d/tasks.json' % self.addr),
+                    self.client.fetch('http://%s:%d/workers.json' % self.addr)]
 
-        response = yield self.client.fetch('http://%s:%d/tasks.json' % self.addr)
-        d = json.loads(response.body.decode())
+            tasks = json.loads(tasks.body.decode())
+            workers = json.loads(workers.body.decode())
 
-        task_table_update(self.task_source, d)
+            task_table_update(self.task_source, tasks)
+            worker_table_update(self.worker_source, workers)
 
-        for k,v in d['bytes'].items():
-            self.nbytes[k].append(v)
-        self.times.append(time.time() * 1000 - self.start * 1000) #bokeh uses msse
-
-        self.ts_source.data['time'] = [self.times for k in self.nbytes.keys()]
-        self.ts_source.data['nbytes'] = [v for k, v in sorted(self.nbytes.items(),
-                                         key=lambda x: x[0], reverse=True)]
-
-        if self.display_notebook:
-            push_notebook()
+            if self.display_notebook:
+                push_notebook()
 
 
 def task_table_plot(row_headers=False, width=600, height=100):
