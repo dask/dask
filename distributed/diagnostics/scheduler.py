@@ -1,7 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 import os
+
 import pandas as pd
+from toolz import countby
+
+from ..utils import key_split
 
 
 def scheduler_status_str(d):
@@ -114,3 +118,22 @@ def worker_status_df(d):
     df.index.name = 'Workers'
     df = df.sort_index()
     return df
+
+
+def status(s):
+    """ Task and worker status of scheduler """
+    workers = list(s.ncores)
+
+    bytes = {w: sum(s.nbytes[k] for k in s.has_what[w]) for w in workers}
+    processing = {w: countby(key_split, tasks)
+                  for w, tasks in s.processing.items()}
+
+    return {'address': s.address,
+            'ncores': s.ncores,
+            'bytes': bytes, 'processing': processing,
+            'tasks': len(s.tasks),
+            'in-memory': len(s.who_has),
+            'ready': len(s.ready)
+                   + sum(map(len, s.stacks.values())),
+            'waiting': len(s.waiting),
+            'failed': len(s.exceptions_blame)}
