@@ -10,6 +10,7 @@ import os
 import re
 from threading import Lock
 import uuid
+import six
 
 import pandas as pd
 import numpy as np
@@ -714,19 +715,11 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                                  'stop': s + chunksize,
                                  'columns': empty.columns}))
                    for i, s in enumerate(range(start, stop, chunksize)))
-
-        if index:
-            divisions = list()
-            for i in range(start, stop, chunksize):
-                kwargs = {'start': i, 'stop': i + 1}
-                a = _pd_read_hdf(path, key, lock, kwargs)
-                divisions.append(a.index[0])
-            last = pd.HDFStore(path).get_storer(key).nrows - 1
-            kwargs = {'start': last, 'stop': last + 1}
-            a = _pd_read_hdf(path, key, lock, kwargs)
-            divisions.append(a.index[0])
-        else:
+        if not index:
             divisions = [None] * (len(dsk) + 1)
+        else:
+            divisions = _hdf_get_divisions(path, key, start, stop, chunksize,
+                                           lock, index)
         return DataFrame(dsk, name, empty, divisions)
 
     if lock is True:
@@ -739,6 +732,25 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
     return concat([one_path_one_key(path, k, start, s, columns, chunksize,
                                     lock, index)
                    for k, s in zip(keys, stops)])
+
+
+def _hdf_get_divisions(path, key, start, stop, chunksize, lock, index):
+    divisions = list()
+    for i in range(start, stop, chunksize):
+        kwargs = {'start': i, 'stop': i + 1}
+        a = _pd_read_hdf(path, key, lock, kwargs)
+        if isinstance(index, six.string_types):
+            divisions.append(a[index].iloc[0])
+        else:
+            divisions.append(a.index[0])
+    last = pd.HDFStore(path).get_storer(key).nrows - 1
+    kwargs = {'start': last, 'stop': last + 1}
+    a = _pd_read_hdf(path, key, lock, kwargs)
+    if isinstance(index, six.string_types):
+        divisions.append(a[index].iloc[0])
+    else:
+        divisions.append(a.index[0])
+    return divisions
 
 
 def _pd_read_hdf(path, key, lock, kwargs):
@@ -755,7 +767,7 @@ def _pd_read_hdf(path, key, lock, kwargs):
 
 @wraps(pd.read_hdf)
 def read_hdf(pattern, key, start=0, stop=None, columns=None,
-             chunksize=1000000, lock=True, index=False):
+             chunksize=1000000, lock=True, sorted_index_column=False):
     """
     Read hdf files into a dask dataframe. Like pandas.read_hdf, except it we
     can read multiple files, and read multiple keys from the same file by using
@@ -775,12 +787,13 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         List of column names to limit the dataframe to.
     chunksize : int, defaults to 1E6
         Number of rows to include in iteration, return an iterator.
-    lock : boolean or Lock object, default True
+    lock : bool or Lock object, default True
         If True, will apply locks to prevent multiple HDFStore objects from
         simultaneous reads. If a lock object, will use that to acquire locks.
         If False, will not use locks.
-    index : boolean, default False
-        Should the index of the HDFStore be used for divisions?
+    sorted_index_column : bool or str, default False
+        If True, use the sorted index as the key. If True, use the column
+        given. Otherwise, no divisions.
 
     Returns
     -------
@@ -807,7 +820,7 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     from .multi import concat
     return concat([_read_single_hdf(path, key, start=start, stop=stop,
                                     columns=columns, chunksize=chunksize,
-                                    lock=lock, index=index)
+                                    lock=lock, index=sorted_index_column)
                    for path in paths])
 
 

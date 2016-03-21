@@ -684,30 +684,47 @@ def test_read_hdf():
         assert a.npartitions == 2
         assert a._known_dtype
 
-        tm.assert_frame_equal(a.compute(), df)
+        eq(a, df)
 
-        tm.assert_frame_equal(
-              dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3).compute(),
-              pd.read_hdf(fn, '/data', start=1, stop=3))
+        eq(dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3),
+           pd.read_hdf(fn, '/data', start=1, stop=3))
 
         assert (sorted(dd.read_hdf(fn, '/data').dask) ==
                 sorted(dd.read_hdf(fn, '/data').dask))
 
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data', format='table')
-        a = dd.read_hdf(fn, '/data', chunksize=2, index=True)
-        assert a.npartitions == 2
+        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_index_column=True)
+        eq(a.npartitions, 2)
         assert a._known_dtype
-        assert a.divisions == (1., 3., 4.)
+        eq(a.divisions, (1., 3., 4.))
 
-        tm.assert_frame_equal(a.compute(), df)
+        eq(a.compute(), df)
 
-        a = dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3, index=True)
+        a = dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3,
+                        sorted_index_column=True)
         b = pd.read_hdf(fn, '/data', start=1, stop=3)
 
-        assert a.divisions == (2., 4.)
+        eq(a.divisions, (2., 4.))
 
-        tm.assert_frame_equal(a.compute(), b)
+        eq(a, b)
+
+    with tmpfile('h5') as fn:
+        df.to_hdf(fn, '/data', format='table')
+        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_index_column='y')
+        eq(a.npartitions, 2)
+        assert a._known_dtype
+        eq(a.divisions, (1., 3., 4.))
+
+        eq(a, df)
+
+        a = dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3,
+                        sorted_index_column='y')
+        b = pd.read_hdf(fn, '/data', start=1, stop=3)
+
+        eq(a.divisions, (2., 4.))
+
+        eq(a, b)
 
 
 def test_to_csv():
