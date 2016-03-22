@@ -60,8 +60,7 @@ class BatchedSend(object):
             yield self.last_send
             self.buffer, payload = [], self.buffer
             self.last_transmission = now
-            future = write(self.stream, payload)
-            self.next_send = future
+            self.next_send = write(self.stream, payload)
         except Exception as e:
             logger.exception(e)
 

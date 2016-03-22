@@ -35,7 +35,7 @@ def test_simple(s, a, b):
     except ImportError:
         assert response == {}
 
-    endpoints = ['/files.json']
+    endpoints = ['/files.json', '/processing.json']
     for endpoint in endpoints:
         response = yield client.fetch(('http://localhost:%d' % server.port)
                                       + endpoint)
