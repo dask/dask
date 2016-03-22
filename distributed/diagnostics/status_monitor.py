@@ -115,13 +115,14 @@ def worker_table_plot(width=600, height=100, **kwargs):
 
 def worker_table_update(source, d):
     """ Update host table source """
-    source.data['time'] = [time.time()]
     workers = sorted(d, reverse=True)
 
-    source.data['workers'] = workers
+    data = {}
+    data['workers'] = workers
     for name in ['cores', 'cpu', 'available-memory', 'latency', 'last-seen',
                  'total-memory']:
-        source.data[name] = [d[w][name] for w in workers]
+        data[name] = [d[w][name] for w in workers]
 
-    source.data['processing'] = [sorted(d[w]['processing']) for w in workers]
-    source.data['processes'] = [len(d[w]['ports']) for w in workers]
+    data['processing'] = [sorted(d[w]['processing']) for w in workers]
+    data['processes'] = [len(d[w]['ports']) for w in workers]
+    source.data.update(data)
