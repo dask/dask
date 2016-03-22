@@ -651,7 +651,8 @@ class Scheduler(Server):
             return
         with ignoring(AttributeError):
             self.worker_streams[address].stream.close()
-        host, port = self.coerce_address(address).split(':')
+
+        host, port = address.split(':')
 
         self.host_info[host]['cores'] -= self.ncores[address]
         self.host_info[host]['ports'].remove(port)
@@ -670,6 +671,7 @@ class Scheduler(Server):
 
         in_flight = set(self.stacks.pop(address))
         in_flight |= self.processing.pop(address)
+        in_flight = {k for k in in_flight if k in self.tasks}
         missing = set()
 
         for key in self.has_what.pop(address):
@@ -1172,7 +1174,8 @@ class Scheduler(Server):
 
         try:
             d = yield gen.with_timeout(timedelta(seconds=0.1),
-                                       self.rpc(ip=host, port=port).health())
+                                       self.rpc(ip=host, port=port).health(),
+                                       io_loop=self.loop)
         except gen.TimeoutError:
             logger.warn("Heartbeat failed for %s", address)
         except Exception as e:

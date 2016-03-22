@@ -187,7 +187,8 @@ class Worker(Server):
     def _close(self, report=True, timeout=10):
         if report:
             yield gen.with_timeout(timedelta(seconds=timeout),
-                    self.center.unregister(address=(self.ip, self.port)))
+                    self.center.unregister(address=(self.ip, self.port)),
+                    io_loop=self.loop)
         self.center.close_streams()
         self.stop()
         self.executor.shutdown()
@@ -304,7 +305,8 @@ class Worker(Server):
             else:
                 while not future.done() and future._state != 'FINISHED':
                     try:
-                        yield gen.with_timeout(timedelta(seconds=1), future)
+                        yield gen.with_timeout(timedelta(seconds=1), future,
+                                               io_loop=self.loop)
                         break
                     except gen.TimeoutError:
                         logger.info("work queue size: %d", self.executor._work_queue.qsize())
