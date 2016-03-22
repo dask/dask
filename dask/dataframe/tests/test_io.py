@@ -161,6 +161,12 @@ def test_dummy_from_array():
     msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
+        
+    np.random.seed(42)    
+    x = np.random.rand(201, 2)
+    x = from_array(x, chunksize=50, columns=['a', 'b'])
+    assert len(x.divisions) == 6 # Should be 5 partitions and the end
+    
 
 def test_dummy_from_1darray():
     x = np.array([1., 2., 3.], dtype=np.float64)

@@ -312,8 +312,7 @@ def from_array(x, chunksize=50000, columns=None):
     dummy = _dummy_from_array(x, columns)
 
     divisions = tuple(range(0, len(x), chunksize))
-    if divisions[-1] != len(x) - 1:
-        divisions = divisions + (len(x) - 1,)
+    divisions = divisions + (len(x) - 1,)
     token = tokenize(x, chunksize, columns)
     name = 'from_array-' + token
 
