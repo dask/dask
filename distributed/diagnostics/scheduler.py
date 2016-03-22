@@ -28,14 +28,19 @@ def workers(s):
     Examples
     --------
     >>> workers(my_scheduler)  # doctest: +SKIP
-    {'127.0.0.1': {'available-memory': 3496833024,
+    {'127.0.0.1': {
                    'cores': 3,
                    'cpu': 0.0,
                    'last-seen': 0.003068,
                    'latency': 0.01584628690034151,
                    'ports': ['54871', '50943'],
                    'processing': {'inc': 2, 'add': 1},
-                   'total-memory': 16701911040}}
+                   'disk-read': 1234,
+                   'disk-write': 1234,
+                   'network-send': 1234,
+                   'network-recv': 1234,
+                   'memory': 16701911040,
+                   'memory-percent': 85}}
     """
     hosts = {host: ['%s:%s' % (host, port) for port in d['ports']]
                 for host, d in s.host_info.items()}

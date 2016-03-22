@@ -102,14 +102,24 @@ def task_table_update(source, d):
 
 def worker_table_plot(width=600, height=100, **kwargs):
     """ Column data source and plot for host table """
-    names = ['workers', 'cpu', 'available-memory', 'cores', 'processes',
-             'processing', 'latency', 'last-seen']
+    names = ['workers', 'cpu', 'memory-percent', 'memory', 'cores', 'processes',
+             'processing', 'latency', 'last-seen', 'disk-read', 'disk-write',
+             'network-send', 'network-recv']
     source = ColumnDataSource({k: [] for k in names})
 
-    columns = [TableColumn(field=name, title=name) for name in names]
-    table = DataTable(source=source, columns=columns, width=width,
-                      height=height, **kwargs)
+    columns = {name: TableColumn(field=name, title=name) for name in names}
 
+    slow_names = ['workers', 'cores', 'processes', 'memory',
+                  'latency', 'last-seen']
+    slow = DataTable(source=source, columns=[columns[n] for n in slow_names],
+                     width=width, height=height, **kwargs)
+
+    fast_names = ['workers', 'cpu', 'memory-percent', 'processing',
+            'disk-read', 'disk-write', 'network-send', 'network-recv']
+    fast = DataTable(source=source, columns=[columns[n] for n in fast_names],
+                     width=width, height=height, **kwargs)
+
+    table = vplot(slow, fast)
     return source, table
 
 
@@ -119,8 +129,9 @@ def worker_table_update(source, d):
 
     data = {}
     data['workers'] = workers
-    for name in ['cores', 'cpu', 'available-memory', 'latency', 'last-seen',
-                 'total-memory']:
+    for name in ['cores', 'cpu', 'memory-percent', 'latency', 'last-seen',
+                 'memory', 'disk-read', 'disk-write', 'network-send',
+                 'network-recv']:
         data[name] = [d[w][name] for w in workers]
 
     data['processing'] = [sorted(d[w]['processing']) for w in workers]

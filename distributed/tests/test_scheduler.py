@@ -887,8 +887,8 @@ def test_host_health(s, a, b, c):
         assert w.ip in s.host_info
         assert 0 < s.host_info[w.ip]['latency'] < 1
         assert 0 <= s.host_info[w.ip]['cpu'] <= 100
-        assert 0 < s.host_info[w.ip]['total-memory']
-        assert 0 < s.host_info[w.ip]['available-memory'] < s.host_info[w.ip]['total-memory']
+        assert 0 < s.host_info[w.ip]['memory']
+        assert 0 < s.host_info[w.ip]['memory-percent'] < 100
 
         assert isinstance(s.host_info[w.ip]['last-seen'], datetime)
         assert s.host_info[w.ip]['heartbeat-port'] in s.host_info[w.ip]['ports']
