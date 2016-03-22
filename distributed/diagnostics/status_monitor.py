@@ -132,7 +132,10 @@ def worker_table_update(source, d):
     for name in ['cores', 'cpu', 'memory-percent', 'latency', 'last-seen',
                  'memory', 'disk-read', 'disk-write', 'network-send',
                  'network-recv']:
-        data[name] = [d[w][name] for w in workers]
+        try:
+            data[name] = [d[w][name] for w in workers]
+        except KeyError:
+            pass
 
     data['processing'] = [sorted(d[w]['processing']) for w in workers]
     data['processes'] = [len(d[w]['ports']) for w in workers]

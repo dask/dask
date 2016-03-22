@@ -54,7 +54,7 @@ def main(center, host, port, http_port, bokeh_port):
         hosts = ['%s:%d' % (h, bokeh_port) for h in
                  ['localhost', '127.0.0.1', ip, socket.gethostname()]]
         dirname = os.path.dirname(distributed.__file__)
-        path = os.path.join(dirname, 'diagnostics', 'bokeh', 'status.py')
+        path = os.path.join(dirname, 'diagnostics', 'bokeh', 'status')
         proc = subprocess.Popen(['bokeh', 'serve', path,
                                  '--log-level', 'warning',
                                  '--port', str(bokeh_port)] +

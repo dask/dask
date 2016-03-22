@@ -708,7 +708,13 @@ class Scheduler(Server):
                 self.host_info[host]['ports'] = set()
                 self.host_info[host]['cores'] = 0
 
-            self.host_info[host]['ports'].add(port)
+            try:
+                self.host_info[host]['ports'].add(port)
+            except KeyError():
+                print(self.host_info)
+                print(host)
+                print(self.host_info[host])
+                import pdb; pdb.set_trace()
             self.host_info[host]['cores'] += ncores
             self.loop.add_callback(self.heartbeat, host)
             self._restart_heartbeat(host)
@@ -983,7 +989,7 @@ class Scheduler(Server):
     def add_client(self, stream, client=None):
         """ Listen to messages from an IOStream """
         logger.info("Connection to %s, %s", type(self).__name__, client)
-        bstream = BatchedSend(interval=10)
+        bstream = BatchedSend(interval=10, loop=self.loop)
         bstream.start(stream)
         self.streams[client] = bstream
 

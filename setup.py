@@ -23,6 +23,7 @@ setup(name='distributed',
                 'distributed.cli',
                 'distributed.diagnostics',
                 'distributed.diagnostics.bokeh',
+                'distributed.diagnostics.bokeh.status',
                 'distributed.http',
                 'distributed.formats'],
       long_description=(open('README.md').read() if os.path.exists('README.md')
