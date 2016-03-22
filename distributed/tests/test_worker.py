@@ -39,6 +39,16 @@ def test_health():
     w = Worker('127.0.0.1', 8019)
     d = w.health()
     assert isinstance(d, dict)
+    d = w.health()
+    try:
+        import psutil
+    except ImportError:
+        pass
+    else:
+        assert 'disk-read' in d
+        assert 'disk-write' in d
+        assert 'network-recv' in d
+        assert 'network-send' in d
 
 
 def test_worker(loop):
