@@ -708,13 +708,7 @@ class Scheduler(Server):
                 self.host_info[host]['ports'] = set()
                 self.host_info[host]['cores'] = 0
 
-            try:
-                self.host_info[host]['ports'].add(port)
-            except KeyError():
-                print(self.host_info)
-                print(host)
-                print(self.host_info[host])
-                import pdb; pdb.set_trace()
+            self.host_info[host]['ports'].add(port)
             self.host_info[host]['cores'] += ncores
             self.loop.add_callback(self.heartbeat, host)
             self._restart_heartbeat(host)

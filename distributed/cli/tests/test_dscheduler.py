@@ -1,13 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
+import requests
 import socket
 from subprocess import Popen, PIPE
-import requests
+from time import sleep, time
 
 import pytest
 
 from distributed import Scheduler, Executor
-from distributed.utils import get_ip
+from distributed.utils import get_ip, ignoring
 
 
 def test_defaults():
@@ -30,9 +31,27 @@ def test_bokeh():
         proc = Popen(['dscheduler'], stdout=PIPE, stderr=PIPE)
         e = Executor('127.0.0.1:%d' % Scheduler.default_port)
 
-        for name in [socket.gethostname(), 'localhost', '127.0.0.1', get_ip()]:
-            response = requests.get('http://%s:8787/status/' % name)
-            assert response.ok
+        while True:
+            line = proc.stderr.readline()
+            if b'Start Bokeh UI' in line:
+                break
+
+        start = time()
+        while True:
+            try:
+                for name in [socket.gethostname(), 'localhost', '127.0.0.1', get_ip()]:
+                    response = requests.get('http://%s:8787/status/' % name)
+                    assert response.ok
+                break
+            except:
+                sleep(0.1)
+                assert time() < start + 5
+
     finally:
-        e.shutdown()
-        proc.kill()
+        with ignoring(Exception):
+            e.shutdown()
+        with ignoring(Exception):
+            import distributed.diagnostics.bokeh
+            distributed.diagnostics.bokeh.server_process.kill()
+        with ignoring(Exception):
+            proc.kill()

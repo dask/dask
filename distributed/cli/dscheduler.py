@@ -51,6 +51,7 @@ def main(center, host, port, http_port, bokeh_port):
     except ImportError:
         pass
     else:
+        import distributed.diagnostics.bokeh
         hosts = ['%s:%d' % (h, bokeh_port) for h in
                  ['localhost', '127.0.0.1', ip, socket.gethostname()]]
         dirname = os.path.dirname(distributed.__file__)
@@ -59,6 +60,9 @@ def main(center, host, port, http_port, bokeh_port):
                                  '--log-level', 'warning',
                                  '--port', str(bokeh_port)] +
                                  sum([['--host', host] for host in hosts], []))
+
+        distributed.diagnostics.bokeh.server_process = proc  # monkey patch
+
         logger.info(" Start Bokeh UI at:        http://%s:%d/status/"
                     % (ip, bokeh_port))
 
