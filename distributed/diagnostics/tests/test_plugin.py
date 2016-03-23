@@ -23,6 +23,7 @@ def test_diagnostic(s, a, b):
 
     counter = Counter()
     counter.start(s)
+    assert counter in s.plugins
 
     assert counter.count == 0
     sched.put_nowait({'op': 'update-graph',
@@ -38,3 +39,5 @@ def test_diagnostic(s, a, b):
             break
 
     assert counter.count == 3
+    s.remove_plugin(counter)
+    assert counter not in s.plugins

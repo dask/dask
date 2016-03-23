@@ -971,6 +971,9 @@ class Scheduler(Server):
         """
         self.plugins.append(plugin)
 
+    def remove_plugin(self, plugin):
+        self.plugins.remove(plugin)
+
     def handle_queues(self, scheduler_queue, report_queue):
         """ Register new control and report queues to the Scheduler """
         self.scheduler_queues.append(scheduler_queue)
