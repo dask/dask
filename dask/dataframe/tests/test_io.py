@@ -670,6 +670,8 @@ def test_read_hdf():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    df2 = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                        'y': [1, 2, 2, 3]}, index=[1., 2., 3., 4.])                       
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data')
         try:
@@ -683,48 +685,41 @@ def test_read_hdf():
         a = dd.read_hdf(fn, '/data', chunksize=2)
         assert a.npartitions == 2
         assert a._known_dtype
-
         eq(a, df)
-
         eq(dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3),
            pd.read_hdf(fn, '/data', start=1, stop=3))
-
         assert (sorted(dd.read_hdf(fn, '/data').dask) ==
                 sorted(dd.read_hdf(fn, '/data').dask))
 
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data', format='table')
-        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_index_column=True)
+        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_division_column=True)
         eq(a.npartitions, 2)
         assert a._known_dtype
-        eq(a.divisions, (1., 3., 4.))
-
-        eq(a.compute(), df)
-
+        assert a.divisions == (1., 3., 4.)
+        eq(a, df)
         a = dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3,
-                        sorted_index_column=True)
+                        sorted_division_column=True)
         b = pd.read_hdf(fn, '/data', start=1, stop=3)
-
-        eq(a.divisions, (2., 4.))
-
-        eq(a, b)
+        assert  a.divisions == (2., 3.)
+        eq(a, b)        
 
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data', format='table')
-        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_index_column='y')
+        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_division_column='y')
         eq(a.npartitions, 2)
         assert a._known_dtype
-        eq(a.divisions, (1., 3., 4.))
-
+        assert a.divisions == (1., 3., 4.)
         eq(a, df)
-
         a = dd.read_hdf(fn, '/data', chunksize=2, start=1, stop=3,
-                        sorted_index_column='y')
+                        sorted_division_column='y')
         b = pd.read_hdf(fn, '/data', start=1, stop=3)
-
-        eq(a.divisions, (2., 4.))
-
+        assert a.divisions == (2., 3.)
         eq(a, b)
+        df2.to_hdf(fn, '/data2', format='table')
+        a = dd.read_hdf(fn, '/data2', chunksize=2, sorted_division_column='y')
+        assert a.divisions == (1., 2., 3., 3.)
+        eq(a, df2)
 
 
 def test_to_csv():
