@@ -37,19 +37,22 @@ class SchedulerPlugin(object):
     >>> c = Counter()
     >>> scheduler.add_plugin(c)  # doctest: +SKIP
     """
-    def task_finished(self, scheduler, key, worker, nbytes):
+    def task_finished(self, scheduler, key=None, worker=None, nbytes=None,
+            **kwargs):
         """ Run when a task is reported complete """
         pass
 
-    def update_graph(self, scheduler, dsk, keys, restrictions):
+    def update_graph(self, scheduler, dsk=None, keys=None,
+            restrictions=None, **kwargs):
         """ Run when a new graph / tasks enter the scheduler """
         pass
 
-    def task_erred(self, scheduler, key, worker, exception):
+    def task_erred(self, scheduler, key=None, worker=None, exception=None,
+            **kwargs):
         """ Run when a task is reported failed """
         pass
 
-    def restart(self, scheduler):
+    def restart(self, scheduler, **kwargs):
         """ Run when the scheduler restarts itself """
         pass
 

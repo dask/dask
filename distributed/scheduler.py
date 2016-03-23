@@ -496,7 +496,8 @@ class Scheduler(Server):
         if client:
             self.client_wants_keys(keys=list(who_has), client=client)
 
-    def mark_task_erred(self, key, worker, exception, traceback):
+    def mark_task_erred(self, key=None, worker=None,
+                        exception=None, traceback=None, **kwargs):
         """ Mark that a task has erred on a particular worker
 
         See Also
@@ -511,7 +512,8 @@ class Scheduler(Server):
             self.ensure_occupied(worker)
             for plugin in self.plugins[:]:
                 try:
-                    plugin.task_erred(self, key, worker, exception)
+                    plugin.task_erred(self, key=key, worker=worker,
+                            exception=exception, traceback=traceback, **kwargs)
                 except Exception as e:
                     logger.exception(e)
 
@@ -534,7 +536,8 @@ class Scheduler(Server):
         for dep in self.dependents[key]:
             self.mark_failed(dep, failing_key)
 
-    def mark_task_finished(self, key, worker, nbytes, type=None):
+    def mark_task_finished(self, key=None, worker=None, nbytes=None, type=None,
+            **kwargs):
         """ Mark that a task has finished execution on a particular worker """
         logger.debug("Mark task as finished %s, %s", key, worker)
         if worker in self.processing and key in self.processing[worker]:
@@ -543,7 +546,8 @@ class Scheduler(Server):
             self.ensure_occupied(worker)
             for plugin in self.plugins[:]:
                 try:
-                    plugin.task_finished(self, key, worker, nbytes)
+                    plugin.task_finished(self, key=key, worker=worker,
+                            nbytes=nbytes, type=type, **kwargs)
                 except Exception as e:
                     logger.exception(e)
         else:
@@ -578,13 +582,14 @@ class Scheduler(Server):
             else:
                 self.waiting[dep] = {key}
 
-    def mark_missing_data(self, missing=None, key=None, worker=None):
+    def mark_missing_data(self, keys=None, key=None, worker=None, **kwargs):
         """ Mark that certain keys have gone missing.  Recover.
 
         See Also
         --------
         recover_missing
         """
+        missing = keys
         if key and worker:
             try:
                 self.processing[worker].remove(key)
@@ -837,7 +842,10 @@ class Scheduler(Server):
 
         for plugin in self.plugins[:]:
             try:
-                plugin.update_graph(self, tasks, keys, restrictions or {})
+                plugin.update_graph(self, client=client, tasks=tasks,
+                        keys=keys, restrictions=restrictions or {},
+                        dependencies=dependencies,
+                        loose_restrictions=loose_restrictions)
             except Exception as e:
                 logger.exception(e)
 
@@ -1105,14 +1113,11 @@ class Scheduler(Server):
                         break
 
                     if msg['status'] == 'error':
-                        self.mark_task_erred(msg['key'], ident, msg['exception'],
-                                                                msg['traceback'])
+                        self.mark_task_erred(worker=ident, **msg)
                     elif msg['status'] == 'missing-data':
-                        self.mark_missing_data(msg['keys'], key=msg['key'],
-                                               worker=ident)
+                        self.mark_missing_data(worker=ident, **msg)
                     elif msg['status'] == 'OK':
-                        self.mark_task_finished(msg['key'], ident, msg['nbytes'],
-                                                type=msg.get('type'))
+                        self.mark_task_finished(worker=ident, **msg)
                     else:
                         logger.warn("Unknown message type, %s, %s", msg['status'],
                                 msg)

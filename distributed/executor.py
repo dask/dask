@@ -665,7 +665,7 @@ class Executor(object):
             if response['status'] == 'error':
                 logger.debug("Couldn't gather keys %s", response['keys'])
                 self._send_to_scheduler({'op': 'missing-data',
-                                         'missing': response['keys']})
+                                         'keys': response['keys']})
                 for key in response['keys']:
                     self.futures[key]['event'].clear()
             else:

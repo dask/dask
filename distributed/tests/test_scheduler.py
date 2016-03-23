@@ -362,7 +362,7 @@ def test_scheduler(s, a, b):
             break
 
     # Test missing data
-    yield write(stream, {'op': 'missing-data', 'missing': ['z']})
+    yield write(stream, {'op': 'missing-data', 'keys': ['z']})
 
     while True:
         msg = yield read(stream)

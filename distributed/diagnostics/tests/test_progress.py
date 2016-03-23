@@ -93,7 +93,7 @@ def test_robust_to_bad_plugin(s, a, b):
     sched, report = Queue(), Queue(); s.handle_queues(sched, report)
 
     class Bad(SchedulerPlugin):
-        def task_finished(self, scheduler, key, worker, nbytes):
+        def task_finished(self, scheduler, key, worker, nbytes, **kwargs):
             raise Exception()
 
     bad = Bad()

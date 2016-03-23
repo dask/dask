@@ -118,7 +118,7 @@ class Progress(SchedulerPlugin):
     def _start(self):
         pass
 
-    def task_finished(self, scheduler, key, worker, nbytes):
+    def task_finished(self, scheduler, key, worker, nbytes, **kwargs):
         logger.debug("Progress sees key %s", key)
         if key in self.keys:
             self.keys.remove(key)
@@ -126,7 +126,7 @@ class Progress(SchedulerPlugin):
         if not self.keys:
             self.stop()
 
-    def task_erred(self, scheduler, key, worker, exception):
+    def task_erred(self, scheduler, key, worker, exception, **kwargs):
         logger.debug("Progress sees task erred")
         if key in self.all_keys:
             self.stop(exception=exception, key=key)
@@ -214,7 +214,7 @@ class MultiProgress(Progress):
             self.task_erred(None, k, None, True)
         logger.debug("Set up Progress keys")
 
-    def task_finished(self, scheduler, key, worker, nbytes):
+    def task_finished(self, scheduler, key, worker, nbytes, **kwargs):
         s = self.keys.get(self.func(key), None)
         if s and key in s:
             s.remove(key)
@@ -222,7 +222,7 @@ class MultiProgress(Progress):
         if not self.keys or not any(self.keys.values()):
             self.stop()
 
-    def task_erred(self, scheduler, key, worker, exception):
+    def task_erred(self, scheduler, key, worker, exception, **kwargs):
         logger.debug("Progress sees task erred")
 
         if (self.func(key) in self.all_keys and

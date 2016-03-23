@@ -18,7 +18,7 @@ def test_diagnostic(s, a, b):
             scheduler.add_plugin(self)
             self.count = 0
 
-        def task_finished(self, scheduler, key, worker, nbytes):
+        def task_finished(self, scheduler, key, worker, nbytes, **kwargs):
             self.count += 1
 
     counter = Counter()
