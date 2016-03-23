@@ -167,7 +167,7 @@ class Scheduler(Server):
         self.nbytes = dict()
         self.ncores = dict()
         self.worker_info = defaultdict(dict)
-        self.host_info = defaultdict(dict)
+        self.host_info = dict()
         self.aliases = dict()
         self.processing = dict()
         self.restrictions = dict()
@@ -702,9 +702,7 @@ class Scheduler(Server):
         if coerce_address:
             host, port = self.coerce_address(address).split(':')
             if host not in self.host_info:
-                self.host_info[host] = dict()
-                self.host_info[host]['ports'] = set()
-                self.host_info[host]['cores'] = 0
+                self.host_info[host] = {'ports': set(), 'cores': 0}
 
             self.host_info[host]['ports'].add(port)
             self.host_info[host]['cores'] += ncores
