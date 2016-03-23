@@ -9,7 +9,11 @@ import json
 from tornado import gen
 from tornado.locks import Condition
 from tornado.httpclient import AsyncHTTPClient
+from tornado.iostream import StreamClosedError
+from tornado.ioloop import IOLoop
 
+from distributed.core import read
+from distributed.diagnostics.eventstream import eventstream
 import distributed.diagnostics
 from distributed.utils import log_errors
 
@@ -30,6 +34,32 @@ def http_get(route):
         messages[route]['times'].append(datetime.now())
 
 
+@gen.coroutine
+def task_events():
+    with log_errors():
+        stream = yield eventstream('localhost:8786', 0.1)
+        d = deque(maxlen=100000)
+        c = Condition()
+        times = deque(maxlen=100000)
+        messages['task-events'] = {'stream': stream,
+                                   'interval': 0.1,
+                                   'deque': d,
+                                   'times': times,
+                                   'condition': c}
+
+        while True:
+            try:
+                msgs = yield read(stream)
+            except StreamClosedError:
+                break
+            else:
+                for msg in msgs:
+                    if 'compute-start' in msg:
+                        d.append(msg)
+                        times.append(msg['compute-start'])
+                c.notify_all()
+
+
 def on_server_loaded(server_context):
     messages['workers'] = {'interval': 1000,
                            'deque': deque(maxlen=1000),
@@ -42,3 +72,4 @@ def on_server_loaded(server_context):
                          'times': deque(maxlen=1000),
                          'condition': Condition()}
     server_context.add_periodic_callback(lambda: http_get('tasks'), 100)
+    IOLoop.current().add_callback(task_events)
