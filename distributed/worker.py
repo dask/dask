@@ -142,6 +142,7 @@ class Worker(Server):
                     'delete_data': self.delete_data,
                     'terminate': self.terminate,
                     'ping': pingpong,
+                    'health': self.health,
                     'upload_file': self.upload_file}
 
         super(Worker, self).__init__(handlers, **kwargs)
@@ -186,7 +187,8 @@ class Worker(Server):
     def _close(self, report=True, timeout=10):
         if report:
             yield gen.with_timeout(timedelta(seconds=timeout),
-                    self.center.unregister(address=(self.ip, self.port)))
+                    self.center.unregister(address=(self.ip, self.port)),
+                    io_loop=self.loop)
         self.center.close_streams()
         self.stop()
         self.executor.shutdown()
@@ -303,7 +305,8 @@ class Worker(Server):
             else:
                 while not future.done() and future._state != 'FINISHED':
                     try:
-                        yield gen.with_timeout(timedelta(seconds=1), future)
+                        yield gen.with_timeout(timedelta(seconds=1), future,
+                                               io_loop=self.loop)
                         break
                     except gen.TimeoutError:
                         logger.info("work queue size: %d", self.executor._work_queue.qsize())
@@ -484,6 +487,36 @@ class Worker(Server):
                 logger.exception(e)
                 return {'status': 'error', 'exception': dumps(e)}
         return {'status': 'OK', 'nbytes': len(data)}
+
+    def health(self, stream=None):
+        """ Information about worker """
+        d = {'active': len(self.active),
+             'stored': len(self.data)}
+        try:
+            import psutil
+            mem = psutil.virtual_memory()
+            d.update({'cpu': psutil.cpu_percent(),
+                      'memory': mem.total,
+                      'memory-percent': mem.percent})
+            try:
+                net_io = psutil.net_io_counters()
+                d['network-send'] = net_io.bytes_sent - self._last_net_io.bytes_sent
+                d['network-recv'] = net_io.bytes_recv - self._last_net_io.bytes_recv
+            except AttributeError:
+                pass
+            self._last_net_io = net_io
+
+            try:
+                disk_io = psutil.disk_io_counters()
+                d['disk-read'] = disk_io.read_bytes - self._last_disk_io.read_bytes
+                d['disk-write'] = disk_io.write_bytes - self._last_disk_io.write_bytes
+            except AttributeError:
+                pass
+            self._last_disk_io = disk_io
+        except ImportError:
+            pass
+        return d
+
 
 
 job_counter = [0]

@@ -146,31 +146,41 @@ def test_with_status(e, s, a, b):
     ss.listen(0)
 
     client = AsyncHTTPClient()
-    response = yield client.fetch('http://localhost:%d/status.json' %
+    response = yield client.fetch('http://localhost:%d/tasks.json' %
                                   ss.port)
     out = json.loads(response.body.decode())
+    assert out['total'] == 0
+    assert out['processing'] == 0
     assert out['failed'] == 0
     assert out['in-memory'] == 0
-    assert out['bytes'] == {a.address: 0, b.address: 0}
-    assert out['processing'] == {a.address: {}, b.address: {}}
     assert out['ready'] == 0
-    assert out['tasks'] == 0
     assert out['waiting'] == 0
 
     L = e.map(div, range(10), range(10))
     yield _wait(L)
 
     client = AsyncHTTPClient()
-    response = yield client.fetch('http://localhost:%d/status.json' %
+    response = yield client.fetch('http://localhost:%d/tasks.json' %
                                   ss.port)
     out = json.loads(response.body.decode())
     assert out['failed'] == 1
     assert out['in-memory'] == 9
     assert out['ready'] == 0
-    assert out['tasks'] == 10
+    assert out['total'] == 10
     assert out['waiting'] == 0
-    assert out['processing'] == {a.address: {}, b.address: {}}
-    assert set(out['bytes']) == {a.address, b.address}
-    assert all(v > 0 for v in out['bytes'].values())
 
     ss.stop()
+
+
+
+@gen_cluster(executor=True)
+def test_basic(e, s, a, b):
+    ss = HTTPScheduler(s)
+    ss.listen(0)
+
+    client = AsyncHTTPClient()
+    for name in ['tasks', 'workers']:
+        response = yield client.fetch('http://localhost:%d/%s.json' %
+                                      (ss.port, name))
+        data = json.loads(response.body.decode())
+        assert isinstance(data, dict)

@@ -4,7 +4,6 @@ from collections import defaultdict
 import json
 import logging
 
-from toolz import countby
 from tornado import web, gen
 from tornado.httpclient import AsyncHTTPClient
 
@@ -73,28 +72,18 @@ class MemoryLoadByKey(RequestHandler):
         self.write(out)
 
 
-class Status(RequestHandler):
+class Tasks(RequestHandler):
     """ Lots of information about all the workers """
     def get(self):
-        workers = list(self.server.ncores)
+        from ..diagnostics.scheduler import tasks
+        self.write(tasks(self.server))
 
-        bytes= {w: sum(self.server.nbytes[k]
-                       for k in self.server.has_what[w])
-                  for w in workers}
-        processing = {w: countby(key_split, tasks)
-                    for w, tasks in self.server.processing.items()}
 
-        result = {'address': self.server.address,
-                  'ncores': self.server.ncores,
-                  'bytes': bytes, 'processing': processing,
-                  'tasks': len(self.server.tasks),
-                  'in-memory': len(self.server.who_has),
-                  'ready': len(self.server.ready)
-                         + sum(map(len, self.server.stacks.values())),
-                  'waiting': len(self.server.waiting),
-                  'failed': len(self.server.exceptions_blame)}
-
-        self.write(result)
+class Workers(RequestHandler):
+    """ Lots of information about all the workers """
+    def get(self):
+        from ..diagnostics.scheduler import workers
+        self.write(workers(self.server))
 
 
 def HTTPScheduler(scheduler):
@@ -104,8 +93,8 @@ def HTTPScheduler(scheduler):
         (r'/processing.json', Processing, {'server': scheduler}),
         (r'/proxy/([\w.-]+):(\d+)/(.+)', Proxy),
         (r'/broadcast/(.+)', Broadcast, {'server': scheduler}),
-        (r'/status.json', Status, {'server': scheduler}),
-        (r'/', Status, {'server': scheduler}),
+        (r'/tasks.json', Tasks, {'server': scheduler}),
+        (r'/workers.json', Workers, {'server': scheduler}),
         (r'/memory-load.json', MemoryLoad, {'server': scheduler}),
         (r'/memory-load-by-key.json', MemoryLoadByKey, {'server': scheduler}),
         ]))
