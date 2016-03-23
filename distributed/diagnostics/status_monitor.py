@@ -155,24 +155,22 @@ def task_stream_plot(height=400, width=1000, **kwargs):
             'worker': [], 'thread': [], 'worker-position': []}
 
     source = ColumnDataSource(data)
-    fig = figure(x_range=[time(), time() + 10], y_range=[0, 1], width=width,
-                 height=height, **kwargs)
+    fig = figure(width=width, height=height, x_axis_type='datetime', **kwargs)
     fig.rect(x='compute-start', width='compute-duration',
              y='worker-position', height=0.9, line_color='gray', source=source)
     return source, fig
 
 
 def task_stream_update(source, plot, msgs):
-    plot.x_range.end = time()
     if not msgs:
         return
     if source.data['key'] and msgs[-1]['key'] == source.data['key'][-1]:  # no change
         return
 
     data = dict()
-    data['compute-start'] = list(pluck('compute-start', msgs))
-    data['compute-duration'] = list(map(sub, pluck('compute-stop', msgs),
-                                             data['compute-start']))
+    data['compute-start'] = [msg['compute-start'] * 1000 for msg in msgs]
+    data['compute-duration'] = [1000 * (msg['compute-stop']
+                                      - msg['compute-start']) for msg in msgs]
     data['key'] = list(pluck('key', msgs))
     data['key-prefix'] = list(map(key_split, data['key']))
     data['worker'] = list(pluck('worker', msgs))
@@ -186,4 +184,3 @@ def task_stream_update(source, plot, msgs):
     source.data.update(data)
 
     plot.y_range.end = len(sorted_workers)
-    plot.x_range.start = msgs[0]['compute-start']
