@@ -10,6 +10,10 @@ from tornado import gen
 from distributed.diagnostics.status_monitor import (
         worker_table_plot, worker_table_update, task_table_plot,
         task_table_update)
+from distributed.diagnostics.worker_monitor import (
+        resource_profile_plot, resource_profile_update
+)
+
 from distributed.utils import log_errors
 import distributed.diagnostics
 
@@ -35,4 +39,14 @@ def task_update():
         task_table_update(task_source, msg)
 doc.add_periodic_callback(task_update, messages['tasks']['interval'])
 
-doc.add_root(vplot(worker_table, task_table))
+resource_source, resource_plot = resource_profile_plot()
+@gen.coroutine
+def resource_update():
+    with log_errors():
+        yield messages['workers']['condition'].wait()
+        worker_buffer = messages['workers']['deque']
+        times_buffer = messages['workers']['times']
+        resource_profile_update(resource_source, worker_buffer, times_buffer)
+doc.add_periodic_callback(resource_update, messages['workers']['interval'])
+
+doc.add_root(vplot(worker_table, task_table, resource_plot))
