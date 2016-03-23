@@ -28,6 +28,7 @@ def test_worker_ncores():
     finally:
         shutil.rmtree(w.local_dir)
 
+
 def test_identity():
     w = Worker('127.0.0.1', 8019)
     ident = w.identity(None)
@@ -70,6 +71,7 @@ def test_worker(loop):
         assert c.who_has['x'] == {a.address}
         assert isinstance(response['compute-start'], float)
         assert isinstance(response['compute-stop'], float)
+        assert isinstance(response['thread'], int)
 
         response = yield bb.compute(key='y',
                                     function=dumps(add),

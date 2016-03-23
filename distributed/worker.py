@@ -8,6 +8,7 @@ from multiprocessing.pool import ThreadPool
 import os
 import pkg_resources
 import tempfile
+from threading import current_thread
 from time import time
 from timeit import default_timer
 import traceback
@@ -606,4 +607,5 @@ def apply_function(function, args, kwargs):
         end = time()
     msg['compute-start'] = start
     msg['compute-stop'] = end
+    msg['thread'] = current_thread().ident
     return msg
