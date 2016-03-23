@@ -1,8 +1,17 @@
 EC2 Startup Script
 ==================
 
-You can quickly deploy a scheduler and workers on EC2 using the ``dec2``
-quickstart application::
+First, add your AWS credentials to ``~/.aws/credentials`` like this:
+
+.. code-block::
+
+     [default]
+     aws_access_key_id = YOUR_ACCESS_KEY
+     aws_secret_access_key = YOUR_SECRET_KEY
+
+For other ways to manage or troubleshoot credentials, see the `boto3 docs <https://boto3.readthedocs.org/en/latest/guide/quickstart.html>`_.
+
+Now, you can quickly deploy a scheduler and workers on EC2 using the ``dec2`` quickstart application::
 
   pip install dec2
   dec2 up --keyname YOUR-AWS-KEY --keypair ~/.ssh/YOUR-AWS-SSH-KEY.pem
