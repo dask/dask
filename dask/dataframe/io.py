@@ -753,19 +753,24 @@ def _divide_buffer(buffer, division_column, start, stop, chunksize):
         _div_col = lambda x: pd.Series(x.index)
     for i, chunk in enumerate(buffer):
         if i == 0:
-            buf = chunk
+            buf = chunk.copy()
             div_col = _div_col(buf)
             divisions.append(div_col.iloc[0])
         else:
-            buf = pd.concat((buf, chunk))
+            if buf.empty:
+                # If the buffer is empty, let's refill it before continuing
+                # searching for divisions.
+                buf = chunk.copy()
+                continue
+            buf = pd.concat((buf, chunk)).copy()
             div_col = _div_col(buf)
             while len(div_col) > chunksize:
                 split = div_col.iloc[chunksize]
                 if divisions[-1] == split:
                     raise ValueError('Chunksize of %s is too small to divide by' % chunksize)
                 div_loc = int(div_col.searchsorted(split))
-                starts.append(div_loc)
-                stops.append(div_loc)
+                starts.append(starts[-1] + div_loc)
+                stops.append(starts[-1])
                 divisions.append(split)
                 buf = buf.iloc[div_loc:]
                 div_col = _div_col(buf)

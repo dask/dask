@@ -671,7 +671,15 @@ def test_read_hdf():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     df2 = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                        'y': [1, 2, 2, 3]}, index=[1., 2., 3., 4.])                       
+                        'y': [1, 2, 2, 3]}, index=[1., 2., 3., 4.])
+    np.random.seed(42)
+    vals = list()
+    for i in range(1, 101):
+        reps = np.random.randint(1, 4)
+        for r in range(reps):
+            vals.append(i)
+    df3 = pd.DataFrame({'x': np.arange(1, len(vals) +1),
+                        'y': vals})
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data')
         try:
@@ -720,6 +728,9 @@ def test_read_hdf():
         a = dd.read_hdf(fn, '/data2', chunksize=2, sorted_division_column='y')
         assert a.divisions == (1., 2., 3., 3.)
         eq(a, df2)
+        df3.to_hdf(fn, '/data3', format='table')
+        a = dd.read_hdf(fn, '/data3', chunksize=3, sorted_division_column='y')
+        eq(a, df3)
 
 
 def test_to_csv():
