@@ -135,6 +135,7 @@ help make debugging and profiling graph execution easier.
 
 * :doc:`install`
 * :doc:`examples-overview`
+* :doc:`cheatsheet`
 * :doc:`glossary`
 * :doc:`faq`
 * :doc:`spark`
@@ -148,6 +149,7 @@ help make debugging and profiling graph execution easier.
 
    install.rst
    examples-overview.rst
+   cheatsheet.rst
    glossary.rst
    faq.rst
    spark.rst
