@@ -2,16 +2,22 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 import json
-import time
+from operator import sub
+from time import time
 from tornado import gen
-
-from ..core import rpc
-from ..utils import ignoring, is_kernel, log_errors
-from ..executor import default_executor
-from ..scheduler import Scheduler
 
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop, PeriodicCallback
+
+from ..core import rpc
+from ..utils import ignoring, is_kernel, log_errors, key_split
+from ..executor import default_executor
+from ..scheduler import Scheduler
+
+try:
+    from cytoolz import pluck
+except ImportError:
+    from toolz import pluck
 
 with ignoring(ImportError):
     from bokeh.palettes import Spectral11
@@ -140,3 +146,41 @@ def worker_table_update(source, d):
     data['processing'] = [sorted(d[w]['processing']) for w in workers]
     data['processes'] = [len(d[w]['ports']) for w in workers]
     source.data.update(data)
+
+
+def task_stream_plot(**kwargs):
+    data = {'compute-start': [], 'compute-duration': [],
+            'transfer-start': [], 'transfer-duration': [],
+            'key': [], 'key-prefix': [],
+            'worker': [], 'thread': [], 'worker-position': []}
+
+    source = ColumnDataSource(data)
+    fig = figure(x_range=[time(), time() + 10], y_range=[0, 1], **kwargs)
+    fig.rect(x='compute-start', width='compute-duration',
+             y='worker-position', height=0.9, line_color='gray', source=source)
+    return source, fig
+
+
+def task_stream_update(source, plot, msgs):
+    if source.data['key'] and msgs[-1]['key'] == source.data['key'][-1]:  # no change
+        return
+
+    data = dict()
+    data['compute-start'] = list(pluck('compute-start', msgs))
+    data['compute-duration'] = list(map(sub, pluck('compute-stop', msgs),
+                                             data['compute-start']))
+    data['key'] = list(pluck('key', msgs))
+    data['key-prefix'] = list(map(key_split, data['key']))
+    data['worker'] = list(pluck('worker', msgs))
+
+    workers = list(pluck('worker', msgs))
+    threads = list(pluck('thread', msgs))
+    sorted_workers = sorted(set(zip(workers, threads)))
+    data['worker'] = workers
+    data['worker-position'] = list(map(sorted_workers.index,
+                                        zip(workers, threads)))
+    source.data.update(data)
+
+    plot.y_range.end = len(sorted_workers)
+    plot.x_range.start = msgs[0]['compute-start']
+    plot.x_range.end = msgs[-1]['compute-stop']

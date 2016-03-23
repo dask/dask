@@ -1,5 +1,6 @@
 from distributed.diagnostics.status_monitor import (worker_table_plot,
-        worker_table_update, task_table_plot, task_table_update)
+        worker_table_update, task_table_plot, task_table_update,
+        task_stream_plot, task_stream_update)
 from distributed.diagnostics.scheduler import workers, tasks
 
 from distributed.utils_test import gen_cluster, inc
@@ -34,3 +35,22 @@ def test_task_table(e, s, a, b):
     task_table_update(source, data)
     assert source.data['processing'] == [0]
     assert source.data['total'] == [10]
+
+
+def test_task_stream():
+    source, plot = task_stream_plot()
+    msgs = [{'status': 'OK', 'compute-start': 10, 'compute-stop': 20,
+             'key':'inc-1', 'thread': 5855, 'worker':'127.0.0.1:9999'},
+            {'status': 'OK', 'compute-start': 15, 'compute-stop': 25,
+             'key':'inc-2', 'thread': 6000, 'worker':'127.0.0.1:9999'},
+            {'status': 'OK', 'compute-start': 10, 'compute-stop': 14,
+             'key':'inc-3', 'thread': 6000, 'worker':'127.0.0.1:9999'},
+            {'status': 'OK', 'compute-start': 10, 'compute-stop': 30,
+             'key':'add-1', 'thread': 4000, 'worker':'127.0.0.2:9999'}]
+
+    task_stream_update(source, plot, msgs)
+    assert len(source.data['compute-start']) == len(msgs)
+    assert plot.y_range.start == 0
+    assert plot.y_range.end == 3
+    assert plot.x_range.start == 10
+    assert plot.x_range.end == 30
