@@ -68,6 +68,8 @@ def test_worker(loop):
         assert response['status'] == 'OK'
         assert a.data['x'] == 3
         assert c.who_has['x'] == {a.address}
+        assert isinstance(response['compute-start'], float)
+        assert isinstance(response['compute-stop'], float)
 
         response = yield bb.compute(key='y',
                                     function=dumps(add),
@@ -77,6 +79,8 @@ def test_worker(loop):
         assert b.data['y'] == 13
         assert c.who_has['y'] == {b.address}
         assert response['nbytes'] == sizeof(b.data['y'])
+        assert isinstance(response['transfer-start'], float)
+        assert isinstance(response['transfer-stop'], float)
 
         def bad_func():
             1 / 0

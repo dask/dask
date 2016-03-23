@@ -8,6 +8,7 @@ from multiprocessing.pool import ThreadPool
 import os
 import pkg_resources
 import tempfile
+from time import time
 from timeit import default_timer
 import traceback
 import shutil
@@ -231,6 +232,7 @@ class Worker(Server):
     @gen.coroutine
     def _ready_task(self, function=None, key=None, args=(), kwargs={},
             task=None, who_has=None):
+        diagnostics = {}
         if who_has:
             local_data = {k: self.data[k] for k in who_has if k in self.data}
             who_has = {k: set(map(coerce_to_address, v))
@@ -239,9 +241,9 @@ class Worker(Server):
             try:
                 logger.info("gather %d keys from peers: %s",
                             len(who_has), str(who_has))
-                start = default_timer()
+                diagnostics['transfer-start'] = time()
                 other = yield gather_from_workers(who_has)
-                transfer_time = default_timer() - start
+                diagnostics['transfer-stop'] = time()
                 data = merge(local_data, other)
             except KeyError as e:
                 logger.warn("Could not find data for %s", key)
@@ -261,7 +263,7 @@ class Worker(Server):
                 args = loads(args)
             if kwargs:
                 kwargs = loads(kwargs)
-            deserialization_time = default_timer() - start
+            diagnostics['deserialization'] = default_timer() - start
         except Exception as e:
             logger.warn("Could not deserialize task", exc_info=True)
             raise Return(assoc(error_message(e), 'key', key))
@@ -279,8 +281,7 @@ class Worker(Server):
                       'function': function,
                       'args': args2,
                       'kwargs': kwargs2,
-                      'diagnostics': {'transfer': transfer_time,
-                                      'deserialization': deserialization_time},
+                      'diagnostics': diagnostics,
                       'key': key})
 
     @gen.coroutine
@@ -591,7 +592,7 @@ def apply_function(function, args, kwargs):
     -------
     msg: dictionary with status, result/error, timings, etc..
     """
-    start = default_timer()
+    start = time()
     try:
         result = function(*args, **kwargs)
     except Exception as e:
@@ -602,6 +603,7 @@ def apply_function(function, args, kwargs):
                'nbytes': sizeof(result),
                'type': dumps_function(type(result)) if result is not None else None}
     finally:
-        end = default_timer()
-    msg['compute-time'] = end - start
+        end = time()
+    msg['compute-start'] = start
+    msg['compute-stop'] = end
     return msg
