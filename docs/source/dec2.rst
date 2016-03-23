@@ -1,9 +1,7 @@
 EC2 Startup Script
 ==================
 
-First, add your AWS credentials to ``~/.aws/credentials`` like this:
-
-.. code-block::
+First, add your AWS credentials to ``~/.aws/credentials`` like this::
 
      [default]
      aws_access_key_id = YOUR_ACCESS_KEY
