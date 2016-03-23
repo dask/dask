@@ -9,11 +9,8 @@ from tornado import gen
 
 from distributed.diagnostics.status_monitor import (
         worker_table_plot, worker_table_update, task_table_plot,
-        task_table_update)
-from distributed.diagnostics.worker_monitor import (
         resource_profile_plot, resource_profile_update
-)
-
+        task_table_update, task_stream_plot, task_stream_update)
 from distributed.utils import log_errors
 import distributed.diagnostics
 
@@ -49,4 +46,13 @@ def resource_update():
         resource_profile_update(resource_source, worker_buffer, times_buffer)
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])
 
-doc.add_root(vplot(worker_table, task_table, resource_plot))
+task_stream_source, task_stream_plot = task_stream_plot()
+@gen.coroutine
+def task_stream_update2():
+    with log_errors():
+        msgs = list(messages['task-events']['deque'])
+        yield messages['task-events']['condition'].wait()
+        task_stream_update(task_stream_source, task_stream_plot, msgs)
+doc.add_periodic_callback(task_stream_update2, messages['task-events']['interval'])
+
+doc.add_root(vplot(worker_table, task_table, resource_plot, task_stream_plot))

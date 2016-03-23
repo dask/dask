@@ -8,7 +8,7 @@ from tornado import web, gen
 from tornado.httpclient import AsyncHTTPClient
 
 from .core import RequestHandler, MyApp, Resources, Proxy
-from ..utils import key_split
+from ..utils import key_split, log_errors
 from ..compatibility import unicode
 
 
@@ -75,15 +75,17 @@ class MemoryLoadByKey(RequestHandler):
 class Tasks(RequestHandler):
     """ Lots of information about all the workers """
     def get(self):
-        from ..diagnostics.scheduler import tasks
-        self.write(tasks(self.server))
+        with log_errors():
+            from ..diagnostics.scheduler import tasks
+            self.write(tasks(self.server))
 
 
 class Workers(RequestHandler):
     """ Lots of information about all the workers """
     def get(self):
-        from ..diagnostics.scheduler import workers
-        self.write(workers(self.server))
+        with log_errors():
+            from ..diagnostics.scheduler import workers
+            self.write(workers(self.server))
 
 
 def HTTPScheduler(scheduler):

@@ -28,8 +28,7 @@ def workers(s):
     Examples
     --------
     >>> workers(my_scheduler)  # doctest: +SKIP
-    {'127.0.0.1': {
-                   'cores': 3,
+    {'127.0.0.1': {'cores': 3,
                    'cpu': 0.0,
                    'last-seen': 0.003068,
                    'latency': 0.01584628690034151,

@@ -37,12 +37,13 @@ def http_get(route):
 @gen.coroutine
 def task_events():
     with log_errors():
-        stream = yield eventstream('localhost:8786', 0.1)
-        d = deque(maxlen=100000)
+        stream = yield eventstream('localhost:8786', 0.100)
+        print("Hello")
+        d = deque(maxlen=4000)
         c = Condition()
-        times = deque(maxlen=100000)
+        times = deque(maxlen=4000)
         messages['task-events'] = {'stream': stream,
-                                   'interval': 0.1,
+                                   'interval': 100,
                                    'deque': d,
                                    'times': times,
                                    'condition': c}

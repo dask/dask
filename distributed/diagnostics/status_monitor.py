@@ -148,20 +148,24 @@ def worker_table_update(source, d):
     source.data.update(data)
 
 
-def task_stream_plot(**kwargs):
+def task_stream_plot(height=400, width=1000, **kwargs):
     data = {'compute-start': [], 'compute-duration': [],
             'transfer-start': [], 'transfer-duration': [],
             'key': [], 'key-prefix': [],
             'worker': [], 'thread': [], 'worker-position': []}
 
     source = ColumnDataSource(data)
-    fig = figure(x_range=[time(), time() + 10], y_range=[0, 1], **kwargs)
+    fig = figure(x_range=[time(), time() + 10], y_range=[0, 1], width=width,
+                 height=height, **kwargs)
     fig.rect(x='compute-start', width='compute-duration',
              y='worker-position', height=0.9, line_color='gray', source=source)
     return source, fig
 
 
 def task_stream_update(source, plot, msgs):
+    plot.x_range.end = time()
+    if not msgs:
+        return
     if source.data['key'] and msgs[-1]['key'] == source.data['key'][-1]:  # no change
         return
 
@@ -183,4 +187,3 @@ def task_stream_update(source, plot, msgs):
 
     plot.y_range.end = len(sorted_workers)
     plot.x_range.start = msgs[0]['compute-start']
-    plot.x_range.end = msgs[-1]['compute-stop']
