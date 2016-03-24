@@ -22,8 +22,8 @@ except ImportError:
 
 with ignoring(ImportError):
     from bokeh.palettes import Spectral11
-    from bokeh.models import (ColumnDataSource, HoverTool, BoxZoomTool,
-            PanTool, ResetTool, ResizeTool, FactorRange)
+    from bokeh.models import (ColumnDataSource, FactorRange, DataRange1d,
+            HoverTool)
     from bokeh.models.widgets import DataTable, TableColumn
     from bokeh.plotting import vplot, output_notebook, show, figure
     from bokeh.io import curstate, push_notebook
@@ -157,16 +157,18 @@ def task_stream_plot(height=400, width=800, **kwargs):
             'worker': [], 'thread': [], 'y': []}
 
     source = ColumnDataSource(data)
-    hover = HoverTool()
-    tools = [hover, BoxZoomTool(), PanTool(), ResetTool(), ResizeTool()]
+    x_range = DataRange1d(follow='end', follow_interval=20000)
     fig = figure(width=width, height=height, x_axis_type='datetime',
-                 tools=tools, **kwargs)
+                 tools=['xwheel_zoom', 'xpan', 'reset', 'resize'],
+                 x_range=x_range, **kwargs)
     fig.rect(x='start', width='duration',
              y='y', height=0.9,
              fill_color='color', line_color='gray', source=source)
     fig.xaxis.axis_label = 'Time'
     fig.yaxis.axis_label = 'Worker Core'
 
+    hover = HoverTool()
+    fig.add_tools(hover)
     hover = fig.select(HoverTool)
     hover.tooltips = """
     <div>
