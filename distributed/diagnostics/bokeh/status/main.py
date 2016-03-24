@@ -44,8 +44,8 @@ resource_source, resource_plot = resource_profile_plot()
 def resource_update():
     with log_errors():
         yield messages['workers']['condition'].wait()
-        worker_buffer = messages['workers']['deque']
-        times_buffer = messages['workers']['times']
+        worker_buffer = list(messages['workers']['deque'])
+        times_buffer = list(messages['workers']['times'])
         resource_profile_update(resource_source, worker_buffer, times_buffer)
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])
 
