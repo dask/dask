@@ -10,8 +10,8 @@ from tornado import gen
 
 from distributed.diagnostics.status_monitor import (
         worker_table_plot, worker_table_update, task_table_plot,
-        resource_profile_plot, resource_profile_update
-        task_table_update, task_stream_plot, task_stream_update)
+        resource_profile_plot, resource_profile_update,
+        task_table_update, task_stream_plot)
 from distributed.utils import log_errors
 import distributed.diagnostics
 

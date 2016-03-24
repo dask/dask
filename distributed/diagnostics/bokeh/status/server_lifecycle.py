@@ -36,24 +36,9 @@ def http_get(route):
 
 
 @gen.coroutine
-def task_events():
+def task_events(interval, deque, times, condition, rectangles, workers):
     with log_errors():
         stream = yield eventstream('localhost:8786', 0.100)
-        d = deque(maxlen=2000)
-        c = Condition()
-        times = deque(maxlen=2000)
-        rectangles = {name: deque(maxlen=2000) for name in
-            'start duration key name color worker worker_thread'.split()}
-        workers = set()
-
-        messages['task-events'] = {'stream': stream,
-                                   'interval': 100,
-                                   'deque': d,
-                                   'times': times,
-                                   'condition': c,
-                                   'rectangles':rectangles,
-                                   'workers': workers}
-
         while True:
             try:
                 msgs = yield read(stream)
@@ -62,10 +47,10 @@ def task_events():
             else:
                 for msg in msgs:
                     if 'compute-start' in msg:
-                        d.append(msg)
+                        deque.append(msg)
                         times.append(msg['compute-start'])
                         task_stream_append(rectangles, msg, workers)
-                c.notify_all()
+                condition.notify_all()
 
 
 def on_server_loaded(server_context):
@@ -80,4 +65,13 @@ def on_server_loaded(server_context):
                          'times': deque(maxlen=1000),
                          'condition': Condition()}
     server_context.add_periodic_callback(lambda: http_get('tasks'), 100)
-    IOLoop.current().add_callback(task_events)
+
+    messages['task-events'] = {'interval': 100,
+                               'deque': deque(maxlen=2000),
+                               'times': deque(maxlen=2000),
+                               'condition': Condition(),
+                               'rectangles':{name: deque(maxlen=2000) for name in
+                                            'start duration key name color worker worker_thread'.split()},
+                               'workers': set()}
+
+    IOLoop.current().add_callback(task_events, **messages['task-events'])

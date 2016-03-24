@@ -1,6 +1,6 @@
 from distributed.diagnostics.status_monitor import (worker_table_plot,
         worker_table_update, task_table_plot, task_table_update,
-        task_stream_plot, task_stream_update, task_stream_append)
+        task_stream_plot, task_stream_append)
 from distributed.diagnostics.scheduler import workers, tasks
 
 from distributed.utils_test import gen_cluster, inc
