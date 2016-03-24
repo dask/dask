@@ -5,9 +5,9 @@ from __future__ import print_function, division, absolute_import
 from collections import deque
 from datetime import datetime
 import json
+from time import time
 
 from tornado import gen
-from tornado.locks import Condition
 from tornado.httpclient import AsyncHTTPClient
 from tornado.iostream import StreamClosedError
 from tornado.ioloop import IOLoop
@@ -31,12 +31,11 @@ def http_get(route):
         response = yield client.fetch('http://localhost:9786/%s.json' % route)
         msg = json.loads(response.body.decode())
         messages[route]['deque'].append(msg)
-        messages[route]['condition'].notify_all()
         messages[route]['times'].append(datetime.now())
 
 
 @gen.coroutine
-def task_events(interval, deque, times, condition, rectangles, workers):
+def task_events(interval, deque, times, rectangles, workers, last_seen):
     with log_errors():
         stream = yield eventstream('localhost:8786', 0.100)
         while True:
@@ -45,33 +44,34 @@ def task_events(interval, deque, times, condition, rectangles, workers):
             except StreamClosedError:
                 break
             else:
+                if not msgs:
+                    continue
+
+                last_seen[0] = time()
                 for msg in msgs:
                     if 'compute-start' in msg:
                         deque.append(msg)
                         times.append(msg['compute-start'])
                         task_stream_append(rectangles, msg, workers)
-                condition.notify_all()
 
 
 def on_server_loaded(server_context):
     messages['workers'] = {'interval': 1000,
                            'deque': deque(maxlen=1000),
-                           'times': deque(maxlen=1000),
-                           'condition': Condition()}
+                           'times': deque(maxlen=1000)}
     server_context.add_periodic_callback(lambda: http_get('workers'), 1000)
 
     messages['tasks'] = {'interval': 100,
                          'deque': deque(maxlen=1000),
-                         'times': deque(maxlen=1000),
-                         'condition': Condition()}
+                         'times': deque(maxlen=1000)}
     server_context.add_periodic_callback(lambda: http_get('tasks'), 100)
 
-    messages['task-events'] = {'interval': 100,
+    messages['task-events'] = {'interval': 200,
                                'deque': deque(maxlen=2000),
                                'times': deque(maxlen=2000),
-                               'condition': Condition(),
                                'rectangles':{name: deque(maxlen=2000) for name in
                                             'start duration key name color worker worker_thread'.split()},
-                               'workers': set()}
+                               'workers': set(),
+                               'last_seen': [time()]}
 
     IOLoop.current().add_callback(task_events, **messages['task-events'])

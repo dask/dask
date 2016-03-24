@@ -23,7 +23,6 @@ worker_source, worker_table = worker_table_plot()
 @gen.coroutine
 def worker_update():
     with log_errors():
-        yield messages['workers']['condition'].wait()
         msg = messages['workers']['deque'][-1]
         worker_table_update(worker_source, msg)
 doc.add_periodic_callback(worker_update, messages['workers']['interval'])
@@ -32,7 +31,6 @@ task_source, task_table = task_table_plot()
 @gen.coroutine
 def task_update():
     with log_errors():
-        yield messages['tasks']['condition'].wait()
         msg = messages['tasks']['deque'][-1]
         task_table_update(task_source, msg)
 doc.add_periodic_callback(task_update, messages['tasks']['interval'])
@@ -48,10 +46,14 @@ def resource_update():
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])
 
 task_stream_source, task_stream_plot = task_stream_plot()
+last_time = [None]
 @gen.coroutine
 def task_stream_update2():
     with log_errors():
-        yield messages['task-events']['condition'].wait()
+        if messages['task-events']['last_seen'] == last_time:
+            return
+        else:
+            last_time[0] = messages['task-events']['last_seen'][0]
         rectangles = valmap(list, messages['task-events']['rectangles'])
         workers = messages['task-events']['workers']
         workers = {w: i for i, w in enumerate(sorted(workers))}
