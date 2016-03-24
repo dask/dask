@@ -20,12 +20,12 @@ def resource_profile_plot(width=600, height=400):
 def resource_profile_update(source, worker_buffer, times_buffer):
     data = defaultdict(list)
 
-    workers = set(chain(*list(w.keys() for w in worker_buffer)))
+    workers = sorted(list(set(chain(*list(w.keys() for w in worker_buffer)))))
 
     for name in ['cpu', 'memory-percent']:
         data[name] = [[msg[w][name] if w in msg else 'null' for msg in worker_buffer] for w in workers]
 
-    data['workers'] = list(workers)
+    data['workers'] = workers
     data['times'] = [[t if w in worker_buffer[i] else 'null' for i, t in enumerate(times_buffer)] for w in workers]
 
     source.data.update(data)
