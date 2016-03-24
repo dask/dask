@@ -13,9 +13,7 @@ def test_resource_monitor_plot(s, a, b):
     while any('last-seen' not in v for v in s.host_info.values()):
         yield gen.sleep(0.01)
 
-    times_buffer = [datetime.datetime(2016, 3, 23, 14, 31, 4, 426461),
-                    datetime.datetime(2016, 3, 23, 14, 31, 5, 430657),
-                    datetime.datetime(2016, 3, 23, 14, 31, 6, 432290)]
+    times_buffer = [1000, 1001, 1003]
     workers_buffer = [{},
                       {'10.10.20.86': {'cpu': 15.9, 'memory-percent': 63.0}},
                       {'10.10.20.86': {'cpu': 14.9, 'memory-percent': 64.0},
@@ -29,11 +27,7 @@ def test_resource_monitor_plot(s, a, b):
     assert source.data['cpu'][0] == ['null', 15.9, 14.9]
     assert source.data['cpu'][1] == ['null', 'null', 13.9]
 
-    assert source.data['times'][0] == ['null',
-                                       datetime.datetime(2016, 3, 23, 14, 31, 5, 430657),
-                                       datetime.datetime(2016, 3, 23, 14, 31, 6, 432290)]
-    assert source.data['times'][1] == ['null',
-                                       'null',
-                                       datetime.datetime(2016, 3, 23, 14, 31, 6, 432290)]
+    assert source.data['times'][0] == ['null', 1001000, 1003000]
+    assert source.data['times'][1] == ['null','null', 1003000]
     assert len(source.data['times']) == 2
     assert len(source.data['memory-percent']) == 2

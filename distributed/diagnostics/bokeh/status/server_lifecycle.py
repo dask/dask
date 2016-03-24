@@ -31,7 +31,7 @@ def http_get(route):
         response = yield client.fetch('http://localhost:9786/%s.json' % route)
         msg = json.loads(response.body.decode())
         messages[route]['deque'].append(msg)
-        messages[route]['times'].append(datetime.now())
+        messages[route]['times'].append(time())
 
 
 @gen.coroutine
@@ -56,10 +56,10 @@ def task_events(interval, deque, times, rectangles, workers, last_seen):
 
 
 def on_server_loaded(server_context):
-    messages['workers'] = {'interval': 1000,
+    messages['workers'] = {'interval': 500,
                            'deque': deque(maxlen=1000),
                            'times': deque(maxlen=1000)}
-    server_context.add_periodic_callback(lambda: http_get('workers'), 1000)
+    server_context.add_periodic_callback(lambda: http_get('workers'), 500)
 
     messages['tasks'] = {'interval': 100,
                          'deque': deque(maxlen=1000),
