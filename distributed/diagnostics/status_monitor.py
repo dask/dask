@@ -150,10 +150,10 @@ def worker_table_update(source, d):
     source.data.update(data)
 
 
-def task_stream_plot(height=400, width=1000, **kwargs):
-    data = {'compute_start': [], 'compute_duration': [],
+def task_stream_plot(height=400, width=800, **kwargs):
+    data = {'start': [], 'duration': [],
             'transfer-start': [], 'transfer-duration': [],
-            'key': [], 'key_prefix': [], 'color': [],
+            'key': [], 'name': [], 'color': [],
             'worker': [], 'thread': [], 'worker_position': []}
 
     source = ColumnDataSource(data)
@@ -161,7 +161,7 @@ def task_stream_plot(height=400, width=1000, **kwargs):
     tools = [hover, BoxZoomTool(), PanTool(), ResetTool(), ResizeTool()]
     fig = figure(width=width, height=height, x_axis_type='datetime',
                  tools=tools, **kwargs)
-    fig.rect(x='compute_start', width='compute_duration',
+    fig.rect(x='start', width='duration',
              y='worker_position', height=0.9,
              fill_color='color', line_color='gray', source=source)
     fig.xaxis.axis_label = 'Time'
@@ -171,11 +171,11 @@ def task_stream_plot(height=400, width=1000, **kwargs):
     hover.tooltips = """
     <div>
         <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
-        <span style="font-size: 10px; font-family: Monaco, monospace;">@key_prefix</span>
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
     </div>
     <div>
         <span style="font-size: 14px; font-weight: bold;">Duration:</span>&nbsp;
-        <span style="font-size: 10px; font-family: Monaco, monospace;">@compute_duration</span>
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@duration</span>
     </div>
     """
     hover.point_policy = 'follow_mouse'
@@ -191,7 +191,15 @@ def incrementing_index(o):
 
 
 
+
+
+
 def task_stream_update(source, plot, msgs, palette=Spectral11):
+    n = len(palette)
+    def color_of_key(k):
+        i = incrementing_index(key_split(k))
+        return palette[i % n]
+
     with log_errors():
         if not msgs:
             return
@@ -199,14 +207,14 @@ def task_stream_update(source, plot, msgs, palette=Spectral11):
             return
 
         data = dict()
-        data['compute_start'] = [msg['compute-start'] * 1000 for msg in msgs]
-        data['compute_duration'] = [1000 * (msg['compute-stop']
+        data['start'] = [msg['compute-start'] * 1000 for msg in msgs]
+        data['duration'] = [1000 * (msg['compute-stop']
                                           - msg['compute-start']) for msg in msgs]
         data['key'] = list(pluck('key', msgs))
-        data['key_prefix'] = list(map(key_split, data['key']))
+        data['name'] = list(map(key_split, data['key']))
         data['worker'] = list(pluck('worker', msgs))
         data['color'] = [palette[incrementing_index(kp) % len(palette)]
-                         for kp in data['key_prefix']]
+                         for kp in data['name']]
 
         workers = list(pluck('worker', msgs))
         threads = list(pluck('thread', msgs))
@@ -214,4 +222,17 @@ def task_stream_update(source, plot, msgs, palette=Spectral11):
         data['worker'] = workers
         data['worker_position'] = list(map(sorted_workers.index,
                                             zip(workers, threads)))
+        for msg in msgs:
+            if 'transfer-start' in msg:
+                data['start'].append(msg['transfer-start'] * 1000)
+                data['duration'].append(1000 * (msg['transfer-stop'] -
+                                                msg['transfer-start']))
+
+                data['key'] = msg['key']
+                data['name'].append('transfer-to-' + key_split(msg['key']))
+                data['worker'].append(msg['worker'])
+                data['color'].append('red')
+                data['worker_position'].append(
+                    sorted_workers.index((msg['worker'], msg['thread'])))
+
         source.data.update(data)

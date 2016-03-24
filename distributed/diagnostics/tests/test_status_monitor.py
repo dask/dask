@@ -46,10 +46,12 @@ def test_task_stream():
             {'status': 'OK', 'compute-start': 10, 'compute-stop': 14,
              'key':'inc-3', 'thread': 6000, 'worker':'127.0.0.1:9999'},
             {'status': 'OK', 'compute-start': 10, 'compute-stop': 30,
+             'transfer-start': 8, 'transfer-stop': 10,
              'key':'add-1', 'thread': 4000, 'worker':'127.0.0.2:9999'}]
 
     task_stream_update(source, plot, msgs)
-    assert len(source.data['compute-start']) == len(msgs)
+    assert len(source.data['start']) == len(msgs) + 1
+    assert source.data['color'][-1] == 'red'
     L = source.data['color']
     assert L[0] == L[1] == L[2]
     assert L[3] != L[0]
