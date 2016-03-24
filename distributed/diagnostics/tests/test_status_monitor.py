@@ -50,7 +50,6 @@ def test_task_stream():
 
     task_stream_update(source, plot, msgs)
     assert len(source.data['compute-start']) == len(msgs)
-    assert plot.y_range.start == 0
-    assert plot.y_range.end == 3
-    assert plot.x_range.start == 10
-    assert plot.x_range.end == 30
+    L = source.data['color']
+    assert L[0] == L[1] == L[2]
+    assert L[3] != L[0]

@@ -4,8 +4,9 @@ from collections import defaultdict
 import json
 from operator import sub
 from time import time
-from tornado import gen
 
+from toolz import memoize
+from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.ioloop import IOLoop, PeriodicCallback
 
@@ -21,7 +22,8 @@ except ImportError:
 
 with ignoring(ImportError):
     from bokeh.palettes import Spectral11
-    from bokeh.models import ColumnDataSource
+    from bokeh.models import (ColumnDataSource, HoverTool, BoxZoomTool,
+            PanTool, ResetTool, ResizeTool)
     from bokeh.models.widgets import DataTable, TableColumn
     from bokeh.plotting import vplot, output_notebook, show, figure
     from bokeh.io import curstate, push_notebook
@@ -149,38 +151,67 @@ def worker_table_update(source, d):
 
 
 def task_stream_plot(height=400, width=1000, **kwargs):
-    data = {'compute-start': [], 'compute-duration': [],
+    data = {'compute_start': [], 'compute_duration': [],
             'transfer-start': [], 'transfer-duration': [],
-            'key': [], 'key-prefix': [],
-            'worker': [], 'thread': [], 'worker-position': []}
+            'key': [], 'key_prefix': [], 'color': [],
+            'worker': [], 'thread': [], 'worker_position': []}
 
     source = ColumnDataSource(data)
-    fig = figure(width=width, height=height, x_axis_type='datetime', **kwargs)
-    fig.rect(x='compute-start', width='compute-duration',
-             y='worker-position', height=0.9, line_color='gray', source=source)
+    hover = HoverTool()
+    tools = [hover, BoxZoomTool(), PanTool(), ResetTool(), ResizeTool()]
+    fig = figure(width=width, height=height, x_axis_type='datetime',
+                 tools=tools, **kwargs)
+    fig.rect(x='compute_start', width='compute_duration',
+             y='worker_position', height=0.9,
+             fill_color='color', line_color='gray', source=source)
+    fig.xaxis.axis_label = 'Time'
+    fig.yaxis.axis_label = 'Worker Core'
+
+    hover = fig.select(HoverTool)
+    hover.tooltips = """
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Key:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@key_prefix</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Duration:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@compute_duration</span>
+    </div>
+    """
+    hover.point_policy = 'follow_mouse'
+
     return source, fig
 
 
-def task_stream_update(source, plot, msgs):
-    if not msgs:
-        return
-    if source.data['key'] and msgs[-1]['key'] == source.data['key'][-1]:  # no change
-        return
+import itertools
+counter = itertools.count()
+@memoize
+def incrementing_index(o):
+    return next(counter)
 
-    data = dict()
-    data['compute-start'] = [msg['compute-start'] * 1000 for msg in msgs]
-    data['compute-duration'] = [1000 * (msg['compute-stop']
-                                      - msg['compute-start']) for msg in msgs]
-    data['key'] = list(pluck('key', msgs))
-    data['key-prefix'] = list(map(key_split, data['key']))
-    data['worker'] = list(pluck('worker', msgs))
 
-    workers = list(pluck('worker', msgs))
-    threads = list(pluck('thread', msgs))
-    sorted_workers = sorted(set(zip(workers, threads)))
-    data['worker'] = workers
-    data['worker-position'] = list(map(sorted_workers.index,
-                                        zip(workers, threads)))
-    source.data.update(data)
 
-    plot.y_range.end = len(sorted_workers)
+def task_stream_update(source, plot, msgs, palette=Spectral11):
+    with log_errors():
+        if not msgs:
+            return
+        if source.data['key'] and msgs[-1]['key'] == source.data['key'][-1]:  # no change
+            return
+
+        data = dict()
+        data['compute_start'] = [msg['compute-start'] * 1000 for msg in msgs]
+        data['compute_duration'] = [1000 * (msg['compute-stop']
+                                          - msg['compute-start']) for msg in msgs]
+        data['key'] = list(pluck('key', msgs))
+        data['key_prefix'] = list(map(key_split, data['key']))
+        data['worker'] = list(pluck('worker', msgs))
+        data['color'] = [palette[incrementing_index(kp) % len(palette)]
+                         for kp in data['key_prefix']]
+
+        workers = list(pluck('worker', msgs))
+        threads = list(pluck('thread', msgs))
+        sorted_workers = sorted(set(zip(workers, threads)))
+        data['worker'] = workers
+        data['worker_position'] = list(map(sorted_workers.index,
+                                            zip(workers, threads)))
+        source.data.update(data)
