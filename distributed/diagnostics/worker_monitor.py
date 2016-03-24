@@ -1,4 +1,5 @@
 from collections import defaultdict
+from itertools import chain
 
 from ..utils import ignoring
 
@@ -19,17 +20,12 @@ def resource_profile_plot(width=600, height=400):
 def resource_profile_update(source, worker_buffer, times_buffer):
     data = defaultdict(list)
 
-    workers = sorted(worker_buffer[-1], reverse=True)
-
-    import pdb; pdb.set_trace()
+    workers = set(chain(*list(w.keys() for w in worker_buffer)))
 
     for name in ['cpu', 'memory-percent']:
-        try:
-            data[name] = [[msg[w][name] for msg in worker_buffer if msg != {} and w in msg] for w in workers]
-        except KeyError:
-            pass
+        data[name] = [[msg[w][name] if w in msg else 'null' for msg in worker_buffer] for w in workers]
 
-    data['workers'] = workers
-    data['times'] = [[t for i, t in enumerate(times_buffer) if worker_buffer[i] != {}] for w in workers]
+    data['workers'] = list(workers)
+    data['times'] = [[t if w in worker_buffer[i] else 'null' for i, t in enumerate(times_buffer)] for w in workers]
 
     source.data.update(data)
