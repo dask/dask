@@ -1,6 +1,6 @@
 from distributed.diagnostics.status_monitor import (worker_table_plot,
         worker_table_update, task_table_plot, task_table_update,
-        task_stream_plot, task_stream_update)
+        task_stream_plot, task_stream_update, task_stream_append)
 from distributed.diagnostics.scheduler import workers, tasks
 
 from distributed.utils_test import gen_cluster, inc
@@ -37,8 +37,11 @@ def test_task_table(e, s, a, b):
     assert source.data['total'] == [10]
 
 
-def test_task_stream():
+def test_task_stream_plot():
     source, plot = task_stream_plot()
+
+
+def test_task_stream_append():
     msgs = [{'status': 'OK', 'compute-start': 10, 'compute-stop': 20,
              'key':'inc-1', 'thread': 5855, 'worker':'127.0.0.1:9999'},
             {'status': 'OK', 'compute-start': 15, 'compute-stop': 25,
@@ -49,9 +52,16 @@ def test_task_stream():
              'transfer-start': 8, 'transfer-stop': 10,
              'key':'add-1', 'thread': 4000, 'worker':'127.0.0.2:9999'}]
 
-    task_stream_update(source, plot, msgs)
-    assert len(source.data['start']) == len(msgs) + 1
-    assert source.data['color'][-1] == 'red'
-    L = source.data['color']
+    lists = {name: [] for name in
+            'start duration key name color worker worker_thread'.split()}
+    workers = {'127.0.0.1:9999-5855'}
+
+    for msg in msgs:
+        task_stream_append(lists, msg, workers)
+    assert len(lists['start']) == len(msgs) + 1  # +1 for a transfer
+    assert len(workers) == 3
+    assert workers == set(lists['worker_thread'])
+    assert lists['color'][-1] == 'red'
+    L = lists['color']
     assert L[0] == L[1] == L[2]
     assert L[3] != L[0]

@@ -23,7 +23,7 @@ except ImportError:
 with ignoring(ImportError):
     from bokeh.palettes import Spectral11
     from bokeh.models import (ColumnDataSource, HoverTool, BoxZoomTool,
-            PanTool, ResetTool, ResizeTool)
+            PanTool, ResetTool, ResizeTool, FactorRange)
     from bokeh.models.widgets import DataTable, TableColumn
     from bokeh.plotting import vplot, output_notebook, show, figure
     from bokeh.io import curstate, push_notebook
@@ -154,7 +154,7 @@ def task_stream_plot(height=400, width=800, **kwargs):
     data = {'start': [], 'duration': [],
             'transfer-start': [], 'transfer-duration': [],
             'key': [], 'name': [], 'color': [],
-            'worker': [], 'thread': [], 'worker_position': []}
+            'worker': [], 'thread': [], 'y': []}
 
     source = ColumnDataSource(data)
     hover = HoverTool()
@@ -162,7 +162,7 @@ def task_stream_plot(height=400, width=800, **kwargs):
     fig = figure(width=width, height=height, x_axis_type='datetime',
                  tools=tools, **kwargs)
     fig.rect(x='start', width='duration',
-             y='worker_position', height=0.9,
+             y='y', height=0.9,
              fill_color='color', line_color='gray', source=source)
     fig.xaxis.axis_label = 'Time'
     fig.yaxis.axis_label = 'Worker Core'
@@ -190,49 +190,29 @@ def incrementing_index(o):
     return next(counter)
 
 
-
-
-
-
-def task_stream_update(source, plot, msgs, palette=Spectral11):
-    n = len(palette)
-    def color_of_key(k):
-        i = incrementing_index(key_split(k))
-        return palette[i % n]
-
+def task_stream_append(lists, msg, worker_threads, palette=Spectral11):
     with log_errors():
-        if not msgs:
-            return
-        if source.data['key'] and msgs[-1]['key'] == source.data['key'][-1]:  # no change
-            return
+        lists['start'].append(msg['compute-start'] * 1000)
+        lists['duration'].append(1000 * (msg['compute-stop']-msg['compute-start']))
+        key = msg['key']
+        name = key_split(key)
+        color = palette[incrementing_index(name) % len(palette)]
+        lists['key'].append(key)
+        lists['name'].append(name)
+        lists['color'].append(color)
+        lists['worker'].append(msg['worker'])
 
-        data = dict()
-        data['start'] = [msg['compute-start'] * 1000 for msg in msgs]
-        data['duration'] = [1000 * (msg['compute-stop']
-                                          - msg['compute-start']) for msg in msgs]
-        data['key'] = list(pluck('key', msgs))
-        data['name'] = list(map(key_split, data['key']))
-        data['worker'] = list(pluck('worker', msgs))
-        data['color'] = [palette[incrementing_index(kp) % len(palette)]
-                         for kp in data['name']]
+        worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
+        lists['worker_thread'].append(worker_thread)
+        worker_threads.add(worker_thread)
 
-        workers = list(pluck('worker', msgs))
-        threads = list(pluck('thread', msgs))
-        sorted_workers = sorted(set(zip(workers, threads)))
-        data['worker'] = workers
-        data['worker_position'] = list(map(sorted_workers.index,
-                                            zip(workers, threads)))
-        for msg in msgs:
-            if 'transfer-start' in msg:
-                data['start'].append(msg['transfer-start'] * 1000)
-                data['duration'].append(1000 * (msg['transfer-stop'] -
-                                                msg['transfer-start']))
+        if 'transfer-start' in msg:
+            lists['start'].append(msg['transfer-start'] * 1000)
+            lists['duration'].append(1000 * (msg['transfer-stop'] -
+                                            msg['transfer-start']))
 
-                data['key'] = msg['key']
-                data['name'].append('transfer-to-' + key_split(msg['key']))
-                data['worker'].append(msg['worker'])
-                data['color'].append('red')
-                data['worker_position'].append(
-                    sorted_workers.index((msg['worker'], msg['thread'])))
-
-        source.data.update(data)
+            lists['key'].append(key)
+            lists['name'].append('transfer-to-' + name)
+            lists['worker'].append(msg['worker'])
+            lists['color'].append('red')
+            lists['worker_thread'].append(worker_thread)

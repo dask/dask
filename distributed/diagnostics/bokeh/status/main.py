@@ -5,6 +5,7 @@ from __future__ import print_function, division, absolute_import
 import json
 
 from bokeh.plotting import curdoc, vplot
+from toolz import valmap
 from tornado import gen
 
 from distributed.diagnostics.status_monitor import (
@@ -50,9 +51,12 @@ task_stream_source, task_stream_plot = task_stream_plot()
 @gen.coroutine
 def task_stream_update2():
     with log_errors():
-        msgs = list(messages['task-events']['deque'])
         yield messages['task-events']['condition'].wait()
-        task_stream_update(task_stream_source, task_stream_plot, msgs)
+        rectangles = valmap(list, messages['task-events']['rectangles'])
+        workers = messages['task-events']['workers']
+        workers = {w: i for i, w in enumerate(sorted(workers))}
+        rectangles['y'] = [workers[wt] for wt in rectangles['worker_thread']]
+        task_stream_source.data.update(rectangles)
 doc.add_periodic_callback(task_stream_update2, messages['task-events']['interval'])
 
 doc.add_root(vplot(worker_table, task_table, resource_plot, task_stream_plot))

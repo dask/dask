@@ -14,6 +14,7 @@ from tornado.ioloop import IOLoop
 
 from distributed.core import read
 from distributed.diagnostics.eventstream import eventstream
+from distributed.diagnostics.status_monitor import task_stream_append
 import distributed.diagnostics
 from distributed.utils import log_errors
 
@@ -41,11 +42,17 @@ def task_events():
         d = deque(maxlen=2000)
         c = Condition()
         times = deque(maxlen=2000)
+        rectangles = {name: deque(maxlen=2000) for name in
+            'start duration key name color worker worker_thread'.split()}
+        workers = set()
+
         messages['task-events'] = {'stream': stream,
                                    'interval': 100,
                                    'deque': d,
                                    'times': times,
-                                   'condition': c}
+                                   'condition': c,
+                                   'rectangles':rectangles,
+                                   'workers': workers}
 
         while True:
             try:
@@ -57,6 +64,7 @@ def task_events():
                     if 'compute-start' in msg:
                         d.append(msg)
                         times.append(msg['compute-start'])
+                        task_stream_append(rectangles, msg, workers)
                 c.notify_all()
 
 
