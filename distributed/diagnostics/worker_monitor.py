@@ -14,7 +14,7 @@ def resource_profile_plot(width=600, height=300):
     names = ['times','workers', 'cpu', 'memory-percent']
     source = ColumnDataSource({k: [] for k in names})
 
-    x_range = DataRange1d(follow='end', follow_interval=10000)
+    x_range = DataRange1d(follow='end', follow_interval=10000, range_padding=0)
     p = figure(width=width, height=height, x_axis_type='datetime',
                tools='xpan,box_zoom,resize,wheel_zoom,reset', x_range=x_range)
     p.multi_line(xs='times', ys='memory-percent', line_width=2, line_alpha=0.4,

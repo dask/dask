@@ -153,7 +153,7 @@ def task_stream_plot(height=400, width=800, **kwargs):
             'worker': [], 'thread': [], 'y': []}
 
     source = ColumnDataSource(data)
-    x_range = DataRange1d(follow='end', follow_interval=10000)
+    x_range = DataRange1d(follow='end', follow_interval=10000, range_padding=0)
     fig = figure(width=width, height=height, x_axis_type='datetime',
                  tools=['xwheel_zoom', 'xpan', 'reset', 'resize'],
                  x_range=x_range, **kwargs)
