@@ -48,9 +48,6 @@ def main(center, host, port, http_port, bokeh_port):
 
     try:
         import bokeh
-    except ImportError:
-        pass
-    else:
         import distributed.diagnostics.bokeh
         hosts = ['%s:%d' % (h, bokeh_port) for h in
                  ['localhost', '127.0.0.1', ip, socket.gethostname(), host]]
@@ -65,6 +62,10 @@ def main(center, host, port, http_port, bokeh_port):
 
         logger.info(" Start Bokeh UI at:        http://%s:%d/status/"
                     % (ip, bokeh_port))
+    except ImportError:
+        logger.info("Please install Bokeh to get Web UI")
+    except Exception as e:
+        logger.warn("Could not start Bokeh web UI", exc_info=True)
 
     loop.start()
     loop.close()
