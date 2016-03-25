@@ -1,5 +1,5 @@
-Distibuted
-==========
+Distributed
+===========
 
 A library for distributed computation.  See documentation_ for more details.
 
