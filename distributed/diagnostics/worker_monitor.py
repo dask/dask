@@ -6,14 +6,15 @@ from itertools import chain
 from ..utils import ignoring
 
 with ignoring(ImportError):
-    from bokeh.models import ColumnDataSource, Range1d
+    from bokeh.models import ColumnDataSource, DataRange1d
     from bokeh.palettes import Spectral9
     from bokeh.plotting import figure
 
-def resource_profile_plot(width=600, height=300, x_range=None):
+def resource_profile_plot(width=600, height=300):
     names = ['times','workers', 'cpu', 'memory-percent']
     source = ColumnDataSource({k: [] for k in names})
 
+    x_range = DataRange1d(follow='end', follow_interval=10000)
     p = figure(width=width, height=height, x_axis_type='datetime',
                tools='xpan,box_zoom,resize,wheel_zoom,reset', x_range=x_range)
     p.multi_line(xs='times', ys='memory-percent', line_width=2, line_alpha=0.4,

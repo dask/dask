@@ -28,6 +28,7 @@ with ignoring(ImportError):
     from bokeh.plotting import vplot, output_notebook, show, figure
     from bokeh.io import curstate, push_notebook
 
+
 class Status_Monitor(object):
     """ Display the tasks running and waiting on each worker
 
@@ -93,7 +94,7 @@ class Status_Monitor(object):
                 push_notebook()
 
 
-def task_table_plot(row_headers=False, width=600, height=100):
+def task_table_plot(row_headers=False, width=600, height="auto"):
     names = ['waiting', 'ready', 'failed', 'processing', 'in-memory', 'total']
     source = ColumnDataSource({k: [] for k in names})
 
@@ -108,7 +109,7 @@ def task_table_update(source, d):
     source.data = d
 
 
-def worker_table_plot(width=600, height=100, **kwargs):
+def worker_table_plot(width=600, height="auto", **kwargs):
     """ Column data source and plot for host table """
     names = ['workers', 'cpu', 'memory-percent', 'memory', 'cores', 'processes',
              'processing', 'latency', 'last-seen', 'disk-read', 'disk-write',
@@ -157,7 +158,7 @@ def task_stream_plot(height=400, width=800, **kwargs):
             'worker': [], 'thread': [], 'y': []}
 
     source = ColumnDataSource(data)
-    x_range = DataRange1d(follow='end', follow_interval=20000)
+    x_range = DataRange1d(follow='end', follow_interval=10000)
     fig = figure(width=width, height=height, x_axis_type='datetime',
                  tools=['xwheel_zoom', 'xpan', 'reset', 'resize'],
                  x_range=x_range, **kwargs)
