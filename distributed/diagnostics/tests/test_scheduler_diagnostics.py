@@ -1,5 +1,7 @@
 import json
 
+from tornado import gen
+
 from distributed.utils_test import gen_cluster, div
 from distributed.diagnostics.scheduler import tasks, workers
 from distributed.executor import _wait

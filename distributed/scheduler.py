@@ -1172,7 +1172,7 @@ class Scheduler(Server):
         start = default_timer()
 
         try:
-            d = yield gen.with_timeout(timedelta(seconds=0.1),
+            d = yield gen.with_timeout(timedelta(seconds=1),
                                        self.rpc(ip=host, port=port).health(),
                                        io_loop=self.loop)
         except gen.TimeoutError:
