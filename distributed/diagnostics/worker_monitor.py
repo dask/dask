@@ -33,7 +33,7 @@ def resource_profile_update(source, worker_buffer, times_buffer):
     workers = sorted(list(set(chain(*list(w.keys() for w in worker_buffer)))))
 
     for name in ['cpu', 'memory-percent']:
-        data[name] = [[msg[w][name] if w in msg else 'null'
+        data[name] = [[msg[w][name] if w in msg and name in msg[w] else 'null'
                        for msg in worker_buffer]
                        for w in workers]
 

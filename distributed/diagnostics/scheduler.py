@@ -55,7 +55,8 @@ def workers(s):
         info['processing'] = processing[host]
         result[host] = info
         info['ports'] = list(info['ports'])
-        info['last-seen'] = (now - info['last-seen']).total_seconds()
+        if 'last-seen' in info:
+            info['last-seen'] = (now - info['last-seen']).total_seconds()
 
     return result
 

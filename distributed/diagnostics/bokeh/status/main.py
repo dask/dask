@@ -24,7 +24,10 @@ width = 800
 worker_source, worker_table = worker_table_plot(width=width)
 def worker_update():
     with log_errors():
-        msg = messages['workers']['deque'][-1]
+        try:
+            msg = messages['workers']['deque'][-1]
+        except IndexError:
+            return
         worker_table_update(worker_source, msg)
 doc.add_periodic_callback(worker_update, messages['workers']['interval'])
 
@@ -32,7 +35,10 @@ doc.add_periodic_callback(worker_update, messages['workers']['interval'])
 task_source, task_table = task_table_plot(width=width)
 def task_update():
     with log_errors():
-        msg = messages['tasks']['deque'][-1]
+        try:
+            msg = messages['tasks']['deque'][-1]
+        except IndexError:
+            return
         task_table_update(task_source, msg)
 doc.add_periodic_callback(task_update, messages['tasks']['interval'])
 
@@ -54,6 +60,7 @@ def task_stream_update():
         workers = {w: i for i, w in enumerate(sorted(workers, reverse=True))}
         rectangles['y'] = [workers[wt] for wt in rectangles['worker_thread']]
         task_stream_source.data.update(rectangles)
+
 doc.add_periodic_callback(task_stream_update, messages['task-events']['interval'])
 
 
