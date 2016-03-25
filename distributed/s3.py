@@ -149,7 +149,7 @@ def read_text(fn, keyname=None, encoding='utf-8', errors='strict', lineterminato
     ensure_default_get(executor)
     from dask.bag import from_imperative
     if collection:
-        result = from_imperative(lines)
+        result = from_imperative(lines).filter(None)
     else:
         result = lines
 

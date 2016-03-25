@@ -314,6 +314,20 @@ def test__read_text(e, s, a, b):
         assert all(isinstance(x, Value) for x in L)
 
 
+@gen_cluster([(ip, 1)], timeout=60, executor=True)
+def test__read_text_json_endline(e, s, a):
+    import json
+    with make_hdfs() as hdfs:
+        with hdfs.open('/tmp/test/text.1.txt', 'wb') as f:
+            f.write(b'{"x": 1}\n{"x": 2}\n')
+
+        b = read_text('/tmp/test/text.1.txt').map(json.loads)
+        result = yield e.compute(b)._result()
+
+        assert result == [{"x": 1}, {"x": 2}]
+
+
+
 @gen_cluster([(ip, 1), (ip, 1)], timeout=60, executor=True)
 def test__read_text_unicode(e, s, a, b):
     fn = '/tmp/test/data.txt'
