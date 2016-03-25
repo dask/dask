@@ -15,11 +15,6 @@ from ..utils import ignoring, is_kernel, log_errors, key_split
 from ..executor import default_executor
 from ..scheduler import Scheduler
 
-try:
-    from cytoolz import pluck
-except ImportError:
-    from toolz import pluck
-
 with ignoring(ImportError):
     from bokeh.palettes import Spectral11
     from bokeh.models import (ColumnDataSource, FactorRange, DataRange1d,
@@ -199,7 +194,10 @@ def task_stream_append(lists, msg, worker_threads, palette=Spectral11):
         lists['duration'].append(1000 * (msg['compute-stop']-msg['compute-start']))
         key = msg['key']
         name = key_split(key)
-        color = palette[incrementing_index(name) % len(palette)]
+        if msg['status'] == 'OK':
+            color = palette[incrementing_index(name) % len(palette)]
+        else:
+            color = 'black'
         lists['key'].append(key)
         lists['name'].append(name)
         lists['color'].append(color)

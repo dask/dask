@@ -65,6 +65,7 @@ resource_plot.min_border_bottom -= 40
 resource_plot.plot_height -= 80
 resource_plot.logo = None
 resource_plot.toolbar_location = None
+resource_plot.xaxis.axis_label = None
 
 
 def resource_update():

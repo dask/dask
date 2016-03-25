@@ -46,7 +46,7 @@ def test_task_stream_append():
              'key':'inc-1', 'thread': 5855, 'worker':'127.0.0.1:9999'},
             {'status': 'OK', 'compute-start': 15, 'compute-stop': 25,
              'key':'inc-2', 'thread': 6000, 'worker':'127.0.0.1:9999'},
-            {'status': 'OK', 'compute-start': 10, 'compute-stop': 14,
+            {'status': 'error', 'compute-start': 10, 'compute-stop': 14,
              'key':'inc-3', 'thread': 6000, 'worker':'127.0.0.1:9999'},
             {'status': 'OK', 'compute-start': 10, 'compute-stop': 30,
              'transfer-start': 8, 'transfer-stop': 10,
@@ -63,5 +63,6 @@ def test_task_stream_append():
     assert workers == set(lists['worker_thread'])
     assert lists['color'][-1] == 'red'
     L = lists['color']
-    assert L[0] == L[1] == L[2]
+    assert L[0] == L[1]
+    assert L[2] == 'black'
     assert L[3] != L[0]
