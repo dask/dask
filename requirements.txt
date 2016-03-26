@@ -5,6 +5,7 @@ cloudpickle
 dask
 click
 boto3
+s3fs
 locket
 six
 tblib
