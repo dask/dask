@@ -35,9 +35,11 @@ signal.signal(signal.SIGTERM, handle_signal)
 @click.option('--port', type=int, default=8786, help="Serving port")
 @click.option('--http-port', type=int, default=9786, help="HTTP port")
 @click.option('--bokeh-port', type=int, default=8787, help="HTTP port")
+@click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
+              required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default=ip,
               help="Serving host defaults to %s" % ip)
-def main(center, host, port, http_port, bokeh_port):
+def main(center, host, port, http_port, bokeh_port, _bokeh):
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
     scheduler = Scheduler(center, ip=ip,
@@ -46,26 +48,27 @@ def main(center, host, port, http_port, bokeh_port):
         loop.run_sync(scheduler.sync_center)
     scheduler.start(port)
 
-    try:
-        import bokeh
-        import distributed.diagnostics.bokeh
-        hosts = ['%s:%d' % (h, bokeh_port) for h in
-                 ['localhost', '127.0.0.1', ip, socket.gethostname(), host]]
-        dirname = os.path.dirname(distributed.__file__)
-        path = os.path.join(dirname, 'diagnostics', 'bokeh', 'status')
-        proc = subprocess.Popen(['bokeh', 'serve', path,
-                                 '--log-level', 'warning',
-                                 '--port', str(bokeh_port)] +
+    if _bokeh:
+        try:
+            import bokeh
+            import distributed.diagnostics.bokeh
+            hosts = ['%s:%d' % (h, bokeh_port) for h in
+                     ['localhost', '127.0.0.1', ip, socket.gethostname(), host]]
+            dirname = os.path.dirname(distributed.__file__)
+            path = os.path.join(dirname, 'diagnostics', 'bokeh', 'status')
+            proc = subprocess.Popen(['bokeh', 'serve', path,
+                                     '--log-level', 'warning',
+                                     '--port', str(bokeh_port)] +
                                  sum([['--host', host] for host in hosts], []))
 
-        distributed.diagnostics.bokeh.server_process = proc  # monkey patch
+            distributed.diagnostics.bokeh.server_process = proc  # monkey patch
 
-        logger.info(" Start Bokeh UI at:        http://%s:%d/status/"
-                    % (ip, bokeh_port))
-    except ImportError:
-        logger.info("Please install Bokeh to get Web UI")
-    except Exception as e:
-        logger.warn("Could not start Bokeh web UI", exc_info=True)
+            logger.info(" Start Bokeh UI at:        http://%s:%d/status/"
+                        % (ip, bokeh_port))
+        except ImportError:
+            logger.info("Please install Bokeh to get Web UI")
+        except Exception as e:
+            logger.warn("Could not start Bokeh web UI", exc_info=True)
 
     loop.start()
     loop.close()

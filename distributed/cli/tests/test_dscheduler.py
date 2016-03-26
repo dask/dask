@@ -13,7 +13,7 @@ from distributed.utils import get_ip, ignoring
 
 def test_defaults():
     try:
-        proc = Popen(['dscheduler'], stdout=PIPE, stderr=PIPE)
+        proc = Popen(['dscheduler', '--no-bokeh'], stdout=PIPE, stderr=PIPE)
         e = Executor('127.0.0.1:%d' % Scheduler.default_port)
 
         response = requests.get('http://127.0.0.1:9786/info.json')
@@ -22,6 +22,21 @@ def test_defaults():
     finally:
         e.shutdown()
         proc.kill()
+
+
+def test_no_bokeh():
+    pytest.importorskip('bokeh')
+
+    try:
+        proc = Popen(['dscheduler', '--no-bokeh'], stdout=PIPE, stderr=PIPE)
+        e = Executor('127.0.0.1:%d' % Scheduler.default_port)
+        for i in range(3):
+            assert b'bokeh' not in next(proc.stderr)
+    finally:
+        with ignoring(Exception):
+            e.shutdown()
+        with ignoring(Exception):
+            proc.kill()
 
 
 def test_bokeh():
