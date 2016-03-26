@@ -148,9 +148,8 @@ def worker_table_update(source, d):
 
 def task_stream_plot(height=400, width=800, **kwargs):
     data = {'start': [], 'duration': [],
-            'transfer-start': [], 'transfer-duration': [],
             'key': [], 'name': [], 'color': [],
-            'worker': [], 'thread': [], 'y': []}
+            'worker': [], 'y': [], 'worker_thread': []}
 
     source = ColumnDataSource(data)
     x_range = DataRange1d(follow='end', follow_interval=10000, range_padding=0)

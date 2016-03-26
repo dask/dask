@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+from bisect import bisect
 import json
 
 from bokeh.plotting import curdoc, vplot
@@ -48,18 +49,25 @@ task_stream_plot.min_border_top -= 30
 task_stream_plot.min_border_bottom -= 30
 task_stream_plot.plot_height -= 60
 task_stream_plot.xaxis.axis_label = None
-last_time = [None]
+task_stream_index = [0]
 def task_stream_update():
     with log_errors():
-        if messages['task-events']['last_seen'] == last_time:
+        index = messages['task-events']['index']
+        if not index:
             return
-        else:
-            last_time[0] = messages['task-events']['last_seen'][0]
+        if index[-1] == task_stream_index[0]:
+            return
+
+        ind = bisect(index, task_stream_index[0])
         rectangles = valmap(list, messages['task-events']['rectangles'])
+        rectangles = {k: [v[i] for i in range(ind, len(index))]
+                      for k, v in rectangles.items()}
+        task_stream_index[0] = index[-1]
+
         workers = messages['task-events']['workers']
         workers = {w: i for i, w in enumerate(sorted(workers, reverse=True))}
         rectangles['y'] = [workers[wt] for wt in rectangles['worker_thread']]
-        task_stream_source.data.update(rectangles)
+        task_stream_source.stream(rectangles, 2000)
 
 doc.add_periodic_callback(task_stream_update, messages['task-events']['interval'])
 

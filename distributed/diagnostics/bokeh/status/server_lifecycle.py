@@ -35,7 +35,8 @@ def http_get(route):
 
 
 @gen.coroutine
-def task_events(interval, deque, times, rectangles, workers, last_seen):
+def task_events(interval, deque, times, index, rectangles, workers, last_seen):
+    i = 0
     with log_errors():
         stream = yield eventstream('localhost:8786', 0.100)
         while True:
@@ -52,6 +53,8 @@ def task_events(interval, deque, times, rectangles, workers, last_seen):
                     if 'compute-start' in msg:
                         deque.append(msg)
                         times.append(msg['compute-start'])
+                        index.append(i)
+                        i += 1
                         task_stream_append(rectangles, msg, workers)
 
 
@@ -69,6 +72,7 @@ def on_server_loaded(server_context):
     messages['task-events'] = {'interval': 200,
                                'deque': deque(maxlen=2000),
                                'times': deque(maxlen=2000),
+                               'index': deque(maxlen=2000),
                                'rectangles':{name: deque(maxlen=2000) for name in
                                             'start duration key name color worker worker_thread'.split()},
                                'workers': set(),
