@@ -8,11 +8,13 @@ from tornado import gen
 from tornado.queues import Queue
 
 from dask.core import get_deps
+from distributed.executor import _wait
 from distributed.worker import dumps_task
-from distributed.utils_test import gen_cluster, cluster, inc, dec, gen_test
+from distributed.utils_test import (gen_cluster, cluster, inc, dec, gen_test,
+        div)
 from distributed.utils import All, key_split
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
-        MultiProgress, dependent_keys)
+        AllProgress, MultiProgress, dependent_keys)
 from distributed.core import dumps
 
 def test_dependent_keys():
@@ -117,3 +119,47 @@ def check_bar_completed(capsys, width=40):
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
     assert bar == '[' + '#'*width + ']'
     assert percent == '100% Completed'
+
+
+@gen_cluster(executor=True)
+def test_AllProgress(e, s, a, b):
+    x, y, z = e.map(inc, [1, 2, 3])
+    xx, yy, zz = e.map(dec, [x, y, z])
+
+    yield _wait([x, y, z])
+    p = AllProgress(s)
+    assert p.all['inc'] == {x.key, y.key, z.key}
+    assert p.in_memory['inc'] == {x.key, y.key, z.key}
+    assert p.released == {}
+    assert p.erred == {}
+
+    yield _wait([xx, yy, zz])
+    assert p.all['dec'] == {xx.key, yy.key, zz.key}
+    assert p.in_memory['dec'] == {xx.key, yy.key, zz.key}
+    assert p.released == {}
+    assert p.erred == {}
+
+    s.client_releases_keys(client=e.id, keys=[x.key, y.key, z.key])
+    assert p.released['inc'] == {x.key, y.key, z.key}
+    assert p.all['inc'] == {x.key, y.key, z.key}
+    assert p.all['dec'] == {xx.key, yy.key, zz.key}
+
+    xxx = e.submit(div, 1, 0)
+    yield _wait([xxx])
+    assert p.erred == {'div': {xxx.key}}
+
+    s.client_releases_keys(client=e.id, keys=[xx.key, yy.key, zz.key])
+    for c in [p.all, p.in_memory, p.released, p.erred]:
+        assert 'inc' not in c
+        assert 'dec' not in c
+
+    def f(x):
+        return x
+
+    for i in range(4):
+        future = e.submit(f, i)
+
+    yield gen.sleep(1)
+
+    yield _wait([future])
+    assert p.in_memory == {'f': {future.key}}

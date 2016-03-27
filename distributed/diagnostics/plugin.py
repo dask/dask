@@ -56,3 +56,11 @@ class SchedulerPlugin(object):
         """ Run when the scheduler restarts itself """
         pass
 
+    def forget(self, scheduler, key):
+        pass
+
+    def delete(self, scheduler, key):
+        pass
+
+    def mark_key_in_memory(self, scheduler, key, **kwargs):
+        pass
