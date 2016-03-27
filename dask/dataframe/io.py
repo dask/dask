@@ -718,11 +718,9 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                        for i, s in enumerate(range(start, stop, chunksize)))
             divisions = [None] * (len(dsk) + 1)
         else:
-            buffer = _pd_read_hdf(path, key, lock, {'chunksize': chunksize,
-                                                    'start': start,
-                                                    'stop': stop})
-            divisions, starts, stops = _divide_buffer(buffer, division_column,
-                                                      start, stop, chunksize)
+            divisions, starts, stops = _find_divisions(division_column, start,
+                                                       stop, chunksize, path,
+                                                       key, lock)
             ss = zip(starts, stops)
             dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
                 {'start': s[0],
@@ -743,40 +741,50 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                    for k, s in zip(keys, stops)])
 
 
-def _divide_buffer(buffer, division_column, start, stop, chunksize):
+def _find_divisions(division_column, start, stop, chunksize, path, key, lock):
     divisions = list()
     starts = [start]
-    stops=list()
+    stops = list()
+    row = start
     if isinstance(division_column, string_types):
         _div_col = lambda x: x[division_column]
     elif division_column:
         _div_col = lambda x: pd.Series(x.index)
-    for i, chunk in enumerate(buffer):
-        if i == 0:
-            buf = chunk.copy()
-            div_col = _div_col(buf)
-            divisions.append(div_col.iloc[0])
-        else:
-            if buf.empty:
-                # If the buffer is empty, let's refill it before continuing
-                # searching for divisions.
-                buf = chunk.copy()
-                continue
-            buf = pd.concat((buf, chunk)).copy()
-            div_col = _div_col(buf)
-            while len(div_col) > chunksize:
-                split = div_col.iloc[chunksize]
-                if divisions[-1] == split:
-                    raise ValueError('Chunksize of %s is too small to divide by' % chunksize)
-                div_loc = int(div_col.searchsorted(split))
-                starts.append(starts[-1] + div_loc)
-                stops.append(starts[-1])
-                divisions.append(split)
-                buf = buf.iloc[div_loc:]
-                div_col = _div_col(buf)
-    divisions.append(div_col.iloc[-1])
-    stops.append(stop - start + 1)
+    stop = _get_last_row(path, key, lock, stop)
+    data = _pd_read_hdf(path, key, lock,
+                        {'start': row, 'stop': row + 1})
+    divisions.append(_div_col(data).iloc[0])
+    for row in range(start + chunksize, stop, chunksize):
+        data = _pd_read_hdf(path, key, lock,
+                            {'start': row - 1, 'stop': row + 1})
+        while _div_col(data).iloc[0] == _div_col(data).iloc[1]:
+            row += 1
+            if row > stop:
+                raise ValueError('No split found in last division')
+            data = _pd_read_hdf(path, key, lock,
+                                {'start': row - 1, 'stop': row + 1})
+        starts.append(row)
+        stops.append(row)
+        divisions.append(_div_col(data).iloc[1])
+    stops.append(stop)
+    data = _pd_read_hdf(path, key, lock,
+                        {'start': stop - 1, 'stop': stop})
+    divisions.append(_div_col(data).iloc[0])
     return divisions, starts, stops
+
+
+def _get_last_row(path, key, lock, stop):
+    if stop is None:
+        if lock:
+            lock.acquire()
+        try:
+            nrows = pd.HDFStore(path).get_storer(key).nrows
+        finally:
+            if lock:
+                lock.release()
+        return nrows
+    else:
+        return stop
 
 
 def _pd_read_hdf(path, key, lock, kwargs):

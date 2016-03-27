@@ -726,7 +726,7 @@ def test_read_hdf():
         eq(a, b)
         df2.to_hdf(fn, '/data2', format='table')
         a = dd.read_hdf(fn, '/data2', chunksize=2, sorted_division_column='y')
-        assert a.divisions == (1., 2., 3., 3.)
+        assert a.divisions == (1., 3., 3.)
         eq(a, df2)
         df3.to_hdf(fn, '/data3', format='table')
         a = dd.read_hdf(fn, '/data3', chunksize=3, sorted_division_column='y')
