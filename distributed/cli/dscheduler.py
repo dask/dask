@@ -39,7 +39,8 @@ signal.signal(signal.SIGTERM, handle_signal)
               required=False, help="Launch Bokeh Web UI")
 @click.option('--host', type=str, default=ip,
               help="Serving host defaults to %s" % ip)
-def main(center, host, port, http_port, bokeh_port, _bokeh):
+@click.option('--show/--no-show', default=False, help="Show web UI")
+def main(center, host, port, http_port, bokeh_port, show, _bokeh):
     ip = socket.gethostbyname(host)
     loop = IOLoop.current()
     scheduler = Scheduler(center, ip=ip,
@@ -56,10 +57,15 @@ def main(center, host, port, http_port, bokeh_port, _bokeh):
                      ['localhost', '127.0.0.1', ip, socket.gethostname(), host]]
             dirname = os.path.dirname(distributed.__file__)
             path = os.path.join(dirname, 'diagnostics', 'bokeh', 'status')
-            proc = subprocess.Popen(['bokeh', 'serve', path,
-                                     '--log-level', 'warning',
-                                     '--port', str(bokeh_port)] +
-                                 sum([['--host', host] for host in hosts], []))
+            args = (['bokeh', 'serve', path,
+                     '--log-level', 'warning',
+                     '--check-unused-sessions=50',
+                     '--unused-session-lifetime=10',
+                     '--port', str(bokeh_port)] +
+                     sum([['--host', host] for host in hosts], []))
+            if show:
+                args.append('--show')
+            proc = subprocess.Popen(args)
 
             distributed.diagnostics.bokeh.server_process = proc  # monkey patch
 
