@@ -1,6 +1,6 @@
 from distributed.diagnostics.status_monitor import (worker_table_plot,
         worker_table_update, task_table_plot, task_table_update,
-        task_stream_plot, task_stream_append)
+        task_stream_plot, task_stream_append, progress_plot)
 from distributed.diagnostics.scheduler import workers, tasks
 
 from distributed.utils_test import gen_cluster, inc
@@ -66,3 +66,7 @@ def test_task_stream_append():
     assert L[0] == L[1]
     assert L[2] == 'black'
     assert L[3] != L[0]
+
+
+def test_progress_plot():
+    source, plot = progress_plot()

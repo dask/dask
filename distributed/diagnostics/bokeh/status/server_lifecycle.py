@@ -14,6 +14,7 @@ from tornado.ioloop import IOLoop
 
 from distributed.core import read
 from distributed.diagnostics.eventstream import eventstream
+from distributed.diagnostics.progress_stream import progress_stream
 from distributed.diagnostics.status_monitor import task_stream_append
 import distributed.diagnostics
 from distributed.utils import log_errors
@@ -58,6 +59,19 @@ def task_events(interval, deque, times, index, rectangles, workers, last_seen):
                         task_stream_append(rectangles, msg, workers)
 
 
+@gen.coroutine
+def progress():
+    with log_errors():
+        stream = yield progress_stream('localhost:8786', 0.100)
+        while True:
+            try:
+                msg = yield read(stream)
+            except StreamClosedError:
+                break
+            else:
+                messages['progress'] = msg
+
+
 def on_server_loaded(server_context):
     messages['workers'] = {'interval': 500,
                            'deque': deque(maxlen=1000),
@@ -77,5 +91,8 @@ def on_server_loaded(server_context):
                                             'start duration key name color worker worker_thread'.split()},
                                'workers': set(),
                                'last_seen': [time()]}
+    messages['progress'] = {'all': {}, 'in_memory': {},
+                            'erred': {}, 'released': {}}
 
     IOLoop.current().add_callback(task_events, **messages['task-events'])
+    IOLoop.current().add_callback(progress)

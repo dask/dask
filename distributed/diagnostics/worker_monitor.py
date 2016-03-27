@@ -6,7 +6,7 @@ from itertools import chain
 from ..utils import ignoring
 
 with ignoring(ImportError):
-    from bokeh.models import ColumnDataSource, DataRange1d
+    from bokeh.models import ColumnDataSource, DataRange1d, Range1d
     from bokeh.palettes import Spectral9
     from bokeh.plotting import figure
 

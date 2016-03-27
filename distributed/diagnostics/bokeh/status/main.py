@@ -10,9 +10,10 @@ from toolz import valmap
 
 from distributed.diagnostics.status_monitor import (
         worker_table_plot, worker_table_update, task_table_plot,
-        task_table_update, task_stream_plot)
+        task_table_update, task_stream_plot, progress_plot)
 from distributed.diagnostics.worker_monitor import (
         resource_profile_plot, resource_profile_update)
+from distributed.diagnostics.progress_stream import progress_quads
 from distributed.utils import log_errors
 import distributed.diagnostics
 
@@ -44,7 +45,7 @@ def task_update():
 doc.add_periodic_callback(task_update, messages['tasks']['interval'])
 
 
-task_stream_source, task_stream_plot = task_stream_plot(width=width)
+task_stream_source, task_stream_plot = task_stream_plot(height=300, width=width)
 task_stream_plot.min_border_top -= 30
 task_stream_plot.min_border_bottom -= 30
 task_stream_plot.plot_height -= 60
@@ -72,7 +73,7 @@ def task_stream_update():
 doc.add_periodic_callback(task_stream_update, messages['task-events']['interval'])
 
 
-resource_source, resource_plot = resource_profile_plot(width=width)
+resource_source, resource_plot = resource_profile_plot(height=200, width=width)
 resource_plot.x_range = task_stream_plot.x_range
 resource_plot.min_border_top -= 40
 resource_plot.title = None
@@ -90,5 +91,24 @@ def resource_update():
         resource_profile_update(resource_source, worker_buffer, times_buffer)
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])
 
-vbox = vplot(worker_table, task_table, task_stream_plot, resource_plot)
+
+progress_source, progress_plot = progress_plot(height=250, width=width)
+progress_plot.min_border_top -= 40
+progress_plot.title = None
+progress_plot.min_border_bottom -= 40
+progress_plot.plot_height -= 80
+progress_plot.logo = None
+progress_plot.toolbar_location = None
+progress_plot.xaxis.axis_label = None
+
+
+def progress_update():
+    with log_errors():
+        msg = messages['progress']
+        d = progress_quads(msg)
+        progress_source.data.update(d)
+doc.add_periodic_callback(progress_update, 100)
+
+
+vbox = vplot(worker_table, task_table, progress_plot, task_stream_plot, resource_plot)
 doc.add_root(vbox)

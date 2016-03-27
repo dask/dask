@@ -217,3 +217,55 @@ def task_stream_append(lists, msg, worker_threads, palette=Spectral11):
             lists['worker'].append(msg['worker'])
             lists['color'].append('red')
             lists['worker_thread'].append(worker_thread)
+
+
+def progress_plot(height=300, width=800, **kwargs):
+    from .progress_stream import progress_quads
+    data = progress_quads({'all': {}, 'in_memory': {},
+                           'erred': {}, 'released': {}})
+
+    source = ColumnDataSource(data)
+    fig = figure(width=width, height=height, tools=['resize'], **kwargs)
+    fig.quad(source=source, top='top', bottom='bottom',
+             left=0, right=1, color='#aaaaaa', alpha=0.2)
+    fig.quad(source=source, top='top', bottom='bottom',
+             left=0, right='released_right', color='#0000FF', alpha=0.4)
+    fig.quad(source=source, top='top', bottom='bottom',
+             left='released_right', right='in_memory_right',
+             color='#0000FF', alpha=0.8)
+    fig.quad(source=source, top='top', bottom='bottom',
+             left='error_left', right=1,
+             color='#000000', alpha=0.3)
+    fig.text(source=source, text='fraction', y='center', x=-0.01,
+             text_align='right', text_baseline='middle')
+    fig.text(source=source, text='name', y='center', x=1.01,
+             text_align='left', text_baseline='middle')
+    fig.scatter(x=[-0.1, 1.4], y=[0, 5], alpha=0)
+    fig.xgrid.grid_line_color = None
+    fig.ygrid.grid_line_color = None
+    fig.axis.visible = None
+
+    hover = HoverTool()
+    fig.add_tools(hover)
+    hover = fig.select(HoverTool)
+    hover.tooltips = """
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Name:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">All:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@all</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">In Memory:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@in_memory</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Erred:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@erred</span>
+    </div>
+    """
+    hover.point_policy = 'follow_mouse'
+
+    return source, fig

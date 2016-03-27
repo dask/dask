@@ -19,7 +19,7 @@ def counts(scheduler, allprogress):
     return {'all': valmap(len, allprogress.all),
             'in_memory': valmap(len, allprogress.in_memory),
             'released': valmap(len, allprogress.released),
-            'erred': valmap(len, allprogress.released)}
+            'erred': valmap(len, allprogress.erred)}
 
 
 @gen.coroutine
@@ -71,7 +71,7 @@ def progress_quads(msg):
     d['released_right'] = [r / a for r, a in zip(d['released'], d['all'])]
     d['in_memory_right'] = [(r + im) / a for r, im, a in
             zip(d['released'], d['in_memory'], d['all'])]
-    d['fraction'] = ['%d / %d' % (im, a)
-                     for im, a in zip(d['in_memory'], d['all'])]
+    d['fraction'] = ['%d / %d' % (im + r, a)
+                   for im, r, a in zip(d['in_memory'], d['released'], d['all'])]
     d['erred_left'] = [1 - e / a for e, a in zip(d['erred'], d['all'])]
     return d
