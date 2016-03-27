@@ -68,7 +68,7 @@ def task_stream_update():
         workers = messages['task-events']['workers']
         workers = {w: i for i, w in enumerate(sorted(workers, reverse=True))}
         rectangles['y'] = [workers[wt] for wt in rectangles['worker_thread']]
-        task_stream_source.stream(rectangles, 2000)
+        task_stream_source.stream(rectangles, 20000)
 
 doc.add_periodic_callback(task_stream_update, messages['task-events']['interval'])
 
@@ -110,5 +110,5 @@ def progress_update():
 doc.add_periodic_callback(progress_update, 100)
 
 
-vbox = vplot(worker_table, task_table, progress_plot, task_stream_plot, resource_plot)
+vbox = vplot(progress_plot, task_stream_plot, worker_table, task_table, resource_plot)
 doc.add_root(vbox)

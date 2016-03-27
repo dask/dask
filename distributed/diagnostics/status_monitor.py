@@ -154,7 +154,7 @@ def task_stream_plot(height=400, width=800, **kwargs):
     source = ColumnDataSource(data)
     x_range = DataRange1d(follow='end', follow_interval=10000, range_padding=0)
     fig = figure(width=width, height=height, x_axis_type='datetime',
-                 tools=['xwheel_zoom', 'xpan', 'reset', 'resize'],
+                 tools=['xwheel_zoom', 'xpan', 'reset', 'resize', 'box_zoom'],
                  x_range=x_range, **kwargs)
     fig.rect(x='start', width='duration',
              y='y', height=0.9,
@@ -162,6 +162,9 @@ def task_stream_plot(height=400, width=800, **kwargs):
     fig.circle(x=[1, 2], y=[1, 2], alpha=0.0)
     fig.xaxis.axis_label = 'Time'
     fig.yaxis.axis_label = 'Worker Core'
+    fig.min_border_right = 10
+    fig.ygrid.grid_line_alpha = 0.4
+    fig.xgrid.grid_line_alpha = 0.0
 
     hover = HoverTool()
     fig.add_tools(hover)
@@ -240,10 +243,14 @@ def progress_plot(height=300, width=800, **kwargs):
              text_align='right', text_baseline='middle')
     fig.text(source=source, text='name', y='center', x=1.01,
              text_align='left', text_baseline='middle')
-    fig.scatter(x=[-0.1, 1.4], y=[0, 5], alpha=0)
+    fig.scatter(x=[-0.2, 1.4], y=[0, 5], alpha=0)
     fig.xgrid.grid_line_color = None
     fig.ygrid.grid_line_color = None
     fig.axis.visible = None
+    fig.min_border_left = 0
+    fig.min_border_right = 10
+    fig.min_border_top = 0
+    fig.min_border_bottom = 0
 
     hover = HoverTool()
     fig.add_tools(hover)

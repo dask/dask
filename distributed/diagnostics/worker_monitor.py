@@ -26,6 +26,7 @@ def resource_profile_plot(width=600, height=300):
     p.legend[0].location = 'top_left'
     p.yaxis[0].axis_label = "Percent"
     p.xaxis[0].axis_label = "Time"
+    p.min_border_right = 10
 
     return source, p
 
