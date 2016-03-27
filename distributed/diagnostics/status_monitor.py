@@ -159,7 +159,7 @@ def task_stream_plot(height=400, width=800, **kwargs):
     fig.rect(x='start', width='duration',
              y='y', height=0.9,
              fill_color='color', line_color='gray', source=source)
-    fig.rect(x=0, width=1, y=0, height=1, fill_color='white', alpha=0.0)
+    fig.circle(x=[1, 2], y=[1, 2], alpha=0.0)
     fig.xaxis.axis_label = 'Time'
     fig.yaxis.axis_label = 'Worker Core'
 
