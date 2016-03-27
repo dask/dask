@@ -172,7 +172,8 @@ def test_read_text_compression(e, s, a, b):
     b = read_text('distributed-test/csv/gzip/', compression='gzip')
     result = yield e.compute(b)._result()
     assert result == [line for k in sorted(csv_files)
-                           for line in csv_files[k].decode().split('\n')]
+                           for line in csv_files[k].decode().split('\n')
+                           if line]
 
 
 def test_read_text_sync(loop):

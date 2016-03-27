@@ -50,6 +50,7 @@ install:
   - source activate test-environment
   - conda install pytest coverage tornado toolz dill futures dask ipywidgets psutil bokeh requests
   - pip install git+https://github.com/dask/dask.git --upgrade
+  - pip install s3fs
 
   # Install distributed
   - python setup.py install

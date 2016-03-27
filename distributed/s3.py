@@ -5,12 +5,12 @@ import io
 
 from dask.imperative import Value, do
 from dask.base import tokenize
+from s3fs import S3FileSystem
 
 from . import formats
 from .utils import read_block, seek_delimiter, ensure_bytes, ignoring, sync
 from .executor import default_executor, ensure_default_get
 from .compatibility import unicode, gzip_decompress
-from .s3fs import S3FileSystem
 
 logger = logging.getLogger(__name__)
 
