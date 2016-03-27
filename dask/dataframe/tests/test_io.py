@@ -669,9 +669,11 @@ def test_to_hdf():
 def test_read_hdf():
     pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+                       'y': [1, 2, 3, 4],
+                       'z': [2, 3, 3, 3]}, index=[1., 2., 3., 4.])
     df2 = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
-                        'y': [1, 2, 2, 3]}, index=[1., 2., 3., 4.])
+                        'y': [1, 2, 2, 3],
+                        'z': [2, 3, 3, 3]}, index=[1., 2., 3., 4.])
     np.random.seed(42)
     vals = list()
     for i in range(1, 101):
@@ -710,7 +712,8 @@ def test_read_hdf():
                         sorted_division_column=True)
         b = pd.read_hdf(fn, '/data', start=1, stop=3)
         assert  a.divisions == (2., 3.)
-        eq(a, b)        
+        eq(a, b)
+        
 
     with tmpfile('h5') as fn:
         df.to_hdf(fn, '/data', format='table')
@@ -731,6 +734,10 @@ def test_read_hdf():
         df3.to_hdf(fn, '/data3', format='table')
         a = dd.read_hdf(fn, '/data3', chunksize=3, sorted_division_column='y')
         eq(a, df3)
+        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_division_column='z')
+        b = pd.read_hdf(fn, '/data')
+        assert a.divisions == (2., 3.)
+        eq(a, b)
 
 
 def test_to_csv():

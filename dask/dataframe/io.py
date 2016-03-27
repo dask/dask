@@ -759,10 +759,12 @@ def _find_divisions(division_column, start, stop, chunksize, path, key, lock):
                             {'start': row - 1, 'stop': row + 1})
         while _div_col(data).iloc[0] == _div_col(data).iloc[1]:
             row += 1
-            if row > stop:
-                raise ValueError('No split found in last division')
+            if row >= stop:
+                break 
             data = _pd_read_hdf(path, key, lock,
                                 {'start': row - 1, 'stop': row + 1})
+        if row >= stop:
+            break
         starts.append(row)
         stops.append(row)
         divisions.append(_div_col(data).iloc[1])
