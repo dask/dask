@@ -26,22 +26,20 @@ task_stream_index = [0]
 def task_stream_update():
     with log_errors():
         index = messages['task-events']['index']
+        rectangles = messages['task-events']['rectangles']
+
         if not index:
             return
         if index[-1] == task_stream_index[0]:
             return
 
         ind = bisect(index, task_stream_index[0])
-        rectangles = messages['task-events']['rectangles']
         if task_stream_index == [0]:
             rectangles = valmap(list, rectangles)
         rectangles = {k: [v[i] for i in range(ind, len(index))]
                       for k, v in rectangles.items()}
         task_stream_index[0] = index[-1]
 
-        workers = messages['task-events']['workers']
-        workers = {w: i for i, w in enumerate(sorted(workers, reverse=True))}
-        rectangles['y'] = [workers[wt] for wt in rectangles['worker_thread']]
         task_stream_source.stream(rectangles, 20000)
 
 doc.add_periodic_callback(task_stream_update, messages['task-events']['interval'])

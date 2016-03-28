@@ -54,7 +54,7 @@ def on_server_loaded(server_context):
                                'times': deque(maxlen=20000),
                                'index': deque(maxlen=20000),
                                'rectangles':{name: deque(maxlen=20000) for name in
-                                            'start duration key name color worker worker_thread'.split()},
-                               'workers': set(),
+                                            'start duration key name color worker worker_thread y'.split()},
+                               'workers': dict(),
                                'last_seen': [time()]}
     IOLoop.current().add_callback(task_events, **messages['task-events'])

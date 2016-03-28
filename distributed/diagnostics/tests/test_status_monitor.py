@@ -53,14 +53,15 @@ def test_task_stream_append():
              'key':'add-1', 'thread': 4000, 'worker':'127.0.0.2:9999'}]
 
     lists = {name: [] for name in
-            'start duration key name color worker worker_thread'.split()}
-    workers = {'127.0.0.1:9999-5855'}
+            'start duration key name color worker worker_thread y'.split()}
+    workers = {'127.0.0.1:9999-5855': 0}
 
     for msg in msgs:
         task_stream_append(lists, msg, workers)
     assert len(lists['start']) == len(msgs) + 1  # +1 for a transfer
     assert len(workers) == 3
-    assert workers == set(lists['worker_thread'])
+    assert set(workers) == set(lists['worker_thread'])
+    assert set(workers.values()) == set(range(len(workers)))
     assert lists['color'][-1] == 'red'
     L = lists['color']
     assert L[0] == L[1]

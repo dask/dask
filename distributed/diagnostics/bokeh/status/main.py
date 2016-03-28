@@ -62,7 +62,6 @@ def resource_update():
         data = messages['workers']['plot-data']
 
         if not index or index[-1] == resource_index[0]:
-            print("fast return", index, resource_index)
             return
 
         if resource_index == [0]:
@@ -70,10 +69,8 @@ def resource_update():
 
         ind = bisect(index, resource_index[0])
         indexes = list(range(ind, len(index)))
-        print(indexes)
         data = {k: [v[i] for i in indexes] for k, v in data.items()}
         resource_index[0] = index[-1]
-        print(resource_index, data)
         resource_source.stream(data, 10000)
 
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])

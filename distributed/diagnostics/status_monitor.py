@@ -191,7 +191,7 @@ def incrementing_index(o):
     return next(counter)
 
 
-def task_stream_append(lists, msg, worker_threads, palette=Spectral11):
+def task_stream_append(lists, msg, workers, palette=Spectral11):
     lists['start'].append(msg['compute-start'] * 1000)
     lists['duration'].append(1000 * (msg['compute-stop']-msg['compute-start']))
     key = msg['key']
@@ -207,7 +207,9 @@ def task_stream_append(lists, msg, worker_threads, palette=Spectral11):
 
     worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
     lists['worker_thread'].append(worker_thread)
-    worker_threads.add(worker_thread)
+    if worker_thread not in workers:
+        workers[worker_thread] = len(workers)
+    lists['y'].append(workers[worker_thread])
 
     if 'transfer-start' in msg:
         lists['start'].append(msg['transfer-start'] * 1000)
@@ -219,6 +221,7 @@ def task_stream_append(lists, msg, worker_threads, palette=Spectral11):
         lists['worker'].append(msg['worker'])
         lists['color'].append('red')
         lists['worker_thread'].append(worker_thread)
+        lists['y'].append(workers[worker_thread])
 
 
 def progress_plot(height=300, width=800, **kwargs):
