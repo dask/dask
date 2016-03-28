@@ -39,4 +39,4 @@ def test_resource_append():
            '10.10.20.87': {'cpu': 30, 'memory-percent': 70, 'time': 1000}}
 
     resource_append(lists, msg)
-    assert lists == {'time': [1500000], 'cpu': [20], 'memory-percent': [60]}
+    assert lists == {'time': [1500000], 'cpu': [0.2], 'memory-percent': [0.6]}
