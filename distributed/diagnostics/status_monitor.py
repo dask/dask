@@ -19,7 +19,7 @@ with ignoring(ImportError):
     from bokeh.palettes import Spectral11
     from bokeh.models import (ColumnDataSource, FactorRange, DataRange1d,
             HoverTool)
-    from bokeh.models.widgets import DataTable, TableColumn
+    from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
     from bokeh.plotting import vplot, output_notebook, show, figure
     from bokeh.io import curstate, push_notebook
 
@@ -117,11 +117,20 @@ def worker_table_plot(width=600, height="auto", **kwargs):
                   'latency', 'last-seen']
     slow = DataTable(source=source, columns=[columns[n] for n in slow_names],
                      width=width, height=height, **kwargs)
+    slow.columns[3].formatter = NumberFormatter(format='0.0 b')
+    slow.columns[4].formatter = NumberFormatter(format='0.00000')
+    slow.columns[5].formatter = NumberFormatter(format='0.000')
 
     fast_names = ['workers', 'cpu', 'memory-percent', 'processing',
             'disk-read', 'disk-write', 'network-send', 'network-recv']
     fast = DataTable(source=source, columns=[columns[n] for n in fast_names],
                      width=width, height=height, **kwargs)
+    fast.columns[1].formatter = NumberFormatter(format='0.0 %')
+    fast.columns[2].formatter = NumberFormatter(format='0.0 %')
+    fast.columns[4].formatter = NumberFormatter(format='0 b')
+    fast.columns[5].formatter = NumberFormatter(format='0 b')
+    fast.columns[6].formatter = NumberFormatter(format='0 b')
+    fast.columns[7].formatter = NumberFormatter(format='0 b')
 
     table = vplot(slow, fast)
     return source, table
@@ -137,7 +146,10 @@ def worker_table_update(source, d):
                  'memory', 'disk-read', 'disk-write', 'network-send',
                  'network-recv']:
         try:
-            data[name] = [d[w][name] for w in workers]
+            if name in ('cpu', 'memory-percent'):
+                data[name] = [d[w][name] / 100 for w in workers]
+            else:
+                data[name] = [d[w][name] for w in workers]
         except KeyError:
             pass
 
@@ -236,7 +248,8 @@ def progress_plot(height=300, width=800, **kwargs):
                            'erred': {}, 'released': {}})
 
     source = ColumnDataSource(data)
-    fig = figure(width=width, height=height, tools=['resize'], **kwargs)
+    fig = figure(width=width, height=height, tools=['resize'],
+                 **kwargs)
     fig.quad(source=source, top='top', bottom='bottom',
              left=0, right=1, color='#aaaaaa', alpha=0.2)
     fig.quad(source=source, top='top', bottom='bottom',
