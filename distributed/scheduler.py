@@ -145,7 +145,7 @@ class Scheduler(Server):
     def __init__(self, center=None, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
-            ip=None, services=None, heartbeat_interval=1000, **kwargs):
+            ip=None, services=None, heartbeat_interval=500, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
         self.worker_streams = dict()

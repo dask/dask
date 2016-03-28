@@ -56,9 +56,10 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
             hosts = ['%s:%d' % (h, bokeh_port) for h in
                      ['localhost', '127.0.0.1', ip, socket.gethostname(), host]]
             dirname = os.path.dirname(distributed.__file__)
-            path = os.path.join(dirname, 'diagnostics', 'bokeh', 'status')
-            args = (['bokeh', 'serve', path,
-                     '--log-level', 'warning',
+            paths = [os.path.join(dirname, 'diagnostics', 'bokeh', name)
+                     for name in ['status', 'tasks']]
+            args = (['bokeh', 'serve'] + paths +
+                    ['--log-level', 'warning',
                      '--check-unused-sessions=50',
                      '--unused-session-lifetime=10',
                      '--port', str(bokeh_port)] +

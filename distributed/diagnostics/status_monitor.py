@@ -192,34 +192,33 @@ def incrementing_index(o):
 
 
 def task_stream_append(lists, msg, worker_threads, palette=Spectral11):
-    with log_errors():
-        lists['start'].append(msg['compute-start'] * 1000)
-        lists['duration'].append(1000 * (msg['compute-stop']-msg['compute-start']))
-        key = msg['key']
-        name = key_split(key)
-        if msg['status'] == 'OK':
-            color = palette[incrementing_index(name) % len(palette)]
-        else:
-            color = 'black'
+    lists['start'].append(msg['compute-start'] * 1000)
+    lists['duration'].append(1000 * (msg['compute-stop']-msg['compute-start']))
+    key = msg['key']
+    name = key_split(key)
+    if msg['status'] == 'OK':
+        color = palette[incrementing_index(name) % len(palette)]
+    else:
+        color = 'black'
+    lists['key'].append(key)
+    lists['name'].append(name)
+    lists['color'].append(color)
+    lists['worker'].append(msg['worker'])
+
+    worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
+    lists['worker_thread'].append(worker_thread)
+    worker_threads.add(worker_thread)
+
+    if 'transfer-start' in msg:
+        lists['start'].append(msg['transfer-start'] * 1000)
+        lists['duration'].append(1000 * (msg['transfer-stop'] -
+                                        msg['transfer-start']))
+
         lists['key'].append(key)
-        lists['name'].append(name)
-        lists['color'].append(color)
+        lists['name'].append('transfer-to-' + name)
         lists['worker'].append(msg['worker'])
-
-        worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
+        lists['color'].append('red')
         lists['worker_thread'].append(worker_thread)
-        worker_threads.add(worker_thread)
-
-        if 'transfer-start' in msg:
-            lists['start'].append(msg['transfer-start'] * 1000)
-            lists['duration'].append(1000 * (msg['transfer-stop'] -
-                                            msg['transfer-start']))
-
-            lists['key'].append(key)
-            lists['name'].append('transfer-to-' + name)
-            lists['worker'].append(msg['worker'])
-            lists['color'].append('red')
-            lists['worker_thread'].append(worker_thread)
 
 
 def progress_plot(height=300, width=800, **kwargs):
