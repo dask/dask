@@ -1139,6 +1139,10 @@ class Series(_Frame):
     def notnull(self):
         return self.map_partitions(pd.Series.notnull)
 
+    @derived_from(pd.Series)
+    def isnull(self):
+        return self.map_partitions(pd.Series.isnull)
+
     def to_bag(self, index=False):
         """Convert to a dask Bag.
 
