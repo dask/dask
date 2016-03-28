@@ -172,7 +172,7 @@ def task_stream_plot(height=400, width=800, follow_interval=5000, **kwargs):
 
     fig = figure(width=width, height=height, x_axis_type='datetime',
                  tools=['xwheel_zoom', 'xpan', 'reset', 'resize', 'box_zoom'],
-                 x_range=x_range, **kwargs)
+                 responsive=True, x_range=x_range, **kwargs)
     fig.rect(x='start', width='duration',
              y='y', height=0.9,
              fill_color='color', line_color='gray', source=source)
@@ -249,7 +249,7 @@ def progress_plot(height=300, width=800, **kwargs):
 
     source = ColumnDataSource(data)
     fig = figure(width=width, height=height, tools=['resize'],
-                 **kwargs)
+                 responsive=True, **kwargs)
     fig.quad(source=source, top='top', bottom='bottom',
              left=0, right=1, color='#aaaaaa', alpha=0.2)
     fig.quad(source=source, top='top', bottom='bottom',
