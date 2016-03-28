@@ -20,12 +20,12 @@ def resource_profile_plot(width=600, height=300):
     x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
     y_range = Range1d(0, 100)
     p = figure(width=width, height=height, x_axis_type='datetime',
-               tools='xpan,xwheel_zoom,box_zoom,resize,reset',
+               responsive=True, tools='xpan,xwheel_zoom,box_zoom,resize,reset',
                x_range=x_range, y_range=y_range)
     p.line(x='time', y='memory-percent', line_width=2, line_alpha=0.8,
-           color=Spectral9[7], legend='Memory Usage', source=source)
+           color=Spectral9[7], legend='Avg Memory Usage', source=source)
     p.line(x='time', y='cpu', line_width=2, line_alpha=0.8,
-           color=Spectral9[0], legend='CPU Usage', source=source)
+           color=Spectral9[0], legend='Avg CPU Usage', source=source)
     p.legend[0].location = 'top_left'
     p.yaxis[0].axis_label = 'Percent'
     p.xaxis[0].axis_label = 'Time'
