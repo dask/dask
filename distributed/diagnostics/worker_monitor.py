@@ -8,7 +8,8 @@ from toolz import pluck
 from ..utils import ignoring
 
 with ignoring(ImportError):
-    from bokeh.models import ColumnDataSource, DataRange1d, Range1d
+    from bokeh.models import (ColumnDataSource, DataRange1d, Range1d,
+            NumeralTickFormatter)
     from bokeh.palettes import Spectral9
     from bokeh.plotting import figure
 
@@ -18,7 +19,7 @@ def resource_profile_plot(width=600, height=300):
     source = ColumnDataSource({k: [] for k in names})
 
     x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
-    y_range = Range1d(0, 100)
+    y_range = Range1d(0, 1)
     p = figure(width=width, height=height, x_axis_type='datetime',
                responsive=True, tools='xpan,xwheel_zoom,box_zoom,resize,reset',
                x_range=x_range, y_range=y_range)
@@ -27,8 +28,7 @@ def resource_profile_plot(width=600, height=300):
     p.line(x='time', y='cpu', line_width=2, line_alpha=0.8,
            color=Spectral9[0], legend='Avg CPU Usage', source=source)
     p.legend[0].location = 'top_left'
-    p.yaxis[0].axis_label = 'Percent'
-    p.xaxis[0].axis_label = 'Time'
+    p.yaxis[0].formatter = NumeralTickFormatter(format="0 %")
     p.min_border_right = 10
 
     return source, p
@@ -57,7 +57,7 @@ def resource_append(lists, msg):
     if not L:
         return
     for k in ['cpu', 'memory-percent']:
-        lists[k].append(mean(pluck(k, L)))
+        lists[k].append(mean(pluck(k, L)) / 100)
 
     lists['time'].append(mean(pluck('time', L)) * 1000)
 
