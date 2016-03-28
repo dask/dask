@@ -493,7 +493,8 @@ class Worker(Server):
     def health(self, stream=None):
         """ Information about worker """
         d = {'active': len(self.active),
-             'stored': len(self.data)}
+             'stored': len(self.data),
+             'time': time()}
         try:
             import psutil
             mem = psutil.virtual_memory()

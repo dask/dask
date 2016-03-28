@@ -25,7 +25,7 @@ def test_eventstream(e, s, a, b):
     assert len(es.buffer) == 10
 
 
-@gen_cluster(executor=True, timeout=None)
+@gen_cluster(executor=True)
 def test_eventstream_remote(e, s, a, b):
     stream = yield eventstream(s.address, interval=0.010)
 

@@ -146,23 +146,31 @@ def worker_table_update(source, d):
     source.data.update(data)
 
 
-def task_stream_plot(height=400, width=800, **kwargs):
+def task_stream_plot(height=400, width=800, follow_interval=5000, **kwargs):
     data = {'start': [], 'duration': [],
-            'transfer-start': [], 'transfer-duration': [],
             'key': [], 'name': [], 'color': [],
-            'worker': [], 'thread': [], 'y': []}
+            'worker': [], 'y': [], 'worker_thread': []}
 
     source = ColumnDataSource(data)
-    x_range = DataRange1d(follow='end', follow_interval=10000, range_padding=0)
+    if follow_interval:
+        x_range = DataRange1d(follow='end', follow_interval=follow_interval,
+                              range_padding=0)
+    else:
+        x_range = None
+
     fig = figure(width=width, height=height, x_axis_type='datetime',
-                 tools=['xwheel_zoom', 'xpan', 'reset', 'resize'],
+                 tools=['xwheel_zoom', 'xpan', 'reset', 'resize', 'box_zoom'],
                  x_range=x_range, **kwargs)
     fig.rect(x='start', width='duration',
              y='y', height=0.9,
              fill_color='color', line_color='gray', source=source)
-    fig.rect(x=0, width=1, y=0, height=1, fill_color='white', alpha=0.0)
+    if x_range:
+        fig.circle(x=[1, 2], y=[1, 2], alpha=0.0)
     fig.xaxis.axis_label = 'Time'
     fig.yaxis.axis_label = 'Worker Core'
+    fig.min_border_right = 10
+    fig.ygrid.grid_line_alpha = 0.4
+    fig.xgrid.grid_line_alpha = 0.0
 
     hover = HoverTool()
     fig.add_tools(hover)
@@ -189,32 +197,90 @@ def incrementing_index(o):
     return next(counter)
 
 
-def task_stream_append(lists, msg, worker_threads, palette=Spectral11):
-    with log_errors():
-        lists['start'].append(msg['compute-start'] * 1000)
-        lists['duration'].append(1000 * (msg['compute-stop']-msg['compute-start']))
-        key = msg['key']
-        name = key_split(key)
-        if msg['status'] == 'OK':
-            color = palette[incrementing_index(name) % len(palette)]
-        else:
-            color = 'black'
+def task_stream_append(lists, msg, workers, palette=Spectral11):
+    lists['start'].append(msg['compute-start'] * 1000)
+    lists['duration'].append(1000 * (msg['compute-stop']-msg['compute-start']))
+    key = msg['key']
+    name = key_split(key)
+    if msg['status'] == 'OK':
+        color = palette[incrementing_index(name) % len(palette)]
+    else:
+        color = 'black'
+    lists['key'].append(key)
+    lists['name'].append(name)
+    lists['color'].append(color)
+    lists['worker'].append(msg['worker'])
+
+    worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
+    lists['worker_thread'].append(worker_thread)
+    if worker_thread not in workers:
+        workers[worker_thread] = len(workers)
+    lists['y'].append(workers[worker_thread])
+
+    if 'transfer-start' in msg:
+        lists['start'].append(msg['transfer-start'] * 1000)
+        lists['duration'].append(1000 * (msg['transfer-stop'] -
+                                        msg['transfer-start']))
+
         lists['key'].append(key)
-        lists['name'].append(name)
-        lists['color'].append(color)
+        lists['name'].append('transfer-to-' + name)
         lists['worker'].append(msg['worker'])
-
-        worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
+        lists['color'].append('red')
         lists['worker_thread'].append(worker_thread)
-        worker_threads.add(worker_thread)
+        lists['y'].append(workers[worker_thread])
 
-        if 'transfer-start' in msg:
-            lists['start'].append(msg['transfer-start'] * 1000)
-            lists['duration'].append(1000 * (msg['transfer-stop'] -
-                                            msg['transfer-start']))
 
-            lists['key'].append(key)
-            lists['name'].append('transfer-to-' + name)
-            lists['worker'].append(msg['worker'])
-            lists['color'].append('red')
-            lists['worker_thread'].append(worker_thread)
+def progress_plot(height=300, width=800, **kwargs):
+    from .progress_stream import progress_quads
+    data = progress_quads({'all': {}, 'in_memory': {},
+                           'erred': {}, 'released': {}})
+
+    source = ColumnDataSource(data)
+    fig = figure(width=width, height=height, tools=['resize'], **kwargs)
+    fig.quad(source=source, top='top', bottom='bottom',
+             left=0, right=1, color='#aaaaaa', alpha=0.2)
+    fig.quad(source=source, top='top', bottom='bottom',
+             left=0, right='released_right', color='#0000FF', alpha=0.4)
+    fig.quad(source=source, top='top', bottom='bottom',
+             left='released_right', right='in_memory_right',
+             color='#0000FF', alpha=0.8)
+    fig.quad(source=source, top='top', bottom='bottom',
+             left='error_left', right=1,
+             color='#000000', alpha=0.3)
+    fig.text(source=source, text='fraction', y='center', x=-0.01,
+             text_align='right', text_baseline='middle')
+    fig.text(source=source, text='name', y='center', x=1.01,
+             text_align='left', text_baseline='middle')
+    fig.scatter(x=[-0.2, 1.4], y=[0, 5], alpha=0)
+    fig.xgrid.grid_line_color = None
+    fig.ygrid.grid_line_color = None
+    fig.axis.visible = None
+    fig.min_border_left = 0
+    fig.min_border_right = 10
+    fig.min_border_top = 0
+    fig.min_border_bottom = 0
+
+    hover = HoverTool()
+    fig.add_tools(hover)
+    hover = fig.select(HoverTool)
+    hover.tooltips = """
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Name:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">All:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@all</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">In Memory:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@in_memory</span>
+    </div>
+    <div>
+        <span style="font-size: 14px; font-weight: bold;">Erred:</span>&nbsp;
+        <span style="font-size: 10px; font-family: Monaco, monospace;">@erred</span>
+    </div>
+    """
+    hover.point_policy = 'follow_mouse'
+
+    return source, fig

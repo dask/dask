@@ -41,6 +41,7 @@ def test_health():
     d = w.health()
     assert isinstance(d, dict)
     d = w.health()
+    assert 'time' in d
     try:
         import psutil
     except ImportError:

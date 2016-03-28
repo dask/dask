@@ -145,7 +145,7 @@ class Scheduler(Server):
     def __init__(self, center=None, loop=None,
             resource_interval=1, resource_log_size=1000,
             max_buffer_size=MAX_BUFFER_SIZE, delete_interval=500,
-            ip=None, services=None, heartbeat_interval=1000, **kwargs):
+            ip=None, services=None, heartbeat_interval=500, **kwargs):
         self.scheduler_queues = [Queue()]
         self.report_queues = []
         self.worker_streams = dict()
@@ -419,6 +419,12 @@ class Scheduler(Server):
         if type:
             msg['type'] = type
         self.report(msg)
+
+        for plugin in self.plugins:
+            try:
+                plugin.mark_key_in_memory(self, key, workers=workers, type=type)
+            except Exception as e:
+                logger.exception(e)
         # self.validate(allow_overlap=True, allow_bad_stacks=True)
 
     def release_live_dependencies(self, key):
@@ -786,6 +792,8 @@ class Scheduler(Server):
         for k in list(tasks):
             if tasks[k] is k:
                 del tasks[k]
+            if k in self.tasks:
+                del tasks[k]
 
         keys = set(keys)
         for k in keys:
@@ -925,6 +933,12 @@ class Scheduler(Server):
 
         if key in self.who_has:
             self.delete_data(keys=[key])
+
+        for plugin in self.plugins:
+            try:
+                plugin.forget(self, key)
+            except Exception as e:
+                logger.exception(e)
 
     def cancel_key(self, key, client, retries=5):
         if key not in self.who_wants:  # no key yet, lets try again in 500ms
@@ -1165,6 +1179,12 @@ class Scheduler(Server):
                 if key in self.waiting_data:
                     del self.waiting_data[key]
                 self.released.add(key)
+
+                for plugin in self.plugins:
+                    try:
+                        plugin.delete(self, key)
+                    except Exception as e:
+                        logger.exception(e)
 
     @gen.coroutine
     def heartbeat(self, host):

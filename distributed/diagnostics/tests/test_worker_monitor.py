@@ -1,12 +1,12 @@
-from distributed.diagnostics.worker_monitor import (resource_profile_plot,
-        resource_profile_update)
-from distributed.diagnostics.scheduler import workers, tasks
-from distributed.utils_test import gen_cluster
-
 from collections import deque
 import datetime
+
 from tornado import gen
 
+from distributed.diagnostics.worker_monitor import (resource_profile_plot,
+        resource_profile_update, resource_append)
+from distributed.diagnostics.scheduler import workers, tasks
+from distributed.utils_test import gen_cluster
 
 @gen_cluster()
 def test_resource_monitor_plot(s, a, b):
@@ -31,3 +31,12 @@ def test_resource_monitor_plot(s, a, b):
     assert source.data['times'][1] == ['null','null', 1003000]
     assert len(source.data['times']) == 2
     assert len(source.data['memory-percent']) == 2
+
+
+def test_resource_append():
+    lists = {'time': [], 'cpu': [], 'memory-percent': []}
+    msg = {'10.10.20.86': {'cpu': 10, 'memory-percent': 50, 'time': 2000},
+           '10.10.20.87': {'cpu': 30, 'memory-percent': 70, 'time': 1000}}
+
+    resource_append(lists, msg)
+    assert lists == {'time': [1500000], 'cpu': [20], 'memory-percent': [60]}

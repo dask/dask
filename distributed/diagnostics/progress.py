@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import defaultdict
 import logging
 import sys
 import threading
@@ -258,3 +259,61 @@ def format_time(t):
         return '{0:2.0f}min {1:4.1f}s'.format(m, s)
     else:
         return '{0:4.1f}s'.format(s)
+
+
+class AllProgress(SchedulerPlugin):
+    """ Keep track of all keys, grouped by key_split """
+    def __init__(self, scheduler):
+        self.all = defaultdict(set)
+        self.in_memory = defaultdict(set)
+        self.erred = defaultdict(set)
+        self.released = defaultdict(set)
+
+        for key in scheduler.tasks:
+            k = key_split(key)
+            self.all[k].add(key)
+
+        for key in scheduler.who_has:
+            k = key_split(key)
+            self.in_memory[k].add(key)
+
+        for key in scheduler.exceptions_blame:
+            k = key_split(key)
+            self.erred[k].add(key)
+
+        for key in scheduler.released:
+            k = key_split(key)
+            self.released[k].add(key)
+
+        scheduler.add_plugin(self)
+
+    def update_graph(self, scheduler, tasks=None, **kwargs):
+        for key in tasks:
+            k = key_split(key)
+            self.all[k].add(key)
+
+    def mark_key_in_memory(self, scheduler, key, **kwargs):
+        if key in scheduler.tasks:
+            k = key_split(key)
+            self.in_memory[k].add(key)
+
+    def task_erred(self, scheduler, key=None, **kwargs):
+        k = key_split(key)
+        self.erred[k].add(key)
+
+    def delete(self, scheduler, key):
+        k = key_split(key)
+        try:
+            self.in_memory[k].remove(key)
+        except KeyError:
+            pass
+        self.released[k].add(key)
+
+    def forget(self, scheduler, key):
+        k = key_split(key)
+        for d in [self.all, self.in_memory, self.released, self.erred]:
+            if k in d:
+                if key in d[k]:
+                    d[k].remove(key)
+                if not d[k]:
+                    del d[k]
