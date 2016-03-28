@@ -10,7 +10,7 @@ from toolz import valmap
 
 from distributed.diagnostics.status_monitor import (
         worker_table_plot, worker_table_update, task_table_plot,
-        task_table_update, progress_plot)
+        task_table_update, progress_plot, task_stream_plot)
 from distributed.diagnostics.worker_monitor import (
         resource_profile_plot, resource_profile_update)
 from distributed.diagnostics.progress_stream import progress_quads
@@ -71,7 +71,7 @@ def resource_update():
         indexes = list(range(ind, len(index)))
         data = {k: [v[i] for i in indexes] for k, v in data.items()}
         resource_index[0] = index[-1]
-        resource_source.stream(data, 10000)
+        resource_source.stream(data, 1000)
 
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])
 
@@ -94,5 +94,31 @@ def progress_update():
 doc.add_periodic_callback(progress_update, 50)
 
 
-vbox = vplot(worker_table, task_table, progress_plot, resource_plot)
+task_stream_source, task_stream_plot = task_stream_plot(height=800,
+        width=width, follow_interval=None)
+task_stream_plot.min_border_bottom = 0
+task_stream_plot.min_border_left = 0
+task_stream_plot.min_border_right = 10
+task_stream_plot.xaxis.axis_label = None
+task_stream_index = [0]
+def task_stream_update():
+    with log_errors():
+        index = messages['task-events']['index']
+        rectangles = messages['task-events']['rectangles']
+
+        if not index or index[-1] == task_stream_index[0]:
+            return
+
+        ind = bisect(index, task_stream_index[0])
+        rectangles = {k: [v[i] for i in range(ind, len(index))]
+                      for k, v in rectangles.items()}
+        task_stream_index[0] = index[-1]
+
+        task_stream_source.stream(rectangles, 1000)
+
+doc.add_periodic_callback(task_stream_update, messages['task-events']['interval'])
+
+
+vbox = vplot(worker_table, task_table, progress_plot, resource_plot,
+        task_stream_plot)
 doc.add_root(vbox)

@@ -146,20 +146,26 @@ def worker_table_update(source, d):
     source.data.update(data)
 
 
-def task_stream_plot(height=400, width=800, **kwargs):
+def task_stream_plot(height=400, width=800, follow_interval=5000, **kwargs):
     data = {'start': [], 'duration': [],
             'key': [], 'name': [], 'color': [],
             'worker': [], 'y': [], 'worker_thread': []}
 
     source = ColumnDataSource(data)
-    x_range = DataRange1d(follow='end', follow_interval=10000, range_padding=0)
+    if follow_interval:
+        x_range = DataRange1d(follow='end', follow_interval=follow_interval,
+                              range_padding=0)
+    else:
+        x_range = None
+
     fig = figure(width=width, height=height, x_axis_type='datetime',
                  tools=['xwheel_zoom', 'xpan', 'reset', 'resize', 'box_zoom'],
                  x_range=x_range, **kwargs)
     fig.rect(x='start', width='duration',
              y='y', height=0.9,
              fill_color='color', line_color='gray', source=source)
-    fig.circle(x=[1, 2], y=[1, 2], alpha=0.0)
+    if x_range:
+        fig.circle(x=[1, 2], y=[1, 2], alpha=0.0)
     fig.xaxis.axis_label = 'Time'
     fig.yaxis.axis_label = 'Worker Core'
     fig.min_border_right = 10

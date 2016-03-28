@@ -61,7 +61,7 @@ def main(center, host, port, http_port, bokeh_port, show, _bokeh):
             args = (['bokeh', 'serve'] + paths +
                     ['--log-level', 'warning',
                      '--check-unused-sessions=50',
-                     '--unused-session-lifetime=10',
+                     '--unused-session-lifetime=1',
                      '--port', str(bokeh_port)] +
                      sum([['--host', host] for host in hosts], []))
             if show:
