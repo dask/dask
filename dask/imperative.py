@@ -67,11 +67,11 @@ def to_task_dasks(expr):
     """
     if isinstance(expr, Value):
         return expr.key, expr._dasks
-    if isinstance(expr, base.Base):
+    if base.is_dask_collection(expr):
         name = tokenize(expr, pure=True)
-        keys = expr._keys()
-        dsk = expr._optimize(expr.dask, keys)
-        dsk[name] = (expr._finalize, (concrete, keys))
+        keys = expr._dask_keys_()
+        dsk = expr._dask_optimize_(expr._dask_graph_(), keys)
+        dsk[name] = (expr._dask_finalize_, (concrete, keys))
         return name, [dsk]
     if isinstance(expr, tuple) and type(expr) != tuple:
         return expr, []
@@ -220,9 +220,9 @@ class Value(base.Base):
     Equivalent to the output from a single key in a dask graph.
     """
     __slots__ = ('_key', '_dasks')
-    _optimize = staticmethod(lambda dsk, keys, **kwargs: dsk)
-    _finalize = staticmethod(first)
-    _default_get = staticmethod(threaded.get)
+    _dask_optimize_ = staticmethod(lambda dsk, keys, **kwargs: dsk)
+    _dask_finalize_ = staticmethod(first)
+    _dask_default_get_ = staticmethod(threaded.get)
 
     def __init__(self, name, dasks):
         object.__setattr__(self, '_key', name)

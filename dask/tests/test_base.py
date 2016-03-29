@@ -6,22 +6,43 @@ import shutil
 import pytest
 from operator import add, mul
 import sys
-
-pytest.importorskip('toolz')
-from toolz import compose, partial, curry
+from uuid import uuid4
 
 import dask
+from dask.threaded import get as threaded_get
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
-        visualize)
+                       is_dask_collection, visualize)
 from dask.utils import raises, tmpfile, ignoring
 
 from dask.compatibility import unicode
 
 
+class Duck(object):
+    """Duck-typed dask collection"""
+    def __init__(self, val):
+        self.key = str(uuid4())
+        self.val = val
+
+    _dask_graph_ = lambda self: {self.key: self.val}
+    _dask_keys_ = lambda self: self.key
+    _dask_finalize_ = staticmethod(lambda x: x)
+    _dask_optimize_ = staticmethod(lambda d, k, **kws: d)
+    _dask_default_get_ = staticmethod(threaded_get)
+
+
+def test_is_dask_collection():
+    duck = Duck(1)
+    assert is_dask_collection(duck)
+    assert not is_dask_collection("foo")
+    db = pytest.importorskip("dask.bag")
+    assert is_dask_collection(db.from_sequence([1, 2, 3], npartitions=2))
+
+
 def test_normalize_function():
+    toolz = pytest.importorskip('toolz')
     def f1(a, b, c=1):
         pass
-    cf1 = curry(f1)
+    cf1 = toolz.curry(f1)
     def f2(a, b=1, c=2):
         pass
     def f3(a):
@@ -29,7 +50,7 @@ def test_normalize_function():
     assert normalize_function(f2) == str(f2)
     f = lambda a: a
     assert normalize_function(f) == str(f)
-    comp = compose(partial(f2, b=2), f3)
+    comp = toolz.compose(toolz.partial(f2, b=2), f3)
     assert normalize_function(comp) == ((str(f2), (), (('b', 2),)), str(f3))
     assert normalize_function(cf1) == (str(f1), (), ())
     assert normalize_function(cf1(2, c=2)) == (str(f1), (2,), (('c', 2),))
@@ -98,12 +119,18 @@ def test_tokenize_numpy_memmap():
     assert y != z
 
 
-def test_normalize_base():
+def test_normalize_builtins():
     for i in [1, 1.1, '1', slice(1, 2, 3)]:
         assert normalize_token(i) is i
 
 
+def test_normalize_duck():
+    duck = Duck(1)
+    assert normalize_token(duck) == ('Duck', duck._dask_keys_())
+
+
 def test_tokenize_pandas():
+    pd = pytest.importorskip('pandas')
     a = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
     b = pd.DataFrame({'x': [1, 2, 3], 'y': ['4', 'asd', None]}, index=[1, 2, 3])
 
@@ -137,6 +164,7 @@ def test_tokenize_same_repr():
 
 
 def test_tokenize_sequences():
+    np = pytest.importorskip('numpy')
     assert tokenize([1]) != tokenize([2])
     assert tokenize([1]) != tokenize((1,))
     assert tokenize([1]) == tokenize([1])
@@ -158,11 +186,19 @@ def test_tokenize_ordered_dict():
         assert tokenize(a) != tokenize(c)
 
 
-da = pytest.importorskip('dask.array')
-import numpy as np
+def test_compute_duck():
+    duck = Duck(1)
+    assert compute(duck) == (1,)
+    da = pytest.importorskip('dask.array')
+    x = da.arange(5, chunks=2)
+    out1, out2 = compute(duck, x)
+    assert out1 == 1
+    assert (out2 == x.compute()).all()
 
 
 def test_compute_array():
+    da = pytest.importorskip('dask.array')
+    import numpy as np
     arr = np.arange(100).reshape((10, 10))
     darr = da.from_array(arr, chunks=(5, 5))
     darr1 = darr + 1
@@ -172,35 +208,36 @@ def test_compute_array():
     assert np.allclose(out2, arr + 2)
 
 
-dd = pytest.importorskip('dask.dataframe')
-import pandas as pd
-from pandas.util.testing import assert_series_equal
-
-
 def test_compute_dataframe():
+    dd = pytest.importorskip('dask.dataframe')
+    import pandas as pd
     df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 5, 3, 3]})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    assert_series_equal(out1, df.a + 1)
-    assert_series_equal(out2, df.a + df.b)
+    pd.util.testing.assert_series_equal(out1, df.a + 1)
+    pd.util.testing.assert_series_equal(out2, df.a + df.b)
 
 
 def test_compute_array_dataframe():
+    da = pytest.importorskip('dask.array')
+    dd = pytest.importorskip('dask.dataframe')
+    import numpy as np
+    import pandas as pd
     arr = np.arange(100).reshape((10, 10))
     darr = da.from_array(arr, chunks=(5, 5)) + 1
     df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 5, 3, 3]})
     ddf = dd.from_pandas(df, npartitions=2).a + 2
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
-    assert_series_equal(df_out, df.a + 2)
-
-
-db = pytest.importorskip('dask.bag')
+    pd.util.testing.assert_series_equal(df_out, df.a + 2)
 
 
 def test_compute_array_bag():
+    db = pytest.importorskip('dask.bag')
+    da = pytest.importorskip('dask.array')
+    import numpy as np
     x = da.arange(5, chunks=2)
     b = db.from_sequence([1, 2, 3])
 
@@ -212,6 +249,7 @@ def test_compute_array_bag():
 
 
 def test_compute_with_literal():
+    da = pytest.importorskip('dask.array')
     x = da.arange(5, chunks=2)
     y = 10
 
@@ -223,9 +261,10 @@ def test_compute_with_literal():
 
 
 def test_visualize():
+    da = pytest.importorskip('dask.array')
     pytest.importorskip('graphviz')
+    d = tempfile.mkdtemp()
     try:
-        d = tempfile.mkdtemp()
         x = da.arange(5, chunks=2)
         x.visualize(filename=os.path.join(d, 'mydask'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
@@ -235,6 +274,17 @@ def test_visualize():
         assert os.path.exists(os.path.join(d, 'mydask.png'))
         dsk = {'a': 1, 'b': (add, 'a', 2), 'c': (mul, 'a', 1)}
         visualize(x, dsk, filename=os.path.join(d, 'mydask.png'))
+        assert os.path.exists(os.path.join(d, 'mydask.png'))
+    finally:
+        shutil.rmtree(d)
+
+
+def test_visualize_duck():
+    pytest.importorskip('graphviz')
+    d = tempfile.mkdtemp()
+    try:
+        duck = Duck(1)
+        visualize(duck, filename=os.path.join(d, 'mydask'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
     finally:
         shutil.rmtree(d)

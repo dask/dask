@@ -27,7 +27,7 @@ from .. import threaded
 from ..compatibility import unicode, apply, operator_div, bind_method
 from ..utils import (repr_long_list, IndexCallable,
                      pseudorandom, derived_from, different_seeds)
-from ..base import Base, compute, tokenize, normalize_token
+from ..base import Base, compute, tokenize, normalize_token, is_dask_collection
 from ..async import get_sync
 
 no_default = '__no_default__'
@@ -70,9 +70,9 @@ class Scalar(Base):
     TODO: Clean up this abstraction
     """
 
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(threaded.get)
-    _finalize = staticmethod(finalize)
+    _dask_optimize_ = staticmethod(optimize)
+    _dask_default_get_ = staticmethod(threaded.get)
+    _dask_finalize_ = staticmethod(finalize)
 
     def __init__(self, dsk, _name, name=None, divisions=None):
         self.dask = dsk
@@ -115,12 +115,10 @@ def _scalar_binary(op, a, b, inv=False):
     name = '{0}-{1}'.format(op.__name__, tokenize(a, b))
 
     dsk = a.dask
-    if not isinstance(b, Base):
-        pass
-    elif isinstance(b, Scalar):
+    if isinstance(b, Scalar):
         dsk = merge(dsk, b.dask)
         b = (b._name, 0)
-    else:
+    elif is_dask_collection(b):
         return NotImplemented
 
     if inv:
@@ -155,9 +153,9 @@ class _Frame(Base):
         Values along which we partition our blocks on the index
     """
 
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(threaded.get)
-    _finalize = staticmethod(finalize)
+    _dask_optimize_ = staticmethod(optimize)
+    _dask_default_get_ = staticmethod(threaded.get)
+    _dask_finalize_ = staticmethod(finalize)
 
     def __new__(cls, dsk, _name, metadata, divisions):
         if (np.isscalar(metadata) or metadata is None or
