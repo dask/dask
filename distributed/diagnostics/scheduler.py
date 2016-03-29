@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from datetime import datetime
 import os
 
-import pandas as pd
 from toolz import countby, concat, dissoc
 
 from ..utils import key_split
@@ -83,6 +82,7 @@ def scheduler_progress_df(d):
     in-memory       30  +++++++++++++++++
     total           70  ++++++++++++++++++++++++++++++++++++++++
     """
+    import pandas as pd
     d = d.copy()
     d['total'] = d.pop('tasks')
     names = ['waiting', 'ready', 'failed', 'processing', 'in-memory', 'total']
@@ -120,6 +120,7 @@ def worker_status_df(d):
     192.168.1.107       4   2000       [inc]
     192.168.1.108       4   1000  [add, inc]
     """
+    import pandas as pd
     names = ['ncores', 'bytes', 'processing']
     df = pd.DataFrame({k: d[k] for k in names}, columns=names)
     df['processing'] = df['processing'].apply(sorted)
