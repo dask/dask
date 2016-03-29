@@ -1,17 +1,20 @@
-from distributed.compatibility import gzip_compress
-from distributed.utils_test import gen_cluster
-from distributed.formats.csv import read_csv, bytes_read_csv
-from distributed.executor import Future
+from __future__ import print_function, division, absolute_import
 
+from io import BytesIO
+
+import pytest
+pd = pytest.importorskip('pandas')
+dd = pytest.importorskip('dask.dataframe')
 
 import pandas.util.testing as tm
-import pandas as pd
-from tornado import gen
-import pytest
-from io import BytesIO
 from toolz import partition_all
+from tornado import gen
 
-dd = pytest.importorskip('dask.dataframe')
+from distributed.compatibility import gzip_compress
+from distributed.executor import Future
+from distributed.formats.csv import read_csv, bytes_read_csv
+from distributed.utils_test import gen_cluster
+
 
 
 files = {'2014-01-01.csv': (b'name,amount,id\n'

@@ -3,8 +3,6 @@ from __future__ import print_function, division, absolute_import
 from io import BytesIO
 
 from dask import do
-from dask.dataframe import from_imperative
-import pandas as pd
 
 from .compression import compressors, decompressors
 
@@ -27,6 +25,7 @@ def bytes_read_csv(b, header, kwargs):
     See Also:
         distributed.formats.csv.read_csv
     """
+    import pandas as pd
     with log_errors():
         compression = kwargs.pop('compression', None)
         b2 = decompressors[compression](b)
@@ -67,6 +66,7 @@ def read_csv(block_lists, header, head, kwargs, lazy=True, collection=True,
     A dask.dataframe, or list of futures or values, depending on the value of
     lazy and collection.
     """
+    from dask.dataframe import from_imperative
     executor = default_executor(executor)
 
     dfs1 = [[do(bytes_read_csv)(blocks[0], '', kwargs)] +

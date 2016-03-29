@@ -1,8 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
-
 from datetime import timedelta
 import sys
+
+import pytest
+pytest.importorskip('numpy')
+pytest.importorskip('pandas')
 
 import dask
 import dask.dataframe as dd
@@ -17,7 +20,6 @@ from distributed.collections import (_futures_to_dask_dataframe,
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-import pytest
 from toolz import identity
 
 from tornado import gen
