@@ -20,10 +20,11 @@ import distributed.diagnostics.bokeh
 
 messages = distributed.diagnostics.bokeh.messages  # global message store
 doc = curdoc()
-width = 800
+table_width = 800
+width = 600
 
 
-worker_source, worker_table = worker_table_plot(width=width)
+worker_source, worker_table = worker_table_plot(width=table_width)
 def worker_update():
     with log_errors():
         try:
@@ -34,7 +35,7 @@ def worker_update():
 doc.add_periodic_callback(worker_update, messages['workers']['interval'])
 
 
-task_source, task_table = task_table_plot(width=width)
+task_source, task_table = task_table_plot(width=table_width)
 def task_update():
     with log_errors():
         try:
@@ -45,7 +46,7 @@ def task_update():
 doc.add_periodic_callback(task_update, messages['tasks']['interval'])
 
 
-resource_source, resource_plot = resource_profile_plot(height=200, width=width)
+resource_source, resource_plot = resource_profile_plot(height=int(width/3), width=width)
 resource_plot.min_border_top -= 40
 resource_plot.title = None
 resource_plot.min_border_bottom -= 40
@@ -76,13 +77,13 @@ def resource_update():
 doc.add_periodic_callback(resource_update, messages['workers']['interval'])
 
 
-progress_source, progress_plot = progress_plot(height=250, width=width)
+progress_source, progress_plot = progress_plot(height=int(width/3), width=width)
 progress_plot.min_border_top -= 40
 progress_plot.title = None
 progress_plot.min_border_bottom -= 40
 progress_plot.plot_height -= 80
 progress_plot.logo = None
-progress_plot.toolbar_location = None
+# progress_plot.toolbar_location = None
 progress_plot.xaxis.axis_label = None
 
 
@@ -94,7 +95,7 @@ def progress_update():
 doc.add_periodic_callback(progress_update, 50)
 
 
-task_stream_source, task_stream_plot = task_stream_plot(height=800,
+task_stream_source, task_stream_plot = task_stream_plot(height=int(width/2),
         width=width, follow_interval=None)
 task_stream_plot.min_border_bottom = 0
 task_stream_plot.min_border_left = 0

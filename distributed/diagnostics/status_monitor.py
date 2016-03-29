@@ -138,7 +138,7 @@ def worker_table_plot(width=600, height="auto", **kwargs):
 
 def worker_table_update(source, d):
     """ Update host table source """
-    workers = sorted(d, reverse=True)
+    workers = sorted(d)
 
     data = {}
     data['workers'] = workers
@@ -258,7 +258,7 @@ def progress_plot(height=300, width=800, **kwargs):
              left='released_right', right='in_memory_right',
              color='#0000FF', alpha=0.8)
     fig.quad(source=source, top='top', bottom='bottom',
-             left='error_left', right=1,
+             left='erred_left', right=1,
              color='#000000', alpha=0.3)
     fig.text(source=source, text='fraction', y='center', x=-0.01,
              text_align='right', text_baseline='middle')
@@ -272,6 +272,7 @@ def progress_plot(height=300, width=800, **kwargs):
     fig.min_border_right = 10
     fig.min_border_top = 0
     fig.min_border_bottom = 0
+    fig.outline_line_color = None
 
     hover = HoverTool()
     fig.add_tools(hover)
