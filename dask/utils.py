@@ -14,7 +14,7 @@ import inspect
 import codecs
 from sys import getdefaultencoding
 
-from .compatibility import long, getargspec, BZ2File, GzipFile
+from .compatibility import long, getargspec, BZ2File, GzipFile, LZMAFile
 
 
 system_encoding = getdefaultencoding()
@@ -142,7 +142,7 @@ def filetexts(d, open=open):
             os.remove(filename)
 
 
-compressions = {'gz': 'gzip', 'bz2': 'bz2'}
+compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}
 
 
 def infer_compression(filename):
@@ -150,7 +150,7 @@ def infer_compression(filename):
     return compressions.get(extension, None)
 
 
-opens = {'gzip': GzipFile, 'bz2': BZ2File}
+opens = {'gzip': GzipFile, 'bz2': BZ2File, 'xz': LZMAFile}
 
 
 def open(filename, mode='rb', compression=None, **kwargs):
