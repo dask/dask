@@ -14,6 +14,8 @@
 
 [Erkka Rinne](https://github.com/ererkka)
 
+[Eyad Sibai](https://github.com/eyadsibai)
+
 [Gabriele Lanaro](http://gabrielelanaro.github.io/)
 
 [Jim Crist](http://jcrist.github.io/)
