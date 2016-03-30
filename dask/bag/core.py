@@ -95,7 +95,7 @@ def optimize(dsk, keys, **kwargs):
 
 
 def to_textfiles(b, path, name_function=str, compression='infer',
-                 encoding=system_encoding):
+                 encoding=system_encoding, compute=True):
     """ Write bag to disk, one filename per partition, one line per element
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -165,6 +165,8 @@ def to_textfiles(b, path, name_function=str, compression='infer',
     dsk = dict(((name, i), (write, (b.name, i), path, get_compression(path),
                             encoding))
                for i, path in enumerate(paths))
+    if compute:
+        return Bag(merge(b.dask, dsk), name, b.npartitions).compute()
 
     return Bag(merge(b.dask, dsk), name, b.npartitions)
 
@@ -461,8 +463,8 @@ class Bag(Base):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=str, compression='infer',
-                     encoding=system_encoding):
-        return to_textfiles(self, path, name_function, compression, encoding)
+                     encoding=system_encoding, compute=True):
+        return to_textfiles(self, path, name_function, compression, encoding, compute)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction

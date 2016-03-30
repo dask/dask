@@ -674,7 +674,7 @@ def test_to_textfiles():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     dir = mkdtemp()
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
-        c = b.to_textfiles(os.path.join(dir, '*.' + ext))
+        c = b.to_textfiles(os.path.join(dir, '*.' + ext), compute=False)
         assert c.npartitions == b.npartitions
         try:
             c.compute(get=dask.get)
@@ -695,7 +695,7 @@ def test_to_textfiles_encoding():
     b = db.from_sequence([u'汽车', u'苹果', u'天气'], npartitions=2)
     dir = mkdtemp()
     for ext, myopen in [('gz', GzipFile), ('bz2', BZ2File), ('', open)]:
-        c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030')
+        c = b.to_textfiles(os.path.join(dir, '*.' + ext), encoding='gb18030', compute=False)
         assert c.npartitions == b.npartitions
         try:
             c.compute(get=dask.get)
@@ -716,12 +716,12 @@ def test_to_textfiles_inputs():
     B = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
     with tmpfile() as a:
         with tmpfile() as b:
-            B.to_textfiles([a, b]).compute()
+            B.to_textfiles([a, b])
             assert os.path.exists(a)
             assert os.path.exists(b)
 
     with tmpfile() as dirname:
-        B.to_textfiles(dirname).compute()
+        B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))
     assert raises(ValueError, lambda: B.to_textfiles(5))
