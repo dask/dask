@@ -460,14 +460,14 @@ def map_blocks(func, *args, **kwargs):
     >>> x = da.arange(1000, chunks=(100,))
     >>> y = da.arange(100, chunks=(10,))
 
-    The relevant attribute to match in numblocks
+    The relevant attribute to match is numblocks
 
     >>> x.numblocks
     (10,)
     >>> y.numblocks
     (10,)
 
-    If these must match (up to broadcasting rules) then we can map arbitray
+    If these must match (up to broadcasting rules) then we can map arbitrary
     functions across blocks
 
     >>> def func(a, b):
