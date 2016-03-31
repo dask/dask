@@ -165,10 +165,12 @@ def to_textfiles(b, path, name_function=str, compression='infer',
     dsk = dict(((name, i), (write, (b.name, i), path, get_compression(path),
                             encoding))
                for i, path in enumerate(paths))
-    if compute:
-        return Bag(merge(b.dask, dsk), name, b.npartitions).compute()
 
-    return Bag(merge(b.dask, dsk), name, b.npartitions)
+    result = Bag(merge(b.dask, dsk), name, b.npartitions)
+    if compute:
+        result.compute()
+    else:
+        return result
 
 
 def finalize(results):
@@ -1066,9 +1068,23 @@ def write(data, filename, compression, encoding):
             os.makedirs(dirname)
 
     f = open(filename, mode='wb', compression=compression)
+
+    # Check presence of endlines
+    data = iter(data)
+    firstline = next(data)
+    if not (firstline.endswith(os.linesep) or firstline.endswith('\n')):
+        sep = os.linesep if firstline.endswith(os.linesep) else '\n'
+        firstline = firstline + sep
+        data = (line + sep for line in data)
+    f.write(firstline.encode(encoding))
+
     try:
+        lastline = ''
         for line in data:
-            f.write(line.encode(encoding))
+            f.write(lastline.encode(encoding))
+            lastline = line
+        f.write(lastline.rstrip(os.linesep).encode(encoding))
+
     finally:
         f.close()
 
