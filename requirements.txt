@@ -1,7 +1,7 @@
 tornado >= 4.2
 toolz
 msgpack-python
-cloudpickle
+cloudpickle >= 0.2.1
 dask
 click
 boto3
@@ -9,3 +9,4 @@ s3fs
 locket
 six
 tblib
+psutil
