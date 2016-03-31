@@ -1948,3 +1948,9 @@ def test_tril_triu_errors():
     dA = da.from_array(A, chunks=(5, 5))
     assert raises(NotImplementedError, lambda: da.triu(dA))
 
+
+def test_atop_names():
+    x = da.ones(5, chunks=(2,))
+    y = atop(add, 'i', x, 'i')
+    assert y.name.startswith('add')
+

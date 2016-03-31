@@ -14,11 +14,11 @@ from .numpy_compat import divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..context import _globals
-from ..utils import ignoring
+from ..utils import ignoring, funcname
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
-              split_every=None, combine=None):
+              split_every=None, combine=None, name=None):
     """ General version of reductions
 
     >>> reduction(my_array, np.sum, np.sum, axis=0, keepdims=False)  # doctest: +SKIP
@@ -41,11 +41,11 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
                         in enumerate(tmp.chunks))
 
     return _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
-                       combine)
+                       combine, name=name)
 
 
 def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
-                combine=None):
+                combine=None, name=None):
     """Perform the tree reduction step of a reduction.
 
     Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
@@ -68,11 +68,13 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
     func = compose(partial(combine or aggregate, axis=axis, keepdims=True),
                    partial(_concatenate2, axes=axis))
     for i in range(depth - 1):
-        x = partial_reduce(func, x, split_every, True, None)
+        x = partial_reduce(func, x, split_every, True, None,
+                           name=(name or funcname(combine or aggregate)) + '-partial')
     func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
                    partial(_concatenate2, axes=axis))
     return partial_reduce(func, x, split_every, keepdims=keepdims,
-                          dtype=dtype)
+                          dtype=dtype,
+                          name=(name or funcname(aggregate)) + '-aggregate')
 
 
 def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
@@ -92,7 +94,8 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
 
     >>> partial_reduce(np.min, x, {0: 1, 2: 3})    # doctest: +SKIP
     """
-    name = name or 'p_reduce-' + tokenize(func, x, split_every, keepdims, dtype)
+    name = (name or funcname(func)) + '-' + tokenize(func, x, split_every,
+                                                   keepdims, dtype)
     parts = [list(partition_all(split_every.get(i, 1), range(n))) for (i, n)
              in enumerate(x.numblocks)]
     keys = product(*map(range, map(len, parts)))
@@ -353,7 +356,7 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):
         dt = None
     return reduction(a, moment_chunk, partial(moment_agg, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt, split_every=split_every,
-                     combine=moment_combine)
+                     combine=moment_combine, name='var')
 
 
 def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None):

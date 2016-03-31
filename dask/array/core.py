@@ -24,7 +24,7 @@ from .slicing import slice_array
 from . import numpy_compat
 from ..base import Base, compute, tokenize, normalize_token
 from ..utils import (deepmap, ignoring, repr_long_list, concrete, is_integer,
-        IndexCallable)
+        IndexCallable, funcname)
 from ..compatibility import unicode, long, getargspec, zip_longest
 from .. import threaded, core
 
@@ -1665,7 +1665,7 @@ def atop(func, out_ind, *args, **kwargs):
     argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
     # Finish up the name
     if not out:
-        out = 'atop-' + tokenize(func, out_ind, argindsstr, dtype)
+        out = funcname(func) + '-' + tokenize(func, out_ind, argindsstr, dtype)
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks)
     dsks = [a.dask for a, _ in arginds]
