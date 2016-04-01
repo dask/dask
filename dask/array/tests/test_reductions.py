@@ -8,6 +8,12 @@ from dask.core import get_deps
 from dask.context import set_options
 from dask.utils import ignoring
 import numpy as np
+# temporary until numpy functions migrated
+try:
+    from numpy import nanprod
+except ImportError:  # pragma: no cover
+    import dask.array.numpy_compat as npcompat
+    nanprod = npcompat.nanprod
 
 
 def eq(a, b):
@@ -65,8 +71,7 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.all, a, np.all, x, False)
 
     reduction_1d_test(da.nansum, a, np.nansum, x)
-    with ignoring(AttributeError):
-        reduction_1d_test(da.nanprod, a, np.nanprod, x)
+    reduction_1d_test(da.nanprod, a, nanprod, x)
     reduction_1d_test(da.nanmean, a, np.mean, x)
     reduction_1d_test(da.nanvar, a, np.var, x)
     reduction_1d_test(da.nanstd, a, np.std, x)
@@ -126,8 +131,7 @@ def test_reductions_2D(dtype):
     reduction_2d_test(da.all, a, np.all, x, False)
 
     reduction_2d_test(da.nansum, a, np.nansum, x)
-    with ignoring(AttributeError):
-        reduction_2d_test(da.nanprod, a, np.nanprod, x)
+    reduction_2d_test(da.nanprod, a, nanprod, x)
     reduction_2d_test(da.nanmean, a, np.mean, x)
     reduction_2d_test(da.nanvar, a, np.nanvar, x, False)  # Difference in dtype algo
     reduction_2d_test(da.nanstd, a, np.nanstd, x, False)  # Difference in dtype algo
@@ -201,8 +205,7 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.all, a, np.all, x, False, False)
 
     reduction_2d_test(da.nansum, a, np.nansum, x, False, False)
-    with ignoring(AttributeError):
-        reduction_2d_test(da.nanprod, a, np.nanprod, x, False, False)
+    reduction_2d_test(da.nanprod, a, nanprod, x, False, False)
     reduction_2d_test(da.nanmean, a, np.nanmean, x, False, False)
     reduction_2d_test(da.nanvar, a, np.nanvar, x, False, False)
     reduction_2d_test(da.nanstd, a, np.nanstd, x, False, False)
@@ -272,8 +275,7 @@ def test_nan():
     assert eq(np.nanstd(x, axis=0), da.nanstd(d, axis=0))
     assert eq(np.nanargmin(x, axis=0), da.nanargmin(d, axis=0))
     assert eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
-    with ignoring(AttributeError):
-        assert eq(np.nanprod(x), da.nanprod(d))
+    assert eq(nanprod(x), da.nanprod(d))
 
 
 def test_0d_array():

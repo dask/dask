@@ -22,7 +22,7 @@ from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          cumsum, cumprod)
 from .percentile import percentile
 with ignoring(ImportError):
-    from .reductions import nanprod
+    from .reductions import nanprod, nancumprod, nancumsum
 from . import random, linalg, ghost, learn, fft
 from .wrap import ones, zeros, empty, full
 from .rechunk import rechunk

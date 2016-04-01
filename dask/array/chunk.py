@@ -6,6 +6,7 @@ from functools import wraps
 
 from toolz import concat
 import numpy as np
+from . import numpy_compat as npcompat
 
 from ..compatibility import builtins, getargspec
 from ..utils import ignoring
@@ -61,8 +62,16 @@ any = keepdims_wrapper(np.any)
 all = keepdims_wrapper(np.all)
 nansum = keepdims_wrapper(np.nansum)
 
-with ignoring(AttributeError):
-    nanprod = keepdims_wrapper(np.nanprod)
+try:
+    from numpy import nanprod, nancumprod, nancumsum
+except ImportError:  # pragma: no cover
+    nanprod = npcompat.nanprod
+    nancumprod = npcompat.nancumprod
+    nancumsum = npcompat.nancumsum
+
+nanprod = keepdims_wrapper(nanprod)
+nancumprod = keepdims_wrapper(nancumprod)
+nancumsum = keepdims_wrapper(nancumsum)
 
 nanmin = keepdims_wrapper(np.nanmin)
 nanmax = keepdims_wrapper(np.nanmax)
