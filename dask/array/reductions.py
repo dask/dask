@@ -185,6 +185,16 @@ with ignoring(AttributeError):
                          keepdims=keepdims, dtype=dt, split_every=split_every)
 
 
+    @wraps(chunk.nancumsum)
+    def nancumsum(x, axis, dtype=None):
+        return cumreduction(chunk.nancumsum, operator.add, 0, x, axis, dtype)
+
+
+    @wraps(chunk.nancumprod)
+    def nancumprod(x, axis, dtype=None):
+        return cumreduction(chunk.nancumprod, operator.mul, 1, x, axis, dtype)
+
+
 @wraps(chunk.nanmin)
 def nanmin(a, axis=None, keepdims=False, split_every=None):
     return reduction(a, chunk.nanmin, chunk.nanmin, axis=axis,
