@@ -7,6 +7,7 @@ import dask
 import pytest
 
 from dask.async import *
+from dask.utils_test import GetFunctionTestCase
 
 
 fib_dask = {'f0': 0, 'f1': 1, 'f2': 1, 'f3': 2, 'f4': 3, 'f5': 5, 'f6': 8}
@@ -84,20 +85,11 @@ def test_finish_task():
           'waiting_data': {'y': set(['w']),
                            'z': set(['w'])}}
 
+class TestGetAsync(GetFunctionTestCase):
+    get = staticmethod(get_sync)
 
-def test_get():
-    dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
-    assert get_sync(dsk, 'w') == 4
-    assert get_sync(dsk, ['w', 'z']) == (4, 2)
-
-
-def test_nested_get():
-    dsk = {'x': 1, 'y': 2, 'a': (add, 'x', 'y'), 'b': (sum, ['x', 'y'])}
-    assert get_sync(dsk, ['a', 'b']) == (3, 3)
-
-
-def test_get_sync_num_workers():
-    get_sync({'x': (inc, 'y'), 'y': 1}, 'x', num_workers=2)
+    def test_get_sync_num_workers(self):
+        self.get({'x': (inc, 'y'), 'y': 1}, 'x', num_workers=2)
 
 
 def test_cache_options():

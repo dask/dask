@@ -1,9 +1,10 @@
 from collections import namedtuple
-from operator import add
 
 from dask.utils import raises
-from dask.core import (istask, get, get_dependencies, flatten, subs,
-                       preorder_traversal, quote, list2, _deps)
+from dask.utils_test import GetFunctionTestCase
+from dask import core
+from dask.core import (istask, get_dependencies, flatten, subs,
+                       preorder_traversal, quote, _deps)
 
 
 def contains(a, b):
@@ -31,11 +32,6 @@ def test_istask():
     assert not istask(f(sum, 2))
 
 
-d = {':x': 1,
-     ':y': (inc, ':x'),
-     ':z': (add, ':x', ':y')}
-
-
 def test_preorder_traversal():
     t = (add, 1, 2)
     assert list(preorder_traversal(t)) == [add, 1, 2]
@@ -45,20 +41,36 @@ def test_preorder_traversal():
     assert list(preorder_traversal(t)) == [add, sum, list, 1, 2, 3]
 
 
-def test_get():
-    assert get(d, ':x') == 1
-    assert get(d, ':y') == 2
-    assert get(d, ':z') == 3
-    assert get(d, 'pass-through') == 'pass-through'
+class TestGet(GetFunctionTestCase):
+    get = staticmethod(core.get)
+
+
+def test_GetFunctionTestCase_class():
+    class CustomTestGetFail(GetFunctionTestCase):
+        get = staticmethod(lambda x, y: 1)
+
+    custom_testget = CustomTestGetFail()
+    raises(AssertionError, custom_testget.test_get)
+
+    class CustomTestGetPass(GetFunctionTestCase):
+        get = staticmethod(core.get)
+
+    custom_testget = CustomTestGetPass()
+    custom_testget.test_get()
 
 
 def test_memoized_get():
+    d = {':x': 1,
+         ':y': (inc, ':x'),
+         ':z': (add, ':x', ':y')}
     try:
         import toolz
     except ImportError:
         return
     cache = dict()
-    getm = toolz.memoize(get, cache=cache, key=lambda args, kwargs: args[1:])
+
+    getm = toolz.memoize(core.get, cache=cache,
+                         key=lambda args, kwargs: args[1:])
 
     result = getm(d, ':z', get=getm)
     assert result == 3
@@ -67,31 +79,6 @@ def test_memoized_get():
                             (':y',): 2,
                             (':z',): 3})
 
-def test_data_not_in_dict_is_ok():
-    d = {'x': 1, 'y': (add, 'x', 10)}
-    assert get(d, 'y') == 11
-
-
-def test_get_with_list():
-    d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
-
-    assert get(d, ['x', 'y']) == [1, 2]
-    assert get(d, 'z') == 3
-
-
-def test_get_with_nested_list():
-    d = {'x': 1, 'y': 2, 'z': (sum, ['x', 'y'])}
-
-    assert get(d, [['x'], 'y']) == [[1], 2]
-    assert get(d, 'z') == 3
-
-
-def test_get_works_with_unhashables_in_values():
-    f = lambda x, y: x + len(y)
-    d = {'x': 1, 'y': (f, 'x', set([1]))}
-
-    assert get(d, 'y') == 2
-
 
 def test_get_laziness():
     def isconcrete(arg):
@@ -99,8 +86,8 @@ def test_get_laziness():
 
     d = {'x': 1, 'y': 2, 'z': (isconcrete, ['x', 'y'])}
 
-    assert get(d, ['x', 'y']) == [1, 2]
-    assert get(d, 'z') == False
+    assert core.get(d, ['x', 'y']) == (1, 2)
+    assert core.get(d, 'z') == False
 
 
 def test_get_dependencies_nested():
@@ -118,24 +105,6 @@ def test_get_dependencies_empty():
 def test_get_dependencies_list():
     dsk = {'x': 1, 'y': 2, 'z': ['x', [(inc, 'y')]]}
     assert get_dependencies(dsk, 'z') == set(['x', 'y'])
-
-
-def test_nested_tasks():
-    d = {'x': 1,
-         'y': (inc, 'x'),
-         'z': (add, (inc, 'x'), 'y')}
-
-    assert get(d, 'z') == 4
-
-
-def test_get_stack_limit():
-    d = dict(('x%s' % (i+1), (inc, 'x%s' % i)) for i in range(10000))
-    d['x0'] = 0
-    assert get(d, 'x10000') == 10000
-    # introduce cycle
-    d['x5000'] = (inc, 'x5001')
-    assert raises(RuntimeError, lambda: get(d, 'x10000'))
-    assert get(d, 'x4999') == 4999
 
 
 def test_flatten():
@@ -183,7 +152,7 @@ def test_quote():
                 [1, [2, 3]], (add, 1, (add, 2, 3))]
 
     for l in literals:
-        assert get({'x': quote(l)}, 'x') == l
+        assert core.get({'x': quote(l)}, 'x') == l
 
 
 def test__deps():
