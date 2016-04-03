@@ -1,8 +1,11 @@
+# -*- coding: utf-8 -*-
+
 import tempfile
 import os
 import shutil
 import pytest
 from operator import add, mul
+import sys
 
 pytest.importorskip('toolz')
 from toolz import compose, partial, curry
@@ -11,6 +14,8 @@ import dask
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
         visualize)
 from dask.utils import raises, tmpfile, ignoring
+
+from dask.compatibility import unicode
 
 
 def test_normalize_function():
@@ -72,6 +77,10 @@ def test_tokenize_numpy_array_on_object_dtype():
            tokenize(np.array(['a', None, 'aaa'], dtype=object))
     assert tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) == \
            tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object))
+    if sys.version_info[0] == 2:
+        assert tokenize(np.array([unicode("Rebeca Alón",encoding="utf-8")], dtype=object)) == \
+               tokenize(np.array([unicode("Rebeca Alón",encoding="utf-8")], dtype=object))
+
 
 
 def test_tokenize_numpy_memmap():
