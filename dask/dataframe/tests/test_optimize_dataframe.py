@@ -37,6 +37,7 @@ def test_column_optimizations_with_bcolz_and_rewrite():
         assert result == expected
 
 
+@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_castra_column_store():
     try:
         from castra import Castra
