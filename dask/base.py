@@ -205,7 +205,7 @@ with ignoring(ImportError):
             return x.filename, os.path.getmtime(x.filename), x.dtype, x.shape
         if x.dtype.hasobject:
             try:
-                data = md5('-'.join(x.flat)).hexdigest()
+                data = md5('-'.join(x.flat).encode('utf-8')).hexdigest()
             except TypeError:
                 data = md5(b'-'.join([str(item).encode() for item in x.flat])).hexdigest()
         else:
