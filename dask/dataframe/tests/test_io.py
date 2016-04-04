@@ -161,12 +161,12 @@ def test_dummy_from_array():
     msg = r"""Length mismatch: Expected axis has 2 elements, new values have 3 elements"""
     with tm.assertRaisesRegexp(ValueError, msg):
         dd.io._dummy_from_array(x, columns=['a', 'b', 'c'])
-        
-    np.random.seed(42)    
+
+    np.random.seed(42)
     x = np.random.rand(201, 2)
     x = from_array(x, chunksize=50, columns=['a', 'b'])
     assert len(x.divisions) == 6 # Should be 5 partitions and the end
-    
+
 
 def test_dummy_from_1darray():
     x = np.array([1., 2., 3.], dtype=np.float64)
@@ -455,7 +455,7 @@ def test_from_pandas_non_sorted():
     ddf = dd.from_pandas(df, npartitions=2, sort=False)
     assert not ddf.known_divisions
     eq(df, ddf)
-    
+
     ddf = dd.from_pandas(df, chunksize=2, sort=False)
     assert not ddf.known_divisions
     eq(df, ddf)
@@ -581,6 +581,7 @@ def test_from_dask_array_struct_dtype():
               pd.DataFrame(x, columns=['b', 'a']))
 
 
+@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_to_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
@@ -615,6 +616,7 @@ def test_to_castra():
     assert last[1] == a.npartitions - 1
 
 
+@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra():
     pytest.importorskip('castra')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
@@ -636,6 +638,7 @@ def test_from_castra():
         del with_fn, c
 
 
+@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra_with_selection():
     """ Optimizations fuse getitems with load_partitions
 
@@ -712,7 +715,7 @@ def test_to_csv():
             tm.assert_frame_equal(result, df)
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_to_csv_gzip():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])

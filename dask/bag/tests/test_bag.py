@@ -385,6 +385,7 @@ def test_can_use_dict_to_make_concrete():
     assert isinstance(dict(b.frequencies()), dict)
 
 
+@pytest.mark.xfail(reason="bloscpack BLOSC_MAX_BUFFERSIZE")
 def test_from_castra():
     castra = pytest.importorskip('castra')
     pd = pytest.importorskip('pandas')
