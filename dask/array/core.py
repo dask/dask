@@ -1314,6 +1314,16 @@ class Array(Base):
         from .reductions import cumprod
         return cumprod(self, axis, dtype)
 
+    def nancumsum(self, axis, dtype=None):
+        """ See da.nancumsum for docstring """
+        from .reductions import nancumsum
+        return nancumsum(self, axis, dtype)
+
+    def nancumprod(self, axis, dtype=None):
+        """ See da.nancumprod for docstring """
+        from .reductions import nancumprod
+        return nancumprod(self, axis, dtype)
+
     @wraps(squeeze)
     def squeeze(self):
         return squeeze(self)
