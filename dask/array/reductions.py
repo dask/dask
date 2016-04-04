@@ -178,7 +178,7 @@ with ignoring(AttributeError):
         if dtype is not None:
             dt = dtype
         elif a._dtype is not None:
-            dt = np.empty((1,), dtype=a._dtype).nanprod().dtype
+            dt = chunk.nanprod(np.empty((1,), dtype=a._dtype)).dtype
         else:
             dt = None
         return reduction(a, chunk.nanprod, chunk.prod, axis=axis,
