@@ -2,54 +2,101 @@
 Dask
 ====
 
-Dask is a simple task scheduling system that uses directed acyclic graphs (DAGs)
-of tasks to break up large computations into many small ones.
+Dask is a flexible parallel computing library for analytics.  Dask emphasizes
+the following virtues:
 
-**Dask enables parallel computing** through task scheduling and blocked algorithms.
-This allows developers to write complex parallel algorithms and execute them
-in parallel either on a modern multi-core machine or on a distributed cluster.
+*  **Familiar**: Provides parallelized NumPy array and Pandas DataFrame objects
+*  **Native**: Enables distributed computing in Pure Python with access to
+   the PyData stack.
+*  **Fast**: Operates with low overhead, low latency, and minimal serialization
+   necessary for fast numerical algorithms
+*  **Flexible**: Supports complex and messy workloads
+*  **Scales up**: Runs resiliently on clusters with 100s of nodes
+*  **Scales down**: Trivial to set up and run on a laptop in a single process
+*  **Responsive**: Designed with interactive computing in mind it provides rapid
+   feedback and diagnostics to aid humans
 
-On a single machine dask increases the scale of comfortable data from
-*fits-in-memory* to *fits-on-disk* by intelligently streaming data from disk
-and by leveraging all the cores of a modern CPU.
-
-Dask use cases
-==============
-
-* Dask powers parallel array libraries in climate science (`xarray`_), image
-  processing (`scikit-image`_) , and genomics (`scikit-allel`_).
-* Dask enables data scientists to process tens of gigabytes of data on a laptop
-  using familiar NumPy and Pandas interfaces.
-* Dask enables researchers to rapidly prototype and deploy novel algorithms on a
-  single machine or a distributed cluster.
-
-Dask user intro
-===============
-
-Users interact with dask either by making graphs directly, or through the
-*dask collections* which provide larger-than-memory counterparts to existing
-popular libraries:
-
-* ``dask.array`` = ``numpy`` + ``threading``
-* ``dask.bag`` = ``map, filter, toolz`` + ``multiprocessing``
-* ``dask.dataframe`` = ``pandas`` + ``threading``
-
-Dask primarily targets parallel computations that run on a single machine. It
-integrates nicely with the existing PyData ecosystem and is trivial to setup
-and use::
-
-    conda install dask
-    or
-    pip install dask
-
-Operations on dask collections (array, bag, dataframe) produce task graphs that
-encode blocked algorithms. Task schedulers execute these task graphs in
-parallel in a variety of contexts.
 
 .. image:: images/collections-schedulers.png
    :alt: Dask collections and schedulers
    :width: 80%
    :align: center
+
+
+Familiar user interface
+-----------------------
+
+**Dask DataFrame** mimics Pandas
+
+.. code-block:: python
+
+    import pandas as pd                     import dask.dataframe as dd
+    df = pd.read_csv('2015-01-01.csv')      df = dd.read_csv('2015-*-*.csv')
+    df.groupby(df.user_id).value.mean()     df.groupby(df.user_id).value.mean().compute()
+
+**Dask Array** mimics NumPy
+
+.. code-block:: python
+
+   import numpy as np                       import dask.array as da
+   f = h5py.File('myfile.hdf5')
+   x = np.array(f['/small-data'])           x = da.from_array(f['/big-data'],
+                                                              chunks=(1000, 1000))
+   x - x.mean(axis=1)                       x - x.mean(axis=1).compute()
+
+**Dask Bag** mimics iterators, Toolz, PySpark
+
+.. code-block:: python
+
+   import dask.bag as db
+   b = db.from_filenames('2015-*-*.json.gz').map(json.loads)
+   b.pluck('name').frequencies().topk(10, lambda pair: pair[1]).compute()
+
+**Dask Imperative** mimics for loops and wraps custom code
+
+.. code-block:: python
+
+   from dask.imperative import do
+   L = []
+   for fn in filenames:            # Use for loops to build up computation
+       data = do(load)(fn)         # Delay execution of function with `do`
+       L.append(do(process)(data)) # Build connections between variables
+
+   result = do(summarize)(L)
+   result.compute()
+
+
+Scales from laptops to clusters
+-------------------------------
+
+Dask is convenient on a laptop.  It :doc:`installs <install>` trivially with
+``conda`` or ``pip`` and extends the size of convenient datasets from "fits in
+memory" to "fits on disk".
+
+Dask can scale to a cluster of 100s of machines. It is resilient, elastic, data
+local, and low latency.  For more information see documentation on the
+`distributed scheduler`_.
+
+This ease of transition between single-machine to moderate cluster enables
+users both to start simple and to grow when necessary.
+
+
+Complex Algorithms
+------------------
+
+Dask represents parallel computations with :doc:`task graphs<graphs>`.  These
+directed acyclic graphs may have arbitrary structure, which enables both
+developers and users the freedom to build sophisticated algorithms and to
+handle messy situations not easily managed by the ``map/filter/groupby``
+paradigm common in most data engineering frameworks.
+
+We originally needed this complexity to build complex algorithms for
+n-dimensional arrays but have found it to be equally valuable when dealing with
+messy situations in everyday problems.
+
+
+Index
+-----
 
 **Collections**
 
@@ -98,12 +145,13 @@ here.
 
 **Scheduling**
 
-Schedulers execute task graphs.  After a collection produces a graph we execute
-this graph in parallel, either using all of the cores on a single workstation
-or using a distributed cluster.
+Schedulers execute task graphs.  Dask currently has two main schedulers, one
+for single machine processing using threads or processes, and one for
+distributed memory clusters.
 
 * :doc:`scheduler-overview`
-* :doc:`shared`
+* :doc:`Single machine scheduler<shared>`
+* `Distributed scheduler`_  (separate webpage)
 * :doc:`scheduling-policy`
 
 .. toctree::
@@ -179,3 +227,5 @@ license`_.
 .. _`scikit-image`: http://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
 .. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
+.. _`distributed scheduler`: http://distributed.readthedocs.org/en/latest/
+.. _`Distributed scheduler`: http://distributed.readthedocs.org/en/latest/
