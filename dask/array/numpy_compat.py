@@ -279,19 +279,19 @@ except ImportError:  # pragma: no cover
 
         Examples
         --------
-        >>> np.nancumsum(1)
+        >>> np.nancumsum(1) #doctest: +SKIP
         array([1])
-        >>> np.nancumsum([1])
+        >>> np.nancumsum([1]) #doctest: +SKIP
         array([1])
-        >>> np.nancumsum([1, np.nan])
+        >>> np.nancumsum([1, np.nan]) #doctest: +SKIP
         array([ 1.,  1.])
         >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nancumsum(a)
+        >>> np.nancumsum(a) #doctest: +SKIP
         array([ 1.,  3.,  6.,  6.])
-        >>> np.nancumsum(a, axis=0)
+        >>> np.nancumsum(a, axis=0) #doctest: +SKIP
         array([[ 1.,  2.],
                [ 4.,  2.]])
-        >>> np.nancumsum(a, axis=1)
+        >>> np.nancumsum(a, axis=1) #doctest: +SKIP
         array([[ 1.,  3.],
                [ 3.,  3.]])
 
@@ -341,19 +341,19 @@ except ImportError:  # pragma: no cover
 
         Examples
         --------
-        >>> np.nancumprod(1)
+        >>> np.nancumprod(1) #doctest: +SKIP
         array([1])
-        >>> np.nancumprod([1])
+        >>> np.nancumprod([1]) #doctest: +SKIP
         array([1])
-        >>> np.nancumprod([1, np.nan])
+        >>> np.nancumprod([1, np.nan]) #doctest: +SKIP
         array([ 1.,  1.])
         >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nancumprod(a)
+        >>> np.nancumprod(a) #doctest: +SKIP
         array([ 1.,  2.,  6.,  6.])
-        >>> np.nancumprod(a, axis=0)
+        >>> np.nancumprod(a, axis=0) #doctest: +SKIP
         array([[ 1.,  2.],
                [ 3.,  2.]])
-        >>> np.nancumprod(a, axis=1)
+        >>> np.nancumprod(a, axis=1) #doctest: +SKIP
         array([[ 1.,  2.],
                [ 3.,  3.]])
 
