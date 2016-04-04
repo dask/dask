@@ -243,7 +243,7 @@ def task_stream_append(lists, msg, workers, palette=Spectral11):
 
 
 def progress_plot(height=300, width=800, **kwargs):
-    from .progress_stream import progress_quads
+    from distributed.diagnostics.progress_stream import progress_quads
     data = progress_quads({'all': {}, 'in_memory': {},
                            'erred': {}, 'released': {}})
 
