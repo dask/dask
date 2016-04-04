@@ -728,6 +728,15 @@ def test_to_textfiles_inputs():
     assert raises(ValueError, lambda: B.to_textfiles(5))
 
 
+def test_to_textfiles_endlines():
+    b = db.from_sequence(['a', 'b', 'c'], npartitions=1)
+    with tmpfile() as fn:
+        b.to_textfiles([fn])
+        with open(fn, 'r') as f:
+            result = f.readlines()
+        assert result == ['a\n', 'b\n', 'c']
+
+
 def test_bz2_stream():
     text = '\n'.join(map(str, range(10000)))
     compressed = bz2.compress(text.encode())
