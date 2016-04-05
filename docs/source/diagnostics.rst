@@ -57,7 +57,7 @@ computation:
     >>> a = da.random.normal(size=(10000, 10000), chunks=(1000, 1000))
     >>> res = a.dot(a.T).mean(axis=0)
 
-    >>> with ProgressBar()
+    >>> with ProgressBar():
     ...     out = res.compute()
     [########################################] | 100% Completed | 17.1 s
 
