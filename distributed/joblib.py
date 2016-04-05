@@ -20,8 +20,10 @@ class DistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     def effective_n_jobs(self, n_jobs=1):
         return sum(self.executor.ncores().values())
 
-    def apply_async(self, func, callback=None):
-        future = self.executor.submit(func, pure=False)
+    def apply_async(self, func, *args, **kwargs):
+        callback = kwargs.pop('callback', None)
+        kwargs['pure'] = False
+        future = self.executor.submit(func, *args, **kwargs)
 
         @gen.coroutine
         def callback_wrapper():
