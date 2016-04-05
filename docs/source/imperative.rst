@@ -17,21 +17,21 @@ Now, rebuilding the example from :ref:`custom graphs <custom-graph-example>`:
 
 .. code-block:: python
 
-    from dask.imperative import do, value
+    from dask.imperative import delayed, value
 
-    @do
+    @delayed
     def load(filename):
         ...
 
-    @do
+    @delayed
     def clean(data):
         ...
 
-    @do
+    @delayed
     def analyze(sequence_of_data):
         ...
 
-    @do
+    @delayed
     def store(result):
         with open(..., 'w') as f:
             f.write(result)
@@ -46,7 +46,7 @@ Now, rebuilding the example from :ref:`custom graphs <custom-graph-example>`:
 
 This builds the same graph as seen before, but using normal python syntax. In
 fact, the only difference between python code that would do this in serial, and
-the parallel version with dask is the ``do`` decorators on the functions, and
+the parallel version with dask is the ``delayed`` decorators on the functions, and
 the call to ``compute`` at the end.
 
 
@@ -55,11 +55,11 @@ How it works
 
 The ``dask.imperative`` interface consists of two functions:
 
-1. ``do``
+1. ``delayed``
 
    Wraps functions. Can be used as a decorator, or around function calls
-   directly (i.e. ``do(foo)(a, b, c)``). Outputs from functions wrapped in
-   ``do`` are proxy objects of type ``Value`` that contain a graph of all
+   directly (i.e. ``delayed(foo)(a, b, c)``). Outputs from functions wrapped in
+   ``delayed`` are proxy objects of type ``Value`` that contain a graph of all
    operations done to get to this result.
 
 2. ``value``
@@ -122,7 +122,7 @@ Below is the same code, parallelized using ``dask.imperative``:
         sums.append(positive.sum())             # Sum chunk
         counts.append(positive.size)            # Count chunk
 
-    result = do(sum)(sums) / do(sum)(counts)    # Aggregate results
+    result = delayed(sum)(sums) / delayed(sum)(counts)    # Aggregate results
 
     result.compute()                            # Perform the computation
 
@@ -131,7 +131,7 @@ Only 3 lines had to change to make this computation parallel instead of serial.
 
 - Wrap the original array in ``value``. This makes all the slices on it return
   ``Value`` objects.
-- Wrap both calls to ``sum`` with ``do``.
+- Wrap both calls to ``sum`` with ``delayed``.
 - Call the ``compute`` method on the result.
 
 While the for loop above still iterates fully, it's just building up a graph of
@@ -159,18 +159,18 @@ back to the custom format.
 .. code-block:: python
 
    import dask.dataframe as dd
-   from dask.imperative import do
+   from dask.imperative import delayed
 
    from my_custom_library import load, save
 
    filenames = ...
-   dfs = [do(load)(fn) for fn in filenames]
+   dfs = [delayed(load)(fn) for fn in filenames]
 
    df = dd.from_imperative(dfs)
    df = ... # do work with dask.dataframe
 
    dfs = df.to_imperative()
-   writes = [do(save)(df, fn) for df, fn in zip(dfs, filenames)]
+   writes = [delayed(save)(df, fn) for df, fn in zip(dfs, filenames)]
 
    dd.compute(writes)
 
@@ -185,5 +185,5 @@ Definitions
 .. currentmodule:: dask.imperative
 
 .. autofunction:: value
-.. autofunction:: do
+.. autofunction:: delayed
 .. autofunction:: compute

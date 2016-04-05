@@ -56,13 +56,13 @@ Familiar user interface
 
 .. code-block:: python
 
-   from dask.imperative import do
+   from dask.imperative import delayed
    L = []
-   for fn in filenames:            # Use for loops to build up computation
-       data = do(load)(fn)         # Delay execution of function with `do`
-       L.append(do(process)(data)) # Build connections between variables
+   for fn in filenames:                  # Use for loops to build up computation
+       data = delayed(load)(fn)          # Delay execution of function
+       L.append(delayed(process)(data))  # Build connections between variables
 
-   result = do(summarize)(L)
+   result = delayed(summarize)(L)
    result.compute()
 
 
